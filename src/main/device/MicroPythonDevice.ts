@@ -1,6 +1,12 @@
 import { EventEmitter } from 'events'
 import { SerialPort } from 'serialport'
 import { buildControlLine } from '../../shared/control'
+import {
+  RUNTIME_PROBE_PY,
+  parseRuntimeProbe,
+  runtimeGreeting,
+  type RuntimeInfo
+} from '../../shared/dialect'
 import type {
   ConnectOptions,
   ConnectionState,
@@ -60,6 +66,12 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
   private state: ConnectionState = 'disconnected'
   private currentPath?: string
   private currentBaud?: number
+
+  /** What the board said it is (#752), probed on connect. Null until the probe
+   *  answers, and stays null for a board that wouldn't say — the rest of the app
+   *  reads this instead of assuming MicroPython. Cleared on disconnect so the
+   *  next board can't inherit the last one's runtime. */
+  private runtime: RuntimeInfo | null = null
 
   /**
    * Buffer of bytes received from the device. When a command is awaiting a
@@ -136,11 +148,13 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
 
   /** Current connection status snapshot (safe to send over IPC). */
   getStatus(): DeviceStatus {
-    return {
+    const status: DeviceStatus = {
       state: this.state,
       path: this.currentPath,
       baudRate: this.currentBaud
     }
+    if (this.runtime) status.runtime = this.runtime
+    return status
   }
 
   isConnected(): boolean {
@@ -191,19 +205,35 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
     void this.greet()
   }
 
-  /** Print the board's MicroPython greeting to the terminal on connect, rebuilt
-   *  from `os.uname()` so it matches the real banner (`MicroPython vX on DATE;
-   *  <board>`) — the connect cue the leaked Ctrl-B banner used to provide (#612). */
+  /**
+   * Ask the board what it is, then print its greeting to the terminal — the
+   * connect cue the leaked Ctrl-B banner used to provide (#612).
+   *
+   * One probe serves both jobs (#752). It reads `sys.implementation` for the
+   * DIALECT — MicroPython or CircuitPython, which the rest of the app reads off
+   * the session rather than assuming — and `os.uname()` for the version, build
+   * date and board string that make the greeting read like the board's own.
+   * Because each runtime words its banner differently, the line is rebuilt from
+   * what was probed rather than hard-coded, so a CircuitPython user isn't
+   * greeted with MicroPython's wording.
+   *
+   * Fire-and-forget: a board that answers neither still connects, and simply
+   * shows no banner.
+   */
   private async greet(): Promise<void> {
     try {
-      const line = (
-        await this.eval("import os as _o; print('MicroPython v' + _o.uname().version + '; ' + _o.uname().machine)")
-      ).trim()
-      if (line && this.isConnected()) {
+      const info = parseRuntimeProbe(await this.eval(RUNTIME_PROBE_PY))
+      if (!info || !this.isConnected()) return
+      this.runtime = info
+      // The `connected` status went out before the probe answered, so publish a
+      // second one now that the runtime is known.
+      this.emit('status', this.getStatus())
+      const line = runtimeGreeting(info)
+      if (line) {
         this.emit('data', Buffer.from(`\r\n${line}\r\nType "help()" for more information.\r\n>>> `))
       }
     } catch {
-      // Best-effort — a board that can't answer os.uname() just shows no banner.
+      // Best-effort — a board that can't answer the probe just shows no banner.
     }
   }
 
@@ -221,11 +251,16 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
 
   private setState(state: ConnectionState, error?: string): void {
     this.state = state
+    // A new connection knows nothing about the board yet, and the PREVIOUS
+    // board's runtime must not leak into it — unplugging a Pico and plugging in
+    // a Feather would otherwise leave the status bar naming the wrong Python.
+    if (state !== 'connected') this.runtime = null
     const status: DeviceStatus = {
       state,
       path: this.currentPath,
       baudRate: this.currentBaud
     }
+    if (this.runtime) status.runtime = this.runtime
     if (error) status.error = error
     this.emit('status', status)
   }

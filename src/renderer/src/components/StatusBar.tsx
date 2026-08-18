@@ -22,6 +22,7 @@ import {
   type StatusTip
 } from './status-tips'
 import { isVirtualPort, VIRTUAL_PORT_SHORT } from '../../../shared/virtual-device'
+import { runtimeLabel } from '../../../shared/dialect'
 import type { FirmwareCatalog, UpdateStatus } from '../../../preload/index.d'
 import { BulbIcon } from './ui-icons'
 import './StatusBar.css'
@@ -171,6 +172,11 @@ export function StatusBar({
   }, [refreshGit])
 
   const connected = status.state === 'connected'
+  // Which Python the board is actually running (#752). Absent until the connect
+  // probe answers, and absent for good on a board that wouldn't say — so this
+  // renders nothing rather than guessing MicroPython, which is exactly the
+  // assumption the CircuitPython epic (#209) exists to remove.
+  const runtime = connected ? runtimeLabel(status.runtime ?? null) : ''
   // Offline mode (#135): connected to the built-in simulated device, not real
   // hardware — surfaced with a distinct label + badge so it's never mistaken
   // for a physical board.
@@ -337,6 +343,19 @@ export function StatusBar({
           <span className="statusbar__dot" aria-hidden="true" />
           <span>{connLabel}</span>
         </span>
+
+        {runtime && (
+          <span
+            className="statusbar__item statusbar__runtime"
+            title={
+              status.runtime?.machine
+                ? `${runtime} — ${status.runtime.machine}`
+                : `The board is running ${runtime}`
+            }
+          >
+            {runtime}
+          </span>
+        )}
 
         {showLiveWarning && (
           <span
