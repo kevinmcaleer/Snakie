@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { cablePlugStyle, connectorSize, connectorStyle } from '../src/renderer/src/components/part-body'
+import {
+  cablePlugStyle,
+  connectorSize,
+  connectorStyle,
+  seatedConnectorSize
+} from '../src/renderer/src/components/part-body'
 import { connectorDims } from '../src/renderer/src/components/part-editor.util'
 import type { PartConnector } from '../src/shared/part'
 
@@ -125,6 +130,46 @@ describe('QWIIC / JST-SH is datasheet-accurate (#697 follow-up)', () => {
     // spellings must not drift apart again.
     const asJst = mm(conn('jst', 4, 'sh'))
     expect(asJst).toEqual(mm(conn('qwiic', 4)))
+  })
+})
+
+describe('a socket measured on the canvas that draws its body (#772)', () => {
+  // A part body is laid out in a fixed reference frame and then scaled to its real
+  // millimetres, so a socket is sized with the BODY's px/mm and shrinks with the
+  // body. An overlay drawn in canvas coordinates has to repeat those two steps in
+  // that order.
+  const BODY_PX_PER_MM = 12.5 // a 24 mm module drawn into a 300px reference box
+
+  it('scales with the body, whatever the body scale', () => {
+    const c = conn('grove', 4)
+    const unit = seatedConnectorSize(c, BODY_PX_PER_MM, 1)
+    for (const k of [0.1, 0.25, 0.5, 2, 4]) {
+      const at = seatedConnectorSize(c, BODY_PX_PER_MM, k)
+      expect(at.w, `w at ${k}×`).toBeCloseTo(unit.w * k, 6)
+      expect(at.h, `h at ${k}×`).toBeCloseTo(unit.h * k, 6)
+    }
+  })
+
+  it('applies the visibility floor in the SOCKET’s frame, not the canvas’s', () => {
+    // The trap this exists to close: `connectorSize` floors at 16 × 8 PIXELS so a
+    // socket stays clickable when zoomed out. Measuring an overlay straight from
+    // the canvas px/mm trips that floor at scales the socket itself never trips,
+    // and the plug comes out LARGER than the port it plugs into — on small boards
+    // only, which is what made it read as an offset rather than a units mix-up.
+    const c = conn('grove', 4)
+    const k = 0.08
+    const naive = connectorSize(c, BODY_PX_PER_MM * k) // measured on the canvas
+    const seated = seatedConnectorSize(c, BODY_PX_PER_MM, k) // measured on the body
+    expect(naive.w).toBeGreaterThan(seated.w)
+    expect(seated.w).toBeCloseTo(connectorSize(c, BODY_PX_PER_MM).w * k, 6)
+  })
+
+  it('treats a body with no scale as drawn as-is', () => {
+    const c = conn('qwiic', 4)
+    expect(seatedConnectorSize(c, BODY_PX_PER_MM, 0)).toEqual({
+      w: connectorSize(c, BODY_PX_PER_MM).w,
+      h: connectorSize(c, BODY_PX_PER_MM).h
+    })
   })
 })
 

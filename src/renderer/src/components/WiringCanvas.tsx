@@ -24,12 +24,19 @@ import { isServoPart, servoBoardGpio, boundJoint, bindServoJoint } from './servo
 import type { BoardDefinition } from '../../../shared/board'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
 import type { PartConnector, PartPinBuses, PartPinCapability, PartPinSignals } from '../../../shared/part'
-import { cableRole, conductorColour, connectorFit, housingPlugAngle } from './cable'
+import { cablePlugGeometry, cableRole, conductorColour, connectorFit, housingPlugAngle } from './cable'
 import { partSupplyVoltage } from '../../../shared/power-led'
 import type { SmokeSite } from '../../../shared/erc'
 import { BOARD_KEY, browserTree, countNodes, type BrowserNode } from './browser-tree'
 import { boardBox, layoutPads, mcuSymbolLayout, padKey, padLabelPlacement, type PadPoint } from './board-layout'
-import { partBodyBox, PartBody, pinOutwardDir, connectorSize, cablePlugStyle } from './part-body'
+import {
+  partBodyBox,
+  PartBody,
+  pinOutwardDir,
+  connectorSize,
+  seatedConnectorSize,
+  cablePlugStyle
+} from './part-body'
 import { cableRoute } from './cable-route'
 import { serializeLiveSvg, exportSvgString, downloadBlob, type ExportFmt } from './svg-export'
 import { bomMarkdown, pinoutMarkdown } from '../../../shared/robot-docs'
@@ -471,6 +478,32 @@ interface Subject {
   hit: { x: number; y: number; w: number; h: number }
 }
 
+/**
+ * A point in a part's OWN body frame (normalised 0..1 of its `box`) → canvas
+ * coords (#772).
+ *
+ * This is the one transform a life-like body's contents go through: scale to the
+ * drawn size, then turn about the body centre, then offset by the subject's
+ * placement — the same three steps {@link partLifelikePins}' anchors take. Any
+ * overlay that wants to sit on something `PartBody` drew (a connector housing, a
+ * mount point) has to go through it too, or it lands somewhere else.
+ */
+function bodyPoint(s: Subject, nx: number, ny: number): { x: number; y: number } | null {
+  const box = s.box
+  // No life-like body to place against — the SCHEMATIC view, where a symbol's
+  // terminals bear no relation to where anything sits on the real part.
+  if (!box) return null
+  const k = s.scale ?? 1
+  const r = rotatePoint(
+    (box.x + nx * box.w) * k,
+    (box.y + ny * box.h) * k,
+    (box.w * k) / 2,
+    (box.h * k) / 2,
+    normRot(s.rotation)
+  )
+  return { x: s.x + r.x, y: s.y + r.y }
+}
+
 function boardPinNet(type: string | undefined): RobotNet {
   if (type === 'vcc') return 'vcc'
   if (type === 'gnd') return 'gnd'
@@ -792,6 +825,28 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     savePin(window.localStorage, PIN_KEYS.browser, v)
   }
   const [, force] = useState(0) // re-render during a wire/pan/box drag (ref-driven)
+  /**
+   * The last REFUSED cable drop — the reason, and the socket it was dropped on
+   * (#771).
+   *
+   * A refused pairing was silent: the reason lived only in the hover badge, which
+   * goes with the drag, so releasing looked identical to a drag that failed to
+   * land. A refusal a user cannot see is indistinguishable from a bug. This holds
+   * the reason where the lead was dropped until it is read (or another drag
+   * starts).
+   */
+  const [refusal, setRefusal] = useState<{
+    reason: string
+    cx: number
+    cy: number
+    r: number
+    seq: number
+  } | null>(null)
+  useEffect(() => {
+    if (!refusal) return
+    const t = window.setTimeout(() => setRefusal(null), 6000)
+    return () => window.clearTimeout(t)
+  }, [refusal])
   // What the pointer is over (breadboard view): a part (`pin: null`) reveals all
   // its pins' capability chips; a specific pin emphasises its own.
   const [hover, setHover] = useState<{ key: string; pin: number | null } | null>(null)
@@ -1567,16 +1622,31 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         for (const a of p.anchors) pts.push({ x: s.x + a.x, y: s.y + a.y })
       }
       if (pts.length < 2 || endpoints.length !== conn.pins.length) return
-      const cx = pts.reduce((n, p) => n + p.x, 0) / pts.length
-      const cy = pts.reduce((n, p) => n + p.y, 0) / pts.length
+      // The HOUSING's centre — `conn.x/conn.y` put through the body's own
+      // transform, which is exactly where `PartBody` draws the socket glyph, for
+      // a `connectors[]` entry and a housed group alike (#772). This used to be
+      // the mean of the CONTACT anchors, and those sit at the housing's front
+      // edge, not at its middle: every plug (and every drop-target ring) on a
+      // `connectors[]` socket was half a housing-depth adrift of the socket.
+      //
+      // The SCHEMATIC view has no body to place against, so it keeps the mean of
+      // the terminals — there the "socket" is a group of stubs on a symbol, and
+      // a board position would mean nothing.
+      const centre = bodyPoint(s, conn.x, conn.y) ?? {
+        x: pts.reduce((n, p) => n + p.x, 0) / pts.length,
+        y: pts.reduce((n, p) => n + p.y, 0) / pts.length
+      }
+      const cx = centre.x
+      const cy = centre.y
       // Pad the contact span so the target covers the housing, not just the pins.
       const r = Math.max(...pts.map((p) => Math.hypot(p.x - cx, p.y - cy))) * 1.6
       // The housing's real size, from the SAME function that draws the socket, so
-      // a plug can't disagree with the thing it seats on. `box` is the body's
-      // local frame and `scale` takes it to canvas px.
+      // a plug can't disagree with the thing it seats on — measured in the BODY's
+      // frame and then scaled with the body, in that order (see
+      // `seatedConnectorSize`).
       const mmW = def.dimensions?.width ?? 0
-      const pxPerMm = s.box && mmW > 0 ? (s.box.w / mmW) * (s.scale ?? 1) : 0
-      const size = connectorSize(conn, pxPerMm)
+      const pxPerMm = s.box && mmW > 0 ? s.box.w / mmW : 0
+      const size = seatedConnectorSize(conn, pxPerMm, s.scale ?? 1)
       connectorTargets.push({
         key: s.key,
         connIndex: ci,
@@ -1750,6 +1820,8 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
 
   const onPointerDown = (e: ReactPointerEvent<SVGSVGElement>): void => {
     ;(e.target as Element).setPointerCapture?.(e.pointerId)
+    // Any new gesture supersedes the last refusal notice (#771).
+    if (refusal) setRefusal(null)
     // A net highlight (ERC "Show me") is dismissed by any click on the board — the
     // first click just clears it and does nothing else.
     if (highlight) {
@@ -1944,9 +2016,24 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
           (ca ? connectorAt(w.x, w.y) : null)
         const differentConnector = ca && cb && !(ca.key === cb.key && ca.connIndex === cb.connIndex)
         if (differentConnector) {
-          // Refused pairings never reach here as a wire — the drag simply doesn't
-          // land, having already said why in the hover badge.
-          makeCable(ca, cb)
+          // A refused pairing lands as a MESSAGE rather than as nothing (#771).
+          // The hover badge goes with the drag, so a release that quietly did
+          // nothing read as a broken drag — the same thing a real bug looks like.
+          const fit = connectorFit(ca.conn, cb.conn)
+          if (fit.ok) {
+            makeCable(ca, cb)
+          } else if (fit.reason) {
+            const at = connectorTargets.find(
+              (x) => x.key === cb.key && x.connIndex === cb.connIndex
+            )
+            setRefusal({
+              reason: fit.reason,
+              cx: at?.cx ?? w.x,
+              cy: at?.cy ?? w.y,
+              r: at?.r ?? 24,
+              seq: Date.now()
+            })
+          }
         } else if (target && target.endpoint !== d.from) {
           addConnection(d.from, target.endpoint)
         }
@@ -2824,26 +2911,21 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
             {/* Seated plug shells, drawn over the wires so the lead's four
                 conductors disappear into the housing the way they really do. */}
             {cablePlugs.map(({ t, kind, angle }, i) => {
-              // The housing's real footprint (#697). It used to be sized off the
-              // contact-span radius, which drew a 3-way servo plug ~4 mm deep
-              // against a real 2.54 mm — so on a PCA9685, whose servo headers sit
-              // one 2.54 mm pitch apart, neighbouring plugs overlapped.
-              // The group is rotated so +x is the way the lead LEAVES, and a lead
-              // leaves through the mouth — so the contact span runs ACROSS that
-              // axis and the housing's depth along it. Drawing w along x put the
-              // shell broadside to its own cable, which is why the plug sat
-              // beside the socket instead of over it.
-              const w = t.h
-              const h = t.w
+              // The housing's real footprint (#697), turned into the two shapes a
+              // plug is drawn from by ONE pure rule (#772). The frame is the
+              // socket's own — origin at the housing centre, +x the way the lead
+              // leaves — so the group just has to translate and turn, and the
+              // plug can no longer be centred on anything but its socket.
+              const { shell: body, boot } = cablePlugGeometry(t.w, t.h)
               // The lead's own housing colour (shared, so a plug can't drift
               // from the palette the way its SIZE once did) — a QWIIC lead is
               // white, Grove off-white, DuPont black.
               const { shell, edge } = cablePlugStyle(kind)
               return (
-                <g key={`plug${i}`} transform={`rotate(${angle} ${t.cx} ${t.cy})`} style={{ pointerEvents: 'none' }} className="wc__cable-plug">
-                  <rect x={t.cx - w / 2} y={t.cy - h / 2} width={w} height={h} rx={h * 0.18} fill={shell} stroke={edge} strokeWidth={1} />
+                <g key={`plug${i}`} transform={`translate(${t.cx} ${t.cy}) rotate(${angle})`} style={{ pointerEvents: 'none' }} className="wc__cable-plug">
+                  <rect x={body.x} y={body.y} width={body.w} height={body.h} rx={body.rx} fill={shell} stroke={edge} strokeWidth={1} />
                   {/* Strain-relief boot on the side the lead leaves from. */}
-                  <rect x={t.cx + w / 2 - h * 0.1} y={t.cy - h * 0.3} width={h * 0.42} height={h * 0.6} rx={h * 0.14} fill={edge} opacity={0.85} />
+                  <rect x={boot.x} y={boot.y} width={boot.w} height={boot.h} rx={boot.rx} fill={edge} opacity={0.85} />
                 </g>
               )
             })}
@@ -2892,6 +2974,32 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                     </text>
                   </g>
                 )}
+              </g>
+            )}
+
+            {/* A refused DROP, said again where the lead was let go (#771). The
+                hover badge above vanishes with the drag, so without this a
+                refusal and a drag that failed to land looked identical — and the
+                user reasonably read the refusal as a broken drag. */}
+            {refusal && !cableDrag && (
+              <g key={refusal.seq} className="wc__refused" pointerEvents="none">
+                <circle
+                  cx={refusal.cx}
+                  cy={refusal.cy}
+                  r={refusal.r}
+                  className="wc__refused-ring"
+                  fill="none"
+                  strokeDasharray="4 3"
+                />
+                <text
+                  x={refusal.cx}
+                  y={refusal.cy - refusal.r - 10}
+                  textAnchor="middle"
+                  className="wc__refused-why"
+                  style={{ paintOrder: 'stroke' }}
+                >
+                  {refusal.reason}
+                </text>
               </g>
             )}
             {drag?.kind === 'wire' && drag.from && (() => {

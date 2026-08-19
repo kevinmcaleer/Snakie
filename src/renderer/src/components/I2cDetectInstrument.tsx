@@ -183,19 +183,14 @@ export function I2cDetectInstrument({
     setAdding(part.id)
     setAddedId(null)
     try {
-      // Pop the breadboard view first, then resolve the project folder from the
-      // board payload (it streams right after the window opens) so the part
-      // lands in the SAME robot.yml the Board View edits.
-      await window.api.board.open()
-      let folder: string | undefined
-      for (let i = 0; i < 10; i++) {
-        const p = await window.api.board.requestSource().catch(() => null)
-        if (p) {
-          folder = p.folder
-          break
-        }
-        await new Promise((r) => setTimeout(r, 150))
-      }
+      // The project folder, straight from the session (#775). This used to open
+      // the pop-out board WINDOW and then poll `board.requestSource()` for the
+      // payload that streams once it is open — the folder arrived as a side
+      // effect of a window existing, which is why "Add" opened the deprecated
+      // window at all. It is a property of the session, so it is asked for
+      // directly; getting it wrong writes the part into a DIFFERENT project's
+      // robot.yml (or, with no folder at all, into the userData fallback).
+      const folder = (await window.api.workspace.folder().catch(() => null)) ?? undefined
       const robot = await window.api.robot.load(folder)
       const ids = new Set(['board', ...robot.parts.map((x) => x.id)])
       let id = part.id
@@ -206,8 +201,13 @@ export function I2cDetectInstrument({
         parts: [...robot.parts, { id, lib: libraryId, part: part.id, label: part.name }]
       })
       setAddedId(part.id)
+      // …then SHOW the part where it landed. The Electronics workspace is where
+      // the Board View lives now; the pop-out window it used to open is
+      // deprecated. Sent as an IPC so this works from a DETACHED instrument
+      // window too, which cannot reach the main window's switcher directly.
+      window.api.workspace.show('board')
     } catch {
-      // Best-effort — the board window not opening shouldn't crash the panel.
+      // Best-effort — a project that won't load or save shouldn't crash the panel.
     } finally {
       setAdding(null)
     }

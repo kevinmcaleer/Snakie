@@ -1,11 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import {
+  cablePlugGeometry,
   cableRole,
   conductorColour,
   connectorFit,
   connectorKindName,
   housingPlugAngle,
-  pairContacts
+  pairContacts,
+  variantsCompatible
 } from '../src/renderer/src/components/cable'
 import type { PartConnector, PartPin } from '../src/shared/part'
 
@@ -209,6 +211,85 @@ describe('connectorFit', () => {
   })
 })
 
+describe('a port that declares no variant (#771)', () => {
+  /**
+   * The two ways of authoring a Grove port have to behave the same. The
+   * `seeed-xiao-expansion-base` declares four physically identical Grove sockets
+   * two different ways — one `connectors:` entry carrying `variant: i2c`, three
+   * group housings carrying no variant at all — and a lead that seated in one
+   * silently refused the others.
+   */
+  const groveNoVariant = (): PartConnector => ({
+    kind: 'grove',
+    x: 0.5,
+    y: 0.5,
+    // A base's broken-out digital port. Its signal pin ALSO advertises an I²C
+    // role, which is exactly what made role-matching fail: the module's plain
+    // `SIG` then has no partner and the lead carries power and ground only.
+    pins: [
+      pin('GPIO0', 'io', { capabilities: ['digital', 'pwm'], signals: { i2c: 'SCL' } }),
+      pin('N/A', 'other'),
+      pin('VCC', 'pwr'),
+      pin('GND', 'gnd')
+    ]
+  })
+
+  it('is unknown, not different', () => {
+    expect(variantsCompatible(undefined, 'digital')).toBe(true)
+    expect(variantsCompatible('i2c', undefined)).toBe(true)
+    expect(variantsCompatible(undefined, undefined)).toBe(true)
+    expect(variantsCompatible('i2c', 'digital')).toBe(false)
+    expect(variantsCompatible('I2C', 'i2c')).toBe(true) // spelling isn't a mismatch
+  })
+
+  it('accepts the lead a port declaring the SAME wiring would accept', () => {
+    const fit = connectorFit(groveDigital(), groveNoVariant())
+    expect(fit.ok).toBe(true)
+    expect(fit.reason).toBeUndefined()
+  })
+
+  it('joins it contact-for-contact, like the straight lead it is', () => {
+    // A Grove cable is a 4-way straight-through lead; which contact meets which
+    // is decided by the housing, never by what either end calls its wiring. Going
+    // down the cross-family ROLE path here is what lost the signal wire.
+    const pairs = pairContacts(groveDigital(), groveNoVariant())
+    expect(pairs).toContainEqual([0, 0]) // SIG -> the port's signal pin
+    expect(pairs).toContainEqual([2, 2]) // VCC -> VCC
+    expect(pairs).toContainEqual([3, 3]) // GND -> GND
+    expect(pairs.some(([ia]) => ia === 1)).toBe(false) // NC invents no wire
+  })
+
+  it('behaves identically whichever way the port was authored', () => {
+    // The whole point: a housing and a `connectors:` entry describing the same
+    // physical socket must not disagree.
+    const stated = connectorFit(groveDigital(), groveDigital())
+    const unstated = connectorFit(groveDigital(), groveNoVariant())
+    expect(unstated.ok).toBe(stated.ok)
+    expect(unstated.pairs).toEqual(stated.pairs)
+  })
+
+  it('still refuses two ports that BOTH state incompatible wiring', () => {
+    // Accepting the unknown must not accept the known-wrong — the guard exists
+    // because Grove plugs are physically identical, so nothing else catches it.
+    const fit = connectorFit(groveI2c(), groveUart())
+    expect(fit.ok).toBe(false)
+    expect(fit.reason).toBeTruthy()
+  })
+
+  it('gives a reason for every refusal, so none can be silent', () => {
+    const refusals = [
+      connectorFit(groveI2c(), groveUart()),
+      connectorFit(servo(), groveI2c()),
+      connectorFit(groveI2c(), servo())
+    ]
+    for (const fit of refusals) {
+      expect(fit.ok).toBe(false)
+      expect(fit.reason, JSON.stringify(fit)).toBeTruthy()
+      expect(fit.pairs).toEqual([])
+    }
+  })
+})
+
 describe('connectorKindName', () => {
   it('names a port the way its silk does', () => {
     expect(connectorKindName(groveI2c())).toBe('Grove I2C')
@@ -244,6 +325,74 @@ describe('the lead leaves through the mouth, not off an end', () => {
     for (const rotation of [0, 180]) {
       expect(housingPlugAngle(c({ rotation, y: 0.2 }))).toBeLessThan(0) // upper half → up
       expect(housingPlugAngle(c({ rotation, y: 0.8 }))).toBeGreaterThan(0) // lower → down
+    }
+  })
+})
+
+describe('the plug a seated lead is drawn as (#772)', () => {
+  // A real 4-way Grove socket: 11.8 mm along its contacts, 6.6 mm across them,
+  // drawn here at 6.55 px/mm (a 58 mm carrier filling the canvas cap).
+  const SPAN = 11.8 * 6.55
+  const DEPTH = 6.6 * 6.55
+
+  it('centres the shell on the socket, not beside it', () => {
+    // The frame's origin IS the socket centre, so a shell that is not centred on
+    // the origin is a shell that does not sit on its port. The plug used to be
+    // pinned to the mean of the contact anchors, which sit at the housing's front
+    // edge — half a housing-depth adrift.
+    const { shell } = cablePlugGeometry(SPAN, DEPTH)
+    expect(shell.x + shell.w / 2).toBeCloseTo(0, 10)
+    expect(shell.y + shell.h / 2).toBeCloseTo(0, 10)
+  })
+
+  it('covers the socket footprint exactly — depth along the lead, span across it', () => {
+    // +x is the way the lead leaves, and a lead leaves through the mouth: so the
+    // housing's DEPTH runs along that axis and its contact span across it. Getting
+    // this the other way round draws the shell broadside to its own cable.
+    const { shell } = cablePlugGeometry(SPAN, DEPTH)
+    expect(shell.w).toBeCloseTo(DEPTH, 10)
+    expect(shell.h).toBeCloseTo(SPAN, 10)
+  })
+
+  it('never grows outside the socket across the contacts', () => {
+    // What made this visible on hardware: on a 20 mm Grove module the plug covered
+    // a third of the board. Nothing the plug draws may be wider than the port.
+    const { shell, boot } = cablePlugGeometry(SPAN, DEPTH)
+    for (const r of [shell, boot]) {
+      expect(r.y).toBeGreaterThanOrEqual(-SPAN / 2)
+      expect(r.y + r.h).toBeLessThanOrEqual(SPAN / 2)
+    }
+  })
+
+  it('keeps the strain relief a stub — proportioned to the DEPTH, not the span', () => {
+    // The boot's length used to come from the contact span, so on a Grove (11.8 mm
+    // across, 6.6 mm deep) it stood further proud of the shell than the shell was
+    // thick. A plug is a little longer than its socket, never half as long again.
+    const { shell, boot } = cablePlugGeometry(SPAN, DEPTH)
+    const proud = boot.x + boot.w - (shell.x + shell.w)
+    expect(proud).toBeGreaterThan(0) // it IS a boot: it stands out of the shell
+    expect(proud).toBeLessThan(DEPTH / 2)
+    expect(boot.x).toBeGreaterThan(0) // …on the side the lead leaves from
+  })
+
+  it('is linear in the drawn scale — no absolute pixels to trip over', () => {
+    // The bug class this closes: a plug measured in one unit against a socket
+    // measured in another looks right at one board size and wrong at every other.
+    // Doubling the socket must double every number the plug is drawn from.
+    const once = cablePlugGeometry(SPAN, DEPTH)
+    const twice = cablePlugGeometry(SPAN * 2, DEPTH * 2)
+    for (const key of ['shell', 'boot'] as const) {
+      for (const f of ['x', 'y', 'w', 'h', 'rx'] as const) {
+        expect(twice[key][f], `${key}.${f}`).toBeCloseTo(once[key][f] * 2, 10)
+      }
+    }
+  })
+
+  it('degrades to nothing rather than NaN for a socket with no size', () => {
+    const { shell, boot } = cablePlugGeometry(0, 0)
+    for (const v of [shell.w, shell.h, shell.rx, boot.w, boot.h, boot.rx]) {
+      expect(Number.isFinite(v)).toBe(true)
+      expect(v).toBe(0)
     }
   })
 })

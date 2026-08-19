@@ -1087,6 +1087,30 @@ export function connectorSize(conn: PartConnector, pxPerMm = 0): { n: number; w:
   return { n, w: Math.max(18, n * 5 + 6), h: 11 }
 }
 
+/**
+ * The same socket, measured in the coordinates of a canvas that draws the BODY at
+ * `bodyScale` (#772).
+ *
+ * The order matters. A part body is laid out in its own reference frame and then
+ * uniformly scaled, so the socket glyph is sized with the BODY's px/mm and shrinks
+ * with everything else. Anything drawing over that socket — a seated plug — has to
+ * do the same two steps in the same order: calling {@link connectorSize} straight
+ * with the CANVAS px/mm looks equivalent but isn't, because the minimum sizes that
+ * keep a socket visible are absolute pixels. They bite at the smaller scale and not
+ * the larger one, so the plug came out bigger than the socket it plugs into — and
+ * only on some boards, which is what made it look like an offset rather than a
+ * units mix-up.
+ */
+export function seatedConnectorSize(
+  conn: PartConnector,
+  bodyPxPerMm: number,
+  bodyScale: number
+): { w: number; h: number } {
+  const { w, h } = connectorSize(conn, bodyPxPerMm)
+  const k = bodyScale > 0 ? bodyScale : 1
+  return { w: w * k, h: h * k }
+}
+
 /** A connector glyph at (cx, cy): a dark JST-SH housing with gold contacts (a
  *  QWIIC / STEMMA QT / JST socket). `selected` drives the Part Editor highlight.
  *  `pxPerMm` scales the housing to the board's real size (0 ⇒ legacy fixed size).

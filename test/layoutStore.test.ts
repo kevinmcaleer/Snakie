@@ -4,6 +4,7 @@ import {
   WORKSPACE_PRESETS,
   LAYOUT_STORAGE_KEY,
   appliedHorizontal,
+  coerceWorkspaceId,
   defaultLayoutState,
   loadLayoutState,
   recordedHorizontal,
@@ -83,6 +84,29 @@ describe('workspace presets (epic #259; +Robot mode #320)', () => {
     a.workspaces.code.horizontal[0] = 99
     expect(WORKSPACE_PRESETS.code.horizontal[0]).not.toBe(99)
     expect(defaultLayoutState().workspaces.code.horizontal[0]).not.toBe(99)
+  })
+})
+
+describe('a workspace asked for by ANOTHER window (#775)', () => {
+  // A detached instrument window can't reach the switcher, so it sends the id
+  // across a process boundary. That makes the id untrusted input arriving as a
+  // plain string, and this is the boundary that has to judge it.
+  it('accepts every workspace the switcher offers', () => {
+    for (const id of WORKSPACE_IDS) expect(coerceWorkspaceId(id)).toBe(id)
+  })
+
+  it('refuses anything else rather than applying geometry that does not exist', () => {
+    // `lab`/`data` are RETIRED ids that older sessions still carry around —
+    // honouring one would strand the user on a workspace with no switcher segment.
+    for (const bad of ['lab', 'data', 'datalab', 'Board', '', 'undefined']) {
+      expect(coerceWorkspaceId(bad), bad).toBeNull()
+    }
+  })
+
+  it('survives a payload that is not a string at all', () => {
+    for (const bad of [undefined, null, 0, 1, {}, [], ['board']]) {
+      expect(coerceWorkspaceId(bad), JSON.stringify(bad)).toBeNull()
+    }
   })
 })
 
