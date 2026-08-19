@@ -47,6 +47,32 @@ if d is not None and d < 10:
     print("something's close")
 ```
 
+## On a non-Arduino board, pass the I²C bus yourself
+
+The library works out which pins carry I²C from `os.uname().machine`, against a
+table of **Arduino** boards. On anything else — a Pico, a Tiny 2350, an ESP32 —
+that lookup fails and construction raises:
+
+```
+RuntimeError: I2C interface couldn't be determined automatically for '<your board>'
+```
+
+It isn't a wiring fault, and nothing is wrong with the module. Hand it a bus and
+it works:
+
+```python
+from machine import I2C, Pin
+from modulino import ModulinoDistance
+
+# Use YOUR board's I²C pins — Snakie shows them on the board's pinout.
+i2c = I2C(0, sda=Pin(4), scl=Pin(5))
+
+distance = ModulinoDistance(i2c_bus=i2c)
+```
+
+Every Modulino class takes `i2c_bus`, so one bus serves a whole chain — build it
+once and pass it to each module.
+
 ## Install the library
 
 One package covers every Modulino, and it brings the `vl53l4cd` driver with it:

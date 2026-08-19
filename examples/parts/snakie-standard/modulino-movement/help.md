@@ -76,6 +76,32 @@ Note the gyroscope measures **rate of turn**, not angle — hold the board still
 45° and it reads zero. Getting an angle out means integrating over time, and the
 error accumulates; fusing it with the accelerometer is the usual answer.
 
+## On a non-Arduino board, pass the I²C bus yourself
+
+The library works out which pins carry I²C from `os.uname().machine`, against a
+table of **Arduino** boards. On anything else — a Pico, a Tiny 2350, an ESP32 —
+that lookup fails and construction raises:
+
+```
+RuntimeError: I2C interface couldn't be determined automatically for '<your board>'
+```
+
+It isn't a wiring fault, and nothing is wrong with the module. Hand it a bus and
+it works:
+
+```python
+from machine import I2C, Pin
+from modulino import ModulinoMovement
+
+# Use YOUR board's I²C pins — Snakie shows them on the board's pinout.
+i2c = I2C(0, sda=Pin(4), scl=Pin(5))
+
+movement = ModulinoMovement(i2c_bus=i2c)
+```
+
+Every Modulino class takes `i2c_bus`, so one bus serves a whole chain — build it
+once and pass it to each module.
+
 ## Install the library
 
 One package covers every Modulino, and it brings the `lsm6dsox` driver with it:
