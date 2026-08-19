@@ -37,7 +37,7 @@ import type {
   InstallProgress,
   InstallResult,
   PackageInfo
-} from '../main/packages/types'
+} from '../shared/packages/types'
 import type { ModuleInstallPlan } from '../main/modules/resolve'
 import {
   importProbeSnippet,

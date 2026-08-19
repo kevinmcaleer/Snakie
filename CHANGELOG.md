@@ -7,6 +7,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Packages install in the browser too.** (#776) Snakie for Web had no
+  `packages` backend at all: the Packages tab could list nothing, search
+  nothing, and its Install button quietly did nothing. #776 is what made a web
+  version possible — an install is no longer `mip` running on the board but
+  "resolve the package on the host, write the files to the board", and in a
+  browser the host is the page. So the curated list, PyPI search, `github:`
+  specs and bare micropython-lib names (dependencies and all) now work on
+  app.snakie.org exactly as they do on the desktop, over Web Serial or into the
+  simulator.
+
+  What a web page **can't** do is fetch from just anywhere — it is fenced in by
+  its content-security policy and by whether the far end allows cross-origin
+  reads at all. A `gitlab:` spec, a custom package index, or any other host is
+  therefore refused **up front, by name**, with a line saying so and pointing at
+  the desktop app — rather than the bare "Failed to fetch" the browser would
+  otherwise give.
 - **A bitmap font editor, so a display project can have its own typeface.**
   (#250, epic #247) Small displays ship with one tiny built-in font; this
   instrument lets you draw your own the way hand-made display fonts are made —
