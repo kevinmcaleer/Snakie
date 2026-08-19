@@ -192,3 +192,61 @@ export function housingPlugAngle(conn: PartConnector): number {
   if (column) return conn.x < 0.5 ? 180 : 0 // column of contacts → out the side
   return conn.y < 0.5 ? -90 : 90 //            row of contacts   → out top/bottom
 }
+
+/** One rectangle of the plug drawing, in the socket's own frame. */
+export interface PlugRect {
+  x: number
+  y: number
+  w: number
+  h: number
+  rx: number
+}
+
+/** The two shapes a seated plug is drawn from: the shell that covers the socket
+ *  and the strain-relief boot the cable leaves through. */
+export interface PlugGeometry {
+  shell: PlugRect
+  boot: PlugRect
+}
+
+/**
+ * The plug on the end of a seated lead, in the SOCKET'S OWN FRAME (#772).
+ *
+ * Origin is the socket's CENTRE and +x is the direction the lead leaves (the
+ * caller translates to the socket and turns by {@link housingPlugAngle}). Both
+ * inputs are the socket's own drawn footprint — `spanPx` along its row of
+ * contacts, `depthPx` across them — so the plug is derived from the thing it
+ * seats on and cannot be measured in different units from it. It used to be
+ * centred on the mean of the CONTACT anchors, which sit at the housing's front
+ * edge, so the whole plug sat half a housing-depth off the socket.
+ *
+ * The shell covers the socket exactly. The boot is proportioned to the housing
+ * DEPTH — it was previously sized from the contact span, which on a Grove (11.8
+ * mm across, 6.6 mm deep) drew a strain relief longer than the shell itself and
+ * pushed the plug's outline across a third of a 20 mm module.
+ */
+export function cablePlugGeometry(spanPx: number, depthPx: number): PlugGeometry {
+  const span = Math.max(0, spanPx)
+  const depth = Math.max(0, depthPx)
+  // Seen from above, the shell covers the contacts and the cable leaves one long
+  // face — so the DEPTH runs along the lead's axis and the span across it.
+  const shell: PlugRect = {
+    x: -depth / 2,
+    y: -span / 2,
+    w: depth,
+    h: span,
+    rx: Math.min(depth, span) * 0.14
+  }
+  // A stub on the trailing face: it overlaps the shell slightly so the two read
+  // as one moulding, and stands proud by well under half a housing depth.
+  const len = depth * 0.45
+  const width = span * 0.5
+  const boot: PlugRect = {
+    x: depth / 2 - len * 0.35,
+    y: -width / 2,
+    w: len,
+    h: width,
+    rx: Math.min(len, width) * 0.25
+  }
+  return { shell, boot }
+}
