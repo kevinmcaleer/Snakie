@@ -1,6 +1,5 @@
 import { EventEmitter } from 'events'
 import { VIRTUAL_PORT_PATH } from '../../shared/virtual-device'
-import { INSTALL_START, INSTALL_ERR } from '../packages/install'
 import { MicroPythonRuntime, type ReplRuntime } from './MicroPythonRuntime'
 import { isProbeCode, simulateProbeResponse, simulatedTelemetryFrame } from '../../shared/simulation'
 import type { RuntimeInfo } from '../../shared/dialect'
@@ -23,13 +22,8 @@ const TELEMETRY_INTERVAL_MS = 120
  * build's is the port's, not a board firmware anyone could flash, and offering
  * it would invite the update check to compare against a firmware catalog.
  * Whether the simulator should ever offer CircuitPython is #764.
- *
- * `hasMip: false` is likewise a fact, not a guess (#776): the WASM port has no
- * `mip` and no socket layer to fetch with, so driver installs must take the
- * host-resolution route — which works here, because the files land in the
- * simulator's VFS through the same `writeFile` a real board uses.
  */
-const SIM_RUNTIME: RuntimeInfo = { dialect: 'micropython', hasMip: false }
+const SIM_RUNTIME: RuntimeInfo = { dialect: 'micropython' }
 
 /**
  * SIMULATED MicroPython device (issue #135).
@@ -168,18 +162,12 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
     if (isProbeCode(code)) {
       return { stdout: simulateProbeResponse(code, this.tick), stderr: '' }
     }
-    // `mip` package installs can't run on the WASM device (no network, and no
-    // `mip` module in the port). Detect the install snippet and answer with a
-    // clear, sentinel'd result so the Packages / SAM / driver UIs explain it —
-    // instead of the cryptic "mip failed" an empty response parses to (#135).
-    if (code.includes(INSTALL_START)) {
-      return {
-        stdout:
-          `${INSTALL_START}\n${INSTALL_ERR} Package install needs a network connection and a ` +
-          "real board — it isn't available on the simulated device (offline).",
-        stderr: ''
-      }
-    }
+    // (Installs used to be intercepted here: they ran `mip` ON the device, and
+    // the WASM port has neither `mip` nor a network, so the snippet had to be
+    // answered with a canned "offline" error. #776 removed that whole route —
+    // packages are resolved on the HOST now and arrive as ordinary file writes,
+    // which the simulator's VFS accepts like any other file.)
+    //
     // Actually RUN the snippet on the real WASM interpreter and return what it
     // printed (this used to be a `''` stub, which silently broke every exec-based
     // probe on the sim — e.g. `modules.probeInstalled`, so the missing-library

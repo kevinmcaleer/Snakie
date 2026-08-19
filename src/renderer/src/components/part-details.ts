@@ -165,7 +165,7 @@ function driverSummary(
       ? `Installs the “${def.name}” module → ${target || DEFAULT_LIB}`
       : `Unknown module “${moduleId}” — nothing to install`
   }
-  if (method === 'mip') return `mip-installs ${source} → ${target || DEFAULT_LIB}`
+  if (method === 'mip') return `Downloads the ${source} package → ${target || DEFAULT_LIB}`
   if (HTTP_URL.test(source)) return `Downloads ${source} → ${target || DEFAULT_LIB}`
   return `Copies ${source} (shipped with the part) → ${target || DEFAULT_LIB}`
 }

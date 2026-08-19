@@ -42,14 +42,9 @@ import type { ModuleInstallPlan } from '../main/modules/resolve'
 import {
   importProbeSnippet,
   MODULE_PRESENT,
-  MODULES_LIB_DIR,
   type ModuleDef
 } from '../shared/modules-catalog'
-import {
-  capabilitiesFrom,
-  looksLikeMissingMip,
-  type InstallCapabilities
-} from '../shared/install-strategy'
+import { writeFailureMessage } from '../shared/install-messages'
 import { deviceDirsFor } from '../shared/mip-resolve'
 import type {
   CopilotDeviceCode,
@@ -330,21 +325,66 @@ const updates = {
   }
 }
 
-// Sentinel markers emitted by the device install snippet (kept in sync with
-// src/main/packages/install.ts). Used to classify success vs device traceback.
-const INSTALL_START = '<<SNAKIE_MIP_START>>'
-const INSTALL_OK = '<<SNAKIE_MIP_OK>>'
-const INSTALL_ERR = '<<SNAKIE_MIP_ERR>>'
+/**
+ * Put a resolved package's files on the connected board (#776).
+ *
+ * THE install step, shared by `packages.install` and `modules.install`: create
+ * every ancestor directory (MicroPython has no recursive `mkdir`), then write
+ * the files in order. Never throws — a failure comes back as `ok:false` with a
+ * message that says the download succeeded and the BOARD refused, because that
+ * is a completely different problem from not being able to fetch the package.
+ *
+ * `onStep` reports per-file progress: this is the slow leg — a package like the
+ * Modulino range is 25 files, and over the raw REPL each is a run of hex-chunk
+ * round-trips — and silence here reads as a hang.
+ */
+async function writeFilesToBoard(
+  name: string,
+  files: { path: string; contents: string }[],
+  onStep: (message: string) => void
+): Promise<{ ok: boolean; log: string }> {
+  if (files.length === 0) {
+    return { ok: false, log: `Couldn't install ${name}: nothing was resolved to write.` }
+  }
+  let current = ''
+  try {
+    for (const dir of deviceDirsFor(files.map((f) => f.path))) {
+      // An existing directory is fine — MicroPython raises EEXIST for it.
+      await unwrap<void>(ipcRenderer.invoke('device:mkdir', dir)).catch(() => undefined)
+    }
+    let done = 0
+    for (const file of files) {
+      current = file.path
+      onStep(`Writing ${++done}/${files.length} — ${file.path}…`)
+      await unwrap<void>(ipcRenderer.invoke('device:writeFile', file.path, file.contents))
+    }
+    return { ok: true, log: `Wrote ${files.map((f) => f.path).join(', ')}` }
+  } catch (err) {
+    return {
+      ok: false,
+      log: writeFailureMessage({
+        name,
+        path: current || undefined,
+        detail: err instanceof Error ? err.message : String(err)
+      })
+    }
+  }
+}
 
 /**
- * MicroPython package installer API (issue #20).
+ * MicroPython package installer API (issue #20, reworked by #776).
  *
  * `search` / `topPackages` are pure main-process calls (PyPI lives past the
- * CSP). `install` is orchestrated here in the preload: it asks main to build
- * the `mip` snippet + notes, then runs the snippet on the connected device via
- * the SAME serialized `device:exec` channel the rest of the app uses, parsing
- * the sentinel markers to decide success. Progress is reported through an
- * optional callback (purely renderer-side; no main push channel needed).
+ * CSP). `install` is orchestrated here in the preload: it asks main to DOWNLOAD
+ * the package — main has the internet connection, and so does the user's
+ * machine generally; the board does not — then writes the files it gets back
+ * over the SAME serialized `device:*` channel the rest of the app uses.
+ *
+ * This used to run `mip.install()` on the board, which needed the BOARD to be
+ * online. Boards without WiFi could never install anything, and `mip` is absent
+ * from CircuitPython and many vendor builds even when they are online. Progress
+ * is reported through an optional callback (purely renderer-side; no main push
+ * channel needed).
  */
 const packages = {
   /** Curated discovery list of popular MicroPython libraries (offline-safe). */
@@ -354,10 +394,10 @@ const packages = {
   search: (query: string): Promise<PackageInfo[]> =>
     unwrap(ipcRenderer.invoke('packages:search', query)),
   /**
-   * Install `name` onto the connected device by running `mip`. Requires an
-   * active connection (the device.exec call rejects otherwise). `onProgress`
-   * receives lifecycle events; the resolved {@link InstallResult} also carries
-   * the full log + any non-fatal notes.
+   * Install `name` onto the connected device: resolve it on this machine, then
+   * write its files. Requires an active connection (the device calls reject
+   * otherwise). `onProgress` receives lifecycle events; the resolved
+   * {@link InstallResult} also carries the full log + any non-fatal notes.
    */
   install: async (
     name: string,
@@ -367,39 +407,30 @@ const packages = {
     const emit = (p: InstallProgress): void => onProgress?.(p)
     emit({ name, state: 'started' })
 
-    const plan = await unwrap<InstallPlan>(
-      ipcRenderer.invoke('packages:install', name, options ?? {})
-    )
+    emit({ name, state: 'running', message: `Downloading ${name}…` })
+    let plan: InstallPlan
+    try {
+      plan = await unwrap<InstallPlan>(
+        ipcRenderer.invoke('packages:install', name, options ?? {})
+      )
+    } catch (err) {
+      // Main already composed the explanation (it knows WHY the download
+      // failed); pass it through rather than restating it as "install failed".
+      const log = err instanceof Error ? err.message : String(err)
+      emit({ name, state: 'error', message: `Failed to install ${name}` })
+      return { name, ok: false, log, notes: [] }
+    }
     for (const note of plan.notes) emit({ name, state: 'note', message: note })
 
-    emit({ name, state: 'running', message: `Installing ${name} with mip…` })
-    const exec = await unwrap<{ stdout: string; stderr: string }>(
-      ipcRenderer.invoke('device:exec', plan.snippet)
+    const written = await writeFilesToBoard(name, plan.files, (message) =>
+      emit({ name, state: 'running', message })
     )
-
-    const out = `${exec.stdout ?? ''}\n${exec.stderr ?? ''}`.trim()
-    const failed =
-      out.includes(INSTALL_ERR) ||
-      (exec.stderr != null && exec.stderr.includes('Traceback'))
-    const ok = out.includes(INSTALL_OK) && !failed
-
-    // Strip our sentinel markers from the log shown to the user, keeping any
-    // human-readable text (e.g. the error repr printed after INSTALL_ERR).
-    const log = out
-      .split(/\r?\n/)
-      .filter((l) => !l.includes(INSTALL_START) && !l.includes(INSTALL_OK))
-      .map((l) => l.replace(INSTALL_ERR, '').trim())
-      .filter((l) => l.length > 0)
-      .join('\n')
-      .trim()
-
     emit({
       name,
-      state: ok ? 'done' : 'error',
-      message: ok ? `Installed ${name}` : `Failed to install ${name}`
+      state: written.ok ? 'done' : 'error',
+      message: written.ok ? `Installed ${name}` : `Failed to install ${name}`
     })
-
-    return { name, ok, log: log || out, notes: plan.notes }
+    return { name, ok: written.ok, log: written.log, notes: plan.notes }
   }
 }
 
@@ -419,95 +450,37 @@ export interface ModuleInstallResult {
   id: string
   /** Did the install succeed? */
   ok: boolean
-  /** Combined device log (cleaned of sentinel markers) or the error text. */
+  /** What was written, or why it couldn't be. */
   log: string
-  /** Non-fatal notes surfaced during the install (provenance / mip hints). */
+  /** Non-fatal notes surfaced during the install (provenance / source hints). */
   notes: string[]
 }
 
 /**
- * Write a host-resolved package to the board (#776): every ancestor directory
- * first (MicroPython has no recursive `mkdir`), then the files in order.
- *
- * Shared by both entries into the host route — the planned one (the probe said
- * the board has no `mip`) and the retried one (the snippet raised a missing-mip
- * ImportError) — so a package installs identically however it got here.
- */
-async function writeHostFiles(
-  id: string,
-  plan: ModuleInstallPlan,
-  emit: (p: ModuleInstallProgress) => void
-): Promise<ModuleInstallResult> {
-  const files = plan.files ?? []
-  if (files.length === 0) {
-    const msg = `Couldn't install ${id}: nothing was resolved to write.`
-    emit({ id, state: 'error', message: `Failed to install ${id}` })
-    return { id, ok: false, log: msg, notes: plan.notes }
-  }
-  emit({
-    id,
-    state: 'running',
-    message: `Writing ${files.length} file${files.length === 1 ? '' : 's'} to the board…`
-  })
-  try {
-    for (const dir of deviceDirsFor(files.map((f) => f.path))) {
-      // An existing directory is fine — MicroPython raises EEXIST for it.
-      await unwrap<void>(ipcRenderer.invoke('device:mkdir', dir)).catch(() => undefined)
-    }
-    let done = 0
-    for (const file of files) {
-      // Per-file progress, because this is the SLOW path: a package like the
-      // Modulino range is ~25 files, and over the raw REPL each one is a run of
-      // hex-chunk round-trips. Silence here reads as a hang.
-      emit({
-        id,
-        state: 'running',
-        message: `Writing ${++done}/${files.length} — ${file.path}…`
-      })
-      await unwrap<void>(ipcRenderer.invoke('device:writeFile', file.path, file.contents))
-    }
-    emit({ id, state: 'done', message: `Installed ${id}` })
-    return {
-      id,
-      ok: true,
-      log: `Wrote ${files.map((f) => f.path).join(', ')}`,
-      notes: plan.notes
-    }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    emit({ id, state: 'error', message: `Failed to install ${id}` })
-    return { id, ok: false, log: msg, notes: plan.notes }
-  }
-}
-
-/**
- * Per-module installer API (issue #120) — the renderer-facing half of the
- * "modular installs" subsystem.
+ * Per-module installer API (issue #120, reworked by #776) — the renderer-facing
+ * half of the "modular installs" subsystem.
  *
  * `catalog` is a pure main-process call (the static module registry). `install`
  * is orchestrated HERE in the preload (exactly like `packages.install`): it asks
- * main for the {@link ModuleInstallPlan}, then runs the privileged-free device
- * step over the SAME serialized `device:*` channel the rest of the app uses —
- * for a `bundled` module that's `device.mkdir('/lib')` + `device.writeFile`
- * (the #108 path, generalised); for a `mip` module it's `device.exec(snippet)`
- * with the same sentinel parsing as `packages.install`. `probeInstalled` runs a
- * cheap `import <name>` probe per module so the manager can show installed-vs-
- * available without a "list packages" API the firmware doesn't provide.
+ * main for the {@link ModuleInstallPlan} — which for an upstream driver means
+ * main DOWNLOADS it, because this machine has the internet connection and the
+ * board does not — then writes the files over the SAME serialized `device:*`
+ * channel the rest of the app uses. That is the #108 path, generalised: one
+ * mechanism for a bundled stub and a 25-file package alike.
  *
- * **`mip` is not guaranteed to exist (#776.)** It is a micropython-lib package,
- * absent on CircuitPython and on plenty of vendor MicroPython builds, so the
- * install ROUTE is chosen from the board's probed capability rather than its
- * dialect: no `mip` ⇒ main resolves the package on the computer and the plan
- * arrives as ordinary file writes. Two things make that reliable here — the
- * capability is read off the live device status before asking for a plan, and a
- * snippet that still fails with a missing-`mip` ImportError (a board whose probe
- * never answered) is retried down the host route rather than reported raw.
+ * It used to run `mip.install()` on the board for upstream drivers, which asked
+ * a board with no radio to fetch from the internet, and asked every board for a
+ * `mip` that CircuitPython and many vendor builds don't ship (#769, #776).
+ *
+ * `probeInstalled` runs a cheap `import <name>` probe per module so the manager
+ * can show installed-vs-available without a "list packages" API the firmware
+ * doesn't provide.
  */
 const modules = {
   /** The full installable-module catalog (offline-safe), grouped by the UI. */
   catalog: (): Promise<ModuleDef[]> => unwrap(ipcRenderer.invoke('modules:catalog')),
-  /** Resolve one module id to its install plan (bundled contents, a mip snippet,
-   *  or host-resolved files for a board without `mip`). */
+  /** Resolve one module id to the files that install it (bundled, or downloaded
+   *  from its upstream spec). */
   installPlan: (id: string): Promise<ModuleInstallPlan> =>
     unwrap(ipcRenderer.invoke('modules:installPlan', id)),
   /**
@@ -521,93 +494,29 @@ const modules = {
   ): Promise<ModuleInstallResult> => {
     const emit = (p: ModuleInstallProgress): void => onProgress?.(p)
     emit({ id, state: 'started' })
-
-    // What can this board actually do? Read from the live status, which carries
-    // the connect probe's answer (#752, #776). Best-effort: a status we can't
-    // read leaves the capabilities unknown, which keeps the previous route.
-    const runtime = await unwrap<DeviceStatus>(ipcRenderer.invoke('device:getStatus'))
-      .then((s) => s.runtime ?? null)
-      .catch(() => null)
-
-    const requestPlan = (caps: InstallCapabilities): Promise<ModuleInstallPlan> =>
-      unwrap<ModuleInstallPlan>(
-        ipcRenderer.invoke('modules:installPlan', id, { caps, runtime })
-      )
+    emit({ id, state: 'running', message: `Resolving ${id}…` })
 
     let plan: ModuleInstallPlan
     try {
-      plan = await requestPlan(capabilitiesFrom(runtime))
+      plan = await unwrap<ModuleInstallPlan>(ipcRenderer.invoke('modules:installPlan', id))
     } catch (err) {
-      // Planning itself failed — for a host-resolved package that IS the
-      // explanation (main composed it), so surface it as the log rather than
-      // letting it reject into a caller that only knows how to say "failed".
-      const msg = err instanceof Error ? err.message : String(err)
+      // Main already composed the explanation (it knows WHY the download
+      // failed); pass it through rather than restating it as "install failed".
+      const log = err instanceof Error ? err.message : String(err)
       emit({ id, state: 'error', message: `Failed to install ${id}` })
-      return { id, ok: false, log: msg, notes: [] }
+      return { id, ok: false, log, notes: [] }
     }
     for (const note of plan.notes) emit({ id, state: 'note', message: note })
 
-    if (plan.mechanism === 'writeFile' && plan.writeFile) {
-      // Bundled stub: ensure /lib then write the file (the #108 path).
-      emit({ id, state: 'running', message: `Writing ${plan.writeFile.path}…` })
-      try {
-        await unwrap<void>(ipcRenderer.invoke('device:mkdir', MODULES_LIB_DIR)).catch(
-          () => undefined
-        )
-        await unwrap<void>(
-          ipcRenderer.invoke('device:writeFile', plan.writeFile.path, plan.writeFile.contents)
-        )
-        emit({ id, state: 'done', message: `Installed ${id}` })
-        return { id, ok: true, log: `Wrote ${plan.writeFile.path}`, notes: plan.notes }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        emit({ id, state: 'error', message: `Failed to install ${id}` })
-        return { id, ok: false, log: msg, notes: plan.notes }
-      }
-    }
-
-    if (plan.mechanism === 'hostFiles') return writeHostFiles(id, plan, emit)
-
-    // mip mechanism: run the snippet over device.exec, parse the sentinels (same
-    // markers + cleaning as packages.install).
-    emit({ id, state: 'running', message: `Installing ${id} with mip…` })
-    const exec = await unwrap<{ stdout: string; stderr: string }>(
-      ipcRenderer.invoke('device:exec', plan.snippet ?? '')
+    const written = await writeFilesToBoard(id, plan.files, (message) =>
+      emit({ id, state: 'running', message })
     )
-    const out = `${exec.stdout ?? ''}\n${exec.stderr ?? ''}`.trim()
-    const failed =
-      out.includes(INSTALL_ERR) ||
-      (exec.stderr != null && exec.stderr.includes('Traceback'))
-    const ok = out.includes(INSTALL_OK) && !failed
-    const log = out
-      .split(/\r?\n/)
-      .filter((l) => !l.includes(INSTALL_START) && !l.includes(INSTALL_OK))
-      .map((l) => l.replace(INSTALL_ERR, '').trim())
-      .filter((l) => l.length > 0)
-      .join('\n')
-      .trim()
-
-    // The board has no `mip` after all — its probe never answered, so we asked
-    // it to run an installer it does not have. Take the host route now instead
-    // of handing the user the ImportError (#776).
-    if (!ok && looksLikeMissingMip(out)) {
-      try {
-        const hostPlan = await requestPlan({ hasMip: false })
-        for (const note of hostPlan.notes) emit({ id, state: 'note', message: note })
-        return await writeHostFiles(id, hostPlan, emit)
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        emit({ id, state: 'error', message: `Failed to install ${id}` })
-        return { id, ok: false, log: msg, notes: plan.notes }
-      }
-    }
-
     emit({
       id,
-      state: ok ? 'done' : 'error',
-      message: ok ? `Installed ${id}` : `Failed to install ${id}`
+      state: written.ok ? 'done' : 'error',
+      message: written.ok ? `Installed ${id}` : `Failed to install ${id}`
     })
-    return { id, ok, log: log || out, notes: plan.notes }
+    return { id, ok: written.ok, log: written.log, notes: plan.notes }
   },
   /**
    * Probe which of `importNames` are importable on the connected board. Runs one

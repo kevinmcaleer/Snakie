@@ -43,19 +43,6 @@ export interface RuntimeInfo {
   boardId?: string
   /** The build date the runtime reports (`'2026-08-18'`), when it gives one. */
   buildDate?: string
-  /**
-   * Can this board `import mip`? (#776.)
-   *
-   * A CAPABILITY, not an inference from {@link dialect}: `mip` is a
-   * micropython-lib package rather than part of MicroPython, so CircuitPython
-   * never has it AND vendor / feature-branch MicroPython builds routinely omit
-   * it — a board can report `micropython` and still have none. Driver installs
-   * route on this single fact (see `chooseMipRoute`).
-   *
-   * `undefined` means NOT KNOWN (an old probe, a board that wouldn't answer) —
-   * never "no".
-   */
-  hasMip?: boolean
 }
 
 /** How each dialect is named in the UI. */
@@ -73,8 +60,6 @@ export const DIALECT_LABEL: Record<Dialect, string> = {
 const P_NAME = 'SNKIMPL '
 const P_VERSION = 'SNKVER '
 const P_MACHINE = 'SNKMACH '
-/** The `mip` capability line (#776) — `SNKMIP 1` / `SNKMIP 0`. */
-const P_MIP = 'SNKMIP '
 
 /**
  * Ask the board what it is. Run through the raw REPL on connect; parse the
@@ -85,15 +70,6 @@ const P_MIP = 'SNKMIP '
  * enriches: on MicroPython its `.version` is `'1.28.0 on 2026-01-01'` (the
  * banner tail), which is where the build date comes from. Everything is wrapped
  * so a missing attribute degrades to an empty line rather than a traceback.
- *
- * The probe ALSO answers "can this board install packages by itself" (#776) by
- * trying `import mip`. That is deliberately one probe rather than two: the same
- * round-trip already runs on connect, it has retry/logging around it, and a
- * second connect-time probe would race the first for the same noisy window. It
- * is asked as a CAPABILITY (does the import work) rather than as a fact derived
- * from the dialect, because vendor MicroPython builds report `micropython` and
- * still have no `mip`. `import` rather than a file check on purpose: a `mip`
- * whose own dependencies are missing cannot install anything either.
  */
 export const RUNTIME_PROBE_PY = [
   'import sys as _s',
@@ -111,16 +87,9 @@ export const RUNTIME_PROBE_PY = [
   " _m=getattr(_u,'machine','')",
   'except Exception:',
   " _m=getattr(_s.implementation,'_machine','')",
-  "_p='0'",
-  'try:',
-  ' import mip',
-  " _p='1'",
-  'except Exception:',
-  " _p='0'",
   `print(${JSON.stringify(P_NAME)}+_n)`,
   `print(${JSON.stringify(P_VERSION)}+_v)`,
-  `print(${JSON.stringify(P_MACHINE)}+_m)`,
-  `print(${JSON.stringify(P_MIP)}+_p)`
+  `print(${JSON.stringify(P_MACHINE)}+_m)`
 ].join('\n')
 
 /** `'circuitpython'` / `'MicroPython'` / anything → a {@link Dialect}. */
@@ -152,8 +121,6 @@ function compact(info: RuntimeInfo): RuntimeInfo {
   if (info.machine) out.machine = info.machine
   if (info.boardId) out.boardId = info.boardId
   if (info.buildDate) out.buildDate = info.buildDate
-  // `false` is a real answer here — only `undefined` (never asked) is dropped.
-  if (info.hasMip !== undefined) out.hasMip = info.hasMip
   return out
 }
 
@@ -167,17 +134,13 @@ export function parseRuntimeProbe(stdout: string): RuntimeInfo | null {
   let name: string | null = null
   let version = ''
   let machine = ''
-  // Undefined, not false: a probe that predates the `mip` line (or whose line
-  // was lost) must read as "not known" so installs keep their old route (#776).
-  let hasMip: boolean | undefined
   for (const line of stdout.split(/\r?\n/)) {
     if (line.startsWith(P_NAME)) name = line.slice(P_NAME.length).trim()
     else if (line.startsWith(P_VERSION)) version = line.slice(P_VERSION.length).trim()
     else if (line.startsWith(P_MACHINE)) machine = line.slice(P_MACHINE.length).trim()
-    else if (line.startsWith(P_MIP)) hasMip = line.slice(P_MIP.length).trim() === '1'
   }
   if (name === null) return null
-  return compact({ dialect: dialectFromName(name), machine, hasMip, ...splitVersion(version) })
+  return compact({ dialect: dialectFromName(name), machine, ...splitVersion(version) })
 }
 
 /**

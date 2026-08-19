@@ -5,9 +5,17 @@
  * (device-driven probe/install). On the web everything the logic needs is
  * already here: the shared catalog, the bundled driver sources (inlined by
  * vite-plugin-standard-parts), and the full `window.api.device` surface — so
- * this ports the preload's probe/install against those. mip installs run ON
- * the board (it does its own networking), so they work over Web Serial on a
- * network-capable board and fail honestly on the simulator.
+ * this ports the preload's probe/install against those.
+ *
+ * Installs used to run `mip` ON the board, which needed the BOARD to be online
+ * and to ship `mip` — so they never worked on the simulator and never worked on
+ * a board without WiFi. #776 replaced that everywhere with host-side
+ * resolution, and here "the host" is the browser: it downloads the package over
+ * the same shared resolver the desktop uses (raw.githubusercontent.com and the
+ * micropython.org index are CORS-open, which is what makes this reachable from
+ * a web page) and writes the files down `window.api.device`. So a whole package
+ * with transitive `deps` installs here too, over Web Serial or into the
+ * simulator's VFS.
  */
 import {
   MODULES,
@@ -15,12 +23,6 @@ import {
   MODULE_PRESENT,
   type ModuleDef
 } from '../../../shared/modules-catalog'
-import {
-  INSTALL_OK,
-  INSTALL_ERR,
-  INSTALL_START,
-  buildInstallSnippet
-} from '../../../main/packages/install'
 import { driverSources } from 'virtual:snakie-standard-parts'
 import { MODULE_STUBS } from './web-lib-sources'
 import {
@@ -29,17 +31,21 @@ import {
   MipResolveError,
   resolveMipSpec
 } from '../../../shared/mip-resolve'
-import { looksLikeMissingMip, mipInstallFailureMessage } from '../../../shared/install-strategy'
+import {
+  hostInstallNote,
+  resolveFailureMessage,
+  writeFailureMessage
+} from '../../../shared/install-messages'
 
 const LIB_DIR = '/lib'
 
 interface InstallPlan {
   id: string
   importName: string
-  mechanism: 'writeFile' | 'mip'
-  writeFile?: { path: string; contents: string }
-  snippet?: string
-  mipSpec?: string
+  /** Every file to write, parents-before-children. */
+  files: { path: string; contents: string }[]
+  /** The upstream spec these files came from, when there was one. */
+  spec?: string
   notes: string[]
 }
 
@@ -66,7 +72,12 @@ function bundledSource(file: string): string | null {
   return null
 }
 
-function planFor(id: string): InstallPlan {
+/**
+ * The web port of `buildModuleInstallPlan`: bundled source off the inlined
+ * table, or the upstream package downloaded here in the browser. Throws with an
+ * already-composed, human-readable message, exactly as main does.
+ */
+async function planFor(id: string): Promise<InstallPlan> {
   const def = MODULES.find((m: ModuleDef) => m.id === id)
   if (!def) throw new Error(`Unknown module: ${id}`)
   if (def.source.kind === 'bundled') {
@@ -75,8 +86,7 @@ function planFor(id: string): InstallPlan {
       return {
         id,
         importName: def.importName,
-        mechanism: 'writeFile',
-        writeFile: { path: `${LIB_DIR}/${def.source.file}`, contents },
+        files: [{ path: `${LIB_DIR}/${def.source.file}`, contents }],
         notes: []
       }
     }
@@ -84,13 +94,32 @@ function planFor(id: string): InstallPlan {
     // honest error rather than a stub's silent one.
     throw new Error(`${def.source.file} isn't bundled in the web build yet.`)
   }
-  return {
-    id,
-    importName: def.importName,
-    mechanism: 'mip',
-    snippet: buildInstallSnippet(def.source.spec),
-    mipSpec: def.source.spec,
-    notes: []
+  const spec = def.source.spec
+  try {
+    const resolved = await resolveMipSpec(spec, { fetchText: httpMipFetch(), target: LIB_DIR })
+    return {
+      id,
+      importName: def.importName,
+      files: resolved.files.map((f) => ({ path: f.path, contents: f.contents })),
+      spec,
+      notes: [
+        hostInstallNote({
+          name: def.name,
+          spec,
+          fileCount: resolved.files.length,
+          target: LIB_DIR
+        })
+      ]
+    }
+  } catch (err) {
+    throw new Error(
+      resolveFailureMessage({
+        name: def.name,
+        spec,
+        kind: err instanceof MipResolveError ? err.kind : 'network',
+        detail: err instanceof Error ? err.message : String(err)
+      })
+    )
   }
 }
 
@@ -98,7 +127,7 @@ function planFor(id: string): InstallPlan {
 export function createWebModulesApi(): Record<string, unknown> {
   return {
     catalog: async (): Promise<ModuleDef[]> => MODULES,
-    installPlan: async (id: string): Promise<InstallPlan> => planFor(id),
+    installPlan: (id: string): Promise<InstallPlan> => planFor(id),
 
     /** Port of the preload's batched import probe, over the web device. */
     probeInstalled: async (importNames: string[]): Promise<string[]> => {
@@ -121,131 +150,67 @@ export function createWebModulesApi(): Record<string, unknown> {
       }
     },
 
-    /** Port of the preload's install: bundled → writeFile; mip → on-board snippet. */
+    /** Port of the preload's install: resolve (bundled or downloaded), then write. */
     install: async (
       id: string,
       onProgress?: (p: InstallProgress) => void
     ): Promise<InstallResult> => {
       const emit = (p: InstallProgress): void => onProgress?.(p)
       emit({ id, state: 'started' })
+      emit({ id, state: 'running', message: `Resolving ${id}…` })
+
       let plan: InstallPlan
       try {
-        plan = planFor(id)
+        plan = await planFor(id)
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        emit({ id, state: 'error', message: msg })
+        emit({ id, state: 'error', message: `Failed to install ${id}` })
         return { id, ok: false, log: msg, notes: [] }
       }
       for (const note of plan.notes) emit({ id, state: 'note', message: note })
 
-      if (plan.mechanism === 'writeFile' && plan.writeFile) {
-        emit({ id, state: 'running', message: `Writing ${plan.writeFile.path}…` })
-        try {
-          await window.api.device.mkdir(LIB_DIR).catch(() => undefined)
-          await window.api.device.writeFile(plan.writeFile.path, plan.writeFile.contents)
-          emit({ id, state: 'done', message: `Installed ${id}` })
-          window.api.modules.notifyChanged()
-          return { id, ok: true, log: `Wrote ${plan.writeFile.path}`, notes: plan.notes }
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err)
-          emit({ id, state: 'error', message: `Failed to install ${id}` })
-          return { id, ok: false, log: msg, notes: plan.notes }
-        }
-      }
-
-      emit({ id, state: 'running', message: `Installing ${id} with mip…` })
-      try {
-        const exec = await window.api.device.exec(plan.snippet ?? '')
-        const out = `${exec.stdout ?? ''}\n${exec.stderr ?? ''}`.trim()
-        const failed = out.includes(INSTALL_ERR) || (exec.stderr ?? '').includes('Traceback')
-        const ok = out.includes(INSTALL_OK) && !failed
-        const log = out
-          .split(/\r?\n/)
-          .filter((l) => !l.includes(INSTALL_START) && !l.includes(INSTALL_OK))
-          .map((l) => l.replace(INSTALL_ERR, '').trim())
-          .filter((l) => l.length > 0)
-          .join('\n')
-          .trim()
-        if (ok) {
-          emit({ id, state: 'done', message: `Installed ${id}` })
-          window.api.modules.notifyChanged()
-          return { id, ok, log: log || out, notes: plan.notes }
-        }
-        // The board has no mip / no network (e.g. the SIMULATOR) — the browser
-        // still has network, so resolve the spec ourselves and write the files.
-        const fetched = await browserFetchInstall(plan, emit)
-        if (fetched?.ok) return fetched
-        emit({ id, state: 'error', message: `Failed to install ${id}` })
-        // A board-level "no module named 'mip'" is accurate and useless (#776),
-        // so when THAT is what failed, report what Snakie tried instead.
-        const reason = fetched && looksLikeMissingMip(out) ? fetched.log : log || out
-        return { id, ok: false, log: reason, notes: plan.notes }
-      } catch (err) {
-        const fetched = await browserFetchInstall(plan, emit)
-        if (fetched?.ok) return fetched
-        // The exec itself threw (no board, disconnected mid-install) — that
-        // message is the true cause, so it wins over the download's.
-        const msg = err instanceof Error ? err.message : String(err)
+      if (plan.files.length === 0) {
+        const msg = `Couldn't install ${id}: nothing was resolved to write.`
         emit({ id, state: 'error', message: `Failed to install ${id}` })
         return { id, ok: false, log: msg, notes: plan.notes }
       }
-    }
-  }
-}
 
-/**
- * Resolve the mip spec IN THE BROWSER and write its files to /lib (#776).
- *
- * The same host-side resolution the desktop uses, over the same shared
- * resolver — so a package with several files and transitive `deps` (the
- * Modulino range) installs here too, not just a lone `.py`. The browser has a
- * network even when the board does not, and `raw.githubusercontent.com` serves
- * CORS-open, which is what makes this reachable from a web page at all.
- *
- * Returns `null` only when there is no spec to try. A route that ran and FAILED
- * comes back as an `ok: false` result whose log explains what was attempted —
- * so the caller can prefer it over the board's own useless ImportError.
- */
-async function browserFetchInstall(
-  plan: InstallPlan,
-  emit: (p: InstallProgress) => void
-): Promise<InstallResult | null> {
-  const spec = plan.mipSpec
-  if (!spec) return null
-  try {
-    emit({
-      id: plan.id,
-      state: 'running',
-      message: `Board has no mip — downloading ${spec} in the browser…`
-    })
-    const resolved = await resolveMipSpec(spec, {
-      fetchText: httpMipFetch(),
-      target: LIB_DIR
-    })
-    for (const dir of deviceDirsFor(resolved.files.map((f) => f.path))) {
-      await window.api.device.mkdir(dir).catch(() => undefined)
-    }
-    for (const file of resolved.files) {
-      await window.api.device.writeFile(file.path, file.contents)
-    }
-    emit({ id: plan.id, state: 'done', message: `Installed ${plan.id}` })
-    window.api.modules.notifyChanged()
-    return {
-      id: plan.id,
-      ok: true,
-      log: `Board has no mip/network — downloaded ${spec} in the browser and wrote ${resolved.files
-        .map((f) => f.path)
-        .join(', ')}`,
-      notes: plan.notes
-    }
-  } catch (err) {
-    const kind = err instanceof MipResolveError ? err.kind : 'network'
-    const detail = err instanceof Error ? err.message : String(err)
-    return {
-      id: plan.id,
-      ok: false,
-      log: mipInstallFailureMessage({ moduleName: plan.id, spec, kind, detail }),
-      notes: plan.notes
+      let current = ''
+      try {
+        for (const dir of deviceDirsFor(plan.files.map((f) => f.path))) {
+          await window.api.device.mkdir(dir).catch(() => undefined)
+        }
+        let done = 0
+        for (const file of plan.files) {
+          current = file.path
+          emit({
+            id,
+            state: 'running',
+            message: `Writing ${++done}/${plan.files.length} — ${file.path}…`
+          })
+          await window.api.device.writeFile(file.path, file.contents)
+        }
+        emit({ id, state: 'done', message: `Installed ${id}` })
+        window.api.modules.notifyChanged()
+        return {
+          id,
+          ok: true,
+          log: `Wrote ${plan.files.map((f) => f.path).join(', ')}`,
+          notes: plan.notes
+        }
+      } catch (err) {
+        emit({ id, state: 'error', message: `Failed to install ${id}` })
+        return {
+          id,
+          ok: false,
+          log: writeFailureMessage({
+            name: id,
+            path: current || undefined,
+            detail: err instanceof Error ? err.message : String(err)
+          }),
+          notes: plan.notes
+        }
+      }
     }
   }
 }

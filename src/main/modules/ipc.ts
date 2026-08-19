@@ -1,7 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import type { IpcResult } from '../device/types'
 import { MODULES, type ModuleDef } from '../../shared/modules-catalog'
-import { planForId, type ModulePlanRequest, type ModuleInstallPlan } from './resolve'
+import { planForId, type ModuleInstallPlan } from './resolve'
 
 /**
  * IPC for the per-module installer (issue #120).
@@ -39,20 +39,13 @@ export function registerModulesIpc(): void {
   // groups it by instrument for the Modules manager.
   ipcMain.handle('modules:catalog', () => wrap<ModuleDef[]>(async () => MODULES))
 
-  // Resolve a single module to its install plan (bundled file contents, a mip
-  // snippet, or — when the board has no `mip` (#776) — the package's files,
-  // downloaded HERE because the renderer's CSP forbids outbound requests) for
-  // the renderer to execute over the device channel.
-  //
-  // The capabilities come IN rather than being read from the device: this layer
-  // still never touches the device singleton (see the header), and the preload
-  // already holds the probed status it needs to answer.
-  ipcMain.handle('modules:installPlan', (_e, id: string, request?: ModulePlanRequest) =>
-    wrap<ModuleInstallPlan>(async () =>
-      // `fetchText` can only ever be injected in-process (a function does not
-      // cross IPC); drop whatever arrived so the handler always uses the real one.
-      planForId(id, { caps: request?.caps, runtime: request?.runtime })
-    )
+  // Resolve a single module to the FILES that install it — a bundled stub read
+  // off disk, or an upstream package downloaded HERE (#776), because this
+  // process has the internet connection: the board hasn't got one, and the
+  // renderer's CSP forbids outbound requests. The renderer writes them over the
+  // device channel, so this layer still never touches the device singleton.
+  ipcMain.handle('modules:installPlan', (_e, id: string) =>
+    wrap<ModuleInstallPlan>(async () => planForId(id))
   )
 
   // A driver/library was installed onto the board from SOME window (e.g. the Board

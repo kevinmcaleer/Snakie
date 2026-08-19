@@ -99,6 +99,7 @@ export function missingProjectImports(
 }
 
 // `githubRawUrl` lived here until #776: it only ever resolved a SINGLE-file
-// `github:` spec, which left whole-repo and index packages with no route on a
-// board that has no `mip`. `rewriteMipUrl` / `resolveMipSpec` in
-// `src/shared/mip-resolve.ts` replace it and cover all three spec shapes.
+// `github:` spec, which was enough while host-side fetching was a browser-only
+// last resort. Host resolution is now how everything installs, so it is
+// replaced by `rewriteMipUrl` / `resolveMipSpec` in `src/shared/mip-resolve.ts`,
+// which cover single files, whole-repo packages and index names alike.

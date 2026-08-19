@@ -153,7 +153,7 @@ if (!w.api) {
     },
     modules: {
       catalog: P([]),
-      installPlan: P({ id: '', importName: '', mechanism: 'mip', notes: [] }),
+      installPlan: P({ id: '', importName: '', files: [], notes: [] }),
       install: P({ id: '', ok: false, log: '', notes: [] }),
       probeInstalled: P([]),
       notifyChanged: noop,

@@ -1,20 +1,23 @@
 /**
- * HOST-SIDE `mip` RESOLUTION (#776).
+ * HOST-SIDE PACKAGE RESOLUTION (#776) — how Snakie installs, full stop.
  * =============================================================================
  *
- * Snakie's driver installs have always assumed the BOARD can install for
- * itself: a catalog module with a `mip` source becomes a `mip.install(<spec>)`
- * snippet run over the REPL. `mip` is not part of MicroPython — it is a
- * micropython-lib package — so that assumption breaks on CircuitPython (#769)
- * and equally on vendor / feature-branch MicroPython builds that ship without
- * it (#776, confirmed on a Pimoroni Tiny 2350). Either way the user saw a bare
- * `ImportError("no module named 'mip'")`.
+ * Snakie's installs used to assume the BOARD could install for itself: a
+ * `mip`-sourced driver became a `mip.install(<spec>)` snippet run over the
+ * REPL. That asks the board for something most boards do not have — **its own
+ * internet connection**. A Tiny 2350, a non-W Pico, any USB-only board can
+ * never satisfy it. And `mip` is a micropython-lib package rather than part of
+ * MicroPython, so it is frequently not even importable: absent on CircuitPython
+ * (#769) and on vendor / feature-branch builds (#776). The visible symptom was
+ * a bare `ImportError("no module named 'mip'")`, but the real fault was the
+ * direction: the machine with the internet connection is the computer.
  *
- * This module is the other route: resolve the package HERE — on the computer,
- * which has a real network stack and no memory ceiling — and hand back a list
- * of plain files. The caller writes them with `device.writeFile`, which already
- * routes to the CIRCUITPY drive when one is mounted (#754) and over the raw
- * REPL otherwise, so ONE resolution serves both runtimes.
+ * So this module IS the install path, not a fallback: resolve the package here
+ * and hand back a list of plain files. The caller writes them with
+ * `device.writeFile`, which already routes to the CIRCUITPY drive when one is
+ * mounted (#754) and over the raw REPL otherwise — so one resolution serves
+ * every board, wired or wireless, MicroPython or CircuitPython, real or
+ * simulated.
  *
  * It implements `mip`'s own resolution algorithm (micropython-lib
  * `mip/__init__.py`), so the same spec strings the catalog already carries keep
@@ -32,8 +35,9 @@
  *     bytecode version is known; we only ever install SOURCE `.py`, because
  *     Snakie ships no mpy-cross and a `.mpy` fetched as text would corrupt.
  *     A spec that names a `.mpy` fails loudly rather than writing garbage.
- *   - Anything needing the board to participate (its `sys.implementation._mpy`,
- *     its own network stack, its own index credentials).
+ *   - Anything needing the board to participate — which now means anything
+ *     needing its `sys.implementation._mpy` or its own index credentials.
+ *     Nothing else does: the board's role in an install is to accept files.
  *
  * Dependency-free by design — the same discipline as `dialect.ts` — so main,
  * preload, the web build and unit tests can all import it. Network access is
