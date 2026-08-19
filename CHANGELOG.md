@@ -7,6 +7,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **A Sync button keeps Electronics and Build honest with each other.** (#717,
+  epic #720) The same control in both workspaces (and the pop-out board window)
+  shows a badge when the two disagree, and opens a reconcile dialog where YOU
+  decide each difference: a part with no 3-D body can be added, a stand-in box
+  whose part now ships a real mesh can be upgraded in place, a library weight
+  can be applied to a body that lacks one (never over a mass you measured), and
+  — per the long-standing #626 design — deleting a part flags its 3-D body
+  instead of destroying it, with a three-way choice: keep it in Build, remove
+  it, or re-add the part to Electronics. Nothing destructive ever happens
+  without a click.
+- **Every part you place now appears in the Build workspace.** (#716, epic #720)
+  Previously only a part shipping a 3-D mesh reached the Robot View — a handful
+  of the standard library — and batch-added parts never did. Now
+  a part without a mesh gets a **footprint box**: its real dimensions extruded
+  to a family-tuned height in a desaturated take on its PCB colour, so the 3-D
+  scene resembles your robot and centre-of-mass geometry stays meaningful. New
+  parts land at their breadboard position (mirrored onto the ground plane), a
+  part that declares its weight arrives with real mass in the model, and an open
+  Build view picks all this up live instead of waiting for a remount. Behind the
+  scenes each placed part now remembers which 3-D link is its (`urdfLink`) — the
+  spine the coming sync and unified-hierarchy work builds on.
 - **Packages install in the browser too.** (#776) Snakie for Web had no
   `packages` backend at all: the Packages tab could list nothing, search
   nothing, and its Install button quietly did nothing. #776 is what made a web

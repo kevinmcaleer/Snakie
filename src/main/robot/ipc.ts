@@ -12,7 +12,7 @@ import { app, ipcMain, BrowserWindow, dialog } from 'electron'
 import { basename, dirname, extname, join } from 'path'
 import { promises as fsp } from 'fs'
 import { robotFromYaml, robotToYaml } from '../../shared/robot-yaml'
-import { blankRobot, type RobotDefinition } from '../../shared/robot'
+import { blankRobot, type RobotDefinition, type RobotPart } from '../../shared/robot'
 import { readRobotModel } from '../../shared/krf'
 import { generateSkeleton, skeletonJson } from '../../shared/skeleton'
 import { resolvePartAsset } from '../parts/library'
@@ -154,6 +154,31 @@ function queuedWrite(path: string, data: string): Promise<void> {
   return next
 }
 
+/**
+ * Serialised READ-modify-write on the same per-path chain as {@link queuedWrite}
+ * (#716). The read must queue too — reading outside the chain could see a file a
+ * queued write is about to supersede. `fn` gets the current text (`null` when
+ * the file doesn't exist) and returns the new text, or `null` for "leave it".
+ */
+function queuedUpdate(path: string, fn: (raw: string | null) => string | null): Promise<void> {
+  const prev = writeChains.get(path) ?? Promise.resolve()
+  const next = prev.catch(() => undefined).then(async () => {
+    let raw: string | null
+    try {
+      raw = await fsp.readFile(path, 'utf-8')
+    } catch {
+      raw = null
+    }
+    const out = fn(raw)
+    if (out != null) await fsp.writeFile(path, out, 'utf-8')
+  })
+  writeChains.set(path, next)
+  void next.finally(() => {
+    if (writeChains.get(path) === next) writeChains.delete(path)
+  })
+  return next
+}
+
 export function registerRobotIpc(): void {
   ipcMain.handle('robot:load', async (_e, folder?: string): Promise<RobotDefinition> => {
     const path = await robotPath(folder)
@@ -196,6 +221,148 @@ export function registerRobotIpc(): void {
         // Safe to echo back: every robot.yml reader guards its reload with a
         // `saveSeqRef` bumped BEFORE the save, so a load triggered by a window's own
         // save either returns what it just wrote or is discarded as stale.
+        for (const w of BrowserWindow.getAllWindows()) {
+          if (!w.isDestroyed()) w.webContents.send('robot:didChange')
+        }
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: (err as Error).message }
+      }
+    }
+  )
+
+  // #716: a renderer rewrote the project .urdf on disk (the placement bridge
+  // appending a part's Build body). Fan it to EVERY window so open Build views
+  // re-read the file — mirrors the robot:didChange bus above, but for the URDF,
+  // whose writes don't go through robot:save.
+  ipcMain.on('robot:urdfChanged', () => {
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (!w.isDestroyed()) w.webContents.send('robot:didUrdfChange')
+    }
+  })
+
+  // #717: targeted robot.yml MODEL merges for the sync reconcile — same
+  // rationale as patchPartLinks below: the dialog's actions complete seconds
+  // after their click (mesh copies, queued URDF writes), and saving the
+  // renderer's by-then-stale whole document would silently revert anything
+  // another window saved meanwhile. Each field merges against the file's
+  // CURRENT state under the per-path queue; everything is optional.
+  ipcMain.handle(
+    'robot:patchModel',
+    async (
+      _e,
+      args: {
+        folder?: string
+        patch?: {
+          /** Link the model's urdf IF ABSENT (never overwrites an existing link). */
+          ensureUrdf?: string
+          /** Record the MCU board's Build link. */
+          boardLink?: string
+          /** Record one link's mass-authoring source. */
+          linkMass?: { link: string; source: 'measured' | 'library' | 'estimated' | 'none' }
+          /** Remove entries from the orphan ledger (resolved by the user). */
+          clearOrphans?: string[]
+          /** Append part rows (a sync re-add); a row whose id already exists is
+           *  SKIPPED — the plan re-offers it rather than main guessing a rename. */
+          addParts?: RobotPart[]
+        }
+      }
+    ): Promise<{ ok: boolean; error?: string }> => {
+      try {
+        const patch = args?.patch ?? {}
+        const path = await robotPath(args?.folder)
+        await queuedUpdate(path, (raw) => {
+          if (raw == null) return null
+          let def: RobotDefinition
+          try {
+            def = robotFromYaml(raw)
+          } catch {
+            return null // malformed — never "repair" it from here (#505's lesson)
+          }
+          let touched = false
+          const model = { ...(def.robot ?? {}) }
+          if (patch.ensureUrdf && !model.urdf) {
+            model.urdf = patch.ensureUrdf
+            model.version = model.version ?? 1
+            touched = true
+          }
+          if (patch.boardLink && model.boardLink !== patch.boardLink) {
+            model.boardLink = patch.boardLink
+            model.version = model.version ?? 1
+            touched = true
+          }
+          if (patch.linkMass?.link) {
+            model.linkMass = { ...(model.linkMass ?? {}), [patch.linkMass.link]: { source: patch.linkMass.source } }
+            model.version = model.version ?? 1
+            touched = true
+          }
+          if (patch.clearOrphans?.length && model.orphanedLinks?.length) {
+            const rest = model.orphanedLinks.filter((l) => !patch.clearOrphans!.includes(l))
+            if (rest.length !== model.orphanedLinks.length) {
+              if (rest.length) model.orphanedLinks = rest
+              else delete model.orphanedLinks
+              touched = true
+            }
+          }
+          let parts = def.parts
+          if (patch.addParts?.length) {
+            const ids = new Set(['board', ...parts.map((p) => p.id)])
+            const fresh = patch.addParts.filter((p) => p && p.id && p.lib && p.part && !ids.has(p.id))
+            if (fresh.length) {
+              parts = [...parts, ...fresh]
+              touched = true
+            }
+          }
+          if (!touched) return null
+          return robotToYaml({ ...def, parts, robot: Object.keys(model).length ? model : undefined })
+        })
+        for (const w of BrowserWindow.getAllWindows()) {
+          if (!w.isDestroyed()) w.webContents.send('robot:didChange')
+        }
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: (err as Error).message }
+      }
+    }
+  )
+
+  // #716: record the URDF link a placement created onto its robot.yml part row —
+  // a TARGETED merge against the file's CURRENT state, under the per-path write
+  // queue. This deliberately does NOT accept a whole document: the patch fires
+  // seconds after the drop (mesh copies + URDF writes), and a renderer saving
+  // its by-then-stale in-memory robot.yml back would silently revert anything
+  // another window saved in between. Merging one field here cannot lose
+  // concurrent edits; a part deleted mid-flight simply isn't patched (the #717
+  // sync reconciles its leftover Build body).
+  ipcMain.handle(
+    'robot:patchPartLinks',
+    async (
+      _e,
+      args: { folder?: string; links?: { partId: string; link: string }[] }
+    ): Promise<{ ok: boolean; error?: string }> => {
+      try {
+        const links = (Array.isArray(args?.links) ? args.links : []).filter(
+          (l) => l && typeof l.partId === 'string' && typeof l.link === 'string' && l.link
+        )
+        if (links.length === 0) return { ok: true }
+        const path = await robotPath(args?.folder)
+        await queuedUpdate(path, (raw) => {
+          if (raw == null) return null // no manifest — nothing to patch
+          let def: RobotDefinition
+          try {
+            def = robotFromYaml(raw)
+          } catch {
+            return null // malformed — never "repair" it from here (#505's lesson)
+          }
+          let touched = false
+          const parts = def.parts.map((p) => {
+            const hit = links.find((l) => l.partId === p.id)
+            if (!hit || p.urdfLink === hit.link) return p
+            touched = true
+            return { ...p, urdfLink: hit.link }
+          })
+          return touched ? robotToYaml({ ...def, parts }) : null
+        })
         for (const w of BrowserWindow.getAllWindows()) {
           if (!w.isDestroyed()) w.webContents.send('robot:didChange')
         }

@@ -74,6 +74,7 @@ export function createWebRobotApi(fs: WebRobotFs): Record<string, unknown> {
   }
 
   const subs = new Set<() => void>()
+  const urdfSubs = new Set<() => void>()
 
   return {
     load: async (folder?: string): Promise<RobotDefinition> => {
@@ -125,6 +126,124 @@ export function createWebRobotApi(fs: WebRobotFs): Record<string, unknown> {
               // No URDF yet / unreadable — nothing to derive.
             }
           }
+        }
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      }
+    },
+
+    // #717: targeted model merges — mirrors the desktop robot:patchModel.
+    patchModel: async (
+      folder: string | undefined,
+      patch: {
+        ensureUrdf?: string
+        boardLink?: string
+        linkMass?: { link: string; source: 'measured' | 'library' | 'estimated' | 'none' }
+        clearOrphans?: string[]
+        addParts?: RobotDefinition['parts']
+      }
+    ): Promise<{ ok: boolean; error?: string }> => {
+      try {
+        let text: string
+        try {
+          text = hasFolder(folder)
+            ? await fs.readFile(robotYmlPath(folder))
+            : (window.localStorage.getItem(LS_KEY) ?? '')
+        } catch {
+          return { ok: true }
+        }
+        let def: RobotDefinition
+        try {
+          def = robotFromYaml(text)
+        } catch {
+          return { ok: true } // malformed — never "repair" it from here (#505)
+        }
+        let touched = false
+        const model = { ...(def.robot ?? {}) }
+        if (patch.ensureUrdf && !model.urdf) {
+          model.urdf = patch.ensureUrdf
+          model.version = model.version ?? 1
+          touched = true
+        }
+        if (patch.boardLink && model.boardLink !== patch.boardLink) {
+          model.boardLink = patch.boardLink
+          model.version = model.version ?? 1
+          touched = true
+        }
+        if (patch.linkMass?.link) {
+          model.linkMass = { ...(model.linkMass ?? {}), [patch.linkMass.link]: { source: patch.linkMass.source } }
+          model.version = model.version ?? 1
+          touched = true
+        }
+        if (patch.clearOrphans?.length && model.orphanedLinks?.length) {
+          const rest = model.orphanedLinks.filter((l) => !patch.clearOrphans!.includes(l))
+          if (rest.length !== model.orphanedLinks.length) {
+            if (rest.length) model.orphanedLinks = rest
+            else delete model.orphanedLinks
+            touched = true
+          }
+        }
+        let parts = def.parts
+        if (patch.addParts?.length) {
+          const ids = new Set(['board', ...parts.map((p) => p.id)])
+          const fresh = patch.addParts.filter((p) => p && p.id && p.lib && p.part && !ids.has(p.id))
+          if (fresh.length) {
+            parts = [...parts, ...fresh]
+            touched = true
+          }
+        }
+        if (touched) {
+          const out = robotToYaml({ ...def, parts, robot: Object.keys(model).length ? model : undefined })
+          if (hasFolder(folder)) await queuedWrite(robotYmlPath(folder), out)
+          else window.localStorage.setItem(LS_KEY, out)
+          for (const cb of subs) cb()
+        }
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      }
+    },
+
+    // #716: the targeted urdfLink merge — read the CURRENT manifest, patch only
+    // the named parts, write back. Mirrors the desktop robot:patchPartLinks
+    // handler (single-window here, so the read-modify-write needs no queue
+    // beyond queuedWrite's ordering).
+    patchPartLinks: async (
+      folder: string | undefined,
+      links: { partId: string; link: string }[]
+    ): Promise<{ ok: boolean; error?: string }> => {
+      try {
+        const clean = (Array.isArray(links) ? links : []).filter(
+          (l) => l && typeof l.partId === 'string' && typeof l.link === 'string' && l.link
+        )
+        if (clean.length === 0) return { ok: true }
+        let text: string
+        try {
+          text = hasFolder(folder)
+            ? await fs.readFile(robotYmlPath(folder))
+            : (window.localStorage.getItem(LS_KEY) ?? '')
+        } catch {
+          return { ok: true } // no manifest — nothing to patch
+        }
+        let def: RobotDefinition
+        try {
+          def = robotFromYaml(text)
+        } catch {
+          return { ok: true } // malformed — never "repair" it from here (#505)
+        }
+        let touched = false
+        const parts = def.parts.map((p) => {
+          const hit = clean.find((l) => l.partId === p.id)
+          if (!hit || p.urdfLink === hit.link) return p
+          touched = true
+          return { ...p, urdfLink: hit.link }
+        })
+        if (touched) {
+          const out = robotToYaml({ ...def, parts })
+          if (hasFolder(folder)) await queuedWrite(robotYmlPath(folder), out)
+          else window.localStorage.setItem(LS_KEY, out)
+          for (const cb of subs) cb()
         }
         return { ok: true }
       } catch (err) {
@@ -184,6 +303,16 @@ export function createWebRobotApi(fs: WebRobotFs): Record<string, unknown> {
     onChanged: (cb: () => void): (() => void) => {
       subs.add(cb)
       return () => subs.delete(cb)
+    },
+
+    // #716: single-window on the web, so the URDF-changed bus is a local fanout
+    // exactly like onChanged above.
+    notifyUrdfChanged: (): void => {
+      for (const cb of urdfSubs) cb()
+    },
+    onUrdfChanged: (cb: () => void): (() => void) => {
+      urdfSubs.add(cb)
+      return () => urdfSubs.delete(cb)
     }
   }
 }

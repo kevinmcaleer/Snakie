@@ -177,7 +177,11 @@ if (!w.api) {
       save: P({ ok: false, error: 'Saving robot.yml is not available here.' }),
       importMesh: P({ cancelled: true }),
       importPartMesh: P({}),
-      onChanged: unsub
+      patchModel: P({ ok: false }),
+      patchPartLinks: P({ ok: false }),
+      onChanged: unsub,
+      notifyUrdfChanged: noop,
+      onUrdfChanged: unsub
     },
     // Workspace relay + project folder (#775). Not inert like the rest: outside
     // Electron this is a SINGLE-window build, so "ask the main window to switch"

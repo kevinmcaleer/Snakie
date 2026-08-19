@@ -5,6 +5,7 @@ import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { buildI2cGrid, formatI2cAddr, type I2cGridModel } from './scanner-logic'
 import { i2cOptions, i2cBuses, sdaOptions, sclOptions, type I2cOption, type I2cPad } from './i2c-pins'
 import { hexAddr, knownDevicesFor, partsForAddress } from './i2c-known-devices'
+import { addPartsToProject } from './project-parts'
 import { useBoards } from './use-boards'
 import type { BoardDefinition } from '../../../shared/board'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
@@ -192,14 +193,24 @@ export function I2cDetectInstrument({
       // robot.yml (or, with no folder at all, into the userData fallback).
       const folder = (await window.api.workspace.folder().catch(() => null)) ?? undefined
       const robot = await window.api.robot.load(folder)
-      const ids = new Set(['board', ...robot.parts.map((x) => x.id)])
-      let id = part.id
-      let n = 2
-      while (ids.has(id)) id = `${part.id}${n++}`
-      await window.api.robot.save(folder, {
-        ...robot,
-        parts: [...robot.parts, { id, lib: libraryId, part: part.id, label: part.name }]
-      })
+      // The SHARED add sequence (#716) — same ids, same robot.yml save, and the
+      // part gets its Build body (footprint box / mesh) like any other add;
+      // previously this path appended to robot.yml directly and scanner-added
+      // parts never reached the 3-D view. No canvas position here, so the
+      // libraries list (only used for position scaling) can stay empty.
+      let saved: Promise<unknown> = Promise.resolve()
+      addPartsToProject(
+        {
+          robot,
+          folder,
+          libraries: [],
+          saveRobot: (next) => {
+            saved = window.api.robot.save(folder, next)
+          }
+        },
+        [{ libraryId, part }]
+      )
+      await saved
       setAddedId(part.id)
       // …then SHOW the part where it landed. The Electronics workspace is where
       // the Board View lives now; the pop-out window it used to open is

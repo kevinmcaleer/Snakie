@@ -79,7 +79,8 @@ import {
   shouldShowBanner,
   type InstallState
 } from '../lib/instrumentsLib'
-import { useWorkspace } from '../store/workspace'
+import { announceSaved, useWorkspace } from '../store/workspace'
+import { readRobotModel } from '../../../shared/krf'
 import { useEditorSettings } from '../store/settings'
 import './AppShell.css'
 
@@ -217,7 +218,7 @@ export function AppShell(): JSX.Element {
   // us stream every edit / theme change to that window over IPC so it updates
   // live. `boardOpened` tracks whether the window has been opened this session
   // (so we only stream while it's open); it resets when the user closes it.
-  const { openFiles, activeId, currentFolder } = useWorkspace()
+  const { openFiles, activeId, currentFolder, reloadContent } = useWorkspace()
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
   const [boardOpened, setBoardOpened] = useState(false)
 
@@ -774,6 +775,30 @@ export function AppShell(): JSX.Element {
   const [robotNonce, setRobotNonce] = useState(0)
   useEffect(() => window.api.robot.onChanged(() => setRobotNonce((n) => n + 1)), [])
   useEffect(() => window.api.parts.onChanged(() => setRobotNonce((n) => n + 1)), [])
+  // A placement bridge rewrote the project .urdf on disk (#716). Refresh this
+  // window's stale surfaces: a CLEAN open .urdf buffer adopts the new text (its
+  // next save would otherwise write stale content over the appended part bodies
+  // — a dirty buffer is the user's and is left alone), and the save is announced
+  // so the file tree lists a first-created robot.urdf/meshes and skeleton.json
+  // regenerates (the same refresh "New robot" fires).
+  useEffect(
+    () =>
+      window.api.robot.onUrdfChanged(() => {
+        void (async (): Promise<void> => {
+          if (!currentFolder) return
+          const robot = await window.api.robot.load(currentFolder).catch(() => null)
+          const rel = robot ? readRobotModel(robot)?.urdf : undefined
+          if (!rel) return
+          const path = `${currentFolder.replace(/[/\\]$/, '')}/${rel.replace(/^[/\\]/, '')}`
+          const content = await window.api.fs.readFile(path).catch(() => null)
+          if (content == null) return
+          const open = openFiles.find((f) => f.source === 'local' && f.path === path)
+          if (open && !open.dirty && open.content !== content) reloadContent(open.id, content)
+          announceSaved('local', path, content)
+        })()
+      }),
+    [currentFolder, openFiles, reloadContent]
+  )
   useEffect(() => {
     const bump = (): void => setRobotNonce((n) => n + 1)
     window.addEventListener(PARTS_CHANGED_EVENT, bump)

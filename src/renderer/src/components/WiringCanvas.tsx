@@ -28,6 +28,7 @@ import { cablePlugGeometry, cableRole, conductorColour, connectorFit, housingPlu
 import { partSupplyVoltage } from '../../../shared/power-led'
 import type { SmokeSite } from '../../../shared/erc'
 import { BOARD_KEY, browserTree, countNodes, type BrowserNode } from './browser-tree'
+import { linkBaseName } from './sync-plan'
 import { boardBox, layoutPads, mcuSymbolLayout, padKey, padLabelPlacement, type PadPoint } from './board-layout'
 import {
   partBodyBox,
@@ -346,7 +347,7 @@ const PART_BODY_W = 140
 // (mm → px) relative to the board, so e.g. an HC-SR04 reads larger than a small
 // sensor. The board anchors the scale (it keeps BOARD_BODY_W and defines px/mm);
 // when its real width is unknown we fall back to a Pico-ish default (~51mm → 190px).
-const PX_PER_MM_DEFAULT = 3.7
+export const PX_PER_MM_DEFAULT = 3.7
 // Parts are rendered at a NATIVE reference size then uniformly scaled, so pads,
 // silk text and strokes shrink together (not just positions) — fixing labels that
 // looked huge on a small body. Clamp the final size so an odd dimension can't make
@@ -359,7 +360,7 @@ const PART_MAX_H = 380
 // The largest single body (board OR any placed part) is scaled to fit this px cap;
 // one px/mm is then derived from it so EVERY body — the board included — draws at
 // its real mm size, in the right relative proportion (#637).
-const BODY_CAP_PX = 380
+export const BODY_CAP_PX = 380
 // Pointer travel (screen px) below which a press counts as a click, not a drag.
 const DRAG_DEADZONE_PX = 3
 // Minimum clearance a Bézier wire leaves a pin along its outward normal (#182), so
@@ -1752,8 +1753,27 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     // every wire attached to the board. The MCU is changed with the picker.
     if (key === BOARD_KEY) return
     setSelectedKey((k) => (k === key ? null : k)) // drop a stale selection
+    // The part's Build body is NOT deleted with it (#626: it may be jointed into
+    // the robot by now — flag, don't auto-delete). Record the stranded link here,
+    // at the only moment anything still remembers it (the reference lives on the
+    // part being removed); the #717 sync reconcile offers keep / remove / re-add.
+    // A LEGACY row (pre-#716, no urdfLink) records the name the link mint would
+    // have used instead — the plan tolerates `_N` suffixes and drops entries
+    // that match nothing, so a guess is safe and forgetting is not.
+    const doomed = robot.parts.find((p) => p.id === key)
+    const orphan =
+      doomed &&
+      (doomed.urdfLink ||
+        linkBaseName(resolvePart(doomed.lib, doomed.part)?.name || doomed.part))
+    const model = orphan
+      ? {
+          ...(robot.robot ?? {}),
+          orphanedLinks: [...new Set([...(robot.robot?.orphanedLinks ?? []), orphan])]
+        }
+      : robot.robot
     persist({
       ...robot,
+      ...(model ? { robot: model } : {}),
       parts: robot.parts.filter((p) => p.id !== key),
       connections: robot.connections.filter(
         (c) => parseEndpoint(c.from).key !== key && parseEndpoint(c.to).key !== key
@@ -1787,6 +1807,11 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     // Use the source's on-screen position (a never-moved part has no x/y of its own).
     const s = subjByKey.get(key)
     const copy: RobotPart = { ...src, id, x: (src.x ?? s?.x ?? 60) + 30, y: (src.y ?? s?.y ?? 90) + 30 }
+    // The clone must NOT inherit the source's Build-body link (#716) — urdfLink
+    // is a 1:1 part↔link identity, and an aliased copy would make a deletion (or
+    // the #717 sync) target the ORIGINAL's 3-D body. The clone starts link-less;
+    // the sync offers it a body of its own.
+    delete copy.urdfLink
     persist({ ...robot, parts: [...robot.parts, copy] })
     setSelectedKey(id)
   }
