@@ -92,6 +92,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it no longer reads every folder in your home directory looking for a board.
 
 ### Fixed
+- A unit test no longer depends on what is plugged into the machine running it.
+  (#773) The CircuitPython file-routing tests exercise one case — a drive that
+  ejected — that made the device re-resolve its mount, and re-resolution is the
+  one step that leaves the test's temp directory and scans the developer's real
+  volumes (and, if it finds a board, their real serial ports). That is unbounded
+  I/O: it is why that single case timed out repeatedly under a loaded suite
+  while passing every time on its own. The scan is now stubbed — the logic under
+  test is untouched, and two cases now assert something they could not before:
+  that the device really does look again when the marker file is gone, and that
+  a drive still present does **not** cost a rescan on every file operation.
 - **A running Snakie can no longer undo an edit you made to a part outside it.**
   (#750) The parts library is a folder of plain text files, so a script, an
   editor and `git checkout` are all perfectly good ways to change a part — but
