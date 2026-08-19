@@ -4,11 +4,15 @@ import type { PackageInfo } from './types'
 /**
  * Package search (issue #20).
  *
- * All network access lives in the MAIN process — the renderer's CSP forbids
- * outbound requests, so search must be brokered here. We use PyPI's JSON API
- * (`https://pypi.org/pypi/<name>/json`), which is a stable, key-free, CORS-free
- * endpoint and returns a package's metadata. PyPI has no public free-text
- * search JSON API, so the strategy is:
+ * Runs wherever the HOST is: the Electron main process on the desktop (the
+ * renderer's CSP forbids outbound requests, so search is brokered there), and
+ * the browser itself in the web build — PyPI's JSON API answers with
+ * `Access-Control-Allow-Origin: *`, so a page can read it directly once the
+ * web CSP allows the origin. Hence this file being dependency-free and shared.
+ *
+ * We use PyPI's JSON API (`https://pypi.org/pypi/<name>/json`), which is a
+ * stable, key-free endpoint and returns a package's metadata. PyPI has no
+ * public free-text search JSON API, so the strategy is:
  *
  *   1. Always include matches from the offline CURATED list (substring match on
  *      name/description) so search works with no network at all.

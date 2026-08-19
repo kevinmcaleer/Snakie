@@ -39,8 +39,11 @@ export function registerModulesIpc(): void {
   // groups it by instrument for the Modules manager.
   ipcMain.handle('modules:catalog', () => wrap<ModuleDef[]>(async () => MODULES))
 
-  // Resolve a single module to its install plan (bundled file contents OR a mip
-  // snippet) for the renderer to execute over the device channel.
+  // Resolve a single module to the FILES that install it — a bundled stub read
+  // off disk, or an upstream package downloaded HERE (#776), because this
+  // process has the internet connection: the board hasn't got one, and the
+  // renderer's CSP forbids outbound requests. The renderer writes them over the
+  // device channel, so this layer still never touches the device singleton.
   ipcMain.handle('modules:installPlan', (_e, id: string) =>
     wrap<ModuleInstallPlan>(async () => planForId(id))
   )

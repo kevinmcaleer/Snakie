@@ -1,0 +1,263 @@
+id: modulino-buttons
+name: Modulino Buttons
+description: Three buttons and three LEDs on an I²C Modulino, daisy-chainable over QWIIC.
+manufacturer: Arduino
+family: Input
+tags:
+  - modulino
+  - arduino
+  - i2c
+  - qwiic
+  - button
+  - led
+package: SMD
+voltage: 3.3V
+partNumber: ABX00110
+properties:
+  interface: I²C (0x7C, re-addressable — onboard MCU)
+  inputs: 3 momentary buttons (A, B, C)
+  outputs: 3 LEDs, one above each button
+  chain: QWIIC socket at each end, same bus in parallel
+version: 0.1.11
+pcbColor: "#00979d"
+aspect: 1.617
+dimensions:
+  width: 41
+  height: 25.36
+shape:
+  kind: rect
+  cornerRadiusMm: 4.6
+headers:
+  - edge: right
+    pins:
+      - name: GND
+        type: gnd
+        number: 1
+        shape: header
+        rotation: 90
+        x: 0.591716338318
+        y: 0.949529736075
+      - name: 3v3
+        type: pwr
+        number: 2
+        shape: header
+        rotation: 90
+        x: 0.529604117459
+        y: 0.949529736075
+      - name: SDA
+        type: io
+        number: 3
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+        shape: header
+        rotation: 90
+        x: 0.467491896601
+        y: 0.949646140865
+      - name: SCL
+        type: io
+        number: 4
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+        shape: header
+        rotation: 90
+        x: 0.405379675742
+        y: 0.949529736075
+      - name: A
+        type: io
+        number: 14
+        capabilities:
+          - digital
+        shape: header
+        rotation: 270
+        x: 0.779822918204
+        y: 0.047594084474
+      - name: GND
+        type: gnd
+        number: 13
+        shape: header
+        rotation: 270
+        x: 0.717951330983
+        y: 0.047594084474
+      - name: 3v3
+        type: gnd
+        number: 12
+        shape: header
+        rotation: 270
+        x: 0.655575668381
+        y: 0.047594084474
+      - name: PF2
+        type: io
+        number: 11
+        shape: header
+        rotation: 270
+        x: 0.59320000578
+        y: 0.047594084474
+      - name: SWCLK
+        type: io
+        number: 10
+        shape: header
+        rotation: 270
+        x: 0.529604117459
+        y: 0.047594084474
+      - name: SWDIO
+        type: io
+        number: 9
+        capabilities:
+          - digital
+        shape: header
+        rotation: 270
+        x: 0.467491896601
+        y: 0.047594084474
+      - name: TX1
+        type: io
+        number: 8
+        capabilities:
+          - uart
+        signals:
+          uart: TX
+        buses:
+          uart: 1
+        shape: header
+        rotation: 270
+        x: 0.405379675742
+        y: 0.047594084474
+      - name: RX1
+        type: io
+        number: 7
+        capabilities:
+          - uart
+        signals:
+          uart: RX
+        buses:
+          uart: 1
+        shape: header
+        rotation: 270
+        x: 0.34345652081896355
+        y: 0.047594084474
+      - name: B
+        type: io
+        number: 6
+        shape: header
+        rotation: 270
+        x: 0.281157234271
+        y: 0.047594084474
+      - name: C
+        type: io
+        number: 5
+        capabilities:
+          - digital
+        shape: header
+        rotation: 270
+        x: 0.21894603017
+        y: 0.047594084474
+mountingHoles:
+  - x: 0.89024
+    y: 0.81546
+    diameter: 1.5
+  - x: 0.10976
+    y: 0.81546
+    diameter: 1.5
+  - x: 0.10976
+    y: 0.18454
+    diameter: 1.5
+  - x: 0.89024
+    y: 0.18454
+    diameter: 1.5
+buttons:
+  - label: A
+    x: 0.748840637207
+    y: 0.501500634997
+  - label: B
+    x: 0.501258544922
+    y: 0.501500634997
+  - label: C
+    x: 0.24859568278
+    y: 0.501500634997
+rails:
+  - name: GND
+    pins:
+      - GND
+      - GND-B
+  - name: 3V3
+    pins:
+      - 3V3
+      - 3V3-B
+  - name: SDA
+    pins:
+      - SDA
+      - SDA-B
+  - name: SCL
+    pins:
+      - SCL
+      - SCL-B
+connectors:
+  - z: 0
+    kind: qwiic
+    x: 0.94512
+    y: 0.5
+    rotation: 90
+    pins:
+      - name: GND
+        type: gnd
+      - name: 3V3
+        type: pwr
+      - name: SDA
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+      - name: SCL
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+  - z: 0
+    kind: qwiic
+    x: 0.058593378906
+    y: 0.505438238038
+    rotation: 270
+    pins:
+      - name: GND-B
+        type: gnd
+      - name: 3V3-B
+        type: pwr
+      - name: SDA-B
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+      - name: SCL-B
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+image: image.png
+rear:
+  image: rear.png
+help: help.md
+mesh: modulino.stl
+meshUnits: mm
+mass_g: 4.4
+i2cAddresses:
+  - 62
+library:
+  module: modulino
+  docs: https://docs.arduino.cc/hardware/modulino-buttons/
+drivers:
+  - source: module:modulino
+    target: lib/modulino
+    label: Arduino Modulino library
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true

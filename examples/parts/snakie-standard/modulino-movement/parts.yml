@@ -1,0 +1,254 @@
+id: modulino-movement
+name: Modulino Movement
+description: LSM6DSOX 6-axis IMU — accelerometer + gyroscope — on an I²C Modulino, daisy-chainable over QWIIC.
+manufacturer: Arduino
+family: Sensor
+tags:
+  - modulino
+  - arduino
+  - i2c
+  - qwiic
+  - imu
+  - accelerometer
+  - gyroscope
+  - lsm6dsox
+  - sensor
+package: SMD
+voltage: 3.3V
+partNumber: ABX00101
+properties:
+  interface: I²C (0x6A or 0x6B, set by a solder jumper — no onboard MCU)
+  sensor: LSM6DSOXTR 6-axis IMU
+  measures: linear acceleration (g) and angular velocity (dps), each on X/Y/Z
+  chain: QWIIC socket at each end, same bus in parallel
+version: 0.1.2
+pcbColor: "#00979d"
+aspect: 1.617
+dimensions:
+  width: 41
+  height: 25.36
+shape:
+  kind: rect
+  cornerRadiusMm: 4.6
+headers:
+  - edge: left
+    pins:
+      - name: GND
+        type: gnd
+        number: 1
+        shape: header
+        x: 0.7196906951060892
+        y: 0.04990509305968019
+      - name: 3v3
+        type: pwr
+        number: 2
+        shape: header
+        x: 0.7807201038788757
+        y: 0.04990509305968019
+      - name: SDx
+        type: io
+        number: 3
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+        shape: header
+        x: 0.40644876191924023
+        y: 0.0495031499210843
+      - name: SCx
+        type: io
+        number: 4
+        signals:
+          i2c: SCL
+        shape: header
+        x: 0.46689834594726565
+        y: 0.04990509305968019
+      - name: SCL
+        type: io
+        number: 8
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+        shape: header
+        x: 0.4061952209472656
+        y: 0.9511122638369459
+      - name: SDA
+        type: io
+        number: 7
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+        shape: header
+        x: 0.46689834594726565
+        y: 0.9511122638369459
+      - name: 3v3
+        type: pwr
+        number: 6
+        shape: header
+        x: 0.5301728820800782
+        y: 0.9511122638369459
+      - name: GND
+        type: gnd
+        number: 5
+        shape: header
+        x: 0.592655029296875
+        y: 0.9511122638369459
+      - name: INT
+        type: io
+        side: rear
+        gpio: 8
+        capabilities:
+          - digital
+        shape: header
+        x: 0.344926011064748
+        y: 0.04743085674683003
+      - name: INT2
+        type: io
+        side: rear
+        gpio: 9
+        capabilities:
+          - digital
+        shape: header
+        x: 0.40644876191924023
+        y: 0.04743085674683003
+      - name: SDO
+        type: io
+        side: rear
+        gpio: 10
+        capabilities:
+          - digital
+        shape: header
+        x: 0.46689834594726565
+        y: 0.04990509305968019
+      - name: CS
+        type: io
+        side: rear
+        gpio: 11
+        capabilities:
+          - digital
+        shape: header
+        x: 0.6568434050670267
+        y: 0.0495031499210843
+      - name: SD0/SA0
+        type: io
+        side: rear
+        gpio: 12
+        capabilities:
+          - digital
+        shape: header
+        x: 0.7196906951060892
+        y: 0.05167601111058056
+      - name: OCSAUX
+        type: io
+        side: rear
+        gpio: 13
+        capabilities:
+          - digital
+        shape: header
+        x: 0.7807201038788757
+        y: 0.05167601111058056
+mountingHoles:
+  - x: 0.10309460489908853
+    y: 0.18454
+    diameter: 1.5
+  - x: 0.89024
+    y: 0.18454
+    diameter: 1.5
+  - x: 0.89024
+    y: 0.81546
+    diameter: 1.5
+  - x: 0.10309460489908853
+    y: 0.81546
+    diameter: 1.5
+rails:
+  - name: GND
+    pins:
+      - GND
+      - GND-B
+  - name: 3V3
+    pins:
+      - 3V3
+      - 3V3-B
+  - name: SDA
+    pins:
+      - SDA
+      - SDA-B
+  - name: SCL
+    pins:
+      - SCL
+      - SCL-B
+connectors:
+  - z: 0
+    kind: qwiic
+    x: 0.05488
+    y: 0.5
+    rotation: 270
+    pins:
+      - name: GND
+        type: gnd
+      - name: 3V3
+        type: pwr
+      - name: SDA
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+      - name: SCL
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+  - z: 0
+    kind: qwiic
+    x: 0.94512
+    y: 0.5
+    rotation: 90
+    pins:
+      - name: GND-B
+        type: gnd
+      - name: 3V3-B
+        type: pwr
+      - name: SDA-B
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+      - name: SCL-B
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+image: image.jpg
+rear:
+  image: rear.jpg
+  imageLayer:
+    x: -0.000248616536458357
+    y: 0.0003893618578665048
+    w: 1
+    h: 1
+help: help.md
+mesh: modulino.stl
+meshUnits: mm
+mass_g: 3.9
+i2cAddresses:
+  - 106
+  - 107
+library:
+  module: modulino
+  docs: https://docs.arduino.cc/hardware/modulino-buttons/
+drivers:
+  - source: module:modulino
+    target: lib/modulino
+    label: Arduino Modulino library
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true

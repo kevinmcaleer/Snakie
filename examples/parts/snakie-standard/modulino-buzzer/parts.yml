@@ -1,0 +1,231 @@
+id: modulino-buzzer
+name: Modulino Buzzer
+description: Piezo buzzer driven over I²C — tones by frequency and duration.
+manufacturer: Arduino
+family: Output
+tags:
+  - modulino
+  - arduino
+  - i2c
+  - qwiic
+  - audio
+  - buzzer
+  - piezo
+  - sound
+package: SMD
+voltage: 3.3V
+partNumber: ABX00108
+properties:
+  interface: I²C (0x3C, re-addressable — onboard MCU)
+  buzzer: Murata PKLCS1212E4001-R1 piezo
+  mcu: STM32C011
+  outputs: tones by frequency + duration; a NOTES table for melodies
+  chain: QWIIC socket at each end, same bus in parallel
+version: 0.1.10
+pcbColor: "#00979d"
+aspect: 1.617
+dimensions:
+  width: 41
+  height: 25.36
+shape:
+  kind: rect
+  cornerRadiusMm: 4.6
+headers:
+  - edge: left
+    pins:
+      - name: PA0
+        type: io
+        number: 1
+        shape: header
+        x: 0.28147101581331124
+        y: 0.0480588517855896
+      - name: RX1
+        type: io
+        number: 2
+        capabilities:
+          - uart
+        signals:
+          uart: RX
+        buses:
+          uart: 1
+        shape: header
+        x: 0.34256332397460937
+        y: 0.0480588517855896
+      - name: TX1
+        type: io
+        number: 3
+        capabilities:
+          - uart
+        signals:
+          uart: TX
+        buses:
+          uart: 1
+        shape: header
+        x: 0.4070342000325521
+        y: 0.04797094728167
+      - name: P3
+        type: io
+        number: 4
+        shape: header
+        x: 0.4671391805013021
+        y: 0.04797094728167
+      - name: SWCLK
+        type: io
+        number: 5
+        shape: header
+        x: 0.5299398295084635
+        y: 0.04797094728167
+      - name: PF2
+        type: io
+        number: 6
+        capabilities:
+          - digital
+        shape: header
+        x: 0.5908061726888021
+        y: 0.0480588517855896
+      - name: 3v3
+        type: pwr
+        number: 7
+        shape: header
+        x: 0.657755126953125
+        y: 0.04797094728167
+      - name: GND
+        type: gnd
+        number: 8
+        shape: header
+        x: 0.7187506951084213
+        y: 0.0480588517855896
+      - name: SCL
+        type: io
+        number: 12
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+        shape: header
+        x: 0.4070342000325521
+        y: 0.9520164714376006
+      - name: SDA
+        type: io
+        number: 11
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+        shape: header
+        x: 0.4671391805013021
+        y: 0.9565505018745687
+      - name: 3v3
+        type: pwr
+        number: 10
+        shape: header
+        x: 0.5299398295084635
+        y: 0.9565505018745687
+      - name: GND
+        type: gnd
+        number: 9
+        shape: header
+        x: 0.5908061726888021
+        y: 0.9590246559568258
+mountingHoles:
+  - x: 0.10976
+    y: 0.18454
+    diameter: 1.5
+  - x: 0.89024
+    y: 0.18454
+    diameter: 1.5
+  - x: 0.89024
+    y: 0.81546
+    diameter: 1.5
+  - x: 0.10976
+    y: 0.81546
+    diameter: 1.5
+rails:
+  - name: GND
+    pins:
+      - GND
+      - GND-B
+  - name: 3V3
+    pins:
+      - 3V3
+      - 3V3-B
+  - name: SDA
+    pins:
+      - SDA
+      - SDA-B
+  - name: SCL
+    pins:
+      - SCL
+      - SCL-B
+connectors:
+  - z: 0
+    kind: qwiic
+    x: 0.05540050272623698
+    y: 0.5
+    rotation: 270
+    pins:
+      - name: GND
+        type: gnd
+      - name: 3V3
+        type: pwr
+      - name: SDA
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+      - name: SCL
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+  - z: 0
+    kind: qwiic
+    x: 0.9453607836914063
+    y: 0.5
+    rotation: 90
+    pins:
+      - name: GND-B
+        type: gnd
+      - name: 3V3-B
+        type: pwr
+      - name: SDA-B
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+      - name: SCL-B
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+image: image.jpg
+imageLayer:
+  x: 0.00024083455403645093
+  y: -0.000401860908002899
+  w: 1
+  h: 1
+rear:
+  image: rear.jpg
+help: help.md
+mesh: modulino.stl
+meshUnits: mm
+mass_g: 4.2
+i2cAddresses:
+  - 30
+library:
+  module: modulino
+  docs: https://docs.arduino.cc/hardware/modulino-buttons/
+drivers:
+  - source: module:modulino
+    target: lib/modulino
+    label: Arduino Modulino library
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true

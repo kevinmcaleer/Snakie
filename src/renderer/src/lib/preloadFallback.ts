@@ -67,6 +67,11 @@ const fill = (target: Record<string, unknown>): unknown =>
     }
   })
 
+/** The web build's stand-in for the desktop's workspace relay (#775): one page,
+ *  so the "send it to the main window" hop is a local dispatch. */
+const workspaceListeners = new Set<(id: string) => void>()
+let workspaceFolder: string | undefined
+
 // Read through a widened type so TS doesn't treat the (declared non-optional)
 // globals as always-present — outside Electron they genuinely are not.
 const w = window as typeof window & {
@@ -97,6 +102,10 @@ if (!w.api) {
     versions: {},
     device: {
       listPorts: P([]),
+      // A browser cannot see mass storage, so there is never a CIRCUITPY drive
+      // to find here (#753). Stated explicitly rather than left to `deepStub`,
+      // whose truthy `[]` is the trap #513 was filed about.
+      circuitpyDrives: P([]),
       connect: P(undefined),
       disconnect: P(undefined),
       getStatus: P({ state: 'disconnected' }),
@@ -149,7 +158,7 @@ if (!w.api) {
     },
     modules: {
       catalog: P([]),
-      installPlan: P({ id: '', importName: '', mechanism: 'mip', notes: [] }),
+      installPlan: P({ id: '', importName: '', files: [], notes: [] }),
       install: P({ id: '', ok: false, log: '', notes: [] }),
       probeInstalled: P([]),
       notifyChanged: noop,
@@ -173,6 +182,24 @@ if (!w.api) {
       onChanged: unsub,
       notifyUrdfChanged: noop,
       onUrdfChanged: unsub
+    },
+    // Workspace relay + project folder (#775). Not inert like the rest: outside
+    // Electron this is a SINGLE-window build, so "ask the main window to switch"
+    // is just "switch", and the session folder is a value this page already
+    // knows. A local pub/sub gives the exact same behaviour the IPC relay gives
+    // the desktop, which is what keeps the web build's Add-to-project working.
+    workspace: {
+      show: (id: string): void => {
+        for (const cb of [...workspaceListeners]) cb(id)
+      },
+      onShow: (cb: (id: string) => void): (() => void) => {
+        workspaceListeners.add(cb)
+        return () => workspaceListeners.delete(cb)
+      },
+      setFolder: (folder?: string): void => {
+        workspaceFolder = folder && folder.trim() ? folder : undefined
+      },
+      folder: (): Promise<string | null> => Promise.resolve(workspaceFolder ?? null)
     },
     board: {
       open: P(undefined),

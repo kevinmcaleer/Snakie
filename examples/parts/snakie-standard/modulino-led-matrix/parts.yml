@@ -1,0 +1,201 @@
+id: modulino-led-matrix
+name: Modulino LED Matrix
+description: 8x12 charlieplexed LED matrix, 96 blue LEDs, I2C
+manufacturer: Arduino
+partNumber: ABX00152
+family: Output
+tags:
+  - led
+  - modulino
+  - arduino
+  - matrix
+package: SMD
+pinSpacing: 2.54
+voltage: 3.3V
+version: 0.1.10
+pcbColor: "#0f5a2e"
+aspect: 1.617
+dimensions:
+  width: 41
+  height: 25.36
+shape:
+  kind: rect
+  cornerRadiusMm: 4.6
+headers:
+  - edge: left
+    pins:
+      - name: 3v3
+        type: pwr
+        number: 2
+        shape: header
+        x: 0.5301658715142143
+        y: 0.9491622862197885
+      - name: GND
+        type: gnd
+        number: 1
+        shape: header
+        x: 0.5921974436442057
+        y: 0.9491622862197885
+      - name: SCL
+        type: io
+        number: 4
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+        shape: header
+        x: 0.40610272725423174
+        y: 0.9491622862197885
+      - name: SDA
+        type: io
+        number: 3
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+        shape: header
+        x: 0.4681342993842231
+        y: 0.9491622862197885
+      - name: GND
+        type: gnd
+        number: 5
+        shape: header
+        x: 0.34334019978841146
+        y: 0.04643559307450278
+      - name: SWDIO
+        type: io
+        number: 6
+        shape: header
+        x: 0.40610272725423174
+        y: 0.04643559307450278
+      - name: SWCLK
+        type: io
+        number: 7
+        shape: header
+        x: 0.4681342993842231
+        y: 0.04332621757364836
+      - name: PF2
+        type: io
+        number: 8
+        shape: header
+        x: 0.5301658715142143
+        y: 0.04332621757364836
+      - name: 3v3
+        type: pwr
+        number: 9
+        shape: header
+        x: 0.5921974436442057
+        y: 0.04332621757364836
+      - name: P9
+        type: gnd
+        number: 10
+        shape: header
+        x: 0.6549763958135321
+        y: 0.04643559307450278
+mountingHoles:
+  - x: 0.10483909606933593
+    y: 0.17556969513647555
+    diameter: 1.5
+  - x: 0.8898472086588541
+    y: 0.17556969513647555
+    diameter: 1.5
+  - x: 0.8898472086588541
+    y: 0.8181304758932203
+    diameter: 1.5
+  - x: 0.10483909606933593
+    y: 0.8181304758932203
+    diameter: 1.5
+connectors:
+  - z: 0
+    kind: qwiic
+    x: 0.05423502604166669
+    y: 0.4995403516474725
+    rotation: 270
+    pins:
+      - name: GND
+        type: gnd
+      - name: 3V3
+        type: pwr
+      - name: SDA
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+      - name: SCL
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+  - z: 1
+    kind: qwiic
+    x: 0.9409485371907552
+    y: 0.4991887777487167
+    rotation: 90
+    pins:
+      - name: GND-B
+        type: gnd
+      - name: 3V3-B
+        type: pwr
+      - name: SDA-B
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+      - name: SCL-B
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+rails:
+  - name: GND
+    pins:
+      - GND
+      - GND-B
+  - name: 3V3
+    pins:
+      - 3V3
+      - 3V3-B
+  - name: SDA
+    pins:
+      - SDA
+      - SDA-B
+  - name: SCL
+    pins:
+      - SCL
+      - SCL-B
+i2cAddresses:
+  - 57
+# The panel in PIXELS (#780) — not `dimensions` above, which is its physical
+# 41 x 25.36 mm. 8 rows x 12 columns = the 96 LEDs Arduino's docs quote, and the
+# upstream MicroPython driver's own _width / _height.
+# The module drives 16 levels per LED (its driver takes use_grayscale=True and
+# allocates 48 bytes = 4 bits x 96 pixels), so gray4 is what the panel can do;
+# the same driver defaults to 1-bit, which is a subset of it.
+display:
+  width: 12
+  height: 8
+  colour: gray4
+mass_g: 4.4
+mesh: modulino.stl
+meshUnits: mm
+help: help.md
+drivers:
+  - source: module:modulino
+    target: lib/modulino
+    label: Arduino Modulino library
+library:
+  module: modulino
+  docs: https://docs.arduino.cc/hardware/modulino-ledmatrix/
+image: image.jpg
+rear:
+  image: rear.jpg
+layerVisibility:
+  pcb: true
+  image: true
+  holes: true
+  pins: true
+  components: true

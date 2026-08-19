@@ -19,7 +19,7 @@
 import type { BoardDefinition, BoardPad, BoardPadType, BoardHeader } from '../../../shared/board'
 import { installPathFor, moduleById } from '../../../shared/modules-catalog'
 import { BUILTIN_BOARDS } from './board-defs'
-import {
+import { connectablePinCount,
   STANDARD_PIN_SPACING_MM,
   coerceConnectorKind,
   coerceConnectorVariant,
@@ -64,7 +64,7 @@ import {
   type PolygonPoint
 } from '../../../shared/part'
 import type { RobotPart } from '../../../shared/robot'
-import { coerceElectrical } from '../../../shared/part-yaml'
+import { coerceDisplay, coerceElectrical } from '../../../shared/part-yaml'
 import { flattenPartPins } from '../../../shared/netlist'
 
 /** The pin types the editor offers, in UI order. */
@@ -806,9 +806,26 @@ export function resizeContacts(pins: PartPin[], n: number, prefix = 'P'): PartPi
   return kept
 }
 
-/** Real housing dimensions per JST family (mm): pitch, end margin, body depth. */
+/**
+ * Real housing dimensions per JST family (mm): pitch, end margin, body depth.
+ *
+ * `sideMargin` is HALF the difference between the housing's overall width and
+ * its contact span — so a socket's drawn width is `(n-1)·pitch + 2·sideMargin`,
+ * which is how the datasheets themselves tabulate it.
+ *
+ * **SH is measured, from JST's own drawing** (SH series, side-entry SMT header
+ * `SM04B-SRSS-TB` — the QWIIC/STEMMA-QT connector). Its header table gives
+ * `B = A + 3.0` for EVERY circuit count, where `A` is the contact span — hence
+ * 1.5 mm per end, and 6.0 mm overall for the 4-way. The body is **4.25 mm** deep
+ * on the board; 2.9 mm is its HEIGHT, which is what the earlier value had picked
+ * up by mistake — it drew the socket a third too narrow and too shallow (#697).
+ *
+ * The other families are NOT datasheet-verified — they follow the old
+ * ~0.75×pitch approximation. Correct them the same way when someone needs them
+ * to be right.
+ */
 export const JST_DIMS: Record<JstFamily, { pitch: number; sideMargin: number; depthMm: number }> = {
-  sh: { pitch: 1.0, sideMargin: 0.75, depthMm: 2.9 },
+  sh: { pitch: 1.0, sideMargin: 1.5, depthMm: 4.25 },
   gh: { pitch: 1.25, sideMargin: 0.9, depthMm: 3.4 },
   zh: { pitch: 1.5, sideMargin: 1.0, depthMm: 3.6 },
   ph: { pitch: 2.0, sideMargin: 1.4, depthMm: 4.5 },
@@ -835,7 +852,10 @@ export function connectorDims(conn: PartConnector): { pitch: number; sideMargin:
       // plug seating on top.
       return { pitch: 5.08, sideMargin: 2.54, depthMm: 8.5 }
     default:
-      return { pitch: 1.0, sideMargin: 0.75, depthMm: 2.9 }
+      // QWIIC / STEMMA QT IS a JST SH 4-way side-entry header — so it takes the
+      // SH figures rather than its own copy of them, which had already drifted
+      // out of step with the family table above.
+      return JST_DIMS.sh
   }
 }
 
@@ -1981,6 +2001,16 @@ export function normalisePart(part: PartDefinition): PartDefinition {
     if (typeof part.shape.cornerRadius === 'number' && Number.isFinite(part.shape.cornerRadius)) {
       out.shape.cornerRadius = clamp(part.shape.cornerRadius, 0, 0.5)
     }
+    // #739: the mm form is kept as authored — it's a physical dimension, so it
+    // is NOT clamped to the fraction's 0..0.5; `cornerRadiusFraction` clamps at
+    // the point of use, once there's a board size to clamp against.
+    if (
+      typeof part.shape.cornerRadiusMm === 'number' &&
+      Number.isFinite(part.shape.cornerRadiusMm) &&
+      part.shape.cornerRadiusMm >= 0
+    ) {
+      out.shape.cornerRadiusMm = part.shape.cornerRadiusMm
+    }
   }
   if (Array.isArray(part.mountingHoles) && part.mountingHoles.length) {
     out.mountingHoles = part.mountingHoles.map((h) => {
@@ -2206,6 +2236,10 @@ export function normalisePart(part: PartDefinition): PartDefinition {
   // whitelist keeps the SAME fields the YAML round-trip does (no silent drop).
   const electrical = coerceElectrical(part.electrical)
   if (electrical) out.electrical = electrical
+  // The pixel panel (#780) — same deal: the shared coercer, so the editor and the
+  // on-disk form agree on what a valid display block is.
+  const display = coerceDisplay(part.display)
+  if (display) out.display = display
   if (
     part.imageLayer &&
     [part.imageLayer.x, part.imageLayer.y, part.imageLayer.w, part.imageLayer.h].every(
@@ -2298,14 +2332,11 @@ export function normalisePart(part: PartDefinition): PartDefinition {
  */
 export function validatePart(part: PartDefinition): string | null {
   if (!sanitisePartId(part.id)) return 'Give the part a name (it becomes the saved id).'
-  const named = (ps: PartPin[] | undefined): number =>
-    (ps ?? []).filter((p) => String(p.name ?? '').trim() !== '').length
   // Connector contacts count as pins. A Grove or QWIIC module's ONLY electrical
   // interface is its socket — it has no broken-out header at all — so requiring a
-  // header pin would reject an entire (and growing) class of real parts.
-  const pins =
-    (part.headers ?? []).reduce((n, h) => n + named(h.pins), 0) +
-    (part.connectors ?? []).reduce((n, c) => n + named(c.pins), 0)
+  // header pin would reject an entire (and growing) class of real parts. Shared
+  // with the main process's save guard, which used to disagree with this.
+  const pins = connectablePinCount(part)
   if (pins === 0) return 'Add at least one pin — on a header or a connector.'
   if (part.version && !/^\d+\.\d+(\.\d+)?(-[\w.]+)?$/.test(part.version.trim())) {
     return 'Version must look like 1.2.3.'

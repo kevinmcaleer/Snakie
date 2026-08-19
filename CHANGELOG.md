@@ -18,8 +18,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it, or re-add the part to Electronics. Nothing destructive ever happens
   without a click.
 - **Every part you place now appears in the Build workspace.** (#716, epic #720)
-  Previously only a part shipping a 3-D mesh reached the Robot View — which was
-  one part in the whole standard library — and batch-added parts never did. Now
+  Previously only a part shipping a 3-D mesh reached the Robot View — a handful
+  of the standard library — and batch-added parts never did. Now
   a part without a mesh gets a **footprint box**: its real dimensions extruded
   to a family-tuned height in a desaturated take on its PCB colour, so the 3-D
   scene resembles your robot and centre-of-mass geometry stays meaningful. New
@@ -28,8 +28,243 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Build view picks all this up live instead of waiting for a remount. Behind the
   scenes each placed part now remembers which 3-D link is its (`urdfLink`) — the
   spine the coming sync and unified-hierarchy work builds on.
+- **Packages install in the browser too.** (#776) Snakie for Web had no
+  `packages` backend at all: the Packages tab could list nothing, search
+  nothing, and its Install button quietly did nothing. #776 is what made a web
+  version possible — an install is no longer `mip` running on the board but
+  "resolve the package on the host, write the files to the board", and in a
+  browser the host is the page. So the curated list, PyPI search, `github:`
+  specs and bare micropython-lib names (dependencies and all) now work on
+  app.snakie.org exactly as they do on the desktop, over Web Serial or into the
+  simulator.
+
+  What a web page **can't** do is fetch from just anywhere — it is fenced in by
+  its content-security policy and by whether the far end allows cross-origin
+  reads at all. A `gitlab:` spec, a custom package index, or any other host is
+  therefore refused **up front, by name**, with a line saying so and pointing at
+  the desktop app — rather than the bare "Failed to fetch" the browser would
+  otherwise give.
+- **A bitmap font editor, so a display project can have its own typeface.**
+  (#250, epic #247) Small displays ship with one tiny built-in font; this
+  instrument lets you draw your own the way hand-made display fonts are made —
+  a per-glyph pixel grid you click and drag on, a navigator across the whole
+  charset, an adjustable cell (5×7, 8×8, whatever), and a preview line that
+  renders your text at **1×** so you see the real thing before you flash it.
+  It opens on a bundled 5×8 printable-ASCII starter font rather than a blank
+  grid, so the first move is "fix the letters you don't like", and your drawing
+  is parked as you go. Fonts can be fixed-pitch or proportional: **Auto-fit**
+  shrinks every glyph to its own ink plus a pixel of spacing, growing the cell
+  first so the widest letters still get their gap. Export writes a
+  **`font-to-py`-compatible module** into the editor, so existing `Writer` code
+  works unchanged — or a simpler packed `bytearray` + metrics module if you'd
+  rather blit into a `framebuf` yourself. Importing an existing font module,
+  uploading straight to the board and previewing on real hardware are follow-ups.
+- **Grove Red LED, as a Standard library part.** Seeed's 5 mm red LED module
+  (SKU 104030005) on a Grove digital port, drawn from the product photo: the LED
+  in its white holder, the brightness trimmer, the switching transistor and the
+  chip resistors, with `SIG`/`NC`/`VCC`/`GND` on the socket and a `help.md`
+  covering the on/off and PWM-fade snippets. `SIG` is `digital` + `pwm`, so a
+  design can fade it as well as blink it. No driver — `machine.Pin` is enough.
+- **Run, Stop and Reset say what they actually do on a CircuitPython board, and
+  the file tree shows which file boots.** (#755, epic #209) Run stays a raw-REPL
+  execution on both runtimes — it will not overwrite your `code.py` — but it now
+  says what that costs: your `code.py` stops, and the board waits at the REPL
+  rather than going back to it. Reset is where the runtimes really differ, and it
+  says so: on CircuitPython a soft reboot runs `code.py` again from the start,
+  rather than just clearing the board. The device file tree marks the file the
+  board runs at boot — and marks one it will **ignore**, because CircuitPython
+  tries `code.py` before `main.py`, so a board carrying both runs only the first
+  and edits to the other appear to do nothing.
+- **Files, drivers and libraries can be written to a CircuitPython board.**
+  (#754, epic #209) CircuitPython's filesystem is read-only *to the board* while
+  its CIRCUITPY drive is mounted, so every file operation Snakie has — the Files
+  panel, driver installs, the instrument library, the Modules manager — used to
+  fail with a bare `OSError: 30`. Those operations now go to the drive instead.
+  Reads go there too, so listing a folder no longer has to interrupt a running
+  `code.py` to do it, and a file copy replaces the hex-over-serial transfer.
+  Writes are flushed before returning, so CircuitPython's auto-reload can't catch
+  a half-written file. A board that has taken its filesystem back with
+  `storage.remount` still works exactly as before, over the REPL — and if a write
+  does hit the read-only filesystem, the error now explains it instead of naming
+  an errno. The flash gauge measures the drive, which is the number that answers
+  "will this fit".
+- **Snakie finds a CircuitPython board's drive, and says what the board is before
+  you connect.** (#753, epic #209) A board running CircuitPython mounts a
+  **CIRCUITPY** volume, and its `boot_out.txt` names the version and the
+  per-board build id — so the port picker can read "CircuitPython 10.2.1"
+  against a board nothing has connected to yet. A drive is tied to its port by
+  the board's own id, matched against the port's USB serial number, so two
+  boards on one desk can't swap identities; where that can't be established it
+  says nothing rather than guessing, because the next phase writes files to
+  whichever drive this picks. Renamed drives are still found — the marker file
+  decides, not the label.
+- **Snakie can tell which Python your board is running.** (#752, epic #209) The
+  connect probe now reads `sys.implementation`, so the session knows whether a
+  board runs **MicroPython or CircuitPython** instead of assuming — the
+  foundation the rest of the CircuitPython work is built on. The status bar names
+  the runtime and version beside the port, with the board string on hover, and
+  the connect greeting is rebuilt in that runtime's own wording rather than
+  MicroPython's. A board that won't answer stays unidentified rather than being
+  guessed at, and the previous board's runtime can't linger after you unplug it.
+- **A display part can declare its size in pixels.** (#780) A part with a panel
+  now carries a `display` block in `parts.yml` — `width`, `height` and a `colour`
+  depth — so its resolution is a fact the part states rather than something each
+  sketch or instrument re-guesses. This is deliberately **not** `dimensions`,
+  which is the board's physical size in millimetres: a display part has both, and
+  they are unrelated numbers. `colour` is named after bits per pixel (`mono`,
+  `gray2`, `gray4`, `gray8`, `rgb332`, `rgb565`, `rgb888`) to match MicroPython's
+  `framebuf` formats, so "gray4" can't be misread as four grey levels. Populated
+  for the **Modulino LED Matrix** (12 × 8) and the **XIAO Expansion Base**'s
+  onboard 0.96" SSD1306 (128 × 64). Reading it back on the board is a follow-up.
+
+### Changed
+- The per-platform mount-point scanning behind board detection is now in one
+  place (`fs/volumes.ts`) instead of being hand-rolled once per board type, and
+  it no longer reads every folder in your home directory looking for a board.
+
+### Fixed
+- A unit test no longer depends on what is plugged into the machine running it.
+  (#773) The CircuitPython file-routing tests exercise one case — a drive that
+  ejected — that made the device re-resolve its mount, and re-resolution is the
+  one step that leaves the test's temp directory and scans the developer's real
+  volumes (and, if it finds a board, their real serial ports). That is unbounded
+  I/O: it is why that single case timed out repeatedly under a loaded suite
+  while passing every time on its own. The scan is now stubbed — the logic under
+  test is untouched, and two cases now assert something they could not before:
+  that the device really does look again when the marker file is gone, and that
+  a drive still present does **not** cost a rescan on every file operation.
+- **Pin labels are the same size on every board with the same hardware.** (#778)
+  A Tiny 2350's pin names didn't match a Modulino LED Matrix's, even though both
+  carry an ordinary 2.54 mm header. Label size wasn't a setting: it was derived
+  from the tightest gap between *any* two pins, measured in pixels of the part's
+  own fit-to-footprint box — an accident of the outline, not of the hardware. So
+  the same header was typeset one size on a 18 mm board and another on a 41 mm
+  one, and a placed part's silk labels carried its body scale on top of that,
+  setting identical pins in nearly twice the type on a big part as on a small one.
+
+  Labels are now sized the way everything else on a part already is: physically.
+  A label is as big as the room its pin really has — its neighbour's distance in
+  millimetres at the canvas' pixels-per-millimetre — so identical hardware drawn
+  at the same scale reads at the same size, whatever board it sits on.
+
+  The density shrink is still there, because it is the only thing keeping a Servo
+  2040's eighteen servo headers legible, but it now applies **per board edge**. A
+  label is anchored to the edge its pin faces and can only collide with the other
+  labels on that edge, so the Tiny 2350's QWIIC contacts — 1.2 mm apart, and
+  labelling off the bottom — no longer shrink the castellations down both sides.
+  Pins that draw no label at all (a servo header's V+/GND rows) no longer shrink
+  their neighbours either.
+- **A running Snakie can no longer undo an edit you made to a part outside it.**
+  (#750) The parts library is a folder of plain text files, so a script, an
+  editor and `git checkout` are all perfectly good ways to change a part — but
+  the app assumed it was the only author. It held each part in memory from the
+  moment the library loaded and, on the next save, wrote that copy back over
+  whatever was on disk. Corrected I²C addresses reverted to their 8-bit values,
+  QWIIC socket rotations flipped so GND sat on the wrong contact of a power
+  connector, and a module lost its whole template — four times in one session,
+  silently each time, because a save reported success.
+
+  A part now carries a stamp of the exact file it was read from, and a save that
+  presents a stamp the file no longer matches is **refused**, with a message
+  asking you to reopen the part. Nothing is written, so nothing is lost.
+
+  The same save also used to prune the part's folder to match its own idea of
+  the part's contents: every `image.*` and any `help.md`, whether the part
+  referenced them or not. That is how a hand-written `help.md` and a `.stl` mesh
+  were deleted from disk. A save now only removes an asset the part's own
+  previous `parts.yml` named, and only when it is being replaced or cleared —
+  anything else beside `parts.yml` is left alone. The dev "Update Standard"
+  mirror and the bundled-library refresh follow the same rule: they copy over
+  the top rather than emptying the folder first, and the mirror refuses outright
+  when the copy it would overwrite carries a newer version than the one being
+  promoted.
+- **Snakie downloads packages, instead of asking the board to.** (#776,
+  supersedes #769) Installing a driver or a package used to run `mip.install()`
+  **on the board** — which quietly required the *board* to have its own internet
+  connection. Most don't: a Pico, a Tiny 2350, any board without a radio could
+  never install anything this way. Even a Wi-Fi board needed `mip`, an optional
+  micropython-lib package that CircuitPython and many vendor builds leave out,
+  so the failure usually arrived as a bare
+  `ImportError("no module named 'mip'")`.
+
+  Now the machine with the internet connection does the downloading. Snakie
+  resolves the package on your computer and writes its files to the board, which
+  only has to do the thing every board can do: accept files. That reaches a
+  CIRCUITPY drive or the serial REPL through the same path every other file
+  write uses, so one route covers MicroPython and CircuitPython, wired and
+  wireless boards, and the simulator — which could never install anything
+  before. Whole packages come across, not just single files: the Modulino driver
+  installs all 25 of its files, including its three transitive dependencies.
+  It applies to the Packages panel too, not just drivers.
+
+  When an install can't proceed, the message now says which half failed —
+  downloading the package, or writing it to the board — and what to do about it,
+  instead of handing back the board's `ImportError`.
+- **An onboard LED's real size survived saving and vanished on loading.** The
+  YAML writer passes an LED through whole but the reader rebuilt it field by
+  field, so `sizeMm` (and a hand-placed silk label) were dropped on the next
+  load — the bundled LED Bar has authored 2.5 mm segments that never reached the
+  renderer. The reader now names them, and `single` LEDs are drawn life-size like
+  NeoPixels already were, so a 5 mm LED on a 20 mm module reads as the quarter of
+  the board it is. Its glow is a fixed ring around the package rather than a
+  multiple of it, so an ordinary indicator looks exactly as it did.
+
+## [0.44.0] - 2026-08-16
 
 ### Added
+- **Arduino's Modulino range, as Standard library parts.** (#721, #722) The
+  Modulinos are one board with different hardware on top, so the shared half —
+  the 41 × 25.36 mm outline, both QWIIC sockets wired in parallel onto one bus,
+  the generated 3-D mesh and the driver wiring — is authored once and each module
+  fills in the rest. **Buttons, Buzzer, Distance, LED Matrix, Light, Motors** and
+  **Movement** ship in this release, each with its own `help.md`, I²C address and
+  mass. All thirteen declare the same catalog module, so a design using several
+  is offered **one** driver install rather than one per board. A conformance test
+  runs over every `modulino-*` part, so the modules still to come can't drift
+  into subtly different boards.
+- **The full-screen catalog, and a part's details, grow out of the control that
+  opened them.** Pressing the expand button or a card's disclosure scales the new
+  view out of that button rather than replacing the screen, and closing either
+  one runs it backwards, shrinking back into the control it came from — so both
+  read as a detour you can back out of, with your place still visible behind.
+  Honours `prefers-reduced-motion`.
+- **Rotate a part 90° in the Part Editor.** (#749) Two buttons on the canvas
+  toolbar turn the whole board — pads, holes, connectors, components, labels,
+  outline and both photos — so a board photographed portrait can be re-authored
+  landscape and stay that way. It's a real edit, not a view transform, and it
+  round-trips exactly: four turns restore the part unchanged.
+- **Filter the parts catalog by type, manufacturer and tag.** (#740, #747) Type
+  and manufacturer are facets — every part has exactly one, always shown, always
+  counted against the *other* active filters, so a value that would return
+  nothing reads as the dead end it is. Tags are a ranked layer beneath them, with
+  the ones that merely restate a facet dropped and the long tail behind a
+  disclosure. The facets live in a left-hand sidebar in the full-screen catalog;
+  filtering collapses the category shelves into one flat grid, with each card
+  carrying the type its shelf heading used to supply.
+- **A board's corner radius can be given in millimetres.** (#739) How a PCB is
+  actually specified, and the number on a mechanical drawing — rather than a
+  fraction of the board's smaller side.
+- **Cabled leads route around boards instead of across them.** (#745) A QWIIC
+  lead used to run diagonally over the face of the board it left, hiding the silk
+  and reading nothing like a cable. A lead now leaves along its socket's axis and
+  drapes its slack outside the bodies it would otherwise cross, following the way
+  its plugs point.
+- **A full-sized part details view in the parts catalog.** (#748) A catalog card
+  has room for a picture, a name and one truncated line; everything else a part
+  knows was either buried in the narrow docked panel or not surfaced anywhere.
+  Hovering a card now reveals a **disclosure** on its picture, and clicking it
+  opens the part full-screen: the board drawn large with its pinout labels (and
+  the flip, for a two-sided part), its schematic, and — for a part that ships an
+  STL — a **3-D model** you can orbit. Beside it: manufacturer, part number,
+  package, voltage, real dimensions in millimetres, mass, I²C addresses and the
+  author's own spec rows; what driver it installs and from where; the modules it
+  works with; its links; and its bundled `help.md`, rendered. The disclosure has
+  its own hit area, so opening the details never ticks the card, and closing
+  (✕ or Esc) lands you back in the grid with the selection and filters exactly
+  as you left them — a part can also be ticked into the selection from the
+  details view itself. A panel with nothing to say isn't drawn at all, and the
+  3-D tab appears only when the model can actually be loaded, rather than
+  offering an empty frame.
 - **Author a part's drivers in the Part Editor.** (#655) A part that needs a
   MicroPython file on the board — what makes the Driver Install prompt fire when
   it's placed — could until now only say so via hand-edited `parts.yml`, so a
@@ -42,7 +277,36 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   files that ship beside the part are offered as sources, and a bundled filename
   that isn't actually there is flagged at authoring time instead of on hardware.
 
+### Changed
+- **One mesh load path.** (#742) STL loading, measurement and placeholder
+  geometry were duplicated across the robot and part views; they now share one
+  module, which is also what the new 3-D part view is built on.
+
 ### Fixed
+- **QWIIC connectors are drawn life-size, and the right colour.** The socket was
+  smaller than the real part; it's now the JST-SH datasheet's 6.0 × 4.25 mm, with
+  the board socket ivory and the cable plug white, as the real housings are.
+- **Modulino I²C addresses are the ones a bus scan actually reports.** The
+  MicroPython library declares each module's address in its **8-bit** form and
+  shifts it before touching the bus — but only for modules with an onboard MCU.
+  Three parts and most of the known-devices table carried the unshifted number,
+  so I²C-detect could never name an MCU module: Buttons is `0x3E`, not `0x7C`.
+- **Pin numbers and labels read upright on a rotated part.** (#746) Boxed labels
+  on a part turned 180° were upside-down; they now counter-rotate to stay
+  readable whatever the body's angle.
+- **A part's title clears its top-edge pin labels** instead of overlapping them.
+- **The part detail view flips the board, not the mat it sits on.**
+- **Catalog cards read as a grid again.** Titles sit above the picture and always
+  reserve two lines, so every image lines up; long names wrap rather than
+  truncate; the FRONT/BACK badge and the SKU are gone; category headings hug
+  their text; and the shelves fill their width, so they show as many columns as
+  the filtered grid does.
+- **The catalog's facet sidebar is legible in the dark theme** — it was styling
+  itself from the theme tokens while sitting on a deliberately light panel, which
+  put near-white ink on a near-white background.
+- **`npm run dev` no longer trips macOS malware protection.** (#708) Apple
+  revoked the stock ad-hoc Electron signature; the dev binary is re-signed on
+  postinstall.
 - **Mini board hover labels no longer crop at the old frame when zoomed out.**
   Hovering the mini board reveals the full pinout without re-framing (so the
   board doesn't resize under the pointer), which lets labels run past the frame
@@ -3989,7 +4253,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.43.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.44.0...HEAD
+[0.44.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.41.0...v0.42.0
 [0.41.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.40.0...v0.41.0

@@ -1,0 +1,195 @@
+id: modulino-distance
+name: Modulino Distance
+description: VL53L4CD time-of-flight distance sensor on an I²C Modulino, daisy-chainable over QWIIC.
+manufacturer: Arduino
+family: Sensor
+tags:
+  - modulino
+  - arduino
+  - i2c
+  - qwiic
+  - distance
+  - tof
+  - vl53l4cd
+  - sensor
+package: SMD
+voltage: 3.3V
+partNumber: ABX00102
+properties:
+  interface: I²C (0x29, FIXED — no onboard MCU)
+  sensor: VL53L4CDV0DH/1 time-of-flight
+  measures: distance to the nearest obstacle, in millimetres
+  chain: QWIIC socket at each end, same bus in parallel
+version: 0.1.11
+pcbColor: "#00979d"
+aspect: 1.617
+dimensions:
+  width: 41
+  height: 25.36
+shape:
+  kind: rect
+  cornerRadiusMm: 4.6
+headers:
+  - edge: left
+    pins:
+      - name: GND
+        type: gnd
+        number: 1
+        shape: header
+        x: 0.4061952209472656
+        y: 0.04990509305968019
+      - name: 3v3
+        type: pwr
+        number: 2
+        shape: header
+        x: 0.46689834594726565
+        y: 0.05107317863327973
+      - name: SDA
+        type: io
+        number: 3
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+        shape: header
+        x: 0.5301728820800782
+        y: 0.05107317863327973
+      - name: SCL
+        type: io
+        number: 4
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+        shape: header
+        x: 0.592655029296875
+        y: 0.04990509305968019
+      - name: SCL
+        type: io
+        number: 8
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+        shape: header
+        x: 0.4061952209472656
+        y: 0.9511122638369459
+      - name: SDA
+        type: io
+        number: 7
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+        shape: header
+        x: 0.46689834594726565
+        y: 0.9511122638369459
+      - name: 3v3
+        type: pwr
+        number: 6
+        shape: header
+        x: 0.5301728820800782
+        y: 0.9511122638369459
+      - name: GND
+        type: gnd
+        number: 5
+        shape: header
+        x: 0.592655029296875
+        y: 0.9511122638369459
+mountingHoles:
+  - x: 0.10976
+    y: 0.18454
+    diameter: 1.5
+  - x: 0.89024
+    y: 0.18454
+    diameter: 1.5
+  - x: 0.89024
+    y: 0.81546
+    diameter: 1.5
+  - x: 0.10976
+    y: 0.81546
+    diameter: 1.5
+rails:
+  - name: GND
+    pins:
+      - GND
+      - GND-B
+  - name: 3V3
+    pins:
+      - 3V3
+      - 3V3-B
+  - name: SDA
+    pins:
+      - SDA
+      - SDA-B
+  - name: SCL
+    pins:
+      - SCL
+      - SCL-B
+connectors:
+  - z: 0
+    kind: qwiic
+    x: 0.05488
+    y: 0.5
+    rotation: 270
+    pins:
+      - name: GND
+        type: gnd
+      - name: 3V3
+        type: pwr
+      - name: SDA
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+      - name: SCL
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+  - z: 0
+    kind: qwiic
+    x: 0.94512
+    y: 0.5
+    rotation: 90
+    pins:
+      - name: GND-B
+        type: gnd
+      - name: 3V3-B
+        type: pwr
+      - name: SDA-B
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+      - name: SCL-B
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+image: image.jpg
+rear:
+  image: rear.jpg
+help: help.md
+mesh: modulino.stl
+meshUnits: mm
+mass_g: 4.1
+i2cAddresses:
+  - 41
+library:
+  module: modulino
+  docs: https://docs.arduino.cc/hardware/modulino-buttons/
+drivers:
+  - source: module:modulino
+    target: lib/modulino
+    label: Arduino Modulino library
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true

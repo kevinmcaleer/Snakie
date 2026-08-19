@@ -98,13 +98,8 @@ export function missingProjectImports(
   return [...missing].sort()
 }
 
-/**
- * Resolve a single-file `github:owner/repo/path.py[@ref]` mip spec to its raw
- * URL — the BROWSER can fetch it even when the board can't (the simulator has
- * no network and no `mip` module). Multi-file/index specs return null.
- */
-export function githubRawUrl(spec: string): string | null {
-  const m = /^github:([^/]+)\/([^/]+)\/(.+?)(?:@([^@]+))?$/.exec(spec)
-  if (!m || !m[3].endsWith('.py')) return null
-  return `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[4] ?? 'HEAD'}/${m[3]}`
-}
+// `githubRawUrl` lived here until #776: it only ever resolved a SINGLE-file
+// `github:` spec, which was enough while host-side fetching was a browser-only
+// last resort. Host resolution is now how everything installs, so it is
+// replaced by `rewriteMipUrl` / `resolveMipSpec` in `src/shared/mip-resolve.ts`,
+// which cover single files, whole-repo packages and index names alike.

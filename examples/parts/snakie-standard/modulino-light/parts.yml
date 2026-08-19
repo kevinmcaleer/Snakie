@@ -1,0 +1,196 @@
+id: modulino-light
+name: Modulino Light
+description: LTR-381RGB-01 ambient light, colour and IR sensor on an I²C Modulino.
+manufacturer: Arduino
+family: Sensor
+tags:
+  - modulino
+  - arduino
+  - i2c
+  - qwiic
+  - light
+  - colour
+  - ambient
+  - ltr-381rgb
+  - sensor
+package: SMD
+voltage: 3.3V
+partNumber: ABX00111
+properties:
+  interface: I²C (0x53, FIXED — no onboard MCU)
+  sensor: LTR-381RGB-01 ambient light + colour
+  measures: lux, red/green/blue, colour temperature (K), infrared
+  chain: QWIIC socket at each end, same bus in parallel
+version: 0.1.12
+pcbColor: "#00979d"
+aspect: 1.617
+dimensions:
+  width: 41
+  height: 25.36
+shape:
+  kind: rect
+  cornerRadiusMm: 4.6
+headers:
+  - edge: right
+    pins:
+      - name: GND
+        type: gnd
+        number: 1
+        shape: header
+        rotation: 90
+        x: 0.593804779053
+        y: 0.95009490694
+      - name: 3v3
+        type: pwr
+        number: 2
+        shape: header
+        rotation: 90
+        x: 0.533101654053
+        y: 0.948926821367
+      - name: SDA
+        type: io
+        number: 3
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+        shape: header
+        rotation: 90
+        x: 0.46982711792
+        y: 0.948926821367
+      - name: SCL
+        type: io
+        number: 4
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+        shape: header
+        rotation: 90
+        x: 0.407344970703
+        y: 0.95009490694
+      - name: GND
+        type: gnd
+        number: 8
+        shape: header
+        rotation: 270
+        x: 0.593804779053
+        y: 0.048887736163
+      - name: GND
+        type: gnd
+        number: 7
+        shape: header
+        rotation: 270
+        x: 0.533101654053
+        y: 0.048887736163
+      - name: 3v3
+        type: pwr
+        number: 6
+        shape: header
+        rotation: 270
+        x: 0.46982711792
+        y: 0.048887736163
+      - name: GND
+        type: gnd
+        number: 5
+        shape: header
+        rotation: 270
+        x: 0.407344970703
+        y: 0.048887736163
+mountingHoles:
+  - x: 0.89024
+    y: 0.81546
+    diameter: 1.5
+  - x: 0.10976
+    y: 0.81546
+    diameter: 1.5
+  - x: 0.10976
+    y: 0.18454
+    diameter: 1.5
+  - x: 0.89024
+    y: 0.18454
+    diameter: 1.5
+rails:
+  - name: GND
+    pins:
+      - GND
+      - GND-B
+  - name: 3V3
+    pins:
+      - 3V3
+      - 3V3-B
+  - name: SDA
+    pins:
+      - SDA
+      - SDA-B
+  - name: SCL
+    pins:
+      - SCL
+      - SCL-B
+connectors:
+  - z: 0
+    kind: qwiic
+    x: 0.94512
+    y: 0.5
+    rotation: 90
+    pins:
+      - name: GND
+        type: gnd
+      - name: 3V3
+        type: pwr
+      - name: SDA
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+      - name: SCL
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+  - z: 0
+    kind: qwiic
+    x: 0.05488
+    y: 0.5
+    rotation: 270
+    pins:
+      - name: GND-B
+        type: gnd
+      - name: 3V3-B
+        type: pwr
+      - name: SDA-B
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+      - name: SCL-B
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+image: image.png
+rear:
+  image: rear.png
+help: help.md
+mesh: modulino.stl
+meshUnits: mm
+mass_g: 4.4
+i2cAddresses:
+  - 83
+library:
+  module: modulino
+  docs: https://docs.arduino.cc/hardware/modulino-buttons/
+drivers:
+  - source: module:modulino
+    target: lib/modulino
+    label: Arduino Modulino library
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true

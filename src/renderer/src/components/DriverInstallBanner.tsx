@@ -16,9 +16,11 @@ import './DriverInstallBanner.css'
  * the parts (deduped) and offers a single "Install drivers" action — nothing is
  * copied to the device without the user clicking it.
  *
- * Per driver, the install mechanism is chosen by {@link driverInstallMethod}:
+ * Per driver, the install mechanism is chosen by {@link driverInstallMethod}.
+ * All three end in files written to the board — since #776 nothing is fetched
+ * BY the board, which has no internet connection of its own:
  *  - `mip`  → `window.api.packages.install(source, { target })` (a github:/pypi:
- *             spec or a bare micropython-lib package name);
+ *             spec or a bare micropython-lib package name), downloaded in main;
  *  - `copy` → read the file's source (a bundled file in the part folder, or an
  *             http(s) URL — both via `parts.readDriverSource` in main, past the
  *             renderer CSP) then `device.mkdir` each ancestor folder + write it to
@@ -29,8 +31,9 @@ import './DriverInstallBanner.css'
  *             part folder that needs it.
  *
  * The banner is BOARD-AWARE: it stats each `copy` driver's target, and probes each
- * `module` driver BY IMPORT (a mip-backed module lands wherever mip decides, so a
- * guessed path would never match and the banner would nag for ever), showing the
+ * `module` driver BY IMPORT (an upstream package lands wherever its own
+ * `package.json` puts it, so a guessed path would never match and the banner
+ * would nag for ever), showing the
  * drivers that are MISSING — plus, for bundled catalog modules, the ones whose
  * `/lib` copy is OUTDATED against the shipped version (#707: presence alone let a
  * stale driver read as installed for ever, so a bug-fixed driver could never

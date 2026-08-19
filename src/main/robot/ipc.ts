@@ -31,11 +31,23 @@ export interface ImportMeshResult {
   maxDim?: number
 }
 
-/** The largest bounding-box span of an STL (binary OR ASCII), in the file's own units
- *  — a cheap DOM/three-free parse so the mm→m import heuristic works without the
- *  renderer. Returns undefined for a malformed buffer (caller falls back to declared
- *  units). Mirrors the reach of `handleImportStl`'s three.js STLLoader measure. */
-function stlMaxDim(buf: Buffer): number | undefined {
+/**
+ * The largest bounding-box span of an STL (binary OR ASCII), in the file's own
+ * units — a cheap DOM/three-free parse so the mm→m import heuristic works
+ * without the renderer.  Returns undefined for a malformed buffer (caller falls
+ * back to declared units).
+ *
+ * THE DELIBERATE TWIN of the renderer's `maxSpan` in
+ * `src/renderer/src/components/robot-mesh-load.ts` (#742). That one uses
+ * three.js, which isn't available here — so this is the one duplicate the
+ * refactor kept rather than removed. The two MUST agree: the number they
+ * produce picks the mm→m import scale, so a disagreement ships a part a
+ * thousand times too big. `test/meshMeasure.test.ts` holds them against the
+ * same fixtures; change one and run it.
+ *
+ * Exported for that test only.
+ */
+export function stlMaxDim(buf: Buffer): number | undefined {
   let minX = Infinity, minY = Infinity, minZ = Infinity
   let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity
   const grow = (x: number, y: number, z: number): void => {

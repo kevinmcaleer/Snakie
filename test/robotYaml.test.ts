@@ -71,6 +71,22 @@ describe('robot.yml round-trip', () => {
     expect(back.parts[0].rotation).toBe(270)
   })
 
+  it('round-trips a part’s Build-body link (#716)', () => {
+    // `urdfLink` is the part↔URDF-link identity the sync engine reads; it has to
+    // survive `robotToYaml`'s field-by-field part writer AND `coercePart`'s
+    // reader. Both are whitelists, and a field missing from either is dropped
+    // SILENTLY — the failure mode that has already cost this repo twice.
+    const back = robotFromYaml(
+      robotToYaml({ ...blankRobot(), parts: [{ id: 'a', lib: 'l', part: 'p', urdfLink: 'SG90_2' }] })
+    )
+    expect(back.parts[0].urdfLink).toBe('SG90_2')
+    // A blank link is not a link.
+    const blank = robotFromYaml(
+      robotToYaml({ ...blankRobot(), parts: [{ id: 'a', lib: 'l', part: 'p', urdfLink: '' }] })
+    )
+    expect(blank.parts[0].urdfLink).toBeUndefined()
+  })
+
   it('drops malformed parts/connections and defaults a missing connection id', () => {
     const def = robotFromYaml(
       [
@@ -121,6 +137,30 @@ describe('KRF robot model round-trips (#312)', () => {
     // A blank / whitespace baseLink is dropped by the sanitiser.
     const blank = robotFromYaml(robotToYaml({ parts: [], connections: [], robot: { baseLink: '  ' } }))
     expect(blank.robot?.baseLink).toBeUndefined()
+  })
+
+  it('round-trips the orphan ledger and the board’s link (#717)', () => {
+    // Both live on the MODEL, so they pass through `sanitiseRobotModel` on the
+    // way out AND back in — the whitelist that has silently eaten new fields
+    // before. Without them the sync reconcile forgets every stranded link the
+    // moment robot.yml is reloaded.
+    const def: RobotDefinition = {
+      parts: [],
+      connections: [],
+      robot: { version: 1, urdf: 'robot.urdf', boardLink: 'Pico_2', orphanedLinks: ['SG90', 'HC_SR04'] }
+    }
+    const round = robotFromYaml(robotToYaml(def))
+    expect(round.robot?.boardLink).toBe('Pico_2')
+    expect(round.robot?.orphanedLinks).toEqual(['SG90', 'HC_SR04'])
+    // Blank/duplicate entries are dropped, and an empty ledger isn't written.
+    const messy = robotFromYaml(
+      robotToYaml({ parts: [], connections: [], robot: { version: 1, orphanedLinks: ['A', 'A', '  '] } })
+    )
+    expect(messy.robot?.orphanedLinks).toEqual(['A'])
+    const none = robotFromYaml(
+      robotToYaml({ parts: [], connections: [], robot: { version: 1, urdf: 'r.urdf', orphanedLinks: [] } })
+    )
+    expect(none.robot?.orphanedLinks).toBeUndefined()
   })
 
   it('a wiring-only robot.yml stays free of a robot: section', () => {

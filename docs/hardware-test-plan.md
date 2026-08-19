@@ -190,14 +190,19 @@ plot.
 | Refresh | | |
 | Clears on disconnect | | |
 
-## 9. `mip` package install
+## 9. Package install
 
-- [ ] Install a known package (e.g. `mip install <pkg>`); progress/output shown.
+- [ ] Install a known package (e.g. `umqtt.simple`); per-file progress shown.
 - [ ] Installed module is importable on the device afterward.
-- [ ] Failure (bad package name / no network) surfaces a clear error.
+- [ ] Failure (bad package name / no network **on the computer**) surfaces a
+      clear error that names what was being downloaded.
+- [ ] A multi-file package with dependencies (e.g. the Modulino driver) installs
+      the whole tree, including its deps.
 
-> Note: `mip` requires the board to have network access (Wi-Fi boards: ESP32,
-> Pico W). Note connectivity in results.
+> Note (#776): the package is downloaded by **Snakie**, not by the board, so a
+> board with no network — a Pico, a Tiny 2350 — installs exactly like a Pico W.
+> Worth testing on a board with no radio specifically, since that case could
+> never work before.
 
 | Step | Pass/Fail | Notes |
 | --- | --- | --- |

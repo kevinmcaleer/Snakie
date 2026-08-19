@@ -1,0 +1,220 @@
+id: modulino-latch-relay
+name: Modulino Latch Relay
+description: Bistable latching relay that holds its state with no coil current — DC loads only, 30 V max — on an I²C Modulino.
+manufacturer: Arduino
+family: Output
+tags:
+  - modulino
+  - arduino
+  - i2c
+  - qwiic
+  - relay
+  - latching
+  - bistable
+  - output
+package: SMD
+voltage: 3.3V
+partNumber: ABX00138
+properties:
+  interface: I²C (0x02, re-addressable — onboard MCU)
+  relay: HFE60/3-1HT-L2 bistable latching, dual SET/RESET coil
+  switching: DC loads only, 30 V DC maximum — NOT safe for AC
+  coil: 3 V nominal, ~100 mA for 50 ms while it flips, 0 mA once latched
+  mcu: STM32C011F4
+  chain: QWIIC socket at each end, same bus in parallel
+version: 0.1.6
+pcbColor: "#00979d"
+aspect: 1.617
+dimensions:
+  width: 41
+  height: 25.36
+shape:
+  kind: rect
+  cornerRadiusMm: 4.6
+headers:
+  - edge: left
+    pins:
+      - name: PA4
+        type: io
+        number: 10
+        shape: header
+        x: 0.2162824633836008
+        y: 0.9521546188338447
+      - name: SWDIO
+        type: io
+        number: 9
+        capabilities:
+          - digital
+        shape: header
+        x: 0.27856951423214604
+        y: 0.9521546188338447
+      - name: SWCLK
+        type: io
+        number: 8
+        capabilities:
+          - digital
+        shape: header
+        x: 0.3408565650806913
+        y: 0.9521546188338447
+      - name: SCL
+        type: io
+        number: 7
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+        shape: header
+        x: 0.4031436159292365
+        y: 0.9521546188338447
+      - name: SDA
+        type: io
+        number: 6
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+        shape: header
+        x: 0.4654306667777817
+        y: 0.9521546188338447
+      - name: 3v3
+        type: pwr
+        number: 5
+        shape: header
+        x: 0.527717717626327
+        y: 0.9521546188338447
+      - name: GND
+        type: gnd
+        number: 4
+        shape: header
+        x: 0.5900047684748722
+        y: 0.9521546188338447
+      - name: PF2
+        type: io
+        number: 3
+        capabilities:
+          - digital
+        shape: header
+        x: 0.6522918193234174
+        y: 0.9521546188338447
+      - name: PA1
+        type: io
+        number: 2
+        capabilities:
+          - digital
+        shape: header
+        x: 0.7145788701719626
+        y: 0.9521546188338447
+      - name: PA0
+        type: io
+        number: 1
+        capabilities:
+          - digital
+        shape: header
+        x: 0.7768659210205079
+        y: 0.9521546188338447
+mountingHoles:
+  - x: 0.10338205505371094
+    y: 0.18454
+    diameter: 1.5
+  - x: 0.89024
+    y: 0.18454
+    diameter: 1.5
+  - x: 0.89024
+    y: 0.81546
+    diameter: 1.5
+  - x: 0.10338205505371094
+    y: 0.81546
+    diameter: 1.5
+rails:
+  - name: GND
+    pins:
+      - GND
+      - GND-B
+  - name: 3V3
+    pins:
+      - 3V3
+      - 3V3-B
+  - name: SDA
+    pins:
+      - SDA
+      - SDA-B
+  - name: SCL
+    pins:
+      - SCL
+      - SCL-B
+connectors:
+  - z: 0
+    kind: qwiic
+    x: 0.05183
+    y: 0.5
+    rotation: 270
+    pins:
+      - name: GND
+        type: gnd
+      - name: 3V3
+        type: pwr
+      - name: SDA
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+      - name: SCL
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+  - z: 0
+    kind: qwiic
+    x: 0.94817
+    y: 0.5
+    rotation: 90
+    pins:
+      - name: GND-B
+        type: gnd
+      - name: 3V3-B
+        type: pwr
+      - name: SDA-B
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+      - name: SCL-B
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+  - z: 1
+    kind: terminal
+    x: 0.4906000773111979
+    y: 0.17848931802936158
+    pins:
+      - name: T1
+        type: pwr
+      - name: T2
+        type: pwr
+image: image.jpg
+rear:
+  image: rear.jpg
+help: help.md
+mesh: modulino.stl
+meshUnits: mm
+mass_g: 4.4
+i2cAddresses:
+  - 2
+library:
+  module: modulino
+  docs: https://docs.arduino.cc/hardware/modulino-latch/
+drivers:
+  - source: module:modulino
+    target: lib/modulino
+    label: Arduino Modulino library
+layerVisibility:
+  pcb: true
+  image: true
+  holes: true
+  pins: true
+  components: true

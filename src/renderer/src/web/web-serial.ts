@@ -13,6 +13,12 @@
  * {@link ./web-device-router} multiplexes this with the sim backend.
  */
 import { RawReplClient, type SerialTransport } from '../../../shared/raw-repl'
+import {
+  RUNTIME_PROBE_PY,
+  parseRuntimeProbe,
+  runtimeGreeting,
+  type RuntimeInfo
+} from '../../../shared/dialect'
 import { SERIAL_USB_FILTERS, describeUsb } from '../../../shared/serial-filters'
 
 /** Structural Web Serial types (not in every TS DOM lib). */
@@ -106,6 +112,8 @@ interface DeviceStatus {
   state: 'disconnected' | 'connecting' | 'connected'
   path: string
   baudRate: number
+  /** Which Python the board runs (#752) — absent until the connect probe answers. */
+  runtime?: RuntimeInfo
 }
 
 /** Path scheme for Web Serial ports in the port dropdown. */
@@ -127,6 +135,8 @@ export function createWebSerialBackend(): Record<string, unknown> {
   let transport: WebSerialTransport | null = null
   let client: RawReplClient | null = null
   let activePort: WebSerialPort | null = null
+  /** What the board said it is (#752) — probed on connect, cleared on disconnect. */
+  let runtimeInfo: RuntimeInfo | null = null
   // Synthetic path → granted port, so the dropdown can re-select one.
   const known = new Map<string, WebSerialPort>()
 
@@ -134,8 +144,15 @@ export function createWebSerialBackend(): Record<string, unknown> {
   const setState = (s: DeviceStatus['state'], p = path): void => {
     state = s
     path = p
+    // A new connection knows nothing about the board yet, and the previous
+    // board's runtime must not leak into it.
+    if (s !== 'connected') runtimeInfo = null
+    statusSubs.forEach((cb) => cb(snapshot()))
+  }
+  const snapshot = (): DeviceStatus => {
     const st: DeviceStatus = { state, path, baudRate: 115200 }
-    statusSubs.forEach((cb) => cb(st))
+    if (runtimeInfo) st.runtime = runtimeInfo
+    return st
   }
   const need = (): RawReplClient => {
     if (!client) throw new Error('No board connected')
@@ -169,15 +186,22 @@ export function createWebSerialBackend(): Record<string, unknown> {
     await transport.open(115200)
     client = new RawReplClient(transport, emitData)
     setState('connected', p)
-    // Greet: print the board's MicroPython banner so a successful connection is
-    // visible (#612) — reconstructed from os.uname() like the desktop device (the
-    // old cue was the raw-REPL probe's Ctrl-B banner leaking, now suppressed).
-    // Fire-and-forget so it never delays or fails the connection.
+    // Greet + identify: one probe reads the DIALECT off `sys.implementation` and
+    // the version/board off `os.uname()`, then rebuilds the board's own banner —
+    // the connect cue the leaked Ctrl-B banner used to provide (#612), and the
+    // runtime the rest of the app reads instead of assuming MicroPython (#752).
+    // Kept in step with `MicroPythonDevice.greet()`, deliberately. Fire-and-forget
+    // so it never delays or fails the connection.
     void client
-      .eval("import os as _o; print('MicroPython v' + _o.uname().version + '; ' + _o.uname().machine)")
-      .then((line) => {
-        const t = line.trim()
-        if (t) emitData(enc.encode(`\r\n${t}\r\nType "help()" for more information.\r\n>>> `))
+      .eval(RUNTIME_PROBE_PY)
+      .then((out) => {
+        const info = parseRuntimeProbe(out)
+        if (!info) return
+        runtimeInfo = info
+        // The `connected` status went out before the probe answered.
+        statusSubs.forEach((cb) => cb(snapshot()))
+        const line = runtimeGreeting(info)
+        if (line) emitData(enc.encode(`\r\n${line}\r\nType "help()" for more information.\r\n>>> `))
       })
       .catch(() => undefined)
   }
@@ -221,7 +245,7 @@ export function createWebSerialBackend(): Record<string, unknown> {
       if (state !== 'disconnected') setState('disconnected', '')
     },
 
-    getStatus: async (): Promise<DeviceStatus> => ({ state, path, baudRate: 115200 }),
+    getStatus: async (): Promise<DeviceStatus> => snapshot(),
 
     exec: async (code: string) => need().exec(code),
     eval: async (code: string) => need().eval(code),

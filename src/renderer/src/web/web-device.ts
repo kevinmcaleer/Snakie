@@ -17,6 +17,7 @@
 import { WorkerMicroPythonRuntime } from './worker-runtime'
 import { VIRTUAL_PORT_PATH, VIRTUAL_PORT_LABEL } from '../../../shared/virtual-device'
 import { isProbeCode, simulateProbeResponse, simulatedTelemetryFrame } from '../../../shared/simulation'
+import type { RuntimeInfo } from '../../../shared/dialect'
 
 /** How often the simulated board "prints" a telemetry frame (matches the desktop sim). */
 const TELEMETRY_INTERVAL_MS = 120
@@ -26,7 +27,18 @@ interface DeviceStatus {
   state: ConnState
   path: string
   baudRate: number
+  /** Which Python this backend runs (#752). */
+  runtime?: RuntimeInfo
 }
+
+/**
+ * What the web simulator reports as its runtime (#752). Stated, not probed: the
+ * interpreter behind it IS MicroPython (the official WASM port), so this is a
+ * fact about the simulator rather than a guess about a board — and it matches
+ * the desktop `SimulatedDevice`, which is the same thing in the other shell.
+ * Whether a simulator should ever offer CircuitPython is #764.
+ */
+const SIM_RUNTIME: RuntimeInfo = { dialect: 'micropython' }
 
 const enc = new TextEncoder()
 
@@ -81,7 +93,11 @@ export function createWebDeviceApi(): Record<string, unknown> {
       telemetry = null
     }
   }
-  const status = (): DeviceStatus => ({ state, path: VIRTUAL_PORT_PATH, baudRate: 115200 })
+  const status = (): DeviceStatus => {
+    const st: DeviceStatus = { state, path: VIRTUAL_PORT_PATH, baudRate: 115200 }
+    if (state === 'connected') st.runtime = SIM_RUNTIME
+    return st
+  }
   const setState = (s: ConnState): void => {
     state = s
     const st = status()

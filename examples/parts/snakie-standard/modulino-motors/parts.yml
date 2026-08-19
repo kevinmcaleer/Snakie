@@ -1,0 +1,242 @@
+id: modulino-motors
+name: Modulino Motors
+description: Dual H-bridge motor driver on an I²C Modulino — two DC motors, or one stepper.
+manufacturer: Arduino
+family: Motor
+tags:
+  - modulino
+  - arduino
+  - i2c
+  - qwiic
+  - motor
+  - h-bridge
+  - stepper
+  - max22211
+package: SMD
+voltage: 3.3V
+partNumber: ABX00114
+properties:
+  interface: I²C (0x48, re-addressable — onboard MCU)
+  driver: MAX22211 dual H-bridge
+  outputs: 2 brushed DC motors, 1 bipolar stepper, or solenoids/valves
+  current: up to 3.8 A per channel
+  supply: separate 5–24 V motor supply; logic stays 3.3 V
+  sensing: per-channel current measurement
+version: 0.1.9
+pcbColor: "#00979d"
+aspect: 1.617
+dimensions:
+  width: 41
+  height: 25.36
+shape:
+  kind: rect
+  cornerRadius: 0.22
+  cornerRadiusMm: 4.6
+headers:
+  - edge: bottom
+    pins:
+      - name: VIN
+        type: pwr
+        number: 4
+        shape: header
+        x: 0.530688985189
+        y: 0.950169996388
+      - name: GND
+        type: gnd
+        number: 3
+        shape: header
+        x: 0.60033976237
+        y: 0.950169996388
+      - name: A1
+        type: other
+        number: 9
+        shape: header
+        x: 0.215284474691
+        y: 0.136603040404
+      - name: A2
+        type: other
+        number: 10
+        shape: header
+        x: 0.283895568848
+        y: 0.136603040404
+      - name: B1
+        type: other
+        number: 11
+        shape: header
+        x: 0.343759765625
+        y: 0.136603040404
+      - name: B2
+        type: other
+        number: 12
+        shape: header
+        x: 0.405014444987
+        y: 0.136615703916
+      - name: P6
+        type: io
+        number: 2
+        capabilities:
+          - digital
+        shape: header
+        x: 0.657203572591
+        y: 0.950169996388
+      - name: SDA
+        type: io
+        number: 5
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+        shape: header
+        x: 0.470720469157
+        y: 0.950169996388
+      - name: SCL
+        type: io
+        number: 6
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+        shape: header
+        x: 0.405014444987
+        y: 0.950169996388
+      - name: SWCLK
+        type: io
+        number: 7
+        shape: header
+        x: 0.343759765625
+        y: 0.950169996388
+      - name: SWDIO
+        type: io
+        number: 8
+        shape: header
+        x: 0.283895568848
+        y: 0.950169996388
+      - name: VM
+        type: pwr
+        number: 1
+        shape: header
+        x: 0.717562934028
+        y: 0.950169996388
+      - name: VCC
+        type: pwr
+        number: 16
+        shape: header
+        x: 0.790713348389
+        y: 0.136615703916
+      - name: VM
+        type: io
+        number: 15
+        capabilities:
+          - digital
+        shape: header
+        x: 0.727255486382
+        y: 0.136226259827
+      - name: GND
+        type: gnd
+        number: 14
+        shape: header
+        x: 0.663797624376
+        y: 0.136226259827
+      - name: GND
+        type: gnd
+        number: 13
+        shape: header
+        x: 0.60033976237
+        y: 0.136603040404
+mountingHoles:
+  - x: 0.89024
+    y: 0.81546
+    diameter: 1.5
+  - x: 0.10976
+    y: 0.81546
+    diameter: 1.5
+  - x: 0.10976
+    y: 0.18454
+    diameter: 1.5
+  - x: 0.89024
+    y: 0.18454
+    diameter: 1.5
+rails:
+  - name: GND
+    pins:
+      - GND
+      - GND-B
+  - name: 3V3
+    pins:
+      - 3V3
+      - 3V3-B
+  - name: SDA
+    pins:
+      - SDA
+      - SDA-B
+  - name: SCL
+    pins:
+      - SCL
+      - SCL-B
+connectors:
+  - z: 0
+    kind: qwiic
+    x: 0.94512
+    y: 0.499259020126
+    rotation: 90
+    pins:
+      - name: GND
+        type: gnd
+      - name: 3V3
+        type: pwr
+      - name: SDA
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+      - name: SCL
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+  - z: 0
+    kind: qwiic
+    x: 0.05488
+    y: 0.5
+    rotation: 270
+    pins:
+      - name: GND-B
+        type: gnd
+      - name: 3V3-B
+        type: pwr
+      - name: SDA-B
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+      - name: SCL-B
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+image: image.jpg
+rear:
+  image: rear.jpg
+help: help.md
+mesh: modulino.stl
+meshUnits: mm
+mass_g: 4.4
+i2cAddresses:
+  - 36
+library:
+  module: modulino
+  docs: https://docs.arduino.cc/hardware/modulino-motors/
+drivers:
+  - source: module:modulino
+    target: lib/modulino
+    label: Arduino Modulino library
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true

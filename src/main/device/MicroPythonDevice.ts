@@ -1,6 +1,27 @@
 import { EventEmitter } from 'events'
+import { stat } from 'fs/promises'
+import { join } from 'path'
 import { SerialPort } from 'serialport'
 import { buildControlLine } from '../../shared/control'
+import {
+  RUNTIME_PROBE_PY,
+  parseRuntimeProbe,
+  runtimeGreeting,
+  type RuntimeInfo
+} from '../../shared/dialect'
+import { findCircuitPyDrives, pairDriveToPort } from './circuitpy'
+import {
+  driveListDir,
+  driveMkdir,
+  driveReadFileBytes,
+  driveReadFileLine,
+  driveRemove,
+  driveRename,
+  driveStat,
+  driveUsage,
+  driveWriteFile,
+  readOnlyFsError
+} from './circuitpy-fs'
 import type {
   ConnectOptions,
   ConnectionState,
@@ -60,6 +81,18 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
   private state: ConnectionState = 'disconnected'
   private currentPath?: string
   private currentBaud?: number
+
+  /** What the board said it is (#752), probed on connect. Null until the probe
+   *  answers, and stays null for a board that wouldn't say — the rest of the app
+   *  reads this instead of assuming MicroPython. Cleared on disconnect so the
+   *  next board can't inherit the last one's runtime. */
+  private runtime: RuntimeInfo | null = null
+
+  /** The CIRCUITPY drive this board's files live on (#754), resolved once the
+   *  runtime probe says it is CircuitPython. Null means "use the REPL", which is
+   *  right for MicroPython AND for a CircuitPython board that has handed its
+   *  filesystem to itself with `storage.remount`. */
+  private mount: string | null = null
 
   /**
    * Buffer of bytes received from the device. When a command is awaiting a
@@ -136,11 +169,13 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
 
   /** Current connection status snapshot (safe to send over IPC). */
   getStatus(): DeviceStatus {
-    return {
+    const status: DeviceStatus = {
       state: this.state,
       path: this.currentPath,
       baudRate: this.currentBaud
     }
+    if (this.runtime) status.runtime = this.runtime
+    return status
   }
 
   isConnected(): boolean {
@@ -191,20 +226,84 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
     void this.greet()
   }
 
-  /** Print the board's MicroPython greeting to the terminal on connect, rebuilt
-   *  from `os.uname()` so it matches the real banner (`MicroPython vX on DATE;
-   *  <board>`) — the connect cue the leaked Ctrl-B banner used to provide (#612). */
+  /**
+   * Ask the board what it is, then print its greeting to the terminal — the
+   * connect cue the leaked Ctrl-B banner used to provide (#612).
+   *
+   * One probe serves both jobs (#752). It reads `sys.implementation` for the
+   * DIALECT — MicroPython or CircuitPython, which the rest of the app reads off
+   * the session rather than assuming — and `os.uname()` for the version, build
+   * date and board string that make the greeting read like the board's own.
+   * Because each runtime words its banner differently, the line is rebuilt from
+   * what was probed rather than hard-coded, so a CircuitPython user isn't
+   * greeted with MicroPython's wording.
+   *
+   * Fire-and-forget: a board that answers neither still connects, and simply
+   * shows no banner.
+   */
   private async greet(): Promise<void> {
+    const info = await this.probeRuntime()
     try {
-      const line = (
-        await this.eval("import os as _o; print('MicroPython v' + _o.uname().version + '; ' + _o.uname().machine)")
-      ).trim()
-      if (line && this.isConnected()) {
+      if (!info || !this.isConnected()) return
+      this.runtime = info
+      // Now that we know it is CircuitPython, find the drive its files live on
+      // (#754). Best-effort: no drive just means the REPL path, which is what a
+      // `storage.remount` board wants anyway.
+      if (info.dialect === 'circuitpython') await this.resolveMount()
+      // The `connected` status went out before the probe answered, so publish a
+      // second one now that the runtime is known.
+      this.emit('status', this.getStatus())
+      const line = runtimeGreeting(info)
+      if (line) {
         this.emit('data', Buffer.from(`\r\n${line}\r\nType "help()" for more information.\r\n>>> `))
       }
-    } catch {
-      // Best-effort — a board that can't answer os.uname() just shows no banner.
+    } catch (e) {
+      // Best-effort — a board that can't answer still connects. But SAY so: a
+      // silent catch here made a wrong runtime label indistinguishable from a
+      // transport error, and cost a hardware round-trip to narrow (#770).
+      console.warn('[device] greeting failed after a successful probe:', e)
     }
+  }
+
+  /**
+   * Read the board's runtime, retrying a couple of times before giving up.
+   *
+   * The probe is fired the instant the port opens, which is the noisiest moment
+   * in the session: the board may still be emitting boot output, and #612's
+   * Ctrl-B banner consume is running. A probe lost to that noise used to leave
+   * the session with NO dialect at all — and because everything downstream keys
+   * off it, that silently disabled the status-bar runtime, the greeting, and the
+   * CIRCUITPY mount resolution that file writes depend on (#769, #770). The
+   * script itself was never at fault; it returns all three lines when pasted by
+   * hand on the same board.
+   *
+   * So: give the board a moment to settle and ask again. Cheap — a board that
+   * answers first time (the common case) pays nothing.
+   */
+  private async probeRuntime(attempts = 3): Promise<RuntimeInfo | null> {
+    for (let i = 0; i < attempts; i++) {
+      if (!this.isConnected()) return null
+      // Let the connect chatter drain before the first ask, and back off after
+      // a miss rather than hammering a board that is still booting.
+      await new Promise((r) => setTimeout(r, i === 0 ? 120 : 250 * i))
+      if (!this.isConnected()) return null
+      try {
+        const raw = await this.eval(RUNTIME_PROBE_PY)
+        const info = parseRuntimeProbe(raw)
+        if (info) return info
+        // Parsed nothing: the board answered, but not with our marker lines.
+        // Show what it DID say — that is the one fact that identifies whether
+        // this is transport noise or an unexpected runtime.
+        console.warn(
+          `[device] runtime probe ${i + 1}/${attempts} unparsed; board said:`,
+          JSON.stringify(raw.slice(0, 200))
+        )
+      } catch (e) {
+        console.warn(`[device] runtime probe ${i + 1}/${attempts} threw:`, e)
+      }
+    }
+    console.warn('[device] runtime unknown after', attempts, 'attempts — no dialect for this session')
+    return null
   }
 
   /** Close the serial connection if open. */
@@ -221,11 +320,19 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
 
   private setState(state: ConnectionState, error?: string): void {
     this.state = state
+    // A new connection knows nothing about the board yet, and the PREVIOUS
+    // board's runtime must not leak into it — unplugging a Pico and plugging in
+    // a Feather would otherwise leave the status bar naming the wrong Python.
+    if (state !== 'connected') {
+      this.runtime = null
+      this.mount = null
+    }
     const status: DeviceStatus = {
       state,
       path: this.currentPath,
       baudRate: this.currentBaud
     }
+    if (this.runtime) status.runtime = this.runtime
     if (error) status.error = error
     this.emit('status', status)
   }
@@ -622,7 +729,70 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
   }
 
   // ---------------------------------------------------------------------------
-  // Filesystem helpers (built on top of exec/eval)
+  // Where this board's files live (#754)
+  // ---------------------------------------------------------------------------
+
+  /** Find the CIRCUITPY drive belonging to THIS port and remember it. Silent on
+   *  failure — every caller treats "no mount" as "use the REPL". */
+  private async resolveMount(): Promise<void> {
+    this.mount = null
+    try {
+      const drives = await findCircuitPyDrives()
+      if (drives.length === 0) return
+      const ports = await MicroPythonDevice.listPorts()
+      // Normally the connected port is in the list, carrying the USB serial
+      // number that identifies the board. Where enumeration reports nothing
+      // useful — no permissions, no udev metadata — fall back to the bare path:
+      // it can't match by id, but one drive and no other board still can, and
+      // any other enumerated port correctly makes it ambiguous.
+      const self = ports.find((p) => p.path === this.currentPath) ?? { path: this.currentPath ?? '' }
+      const paired = pairDriveToPort(drives, self, ports)
+      // An ambiguous pairing deliberately yields nothing: writing to the wrong
+      // board's drive is worse than falling back to the REPL (#753).
+      this.mount = paired.drive?.mountPath ?? null
+    } catch {
+      // Detection is an optimisation over the REPL, never a prerequisite.
+    }
+  }
+
+  /**
+   * The drive to use for filesystem operations right now, or null for the REPL.
+   *
+   * Re-checked rather than trusted: a CIRCUITPY drive ejects when the board soft
+   * reboots and returns a moment later at the same path, so a remembered mount
+   * can be a path that does not currently exist. One `stat` of the marker file
+   * is cheap; a re-resolve only happens when it has genuinely gone.
+   */
+  private async driveMount(): Promise<string | null> {
+    if (!this.mount) return null
+    try {
+      await stat(join(this.mount, 'boot_out.txt'))
+      return this.mount
+    } catch {
+      await this.resolveMount()
+      return this.mount
+    }
+  }
+
+  /**
+   * Run a filesystem WRITE over the REPL, turning a read-only-filesystem
+   * failure into something a user can act on.
+   *
+   * This is the path a CircuitPython board takes when no drive was found — and
+   * the one it takes when the runtime probe couldn't identify it at all, which
+   * is exactly when a bare `OSError: 30` would be most baffling. Every other
+   * error passes through untouched.
+   */
+  private async replWrite<T>(run: () => Promise<T>): Promise<T> {
+    try {
+      return await run()
+    } catch (err) {
+      throw readOnlyFsError(err)
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Filesystem helpers (over the drive when there is one, else the REPL)
   // ---------------------------------------------------------------------------
 
   /**
@@ -631,6 +801,8 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
    * compact, machine-parseable line per entry.
    */
   async listDir(path = '/'): Promise<DirEntry[]> {
+    const mount = await this.driveMount()
+    if (mount) return driveListDir(mount, path)
     const code = [
       'import os, json',
       `def _ls(p):`,
@@ -662,6 +834,8 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
 
   /** Read a file from the device and return its raw bytes. */
   async readFileBytes(path: string): Promise<Buffer> {
+    const mount = await this.driveMount()
+    if (mount) return driveReadFileBytes(mount, path)
     // `ubinascii` is exposed as `binascii` on some ports; import defensively.
     const code = [
       'import sys',
@@ -689,6 +863,8 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
    * header was reordered.
    */
   async readFileLine(path: string, prefix: string): Promise<string> {
+    const mount = await this.driveMount()
+    if (mount) return driveReadFileLine(mount, path, prefix)
     const code = [
       `_l = ''`,
       `try:`,
@@ -711,6 +887,8 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
    * text-oriented REPL transport.
    */
   async writeFile(path: string, contents: string | Buffer, chunkSize = 256): Promise<void> {
+    const mount = await this.driveMount()
+    if (mount) return driveWriteFile(mount, path, contents)
     const data = Buffer.isBuffer(contents) ? contents : Buffer.from(contents, 'utf8')
     // Open the file once, then stream hex chunks via repeated exec calls so we
     // never put a multi-megabyte literal on a single line.
@@ -719,12 +897,12 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
       'try:\n import ubinascii\nexcept ImportError:\n import binascii as ubinascii',
       `_f=open(${pyStr(path)},'wb')`
     ].join('\n')
-    await this.eval(open)
+    await this.replWrite(() => this.eval(open))
     try {
       for (let i = 0; i < data.length; i += chunkSize) {
         const slice = data.subarray(i, i + chunkSize)
         const hex = slice.toString('hex')
-        await this.eval(`_f.write(ubinascii.unhexlify(${pyStr(hex)}))`)
+        await this.replWrite(() => this.eval(`_f.write(ubinascii.unhexlify(${pyStr(hex)}))`))
       }
     } finally {
       await this.eval('_f.close()').catch(() => undefined)
@@ -735,38 +913,48 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
    *  (and `os.rmdir()` only empty ones), so walk depth-first with an explicit
    *  stack: children first, then the emptied folder (#219). */
   async remove(path: string): Promise<void> {
-    await this.eval(
-      [
-        'import os',
-        `_s = [${pyStr(path)}]`,
-        'while _s:',
-        '    _p = _s[-1]',
-        '    if (os.stat(_p)[0] & 0x4000) != 0:',
-        '        _c = os.listdir(_p)',
-        '        if _c:',
-        "            _s.extend([_p + '/' + _x for _x in _c])",
-        '        else:',
-        '            os.rmdir(_p)',
-        '            _s.pop()',
-        '    else:',
-        '        os.remove(_p)',
-        '        _s.pop()'
-      ].join('\n')
+    const mount = await this.driveMount()
+    if (mount) return driveRemove(mount, path)
+    await this.replWrite(() =>
+      this.eval(
+        [
+          'import os',
+          `_s = [${pyStr(path)}]`,
+          'while _s:',
+          '    _p = _s[-1]',
+          '    if (os.stat(_p)[0] & 0x4000) != 0:',
+          '        _c = os.listdir(_p)',
+          '        if _c:',
+          "            _s.extend([_p + '/' + _x for _x in _c])",
+          '        else:',
+          '            os.rmdir(_p)',
+          '            _s.pop()',
+          '    else:',
+          '        os.remove(_p)',
+          '        _s.pop()'
+        ].join('\n')
+      )
     )
   }
 
   /** Create a directory. */
   async mkdir(path: string): Promise<void> {
-    await this.eval(`import os\nos.mkdir(${pyStr(path)})`)
+    const mount = await this.driveMount()
+    if (mount) return driveMkdir(mount, path)
+    await this.replWrite(() => this.eval(`import os\nos.mkdir(${pyStr(path)})`))
   }
 
   /** Rename / move a path. */
   async rename(from: string, to: string): Promise<void> {
-    await this.eval(`import os\nos.rename(${pyStr(from)}, ${pyStr(to)})`)
+    const mount = await this.driveMount()
+    if (mount) return driveRename(mount, from, to)
+    await this.replWrite(() => this.eval(`import os\nos.rename(${pyStr(from)}, ${pyStr(to)})`))
   }
 
   /** Stat a path, returning type, size and mtime when available. */
   async stat(path: string): Promise<StatResult> {
+    const mount = await this.driveMount()
+    if (mount) return driveStat(mount, path)
     const code = [
       'import os, json',
       `st=os.stat(${pyStr(path)})`,
@@ -777,6 +965,20 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
     const raw = (await this.eval(code)).trim()
     const [isDir, size, mtime] = JSON.parse(raw) as [boolean, number, number | null]
     return { isDir, size, mtime: mtime ?? undefined }
+  }
+
+  /**
+   * Free/total bytes for the flash gauge (#211), when this board's files live on
+   * a drive (#754).
+   *
+   * Null means "ask the board", which is what every MicroPython board wants. For
+   * a mounted CircuitPython board the HOST has the honest number: `os.statvfs`
+   * there describes a filesystem the board cannot write to, while the gauge is
+   * answering "how much room is left for what I am about to copy".
+   */
+  async driveUsage(): Promise<{ total: number; free: number; used: number } | null> {
+    const mount = await this.driveMount()
+    return mount ? driveUsage(mount) : null
   }
 
   /** Tear down resources (called on app quit). */

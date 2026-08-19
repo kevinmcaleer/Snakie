@@ -76,16 +76,43 @@ export function connectorKindName(c: PartConnector): string {
 }
 
 /**
+ * Do two housings' variants describe the same socket? (#771)
+ *
+ * A variant is the WIRING of a housing — Grove `i2c` vs `digital` — and it is
+ * optional, because the two ways of authoring a port disagree about whether to
+ * state it: a `connectors:` entry usually carries one, a group housing usually
+ * doesn't. An absent variant therefore means **not stated**, never "different":
+ * an unknown port is not known to be wrong, and refusing on the strength of
+ * knowing nothing is how a port that is physically identical to its neighbour
+ * came to reject a lead the neighbour accepted.
+ *
+ * Both stated and unequal is the real mismatch, and the only one worth refusing.
+ */
+export function variantsCompatible(a?: string, b?: string): boolean {
+  const va = (a ?? '').trim().toLowerCase()
+  const vb = (b ?? '').trim().toLowerCase()
+  return !va || !vb || va === vb
+}
+
+/**
  * Which contacts a lead between `a` and `b` joins, as `[indexInA, indexInB]`.
  *
  * Identical sockets are joined **contact-for-contact** — that is literally what a
  * straight lead does, and it keeps a Grove UART port's TX/RX the way the modules
  * expect (the crossover lives in the board wiring, not the cable). Anything else
  * is an adapter lead, matched by role.
+ *
+ * "Identical" is the HOUSING — kind and way count — not the wiring stated on it
+ * (#771). Two 4-way Grove shells are joined by a straight 4-way Grove lead
+ * whatever either end calls itself, so an unstated variant must not push the pair
+ * down the adapter path: there it is matched by ROLE, and a port whose digital pin
+ * happens to declare `signals.i2c` then has no partner for the module's plain
+ * `SIG`, leaving a lead with power and ground only — which the fit check rightly
+ * refuses. That was the silent refusal.
  */
 export function pairContacts(a: PartConnector, b: PartConnector): [number, number][] {
   const sameHousing =
-    a.kind === b.kind && (a.variant ?? null) === (b.variant ?? null) && a.pins.length === b.pins.length
+    a.kind === b.kind && variantsCompatible(a.variant, b.variant) && a.pins.length === b.pins.length
   if (sameHousing) {
     return a.pins
       .map((pin, i): [number, number] | null => (cableRole(pin) ? [i, i] : null))
@@ -131,7 +158,9 @@ export function connectorFit(a: PartConnector, b: PartConnector): CableFit {
     const [lead, socket] = aDupont ? [a, b] : [b, a]
     return NO(`A ${connectorKindName(lead)} lead doesn't fit a ${connectorKindName(socket)} socket.`)
   }
-  if (a.kind === 'grove' && b.kind === 'grove' && a.variant && b.variant && a.variant !== b.variant) {
+  // Only a STATED mismatch is a mismatch: a port that declares no variant is
+  // unknown, not wrong (#771 — see `variantsCompatible`).
+  if (a.kind === 'grove' && b.kind === 'grove' && !variantsCompatible(a.variant, b.variant)) {
     return NO(`That's a ${connectorKindName(b)} port — this one is ${connectorKindName(a)}.`)
   }
   // JST families differ by PITCH, so unlike Grove these genuinely can't seat —
@@ -179,7 +208,74 @@ export function connectorFit(a: PartConnector, b: PartConnector): CableFit {
  * Degrees, in PART space — the caller turns it with the placed part.
  */
 export function housingPlugAngle(conn: PartConnector): number {
+  // The lead leaves through the housing's MOUTH, which is a LONG side — the face
+  // the contacts look out of — not off one end. A QWIIC socket sitting along a
+  // board's bottom edge takes its cable downward, out of the board; it does not
+  // take it sideways out of the shell's end. (It used to do the latter, which
+  // put the boot on a short edge and made leads enter a board from the side.)
+  //
+  // So: contacts in a ROW take their lead up or down, contacts in a COLUMN take
+  // it left or right — in each case away from the middle of the part, which is
+  // where the outside is.
   const column = ((conn.rotation ?? 0) / 90) % 2 === 1
-  if (column) return conn.y < 0.5 ? -90 : 90 // off the top / bottom of the column
-  return conn.x < 0.5 ? 180 : 0 //              off the left / right end of the row
+  if (column) return conn.x < 0.5 ? 180 : 0 // column of contacts → out the side
+  return conn.y < 0.5 ? -90 : 90 //            row of contacts   → out top/bottom
+}
+
+/** One rectangle of the plug drawing, in the socket's own frame. */
+export interface PlugRect {
+  x: number
+  y: number
+  w: number
+  h: number
+  rx: number
+}
+
+/** The two shapes a seated plug is drawn from: the shell that covers the socket
+ *  and the strain-relief boot the cable leaves through. */
+export interface PlugGeometry {
+  shell: PlugRect
+  boot: PlugRect
+}
+
+/**
+ * The plug on the end of a seated lead, in the SOCKET'S OWN FRAME (#772).
+ *
+ * Origin is the socket's CENTRE and +x is the direction the lead leaves (the
+ * caller translates to the socket and turns by {@link housingPlugAngle}). Both
+ * inputs are the socket's own drawn footprint — `spanPx` along its row of
+ * contacts, `depthPx` across them — so the plug is derived from the thing it
+ * seats on and cannot be measured in different units from it. It used to be
+ * centred on the mean of the CONTACT anchors, which sit at the housing's front
+ * edge, so the whole plug sat half a housing-depth off the socket.
+ *
+ * The shell covers the socket exactly. The boot is proportioned to the housing
+ * DEPTH — it was previously sized from the contact span, which on a Grove (11.8
+ * mm across, 6.6 mm deep) drew a strain relief longer than the shell itself and
+ * pushed the plug's outline across a third of a 20 mm module.
+ */
+export function cablePlugGeometry(spanPx: number, depthPx: number): PlugGeometry {
+  const span = Math.max(0, spanPx)
+  const depth = Math.max(0, depthPx)
+  // Seen from above, the shell covers the contacts and the cable leaves one long
+  // face — so the DEPTH runs along the lead's axis and the span across it.
+  const shell: PlugRect = {
+    x: -depth / 2,
+    y: -span / 2,
+    w: depth,
+    h: span,
+    rx: Math.min(depth, span) * 0.14
+  }
+  // A stub on the trailing face: it overlaps the shell slightly so the two read
+  // as one moulding, and stands proud by well under half a housing depth.
+  const len = depth * 0.45
+  const width = span * 0.5
+  const boot: PlugRect = {
+    x: depth / 2 - len * 0.35,
+    y: -width / 2,
+    w: len,
+    h: width,
+    rx: Math.min(len, width) * 0.25
+  }
+  return { shell, boot }
 }

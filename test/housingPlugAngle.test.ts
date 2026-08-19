@@ -22,28 +22,29 @@ const conn = (x: number, y: number, rotation?: number): PartConnector =>
   ({ kind: 'dupont', x, y, rotation, pins: [] }) as unknown as PartConnector
 
 describe('housingPlugAngle (#697)', () => {
-  it('takes a COLUMN of contacts off its nearer END — top or bottom', () => {
-    // The lead leaves ALONG the contacts, not across them: the plug body covers
-    // the column and the cable exits one end of it.
-    expect(housingPlugAngle(conn(0.16, 0.83, 90))).toBe(90) //  bottom of the column
-    expect(housingPlugAngle(conn(0.16, 0.2, 90))).toBe(-90) //  top of the column
+  it('takes a COLUMN of contacts out its nearer SIDE — left or right', () => {
+    // The plug body covers the column and the cable exits through its face —
+    // toward the nearer SIDE of the part, which is the outside.
+    expect(housingPlugAngle(conn(0.16, 0.83, 90))).toBe(180) // left of centre → out left
+    expect(housingPlugAngle(conn(0.84, 0.2, 90))).toBe(0) //    right of centre → out right
   })
 
-  it('takes a ROW off its nearer end — left or right', () => {
-    expect(housingPlugAngle(conn(0.2, 0.5))).toBe(180) // left end
-    expect(housingPlugAngle(conn(0.8, 0.5))).toBe(0) //   right end
+  it('takes a ROW out its nearer face — top or bottom', () => {
+    expect(housingPlugAngle(conn(0.5, 0.83))).toBe(90) //  lower half → out the bottom
+    expect(housingPlugAngle(conn(0.5, 0.2))).toBe(-90) //  upper half → out the top
   })
 
   it('treats 270 as a column too, like 90', () => {
-    expect(housingPlugAngle(conn(0.5, 0.2, 270))).toBe(-90)
+    expect(housingPlugAngle(conn(0.2, 0.5, 270))).toBe(180)
   })
 
-  it('leaves along the contact axis, never across it', () => {
-    // A column exits vertically and a row horizontally — the 90° the first
-    // attempt had backwards.
+  it('leaves ACROSS the contact axis — through the mouth, never off an end', () => {
+    // A row of contacts runs horizontally, so its mouth faces up or down; a
+    // column runs vertically, so its mouth faces left or right. Exactly the
+    // opposite of leaving off an end.
     const vertical = (a: number): boolean => Math.abs(a) === 90
-    expect(vertical(housingPlugAngle(conn(0.16, 0.83, 90)))).toBe(true)
-    expect(vertical(housingPlugAngle(conn(0.2, 0.5)))).toBe(false)
+    expect(vertical(housingPlugAngle(conn(0.5, 0.2))), 'a row exits vertically').toBe(true)
+    expect(vertical(housingPlugAngle(conn(0.2, 0.5, 90))), 'a column exits sideways').toBe(false)
   })
 
   it('is always square — never the diagonal that averaging produced', () => {
@@ -66,13 +67,14 @@ describe('housingPlugAngle (#697)', () => {
   })
 
   it('is the ONE rule — a stored connector uses it too, not averaged normals', () => {
-    // A QWIIC in `connectors[]` used to take its angle from its contact normals,
-    // which point out of the socket mouth — across the contacts, so the shell was
-    // drawn end-on. Stored and housed connectors now answer the same way, which is
-    // what stops the next connector kind reintroducing the split.
+    // A QWIIC in `connectors[]` used to take its angle from its contact normals
+    // while a housed group derived its own; stored and housed connectors now
+    // answer the same way, which is what stops the next connector kind
+    // reintroducing the split. (Those normals were right about the DIRECTION all
+    // along — out of the mouth — which is what the rule now says too.)
     const plain = conn(0.3, 0.08)
     const qwiic = { ...plain, kind: 'qwiic' as const }
-    expect(housingPlugAngle(plain)).toBe(180) // along the row, off its left end
+    expect(housingPlugAngle(plain)).toBe(-90) // a row near the top → out the top
     expect(housingPlugAngle(qwiic)).toBe(housingPlugAngle(plain))
   })
 })

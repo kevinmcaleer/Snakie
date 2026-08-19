@@ -19,6 +19,7 @@ import { createWebPartsApi } from './web-parts'
 import { INSTRUMENTS_PY, SNAKIE_PY } from './web-lib-sources'
 import { createWebFeedbackApi, captureTabScreenshot } from './web-feedback'
 import { createWebModulesApi } from './web-modules'
+import { createWebPackagesApi } from './web-packages'
 import { installWebBoardMain, installWebBoardWindow } from './web-board'
 import { VIRTUAL_PORT_PATH } from '../../../shared/virtual-device'
 
@@ -57,6 +58,14 @@ export function installWebApi(kind: WebWindowKind = 'main'): void {
     return () => window.removeEventListener(MODULES_EVENT, h)
   }
   w.api.modules = modules as unknown as Window['api']['modules']
+  // Real package installs (#776 follow-on): the curated list, PyPI search and a
+  // download-then-write install, all on the page. The fallback stub returned
+  // `ok:false` from `install`, so the Packages tab's Install button did nothing
+  // at all in the browser. Hosts a page can't reach are refused by name — see
+  // web-hosts.ts.
+  const pkgs = (w.api.packages ?? {}) as Record<string, unknown>
+  Object.assign(pkgs, createWebPackagesApi())
+  w.api.packages = pkgs as unknown as Window['api']['packages']
   // Screenshots come from the Screen Capture API (browser tab picker) — the
   // Electron multi-window composite doesn't exist here.
   w.api.captureScreenshot = captureTabScreenshot as unknown as Window['api']['captureScreenshot']

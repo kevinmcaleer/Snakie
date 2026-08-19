@@ -1,0 +1,250 @@
+import { describe, expect, it } from 'vitest'
+import { existsSync, readdirSync, readFileSync } from 'fs'
+import { join } from 'path'
+import { partFromYaml } from '../src/shared/part-yaml'
+import { cornerRadiusFraction } from '../src/shared/part'
+import { moduleById } from '../src/shared/modules-catalog'
+import { KNOWN_I2C_DEVICES } from '../src/renderer/src/components/i2c-known-devices'
+import type { PartDefinition } from '../src/shared/part'
+
+/**
+ * TEMPLATE CONFORMANCE for the Modulino range (#722, epic #721).
+ *
+ * Every Modulino is the same board with different top-side hardware, so the
+ * shared half — outline, both QWIIC sockets, the parallel bus, the mesh and the
+ * driver wiring — is authored once and each module fills in the rest. This
+ * enforces that: it runs over EVERY `modulino-*` part in the standard library,
+ * so the twelve still to be built can't quietly drift into twelve subtly
+ * different 41 mm boards, which is the exact failure #722 exists to prevent.
+ */
+const LIB = join(__dirname, '..', 'examples', 'parts', 'snakie-standard')
+
+const MODULINO_DIRS = readdirSync(LIB, { withFileTypes: true })
+  .filter((e) => e.isDirectory() && e.name.startsWith('modulino-'))
+  .map((e) => e.name)
+  .sort()
+
+const load = (dir: string): PartDefinition =>
+  partFromYaml(readFileSync(join(LIB, dir, 'parts.yml'), 'utf-8'))
+
+/** The shared board, from #721. Kept in step with scripts/modulino-mesh.mjs. */
+const BOARD = { lengthMm: 41, widthMm: 25.36 }
+const BUS_PINS = ['GND', '3V3', 'SDA', 'SCL']
+/** Read from the generator, so the 2-D parts and the 3-D mesh can't drift. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const MESH_CORNER_RADIUS_MM = ((await import('../scripts/modulino-mesh.mjs')) as any).BOARD
+  .cornerRadiusMm as number
+
+describe('Modulino parts follow the shared template (#722)', () => {
+  it('there is at least one Modulino part to check', () => {
+    // Guards against this whole suite silently passing on an empty list if the
+    // library is ever restructured.
+    expect(MODULINO_DIRS.length).toBeGreaterThan(0)
+  })
+
+  describe.each(MODULINO_DIRS)('%s', (dir) => {
+    const part = load(dir)
+
+    it('is the shared 41 × 25.36 mm board', () => {
+      expect(part.dimensions?.width).toBeCloseTo(BOARD.lengthMm, 2)
+      expect(part.dimensions?.height).toBeCloseTo(BOARD.widthMm, 2)
+      expect(part.aspect).toBeCloseTo(BOARD.lengthMm / BOARD.widthMm, 2)
+    })
+
+    it('has a rounded outline, and agrees with the mesh when it says so in mm (#739)', () => {
+      // The board is a rounded rect, not a sharp one — that much is certain.
+      const frac = cornerRadiusFraction(part.shape, part.dimensions)
+      expect(frac, `${dir} declares a corner radius`).toBeGreaterThan(0)
+
+      // The 2-D outline and the 3-D mesh are two views of one board, so IF the
+      // part states its radius in millimetres they must match. Deliberately not
+      // asserted otherwise: the generator's 2 mm is eyeballed from product
+      // photos, while a part re-authored in the editor is drawn against a real
+      // board photo — pinning the guess would fail the better source. Settle the
+      // true radius once and this becomes an equality again.
+      if (part.shape?.cornerRadiusMm !== undefined) {
+        expect(part.shape.cornerRadiusMm).toBe(MESH_CORNER_RADIUS_MM)
+      }
+    })
+
+    it('ships the generated mesh, declared in millimetres', () => {
+      expect(part.mesh).toBe('modulino.stl')
+      expect(part.meshUnits).toBe('mm')
+      expect(existsSync(join(LIB, dir, part.mesh!)), `${dir}/${part.mesh}`).toBe(true)
+    })
+
+    it('declares a real mass, in the range the boards actually span', () => {
+      // #721 quoted 3.5–4.4 g, which held while every module was a flat board.
+      // The Knob isn't: Arduino's store gives it as 8.5 g, and it's the one with
+      // a through-hole encoder and a cap standing on top of the PCB. The bound
+      // is the range of the RANGE, not of one board — the point is to catch a
+      // missing or nonsense figure, not to relitigate each store page.
+      expect(part.mass_g).toBeGreaterThanOrEqual(3.5)
+      expect(part.mass_g).toBeLessThanOrEqual(8.5)
+    })
+
+    it('has four mounting holes', () => {
+      expect(part.mountingHoles?.length).toBe(4)
+      // The DIAMETER is deliberately not asserted. #721 quotes Ø3.2 from a
+      // product page, but the parts are drawn against real board photos and
+      // most of the library sits at 1–2 mm; pinning a number sourced from the
+      // web would make the author's own eye fail CI. The pitch is what the
+      // template actually shares, and the positions below carry that.
+      for (const h of part.mountingHoles ?? []) expect(h.diameter).toBeGreaterThan(0)
+    })
+
+    it('has a QWIIC socket at EACH end — the daisy-chain', () => {
+      const qwiic = (part.connectors ?? []).filter((c) => c.kind === 'qwiic')
+      expect(qwiic.length).toBe(2)
+      // One near each end of the long axis.
+      const xs = qwiic.map((c) => c.x).sort((a, b) => a - b)
+      expect(xs[0]).toBeLessThan(0.2)
+      expect(xs[1]).toBeGreaterThan(0.8)
+    })
+
+    it('puts GND at the BOTTOM of the left socket, as the board does', () => {
+      // Confirmed against a real Modulino (2026-08-16). Contacts lay out as
+      // `ry = dx·sin(rotation)` with GND declared first, so rotation 270 puts it
+      // at the largest y — the bottom — and 90 puts it at the top. The two
+      // sockets are the same footprint at opposite ends, i.e. 180° apart, so the
+      // right-hand one mirrors.
+      //
+      // Four of the five parts had these the wrong way round, which is invisible
+      // on screen and shows up on real hardware as a dead bus or a reversed
+      // supply — hence pinning it.
+      const qwiic = (part.connectors ?? []).filter((c) => c.kind === 'qwiic')
+      const left = qwiic.find((c) => c.x < 0.5)
+      const right = qwiic.find((c) => c.x > 0.5)
+      expect(left?.rotation, `${dir} left socket`).toBe(270)
+      expect(right?.rotation, `${dir} right socket`).toBe(90)
+      // …and ground really is the first contact, which is what makes 270 mean
+      // "bottom" rather than the other way about. Either NAME will do: which of
+      // the two sockets carries the plain names and which carries the `-B` ones
+      // is just authoring order, and several parts list the right-hand socket
+      // first. The rails tie them into one bus regardless.
+      expect(left?.pins[0].name).toMatch(/^GND(-B)?$/)
+    })
+
+    it('wires both sockets to ONE bus, in parallel, via rails', () => {
+      // Without the rails the two sockets are four independent nets and a
+      // chained module downstream reads as unpowered.
+      const rails = part.rails ?? []
+      const byName = new Map(rails.map((r) => [r.name, r]))
+      for (const net of BUS_PINS) {
+        const rail = byName.get(net)
+        expect(rail, `${dir} declares a ${net} rail`).toBeTruthy()
+        // BOTH sockets' pins for that net must be on it. A rail may carry MORE
+        // than the pair — Motors ties its screw-terminal ground here, because
+        // the motor supply's return really is the logic ground (only the
+        // positive rail is separate) — so this checks membership, not length.
+        expect(rail!.pins).toContain(net)
+        expect(rail!.pins).toContain(`${net}-B`)
+      }
+      // Every rail pin is a real pin somewhere on the part.
+      const pinNames = new Set([
+        ...(part.connectors ?? []).flatMap((c) => c.pins.map((p) => p.name)),
+        ...(part.headers ?? []).flatMap((h) => h.pins.map((p) => p.name))
+      ])
+      for (const rail of rails) {
+        for (const pin of rail.pins) expect(pinNames.has(pin), `${rail.name} → ${pin}`).toBe(true)
+      }
+    })
+
+    it('carries I²C signals and NO gpio numbers (it is a peripheral, not an MCU)', () => {
+      for (const conn of part.connectors ?? []) {
+        for (const pin of conn.pins) {
+          expect(pin.gpio, `${dir} ${pin.name}`).toBeUndefined()
+          if (/^SDA|^SCL/.test(pin.name)) {
+            expect(pin.capabilities).toContain('i2c')
+            expect(pin.signals?.i2c).toBe(pin.name.startsWith('SDA') ? 'SDA' : 'SCL')
+          }
+        }
+      }
+    })
+
+    it('installs the ONE shared catalog module, not its own copy', () => {
+      // A board with several Modulinos must be offered a single install (#722):
+      // the banner probes `module:` drivers by import, so they collapse into one.
+      const drivers = part.drivers ?? []
+      expect(drivers.length).toBe(1)
+      expect(drivers[0].source).toBe('module:modulino')
+      expect(moduleById('modulino'), 'modulino is in the catalog').toBeTruthy()
+      expect(part.library?.module).toBe('modulino')
+    })
+
+    it('declares its I²C address, and the detect instrument can name it', () => {
+      const addrs = part.i2cAddresses ?? []
+      expect(addrs.length).toBeGreaterThan(0)
+      for (const a of addrs) {
+        const names = KNOWN_I2C_DEVICES[a] ?? []
+        expect(
+          names.some((n) => n.startsWith('Modulino')),
+          `0x${a.toString(16)} is named in the I²C table`
+        ).toBe(true)
+      }
+    })
+
+    it('ships a help page', () => {
+      expect(part.help).toBe('help.md')
+      expect(existsSync(join(LIB, dir, 'help.md'))).toBe(true)
+    })
+  })
+})
+
+/**
+ * THE 8-BIT/7-BIT SHIFT (found reviewing the LED Matrix).
+ *
+ * `arduino-modulino-mpy` declares each module's `default_addresses` in the
+ * EIGHT-bit form, and `Modulino.__init__` does `addr >> 1` before touching the
+ * bus — but only `if self.has_mcu`. So a module with an onboard MCU ships as
+ * 0x7C and a scan reports 0x3E, while the four bare-sensor modules answer on
+ * their sensor's own 7-bit address unshifted.
+ *
+ * Three parts had been authored with the 8-bit number, which is invisible on
+ * screen and shows up as I²C-detect never naming the module. The store's own
+ * spec for the LED Matrix (0x39 = 0x72 >> 1) confirms the derivation.
+ */
+describe('Modulino I²C addresses are the 7-bit ones a scan reports', () => {
+  // source: arduino-modulino-mpy/src/modulino/*.py — `default_addresses`, and
+  // `has_mcu` (False only on distance, light, movement, thermo, hub).
+  const LIB: Record<string, { eightBit: number[]; hasMcu: boolean }> = {
+    'modulino-buttons': { eightBit: [0x7c], hasMcu: true },
+    'modulino-buzzer': { eightBit: [0x3c], hasMcu: true },
+    'modulino-motors': { eightBit: [0x48], hasMcu: true },
+    'modulino-led-matrix': { eightBit: [0x72], hasMcu: true },
+    'modulino-joystick': { eightBit: [0x58], hasMcu: true },
+    'modulino-knob': { eightBit: [0x74, 0x76], hasMcu: true },
+    'modulino-latch-relay': { eightBit: [0x04], hasMcu: true },
+    'modulino-pixels': { eightBit: [0x6c], hasMcu: true },
+    'modulino-vibro': { eightBit: [0x70], hasMcu: true },
+    'modulino-distance': { eightBit: [0x29], hasMcu: false },
+    'modulino-light': { eightBit: [0x53], hasMcu: false },
+    'modulino-movement': { eightBit: [0x6a, 0x6b], hasMcu: false },
+    'modulino-thermo': { eightBit: [0x44], hasMcu: false }
+  }
+
+  it.each(MODULINO_DIRS)('%s', (dir) => {
+    const known = LIB[dir]
+    // A Modulino not yet in the table above can't be checked — say so rather
+    // than passing silently, so the next module added gets its entry.
+    expect(known, `${dir} needs an entry in the library address table`).toBeTruthy()
+    const expected = known.eightBit.map((a) => (known.hasMcu ? a >> 1 : a))
+    expect(load(dir).i2cAddresses).toEqual(expected)
+  })
+
+  it('every address is a legal 7-bit one, bar the Latch Relay', () => {
+    // The I²C spec reserves 0x00–0x07 and 0x78–0x7F, and every Modulino honours
+    // that — except the Latch Relay, which genuinely answers at 0x02 (#728).
+    // That is CONFIRMED, not a shift bug: Arduino's own AddressChanger utility
+    // documents the rule ("Default address is half pinstrap") and names pinstrap
+    // 0x04 as the Latch Relay, and a real one scans at 0x02. Pinned by name so a
+    // second module drifting into the reserved range still fails loudly.
+    for (const dir of MODULINO_DIRS) {
+      const floor = dir === 'modulino-latch-relay' ? 0x02 : 0x08
+      for (const a of load(dir).i2cAddresses ?? []) {
+        expect(a, `${dir} 0x${a.toString(16)}`).toBeLessThanOrEqual(0x77)
+        expect(a, `${dir} 0x${a.toString(16)}`).toBeGreaterThanOrEqual(floor)
+      }
+    }
+  })
+})

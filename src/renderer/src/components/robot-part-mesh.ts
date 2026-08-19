@@ -4,7 +4,7 @@
  *
  *  - a part with a `mesh` drops its bundled STL into the project's `meshes/`
  *    and links it (the original #406 path);
- *  - a part WITHOUT a mesh — most of the library (#715: 37/38) — gets a
+ *  - a part WITHOUT a mesh — still most of the standard library (#715) — gets a
  *    **footprint box**: its real 2-D dimensions extruded to a family-tuned
  *    height, so the 3-D scene resembles the robot and CoM/support-polygon
  *    geometry stays meaningful (decided under epic #720).

@@ -186,7 +186,7 @@ export function addMeshLink(
 
 /**
  * Append a FOOTPRINT-BOX link (#716, epic #720): the Build-workspace stand-in for
- * a part with no mesh — which is most of the library (#715: 37/38). A `<box>`
+ * a part with no mesh — still most of the standard library (#715). A `<box>`
  * primitive sized from the part's real 2-D dimensions keeps CoM and
  * support-polygon geometry meaningful; the per-visual `<material>` colour keeps
  * the scene recognisable (a desaturated take on the part's PCB colour, so it

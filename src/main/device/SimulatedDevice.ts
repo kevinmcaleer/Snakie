@@ -1,8 +1,8 @@
 import { EventEmitter } from 'events'
 import { VIRTUAL_PORT_PATH } from '../../shared/virtual-device'
-import { INSTALL_START, INSTALL_ERR } from '../packages/install'
 import { MicroPythonRuntime, type ReplRuntime } from './MicroPythonRuntime'
 import { isProbeCode, simulateProbeResponse, simulatedTelemetryFrame } from '../../shared/simulation'
+import type { RuntimeInfo } from '../../shared/dialect'
 import type {
   ConnectionState,
   DeviceStatus,
@@ -14,6 +14,16 @@ import type {
 
 /** How often the simulated board "prints" a telemetry frame (ms). */
 const TELEMETRY_INTERVAL_MS = 120
+
+/**
+ * What the simulator reports as its runtime (#752). Stated rather than probed:
+ * the interpreter behind it IS MicroPython (the official WASM port), so this is
+ * a fact about the simulator, not a guess about a board. No version — the WASM
+ * build's is the port's, not a board firmware anyone could flash, and offering
+ * it would invite the update check to compare against a firmware catalog.
+ * Whether the simulator should ever offer CircuitPython is #764.
+ */
+const SIM_RUNTIME: RuntimeInfo = { dialect: 'micropython' }
 
 /**
  * SIMULATED MicroPython device (issue #135).
@@ -60,7 +70,15 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
   // ---------------------------------------------------------------------------
 
   getStatus(): DeviceStatus {
-    return { state: this.state, path: VIRTUAL_PORT_PATH, baudRate: 115200 }
+    return this.statusFor(this.state)
+  }
+
+  /** The status payload for a state — one place, so the snapshot and the pushed
+   *  event can never disagree about what the simulator is. */
+  private statusFor(state: ConnectionState): DeviceStatus {
+    const status: DeviceStatus = { state, path: VIRTUAL_PORT_PATH, baudRate: 115200 }
+    if (state === 'connected') status.runtime = SIM_RUNTIME
+    return status
   }
 
   isConnected(): boolean {
@@ -100,7 +118,7 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
 
   private setState(state: ConnectionState): void {
     this.state = state
-    this.emit('status', { state, path: VIRTUAL_PORT_PATH, baudRate: 115200 })
+    this.emit('status', this.statusFor(state))
   }
 
   // ---------------------------------------------------------------------------
@@ -144,18 +162,12 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
     if (isProbeCode(code)) {
       return { stdout: simulateProbeResponse(code, this.tick), stderr: '' }
     }
-    // `mip` package installs can't run on the WASM device (no network, and no
-    // `mip` module in the port). Detect the install snippet and answer with a
-    // clear, sentinel'd result so the Packages / SAM / driver UIs explain it —
-    // instead of the cryptic "mip failed" an empty response parses to (#135).
-    if (code.includes(INSTALL_START)) {
-      return {
-        stdout:
-          `${INSTALL_START}\n${INSTALL_ERR} Package install needs a network connection and a ` +
-          "real board — it isn't available on the simulated device (offline).",
-        stderr: ''
-      }
-    }
+    // (Installs used to be intercepted here: they ran `mip` ON the device, and
+    // the WASM port has neither `mip` nor a network, so the snippet had to be
+    // answered with a canned "offline" error. #776 removed that whole route —
+    // packages are resolved on the HOST now and arrive as ordinary file writes,
+    // which the simulator's VFS accepts like any other file.)
+    //
     // Actually RUN the snippet on the real WASM interpreter and return what it
     // printed (this used to be a `''` stub, which silently broke every exec-based
     // probe on the sim — e.g. `modules.probeInstalled`, so the missing-library

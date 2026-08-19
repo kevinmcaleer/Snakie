@@ -7,7 +7,12 @@ import {
   PanelResizeHandle
 } from 'react-resizable-panels'
 import { useLocalStorage } from '../hooks/useLocalStorage'
-import { appliedHorizontal, useWorkspaceLayout, type WorkspaceId } from '../store/layout'
+import {
+  appliedHorizontal,
+  coerceWorkspaceId,
+  useWorkspaceLayout,
+  type WorkspaceId
+} from '../store/layout'
 
 // The embedded Board View pane (the Board workspace's tri-split, #259) is
 // code-split: the whole board subsystem (BoardGraph + wiring + Part Editor)
@@ -256,16 +261,26 @@ export function AppShell(): JSX.Element {
     })
   }, [boardOpened, boardSource, boardFileName, boardIsPython, theme, breadboardBg, boardFolder])
 
+  // Publish the open project folder for every OTHER window (#775). It used to be
+  // reachable only inside the board payload, which only streams while the board
+  // WINDOW is open — so anything needing to write the project's robot.yml had to
+  // open that window to find out where it was. The folder belongs to the session,
+  // so it is published whenever it changes and read on demand.
+  useEffect(() => {
+    window.api.workspace.setFolder(boardFolder)
+  }, [boardFolder])
+
   // Reset the "opened" flag when the user closes the board window.
   useEffect(() => {
     const off = window.api.board.onClosed(() => setBoardOpened(false))
     return off
   }, [])
 
-  // Mark the board opened whenever the window opens via ANY path — notably the
-  // mini board panel's open button, which calls board.open() directly. Flipping
-  // `boardOpened` true triggers the streaming effect above to relay the active
-  // file, so the full viewer isn't left blank ("Open a Python file…").
+  // Mark the board opened whenever the window opens via ANY path — the app menu's
+  // Window ▸ Board View item, or the web build's popup. (The mini board's open
+  // button used to come through here too; it asks for the Electronics workspace
+  // now, #775.) Flipping `boardOpened` true triggers the streaming effect above
+  // to relay the active file, so the full viewer isn't left blank.
   // Pop-out (modes review): if the window opens while Board MODE is active, the
   // board moved homes — hand it to the window and return the main split to Code
   // IN THE SAME HANDLER (the two state updates batch into one commit, so the
@@ -557,6 +572,17 @@ export function AppShell(): JSX.Element {
   //  - picking the Board mode while the window is open re-docks (closes) it.
   switchWorkspaceRef.current = layout.switchWorkspace
   activeWsRef.current = layout.active
+  // Any window — including a DETACHED instrument, which has no access to the
+  // switcher — can ask for a workspace (#775). The main window owns the switch,
+  // and hears its own request too, so a docked and an undocked instrument take
+  // exactly the same path.
+  useEffect(() => {
+    const off = window.api.workspace.onShow((id) => {
+      const target = coerceWorkspaceId(id)
+      if (target) switchWorkspaceRef.current(target)
+    })
+    return off
+  }, [])
   useEffect(() => {
     const off = window.api.board.onClosed(() => {
       if (poppedFromBoardRef.current) {

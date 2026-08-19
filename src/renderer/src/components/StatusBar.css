@@ -59,6 +59,13 @@
  * must match) so rotation is gentle rather than blinky. Linked tips read as
  * quiet links and open the docs article externally. */
 .statusbar__tip {
+  /* The tip is the one thing here that may give way. `.statusbar__item` sets
+     `flex: 0 0 auto`, which overrode this element's own `min-width: 0` and left
+     the row unable to shrink — so once the runtime label joined it (#752), the
+     bar overflowed and the tip ran over the version and line numbers. Everything
+     else on the bar is a FACT (port, runtime, cursor position); a rotating hint
+     is what should truncate. */
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   color: var(--text-muted);
@@ -101,6 +108,14 @@
 /* Connection indicator. */
 .statusbar__conn {
   color: var(--text-muted);
+}
+
+/* Which Python the board runs (#752) — a quiet neighbour to the connection
+ * segment, since it answers "what is this board" rather than "am I connected".
+ * Only rendered once the connect probe has answered. */
+.statusbar__runtime {
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 /* Instrument live-poll warning — the poll interrupts a running program, so this

@@ -42,7 +42,7 @@ export async function fetchRegistry(url: string = DEFAULT_REGISTRY_URL): Promise
     const res = await fetch(url, {
       headers: { Accept: 'application/json' },
       // Bound the request so a stalled host can't hang the IPC call (mirrors the
-      // PyPI search timeout in src/main/packages/search.ts).
+      // PyPI search timeout in src/shared/packages/search.ts).
       signal: AbortSignal.timeout(10_000)
     })
     if (!res.ok) {

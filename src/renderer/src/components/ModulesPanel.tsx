@@ -27,10 +27,11 @@ import type { ModuleInstallProgress } from '../../../preload/index.d'
  * progress + inline errors.
  *
  * Mechanism (all via `window.api.modules`, mirroring the Packages tab): the main
- * process resolves a per-module install plan (a bundled `.py`'s contents, or a
- * `mip` snippet) and the install runs over the existing serialized device
- * channel. Already-installed detection is a cheap `import <name>` probe on the
- * board (`probeInstalled`) — re-run on connect + after each install.
+ * process resolves a per-module install plan — a bundled `.py`'s contents, or an
+ * upstream package downloaded there (#776) — and the files are written over the
+ * existing serialized device channel. Already-installed detection is a cheap
+ * `import <name>` probe on the board (`probeInstalled`) — re-run on connect +
+ * after each install.
  *
  * Hardware can't be exercised in CI, so every async path degrades gracefully:
  * the probe falls back to "available" when disconnected, and installs surface

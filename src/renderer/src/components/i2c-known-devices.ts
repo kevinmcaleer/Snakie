@@ -10,19 +10,19 @@ import type { PartDefinition } from '../../../shared/part'
 export const KNOWN_I2C_DEVICES: Record<number, string[]> = {
   0x0c: ['AK09916 magnetometer'],
   0x1d: ['ADXL345 accelerometer', 'LSM303 accel'],
-  0x1e: ['HMC5883L magnetometer', 'LSM303 mag'],
+  0x1e: ['HMC5883L magnetometer', 'LSM303 mag', 'Modulino Buzzer'],
   0x23: ['BH1750 light sensor'],
   0x27: ['PCF8574 I/O expander (LCD backpack)'],
-  0x29: ['VL53L0X / VL53L1X ToF', 'TSL2591 light', 'BNO055 IMU (alt)'],
-  0x38: ['AHT10 / AHT20 temp+humidity', 'FT6206 touch'],
-  0x39: ['APDS-9960 gesture/colour', 'TSL2561 light'],
+  0x29: ['VL53L0X / VL53L1X ToF', 'TSL2591 light', 'BNO055 IMU (alt)', 'Modulino Distance'],
+  0x38: ['AHT10 / AHT20 temp+humidity', 'FT6206 touch', 'Modulino Vibro'],
+  0x39: ['APDS-9960 gesture/colour', 'TSL2561 light', 'Modulino LED Matrix'],
   0x3c: ['SSD1306 / SH1106 OLED'],
   0x3d: ['SSD1306 / SH1106 OLED (alt)'],
   0x40: ['PCA9685 PWM driver', 'INA219 current', 'HTU21D / Si7021 humidity'],
   0x48: ['ADS1115 / ADS1015 ADC', 'TMP102 temp', 'PCF8591'],
   0x49: ['ADS1115 ADC (alt)', 'TSL2561 light (alt)'],
   0x4a: ['ADS1115 ADC (alt)'],
-  0x53: ['ADXL345 accelerometer (alt)'],
+  0x53: ['ADXL345 accelerometer (alt)', 'Modulino Light'],
   0x57: ['MAX30102 pulse oximeter', 'AT24C32 EEPROM'],
   0x5a: ['MLX90614 IR thermometer', 'CCS811 air quality'],
   0x5b: ['CCS811 air quality (alt)'],
@@ -32,7 +32,32 @@ export const KNOWN_I2C_DEVICES: Record<number, string[]> = {
   0x70: ['TCA9548A I²C mux', 'HT16K33 LED matrix'],
   0x76: ['BME280 / BMP280 environmental'],
   0x77: ['BME280 / BMP280 environmental (alt)', 'BME680'],
-  0x5c: ['AM2320 temp+humidity', 'LPS25 pressure']
+  0x5c: ['AM2320 temp+humidity', 'LPS25 pressure'],
+  // Arduino Modulinos (#721). MIND THE SHIFT: a Modulino with an onboard MCU
+  // publishes an EIGHT-bit address (the library's `default_addresses`), and the
+  // firmware answers on that >> 1 — so Buttons ships as 0x7C and a scan reports
+  // 0x3E. The four with no MCU (Distance, Thermo, Light, Movement) are the raw
+  // sensor and use their own 7-bit address unshifted, so they sit beside the
+  // bare chip above. Getting this wrong makes detect silently fail to name any
+  // MCU module. Cross-check: the store quotes 0x39 for LED Matrix = 0x72 >> 1.
+  // Latch Relay really does sit at 0x02, inside the reserved range 0x00–0x07 —
+  // CONFIRMED (#728), not a shift bug. Arduino's own AddressChanger utility
+  // states the rule ("Default address is half pinstrap") and names pinstrap
+  // 0x04 as the Latch Relay, and a scan of a real one reported 0x02. Note
+  // {@link isReservedI2cAddress} still flags it: that warning is right in
+  // general and this board is the exception. Arduino's *datasheet* prints
+  // 0x2A/0x15 instead, but that table is wrong for several modules (it also
+  // contradicts the store's own 0x2C for Joystick and 0x38 for Vibro).
+  0x02: ['Modulino Latch Relay'],
+  0x24: ['Modulino Motors'],
+  0x2c: ['Modulino Joystick'],
+  0x36: ['Modulino Pixels'],
+  0x3a: ['Modulino Knob'],
+  0x3b: ['Modulino Knob (alt)'],
+  0x3e: ['Modulino Buttons'],
+  0x44: ['Modulino Thermo (HS3003)'],
+  0x6a: ['Modulino Movement (LSM6DSOX)'],
+  0x6b: ['Modulino Movement (LSM6DSOX, alt)']
 }
 
 /** Human names for a found address — `[]` when we don't recognise it. */

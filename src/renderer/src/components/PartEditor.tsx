@@ -30,6 +30,8 @@ import {
   partsClaimingAddress
 } from './i2c-known-devices'
 import { floodFillTransparent, removeBackgroundFromEdges } from './image-bg-remove'
+import { rotateImage90 } from './image-rotate'
+import { opposite, rotateBreaksMesh, rotatePart, type RotateDir } from './part-rotate'
 import { bumpPatch } from '../../../shared/part-registry'
 import {
   CAPABILITIES,
@@ -134,6 +136,7 @@ import type {
   PartPinBuses,
   PartPinCapability,
   PartPinShape,
+  PartShape,
   PartPinSignals,
   PartPinType,
   TextAlign,
@@ -181,6 +184,42 @@ const JST_PINS: PartPin[] = [
  *  Grove standard and never varies — signal 1 · signal 2 · VCC · GND, which is
  *  the yellow · white · red · black of every Grove cable. Getting the order right
  *  here is what lets a cable be seated the correct way round later. */
+/**
+ * Standard LED package sizes, in millimetres (#130).
+ *
+ * An LED is a real component with a handful of real sizes, so this is a pick
+ * list rather than a number box. Through-hole first — 5 mm is THE indicator LED
+ * and the default for a new one — then the surface-mount packages, named by the
+ * imperial code that is actually printed in a BOM ("0603"), because that is what
+ * you are reading off when you author a board from a photo.
+ *
+ * Without a size an LED falls back to a legacy fixed on-screen size, which on a
+ * 20 mm Grove module drew a 5 mm LED far too small.
+ */
+const LED_SIZES: { mm: number; label: string }[] = [
+  { mm: 1.0, label: '0402 — 1.0 mm' },
+  { mm: 1.6, label: '0603 — 1.6 mm' },
+  { mm: 2.0, label: '0805 — 2.0 mm' },
+  { mm: 3.0, label: '3 mm' },
+  { mm: 3.2, label: '1206 — 3.2 mm' },
+  // One entry, not two: a 5050 NeoPixel really is 5.0 mm square, the same as a
+  // 5 mm through-hole LED. Splitting them needed a fake 5.05 to keep the option
+  // values distinct, which would have written a dimension no part actually has.
+  { mm: 5.0, label: '5 mm — T1¾ / 5050' },
+  { mm: 8.0, label: '8 mm' },
+  { mm: 10.0, label: '10 mm' }
+]
+
+/** The size a NEW LED of each kind gets. A plain indicator is the classic 5 mm
+ *  through-hole part; a NeoPixel is a 5050; a power light is nearly always a
+ *  little surface-mount 0603. */
+const DEFAULT_LED_MM: Record<OnboardLed['kind'], number> = {
+  single: 5,
+  rgb: 5,
+  neopixel: 5,
+  power: 1.6
+}
+
 const GROVE_PINS: Record<GroveVariant, PartPin[]> = {
   i2c: [
     { name: 'SCL', type: 'io', capabilities: ['i2c'], signals: { i2c: 'SCL' } },
@@ -327,6 +366,22 @@ const ICON: Record<string, JSX.Element> = {
       <g fill="none" stroke="currentColor" strokeWidth="1.4">
         <path d="M8 1.5v13M1.5 8h13" />
         <path d="M8 1.5l-2 2M8 1.5l2 2M8 14.5l-2-2M8 14.5l2-2M1.5 8l2-2M1.5 8l2 2M14.5 8l-2-2M14.5 8l-2 2" />
+      </g>
+    </svg>
+  ),
+  rotateRight: (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <g fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+        <path d="M13 6A5.5 5.5 0 1 0 13 10" />
+        <path d="M13 2v4h-4" strokeLinejoin="round" />
+      </g>
+    </svg>
+  ),
+  rotateLeft: (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <g fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+        <path d="M3 6A5.5 5.5 0 1 1 3 10" />
+        <path d="M3 2v4h4" strokeLinejoin="round" />
       </g>
     </svg>
   ),
@@ -635,6 +690,13 @@ export function PartEditor({
     content: partContentKey(initialSeedRef.current as PartDefinition),
     version: (initialSeedRef.current as PartDefinition).version
   })
+  // The stamp of the `parts.yml` this part was read from (#750) — the main
+  // process refuses a save whose stamp no longer matches the file on disk, so an
+  // edit made outside the app can't be silently reverted by the editor. Held in
+  // a ref (not in `part`) because it is file identity, not part content: it must
+  // survive every edit and undo, and MUST be refreshed from each save's result
+  // or the next save would look stale to itself. `undefined` for a new part.
+  const sourceHashRef = useRef<string | undefined>(initial?.sourceHash)
 
   const fileId = useMemo(() => sanitisePartId(part.id), [part.id])
   const names = useMemo(() => pinNames(part), [part])
@@ -681,6 +743,34 @@ export function PartEditor({
         : 0.6
 
   const patch = (p: Partial<PartDefinition>): void => setPart((d) => ({ ...d, ...p }))
+  /**
+   * Turn the whole board a quarter turn (#749) — pads, holes, connectors,
+   * components, labels, outline and both photos. The pixels are turned first so
+   * the geometry and the picture land in the SAME undo step; doing it the other
+   * way round left an undo that put the board back but not the photo.
+   */
+  const rotateBoard = async (dir: RotateDir): Promise<void> => {
+    const frontSrc = part.imageData
+    // The rear photo is stored in the rear view's own space, so it turns the
+    // other way — exactly as its image layer does.
+    const rearSrc = part.rear?.imageData
+    const [front, rear] = await Promise.all([
+      frontSrc ? rotateImage90(frontSrc, dir) : Promise.resolve(null),
+      rearSrc ? rotateImage90(rearSrc, opposite(dir)) : Promise.resolve(null)
+    ])
+    setPart((d) => {
+      const next = rotatePart(d, dir)
+      if (front) next.imageData = front
+      if (rear) next.rear = { ...(next.rear ?? {}), imageData: rear }
+      return next
+    })
+    setStatus({
+      kind: 'info',
+      text: rotateBreaksMesh(part)
+        ? `Rotated ${dir === 'cw' ? 'right' : 'left'}. The 3-D model can't be turned with it, so the mesh no longer matches the outline.`
+        : `Rotated ${dir === 'cw' ? 'right' : 'left'}.`
+    })
+  }
 
   // Layer visibility is PERSISTED on the part, so the Parts Library preview and
   // the Board View respect what the author hid (e.g. a traced PCB image stays
@@ -1140,6 +1230,8 @@ export function PartEditor({
     setSelection(null)
     // Reset the version baseline so the fresh part's first save keeps its version (#172).
     lastSavedRef.current = { content: partContentKey(seed), version: seed.version }
+    // A blank part came from no file, so it has no stamp to present (#750).
+    sourceHashRef.current = undefined
     setStatus({ kind: 'info', text: 'Started a new blank part.' })
   }
 
@@ -1182,7 +1274,16 @@ export function PartEditor({
       contentChanged && versionUntouched && openedId !== null ? bumpPatch(clean.version) : clean.version
     // `helpText`/`imageData` are runtime-only (normalisePart strips them); re-add
     // them so the main process can write help.md / the image asset out on save.
-    const payload: PartDefinition = { ...clean, version: nextVersion, imageData: part.imageData, helpText: part.helpText }
+    // `sourceHash` is runtime-only for the same reason and comes from the REF,
+    // not from `part` — the editor's copy of it is whatever the file said when
+    // this part was opened, and it must be the freshest one we know of (#750).
+    const payload: PartDefinition = {
+      ...clean,
+      version: nextVersion,
+      imageData: part.imageData,
+      helpText: part.helpText,
+      sourceHash: sourceHashRef.current
+    }
     // The REAR photo is runtime-only too, and `normalisePart` strips it for the
     // same reason it strips the front's — so re-attach it, or the back face saves
     // without its picture (#636 follow-up).
@@ -1195,9 +1296,19 @@ export function PartEditor({
         setOpenedId(clean.id)
         setOpenedLibId(res.libraryId ?? libId)
         lastSavedRef.current = { content: partContentKey(payload), version: nextVersion }
+        // Adopt the stamp of what we just wrote, or the NEXT save would present
+        // the pre-save one and be refused as stale (#750).
+        sourceHashRef.current = res.sourceHash
         if (nextVersion !== part.version) patch({ version: nextVersion }) // reflect the bump in the field
         setStatus({ kind: 'ok', text: `Saved "${clean.name}" to ${res.libraryId ?? libId} (v${nextVersion}).` })
         onSaved(res.libraryId ?? libId, res.id ?? clean.id)
+      } else if (res?.conflict) {
+        // Not a broken save — a refused one. The file moved under us, so the
+        // only safe next step is to look at what is actually on disk (#750).
+        setStatus({
+          kind: 'error',
+          text: res.error ?? `"${clean.id}" changed on disk since you opened it — close the editor and reopen the part.`
+        })
       } else {
         setStatus({ kind: 'error', text: res?.error ?? 'Save failed.' })
       }
@@ -1292,6 +1403,13 @@ export function PartEditor({
                 </button>
                 <button type="button" className="pe__iconbtn" onClick={() => setFitSignal((n) => n + 1)} title="Fit / reset the view" aria-label="Fit">
                   {ICON.fit}
+                </button>
+                <span className="pe__divider" />
+                <button type="button" className="pe__iconbtn" onClick={() => void rotateBoard('ccw')} title="Rotate the board 90° left" aria-label="Rotate left">
+                  {ICON.rotateLeft}
+                </button>
+                <button type="button" className="pe__iconbtn" onClick={() => void rotateBoard('cw')} title="Rotate the board 90° right" aria-label="Rotate right">
+                  {ICON.rotateRight}
                 </button>
                 <span className="pe__divider" />
                 <button type="button" className="pe__iconbtn" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
@@ -1591,7 +1709,10 @@ function LayersPanel({
   const shapes = part.shapes ?? []
   const labels = part.labels ?? []
   const addLed = (kind: OnboardLed['kind'] = 'single'): void => {
-    const next = [...onboardLeds, { kind, x: 0.5, y: 0.5, z: nextItemZ(part) } as (typeof onboardLeds)[number]]
+    const next = [
+      ...onboardLeds,
+      { kind, x: 0.5, y: 0.5, sizeMm: DEFAULT_LED_MM[kind], z: nextItemZ(part) } as (typeof onboardLeds)[number]
+    ]
     patch({ onboardLeds: next })
     setSelection({ type: 'led', index: next.length - 1 })
   }
@@ -2748,16 +2869,7 @@ function Inspector(props: InspectorProps): JSX.Element {
             />
           </label>
         </div>
-        {part.shape?.kind !== 'polygon' && (
-          <SliderField
-            label="Corner radius"
-            value={part.shape?.cornerRadius ?? 0.04}
-            min={0}
-            max={0.5}
-            step={0.01}
-            onChange={(v) => patch({ shape: { kind: 'rect', cornerRadius: v } })}
-          />
-        )}
+        {part.shape?.kind !== 'polygon' && <CornerRadiusFields part={part} patch={patch} />}
         <label className="pe__field">
           <span>Onboard LED pin</span>
           <select value={part.ledLabel ?? ''} onChange={(e) => patch({ ledLabel: e.target.value || undefined })}>
@@ -2926,6 +3038,84 @@ function I2cSection({
           : 'This part has no I²C pin or QWIIC/Grove port yet — addresses are still saved.'}
       </p>
     </section>
+  )
+}
+
+/**
+ * The board outline's corner radius, in EITHER unit (#739).
+ *
+ * A PCB is specified in millimetres — that's the number on the drawing and on
+ * the fabricator's order — so a part that knows its physical size should be
+ * able to say "2 mm" rather than a fraction someone reverse-engineered from it.
+ * The normalised slider stays for parts with no declared dimensions (and for
+ * eyeballing), and the hint always says which of the two is actually drawing,
+ * because two fields for one visual property is otherwise a guessing game.
+ */
+function CornerRadiusFields({
+  part,
+  patch
+}: {
+  part: PartDefinition
+  patch: (p: Partial<PartDefinition>) => void
+}): JSX.Element {
+  const dims = part.dimensions
+  const minSideMm = dims ? Math.min(dims.width, dims.height) : 0
+  const mm = part.shape?.cornerRadiusMm
+  const mmSet = typeof mm === 'number' && Number.isFinite(mm)
+  const mmApplies = mmSet && minSideMm > 0
+
+  // `patch` REPLACES `shape` wholesale, so carry the other field through or
+  // editing one silently wipes the other.
+  const patchShape = (p: Partial<PartShape>): void => {
+    const next: PartShape = { ...(part.shape ?? { kind: 'rect' }), kind: 'rect', ...p }
+    // Drop rather than carry an `undefined`, so the cleared field doesn't
+    // round-trip through robot.yml/parts.yml as a null.
+    if (next.cornerRadiusMm === undefined) delete next.cornerRadiusMm
+    patch({ shape: next })
+  }
+
+  return (
+    <>
+      <SliderField
+        label="Corner radius"
+        value={part.shape?.cornerRadius ?? 0.04}
+        min={0}
+        max={0.5}
+        step={0.01}
+        onChange={(v) => patchShape({ cornerRadius: v })}
+      />
+      <label className="pe__field">
+        <span>Corner radius (mm)</span>
+        <input
+          type="number"
+          min={0}
+          step="0.1"
+          value={mmSet ? mm : ''}
+          placeholder={dims ? 'e.g. 2' : 'needs board dimensions'}
+          onChange={(e) =>
+            patchShape({
+              cornerRadiusMm:
+                e.target.value === '' ? undefined : Math.max(0, Number(e.target.value) || 0)
+            })
+          }
+        />
+      </label>
+      <p className="pe__hint pe__hint--muted">
+        {mmApplies ? (
+          <>
+            Drawing at <strong>{mm} mm</strong> — the slider above is ignored while this is
+            set. Clear it to go back to the fraction.
+          </>
+        ) : mmSet ? (
+          <span className="pe__addr-warn">
+            Set the board&rsquo;s dimensions for millimetres to apply — drawing at the slider
+            value meanwhile.
+          </span>
+        ) : (
+          <>A PCB is specified in millimetres; set that and it wins over the slider.</>
+        )}
+      </p>
+    </>
   )
 }
 
@@ -4039,6 +4229,22 @@ function SelectionInspector({
                 <option value="rgb">RGB</option>
                 <option value="neopixel">NeoPixel</option>
                 <option value="power">Power indicator</option>
+              </select>
+            </label>
+            <label className="pe__field">
+              <span>Size</span>
+              {/* Drawn life-size against the board's real dimensions, so this is
+                  what makes a 5 mm LED read as the quarter of a 20 mm module it
+                  actually is. */}
+              <select
+                value={String(led.sizeMm ?? DEFAULT_LED_MM[led.kind])}
+                onChange={(e) => upd({ sizeMm: Number(e.target.value) })}
+              >
+                {LED_SIZES.map((sz) => (
+                  <option key={sz.mm} value={String(sz.mm)}>
+                    {sz.label}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="pe__field">

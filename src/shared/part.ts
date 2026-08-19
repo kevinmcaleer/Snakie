@@ -569,6 +569,39 @@ export interface PartShape {
   kind: BoardShapeKind
   /** Corner radius for `rect`, normalised to the smaller board side (0..0.5). */
   cornerRadius?: number
+  /**
+   * Corner radius in MILLIMETRES (#739) — how a PCB is actually specified, and
+   * the number on a mechanical drawing. Preferred over {@link cornerRadius}
+   * when the part declares {@link PartDefinition.dimensions}; without those
+   * there's no scale to convert against, so the normalised value is used
+   * instead. Resolve both through {@link cornerRadiusFraction} rather than
+   * reading either field directly.
+   */
+  cornerRadiusMm?: number
+}
+
+/**
+ * The board outline's effective corner radius as a FRACTION of the smaller
+ * board side — the unit both canvases draw with — or `undefined` when the part
+ * specifies none (callers keep their own pixel default).
+ *
+ * Millimetres win when they can be converted (#739): a real PCB is specified in
+ * mm, so that is the authoritative number when the part knows its physical
+ * size. A radius larger than half the smaller side can't be drawn, so the
+ * result is clamped. Pure.
+ */
+export function cornerRadiusFraction(
+  shape: PartShape | undefined,
+  dimensions: { width: number; height: number } | undefined
+): number | undefined {
+  if (!shape) return undefined
+  const mm = shape.cornerRadiusMm
+  const minSideMm = dimensions ? Math.min(dimensions.width, dimensions.height) : 0
+  if (typeof mm === 'number' && Number.isFinite(mm) && mm >= 0 && minSideMm > 0) {
+    return Math.min(0.5, mm / minSideMm)
+  }
+  const frac = shape.cornerRadius
+  return typeof frac === 'number' && Number.isFinite(frac) ? frac : undefined
 }
 
 /**
@@ -714,6 +747,76 @@ export interface PartSchematic {
   aspect?: number
   /** The terminals, each linked to a physical pin by name. */
   pins: SchematicPin[]
+}
+
+/**
+ * How one pixel of a {@link PartDisplay} is encoded, named after the **bits per
+ * pixel** rather than the number of levels.
+ *
+ * That naming is deliberate: "gray4" is ambiguous in the wild (four grey levels,
+ * or four bits?), and getting it wrong is a silent factor-of-four error in a
+ * frame buffer's size. Here `gray4` is unambiguously **4 bits** ⇒ 16 levels,
+ * because these names line up 1:1 with MicroPython's `framebuf` formats, which
+ * is the API a MicroPython display driver actually hands you:
+ *
+ * | value    | bpp | `framebuf`            | typical panel                     |
+ * |----------|-----|-----------------------|-----------------------------------|
+ * | `mono`   |   1 | `MONO_VLSB`/`HLSB`/…  | SSD1306 / SH1106 OLED, LED matrix |
+ * | `gray2`  |   2 | `GS2_HMSB`            | small e-paper                     |
+ * | `gray4`  |   4 | `GS4_HMSB`            | Modulino LED Matrix (0–15)        |
+ * | `gray8`  |   8 | `GS8`                 | greyscale TFT                     |
+ * | `rgb332` |   8 | — (PicoGraphics)      | low-memory colour TFT             |
+ * | `rgb565` |  16 | `RGB565`              | ST7789 / ILI9341 colour TFT       |
+ * | `rgb888` |  24 | — (PicoGraphics)      | full-colour panel                 |
+ *
+ * `mono` keeps its universal name rather than becoming `gray1`. The two values
+ * with no `framebuf` equivalent are PicoGraphics pen types (`PEN_RGB332` /
+ * `PEN_RGB888`), so the set spans both driver families Snakie meets.
+ */
+export type DisplayColour =
+  | 'mono' //   1 bpp — on/off
+  | 'gray2' //  2 bpp — 4 grey levels
+  | 'gray4' //  4 bpp — 16 grey levels
+  | 'gray8' //  8 bpp — 256 grey levels
+  | 'rgb332' // 8 bpp colour
+  | 'rgb565' // 16 bpp colour
+  | 'rgb888' // 24 bpp colour
+
+/**
+ * The pixel-addressable panel a part carries (#780) — an LED matrix, an OLED, a
+ * TFT. Absent ⇒ the part has no panel to draw into, which is nearly all of them.
+ *
+ * **Not {@link PartDefinition.dimensions}.** That is the part's PHYSICAL size in
+ * millimetres and drives how big it is drawn on the board; this is how many
+ * PIXELS it can light. A part legitimately has both, and they are unrelated
+ * numbers — the Modulino LED Matrix is 41 × 25 mm and 12 × 8 px.
+ *
+ * It exists because code on the board otherwise hard-codes the size, and a sketch
+ * that hard-codes 12 breaks the moment it is pointed at a 128-wide OLED. Snakie
+ * knows which part is on the board, so the size can come from the part.
+ *
+ * Scope is one **framebuffer** panel: a display block means "pixels are addressed
+ * by (x, y) and pushed as a frame". A bargraph or an addressable LED strip is
+ * driven by level or by index, not by drawing into a buffer, so neither declares
+ * one — describing a Grove LED Bar as a 10 × 1 display would invent an idiom its
+ * API doesn't have. Character LCDs (16 × 2 HD44780) are also out: their units are
+ * characters, not pixels, and folding those into `width`/`height` would repeat
+ * exactly the conflation this block exists to avoid.
+ */
+export interface PartDisplay {
+  /** Panel width in **pixels** (a positive integer). */
+  width: number
+  /** Panel height in **pixels** (a positive integer). */
+  height: number
+  /**
+   * The deepest format the panel can show — a **capability**, not the mode it
+   * happens to be in. A part file cannot know the runtime mode (the Modulino LED
+   * Matrix driver defaults to 1-bit but takes `use_grayscale=True` for its full
+   * 0–15), and a shallower frame is always displayable on a deeper panel, so the
+   * capability is the stable thing to author. Defaults to `mono` when absent or
+   * unrecognised — the overwhelmingly common case, and the safe floor.
+   */
+  colour: DisplayColour
 }
 
 /**
@@ -1134,6 +1237,20 @@ export interface PartDefinition {
    */
   helpText?: string
 
+  // --- Concurrency stamp (#750) --------------------------------------------
+  /**
+   * Populated by the main process on read: a hash of the EXACT `parts.yml` text
+   * this part was parsed from. NOT written to `parts.yml`.
+   *
+   * It is the "you are editing this version of the file" token. A save hands it
+   * back, and the writer refuses when the file on disk no longer hashes to it —
+   * i.e. something outside the app (a script, an editor, a `git checkout`)
+   * changed the part while it was open. Without it, the app happily serialised a
+   * stale in-memory copy over corrected hardware data, silently, four times in
+   * one session (#750). A conflict surfaces a reload; it never clobbers.
+   */
+  sourceHash?: string
+
   // --- Schematic (Part Editor, #130) ---------------------------------------
   /** Optional schematic symbol (line-drawing) for the schematic view. */
   schematic?: PartSchematic
@@ -1146,6 +1263,17 @@ export interface PartDefinition {
    * project. Absent ⇒ the part isn't matched by address.
    */
   i2cAddresses?: number[]
+
+  // --- Display panel (#780) -------------------------------------------------
+  /**
+   * The pixel-addressable panel this part carries — its size in **pixels** and
+   * colour depth. Absent ⇒ the part has no panel.
+   *
+   * Distinct from {@link dimensions} (the physical board size in millimetres): a
+   * display part has both, and conflating them is the mistake this block exists
+   * to prevent. See {@link PartDisplay}.
+   */
+  display?: PartDisplay
 
   // --- Code library (#166) -------------------------------------------------
   /** A MicroPython driver/library linked to this part. */
@@ -1395,3 +1523,25 @@ export const DEFAULT_REGISTRY_URL =
 
 /** The standard 0.1" header pitch, in millimetres (grid-snap default). */
 export const STANDARD_PIN_SPACING_MM = 2.54
+
+/**
+ * How many NAMED pins a part offers — on a header or on a connector.
+ *
+ * The one place that rule lives. It used to be written twice: the Part Editor
+ * counted headers *and* connectors, while the main process's `writePart` asked
+ * only that `headers` be non-empty. A Grove or QWIIC module — whose only
+ * electrical interface is its socket, with no broken-out header at all — passed
+ * the editor and was then rejected on save, with a message naming a thing it
+ * correctly does not have.
+ *
+ * Counts only named pins, because an unnamed one is dropped by `normalisePart`
+ * and so isn't a connection point at all.
+ */
+export function connectablePinCount(part: PartDefinition): number {
+  const named = (ps: { name?: string }[] | undefined): number =>
+    (ps ?? []).filter((p) => String(p.name ?? '').trim() !== '').length
+  return (
+    (part.headers ?? []).reduce((n, h) => n + named(h.pins), 0) +
+    (part.connectors ?? []).reduce((n, c) => n + named(c.pins), 0)
+  )
+}
