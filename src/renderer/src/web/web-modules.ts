@@ -25,17 +25,9 @@ import {
 } from '../../../shared/modules-catalog'
 import { driverSources } from 'virtual:snakie-standard-parts'
 import { MODULE_STUBS } from './web-lib-sources'
-import {
-  deviceDirsFor,
-  httpMipFetch,
-  MipResolveError,
-  resolveMipSpec
-} from '../../../shared/mip-resolve'
-import {
-  hostInstallNote,
-  resolveFailureMessage,
-  writeFailureMessage
-} from '../../../shared/install-messages'
+import { MipResolveError, resolveMipSpec } from '../../../shared/mip-resolve'
+import { hostInstallNote, resolveFailureMessage } from '../../../shared/install-messages'
+import { webMipFetch, writeFilesToDevice, type InstallDevice } from './web-install'
 
 const LIB_DIR = '/lib'
 
@@ -96,7 +88,7 @@ async function planFor(id: string): Promise<InstallPlan> {
   }
   const spec = def.source.spec
   try {
-    const resolved = await resolveMipSpec(spec, { fetchText: httpMipFetch(), target: LIB_DIR })
+    const resolved = await resolveMipSpec(spec, { fetchText: webMipFetch(), target: LIB_DIR })
     return {
       id,
       importName: def.importName,
@@ -169,48 +161,19 @@ export function createWebModulesApi(): Record<string, unknown> {
       }
       for (const note of plan.notes) emit({ id, state: 'note', message: note })
 
-      if (plan.files.length === 0) {
-        const msg = `Couldn't install ${id}: nothing was resolved to write.`
-        emit({ id, state: 'error', message: `Failed to install ${id}` })
-        return { id, ok: false, log: msg, notes: plan.notes }
-      }
-
-      let current = ''
-      try {
-        for (const dir of deviceDirsFor(plan.files.map((f) => f.path))) {
-          await window.api.device.mkdir(dir).catch(() => undefined)
-        }
-        let done = 0
-        for (const file of plan.files) {
-          current = file.path
-          emit({
-            id,
-            state: 'running',
-            message: `Writing ${++done}/${plan.files.length} — ${file.path}…`
-          })
-          await window.api.device.writeFile(file.path, file.contents)
-        }
-        emit({ id, state: 'done', message: `Installed ${id}` })
-        window.api.modules.notifyChanged()
-        return {
-          id,
-          ok: true,
-          log: `Wrote ${plan.files.map((f) => f.path).join(', ')}`,
-          notes: plan.notes
-        }
-      } catch (err) {
-        emit({ id, state: 'error', message: `Failed to install ${id}` })
-        return {
-          id,
-          ok: false,
-          log: writeFailureMessage({
-            name: id,
-            path: current || undefined,
-            detail: err instanceof Error ? err.message : String(err)
-          }),
-          notes: plan.notes
-        }
-      }
+      const written = await writeFilesToDevice(
+        id,
+        plan.files,
+        window.api.device as unknown as InstallDevice,
+        (message) => emit({ id, state: 'running', message })
+      )
+      emit({
+        id,
+        state: written.ok ? 'done' : 'error',
+        message: written.ok ? `Installed ${id}` : `Failed to install ${id}`
+      })
+      if (written.ok) window.api.modules.notifyChanged()
+      return { id, ok: written.ok, log: written.log, notes: plan.notes }
     }
   }
 }

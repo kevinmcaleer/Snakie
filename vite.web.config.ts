@@ -4,6 +4,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { standardPartsPlugin } from './vite-plugin-standard-parts'
+import { webConnectSrc } from './src/renderer/src/web/web-hosts'
 
 // The desktop app reads its version from Electron's `app.getVersion()`; the web
 // build has no Electron, so inject package.json's version at build time and serve
@@ -122,14 +123,16 @@ export default defineConfig({
     {
       // Relax the renderer CSP for the WEB build ONLY (Electron keeps its strict
       // one): `'wasm-unsafe-eval'` lets the MicroPython WASM instantiate, and
-      // `font-src data:` lets Vite's inlined fonts load.
+      // `font-src data:` lets Vite's inlined fonts load. `connect-src` is built
+      // from `web-hosts.ts` — the SAME list the install path checks a URL
+      // against before fetching it, so the policy and the code cannot drift.
       name: 'snakie-web-csp',
       transformIndexHtml(html: string): string {
         return html.replace(
           /content="default-src 'self';[^"]*"/,
           `content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; ` +
             `style-src 'self' 'unsafe-inline'; img-src 'self' data:; ` +
-            `font-src 'self' data:; connect-src 'self' https://projects.kevsrobots.com https://raw.githubusercontent.com"`
+            `font-src 'self' data:; ${webConnectSrc()}"`
         )
       }
     }

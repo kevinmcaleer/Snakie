@@ -91,7 +91,7 @@ export type {
   InstallOptions,
   InstallProgress,
   InstallResult
-} from '../main/packages/types'
+} from '../shared/packages/types'
 
 // Re-export the per-module installer types (issue #120) so the Modules manager
 // can import them from this single UI-facing module. The progress/result types

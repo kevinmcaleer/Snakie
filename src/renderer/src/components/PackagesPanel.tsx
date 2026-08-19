@@ -23,12 +23,15 @@ import type { InstallProgress, PackageInfo } from '../../../preload/index.d'
  * libraries, expose advanced options (overwrite / custom index URL / .mpy), and
  * NEVER kick the user out to another app.
  *
- * Network access (PyPI search + discovery) is brokered by the main process
- * (`window.api.packages`) because the renderer CSP forbids outbound requests.
- * Installing downloads the package in the main process too and writes its files
- * to the board (#776) — the board has no internet connection of its own, so it
- * never fetches anything. The install controls are still gated on an active
- * connection (there has to be somewhere to write) with a clear hint otherwise.
+ * Network access (PyPI search + discovery) goes through `window.api.packages`,
+ * which on the desktop is brokered by the main process because the renderer CSP
+ * forbids outbound requests. Installing downloads the package there too and
+ * writes its files to the board (#776) — the board has no internet connection
+ * of its own, so it never fetches anything. In the web build the same API is
+ * served by `web/web-packages.ts`, where the page itself is the host and can
+ * only reach the origins its CSP allows (see `web/web-hosts.ts`). The install
+ * controls are still gated on an active connection (there has to be somewhere
+ * to write) with a clear hint otherwise.
  *
  * Hardware + network can't be exercised in CI, so every async path degrades
  * gracefully: search falls back to the curated set offline, and install surfaces

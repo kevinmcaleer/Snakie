@@ -1,4 +1,4 @@
-import { MIP_DEFAULT_TARGET } from '../../shared/mip-resolve'
+import { MIP_DEFAULT_TARGET } from '../mip-resolve'
 import type { InstallOptions } from './types'
 
 /**
@@ -10,11 +10,15 @@ import type { InstallOptions } from './types'
  * a Tiny 2350 or a non-W Pico has no radio at all, and `mip` is an optional
  * micropython-lib package missing from CircuitPython and many vendor builds.
  *
- * So the direction is reversed. `packages:install` resolves the package HERE
- * (`resolveMipSpec`, on the machine that actually has the network) and hands
- * back files; the renderer writes them down the same `device.writeFile` path
- * every other install uses. What's left in this file is the part that was
+ * So the direction is reversed. `packages:install` resolves the package on the
+ * HOST (`resolveMipSpec`, on the machine that actually has the network) and
+ * hands back files; the renderer writes them down the same `device.writeFile`
+ * path every other install uses. What's left in this file is the part that was
  * always host-side reasoning: the install TARGET and the non-fatal notes.
+ *
+ * Dependency-free and shared, because "the host" is the Electron main process on
+ * the desktop and the BROWSER ITSELF in the web build (#776 follow-on) — one set
+ * of rules, one set of words, whichever one is running.
  */
 
 /** Where a package installs when the request doesn't say. */
