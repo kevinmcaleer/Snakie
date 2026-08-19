@@ -184,6 +184,42 @@ const JST_PINS: PartPin[] = [
  *  Grove standard and never varies — signal 1 · signal 2 · VCC · GND, which is
  *  the yellow · white · red · black of every Grove cable. Getting the order right
  *  here is what lets a cable be seated the correct way round later. */
+/**
+ * Standard LED package sizes, in millimetres (#130).
+ *
+ * An LED is a real component with a handful of real sizes, so this is a pick
+ * list rather than a number box. Through-hole first — 5 mm is THE indicator LED
+ * and the default for a new one — then the surface-mount packages, named by the
+ * imperial code that is actually printed in a BOM ("0603"), because that is what
+ * you are reading off when you author a board from a photo.
+ *
+ * Without a size an LED falls back to a legacy fixed on-screen size, which on a
+ * 20 mm Grove module drew a 5 mm LED far too small.
+ */
+const LED_SIZES: { mm: number; label: string }[] = [
+  { mm: 1.0, label: '0402 — 1.0 mm' },
+  { mm: 1.6, label: '0603 — 1.6 mm' },
+  { mm: 2.0, label: '0805 — 2.0 mm' },
+  { mm: 3.0, label: '3 mm' },
+  { mm: 3.2, label: '1206 — 3.2 mm' },
+  // One entry, not two: a 5050 NeoPixel really is 5.0 mm square, the same as a
+  // 5 mm through-hole LED. Splitting them needed a fake 5.05 to keep the option
+  // values distinct, which would have written a dimension no part actually has.
+  { mm: 5.0, label: '5 mm — T1¾ / 5050' },
+  { mm: 8.0, label: '8 mm' },
+  { mm: 10.0, label: '10 mm' }
+]
+
+/** The size a NEW LED of each kind gets. A plain indicator is the classic 5 mm
+ *  through-hole part; a NeoPixel is a 5050; a power light is nearly always a
+ *  little surface-mount 0603. */
+const DEFAULT_LED_MM: Record<OnboardLed['kind'], number> = {
+  single: 5,
+  rgb: 5,
+  neopixel: 5,
+  power: 1.6
+}
+
 const GROVE_PINS: Record<GroveVariant, PartPin[]> = {
   i2c: [
     { name: 'SCL', type: 'io', capabilities: ['i2c'], signals: { i2c: 'SCL' } },
@@ -1645,7 +1681,10 @@ function LayersPanel({
   const shapes = part.shapes ?? []
   const labels = part.labels ?? []
   const addLed = (kind: OnboardLed['kind'] = 'single'): void => {
-    const next = [...onboardLeds, { kind, x: 0.5, y: 0.5, z: nextItemZ(part) } as (typeof onboardLeds)[number]]
+    const next = [
+      ...onboardLeds,
+      { kind, x: 0.5, y: 0.5, sizeMm: DEFAULT_LED_MM[kind], z: nextItemZ(part) } as (typeof onboardLeds)[number]
+    ]
     patch({ onboardLeds: next })
     setSelection({ type: 'led', index: next.length - 1 })
   }
@@ -4162,6 +4201,22 @@ function SelectionInspector({
                 <option value="rgb">RGB</option>
                 <option value="neopixel">NeoPixel</option>
                 <option value="power">Power indicator</option>
+              </select>
+            </label>
+            <label className="pe__field">
+              <span>Size</span>
+              {/* Drawn life-size against the board's real dimensions, so this is
+                  what makes a 5 mm LED read as the quarter of a 20 mm module it
+                  actually is. */}
+              <select
+                value={String(led.sizeMm ?? DEFAULT_LED_MM[led.kind])}
+                onChange={(e) => upd({ sizeMm: Number(e.target.value) })}
+              >
+                {LED_SIZES.map((sz) => (
+                  <option key={sz.mm} value={String(sz.mm)}>
+                    {sz.label}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="pe__field">
