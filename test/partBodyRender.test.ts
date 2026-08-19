@@ -333,6 +333,118 @@ describe('pin labels stay upright on a 180°-rotated body', () => {
   })
 })
 
+describe('pin label size is physical, not per-outline (#778)', () => {
+  // The reported bug: PartBody sized pin labels from the tightest pin gap measured
+  // in the part's own fit-to-footprint body box, so identical 2.54mm hardware got
+  // different type on differently-shaped boards — a Tiny 2350's pin names didn't
+  // match a Modulino LED Matrix's. These guard the WIRING of `pinLabelScales`:
+  // that PartBody feeds it the real geometry, not that the rule itself is right
+  // (pinLabelScale.test.ts owns that).
+
+  /** A board `widthMm` wide with `n` left-edge pins on a real `pitchMm` pitch. */
+  const boardWith = (widthMm: number, heightMm: number, n: number, pitchMm: number): PartDefinition => ({
+    ...blankPart(),
+    dimensions: { width: widthMm, height: heightMm },
+    pinSpacing: 2.54,
+    headers: [
+      {
+        edge: 'left',
+        pins: Array.from({ length: n }, (_, i) => ({
+          name: `P${i}`,
+          type: 'io' as const,
+          number: i + 1,
+          rotation: 180,
+          x: 0.06,
+          y: (2 + i * pitchMm) / heightMm
+        }))
+      }
+    ]
+  })
+
+  /** Every `scale(...)` factor in the drawn markup, rounded so float noise in the
+   *  SVG transforms doesn't make two equal sizes look different. */
+  const scales = (html: string): string[] =>
+    [...html.matchAll(/scale\((-?[\d.]+)\)/g)].map((m) => Number(m[1]).toFixed(4))
+
+  /**
+   * How big a pin annotation ends up ON SCREEN, relative to its full size. The
+   * label group carries a counter-scale (1/bodyScale) and, when the edge is tight,
+   * a shrink; the caller then draws the whole body at bodyScale. These fixtures
+   * give every pin the same treatment, so the distinct factors multiplied together
+   * are one pin's chain.
+   */
+  const onScreenScale = (part: PartDefinition, canvasPxPerMm: number): number => {
+    const nativeW = 300
+    const dims = part.dimensions!
+    const nativeBox = { x: 0, y: 0, w: nativeW, h: (nativeW * dims.height) / dims.width }
+    const bodyScale = (dims.width * canvasPxPerMm) / nativeW
+    const html = renderToStaticMarkup(
+      createElement(PartBody, { part, box: nativeBox, boxedPins: true, bodyScale })
+    )
+    return [...new Set(scales(html))].reduce((a, s) => a * Number(s), bodyScale)
+  }
+
+  it('draws the same 2.54mm header at the same size on an 18mm and a 41mm board', () => {
+    // The reported pair: a Tiny 2350-shaped board and a Modulino-shaped one, both
+    // on the same breadboard, so both at the same canvas px-per-mm. Their body
+    // boxes differ by nearly 2×; their pin labels must not.
+    const tiny = onScreenScale(boardWith(18, 22.9, 8, 2.54), 9.27)
+    const wide = onScreenScale(boardWith(41, 25.36, 8, 2.54), 9.27)
+    expect(tiny).toBeCloseTo(wide, 4)
+  })
+
+  it('still draws a genuinely tighter header smaller', () => {
+    // 1.27mm pitch on the same outline — half the room, so it must not come out
+    // the same size as the 2.54mm one.
+    const coarse = onScreenScale(boardWith(41, 25.36, 8, 2.54), 9.27)
+    const fine = onScreenScale(boardWith(41, 25.36, 8, 1.27), 9.27)
+    expect(fine).toBeLessThan(coarse)
+  })
+
+  it('does not let a crowded edge shrink the labels on a comfortable one', () => {
+    // A QWIIC's four contacts, 1.2mm apart, labelling off the bottom edge — next to
+    // a roomy 2.54mm header down the left. Only the bottom row may shrink.
+    const withQwiic: PartDefinition = {
+      ...blankPart(),
+      dimensions: { width: 18, height: 22.9 },
+      pinSpacing: 2.54,
+      headers: [
+        {
+          edge: 'left',
+          pins: [
+            ...Array.from({ length: 8 }, (_, i) => ({
+              name: `GP${i}`,
+              type: 'io' as const,
+              rotation: 180,
+              x: 0.06,
+              y: (2 + i * 2.54) / 22.9
+            })),
+            ...Array.from({ length: 4 }, (_, i) => ({
+              name: ['GND', '3V3', 'SDA', 'SCL'][i],
+              type: 'io' as const,
+              rotation: 90,
+              x: (7 + i * 1.2) / 18,
+              y: 0.855
+            }))
+          ]
+        }
+      ]
+    }
+    const html = renderToStaticMarkup(
+      createElement(PartBody, {
+        part: withQwiic,
+        box: { x: 0, y: 0, w: 167, h: 212 },
+        boxedPins: true
+      })
+    )
+    // The left header keeps full size (no scale transform at all), while the QWIIC
+    // row draws a shrink. Before the fix the whole board shrank together.
+    const shrinks = scales(html)
+    expect(shrinks.length).toBe(4) // one per QWIIC contact, none on the left header
+    expect(Number(shrinks[0])).toBeLessThan(1)
+  })
+})
+
 describe('board rear (#636) — PartBody draws one face at a time', () => {
   const twoSided: PartDefinition = {
     ...blankPart(),

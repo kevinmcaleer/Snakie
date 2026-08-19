@@ -69,6 +69,7 @@ import type {
   TextAlign
 } from '../../../shared/part'
 import { boxedPinLabel, capabilityChips, connectorContactLabels, housingDrawsShell, castellatedPad, componentLabelTransform, connectorGlyph, connectorLabel, connectorSize, octagonalPad, onboardLedGlyph, onboardLedLabel, partButtonGlyph, PART_BUTTON_SIZE, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
+import { pinLabelScales } from './pin-label-scale'
 import './PartCanvas.css'
 
 /**
@@ -524,11 +525,11 @@ export function PartCanvas({
   // Board px-per-mm (from real dimensions) so physical parts like JST/QWIIC
   // connectors draw life-size; 0 when the part has no mm dimensions (legacy size).
   const connPxPerMm = part.dimensions && part.dimensions.width > 0 ? box.w / part.dimensions.width : 0
-  // The fixed pad + number-box + label sizes were tuned for a comfortable pin
-  // pitch. On a dense/large board they render tighter than those fixed sizes, so
-  // the holes, number boxes and labels overlap. `pinScale` shrinks them together
-  // when the pitch is tight, and is 1 at a comfortable pitch so normal boards are
-  // unchanged (#…). PIN_PITCH_REF ≈ the gap (px) the fixed 14px number-box wants.
+  // The fixed pad size was tuned for a comfortable pin pitch. On a dense/large
+  // board pins render tighter than that, so the pads + their drill holes overlap.
+  // `pinScale` shrinks them when the pitch is tight, and is 1 at a comfortable
+  // pitch so normal boards are unchanged (#…). PIN_PITCH_REF ≈ the gap (px) a
+  // full-size pad wants. (The LABELS are sized separately, by `labelScales` below.)
   const PIN_PITCH_REF = 21
   // The nominal pitch (mm-pitch × px-per-mm) OVERESTIMATES the real room: pins are
   // often packed tighter than the nominal pinSpacing (e.g. the Servo 2040's 3-pin
@@ -2206,6 +2207,24 @@ export function PartCanvas({
       ? { show: true, x: nx }
       : { show: padPassesThrough(pin.shape), x: mirrorX(nx) }
   const mx = (nx: number): number => (rear ? mirrorX(nx) : nx)
+  // How big each edge's pin annotations are drawn (#778) — the SAME rule the board
+  // view uses, so a part reads at one size wherever it is drawn. An annotation is
+  // anchored to the board edge its pin faces, so it only competes with the other
+  // labels on that edge; sizing it off every pin on the board shrank a Tiny 2350's
+  // castellations because its QWIIC contacts sit 1.2mm apart. Pins that draw no
+  // annotation (a hidden label, or a pad that isn't on the face being shown) are
+  // left out — nothing of theirs can be collided with.
+  const labelScales = pinLabelScales({
+    pins: pins.flatMap((rp) => {
+      if (pinLabelHidden(part, rp.pin)) return []
+      const f = padOnFace(rp.pin, rp.x)
+      if (!f.show) return []
+      const rot = f.x === rp.x ? rp.pin.rotation : mirrorRotationX(rp.pin.rotation)
+      const edge = pinOutwardDir(rot, f.x, rp.y)
+      return [{ edge, along: edge === 'left' || edge === 'right' ? py(rp.y) : px(f.x) }]
+    }),
+    nominalPitchPx
+  })
   const faceImage = rear ? part.rear?.imageData : part.imageData
   /** Stamp the face onto a newly-created item. Without this you'd place a pad
    *  while looking at the back and watch it disappear onto the front. */
@@ -3433,15 +3452,17 @@ export function PartCanvas({
             }
             const lo = rp.pin.labelOffset
             const dragTf = lo ? `translate(${lo.x * box.w} ${lo.y * box.h})` : undefined
-            // Shrink the number-box + label on a tight pitch — pivoted at the BOARD
-            // EDGE the annotation is anchored to (via boxedPinLabel), NOT the pin. A
-            // pin set in from the edge (e.g. the Servo 2040's headers at y≈0.17) keeps
-            // its label out in the margin instead of being dragged inward over the
-            // image. Any hand-placed drag offset stays unscaled (#…).
+            // Shrink the number-box + label when THIS edge's labels are tight —
+            // pivoted at the BOARD EDGE the annotation is anchored to (via
+            // boxedPinLabel), NOT the pin. A pin set in from the edge (e.g. the Servo
+            // 2040's headers at y≈0.17) keeps its label out in the margin instead of
+            // being dragged inward over the image. Any hand-placed drag offset stays
+            // unscaled (#…).
             const bdir = pinOutwardDir(rp.pin.rotation, rp.x, rp.y)
+            const labelScale = labelScales[bdir]
             const epx = bdir === 'left' ? box.x : bdir === 'right' ? box.x + box.w : cx
             const epy = bdir === 'top' ? box.y : bdir === 'bottom' ? box.y + box.h : cy
-            const scaleTf = pinScale !== 1 ? `translate(${epx} ${epy}) scale(${pinScale}) translate(${-epx} ${-epy})` : undefined
+            const scaleTf = labelScale !== 1 ? `translate(${epx} ${epy}) scale(${labelScale}) translate(${-epx} ${-epy})` : undefined
             const labelTf = [scaleTf, dragTf].filter(Boolean).join(' ') || undefined
             const labelDraggable = interactive && !locked.pins
             return (

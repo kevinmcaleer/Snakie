@@ -292,6 +292,7 @@ export function capabilityBadges(cx: number, cy: number, caps: PartPinCapability
 
 export type { Box } from './part-editor.util'
 import { connectorContacts, connectorDims, housedGroupConnectors, pinLabelHidden } from './part-editor.util'
+import { pinLabelScales } from './pin-label-scale'
 
 /** Pad fill by electrical role (kept close to the Board View's palette). */
 export const PAD_FILL: Record<PartPinType, string> = {
@@ -1414,9 +1415,9 @@ export function PartBody({
   const physicalPad = connPxPerMm > 0 ? Math.max(5, Math.min(16, 1.9 * connPxPerMm)) : 12
   // Some boards pack pins FAR tighter than the nominal pitch (e.g. the Servo 2040's
   // 3-pin servo clusters render barely one pad-width apart), so a physical 1.9mm pad
-  // and the fixed 14px number box collide. Measure the tightest ACTUAL centre-to-
-  // centre pin gap and shrink the pads + number boxes + labels together to fit it —
-  // a no-op on comfortably-pitched boards, where `pinScale` stays 1.
+  // would touch its neighbour. Measure the tightest ACTUAL centre-to-centre gap
+  // between ANY two pins — a pad collides with whatever is nearest it, whichever
+  // edge that pin faces — and cap the pad to fit.
   let minPinGapPx = Infinity
   for (let i = 0; i < pins.length; i++) {
     for (let j = i + 1; j < pins.length; j++) {
@@ -1428,14 +1429,29 @@ export function PartBody({
   const padSize = Number.isFinite(minPinGapPx)
     ? Math.max(3, Math.min(physicalPad, minPinGapPx * 0.82))
     : physicalPad
-  // Scale the annotations (number box + label + chips) down about the pin so a
-  // dense row stays legible. The divisor sets the target box/gap ratio: the fixed
-  // 14px number box fills ~0.78 of an 18px gap — as large as fits while still
-  // breathing. The floor is low (0.25) because very dense boards (Servo 2040 packed
-  // on a small board-body box) need an aggressive shrink to stop the number boxes
-  // overlapping; they stay readable via the view's zoom. Comfortable boards keep
-  // pinScale = 1.
-  const pinScale = Number.isFinite(minPinGapPx) ? Math.max(0.25, Math.min(1, minPinGapPx / 18)) : 1
+  // How big each edge's pin annotations (number box + label + variable + chips) are
+  // drawn (#778). Unlike a pad, an annotation is anchored to the board EDGE its pin
+  // faces, so it can only collide with the other annotations on that same edge —
+  // and only along that edge's line. `pinLabelScales` sizes each edge from the room
+  // its own labels have, physically (see that module): identical hardware drawn at
+  // the same canvas scale gets identical type, whatever outline it sits on.
+  //
+  // Only pins that actually DRAW an annotation count — a hidden label (a servo
+  // header's V+/GND rows) collides with nothing. `boxedPins` is deliberately NOT
+  // consulted: the mini board boxes only the pins the code uses, and the type must
+  // not resize as that code is edited.
+  const labelScales = pinLabelScales({
+    pins: pins.flatMap((rp) => {
+      if (pinLabelHidden(part, rp.pin)) return []
+      const f = padOnFace(rp.pin, rp.x)
+      if (!f.show) return []
+      const rot = f.x === rp.x ? rp.pin.rotation : mirrorRotationX(rp.pin.rotation)
+      const edge = pinOutwardDir(rot, f.x, rp.y)
+      return [{ edge, along: edge === 'left' || edge === 'right' ? py(rp.y) : px(f.x) }]
+    }),
+    nominalPitchPx: spacing * connPxPerMm,
+    bodyScale
+  })
   const holeR = (diameter: number): number =>
     part.dimensions && part.dimensions.width > 0
       ? Math.max(3, (diameter / part.dimensions.width) * box.w)
@@ -1639,21 +1655,28 @@ export function PartBody({
           // 90° on the top/bottom edges so dense rows don't collide.
           const ll = pinLabelLayout(cx, cy, rp.pin.rotation, rp.x, rp.y, size, box)
           const bdir = pinOutwardDir(rp.pin.rotation, rp.x, rp.y)
-          // Counter-scale the boxed annotation, pivoted at the board EDGE, so the
-          // number box + label stay edge-anchored at a constant on-screen size on a
-          // scaled placed part (matching the main board). No-op at scale 1.
+          // Counter-scale the annotation, pivoted at the board EDGE, so the number
+          // box + label stay edge-anchored at a constant on-screen size on a scaled
+          // placed part (matching the main board). No-op at scale 1.
+          //
+          // This used to apply to the BOXED annotation only, so a placed part's silk
+          // label kept its body's scale — the same 2.54mm header set in 2.7× the type
+          // on a 51mm part as on a 19mm one, which is half of #778. The capability
+          // chips already counter-scale themselves (see `capabilityChips`), so they
+          // are left to do it and are not wrapped here.
           const epx = bdir === 'left' ? box.x : bdir === 'right' ? box.x + box.w : cx
           const epy = bdir === 'top' ? box.y : bdir === 'bottom' ? box.y + box.h : cy
-          const boxedCounter =
-            boxThis && bodyScale !== 1
+          const counterTf =
+            bodyScale !== 1
               ? `translate(${epx} ${epy}) scale(${1 / bodyScale}) translate(${-epx} ${-epy})`
               : undefined
           // Shrink the annotation (number box + label + chips) about the board edge
-          // on a tight-pitch board so a dense row stays legible (no-op at scale 1),
-          // matching the pad cap above.
+          // when THIS edge's labels are tight, so a dense row stays legible (no-op at
+          // scale 1).
+          const labelScale = labelScales[bdir]
           const densityTf =
-            pinScale !== 1
-              ? `translate(${epx} ${epy}) scale(${pinScale}) translate(${-epx} ${-epy})`
+            labelScale !== 1
+              ? `translate(${epx} ${epy}) scale(${labelScale}) translate(${-epx} ${-epy})`
               : undefined
           // Manual label placement (#…): shift the whole annotation by the pin's
           // saved labelOffset (a fraction of the board box).
@@ -1682,7 +1705,7 @@ export function PartBody({
               {!bodyOnly && !pinLabelHidden(part, rp.pin) && (
               <g transform={labelGroupTf}>
               {boxThis ? (
-                <g transform={boxedCounter}>
+                <g transform={counterTf}>
                   {boxedPinLabel(
                     box,
                     cx,
@@ -1697,15 +1720,17 @@ export function PartBody({
                 </g>
               ) : boxedActive ? null : (
                 text && (
-                  <text
-                    x={ll.lx}
-                    y={ll.ly}
-                    className="pcv__pin-label"
-                    textAnchor={ll.anchor}
-                    transform={pinLabelTransform(ll.lx, ll.ly, ll.rotate)}
-                  >
-                    {text}
-                  </text>
+                  <g transform={counterTf}>
+                    <text
+                      x={ll.lx}
+                      y={ll.ly}
+                      className="pcv__pin-label"
+                      textAnchor={ll.anchor}
+                      transform={pinLabelTransform(ll.lx, ll.ly, ll.rotate)}
+                    >
+                      {text}
+                    </text>
+                  </g>
                 )
               )}
               {/* Capability chips (breadboard hover) — box-relative like the labels
