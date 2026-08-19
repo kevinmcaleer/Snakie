@@ -76,6 +76,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it no longer reads every folder in your home directory looking for a board.
 
 ### Fixed
+- **Pin labels are the same size on every board with the same hardware.** (#778)
+  A Tiny 2350's pin names didn't match a Modulino LED Matrix's, even though both
+  carry an ordinary 2.54 mm header. Label size wasn't a setting: it was derived
+  from the tightest gap between *any* two pins, measured in pixels of the part's
+  own fit-to-footprint box — an accident of the outline, not of the hardware. So
+  the same header was typeset one size on a 18 mm board and another on a 41 mm
+  one, and a placed part's silk labels carried its body scale on top of that,
+  setting identical pins in nearly twice the type on a big part as on a small one.
+
+  Labels are now sized the way everything else on a part already is: physically.
+  A label is as big as the room its pin really has — its neighbour's distance in
+  millimetres at the canvas' pixels-per-millimetre — so identical hardware drawn
+  at the same scale reads at the same size, whatever board it sits on.
+
+  The density shrink is still there, because it is the only thing keeping a Servo
+  2040's eighteen servo headers legible, but it now applies **per board edge**. A
+  label is anchored to the edge its pin faces and can only collide with the other
+  labels on that edge, so the Tiny 2350's QWIIC contacts — 1.2 mm apart, and
+  labelling off the bottom — no longer shrink the castellations down both sides.
+  Pins that draw no label at all (a servo header's V+/GND rows) no longer shrink
+  their neighbours either.
 - **A running Snakie can no longer undo an edit you made to a part outside it.**
   (#750) The parts library is a folder of plain text files, so a script, an
   editor and `git checkout` are all perfectly good ways to change a part — but
