@@ -110,8 +110,13 @@ they are re-rendered, not shuffled along:
 ```python
 from time import sleep_ms
 
-message = "HELLO "
-for step in range(len(message) * 8):
+message = "HELLO"
+WIDTH = 12                       # the panel is 12 columns wide
+
+# Start at -WIDTH so the first frame draws the text just off the RIGHT edge, and
+# run until it has fully left on the left. Starting at 0 would open with the
+# message already sitting on the panel, which is not what a marquee should do.
+for step in range(-WIDTH, len(message) * 8):
     matrix.clear()
     matrix.text(-step, 0, message)
     matrix.show()
