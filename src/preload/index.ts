@@ -1081,6 +1081,34 @@ const feedback = {
     ipcRenderer.invoke('feedback:submitBugReport', payload)
 }
 
+/**
+ * Workspace relay + the session's project folder (#775).
+ *
+ * The workspace switcher lives in `AppShell`, in the main window — so a detached
+ * instrument window (or the board window) needs a channel to ask for a switch,
+ * the way `board.open()` already crosses that boundary. And the open project
+ * folder is a property of the SESSION, not of any window: reading it here means
+ * a part can be written to the right `robot.yml` without opening a window to
+ * find out which one that is.
+ */
+const workspace = {
+  /** Ask the MAIN window to show a workspace ('code' | 'board' | 'robot').
+   *  Fire-and-forget, and sendable from any window including the main one. */
+  show: (id: string): void => ipcRenderer.send('workspace:show', id),
+  /** Subscribe to a workspace-switch request (the main window listens).
+   *  Returns an unsubscribe function. */
+  onShow: (cb: (id: string) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, id: string): void => cb(id)
+    ipcRenderer.on('workspace:show', listener)
+    return () => ipcRenderer.removeListener('workspace:show', listener)
+  },
+  /** Publish the open project folder (the main window, when it changes). */
+  setFolder: (folder?: string): void => ipcRenderer.send('workspace:setFolder', folder),
+  /** The open project folder, or null when no folder is open. Readable from any
+   *  window, with nothing opened to fetch it. */
+  folder: (): Promise<string | null> => ipcRenderer.invoke('workspace:folder')
+}
+
 const api = {
   /** Example round-trip channel used to prove the bridge works. */
   ping: (): Promise<string> => ipcRenderer.invoke('ping'),
@@ -1125,6 +1153,8 @@ const api = {
   plugins,
   /** Board View layer: floating window + live active-file relay + user boards. */
   board,
+  /** Workspace relay + the session's project folder (#775). */
+  workspace,
   /** Instrument launch relay: board window → main window scope/meter hosting. */
   instruments,
   /** Find & Replace window: native window ↔ main editor find/replace relay. */

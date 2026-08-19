@@ -45,6 +45,22 @@ import type { ActivityView } from '../components/ActivityBar'
 export const WORKSPACE_IDS = ['code', 'board', 'robot'] as const
 export type WorkspaceId = (typeof WORKSPACE_IDS)[number]
 
+/**
+ * A workspace id from OUTSIDE this window, or null (#775).
+ *
+ * Since any window — a detached instrument, the board window — can ask the main
+ * window to show a workspace, the id arrives as an unvalidated string across a
+ * process boundary. A retired id (`lab`/`data`) or a typo would otherwise apply
+ * geometry that doesn't exist and strand the user on a workspace with no
+ * switcher segment. Null means "don't switch", which is the only safe answer to
+ * a name this build doesn't have.
+ */
+export function coerceWorkspaceId(id: unknown): WorkspaceId | null {
+  return typeof id === 'string' && (WORKSPACE_IDS as readonly string[]).includes(id)
+    ? (id as WorkspaceId)
+    : null
+}
+
 /** Display labels + a one-line description for the switcher tooltips. */
 // Soft Shell (#575, epic #573) renamed the switcher's three workspaces to
 // Code / Electronics / Build. "Electronics" surfaces the Board View; "Build"

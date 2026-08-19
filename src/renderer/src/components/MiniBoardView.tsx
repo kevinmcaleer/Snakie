@@ -555,12 +555,16 @@ export function MiniBoardView({
             SIMULATION
           </span>
         )}
+        {/* The full board lives in the Electronics workspace. Without an
+            `onPopOut` (the plain instrument-dock mount) this used to open the
+            deprecated pop-out window; it now asks the main window to switch, the
+            same thing the MiniViewer's own handler does (#775). */}
         <button
           type="button"
           className="mini-board__open"
-          title={onPopOut ? 'Open the Electronics workspace' : 'Open the full Board Viewer'}
-          aria-label={onPopOut ? 'Open the Electronics workspace' : 'Open the full Board Viewer'}
-          onClick={() => (onPopOut ? onPopOut() : void window.api.board.open())}
+          title="Open the Electronics workspace"
+          aria-label="Open the Electronics workspace"
+          onClick={() => (onPopOut ? onPopOut() : window.api.workspace.show('board'))}
         >
           <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path
