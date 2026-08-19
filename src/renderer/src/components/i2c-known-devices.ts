@@ -40,12 +40,15 @@ export const KNOWN_I2C_DEVICES: Record<number, string[]> = {
   // sensor and use their own 7-bit address unshifted, so they sit beside the
   // bare chip above. Getting this wrong makes detect silently fail to name any
   // MCU module. Cross-check: the store quotes 0x39 for LED Matrix = 0x72 >> 1.
-  // UNVERIFIED: the library declares Latch Relay as 0x04 with no `has_mcu`
-  // override, which shifts to 0x02 — inside the I²C reserved range 0x00–0x07.
-  // Either the module ignores the reservation or its 0x04 is already 7-bit.
-  // Left as the derivation until someone can scan one; there is no Latch Relay
-  // part yet, so nothing depends on it.
-  0x02: ['Modulino Latch Relay (unconfirmed)'],
+  // Latch Relay really does sit at 0x02, inside the reserved range 0x00–0x07 —
+  // CONFIRMED (#728), not a shift bug. Arduino's own AddressChanger utility
+  // states the rule ("Default address is half pinstrap") and names pinstrap
+  // 0x04 as the Latch Relay, and a scan of a real one reported 0x02. Note
+  // {@link isReservedI2cAddress} still flags it: that warning is right in
+  // general and this board is the exception. Arduino's *datasheet* prints
+  // 0x2A/0x15 instead, but that table is wrong for several modules (it also
+  // contradicts the store's own 0x2C for Joystick and 0x38 for Vibro).
+  0x02: ['Modulino Latch Relay'],
   0x24: ['Modulino Motors'],
   0x2c: ['Modulino Joystick'],
   0x36: ['Modulino Pixels'],

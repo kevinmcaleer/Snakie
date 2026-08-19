@@ -73,9 +73,14 @@ describe('Modulino parts follow the shared template (#722)', () => {
       expect(existsSync(join(LIB, dir, part.mesh!)), `${dir}/${part.mesh}`).toBe(true)
     })
 
-    it('declares a real mass (3.5–4.4 g per the range)', () => {
+    it('declares a real mass, in the range the boards actually span', () => {
+      // #721 quoted 3.5–4.4 g, which held while every module was a flat board.
+      // The Knob isn't: Arduino's store gives it as 8.5 g, and it's the one with
+      // a through-hole encoder and a cap standing on top of the PCB. The bound
+      // is the range of the RANGE, not of one board — the point is to catch a
+      // missing or nonsense figure, not to relitigate each store page.
       expect(part.mass_g).toBeGreaterThanOrEqual(3.5)
-      expect(part.mass_g).toBeLessThanOrEqual(4.4)
+      expect(part.mass_g).toBeLessThanOrEqual(8.5)
     })
 
     it('has four mounting holes', () => {
@@ -207,9 +212,15 @@ describe('Modulino I²C addresses are the 7-bit ones a scan reports', () => {
     'modulino-buzzer': { eightBit: [0x3c], hasMcu: true },
     'modulino-motors': { eightBit: [0x48], hasMcu: true },
     'modulino-led-matrix': { eightBit: [0x72], hasMcu: true },
+    'modulino-joystick': { eightBit: [0x58], hasMcu: true },
+    'modulino-knob': { eightBit: [0x74, 0x76], hasMcu: true },
+    'modulino-latch-relay': { eightBit: [0x04], hasMcu: true },
+    'modulino-pixels': { eightBit: [0x6c], hasMcu: true },
+    'modulino-vibro': { eightBit: [0x70], hasMcu: true },
     'modulino-distance': { eightBit: [0x29], hasMcu: false },
     'modulino-light': { eightBit: [0x53], hasMcu: false },
-    'modulino-movement': { eightBit: [0x6a, 0x6b], hasMcu: false }
+    'modulino-movement': { eightBit: [0x6a, 0x6b], hasMcu: false },
+    'modulino-thermo': { eightBit: [0x44], hasMcu: false }
   }
 
   it.each(MODULINO_DIRS)('%s', (dir) => {
@@ -221,11 +232,18 @@ describe('Modulino I²C addresses are the 7-bit ones a scan reports', () => {
     expect(load(dir).i2cAddresses).toEqual(expected)
   })
 
-  it('every address is a legal 7-bit one', () => {
+  it('every address is a legal 7-bit one, bar the Latch Relay', () => {
+    // The I²C spec reserves 0x00–0x07 and 0x78–0x7F, and every Modulino honours
+    // that — except the Latch Relay, which genuinely answers at 0x02 (#728).
+    // That is CONFIRMED, not a shift bug: Arduino's own AddressChanger utility
+    // documents the rule ("Default address is half pinstrap") and names pinstrap
+    // 0x04 as the Latch Relay, and a real one scans at 0x02. Pinned by name so a
+    // second module drifting into the reserved range still fails loudly.
     for (const dir of MODULINO_DIRS) {
+      const floor = dir === 'modulino-latch-relay' ? 0x02 : 0x08
       for (const a of load(dir).i2cAddresses ?? []) {
         expect(a, `${dir} 0x${a.toString(16)}`).toBeLessThanOrEqual(0x77)
-        expect(a).toBeGreaterThanOrEqual(0x08)
+        expect(a, `${dir} 0x${a.toString(16)}`).toBeGreaterThanOrEqual(floor)
       }
     }
   })

@@ -1,0 +1,121 @@
+id: modulino-knob
+name: Modulino Knob
+description: Rotary encoder with a push switch — endless rotation counted in steps — on an I²C Modulino, daisy-chainable over QWIIC.
+manufacturer: Arduino
+family: Input
+tags:
+  - modulino
+  - arduino
+  - i2c
+  - qwiic
+  - encoder
+  - rotary-encoder
+  - knob
+  - input
+package: SMD
+voltage: 3.3V
+partNumber: ABX00107
+properties:
+  interface: I²C (0x3A or 0x3B, re-addressable — onboard MCU)
+  control: PEC11J-9215F-S0015 quadrature encoder, continuous 360° rotation
+  button: integrated push switch
+  mcu: STM32C011F4
+  chain: QWIIC socket at each end, same bus in parallel
+version: 0.1.0
+pcbColor: "#00979d"
+aspect: 1.617
+dimensions:
+  width: 41
+  height: 25.36
+shape:
+  kind: rect
+  cornerRadiusMm: 4.6
+mountingHoles:
+  - x: 0.10976
+    y: 0.18454
+    diameter: 3.2
+  - x: 0.89024
+    y: 0.18454
+    diameter: 3.2
+  - x: 0.89024
+    y: 0.81546
+    diameter: 3.2
+  - x: 0.10976
+    y: 0.81546
+    diameter: 3.2
+rails:
+  - name: GND
+    pins:
+      - GND
+      - GND-B
+  - name: 3V3
+    pins:
+      - 3V3
+      - 3V3-B
+  - name: SDA
+    pins:
+      - SDA
+      - SDA-B
+  - name: SCL
+    pins:
+      - SCL
+      - SCL-B
+connectors:
+  - z: 0
+    kind: qwiic
+    x: 0.05183
+    y: 0.5
+    rotation: 270
+    pins:
+      - name: GND
+        type: gnd
+      - name: 3V3
+        type: pwr
+      - name: SDA
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+      - name: SCL
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+  - z: 0
+    kind: qwiic
+    x: 0.94817
+    y: 0.5
+    rotation: 90
+    pins:
+      - name: GND-B
+        type: gnd
+      - name: 3V3-B
+        type: pwr
+      - name: SDA-B
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+      - name: SCL-B
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+help: help.md
+mesh: modulino.stl
+meshUnits: mm
+mass_g: 8.5
+i2cAddresses:
+  - 58
+  - 59
+library:
+  module: modulino
+  docs: https://docs.arduino.cc/hardware/modulino-knob/
+drivers:
+  - source: module:modulino
+    target: lib/modulino
+    label: Arduino Modulino library
