@@ -1167,6 +1167,20 @@ export interface PartDefinition {
    */
   helpText?: string
 
+  // --- Concurrency stamp (#750) --------------------------------------------
+  /**
+   * Populated by the main process on read: a hash of the EXACT `parts.yml` text
+   * this part was parsed from. NOT written to `parts.yml`.
+   *
+   * It is the "you are editing this version of the file" token. A save hands it
+   * back, and the writer refuses when the file on disk no longer hashes to it —
+   * i.e. something outside the app (a script, an editor, a `git checkout`)
+   * changed the part while it was open. Without it, the app happily serialised a
+   * stale in-memory copy over corrected hardware data, silently, four times in
+   * one session (#750). A conflict surfaces a reload; it never clobbers.
+   */
+  sourceHash?: string
+
   // --- Schematic (Part Editor, #130) ---------------------------------------
   /** Optional schematic symbol (line-drawing) for the schematic view. */
   schematic?: PartSchematic

@@ -147,6 +147,9 @@ const EVERY_FIELD: Required<PartDefinition> = {
   help: 'help.md',
   helpText: '# Contract Part\n', // runtime-only — see RUNTIME_ONLY
 
+  // --- Concurrency stamp ---------------------------------------------------
+  sourceHash: 'e3b0c44298fc1c149afbf4c8996fb924', // runtime-only — see RUNTIME_ONLY
+
   // --- Schematic -----------------------------------------------------------
   schematic: { aspect: 1, pins: [{ pin: 'SDA', side: 'left', order: 0 }] },
 
@@ -185,7 +188,9 @@ const EVERY_FIELD: Required<PartDefinition> = {
 const RUNTIME_ONLY: Partial<Record<keyof PartDefinition, string>> = {
   imageData:
     'inlined by the main process on read; parts.yml keeps the relative `image` filename',
-  helpText: 'inlined by the main process on read; parts.yml keeps the relative `help` filename'
+  helpText: 'inlined by the main process on read; parts.yml keeps the relative `help` filename',
+  sourceHash:
+    'a hash of the parts.yml text the part was READ from (#750) — file identity, not part content. Writing it would change the very bytes it stamps.'
 }
 
 const ALL_FIELDS = Object.keys(EVERY_FIELD) as (keyof PartDefinition)[]
