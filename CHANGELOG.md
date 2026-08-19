@@ -85,6 +85,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the connect greeting is rebuilt in that runtime's own wording rather than
   MicroPython's. A board that won't answer stays unidentified rather than being
   guessed at, and the previous board's runtime can't linger after you unplug it.
+- **A display part can declare its size in pixels.** (#780) A part with a panel
+  now carries a `display` block in `parts.yml` — `width`, `height` and a `colour`
+  depth — so its resolution is a fact the part states rather than something each
+  sketch or instrument re-guesses. This is deliberately **not** `dimensions`,
+  which is the board's physical size in millimetres: a display part has both, and
+  they are unrelated numbers. `colour` is named after bits per pixel (`mono`,
+  `gray2`, `gray4`, `gray8`, `rgb332`, `rgb565`, `rgb888`) to match MicroPython's
+  `framebuf` formats, so "gray4" can't be misread as four grey levels. Populated
+  for the **Modulino LED Matrix** (12 × 8) and the **XIAO Expansion Base**'s
+  onboard 0.96" SSD1306 (128 × 64). Reading it back on the board is a follow-up.
 
 ### Changed
 - The per-platform mount-point scanning behind board detection is now in one

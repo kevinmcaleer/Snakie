@@ -12,7 +12,7 @@ tags:
 package: SMD
 pinSpacing: 2.54
 voltage: 3.3V
-version: 0.1.9
+version: 0.1.10
 pcbColor: "#0f5a2e"
 aspect: 1.617
 dimensions:
@@ -169,6 +169,16 @@ rails:
       - SCL-B
 i2cAddresses:
   - 57
+# The panel in PIXELS (#780) — not `dimensions` above, which is its physical
+# 41 x 25.36 mm. 8 rows x 12 columns = the 96 LEDs Arduino's docs quote, and the
+# upstream MicroPython driver's own _width / _height.
+# The module drives 16 levels per LED (its driver takes use_grayscale=True and
+# allocates 48 bytes = 4 bits x 96 pixels), so gray4 is what the panel can do;
+# the same driver defaults to 1-bit, which is a subset of it.
+display:
+  width: 12
+  height: 8
+  colour: gray4
 mass_g: 4.4
 mesh: modulino.stl
 meshUnits: mm

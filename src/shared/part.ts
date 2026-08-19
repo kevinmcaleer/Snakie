@@ -750,6 +750,76 @@ export interface PartSchematic {
 }
 
 /**
+ * How one pixel of a {@link PartDisplay} is encoded, named after the **bits per
+ * pixel** rather than the number of levels.
+ *
+ * That naming is deliberate: "gray4" is ambiguous in the wild (four grey levels,
+ * or four bits?), and getting it wrong is a silent factor-of-four error in a
+ * frame buffer's size. Here `gray4` is unambiguously **4 bits** ⇒ 16 levels,
+ * because these names line up 1:1 with MicroPython's `framebuf` formats, which
+ * is the API a MicroPython display driver actually hands you:
+ *
+ * | value    | bpp | `framebuf`            | typical panel                     |
+ * |----------|-----|-----------------------|-----------------------------------|
+ * | `mono`   |   1 | `MONO_VLSB`/`HLSB`/…  | SSD1306 / SH1106 OLED, LED matrix |
+ * | `gray2`  |   2 | `GS2_HMSB`            | small e-paper                     |
+ * | `gray4`  |   4 | `GS4_HMSB`            | Modulino LED Matrix (0–15)        |
+ * | `gray8`  |   8 | `GS8`                 | greyscale TFT                     |
+ * | `rgb332` |   8 | — (PicoGraphics)      | low-memory colour TFT             |
+ * | `rgb565` |  16 | `RGB565`              | ST7789 / ILI9341 colour TFT       |
+ * | `rgb888` |  24 | — (PicoGraphics)      | full-colour panel                 |
+ *
+ * `mono` keeps its universal name rather than becoming `gray1`. The two values
+ * with no `framebuf` equivalent are PicoGraphics pen types (`PEN_RGB332` /
+ * `PEN_RGB888`), so the set spans both driver families Snakie meets.
+ */
+export type DisplayColour =
+  | 'mono' //   1 bpp — on/off
+  | 'gray2' //  2 bpp — 4 grey levels
+  | 'gray4' //  4 bpp — 16 grey levels
+  | 'gray8' //  8 bpp — 256 grey levels
+  | 'rgb332' // 8 bpp colour
+  | 'rgb565' // 16 bpp colour
+  | 'rgb888' // 24 bpp colour
+
+/**
+ * The pixel-addressable panel a part carries (#780) — an LED matrix, an OLED, a
+ * TFT. Absent ⇒ the part has no panel to draw into, which is nearly all of them.
+ *
+ * **Not {@link PartDefinition.dimensions}.** That is the part's PHYSICAL size in
+ * millimetres and drives how big it is drawn on the board; this is how many
+ * PIXELS it can light. A part legitimately has both, and they are unrelated
+ * numbers — the Modulino LED Matrix is 41 × 25 mm and 12 × 8 px.
+ *
+ * It exists because code on the board otherwise hard-codes the size, and a sketch
+ * that hard-codes 12 breaks the moment it is pointed at a 128-wide OLED. Snakie
+ * knows which part is on the board, so the size can come from the part.
+ *
+ * Scope is one **framebuffer** panel: a display block means "pixels are addressed
+ * by (x, y) and pushed as a frame". A bargraph or an addressable LED strip is
+ * driven by level or by index, not by drawing into a buffer, so neither declares
+ * one — describing a Grove LED Bar as a 10 × 1 display would invent an idiom its
+ * API doesn't have. Character LCDs (16 × 2 HD44780) are also out: their units are
+ * characters, not pixels, and folding those into `width`/`height` would repeat
+ * exactly the conflation this block exists to avoid.
+ */
+export interface PartDisplay {
+  /** Panel width in **pixels** (a positive integer). */
+  width: number
+  /** Panel height in **pixels** (a positive integer). */
+  height: number
+  /**
+   * The deepest format the panel can show — a **capability**, not the mode it
+   * happens to be in. A part file cannot know the runtime mode (the Modulino LED
+   * Matrix driver defaults to 1-bit but takes `use_grayscale=True` for its full
+   * 0–15), and a shallower frame is always displayable on a deeper panel, so the
+   * capability is the stable thing to author. Defaults to `mono` when absent or
+   * unrecognised — the overwhelmingly common case, and the safe floor.
+   */
+  colour: DisplayColour
+}
+
+/**
  * The behavioural model a part uses in the Circuit Sim DC solver (epic #597).
  * `passive` (default when absent) means the part has no electrical behaviour of
  * its own — a mechanical/decorative part, or one whose pins just pass through.
@@ -1193,6 +1263,17 @@ export interface PartDefinition {
    * project. Absent ⇒ the part isn't matched by address.
    */
   i2cAddresses?: number[]
+
+  // --- Display panel (#780) -------------------------------------------------
+  /**
+   * The pixel-addressable panel this part carries — its size in **pixels** and
+   * colour depth. Absent ⇒ the part has no panel.
+   *
+   * Distinct from {@link dimensions} (the physical board size in millimetres): a
+   * display part has both, and conflating them is the mistake this block exists
+   * to prevent. See {@link PartDisplay}.
+   */
+  display?: PartDisplay
 
   // --- Code library (#166) -------------------------------------------------
   /** A MicroPython driver/library linked to this part. */
