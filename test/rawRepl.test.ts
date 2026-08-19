@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { RawReplClient, pyStr, type SerialTransport } from '../src/shared/raw-repl'
+import { describe, it, expect, vi } from 'vitest'
+import { RawReplClient, pyStr, RAW_REPL_NO_RESPONSE, type SerialTransport } from '../src/shared/raw-repl'
 
 /**
  * The transport-agnostic raw-REPL client (#465) against a MOCK board — proves the
@@ -20,6 +20,8 @@ class MockBoard implements SerialTransport {
   /** Deliver the Ctrl-B banner asynchronously (like real serial latency) rather
    *  than synchronously inside write() — proves the suppression handles timing. */
   asyncBanner = false
+  /** A wedged/absent board: never answers the raw-REPL handshake (#712). */
+  silent = false
   closed = false
 
   onData(cb: (c: Uint8Array) => void): void {
@@ -32,7 +34,8 @@ class MockBoard implements SerialTransport {
     const s = dec.decode(data)
     for (const ch of s) {
       if (ch === '\x01') {
-        // Ctrl-A → enter raw REPL, reply with the banner.
+        // Ctrl-A → enter raw REPL, reply with the banner (unless wedged/absent).
+        if (this.silent) continue
         this.raw = true
         this.buf = ''
         this.emit('\r\nraw REPL; CTRL-B to exit\r\n>')
@@ -68,6 +71,23 @@ describe('RawReplClient', () => {
   it('pyStr escapes for a MicroPython string literal', () => {
     expect(pyStr('/lib/x.py')).toBe("'/lib/x.py'")
     expect(pyStr("a'b\\c")).toBe("'a\\'b\\\\c'")
+  })
+
+  it('surfaces an actionable error when the board never answers the handshake (#712)', async () => {
+    vi.useFakeTimers()
+    try {
+      const board = new MockBoard()
+      board.silent = true // a wedged / firmware-less board that ignores Ctrl-A
+      const client = new RawReplClient(board, () => undefined)
+      const result = client.exec('print(1)').catch((e: Error) => e)
+      await vi.advanceTimersByTimeAsync(5000) // let the idle window elapse
+      const err = await result
+      expect(err).toBeInstanceOf(Error)
+      expect((err as Error).message).toBe(RAW_REPL_NO_RESPONSE)
+      expect((err as Error).message).toMatch(/didn't respond/) // not the opaque low-level text
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('exec captures stdout + stderr through the raw-REPL frame', async () => {

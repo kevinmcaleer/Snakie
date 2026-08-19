@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events'
 import { SerialPort } from 'serialport'
 import { buildControlLine } from '../../shared/control'
+import { RAW_REPL_NO_RESPONSE } from '../../shared/raw-repl'
 import type {
   ConnectOptions,
   ConnectionState,
@@ -419,7 +420,14 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
     await this.write(CTRL_C)
     await this.write(CTRL_C)
     await this.write(CTRL_A)
-    await this.readUntil('raw REPL; CTRL-B to exit\r\n>')
+    try {
+      await this.readUntil('raw REPL; CTRL-B to exit\r\n>')
+    } catch {
+      // The board never answered the raw-REPL handshake. The low-level "went
+      // quiet" message is opaque here — replace it with something the user can
+      // act on (the common causes, in order of likelihood).
+      throw new Error(RAW_REPL_NO_RESPONSE)
+    }
     this.inRawRepl = true
   }
 
