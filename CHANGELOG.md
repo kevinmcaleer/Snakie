@@ -61,6 +61,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it no longer reads every folder in your home directory looking for a board.
 
 ### Fixed
+- **Drivers install on boards that have no `mip`.** (#776, supersedes #769) A
+  driver whose source is a `mip` spec was installed by running `mip.install()`
+  **on the board** — and `mip` is not part of MicroPython. It is an optional
+  micropython-lib package, so CircuitPython has never had it and neither do
+  plenty of vendor builds: a Pimoroni Tiny 2350 reports `micropython` and still
+  failed with `ImportError("no module named 'mip'")`. Snakie now asks the board
+  whether it can `import mip` when it connects — a **capability**, not a guess
+  from the runtime name, because that board disproves the guess — and when it
+  cannot, resolves the package **on your computer** and writes the files to the
+  board instead. That reaches a CIRCUITPY drive or the serial REPL through the
+  same path every other file write uses, so one route serves both runtimes; the
+  simulator, which has no `mip` and no network, now installs drivers this way
+  too. Whole packages come across, not just single files: the Modulino driver
+  installs all 25 of its files including its three transitive dependencies. And
+  when an install genuinely can't proceed, the message says what Snakie tried,
+  why the board couldn't do it itself, and what to do — instead of handing back
+  the board's `ImportError`.
 - **An onboard LED's real size survived saving and vanished on loading.** The
   YAML writer passes an LED through whole but the reader rebuilt it field by
   field, so `sizeMm` (and a hand-placed silk label) were dropped on the next

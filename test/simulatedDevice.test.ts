@@ -73,7 +73,9 @@ describe('SimulatedDevice lifecycle', () => {
     dev.on('status', (st) => pushed.push(st.runtime?.dialect))
     await dev.connect()
 
-    expect(dev.getStatus().runtime).toEqual({ dialect: 'micropython' })
+    // `hasMip: false` is part of that report (#776): the WASM port has neither
+    // `mip` nor a socket layer, so driver installs must resolve on the host.
+    expect(dev.getStatus().runtime).toEqual({ dialect: 'micropython', hasMip: false })
     // The pushed event and the snapshot agree, for every state.
     expect(pushed).toEqual([undefined, 'micropython'])
 

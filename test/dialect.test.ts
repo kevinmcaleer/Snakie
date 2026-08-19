@@ -230,8 +230,64 @@ describe('RUNTIME_PROBE_PY', () => {
     expect(RUNTIME_PROBE_PY).toContain('except Exception:')
   })
 
-  it('prints the three sentinels the parser reads', () => {
-    for (const p of ['SNKIMPL ', 'SNKVER ', 'SNKMACH ']) expect(RUNTIME_PROBE_PY).toContain(p)
+  it('prints the four sentinels the parser reads', () => {
+    for (const p of ['SNKIMPL ', 'SNKVER ', 'SNKMACH ', 'SNKMIP ']) {
+      expect(RUNTIME_PROBE_PY).toContain(p)
+    }
+  })
+
+  it('asks whether mip can be IMPORTED, not whether the runtime is MicroPython', () => {
+    // #776: a vendor build reports `micropython` and still has no `mip`, so the
+    // capability has to be tried rather than inferred — and tried by import,
+    // because a `mip` whose own dependencies are missing can't install either.
+    expect(RUNTIME_PROBE_PY).toContain('import mip')
+  })
+})
+
+describe('the mip capability (#776)', () => {
+  /**
+   * `mip` is a micropython-lib package, not part of MicroPython, so its
+   * presence is a CAPABILITY the board answers — never something derived from
+   * the dialect. The three states below are all real: a stock build that has
+   * it, a vendor build that reports `micropython` and does not, and an older
+   * probe that never asked.
+   */
+  it('reads a board that HAS mip', () => {
+    const info = parseRuntimeProbe([MP_PROBE, 'SNKMIP 1'].join('\n'))
+    expect(info?.hasMip).toBe(true)
+  })
+
+  it('reads a MicroPython board that does NOT have mip — the #776 Tiny 2350', () => {
+    const info = parseRuntimeProbe(
+      [
+        'SNKIMPL micropython',
+        'SNKVER feature/psram-and-wifi',
+        'SNKMACH Pimoroni Tiny 2350',
+        'SNKMIP 0'
+      ].join('\n')
+    )
+    // The dialect alone would have routed this board to `mip` and failed.
+    expect(info?.dialect).toBe('micropython')
+    expect(info?.hasMip).toBe(false)
+  })
+
+  it('leaves the capability UNKNOWN when the probe did not answer it', () => {
+    // Undefined, not false: "we never asked" must not read as "it hasn't got
+    // one", or every board with a lost probe line would take the fallback.
+    expect(parseRuntimeProbe(MP_PROBE)?.hasMip).toBeUndefined()
+    expect(parseRuntimeProbe(CP_PROBE)?.hasMip).toBeUndefined()
+    expect('hasMip' in (parseRuntimeProbe(MP_PROBE) ?? {})).toBe(false)
+  })
+
+  it('survives a false answer through compaction — false is an answer', () => {
+    const info = parseRuntimeProbe([CP_PROBE, 'SNKMIP 0'].join('\n'))
+    expect(info).toEqual({
+      dialect: 'circuitpython',
+      version: '10.2.1',
+      buildDate: '2026-08-18',
+      machine: 'Adafruit Feather RP2040 with rp2040',
+      hasMip: false
+    })
   })
 })
 

@@ -23,8 +23,13 @@ const TELEMETRY_INTERVAL_MS = 120
  * build's is the port's, not a board firmware anyone could flash, and offering
  * it would invite the update check to compare against a firmware catalog.
  * Whether the simulator should ever offer CircuitPython is #764.
+ *
+ * `hasMip: false` is likewise a fact, not a guess (#776): the WASM port has no
+ * `mip` and no socket layer to fetch with, so driver installs must take the
+ * host-resolution route — which works here, because the files land in the
+ * simulator's VFS through the same `writeFile` a real board uses.
  */
-const SIM_RUNTIME: RuntimeInfo = { dialect: 'micropython' }
+const SIM_RUNTIME: RuntimeInfo = { dialect: 'micropython', hasMip: false }
 
 /**
  * SIMULATED MicroPython device (issue #135).

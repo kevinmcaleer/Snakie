@@ -23,7 +23,13 @@ import {
 } from '../../../main/packages/install'
 import { driverSources } from 'virtual:snakie-standard-parts'
 import { MODULE_STUBS } from './web-lib-sources'
-import { githubRawUrl } from '../lib/board-packages'
+import {
+  deviceDirsFor,
+  httpMipFetch,
+  MipResolveError,
+  resolveMipSpec
+} from '../../../shared/mip-resolve'
+import { looksLikeMissingMip, mipInstallFailureMessage } from '../../../shared/install-strategy'
 
 const LIB_DIR = '/lib'
 
@@ -166,15 +172,19 @@ export function createWebModulesApi(): Record<string, unknown> {
           return { id, ok, log: log || out, notes: plan.notes }
         }
         // The board has no mip / no network (e.g. the SIMULATOR) — the browser
-        // still has network, so fetch single-file GitHub specs ourselves and
-        // write them to /lib.
+        // still has network, so resolve the spec ourselves and write the files.
         const fetched = await browserFetchInstall(plan, emit)
-        if (fetched) return fetched
+        if (fetched?.ok) return fetched
         emit({ id, state: 'error', message: `Failed to install ${id}` })
-        return { id, ok: false, log: log || out, notes: plan.notes }
+        // A board-level "no module named 'mip'" is accurate and useless (#776),
+        // so when THAT is what failed, report what Snakie tried instead.
+        const reason = fetched && looksLikeMissingMip(out) ? fetched.log : log || out
+        return { id, ok: false, log: reason, notes: plan.notes }
       } catch (err) {
         const fetched = await browserFetchInstall(plan, emit)
-        if (fetched) return fetched
+        if (fetched?.ok) return fetched
+        // The exec itself threw (no board, disconnected mid-install) — that
+        // message is the true cause, so it wins over the download's.
         const msg = err instanceof Error ? err.message : String(err)
         emit({ id, state: 'error', message: `Failed to install ${id}` })
         return { id, ok: false, log: msg, notes: plan.notes }
@@ -183,32 +193,59 @@ export function createWebModulesApi(): Record<string, unknown> {
   }
 }
 
-/** Fetch a single-file GitHub mip spec in the browser and write it to /lib. */
+/**
+ * Resolve the mip spec IN THE BROWSER and write its files to /lib (#776).
+ *
+ * The same host-side resolution the desktop uses, over the same shared
+ * resolver — so a package with several files and transitive `deps` (the
+ * Modulino range) installs here too, not just a lone `.py`. The browser has a
+ * network even when the board does not, and `raw.githubusercontent.com` serves
+ * CORS-open, which is what makes this reachable from a web page at all.
+ *
+ * Returns `null` only when there is no spec to try. A route that ran and FAILED
+ * comes back as an `ok: false` result whose log explains what was attempted —
+ * so the caller can prefer it over the board's own useless ImportError.
+ */
 async function browserFetchInstall(
   plan: InstallPlan,
   emit: (p: InstallProgress) => void
 ): Promise<InstallResult | null> {
-  const url = plan.mipSpec ? githubRawUrl(plan.mipSpec) : null
-  if (!url) return null
-  const file = url.split('/').pop() ?? `${plan.importName}.py`
+  const spec = plan.mipSpec
+  if (!spec) return null
   try {
-    emit({ id: plan.id, state: 'running', message: `Board has no mip — fetching ${file} in the browser…` })
-    const res = await fetch(url, { signal: AbortSignal.timeout(20_000) })
-    if (!res.ok) throw new Error(`GitHub returned HTTP ${res.status}`)
-    const contents = await res.text()
-    await window.api.device.mkdir(LIB_DIR).catch(() => undefined)
-    await window.api.device.writeFile(`${LIB_DIR}/${file}`, contents)
+    emit({
+      id: plan.id,
+      state: 'running',
+      message: `Board has no mip — downloading ${spec} in the browser…`
+    })
+    const resolved = await resolveMipSpec(spec, {
+      fetchText: httpMipFetch(),
+      target: LIB_DIR
+    })
+    for (const dir of deviceDirsFor(resolved.files.map((f) => f.path))) {
+      await window.api.device.mkdir(dir).catch(() => undefined)
+    }
+    for (const file of resolved.files) {
+      await window.api.device.writeFile(file.path, file.contents)
+    }
     emit({ id: plan.id, state: 'done', message: `Installed ${plan.id}` })
     window.api.modules.notifyChanged()
     return {
       id: plan.id,
       ok: true,
-      log: `Board has no mip/network — fetched ${url} in the browser and wrote ${LIB_DIR}/${file}`,
+      log: `Board has no mip/network — downloaded ${spec} in the browser and wrote ${resolved.files
+        .map((f) => f.path)
+        .join(', ')}`,
       notes: plan.notes
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    emit({ id: plan.id, state: 'note', message: `Browser fetch fallback failed: ${msg}` })
-    return null
+    const kind = err instanceof MipResolveError ? err.kind : 'network'
+    const detail = err instanceof Error ? err.message : String(err)
+    return {
+      id: plan.id,
+      ok: false,
+      log: mipInstallFailureMessage({ moduleName: plan.id, spec, kind, detail }),
+      notes: plan.notes
+    }
   }
 }
