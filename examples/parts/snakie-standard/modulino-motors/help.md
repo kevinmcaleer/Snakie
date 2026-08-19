@@ -51,6 +51,10 @@ motors.release()              # coast
 As a stepper:
 
 ```python
+from modulino import ModulinoMotors
+
+motors = ModulinoMotors()
+
 motors.stepper_mode_enabled = True
 motors.steps_per_revolution = 200
 motors.move_stepper_rpm(400, rpm=60)   # two turns at 60 rpm

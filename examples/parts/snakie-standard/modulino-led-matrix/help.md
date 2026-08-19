@@ -11,6 +11,10 @@ Every drawing call writes to a buffer **in the Pico's memory**, not to the
 board. Nothing lights up until you push it:
 
 ```python
+from modulino import ModulinoLEDMatrix
+
+matrix = ModulinoLEDMatrix()
+
 matrix.set_pixel(3, 4)
 matrix.show()          # <- without this, nothing happens
 ```

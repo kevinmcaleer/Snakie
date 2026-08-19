@@ -75,6 +75,10 @@ A thumbstick never quite returns to centre, so anything within
 worn stick creeps; narrow it for finer control:
 
 ```python
+from modulino import ModulinoJoystick
+
+joystick = ModulinoJoystick()
+
 joystick.deadzone_threshold = 20
 ```
 

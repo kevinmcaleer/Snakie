@@ -72,6 +72,10 @@ value, so a fast spin moves further than a slow one. They fire from inside
 `.update()`, so it must keep being called:
 
 ```python
+from modulino import ModulinoKnob
+
+knob = ModulinoKnob()
+
 knob.on_rotate_clockwise = lambda steps, value: print("cw", steps, value)
 knob.on_rotate_counter_clockwise = lambda steps, value: print("ccw", steps, value)
 knob.on_press = lambda: print("pressed")

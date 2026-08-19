@@ -43,6 +43,10 @@ Reach the chip directly for gain and integration time when the defaults don't
 suit — a dim room or a fast-moving robot both want tuning:
 
 ```python
+from modulino import ModulinoLight
+
+light = ModulinoLight()
+
 light.sensor          # the underlying LTR-381RGB-01 driver
 ```
 
