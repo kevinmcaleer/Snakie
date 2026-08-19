@@ -318,6 +318,19 @@ export const INSTRUMENTS: InstrumentDef[] = [
     hints: ['ssd1306', 'sh1106', 'lcd', 'oled', 'st7789', 'tft', 'spi']
   },
   {
+    id: 'font',
+    name: 'Font editor',
+    accent: '#a855c7',
+    border: 'rgba(168,85,199,.5)',
+    // a serif "A" on a baseline — the classic type-specimen mark
+    icon: 'M4 18 L10 5 L14 5 L20 18 M7.5 13.5 h9 M3 21 h18',
+    group: 'output',
+    kind: 'singleton',
+    description: 'Draw a bitmap font glyph by glyph and export it as a MicroPython module.',
+    // Lights up alongside the display drivers — a custom font is for a screen.
+    hints: ['writer', 'framebuf', 'ssd1306', 'sh1106', 'oled', 'st7789', 'font']
+  },
+  {
     id: 'wifi-scan',
     name: 'Wi-Fi scan',
     accent: '#5ab8ff',

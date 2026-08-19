@@ -39,6 +39,7 @@ import { DisplayInstrument } from './DisplayInstrument'
 import { WifiScanInstrument } from './WifiScanInstrument'
 import { BluetoothInstrument } from './BluetoothInstrument'
 import { I2cDetectInstrument } from './I2cDetectInstrument'
+import { FontInstrument } from './FontInstrument'
 import { MiniBoardView } from './MiniBoardView'
 import {
   SINGLETON_IDS,
@@ -1011,6 +1012,8 @@ export function renderSingleton(
       return <BluetoothInstrument {...p} />
     case 'i2c-detect':
       return <I2cDetectInstrument {...p} />
+    case 'font':
+      return <FontInstrument {...p} />
     default:
       return <PlaceholderInstrument {...p} />
   }
