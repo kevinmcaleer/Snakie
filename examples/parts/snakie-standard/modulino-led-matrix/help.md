@@ -79,11 +79,33 @@ Drawing calls mirror MicroPython's `FrameBuffer`:
 The panel is only 12 columns wide, so anything longer than a character or two
 has to scroll.
 
-There IS a `scroll(dx, dy)` — but it shifts the pixels already in the buffer and
-feeds nothing in behind them, so a message scrolled that way empties itself after
-twelve columns. `scroll()` is for animating what is already drawn. A marquee
-instead redraws the whole string at a moving negative offset, which is what keeps
-the text arriving:
+### Why `scroll()` doesn't do this
+
+There is a `scroll(dx, dy)`, and it is the obvious thing to reach for. It won't
+work, for three reasons that stack up:
+
+- **The text isn't there to scroll.** `text()` draws into the 12 × 8 buffer with
+  an 8 × 8 font, so only the first character and a half ever become pixels. The
+  rest of the string is clipped as it is drawn — it is not held off-screen
+  waiting to slide in. Scrolling cannot reveal what was never rendered.
+- **It doesn't wrap.** Content pushed past an edge is gone, not brought round the
+  other side. So even the character and a half you have simply leaves.
+- **The vacated area isn't cleared.** MicroPython's own `framebuf` docs warn that
+  scroll "may leave a footprint of the previous colours" — the space behind the
+  shift is undefined rather than blank, which is why a naive scroll loop smears.
+
+`scroll()` is a **buffer** operation, for animating something already drawn in
+full: nudging a sprite, a bouncing dot, shifting a 12 × 8 image. The name invites
+the misreading, because "scroll" on a display usually means scrolling a document.
+
+None of this is specific to the Modulino — it is how `framebuf` behaves
+everywhere, including on an SSD1306. A 128-wide OLED just hides it for longer;
+twelve columns make it bite immediately.
+
+So a marquee redraws each frame, at a moving negative offset. Every frame draws
+the **whole** string from a shifted origin, so the panel's clipping window lands
+on a different slice of it — and letters genuinely arrive from the right because
+they are re-rendered, not shuffled along:
 
 ```python
 from time import sleep_ms
