@@ -1,65 +1,26 @@
+import { MIP_DEFAULT_TARGET } from '../../shared/mip-resolve'
 import type { InstallOptions } from './types'
 
 /**
- * Install-snippet builder (issue #20).
+ * Package-install planning (issue #20, reworked by #776).
  *
- * The actual install runs MicroPython's `mip` ON THE DEVICE. The device is only
- * reachable through the serial layer, which the renderer drives via
- * `window.api.device.exec`. So rather than reaching into the device from here,
- * the main process is responsible for the parts that need privilege / network
- * reasoning — composing a safe `mip` snippet and computing any non-fatal NOTES
- * (e.g. the `.mpy` caveat) — and hands the snippet back for the renderer to run
- * over the existing, serialized `device.exec` channel.
+ * The install used to run MicroPython's `mip` ON THE DEVICE — this file built
+ * the snippet and the renderer ran it over `device.exec`. That needed the
+ * BOARD to have an internet connection, which most boards simply do not have:
+ * a Tiny 2350 or a non-W Pico has no radio at all, and `mip` is an optional
+ * micropython-lib package missing from CircuitPython and many vendor builds.
  *
- * The snippet prints sentinel markers so the renderer can tell success from a
- * device-side traceback even though `mip` writes progress to stdout.
+ * So the direction is reversed. `packages:install` resolves the package HERE
+ * (`resolveMipSpec`, on the machine that actually has the network) and hands
+ * back files; the renderer writes them down the same `device.writeFile` path
+ * every other install uses. What's left in this file is the part that was
+ * always host-side reasoning: the install TARGET and the non-fatal notes.
  */
 
-export const INSTALL_START = '<<SNAKIE_MIP_START>>'
-export const INSTALL_OK = '<<SNAKIE_MIP_OK>>'
-export const INSTALL_ERR = '<<SNAKIE_MIP_ERR>>'
-
-/** Encode a JS string as a Python string literal (single-quoted, escaped). */
-function pyStr(value: string): string {
-  return "'" + value.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'"
-}
-
-/**
- * Build the keyword-argument list for `mip.install(...)` from the user options.
- * `mip.install(name, target=None, index=None, version=None)` is the broadly
- * supported signature; `mpy=` is NOT a parameter, so the `.mpy` request is
- * handled as a note (see {@link installNotes}) rather than passed through.
- */
-function buildKwargs(options: InstallOptions): string[] {
-  const kwargs: string[] = []
-  if (options.target && options.target.trim()) {
-    kwargs.push(`target=${pyStr(options.target.trim())}`)
-  }
-  if (options.index && options.index.trim()) {
-    kwargs.push(`index=${pyStr(options.index.trim())}`)
-  }
-  return kwargs
-}
-
-/**
- * Compose the Python snippet to run on the device for installing `name`.
- *
- * `mip.install` itself overwrites existing files by default, so the snippet
- * works for both the overwrite and non-overwrite cases; the distinction is
- * carried to the user as a note (see {@link installNotes}). The whole call is
- * wrapped in try/except so we always emit a definitive OK/ERR sentinel.
- */
-export function buildInstallSnippet(name: string, options: InstallOptions = {}): string {
-  const args = [pyStr(name), ...buildKwargs(options)].join(', ')
-  return [
-    `print(${pyStr(INSTALL_START)})`,
-    'try:',
-    '    import mip',
-    `    mip.install(${args})`,
-    `    print(${pyStr(INSTALL_OK)})`,
-    'except Exception as __e:',
-    `    print(${pyStr(INSTALL_ERR)}, repr(__e))`
-  ].join('\n')
+/** Where a package installs when the request doesn't say. */
+export function installTarget(options: InstallOptions = {}): string {
+  const target = options.target?.trim()
+  return target && target.length > 0 ? target : MIP_DEFAULT_TARGET
 }
 
 /**
@@ -77,8 +38,8 @@ export function installNotes(options: InstallOptions = {}): string[] {
   }
   if (options.overwrite === false) {
     notes.push(
-      "mip.install replaces existing files by default; this firmware doesn't expose a " +
-        'no-overwrite mode, so existing files may still be replaced.'
+      'Installing replaces files of the same name; there is no no-overwrite mode, ' +
+        'so existing files may still be replaced.'
     )
   }
   if (options.index && options.index.trim()) {

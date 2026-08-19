@@ -139,7 +139,10 @@ describe('partDriverRows', () => {
     // Each row says what it does AND where it comes from.
     expect(rows[0].summary).toContain('bme280.py')
     expect(rows[0].summary).toContain('lib/bme280.py')
-    expect(rows[1].summary).toContain('mip')
+    // The `mip` METHOD is still how the spec is classified, but the summary
+    // says what actually happens (#776): Snakie downloads it, the board doesn't.
+    expect(rows[1].summary).toContain('github:org/repo/thing.py')
+    expect(rows[1].summary).toMatch(/download/i)
     expect(rows[2].summary).toContain('https://example.com/x.py')
   })
 

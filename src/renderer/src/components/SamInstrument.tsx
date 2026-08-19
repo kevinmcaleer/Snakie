@@ -14,7 +14,7 @@ import './SamInstrument.css'
  * =============================================================================
  *
  * Type into the speech bubble, pick the buzzer/speaker pin, and SPEAK: the IDE
- * makes sure the `sam` library is on the board (mip-installing it from
+ * makes sure the `sam` library is on the board (installing it from
  * github:kevinmcaleer/sam — which carries the `sam_render.mpy` native
  * accelerator — when it's missing), then exec-s `SAM(pin=N).say("…")` so the
  * board synthesises the text out of that single pin. "Open demo" drops a small
@@ -88,14 +88,20 @@ export function SamInstrument({ def, onClose, docked = true, onToggleDock, float
     setError(null)
     try {
       // Ensure the SAM library (+ its sam_render.mpy accelerator) is on the board.
-      // `packages.install` mip-installs any name / github: / https: spec (the
-      // catalog-based `modules.install` has no `sam` entry), returning {ok, log}.
+      // `packages.install` resolves any name / github: / https: spec on the
+      // HOST and writes the files (the catalog-based `modules.install` has no
+      // `sam` entry), returning {ok, log}. NOTE (#776): a repo spec resolves via
+      // its `package.json`, and github:kevinmcaleer/sam has none — so this
+      // reports a clear "that address does not exist" rather than installing.
+      // It did not work before either (`mip` looks for the same file).
       const present = await window.api.modules.probeInstalled(['sam'])
       if (!present.includes('sam')) {
         setState('installing')
         const res = await window.api.packages.install('github:kevinmcaleer/sam')
         if (!res.ok) {
-          setError(`Couldn't install SAM: ${res.log.split('\n').filter(Boolean).pop() ?? 'mip failed'}`)
+          setError(
+            res.log.split('\n').filter(Boolean).pop() ?? "Couldn't install SAM."
+          )
           return
         }
       }

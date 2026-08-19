@@ -25,8 +25,10 @@ import type { InstallProgress, PackageInfo } from '../../../preload/index.d'
  *
  * Network access (PyPI search + discovery) is brokered by the main process
  * (`window.api.packages`) because the renderer CSP forbids outbound requests.
- * Installs run MicroPython's `mip` on the connected board, so the install
- * controls are gated on an active connection with a clear hint otherwise.
+ * Installing downloads the package in the main process too and writes its files
+ * to the board (#776) — the board has no internet connection of its own, so it
+ * never fetches anything. The install controls are still gated on an active
+ * connection (there has to be somewhere to write) with a clear hint otherwise.
  *
  * Hardware + network can't be exercised in CI, so every async path degrades
  * gracefully: search falls back to the curated set offline, and install surfaces
@@ -575,7 +577,7 @@ function PackagesTab(): JSX.Element {
                     className="pkgs__chip"
                     disabled={installs[name]?.status === 'installing'}
                     onClick={() => void install(name)}
-                    title={`Install ${name} with mip`}
+                    title={`Download ${name} and copy it to the board`}
                   >
                     {installs[name]?.status === 'installing' ? `${name}…` : `+ ${name}`}
                   </button>

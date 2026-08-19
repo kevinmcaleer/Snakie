@@ -7,7 +7,6 @@ import {
   VIRTUAL_PORT_PATH,
   VIRTUAL_PORT_LABEL
 } from '../src/shared/virtual-device'
-import { buildInstallSnippet, INSTALL_OK, INSTALL_ERR } from '../src/main/packages/install'
 
 /**
  * A lightweight {@link ReplRuntime} so the device tests stay fast and
@@ -172,19 +171,10 @@ describe('SimulatedDevice lifecycle', () => {
     await dev.dispose()
   })
 
-  it('answers a mip install with an honest "offline" message (not a silent stub)', async () => {
-    const dev = new SimulatedDevice(new FakeRuntime())
-    await dev.connect()
-    // mip can't run on the WASM device; the install snippet must come back as a
-    // FAILED install with a clear reason, so the UI explains it instead of
-    // showing a cryptic "mip failed" (what an empty response parses to).
-    const { stdout } = await dev.exec(buildInstallSnippet('github:kevinmcaleer/sam'))
-    expect(stdout).toContain(INSTALL_ERR)
-    expect(stdout).not.toContain(INSTALL_OK)
-    expect(stdout.toLowerCase()).toContain('simulated device')
-
-    await dev.dispose()
-  })
+  // (There used to be a test here for the simulator's canned "mip can't run
+  // offline" answer. #776 removed the on-device install route entirely —
+  // packages resolve on the host and arrive as file writes — so there is no
+  // install snippet left for the simulator to intercept.)
 
   it('records control commands (latest-wins per target)', async () => {
     const dev = new SimulatedDevice(new FakeRuntime())

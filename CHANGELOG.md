@@ -61,6 +61,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it no longer reads every folder in your home directory looking for a board.
 
 ### Fixed
+- **Snakie downloads packages, instead of asking the board to.** (#776,
+  supersedes #769) Installing a driver or a package used to run `mip.install()`
+  **on the board** — which quietly required the *board* to have its own internet
+  connection. Most don't: a Pico, a Tiny 2350, any board without a radio could
+  never install anything this way. Even a Wi-Fi board needed `mip`, an optional
+  micropython-lib package that CircuitPython and many vendor builds leave out,
+  so the failure usually arrived as a bare
+  `ImportError("no module named 'mip'")`.
+
+  Now the machine with the internet connection does the downloading. Snakie
+  resolves the package on your computer and writes its files to the board, which
+  only has to do the thing every board can do: accept files. That reaches a
+  CIRCUITPY drive or the serial REPL through the same path every other file
+  write uses, so one route covers MicroPython and CircuitPython, wired and
+  wireless boards, and the simulator — which could never install anything
+  before. Whole packages come across, not just single files: the Modulino driver
+  installs all 25 of its files, including its three transitive dependencies.
+  It applies to the Packages panel too, not just drivers.
+
+  When an install can't proceed, the message now says which half failed —
+  downloading the package, or writing it to the board — and what to do about it,
+  instead of handing back the board's `ImportError`.
 - **An onboard LED's real size survived saving and vanished on loading.** The
   YAML writer passes an LED through whole but the reader rebuilt it field by
   field, so `sizeMm` (and a hand-placed silk label) were dropped on the next
