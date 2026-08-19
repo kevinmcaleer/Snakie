@@ -242,8 +242,8 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
    * shows no banner.
    */
   private async greet(): Promise<void> {
+    const info = await this.probeRuntime()
     try {
-      const info = parseRuntimeProbe(await this.eval(RUNTIME_PROBE_PY))
       if (!info || !this.isConnected()) return
       this.runtime = info
       // Now that we know it is CircuitPython, find the drive its files live on
@@ -257,9 +257,53 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
       if (line) {
         this.emit('data', Buffer.from(`\r\n${line}\r\nType "help()" for more information.\r\n>>> `))
       }
-    } catch {
-      // Best-effort — a board that can't answer the probe just shows no banner.
+    } catch (e) {
+      // Best-effort — a board that can't answer still connects. But SAY so: a
+      // silent catch here made a wrong runtime label indistinguishable from a
+      // transport error, and cost a hardware round-trip to narrow (#770).
+      console.warn('[device] greeting failed after a successful probe:', e)
     }
+  }
+
+  /**
+   * Read the board's runtime, retrying a couple of times before giving up.
+   *
+   * The probe is fired the instant the port opens, which is the noisiest moment
+   * in the session: the board may still be emitting boot output, and #612's
+   * Ctrl-B banner consume is running. A probe lost to that noise used to leave
+   * the session with NO dialect at all — and because everything downstream keys
+   * off it, that silently disabled the status-bar runtime, the greeting, and the
+   * CIRCUITPY mount resolution that file writes depend on (#769, #770). The
+   * script itself was never at fault; it returns all three lines when pasted by
+   * hand on the same board.
+   *
+   * So: give the board a moment to settle and ask again. Cheap — a board that
+   * answers first time (the common case) pays nothing.
+   */
+  private async probeRuntime(attempts = 3): Promise<RuntimeInfo | null> {
+    for (let i = 0; i < attempts; i++) {
+      if (!this.isConnected()) return null
+      // Let the connect chatter drain before the first ask, and back off after
+      // a miss rather than hammering a board that is still booting.
+      await new Promise((r) => setTimeout(r, i === 0 ? 120 : 250 * i))
+      if (!this.isConnected()) return null
+      try {
+        const raw = await this.eval(RUNTIME_PROBE_PY)
+        const info = parseRuntimeProbe(raw)
+        if (info) return info
+        // Parsed nothing: the board answered, but not with our marker lines.
+        // Show what it DID say — that is the one fact that identifies whether
+        // this is transport noise or an unexpected runtime.
+        console.warn(
+          `[device] runtime probe ${i + 1}/${attempts} unparsed; board said:`,
+          JSON.stringify(raw.slice(0, 200))
+        )
+      } catch (e) {
+        console.warn(`[device] runtime probe ${i + 1}/${attempts} threw:`, e)
+      }
+    }
+    console.warn('[device] runtime unknown after', attempts, 'attempts — no dialect for this session')
+    return null
   }
 
   /** Close the serial connection if open. */
