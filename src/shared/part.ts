@@ -1428,3 +1428,25 @@ export const DEFAULT_REGISTRY_URL =
 
 /** The standard 0.1" header pitch, in millimetres (grid-snap default). */
 export const STANDARD_PIN_SPACING_MM = 2.54
+
+/**
+ * How many NAMED pins a part offers — on a header or on a connector.
+ *
+ * The one place that rule lives. It used to be written twice: the Part Editor
+ * counted headers *and* connectors, while the main process's `writePart` asked
+ * only that `headers` be non-empty. A Grove or QWIIC module — whose only
+ * electrical interface is its socket, with no broken-out header at all — passed
+ * the editor and was then rejected on save, with a message naming a thing it
+ * correctly does not have.
+ *
+ * Counts only named pins, because an unnamed one is dropped by `normalisePart`
+ * and so isn't a connection point at all.
+ */
+export function connectablePinCount(part: PartDefinition): number {
+  const named = (ps: { name?: string }[] | undefined): number =>
+    (ps ?? []).filter((p) => String(p.name ?? '').trim() !== '').length
+  return (
+    (part.headers ?? []).reduce((n, h) => n + named(h.pins), 0) +
+    (part.connectors ?? []).reduce((n, c) => n + named(c.pins), 0)
+  )
+}

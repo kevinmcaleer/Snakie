@@ -21,6 +21,7 @@
  * `{ ok, error }` rather than throwing across IPC.
  */
 
+import { connectablePinCount } from '../../shared/part'
 import { app } from 'electron'
 import { basename, join, resolve, sep } from 'path'
 import { createHash } from 'crypto'
@@ -625,8 +626,14 @@ export async function writePart(libraryId: string, part: PartDefinition): Promis
     const libId = sanitiseId(libraryId) || LOCAL_LIBRARY_ID
     const partId = sanitiseId(part.id)
     if (!partId) return { ok: false, error: 'Part id is empty after sanitising.' }
-    if (!Array.isArray(part.headers) || part.headers.length === 0) {
-      return { ok: false, error: 'A part needs at least one header with pins.' }
+    // A part needs SOMEWHERE to connect — but that need not be a header. A Grove
+    // or QWIIC module's only electrical interface is its socket, and it has no
+    // broken-out header at all. This guard used to ask only that `headers` be
+    // non-empty, so such a part passed the editor's own check and was then
+    // rejected here, naming a thing it correctly does not have. Both callers now
+    // share one rule (#130).
+    if (connectablePinCount(part) === 0) {
+      return { ok: false, error: 'A part needs at least one pin — on a header or a connector.' }
     }
 
     const partDir = join(partsDir(), libId, partId)
