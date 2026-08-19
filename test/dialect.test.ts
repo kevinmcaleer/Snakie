@@ -234,3 +234,18 @@ describe('RUNTIME_PROBE_PY', () => {
     for (const p of ['SNKIMPL ', 'SNKVER ', 'SNKMACH ']) expect(RUNTIME_PROBE_PY).toContain(p)
   })
 })
+
+describe("CircuitPython's four-element version tuple", () => {
+  it('drops the empty release level instead of trailing a dot', () => {
+    // Reported from a real board: `sys.implementation.version` is
+    // `(10, 2, 1, '')` on CircuitPython 10.2.1 — three numbers and an empty
+    // release level. Joining the tuple whole gave '10.2.1.', which is not a
+    // version any comparison or display should have to cope with.
+    const join = (v: (number | string)[]): string =>
+      v.filter((x) => String(x)).map(String).join('.')
+    expect(join([10, 2, 1, ''])).toBe('10.2.1')
+    expect(join([1, 28, 0])).toBe('1.28.0')
+    // A pre-release still carries its level through.
+    expect(join([10, 3, 0, 'beta'])).toBe('10.3.0.beta')
+  })
+})

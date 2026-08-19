@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Grove Red LED, as a Standard library part.** Seeed's 5 mm red LED module
+  (SKU 104030005) on a Grove digital port, drawn from the product photo: the LED
+  in its white holder, the brightness trimmer, the switching transistor and the
+  chip resistors, with `SIG`/`NC`/`VCC`/`GND` on the socket and a `help.md`
+  covering the on/off and PWM-fade snippets. `SIG` is `digital` + `pwm`, so a
+  design can fade it as well as blink it. No driver — `machine.Pin` is enough.
 - **Run, Stop and Reset say what they actually do on a CircuitPython board, and
   the file tree shows which file boots.** (#755, epic #209) Run stays a raw-REPL
   execution on both runtimes — it will not overwrite your `code.py` — but it now
@@ -53,6 +59,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The per-platform mount-point scanning behind board detection is now in one
   place (`fs/volumes.ts`) instead of being hand-rolled once per board type, and
   it no longer reads every folder in your home directory looking for a board.
+
+### Fixed
+- **An onboard LED's real size survived saving and vanished on loading.** The
+  YAML writer passes an LED through whole but the reader rebuilt it field by
+  field, so `sizeMm` (and a hand-placed silk label) were dropped on the next
+  load — the bundled LED Bar has authored 2.5 mm segments that never reached the
+  renderer. The reader now names them, and `single` LEDs are drawn life-size like
+  NeoPixels already were, so a 5 mm LED on a 20 mm module reads as the quarter of
+  the board it is. Its glow is a fixed ring around the package rather than a
+  multiple of it, so an ordinary indicator looks exactly as it did.
 
 ## [0.44.0] - 2026-08-16
 

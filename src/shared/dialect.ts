@@ -74,7 +74,11 @@ const P_MACHINE = 'SNKMACH '
 export const RUNTIME_PROBE_PY = [
   'import sys as _s',
   "_n=getattr(_s.implementation,'name','')",
-  "_v='.'.join(str(x) for x in getattr(_s.implementation,'version',()))",
+  // `sys.implementation.version` is a tuple, and CircuitPython's has FOUR
+  // elements — the release level, which is `''` for a stable build. Joining it
+  // whole produced '10.2.1.' with a trailing dot on every CircuitPython board.
+  // Empty components are dropped, so a pre-release ('beta') still comes through.
+  "_v='.'.join(str(x) for x in getattr(_s.implementation,'version',()) if str(x))",
   "_m=''",
   'try:',
   ' import os as _o',
