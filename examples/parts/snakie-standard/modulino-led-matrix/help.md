@@ -54,6 +54,9 @@ from modulino import ModulinoLEDMatrix
 matrix = ModulinoLEDMatrix()
 matrix.clear().show()
 
+# On a non-Arduino board, or if construction reports it can't find the module on
+# the bus, hand it both the bus and the address — see below.
+
 matrix.set_pixel(0, 0)          # x 0-11, y 0-7
 matrix.text(0, 0, "Hi")
 matrix.show()
@@ -74,7 +77,13 @@ Drawing calls mirror MicroPython's `FrameBuffer`:
 ### Scrolling a message
 
 The panel is only 12 columns wide, so anything longer than a character or two
-has to scroll:
+has to scroll.
+
+There IS a `scroll(dx, dy)` — but it shifts the pixels already in the buffer and
+feeds nothing in behind them, so a message scrolled that way empties itself after
+twelve columns. `scroll()` is for animating what is already drawn. A marquee
+instead redraws the whole string at a moving negative offset, which is what keeps
+the text arriving:
 
 ```python
 from time import sleep_ms
@@ -136,7 +145,9 @@ from modulino import ModulinoLEDMatrix
 # Use YOUR board's I²C pins — Snakie shows them on the board's pinout.
 i2c = I2C(0, sda=Pin(4), scl=Pin(5))
 
-matrix = ModulinoLEDMatrix(i2c_bus=i2c)
+# Naming the address skips the library's auto-discovery, which does not find
+# every board. Snakie has this number on the part's details page.
+matrix = ModulinoLEDMatrix(i2c_bus=i2c, address=0x39)
 ```
 
 Every Modulino class takes `i2c_bus`, so one bus serves a whole chain — build it
