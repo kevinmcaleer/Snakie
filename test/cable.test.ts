@@ -6,7 +6,8 @@ import {
   connectorFit,
   connectorKindName,
   housingPlugAngle,
-  pairContacts
+  pairContacts,
+  variantsCompatible
 } from '../src/renderer/src/components/cable'
 import type { PartConnector, PartPin } from '../src/shared/part'
 
@@ -207,6 +208,85 @@ describe('connectorFit', () => {
     const fit = connectorFit(servo(), four)
     expect(fit.ok).toBe(false)
     expect(fit.reason).toMatch(/3-way/)
+  })
+})
+
+describe('a port that declares no variant (#771)', () => {
+  /**
+   * The two ways of authoring a Grove port have to behave the same. The
+   * `seeed-xiao-expansion-base` declares four physically identical Grove sockets
+   * two different ways — one `connectors:` entry carrying `variant: i2c`, three
+   * group housings carrying no variant at all — and a lead that seated in one
+   * silently refused the others.
+   */
+  const groveNoVariant = (): PartConnector => ({
+    kind: 'grove',
+    x: 0.5,
+    y: 0.5,
+    // A base's broken-out digital port. Its signal pin ALSO advertises an I²C
+    // role, which is exactly what made role-matching fail: the module's plain
+    // `SIG` then has no partner and the lead carries power and ground only.
+    pins: [
+      pin('GPIO0', 'io', { capabilities: ['digital', 'pwm'], signals: { i2c: 'SCL' } }),
+      pin('N/A', 'other'),
+      pin('VCC', 'pwr'),
+      pin('GND', 'gnd')
+    ]
+  })
+
+  it('is unknown, not different', () => {
+    expect(variantsCompatible(undefined, 'digital')).toBe(true)
+    expect(variantsCompatible('i2c', undefined)).toBe(true)
+    expect(variantsCompatible(undefined, undefined)).toBe(true)
+    expect(variantsCompatible('i2c', 'digital')).toBe(false)
+    expect(variantsCompatible('I2C', 'i2c')).toBe(true) // spelling isn't a mismatch
+  })
+
+  it('accepts the lead a port declaring the SAME wiring would accept', () => {
+    const fit = connectorFit(groveDigital(), groveNoVariant())
+    expect(fit.ok).toBe(true)
+    expect(fit.reason).toBeUndefined()
+  })
+
+  it('joins it contact-for-contact, like the straight lead it is', () => {
+    // A Grove cable is a 4-way straight-through lead; which contact meets which
+    // is decided by the housing, never by what either end calls its wiring. Going
+    // down the cross-family ROLE path here is what lost the signal wire.
+    const pairs = pairContacts(groveDigital(), groveNoVariant())
+    expect(pairs).toContainEqual([0, 0]) // SIG -> the port's signal pin
+    expect(pairs).toContainEqual([2, 2]) // VCC -> VCC
+    expect(pairs).toContainEqual([3, 3]) // GND -> GND
+    expect(pairs.some(([ia]) => ia === 1)).toBe(false) // NC invents no wire
+  })
+
+  it('behaves identically whichever way the port was authored', () => {
+    // The whole point: a housing and a `connectors:` entry describing the same
+    // physical socket must not disagree.
+    const stated = connectorFit(groveDigital(), groveDigital())
+    const unstated = connectorFit(groveDigital(), groveNoVariant())
+    expect(unstated.ok).toBe(stated.ok)
+    expect(unstated.pairs).toEqual(stated.pairs)
+  })
+
+  it('still refuses two ports that BOTH state incompatible wiring', () => {
+    // Accepting the unknown must not accept the known-wrong — the guard exists
+    // because Grove plugs are physically identical, so nothing else catches it.
+    const fit = connectorFit(groveI2c(), groveUart())
+    expect(fit.ok).toBe(false)
+    expect(fit.reason).toBeTruthy()
+  })
+
+  it('gives a reason for every refusal, so none can be silent', () => {
+    const refusals = [
+      connectorFit(groveI2c(), groveUart()),
+      connectorFit(servo(), groveI2c()),
+      connectorFit(groveI2c(), servo())
+    ]
+    for (const fit of refusals) {
+      expect(fit.ok).toBe(false)
+      expect(fit.reason, JSON.stringify(fit)).toBeTruthy()
+      expect(fit.pairs).toEqual([])
+    }
   })
 })
 

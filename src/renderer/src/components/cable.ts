@@ -76,16 +76,43 @@ export function connectorKindName(c: PartConnector): string {
 }
 
 /**
+ * Do two housings' variants describe the same socket? (#771)
+ *
+ * A variant is the WIRING of a housing — Grove `i2c` vs `digital` — and it is
+ * optional, because the two ways of authoring a port disagree about whether to
+ * state it: a `connectors:` entry usually carries one, a group housing usually
+ * doesn't. An absent variant therefore means **not stated**, never "different":
+ * an unknown port is not known to be wrong, and refusing on the strength of
+ * knowing nothing is how a port that is physically identical to its neighbour
+ * came to reject a lead the neighbour accepted.
+ *
+ * Both stated and unequal is the real mismatch, and the only one worth refusing.
+ */
+export function variantsCompatible(a?: string, b?: string): boolean {
+  const va = (a ?? '').trim().toLowerCase()
+  const vb = (b ?? '').trim().toLowerCase()
+  return !va || !vb || va === vb
+}
+
+/**
  * Which contacts a lead between `a` and `b` joins, as `[indexInA, indexInB]`.
  *
  * Identical sockets are joined **contact-for-contact** — that is literally what a
  * straight lead does, and it keeps a Grove UART port's TX/RX the way the modules
  * expect (the crossover lives in the board wiring, not the cable). Anything else
  * is an adapter lead, matched by role.
+ *
+ * "Identical" is the HOUSING — kind and way count — not the wiring stated on it
+ * (#771). Two 4-way Grove shells are joined by a straight 4-way Grove lead
+ * whatever either end calls itself, so an unstated variant must not push the pair
+ * down the adapter path: there it is matched by ROLE, and a port whose digital pin
+ * happens to declare `signals.i2c` then has no partner for the module's plain
+ * `SIG`, leaving a lead with power and ground only — which the fit check rightly
+ * refuses. That was the silent refusal.
  */
 export function pairContacts(a: PartConnector, b: PartConnector): [number, number][] {
   const sameHousing =
-    a.kind === b.kind && (a.variant ?? null) === (b.variant ?? null) && a.pins.length === b.pins.length
+    a.kind === b.kind && variantsCompatible(a.variant, b.variant) && a.pins.length === b.pins.length
   if (sameHousing) {
     return a.pins
       .map((pin, i): [number, number] | null => (cableRole(pin) ? [i, i] : null))
@@ -131,7 +158,9 @@ export function connectorFit(a: PartConnector, b: PartConnector): CableFit {
     const [lead, socket] = aDupont ? [a, b] : [b, a]
     return NO(`A ${connectorKindName(lead)} lead doesn't fit a ${connectorKindName(socket)} socket.`)
   }
-  if (a.kind === 'grove' && b.kind === 'grove' && a.variant && b.variant && a.variant !== b.variant) {
+  // Only a STATED mismatch is a mismatch: a port that declares no variant is
+  // unknown, not wrong (#771 — see `variantsCompatible`).
+  if (a.kind === 'grove' && b.kind === 'grove' && !variantsCompatible(a.variant, b.variant)) {
     return NO(`That's a ${connectorKindName(b)} port — this one is ${connectorKindName(a)}.`)
   }
   // JST families differ by PITCH, so unlike Grove these genuinely can't seat —

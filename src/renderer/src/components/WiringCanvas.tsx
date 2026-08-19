@@ -825,6 +825,28 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     savePin(window.localStorage, PIN_KEYS.browser, v)
   }
   const [, force] = useState(0) // re-render during a wire/pan/box drag (ref-driven)
+  /**
+   * The last REFUSED cable drop — the reason, and the socket it was dropped on
+   * (#771).
+   *
+   * A refused pairing was silent: the reason lived only in the hover badge, which
+   * goes with the drag, so releasing looked identical to a drag that failed to
+   * land. A refusal a user cannot see is indistinguishable from a bug. This holds
+   * the reason where the lead was dropped until it is read (or another drag
+   * starts).
+   */
+  const [refusal, setRefusal] = useState<{
+    reason: string
+    cx: number
+    cy: number
+    r: number
+    seq: number
+  } | null>(null)
+  useEffect(() => {
+    if (!refusal) return
+    const t = window.setTimeout(() => setRefusal(null), 6000)
+    return () => window.clearTimeout(t)
+  }, [refusal])
   // What the pointer is over (breadboard view): a part (`pin: null`) reveals all
   // its pins' capability chips; a specific pin emphasises its own.
   const [hover, setHover] = useState<{ key: string; pin: number | null } | null>(null)
@@ -1798,6 +1820,8 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
 
   const onPointerDown = (e: ReactPointerEvent<SVGSVGElement>): void => {
     ;(e.target as Element).setPointerCapture?.(e.pointerId)
+    // Any new gesture supersedes the last refusal notice (#771).
+    if (refusal) setRefusal(null)
     // A net highlight (ERC "Show me") is dismissed by any click on the board — the
     // first click just clears it and does nothing else.
     if (highlight) {
@@ -1992,9 +2016,24 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
           (ca ? connectorAt(w.x, w.y) : null)
         const differentConnector = ca && cb && !(ca.key === cb.key && ca.connIndex === cb.connIndex)
         if (differentConnector) {
-          // Refused pairings never reach here as a wire — the drag simply doesn't
-          // land, having already said why in the hover badge.
-          makeCable(ca, cb)
+          // A refused pairing lands as a MESSAGE rather than as nothing (#771).
+          // The hover badge goes with the drag, so a release that quietly did
+          // nothing read as a broken drag — the same thing a real bug looks like.
+          const fit = connectorFit(ca.conn, cb.conn)
+          if (fit.ok) {
+            makeCable(ca, cb)
+          } else if (fit.reason) {
+            const at = connectorTargets.find(
+              (x) => x.key === cb.key && x.connIndex === cb.connIndex
+            )
+            setRefusal({
+              reason: fit.reason,
+              cx: at?.cx ?? w.x,
+              cy: at?.cy ?? w.y,
+              r: at?.r ?? 24,
+              seq: Date.now()
+            })
+          }
         } else if (target && target.endpoint !== d.from) {
           addConnection(d.from, target.endpoint)
         }
@@ -2935,6 +2974,32 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                     </text>
                   </g>
                 )}
+              </g>
+            )}
+
+            {/* A refused DROP, said again where the lead was let go (#771). The
+                hover badge above vanishes with the drag, so without this a
+                refusal and a drag that failed to land looked identical — and the
+                user reasonably read the refusal as a broken drag. */}
+            {refusal && !cableDrag && (
+              <g key={refusal.seq} className="wc__refused" pointerEvents="none">
+                <circle
+                  cx={refusal.cx}
+                  cy={refusal.cy}
+                  r={refusal.r}
+                  className="wc__refused-ring"
+                  fill="none"
+                  strokeDasharray="4 3"
+                />
+                <text
+                  x={refusal.cx}
+                  y={refusal.cy - refusal.r - 10}
+                  textAnchor="middle"
+                  className="wc__refused-why"
+                  style={{ paintOrder: 'stroke' }}
+                >
+                  {refusal.reason}
+                </text>
               </g>
             )}
             {drag?.kind === 'wire' && drag.from && (() => {

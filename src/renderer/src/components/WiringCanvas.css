@@ -1346,3 +1346,45 @@
     display: none;
   }
 }
+
+/* --- A refused cable drop (#771) -------------------------------------------
+   A pairing the fit check turns down used to leave NOTHING behind: the "why
+   not" badge belongs to the hover, so releasing looked exactly like a drag that
+   failed to land. This is the same message, kept where the lead was dropped
+   until it has been read.
+
+   The canvas mat can be dark OR light (skeuomorph parchment / the white
+   breadboard background), and a class cannot tell which — so the text carries
+   its own contrast: a light fill with a dark stroke painted underneath reads on
+   either. `--danger` is the theme's own error colour, which differs per skin. */
+.wc__refused {
+  animation: wc-refused-in 0.16s ease-out 1;
+}
+
+.wc__refused-ring {
+  stroke: var(--danger, #e0483d);
+  stroke-width: 2.5;
+  opacity: 0.9;
+}
+
+.wc__refused-why {
+  font-family: var(--font-ui, sans-serif);
+  font-size: 11px;
+  font-weight: 700;
+  fill: #ffe6e2;
+  stroke: #3a0f0c;
+  stroke-width: 3.5px;
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
+
+@keyframes wc-refused-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wc__refused {
+    animation: none;
+  }
+}
