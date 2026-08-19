@@ -22,7 +22,7 @@ properties:
   control: duration in milliseconds plus a PowerLevel intensity
   mcu: STM32C011F4
   chain: QWIIC socket at each end, same bus in parallel
-version: 0.1.0
+version: 0.1.2
 pcbColor: "#00979d"
 aspect: 1.617
 dimensions:
@@ -31,19 +31,122 @@ dimensions:
 shape:
   kind: rect
   cornerRadiusMm: 4.6
+headers:
+  - edge: left
+    pins:
+      - name: SCL
+        type: io
+        number: 14
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+        shape: header
+        x: 0.4076634724934896
+        y: 0.9515518685871369
+      - name: SDA
+        type: io
+        number: 12
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+        shape: header
+        x: 0.4685789659288195
+        y: 0.9515518685871369
+      - name: 3v3
+        type: pwr
+        number: 12
+        shape: header
+        x: 0.5294944593641493
+        y: 0.9515518685871369
+      - name: GND
+        type: gnd
+        number: 11
+        shape: header
+        x: 0.5904099527994792
+        y: 0.9515518685871369
+      - name: PA0
+        type: io
+        number: 1
+        capabilities:
+          - digital
+        shape: header
+        x: 0.2793975830078125
+        y: 0.047769975712372056
+      - name: RX1
+        type: io
+        number: 2
+        capabilities:
+          - uart
+        signals:
+          uart: RX
+        buses:
+          uart: 1
+        shape: header
+        x: 0.3417987496512277
+        y: 0.047769975712372056
+      - name: TX1
+        type: io
+        number: 3
+        capabilities:
+          - uart
+        signals:
+          uart: TX
+        buses:
+          uart: 1
+        shape: header
+        x: 0.4046814836774554
+        y: 0.047769975712372056
+      - name: SWDIO
+        type: io
+        number: 4
+        capabilities:
+          - digital
+        shape: header
+        x: 0.4673234340122768
+        y: 0.047769975712372056
+      - name: SWCLK
+        type: io
+        number: 5
+        capabilities:
+          - digital
+        shape: header
+        x: 0.5299653843470982
+        y: 0.047769975712372056
+      - name: PF2
+        type: io
+        number: 6
+        capabilities:
+          - digital
+        shape: header
+        x: 0.5926073346819196
+        y: 0.047769975712372056
+      - name: 3v3
+        type: pwr
+        number: 9
+        shape: header
+        x: 0.6552492850167411
+        y: 0.047769975712372056
+      - name: GND
+        type: gnd
+        number: 10
+        shape: header
+        x: 0.7178912353515625
+        y: 0.047769975712372056
 mountingHoles:
-  - x: 0.10976
+  - x: 0.10642732788085937
     y: 0.18454
-    diameter: 3.2
+    diameter: 1.5
   - x: 0.89024
     y: 0.18454
-    diameter: 3.2
+    diameter: 1.5
   - x: 0.89024
     y: 0.81546
-    diameter: 3.2
-  - x: 0.10976
+    diameter: 1.5
+  - x: 0.10642732788085937
     y: 0.81546
-    diameter: 3.2
+    diameter: 1.5
 rails:
   - name: GND
     pins:
@@ -106,6 +209,14 @@ connectors:
           - i2c
         signals:
           i2c: SCL
+image: image.jpg
+imageLayer:
+  x: -0.00024861653645832926
+  y: 0
+  w: 1
+  h: 1
+rear:
+  image: rear.jpg
 help: help.md
 mesh: modulino.stl
 meshUnits: mm
@@ -119,3 +230,9 @@ drivers:
   - source: module:modulino
     target: lib/modulino
     label: Arduino Modulino library
+layerVisibility:
+  pcb: true
+  image: true
+  holes: true
+  pins: true
+  components: true

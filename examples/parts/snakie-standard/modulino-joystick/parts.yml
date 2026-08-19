@@ -20,7 +20,7 @@ properties:
   button: integrated centre-click push button
   mcu: STM32C011F4
   chain: QWIIC socket at each end, same bus in parallel
-version: 0.1.0
+version: 0.1.8
 pcbColor: "#00979d"
 aspect: 1.617
 dimensions:
@@ -29,19 +29,130 @@ dimensions:
 shape:
   kind: rect
   cornerRadiusMm: 4.6
+headers:
+  - edge: left
+    pins:
+      - name: P0
+        type: io
+        side: rear
+        number: 8
+        capabilities:
+          - digital
+        shape: header
+        x: 0.15259986877441403
+        y: 0.05133038949275363
+      - name: P1
+        type: io
+        side: rear
+        number: 7
+        capabilities:
+          - digital
+        shape: header
+        x: 0.21434663560655381
+        y: 0.05133038949275363
+      - name: P2
+        type: io
+        side: rear
+        number: 6
+        capabilities:
+          - digital
+        shape: header
+        x: 0.27633418613009986
+        y: 0.05133038949275363
+      - name: P3
+        type: io
+        side: rear
+        number: 5
+        capabilities:
+          - digital
+        shape: header
+        x: 0.33832173665364584
+        y: 0.05133038949275363
+      - name: P4
+        type: io
+        side: rear
+        number: 4
+        capabilities:
+          - digital
+        shape: header
+        x: 0.6557549529003398
+        y: 0.045929534067749515
+      - name: P5
+        type: io
+        side: rear
+        number: 3
+        capabilities:
+          - digital
+        shape: header
+        x: 0.718714831161745
+        y: 0.045929534067749515
+      - name: P6
+        type: io
+        side: rear
+        number: 2
+        capabilities:
+          - digital
+        shape: header
+        x: 0.7783808454908584
+        y: 0.045929534067749515
+      - name: P7
+        type: io
+        side: rear
+        number: 1
+        capabilities:
+          - digital
+        shape: header
+        x: 0.8396937917861177
+        y: 0.045929534067749515
+      - name: GND
+        type: gnd
+        side: rear
+        number: 9
+        shape: header
+        x: 0.4040035502115885
+        y: 0.9538787233656727
+      - name: 3v3
+        type: pwr
+        side: rear
+        number: 10
+        shape: header
+        x: 0.46686184946695974
+        y: 0.9538787233656727
+      - name: SDA
+        type: io
+        side: rear
+        number: 11
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+        shape: header
+        x: 0.5291062774658203
+        y: 0.9538787233656727
+      - name: SCL
+        type: io
+        side: rear
+        number: 12
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+        shape: header
+        x: 0.5906076151529948
+        y: 0.9538787233656727
 mountingHoles:
   - x: 0.10976
-    y: 0.18454
-    diameter: 3.2
-  - x: 0.89024
-    y: 0.18454
-    diameter: 3.2
-  - x: 0.89024
-    y: 0.81546
-    diameter: 3.2
+    y: 0.18365108840864838
+    diameter: 1.5
+  - x: 0.8952662196858724
+    y: 0.18365108840864838
+    diameter: 1.5
+  - x: 0.8952662196858724
+    y: 0.8171493916935115
+    diameter: 1.5
   - x: 0.10976
-    y: 0.81546
-    diameter: 3.2
+    y: 0.8171493916935115
+    diameter: 1.5
 rails:
   - name: GND
     pins:
@@ -104,6 +215,14 @@ connectors:
           - i2c
         signals:
           i2c: SCL
+image: image.png
+imageLayer:
+  x: -0.0009118471484550472
+  y: -0.07105605641459822
+  w: 1
+  h: 1.1243073548045464
+rear:
+  image: rear.jpg
 help: help.md
 mesh: modulino.stl
 meshUnits: mm
@@ -117,3 +236,9 @@ drivers:
   - source: module:modulino
     target: lib/modulino
     label: Arduino Modulino library
+layerVisibility:
+  pcb: true
+  image: true
+  holes: true
+  pins: true
+  components: true

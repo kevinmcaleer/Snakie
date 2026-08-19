@@ -918,28 +918,56 @@ export function onboardLedGlyph(
     )
   }
   const color = led.color || '#39d353'
+  const r = onboardLedRadius(led, pxPerMm)
+  const k = r / SINGLE_LED_R
   // A power indicator that the solver says has no supply: the unlit package —
   // the LED's own colour dimmed almost out, no glow, no specular highlight. It
   // reads as "this part isn't powered" at a glance, which is the point (#698).
   if (state === 'dark') {
     return (
       <g style={{ pointerEvents: 'none' }}>
-        <circle cx={cx} cy={cy} r={5} fill={color} opacity={0.22} stroke="#0006" strokeWidth={0.8} />
+        <circle cx={cx} cy={cy} r={r} fill={color} opacity={0.22} stroke="#0006" strokeWidth={0.8} />
         {ring}
       </g>
     )
   }
   // Supplied: the same LED with a wider, stronger halo, so lit reads as brighter
   // than an ordinary indicator rather than merely different.
+  //
+  // The glow is a constant RING around the package, not a constant multiple of it:
+  // a 5 mm LED on a 20 mm module is a quarter of the board, and a proportional halo
+  // would then be half of it — a translucent disc spilling over the whole part. A
+  // fixed ring keeps a default-sized indicator looking exactly as it always has.
   const halo = state === 'lit' ? { r: 12, o: 0.45 } : { r: 9, o: 0.3 }
   return (
     <g style={{ pointerEvents: 'none' }}>
-      <circle cx={cx} cy={cy} r={halo.r} fill={color} opacity={halo.o} />
-      <circle cx={cx} cy={cy} r={5} fill={color} stroke="#0006" strokeWidth={0.8} />
-      <circle cx={cx - 1.6} cy={cy - 1.6} r={1.5} fill="#fff" opacity={0.85} />
+      <circle cx={cx} cy={cy} r={r + (halo.r - SINGLE_LED_R)} fill={color} opacity={halo.o} />
+      <circle cx={cx} cy={cy} r={r} fill={color} stroke="#0006" strokeWidth={0.8} />
+      <circle cx={cx - 1.6 * k} cy={cy - 1.6 * k} r={1.5 * k} fill="#fff" opacity={0.85} />
       {ring}
     </g>
   )
+}
+
+/** The drawn radius, in px, of a `single` LED's package. */
+const SINGLE_LED_R = 5
+
+/**
+ * How big to draw an onboard LED's package, in px.
+ *
+ * A board with real dimensions and an LED that declares its physical
+ * {@link OnboardLed.sizeMm} is drawn LIFE-SIZE, so a 5 mm through-hole LED on a
+ * 20 mm Grove module reads as the quarter of the board it actually is instead of
+ * the same small dot every indicator gets. Without either, the legacy fixed size —
+ * which is what every board that doesn't declare a footprint still wants.
+ *
+ * Exported because the silk label has to clear the package: with a scaled LED the
+ * old fixed drop put "LED" inside the lens.
+ */
+export function onboardLedRadius(led: OnboardLed, pxPerMm = 0): number {
+  if (led.kind === 'rgb') return 9
+  if (led.sizeMm && led.sizeMm > 0 && pxPerMm > 0) return (led.sizeMm * pxPerMm) / 2
+  return led.kind === 'neopixel' ? 7 : SINGLE_LED_R
 }
 
 /** The silk label for an onboard LED: its name + GPIO(s) — e.g. `LED · GP25`,
@@ -1817,7 +1845,9 @@ export function PartBody({
           if (!faces(led)) return null
           const cx = px(led.x)
           const cy = py(led.y)
-          const labelY = cy + 18
+          // Clear the package: a life-size 5 mm LED is far wider than the fixed
+          // drop, which would print its name across the lens.
+          const labelY = cy + Math.max(18, onboardLedRadius(led, connPxPerMm) + 11)
           const sel = isSel({ type: 'led', index: i })
           return (
             <g key={`led${i}`}>

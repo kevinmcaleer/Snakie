@@ -21,7 +21,7 @@ properties:
   control: per-LED colour and 0–100 brightness, applied on show()
   mcu: STM32C011F4
   chain: QWIIC socket at each end, same bus in parallel
-version: 0.1.0
+version: 0.1.14
 pcbColor: "#00979d"
 aspect: 1.617
 dimensions:
@@ -30,65 +30,146 @@ dimensions:
 shape:
   kind: rect
   cornerRadiusMm: 4.6
+headers:
+  - edge: left
+    pins:
+      - name: GND
+        type: gnd
+        side: rear
+        number: 10
+        shape: header
+        x: 0.2237909444173177
+        y: 0.05216997028274617
+      - name: GND
+        type: gnd
+        side: rear
+        number: 9
+        shape: header
+        x: 0.28551470721209493
+        y: 0.05216997028274617
+      - name: 3v3
+        type: pwr
+        side: rear
+        number: 8
+        shape: header
+        x: 0.3475292294937621
+        y: 0.05216997028274617
+      - name: PF2
+        type: io
+        side: rear
+        number: 7
+        capabilities:
+          - digital
+        shape: header
+        x: 0.41004730224609376
+        y: 0.05216997028274617
+      - name: SWCLK
+        type: io
+        side: rear
+        number: 6
+        shape: header
+        x: 0.4718341657850477
+        y: 0.05216997028274617
+      - name: SWDIO
+        type: io
+        side: rear
+        number: 5
+        shape: header
+        x: 0.5324097583912037
+        y: 0.05216997028274617
+      - name: TX1
+        type: io
+        side: rear
+        number: 4
+        capabilities:
+          - uart
+        signals:
+          uart: TX
+        buses:
+          uart: 1
+        shape: header
+        x: 0.5954078928629557
+        y: 0.05216997028274617
+      - name: RX1
+        type: io
+        side: rear
+        number: 3
+        capabilities:
+          - uart
+        signals:
+          uart: RX
+        buses:
+          uart: 1
+        shape: header
+        x: 0.6558572839807582
+        y: 0.05216997028274617
+      - name: D0
+        type: io
+        side: rear
+        number: 2
+        capabilities:
+          - digital
+        shape: header
+        x: 0.7175810467755354
+        y: 0.05216997028274617
+      - name: C0
+        type: io
+        side: rear
+        number: 1
+        capabilities:
+          - digital
+        shape: header
+        x: 0.7793048095703126
+        y: 0.05216997028274617
+      - name: GND
+        type: gnd
+        side: rear
+        number: 11
+        shape: header
+        x: 0.41004730224609376
+        y: 0.9499496671554293
+      - name: 3v3
+        type: pwr
+        side: rear
+        number: 12
+        shape: header
+        x: 0.4718341657850477
+        y: 0.9499496671554293
+      - name: SDA
+        type: io
+        side: rear
+        number: 13
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+        shape: header
+        x: 0.5324097583912037
+        y: 0.9499496671554293
+      - name: SCL
+        type: io
+        side: rear
+        number: 14
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+        shape: header
+        x: 0.5954078928629557
+        y: 0.9499496671554293
 mountingHoles:
   - x: 0.10976
     y: 0.18454
-    diameter: 3.2
+    diameter: 1.5
   - x: 0.89024
     y: 0.18454
-    diameter: 3.2
+    diameter: 1.5
   - x: 0.89024
     y: 0.81546
-    diameter: 3.2
+    diameter: 1.5
   - x: 0.10976
     y: 0.81546
-    diameter: 3.2
-# The eight LC8822-2020 pixels. They hang off the onboard STM32, not off any
-# GPIO of the host, so none carries a `gpio` — the same call the Grove LED Bar
-# makes. They're here so the Board View reads as a strip rather than a blank
-# board. Positions are an even span across the middle of the board, not a
-# measurement off a real one.
-onboardLeds:
-  - kind: neopixel
-    label: "1"
-    x: 0.235
-    y: 0.5
-    sizeMm: 2
-  - kind: neopixel
-    label: "2"
-    x: 0.3107
-    y: 0.5
-    sizeMm: 2
-  - kind: neopixel
-    label: "3"
-    x: 0.3864
-    y: 0.5
-    sizeMm: 2
-  - kind: neopixel
-    label: "4"
-    x: 0.4621
-    y: 0.5
-    sizeMm: 2
-  - kind: neopixel
-    label: "5"
-    x: 0.5379
-    y: 0.5
-    sizeMm: 2
-  - kind: neopixel
-    label: "6"
-    x: 0.6136
-    y: 0.5
-    sizeMm: 2
-  - kind: neopixel
-    label: "7"
-    x: 0.6893
-    y: 0.5
-    sizeMm: 2
-  - kind: neopixel
-    label: "8"
-    x: 0.765
-    y: 0.5
-    sizeMm: 2
+    diameter: 1.5
 rails:
   - name: GND
     pins:
@@ -106,6 +187,47 @@ rails:
     pins:
       - SCL
       - SCL-B
+onboardLeds:
+  - kind: neopixel
+    x: 0.235
+    y: 0.5
+    label: "1"
+    sizeMm: 2
+  - kind: neopixel
+    x: 0.3107
+    y: 0.5
+    label: "2"
+    sizeMm: 2
+  - kind: neopixel
+    x: 0.3864
+    y: 0.5
+    label: "3"
+    sizeMm: 2
+  - kind: neopixel
+    x: 0.4621
+    y: 0.5
+    label: "4"
+    sizeMm: 2
+  - kind: neopixel
+    x: 0.5379
+    y: 0.5
+    label: "5"
+    sizeMm: 2
+  - kind: neopixel
+    x: 0.6136
+    y: 0.5
+    label: "6"
+    sizeMm: 2
+  - kind: neopixel
+    x: 0.6893
+    y: 0.5
+    label: "7"
+    sizeMm: 2
+  - kind: neopixel
+    x: 0.765
+    y: 0.5
+    label: "8"
+    sizeMm: 2
 connectors:
   - z: 0
     kind: qwiic
@@ -151,6 +273,14 @@ connectors:
           - i2c
         signals:
           i2c: SCL
+image: image.jpg
+imageLayer:
+  x: -0.00028734842936198324
+  y: 0
+  w: 1
+  h: 1
+rear:
+  image: rear.jpg
 help: help.md
 mesh: modulino.stl
 meshUnits: mm
@@ -164,3 +294,9 @@ drivers:
   - source: module:modulino
     target: lib/modulino
     label: Arduino Modulino library
+layerVisibility:
+  pcb: true
+  image: true
+  holes: true
+  pins: true
+  components: true

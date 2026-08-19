@@ -750,6 +750,19 @@ export function partFromYaml(text: string): PartDefinition {
             if (col) led.color = col
           }
         }
+        // NB: the writer passes an LED through whole, so anything NOT read back
+        // here is lost on the first load — which is how the LED Bar's ten 2.5 mm
+        // segments were silently drawn at the legacy fixed size.
+        const sizeMm = posNum(r.sizeMm)
+        if (sizeMm !== undefined) led.sizeMm = sizeMm
+        if (r.labelOffset && typeof r.labelOffset === 'object') {
+          const lo = r.labelOffset as Record<string, unknown>
+          const lx = num(lo.x)
+          const ly = num(lo.y)
+          if (lx !== undefined && ly !== undefined) led.labelOffset = { x: lx, y: ly }
+        }
+        const labelRot = num(r.labelRotation)
+        if (labelRot !== undefined) led.labelRotation = labelRot
         return led
       })
       .filter((l): l is OnboardLed => l !== null)

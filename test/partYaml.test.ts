@@ -415,6 +415,30 @@ describe('onboard LEDs round-trip', () => {
     ])
   })
 
+  it('keeps an LED\'s real mm size and hand-placed label (they were read-dropped)', () => {
+    // The writer passes an LED through whole, so a field the READER doesn't name
+    // survives the save and vanishes on the next load. `sizeMm` did exactly that:
+    // the bundled LED Bar authors ten 2.5 mm segments and got the legacy fixed
+    // on-screen size instead.
+    const yaml =
+      'id: p\nheaders:\n  - edge: left\n    pins:\n      - name: GP0\n        type: io\n        gpio: 0\n' +
+      'onboardLeds:\n  - { kind: single, label: LED, color: "#e4392f", x: 0.2, y: 0.77, sizeMm: 5, ' +
+      'labelOffset: { x: 0.02, y: -0.04 }, labelRotation: 270 }\n'
+    const led = partFromYaml(yaml).onboardLeds?.[0]
+    expect(led).toEqual({
+      kind: 'single',
+      label: 'LED',
+      color: '#e4392f',
+      x: 0.2,
+      y: 0.77,
+      sizeMm: 5,
+      labelOffset: { x: 0.02, y: -0.04 },
+      labelRotation: 270
+    })
+    // …and back out again, unchanged.
+    expect(partFromYaml(partToYaml(normalisePart(partFromYaml(yaml)))).onboardLeds?.[0]).toEqual(led)
+  })
+
   it('round-trips a NeoPixel with a data + optional power GPIO', () => {
     const part = normalisePart({
       id: 'p',

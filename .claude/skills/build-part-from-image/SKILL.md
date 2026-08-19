@@ -333,6 +333,24 @@ onboardLeds:
 #   - { text: ToF, x: 0.5, y: 0.9, fontSize: 10 }
 ```
 
+### Geometry gotchas (they render silently wrong, they don't error)
+
+- A **`circle` shape** is `x`/`y` = its **CENTRE** plus **`r`** (a fraction of the
+  board width). It has no `w`/`h` — authoring those gets you the default `r: 0.08`
+  at the wrong place, which is what the bundled `grove-buzzer` does.
+- A **`rect` shape** is the opposite: `x`/`y` = its **top-left**, with `w`/`h`.
+- `shape.cornerRadius` is a **FRACTION of the shorter side** (0..0.5), so a `2`
+  means "fully round". Use **`cornerRadiusMm`** when the part declares
+  `dimensions` — it's the number off a mechanical drawing and it wins.
+- `mountingHoles[].diameter` is drawn as a **RADIUS in mm**, despite the name.
+  Author **half** the real hole (a 2 mm hole ⇒ `diameter: 1`); that is what every
+  part sized in the Part Editor already stores.
+- Holes are punched through the **PCB outline layer**, so a part that hides it
+  (`layerVisibility.pcb: false`) and draws its board as a `rect` shape instead
+  shows no holes at all. Prefer `pcb: true` + `pcbColor` over a drawn rectangle.
+- `onboardLeds[].sizeMm` draws the LED **life-size** — set it (a 5 mm LED on a
+  20 mm module is a quarter of the board); without it every LED is the same dot.
+
 Allowed values:
 - pin `type`: `io` · `pwr` · `gnd` · `other`
 - pin `capabilities`: `digital` · `pwm` · `adc` · `i2c` · `spi` · `uart`

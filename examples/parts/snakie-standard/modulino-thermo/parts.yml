@@ -22,7 +22,7 @@ properties:
   measures: −40 °C to +125 °C, 0–100 % RH, 14-bit each
   accuracy: ±0.25 °C, ±2.8 % RH
   chain: QWIIC socket at each end, same bus in parallel
-version: 0.1.0
+version: 0.1.2
 pcbColor: "#00979d"
 aspect: 1.617
 dimensions:
@@ -31,19 +31,54 @@ dimensions:
 shape:
   kind: rect
   cornerRadiusMm: 4.6
+headers:
+  - edge: left
+    pins:
+      - name: SCL
+        type: io
+        number: 1
+        gpio: 0
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+        shape: header
+        x: 0.4083082834879558
+        y: 0.951690015983381
+      - name: SDA
+        type: io
+        number: 2
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+        shape: header
+        x: 0.4702770657009549
+        y: 0.951690015983381
+      - name: 3v3
+        type: pwr
+        number: 3
+        shape: header
+        x: 0.532245847913954
+        y: 0.951690015983381
+      - name: GND
+        type: gnd
+        shape: header
+        x: 0.5941137186686198
+        y: 0.951690015983381
 mountingHoles:
   - x: 0.10976
     y: 0.18454
-    diameter: 3.2
+    diameter: 1.5
   - x: 0.89024
     y: 0.18454
-    diameter: 3.2
+    diameter: 1.5
   - x: 0.89024
     y: 0.81546
-    diameter: 3.2
+    diameter: 1.5
   - x: 0.10976
     y: 0.81546
-    diameter: 3.2
+    diameter: 1.5
 rails:
   - name: GND
     pins:
@@ -106,6 +141,14 @@ connectors:
           - i2c
         signals:
           i2c: SCL
+image: image.jpg
+imageLayer:
+  x: 0.0002330525716145726
+  y: 0
+  w: 1
+  h: 1
+rear:
+  image: rear.jpg
 help: help.md
 mesh: modulino.stl
 meshUnits: mm
@@ -119,3 +162,9 @@ drivers:
   - source: module:modulino
     target: lib/modulino
     label: Arduino Modulino library
+layerVisibility:
+  pcb: true
+  image: true
+  holes: true
+  pins: true
+  components: true
