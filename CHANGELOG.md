@@ -76,6 +76,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it no longer reads every folder in your home directory looking for a board.
 
 ### Fixed
+- **A running Snakie can no longer undo an edit you made to a part outside it.**
+  (#750) The parts library is a folder of plain text files, so a script, an
+  editor and `git checkout` are all perfectly good ways to change a part — but
+  the app assumed it was the only author. It held each part in memory from the
+  moment the library loaded and, on the next save, wrote that copy back over
+  whatever was on disk. Corrected I²C addresses reverted to their 8-bit values,
+  QWIIC socket rotations flipped so GND sat on the wrong contact of a power
+  connector, and a module lost its whole template — four times in one session,
+  silently each time, because a save reported success.
+
+  A part now carries a stamp of the exact file it was read from, and a save that
+  presents a stamp the file no longer matches is **refused**, with a message
+  asking you to reopen the part. Nothing is written, so nothing is lost.
+
+  The same save also used to prune the part's folder to match its own idea of
+  the part's contents: every `image.*` and any `help.md`, whether the part
+  referenced them or not. That is how a hand-written `help.md` and a `.stl` mesh
+  were deleted from disk. A save now only removes an asset the part's own
+  previous `parts.yml` named, and only when it is being replaced or cleared —
+  anything else beside `parts.yml` is left alone. The dev "Update Standard"
+  mirror and the bundled-library refresh follow the same rule: they copy over
+  the top rather than emptying the folder first, and the mirror refuses outright
+  when the copy it would overwrite carries a newer version than the one being
+  promoted.
 - **Snakie downloads packages, instead of asking the board to.** (#776,
   supersedes #769) Installing a driver or a package used to run `mip.install()`
   **on the board** — which quietly required the *board* to have its own internet

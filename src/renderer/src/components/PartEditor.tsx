@@ -690,6 +690,13 @@ export function PartEditor({
     content: partContentKey(initialSeedRef.current as PartDefinition),
     version: (initialSeedRef.current as PartDefinition).version
   })
+  // The stamp of the `parts.yml` this part was read from (#750) — the main
+  // process refuses a save whose stamp no longer matches the file on disk, so an
+  // edit made outside the app can't be silently reverted by the editor. Held in
+  // a ref (not in `part`) because it is file identity, not part content: it must
+  // survive every edit and undo, and MUST be refreshed from each save's result
+  // or the next save would look stale to itself. `undefined` for a new part.
+  const sourceHashRef = useRef<string | undefined>(initial?.sourceHash)
 
   const fileId = useMemo(() => sanitisePartId(part.id), [part.id])
   const names = useMemo(() => pinNames(part), [part])
@@ -1223,6 +1230,8 @@ export function PartEditor({
     setSelection(null)
     // Reset the version baseline so the fresh part's first save keeps its version (#172).
     lastSavedRef.current = { content: partContentKey(seed), version: seed.version }
+    // A blank part came from no file, so it has no stamp to present (#750).
+    sourceHashRef.current = undefined
     setStatus({ kind: 'info', text: 'Started a new blank part.' })
   }
 
@@ -1265,7 +1274,16 @@ export function PartEditor({
       contentChanged && versionUntouched && openedId !== null ? bumpPatch(clean.version) : clean.version
     // `helpText`/`imageData` are runtime-only (normalisePart strips them); re-add
     // them so the main process can write help.md / the image asset out on save.
-    const payload: PartDefinition = { ...clean, version: nextVersion, imageData: part.imageData, helpText: part.helpText }
+    // `sourceHash` is runtime-only for the same reason and comes from the REF,
+    // not from `part` — the editor's copy of it is whatever the file said when
+    // this part was opened, and it must be the freshest one we know of (#750).
+    const payload: PartDefinition = {
+      ...clean,
+      version: nextVersion,
+      imageData: part.imageData,
+      helpText: part.helpText,
+      sourceHash: sourceHashRef.current
+    }
     // The REAR photo is runtime-only too, and `normalisePart` strips it for the
     // same reason it strips the front's — so re-attach it, or the back face saves
     // without its picture (#636 follow-up).
@@ -1278,9 +1296,19 @@ export function PartEditor({
         setOpenedId(clean.id)
         setOpenedLibId(res.libraryId ?? libId)
         lastSavedRef.current = { content: partContentKey(payload), version: nextVersion }
+        // Adopt the stamp of what we just wrote, or the NEXT save would present
+        // the pre-save one and be refused as stale (#750).
+        sourceHashRef.current = res.sourceHash
         if (nextVersion !== part.version) patch({ version: nextVersion }) // reflect the bump in the field
         setStatus({ kind: 'ok', text: `Saved "${clean.name}" to ${res.libraryId ?? libId} (v${nextVersion}).` })
         onSaved(res.libraryId ?? libId, res.id ?? clean.id)
+      } else if (res?.conflict) {
+        // Not a broken save — a refused one. The file moved under us, so the
+        // only safe next step is to look at what is actually on disk (#750).
+        setStatus({
+          kind: 'error',
+          text: res.error ?? `"${clean.id}" changed on disk since you opened it — close the editor and reopen the part.`
+        })
       } else {
         setStatus({ kind: 'error', text: res?.error ?? 'Save failed.' })
       }

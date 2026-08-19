@@ -928,6 +928,12 @@ export interface PartsWriteResult {
   error?: string
   id?: string
   libraryId?: string
+  /** The save was REFUSED because `parts.yml` changed on disk since it was read
+   *  (#750) — the UI asks for a reload rather than reporting a broken save. */
+  conflict?: boolean
+  /** The stamp of the file as just written: the caller's new baseline, so the
+   *  next save in the same session isn't mistaken for a stale one (#750). */
+  sourceHash?: string
 }
 
 /**

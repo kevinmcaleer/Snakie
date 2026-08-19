@@ -290,7 +290,15 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
       if (res.ok) {
         const verb = libraryId === STANDARD_LIBRARY_ID ? 'Synced' : 'Promoted'
         const where = libraryId === STANDARD_LIBRARY_ID ? '' : ' to the Standard library'
-        setNote(`${verb} "${part.name}"${where}${res.shipped ? ' → bundled repo copy (commit it to ship)' : ''}.`)
+        // The runtime copy succeeded; the repo mirror is a separate outcome and
+        // can be REFUSED (a newer repo copy would be reverted, #750). Say so —
+        // silently reporting a plain success is how those reverts went unnoticed.
+        const mirror = res.shipped
+          ? ' → bundled repo copy (commit it to ship).'
+          : res.error
+            ? `. The bundled repo copy was NOT written: ${res.error}`
+            : '.'
+        setNote(`${verb} "${part.name}"${where}${mirror}`)
         await refresh()
       } else {
         setNote(res.error ?? 'Promote failed.')
@@ -440,13 +448,17 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
       id = `${baseId}-copy-${n}`
       name = `${baseName} copy ${n}`
     }
-    const copy: PartDefinition = { ...part, id, name }
+    // `sourceHash` stamps the file the ORIGINAL was read from (#750); the copy is
+    // a different file, so it must not carry it — and the editor we then open on
+    // the copy needs the stamp of the file the save actually wrote.
+    const copy: PartDefinition = { ...part, id, name, sourceHash: undefined }
     const res = await window.api.parts.savePart(libraryId, copy)
     if (res.ok) {
       setNote(`Duplicated "${part.name}" → "${name}".`)
       await refresh()
       setSelected({ libraryId, partId: id })
-      openEditor(libraryId, copy) // jump straight into renaming/tweaking the copy
+      // jump straight into renaming/tweaking the copy
+      openEditor(libraryId, { ...copy, sourceHash: res.sourceHash })
     } else {
       setNote(res.error ?? 'Duplicate failed.')
     }
