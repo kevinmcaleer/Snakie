@@ -156,6 +156,10 @@ const EVERY_FIELD: Required<PartDefinition> = {
   // --- I²C identity --------------------------------------------------------
   i2cAddresses: [0x29],
 
+  // --- Display panel (#780) ------------------------------------------------
+  // Deliberately unlike `dimensions` above: these are PIXELS, those are mm.
+  display: { width: 12, height: 8, colour: 'gray4' },
+
   // --- Code library / drivers ----------------------------------------------
   library: { module: 'contract', url: 'github:snakie/contract', docs: 'https://example.com' },
   drivers: [{ source: 'contract.py', target: 'lib/contract.py', label: 'Contract driver' }],

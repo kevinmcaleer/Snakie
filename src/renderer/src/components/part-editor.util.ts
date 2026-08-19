@@ -64,7 +64,7 @@ import { connectablePinCount,
   type PolygonPoint
 } from '../../../shared/part'
 import type { RobotPart } from '../../../shared/robot'
-import { coerceElectrical } from '../../../shared/part-yaml'
+import { coerceDisplay, coerceElectrical } from '../../../shared/part-yaml'
 import { flattenPartPins } from '../../../shared/netlist'
 
 /** The pin types the editor offers, in UI order. */
@@ -2236,6 +2236,10 @@ export function normalisePart(part: PartDefinition): PartDefinition {
   // whitelist keeps the SAME fields the YAML round-trip does (no silent drop).
   const electrical = coerceElectrical(part.electrical)
   if (electrical) out.electrical = electrical
+  // The pixel panel (#780) — same deal: the shared coercer, so the editor and the
+  // on-disk form agree on what a valid display block is.
+  const display = coerceDisplay(part.display)
+  if (display) out.display = display
   if (
     part.imageLayer &&
     [part.imageLayer.x, part.imageLayer.y, part.imageLayer.w, part.imageLayer.h].every(

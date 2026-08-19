@@ -19,7 +19,7 @@ properties:
   rtc: PCF8563, I²C 0x51, CR1220 backup
   grove: 2x I²C, 1x UART, 1x analog/digital
   storage: microSD (SPI, CS on D2)
-version: 0.1.18
+version: 0.1.19
 pcbColor: "#1b4d3e"
 aspect: 1.365
 dimensions:
@@ -512,6 +512,13 @@ imageLayer:
   w: 1
   h: 1
 help: help.md
+# The onboard 0.96" SSD1306 OLED, in PIXELS (#780) — the board itself is
+# 58 x 42.5 mm (`dimensions` above). Seeed's own wiki drives it as
+# U8X8_SSD1306_128X64, and an SSD1306 panel is 1 bit per pixel.
+display:
+  width: 128
+  height: 64
+  colour: mono
 suggests:
   - module: ssd1306
     unlocks: the 0.96" OLED

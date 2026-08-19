@@ -27,6 +27,7 @@ import {
 import type {
   ComponentShape,
   ComponentShapeKind,
+  DisplayColour,
   DriverFile,
   SuggestedModule,
   ElectricalModel,
@@ -36,6 +37,7 @@ import type {
   PartButton,
   PartConnector,
   PartDefinition,
+  PartDisplay,
   PartEdge,
   PartElectrical,
   PartFeature,
@@ -59,6 +61,7 @@ import type {
 const PIN_TYPES: PartPinType[] = ['pwr', 'gnd', 'io', 'other']
 const CAPABILITIES: PartPinCapability[] = ['digital', 'pwm', 'adc', 'spi', 'i2c', 'uart']
 const ELECTRICAL_MODELS: ElectricalModel[] = ['source', 'resistor', 'led', 'diode', 'switch', 'consumer', 'potentiometer', 'regulator', 'passive']
+const DISPLAY_COLOURS: DisplayColour[] = ['mono', 'gray2', 'gray4', 'gray8', 'rgb332', 'rgb565', 'rgb888']
 const SPI_SIGNALS = ['RX', 'CSn', 'SCK', 'TX']
 
 /** Coerce a raw `signals` map from YAML into a clean {@link PartPinSignals}. */
@@ -272,6 +275,34 @@ export function coerceElectrical(raw: unknown): PartElectrical | null {
   // empty/garbage block doesn't round-trip as noise.
   if (model === 'passive' && Object.keys(el).length === 1) return null
   return el
+}
+
+/**
+ * Coerce a raw `display` block (#780) into a clean {@link PartDisplay}. Returns
+ * null unless BOTH sides are a positive whole number of pixels — a panel with no
+ * width isn't a panel, and a fractional pixel doesn't exist — so a bare or
+ * garbage block is dropped rather than half-populated.
+ *
+ * An absent / unrecognised `colour` falls back to `mono` (as `coerceElectrical`
+ * falls back to `passive`): every panel has SOME depth, mono is both the most
+ * common and the safe floor, and defaulting here means the rest of the app never
+ * has to re-decide it.
+ *
+ * Exported so `normalisePart` (the save-time whitelist) reuses the SAME validator
+ * — one source of truth, so the block can't be dropped or drift on save.
+ */
+export function coerceDisplay(raw: unknown): PartDisplay | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  const width = num(r.width)
+  const height = num(r.height)
+  if (width === undefined || height === undefined) return null
+  if (!Number.isInteger(width) || !Number.isInteger(height)) return null
+  if (width <= 0 || height <= 0) return null
+  const colour = DISPLAY_COLOURS.includes(r.colour as DisplayColour)
+    ? (r.colour as DisplayColour)
+    : 'mono'
+  return { width, height, colour }
 }
 
 /** Coerce one raw component-shape object from YAML into a {@link ComponentShape}. */
@@ -515,6 +546,10 @@ export function partToYaml(part: PartDefinition): string {
     electrical: coerceElectrical(part.electrical) ?? undefined,
     schematic: part.schematic,
     i2cAddresses: part.i2cAddresses,
+    // The pixel panel (#780) — coerced on write like `electrical`, so a bad block
+    // is dropped even if the caller didn't normalise first. NB: this is PIXELS;
+    // `dimensions` above is the physical size in mm and both are written.
+    display: coerceDisplay(part.display) ?? undefined,
     library: part.library,
     drivers: part.drivers?.map(driverToObj),
     suggests: part.suggests?.map(suggestedToObj),
@@ -907,6 +942,11 @@ export function partFromYaml(text: string): PartDefinition {
       .filter((a): a is number => Number.isInteger(a) && a >= 0 && a <= 0x7f)
     if (addrs.length) part.i2cAddresses = addrs
   }
+
+  // The pixel panel (#780) — coerced/validated; a non-integer or non-positive
+  // size drops the whole block.
+  const display = coerceDisplay(raw.display)
+  if (display) part.display = display
 
   if (raw.library && typeof raw.library === 'object' && !Array.isArray(raw.library)) {
     const l = raw.library as Record<string, unknown>
