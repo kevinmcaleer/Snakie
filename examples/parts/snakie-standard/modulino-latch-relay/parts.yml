@@ -1,0 +1,121 @@
+id: modulino-latch-relay
+name: Modulino Latch Relay
+description: Bistable latching relay that holds its state with no coil current — DC loads only, 30 V max — on an I²C Modulino.
+manufacturer: Arduino
+family: Output
+tags:
+  - modulino
+  - arduino
+  - i2c
+  - qwiic
+  - relay
+  - latching
+  - bistable
+  - output
+package: SMD
+voltage: 3.3V
+partNumber: ABX00138
+properties:
+  interface: I²C (0x02, re-addressable — onboard MCU)
+  relay: HFE60/3-1HT-L2 bistable latching, dual SET/RESET coil
+  switching: DC loads only, 30 V DC maximum — NOT safe for AC
+  coil: 3 V nominal, ~100 mA for 50 ms while it flips, 0 mA once latched
+  mcu: STM32C011F4
+  chain: QWIIC socket at each end, same bus in parallel
+version: 0.1.0
+pcbColor: "#00979d"
+aspect: 1.617
+dimensions:
+  width: 41
+  height: 25.36
+shape:
+  kind: rect
+  cornerRadiusMm: 4.6
+mountingHoles:
+  - x: 0.10976
+    y: 0.18454
+    diameter: 3.2
+  - x: 0.89024
+    y: 0.18454
+    diameter: 3.2
+  - x: 0.89024
+    y: 0.81546
+    diameter: 3.2
+  - x: 0.10976
+    y: 0.81546
+    diameter: 3.2
+rails:
+  - name: GND
+    pins:
+      - GND
+      - GND-B
+  - name: 3V3
+    pins:
+      - 3V3
+      - 3V3-B
+  - name: SDA
+    pins:
+      - SDA
+      - SDA-B
+  - name: SCL
+    pins:
+      - SCL
+      - SCL-B
+connectors:
+  - z: 0
+    kind: qwiic
+    x: 0.05183
+    y: 0.5
+    rotation: 270
+    pins:
+      - name: GND
+        type: gnd
+      - name: 3V3
+        type: pwr
+      - name: SDA
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+      - name: SCL
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+  - z: 0
+    kind: qwiic
+    x: 0.94817
+    y: 0.5
+    rotation: 90
+    pins:
+      - name: GND-B
+        type: gnd
+      - name: 3V3-B
+        type: pwr
+      - name: SDA-B
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+      - name: SCL-B
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+help: help.md
+mesh: modulino.stl
+meshUnits: mm
+mass_g: 4.4
+i2cAddresses:
+  - 2
+library:
+  module: modulino
+  docs: https://docs.arduino.cc/hardware/modulino-latch/
+drivers:
+  - source: module:modulino
+    target: lib/modulino
+    label: Arduino Modulino library

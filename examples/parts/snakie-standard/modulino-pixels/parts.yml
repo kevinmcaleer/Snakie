@@ -1,0 +1,166 @@
+id: modulino-pixels
+name: Modulino Pixels
+description: Eight addressable RGB LEDs in a row, per-LED colour and brightness, on an I²C Modulino, daisy-chainable over QWIIC.
+manufacturer: Arduino
+family: Output
+tags:
+  - modulino
+  - arduino
+  - i2c
+  - qwiic
+  - addressable-led
+  - rgb
+  - led
+  - output
+package: SMD
+voltage: 3.3V
+partNumber: ABX00109
+properties:
+  interface: I²C (0x36, re-addressable — onboard MCU)
+  leds: 8 × LC8822-2020 addressable RGB, 2.0 mm square
+  control: per-LED colour and 0–100 brightness, applied on show()
+  mcu: STM32C011F4
+  chain: QWIIC socket at each end, same bus in parallel
+version: 0.1.0
+pcbColor: "#00979d"
+aspect: 1.617
+dimensions:
+  width: 41
+  height: 25.36
+shape:
+  kind: rect
+  cornerRadiusMm: 4.6
+mountingHoles:
+  - x: 0.10976
+    y: 0.18454
+    diameter: 3.2
+  - x: 0.89024
+    y: 0.18454
+    diameter: 3.2
+  - x: 0.89024
+    y: 0.81546
+    diameter: 3.2
+  - x: 0.10976
+    y: 0.81546
+    diameter: 3.2
+# The eight LC8822-2020 pixels. They hang off the onboard STM32, not off any
+# GPIO of the host, so none carries a `gpio` — the same call the Grove LED Bar
+# makes. They're here so the Board View reads as a strip rather than a blank
+# board. Positions are an even span across the middle of the board, not a
+# measurement off a real one.
+onboardLeds:
+  - kind: neopixel
+    label: "1"
+    x: 0.235
+    y: 0.5
+    sizeMm: 2
+  - kind: neopixel
+    label: "2"
+    x: 0.3107
+    y: 0.5
+    sizeMm: 2
+  - kind: neopixel
+    label: "3"
+    x: 0.3864
+    y: 0.5
+    sizeMm: 2
+  - kind: neopixel
+    label: "4"
+    x: 0.4621
+    y: 0.5
+    sizeMm: 2
+  - kind: neopixel
+    label: "5"
+    x: 0.5379
+    y: 0.5
+    sizeMm: 2
+  - kind: neopixel
+    label: "6"
+    x: 0.6136
+    y: 0.5
+    sizeMm: 2
+  - kind: neopixel
+    label: "7"
+    x: 0.6893
+    y: 0.5
+    sizeMm: 2
+  - kind: neopixel
+    label: "8"
+    x: 0.765
+    y: 0.5
+    sizeMm: 2
+rails:
+  - name: GND
+    pins:
+      - GND
+      - GND-B
+  - name: 3V3
+    pins:
+      - 3V3
+      - 3V3-B
+  - name: SDA
+    pins:
+      - SDA
+      - SDA-B
+  - name: SCL
+    pins:
+      - SCL
+      - SCL-B
+connectors:
+  - z: 0
+    kind: qwiic
+    x: 0.05183
+    y: 0.5
+    rotation: 270
+    pins:
+      - name: GND
+        type: gnd
+      - name: 3V3
+        type: pwr
+      - name: SDA
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+      - name: SCL
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+  - z: 0
+    kind: qwiic
+    x: 0.94817
+    y: 0.5
+    rotation: 90
+    pins:
+      - name: GND-B
+        type: gnd
+      - name: 3V3-B
+        type: pwr
+      - name: SDA-B
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+      - name: SCL-B
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+help: help.md
+mesh: modulino.stl
+meshUnits: mm
+mass_g: 4.4
+i2cAddresses:
+  - 54
+library:
+  module: modulino
+  docs: https://docs.arduino.cc/hardware/modulino-pixels/
+drivers:
+  - source: module:modulino
+    target: lib/modulino
+    label: Arduino Modulino library
