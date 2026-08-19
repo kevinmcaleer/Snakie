@@ -1,0 +1,339 @@
+/* Font editor instrument (#250) — metrics header, charset navigator, per-glyph
+   pixel grid and a 1× preview strip.
+
+   Unique BEM prefix `glyf__` (instrument CSS is global; `i2c-detect` and
+   `i2c-display` once collided on `i2cd__`). Nothing else in the renderer uses it.
+
+   Theming: like every instrument body, this panel sits on the SILVER window
+   (`.instr`, the same gradient in both skins), so its own surfaces are
+   theme-NEUTRAL — dark ink on brushed metal, recessed near-black glass for the
+   pixel canvases — and read identically in the dark and skeuomorph skins. The
+   only colour that varies is `--accent` / `--accent-border`, which the component
+   sets inline from the instrument registry. */
+
+.glyf {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 2px 0 0;
+  font-family: var(--font-mono);
+  color: #22252a;
+}
+
+/* --- Metric rows (name, cell size, baseline, charset) --- */
+.glyf__metrics {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.glyf__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #4a4f57;
+  min-width: 0;
+}
+
+.glyf__field--name,
+.glyf__field--grow {
+  flex: 1 1 auto;
+}
+
+.glyf__field input,
+.glyf__field select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #16181c;
+  background: #e4e6ea;
+  border: var(--border-w, 1px) solid #8e939b;
+  border-radius: 4px;
+  padding: 3px 5px;
+}
+
+.glyf__field input[type='number'] {
+  width: 46px;
+  flex: 0 0 auto;
+}
+
+.glyf__field input:focus-visible,
+.glyf__field select:focus-visible,
+.glyf__sample:focus-visible {
+  outline: 2px solid var(--accent, #a855c7);
+  outline-offset: 1px;
+}
+
+.glyf__field input:disabled,
+.glyf__btn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+/* A checkbox + caps label pair (MONO). */
+.glyf__check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #4a4f57;
+  padding-bottom: 4px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.glyf__check input {
+  accent-color: var(--accent, #a855c7);
+  margin: 0;
+  cursor: pointer;
+}
+
+/* --- Buttons --- */
+.glyf__btn {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #16181c;
+  background: linear-gradient(180deg, #eceef1, #d3d6db);
+  border: var(--border-w, 1px) solid #8e939b;
+  border-radius: 4px;
+  padding: 4px 7px;
+  cursor: pointer;
+}
+
+.glyf__btn:hover:not(:disabled) {
+  background: linear-gradient(180deg, #f5f6f8, #dcdfe4);
+}
+
+.glyf__btn:active:not(:disabled) {
+  background: linear-gradient(180deg, #c9ccd1, #dfe2e6);
+}
+
+.glyf__btn--primary {
+  color: #fff;
+  background: var(--accent, #a855c7);
+  border-color: var(--accent-border, #a855c7);
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glyf__btn--icon {
+  padding: 2px 0;
+  width: 22px;
+  text-align: center;
+}
+
+.glyf__row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+/* --- Charset navigator --- */
+.glyf__nav {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(20px, 1fr));
+  gap: 2px;
+  max-height: 84px;
+  overflow-y: auto;
+  padding: 4px;
+  background: #14161a;
+  border: var(--border-w, 1px) solid #45494f;
+  border-radius: 5px;
+}
+
+.glyf__cell {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  color: #6f7681;
+  background: transparent;
+  border: var(--border-w, 1px) solid transparent;
+  border-radius: 3px;
+  padding: 3px 0;
+  cursor: pointer;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* A glyph that has been drawn reads brighter than an empty slot. */
+.glyf__cell--ink {
+  color: #d5dae1;
+}
+
+.glyf__cell:hover {
+  background: #23262b;
+}
+
+.glyf__cell--on {
+  color: #fff;
+  background: var(--accent, #a855c7);
+  border-color: var(--accent-border, #a855c7);
+}
+
+/* --- The glyph editor: pixel grid + tools --- */
+.glyf__editor {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.glyf__grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 5), var(--px, 22px));
+  gap: 1px;
+  padding: 4px;
+  background: #14161a;
+  border: var(--border-w, 1px) solid #45494f;
+  border-radius: 5px;
+  touch-action: none;
+  flex: 0 0 auto;
+}
+
+.glyf__px {
+  width: var(--px, 22px);
+  height: var(--px, 22px);
+  padding: 0;
+  background: #23262b;
+  border: none;
+  border-radius: 1px;
+  cursor: crosshair;
+}
+
+.glyf__px:hover {
+  background: #33373d;
+}
+
+.glyf__px--on {
+  background: var(--accent, #a855c7);
+}
+
+/* The last row above the baseline gets a hairline, so descenders are obvious. */
+.glyf__px--base {
+  box-shadow: inset 0 -2px 0 -1px rgba(255, 255, 255, 0.34);
+}
+
+.glyf__tools {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* A 3×2 arrow cluster for nudging the glyph around its cell. */
+.glyf__nudge {
+  display: grid;
+  grid-template-columns: repeat(3, 22px);
+  gap: 2px;
+  justify-content: start;
+}
+
+.glyf__btn--up {
+  grid-column: 2;
+  grid-row: 1;
+}
+.glyf__btn--left {
+  grid-column: 1;
+  grid-row: 2;
+}
+.glyf__btn--down {
+  grid-column: 2;
+  grid-row: 2;
+}
+.glyf__btn--right {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+/* --- 1× preview strip --- */
+.glyf__preview {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Dark glass so the 1× pixels read like a real OLED, scrolling if the line is
+   wider than the window. */
+.glyf__screen {
+  background: #060809;
+  border: var(--border-w, 1px) solid #45494f;
+  border-radius: 5px;
+  padding: 7px 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.glyf__screen svg {
+  display: block;
+}
+
+.glyf__lit {
+  fill: var(--accent, #a855c7);
+}
+
+.glyf__preview .glyf__sample {
+  flex: 1 1 auto;
+  min-width: 0;
+  box-sizing: border-box;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #16181c;
+  background: #e4e6ea;
+  border: var(--border-w, 1px) solid #8e939b;
+  border-radius: 4px;
+  padding: 3px 5px;
+}
+
+.glyf__measure {
+  align-self: flex-end;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #4a4f57;
+}
+
+/* --- Export + footer --- */
+.glyf__export {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.glyf__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.glyf__status {
+  font-size: 9px;
+  color: #4a4f57;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glyf__link {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: #16181c;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}

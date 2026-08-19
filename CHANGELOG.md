@@ -7,6 +7,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **A bitmap font editor, so a display project can have its own typeface.**
+  (#250, epic #247) Small displays ship with one tiny built-in font; this
+  instrument lets you draw your own the way hand-made display fonts are made —
+  a per-glyph pixel grid you click and drag on, a navigator across the whole
+  charset, an adjustable cell (5×7, 8×8, whatever), and a preview line that
+  renders your text at **1×** so you see the real thing before you flash it.
+  It opens on a bundled 5×8 printable-ASCII starter font rather than a blank
+  grid, so the first move is "fix the letters you don't like", and your drawing
+  is parked as you go. Fonts can be fixed-pitch or proportional: **Auto-fit**
+  shrinks every glyph to its own ink plus a pixel of spacing, growing the cell
+  first so the widest letters still get their gap. Export writes a
+  **`font-to-py`-compatible module** into the editor, so existing `Writer` code
+  works unchanged — or a simpler packed `bytearray` + metrics module if you'd
+  rather blit into a `framebuf` yourself. Importing an existing font module,
+  uploading straight to the board and previewing on real hardware are follow-ups.
 - **Grove Red LED, as a Standard library part.** Seeed's 5 mm red LED module
   (SKU 104030005) on a Grove digital port, drawn from the product photo: the LED
   in its white holder, the brightness trimmer, the switching transistor and the
