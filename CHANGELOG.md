@@ -7,6 +7,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Electronics and Build now show the SAME component hierarchy.** (#718, epic
+  #720) There used to be two trees describing one robot and disagreeing about
+  it: the board browser listed the microcontroller and your placed parts nested
+  by what they're plugged into; the Build dock listed URDF links and joints
+  nested by how they're jointed together. Same idea, different rows, different
+  behaviours. Now there is one tree, in one component, in both workspaces — a
+  part and its 3-D body are a single row, carrier nesting is preserved (a XIAO
+  still sits inside its expansion base), and rows that only exist in Build
+  (joints, structural blocks) appear in Electronics too, dimmed and inert,
+  rather than being hidden — so the shape of the tree reads identically wherever
+  you are. Clicking a row selects it and zooms to fit it in whichever workspace
+  you're in, and the selection now survives switching workspace (it even
+  carries into the popped-out Board View window).
+- **Honest mass: the robot tells you how much of it has actually been weighed.**
+  (#719, epic #720) The centre of mass has always been computed from the parts
+  whose mass is known, silently leaving the rest out — so a balance verdict from
+  4 of 12 parts looked exactly like one from all 12. Every row in the hierarchy
+  now carries its weight, or an amber **"? g"** when it hasn't got one; a line
+  under the tree states the coverage ("mass known for 4 of 12 parts") and turns
+  amber below full; the Build panel's total is marked as the lower bound it is;
+  and the centre-of-mass overlay's readout says "4/12 weighed" while the picture
+  is partial. Nothing is ever invented to fill a gap — no family estimates, no
+  default masses, and a 0 g body reads as *unknown*, not weightless.
 - **A Sync button keeps Electronics and Build honest with each other.** (#717,
   epic #720) The same control in both workspaces (and the pop-out board window)
   shows a badge when the two disagree, and opens a reconcile dialog where YOU

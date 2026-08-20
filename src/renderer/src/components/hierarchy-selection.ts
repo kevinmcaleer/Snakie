@@ -91,9 +91,11 @@ export function useHierarchySelection(): [string | null, (key: string | null) =>
   return [value, set]
 }
 
-/** Test seam — drop the store back to "nothing selected", listeners intact. */
+/** Test seam — drop the store back to "nothing selected", listeners intact.
+ *  Deliberately leaves `hydrated` alone: re-hydrating would attach a SECOND
+ *  `storage` listener each time. */
 export function resetHierarchySelectionForTest(): void {
+  hydrate()
   selected = null
-  hydrated = false
   for (const l of listeners) l()
 }
