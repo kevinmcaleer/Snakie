@@ -305,6 +305,10 @@ function Row({
         : node.geometry === 'mesh'
           ? 'Mesh body'
           : 'Stand-in / primitive body'
+  // Nothing to edit on a row with no 3-D body — its properties (size, mass,
+  // joint) all live on the body it hasn't got yet. A live-looking pencil that
+  // does nothing is worse than no pencil.
+  const noBody = node.kind !== 'joint' && node.link === null
 
   return (
     <div
@@ -317,7 +321,7 @@ function Row({
         (node.loose ? ' is-loose' : '')
       }
       aria-current={isSelected ? 'true' : undefined}
-      onContextMenu={inert || !onContextMenu ? undefined : (e) => onContextMenu(e, node)}
+      onContextMenu={inert || noBody || !onContextMenu ? undefined : (e) => onContextMenu(e, node)}
     >
       <span
         className={`uhier__base${node.isBase ? ' is-base' : ''}`}
@@ -333,9 +337,15 @@ function Row({
         <button
           type="button"
           className={`uhier__edit${isActive ? ' is-on' : ''}`}
-          disabled={inert}
+          disabled={inert || noBody}
           onClick={() => onEdit(node)}
-          title={isActive ? 'Close properties' : 'Edit properties'}
+          title={
+            noBody
+              ? 'No 3-D body yet — add one with Sync, then it has properties'
+              : isActive
+                ? 'Close properties'
+                : 'Edit properties'
+          }
           aria-label={`Edit ${node.label}`}
         >
           {PENCIL}
@@ -347,7 +357,7 @@ function Row({
         disabled={inert}
         aria-disabled={inert || undefined}
         onClick={() => onSelect(node)}
-        onContextMenu={inert || !onContextMenu ? undefined : (e) => onContextMenu(e, node)}
+        onContextMenu={inert || noBody || !onContextMenu ? undefined : (e) => onContextMenu(e, node)}
         title={rowTitle(node, inert)}
       >
         <span className="uhier__label">{node.label}</span>

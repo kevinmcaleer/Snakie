@@ -97,6 +97,14 @@ describe('HierarchyPanel — one tree, both workspaces', () => {
     expect(render('build')).toContain('>3</span>')
   })
 
+  it('a row with no 3-D body has no live pencil — nothing to edit yet', () => {
+    // The Display is placed in Electronics but has never been added to Build.
+    const html = render('build')
+    const at = html.indexOf('Edit Display')
+    expect(at).toBeGreaterThan(-1)
+    expect(html.slice(at - 220, at)).toContain('disabled')
+  })
+
   it('the selection highlights the same key in either workspace', () => {
     for (const ws of ['electronics', 'build'] as const) {
       const html = render(ws, { selectedKey: 's1' })
