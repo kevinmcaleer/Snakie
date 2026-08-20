@@ -123,6 +123,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it no longer reads every folder in your home directory looking for a board.
 
 ### Fixed
+- **Instruments pop out into their own window in the browser too.** (#781) On
+  app.snakie.org, undocking an instrument did nothing you could see: the
+  instrument left the dock, no window opened, and there was no way to get it
+  back except toggling its kind off and on. The pop-out control called
+  `instruments.openWindow`, which outside Electron landed on a stub that
+  returned and did nothing at all.
+
+  It now opens a real, resizable browser window — and, importantly, a LIVE one.
+  A pop-up is its own JavaScript world, so a window that built its own backend
+  would be watching a second, separate simulator (and a USB board can only be
+  open in one place at a time, so it could not join in at all). Instead the
+  editor tab lends the pop-out its own device: same telemetry, same
+  `sendControl`, one board. Close the window and the instrument re-docks, exactly
+  as it does on the desktop. If the browser blocks the pop-up, the instrument
+  comes straight back to the dock and says why; if the editor tab it belongs to
+  is gone, the window says that too instead of showing a dead dial.
+
+  Two smaller things came out of the same fix: the offline service worker was
+  answering *any* navigation with the app shell, so the instrument window would
+  have opened the whole editor inside itself; and a detached instrument now
+  uses the Soft Shell fonts the rest of the app does.
 - A unit test no longer depends on what is plugged into the machine running it.
   (#773) The CircuitPython file-routing tests exercise one case — a drive that
   ejected — that made the device re-resolve its mount, and re-resolution is the
