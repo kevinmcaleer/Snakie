@@ -21,15 +21,31 @@ import { createWebFeedbackApi, captureTabScreenshot } from './web-feedback'
 import { createWebModulesApi } from './web-modules'
 import { createWebPackagesApi } from './web-packages'
 import { installWebBoardMain, installWebBoardWindow } from './web-board'
+import {
+  installWebInstrumentsMain,
+  installWebInstrumentWindow,
+  instrumentKeyFromHash
+} from './web-instruments'
 import { VIRTUAL_PORT_PATH } from '../../../shared/virtual-device'
 
-/** Which renderer entry is installing: the main editor (`main.tsx`) or the
- *  popped-out Board View window (`board-main.tsx`). */
-export type WebWindowKind = 'main' | 'board'
+/** Which renderer entry is installing: the main editor (`main.tsx`), the
+ *  popped-out Board View window (`board-main.tsx`), or a popped-out instrument
+ *  (`instrument-window-main.tsx`). */
+export type WebWindowKind = 'main' | 'board' | 'instrument'
 
-export function installWebApi(kind: WebWindowKind = 'main'): void {
+/**
+ * Install the web backends for one renderer entry. Returns whether the entry got
+ * a working backend — only an instrument popup can fail (it needs its editor
+ * window), and it renders a plain "disconnected" state when it does.
+ */
+export function installWebApi(kind: WebWindowKind = 'main'): boolean {
   const w = window as typeof window & { api?: Record<string, unknown> }
-  if (!w.api) return // the fallback runs first and sets this; guard defensively
+  if (!w.api) return false // the fallback runs first and sets this; guard defensively
+  // An instrument popup builds NOTHING of its own: a second device backend would
+  // be a second simulator (and a real board's serial port can't be shared across
+  // browser contexts anyway). It runs on the EDITOR window's api instead — see
+  // web-instruments.ts.
+  if (kind === 'instrument') return installWebInstrumentWindow(instrumentKeyFromHash(window.location.hash))
   // Report the real app version (injected from package.json by vite.web.config) so
   // the status bar shows it — the fallback returns '' (no Electron `app.getVersion`).
   const version = (import.meta.env as unknown as { VITE_SNAKIE_VERSION?: string }).VITE_SNAKIE_VERSION ?? ''
@@ -103,13 +119,21 @@ export function installWebApi(kind: WebWindowKind = 'main'): void {
   // Board View popup (the desktop's floating BrowserWindow, as a browser window):
   // each side gets its half of the BroadcastChannel relay. AFTER the robot api
   // above, so the relay can wrap `robot.save` with the cross-window notify.
-  if (kind === 'board') installWebBoardWindow()
-  else installWebBoardMain()
+  if (kind === 'board') {
+    installWebBoardWindow()
+  } else {
+    installWebBoardMain()
+    // Undocking an instrument opens a real browser window running on THIS
+    // window's device (#781). AFTER the board relay, which shares the same
+    // `instruments` namespace.
+    installWebInstrumentsMain()
+  }
   // eslint-disable-next-line no-console
   console.info(
     '[Snakie] Web backend ready — Connect the "Simulated device (offline)" to run Python; ' +
       'Open Folder to edit local files.'
   )
+  return true
 }
 
 /**

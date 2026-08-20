@@ -69,13 +69,16 @@ export default defineConfig({
     // electron build), so raise the warning limit past its size.
     chunkSizeWarningLimit: 4000,
     rollupOptions: {
-      // The main app entry plus the Board View, which pops out as a browser
-      // window (`window.open('board.html')` + a BroadcastChannel relay — see
-      // src/renderer/src/web/web-board.ts). The other Electron detached windows
-      // (find / instrument / console) remain in-page panes on the web.
+      // The main app entry plus the two windows that pop OUT of it in the
+      // browser: the Board View (`window.open('board.html')` + a BroadcastChannel
+      // relay — src/renderer/src/web/web-board.ts) and a detached instrument
+      // (`instrument.html`, which runs on the editor tab's own device — see
+      // src/renderer/src/web/web-instruments.ts, #781). The remaining Electron
+      // detached windows (find / console) stay in-page panes on the web.
       input: {
         index: resolve(__dirname, 'src/renderer/index.html'),
-        board: resolve(__dirname, 'src/renderer/board.html')
+        board: resolve(__dirname, 'src/renderer/board.html'),
+        instrument: resolve(__dirname, 'src/renderer/instrument.html')
       },
       output: {
         manualChunks(id: string) {
@@ -101,7 +104,13 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,woff,woff2,wasm}'],
         // The MicroPython WASM + Monaco chunks are large; precache them so the
         // classroom app truly works offline after the first visit.
-        maximumFileSizeToCacheInBytes: 12 * 1024 * 1024
+        maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
+        // The app is an SPA, so every navigation falls back to `index.html` —
+        // but the two pop-out windows are REAL pages, and answering their
+        // navigation with the shell opens the whole editor inside a 460px
+        // instrument window (#781). They are precached in their own right, so
+        // exclude them and let the precache (or the network) serve them.
+        navigateFallbackDenylist: [/^\/board\.html/, /^\/instrument\.html/]
       },
       manifest: {
         name: 'Snakie — MicroPython IDE',
