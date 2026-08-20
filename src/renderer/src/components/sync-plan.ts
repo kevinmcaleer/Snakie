@@ -56,9 +56,11 @@ export type SyncItem =
     }
 
 /** Resolve a part definition from the installed libraries; with no `lib`, every
- *  library is searched (how the MCU board id resolves — boards are parts). */
-function resolveDef(
-  libraries: PartLibraryWithParts[],
+ *  library is searched (how the MCU board id resolves — boards are parts).
+ *  Exported for the unified hierarchy (#718), which must resolve the SAME
+ *  definition the sync plan does or the two would disagree about a part's link. */
+export function resolveDef(
+  libraries: readonly PartLibraryWithParts[],
   lib: string | undefined,
   partId: string | undefined
 ): PartDefinition | undefined {

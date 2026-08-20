@@ -250,6 +250,26 @@ export function looseLinks(urdf: string, base?: string | null): string[] {
 }
 
 /**
+ * The link the hierarchy treats as the BASE — the anchor everything hangs off,
+ * marked with the anchor glyph and used as {@link buildChainTree}'s root.
+ *
+ * The user's `chosen` base wins while it is still a root; a single-tree robot
+ * uses its sole root; several roots with no choice honour the conventional
+ * `base_link` (the new-robot starter's base), else null — meaning "several loose
+ * parts, no base picked yet", which the Build panel prompts about.
+ *
+ * Lives here beside {@link looseLinks} because BOTH workspaces need it now
+ * (#718): the Build view had this rule inline, and the Electronics hierarchy has
+ * to agree with it exactly or the two trees would disagree about the base.
+ */
+export function effectiveBaseLink(urdf: string, chosen?: string | null): string | null {
+  const roots = looseLinks(urdf)
+  if (chosen && roots.includes(chosen)) return chosen
+  if (roots.length === 1) return roots[0]
+  return roots.includes('base_link') ? 'base_link' : null
+}
+
+/**
  * Rename a link everywhere it's referenced: its `<link name="…">` and every
  * joint's `<parent link="…">` / `<child link="…">`. `to` is sanitised to an
  * XML-safe name, made unique (a collision with another link bumps a suffix); a

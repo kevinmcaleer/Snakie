@@ -36,6 +36,7 @@ import {
   jointNames,
   jointDisplayLimits,
   looseLinks,
+  effectiveBaseLink as computeBaseLink,
   parseAssembly,
   readAllJoints,
   readJoint,
@@ -166,12 +167,13 @@ import {
   kgToGrams,
   mmToM,
   mToMm,
-  summariseMass,
   DEFAULT_MATERIAL,
   DEFAULT_INFILL,
-  type MassEstimate,
-  type MassBreakdown
+  type MassEstimate
 } from './robot-mass'
+import { useHierarchy } from './use-hierarchy'
+import { useHierarchySelection } from './hierarchy-selection'
+import { findHierarchyNode, flattenHierarchy } from './hierarchy-tree'
 import type { MassEditorProps, ContactsEditorProps } from './RobotPropertiesDialog'
 import type { MeshTriangles } from './robot-mass-geometry'
 import { addContact, removeContact, setContact } from './robot-contacts'
@@ -836,17 +838,39 @@ export function RobotView({
       .map((i) => i.link)
       .filter((l) => !banned.has(l))
   }, [content, editLink])
-  // The effective base for the hierarchy's ★ marker: the user's chosen base if it's
-  // still a root, else the sole root of a single-tree robot, else null — meaning
-  // several loose parts and no base picked yet (the panel then prompts to pick one).
-  const effectiveBaseLink = useMemo(() => {
-    const roots = looseLinks(content) // every childless link
-    if (chosenBase && roots.includes(chosenBase)) return chosenBase
-    if (roots.length === 1) return roots[0] // a single-tree robot: its sole root
-    // Several roots + no explicit choice: honour the conventional `base_link` (the
-    // new-robot starter's base) if present, else prompt the user to pick one.
-    return roots.includes('base_link') ? 'base_link' : null
-  }, [content, chosenBase])
+  // The effective base for the hierarchy's anchor marker. The rule moved into
+  // `robot-assembly` with #718 so the Electronics hierarchy resolves the SAME
+  // base — two trees that disagreed about the root would not be one hierarchy.
+  const effectiveBaseLink = useMemo(() => computeBaseLink(content, chosenBase), [content, chosenBase])
+
+  // ── The shared hierarchy (#718) ──────────────────────────────────────────
+  // The identical rows the Electronics workspace renders. The URDF is this
+  // view's LIVE buffer (unsaved edits must show up immediately); robot.yml and
+  // the libraries are loaded by the hook, off the same buses the board hosts use.
+  const { nodes: hierarchy, coverage: massCoverageInfo } = useHierarchy({
+    folder: currentFolder || undefined,
+    urdf: content,
+    baseLink: chosenBase
+  })
+  const [hierarchyKey, setHierarchyKey] = useHierarchySelection()
+  // Shared key → this view's selected link. A row with no 3-D body (a part that
+  // hasn't been added to Build yet, a joint) leaves the 3-D selection alone —
+  // the row still highlights, there is simply nothing to ring in the scene.
+  useEffect(() => {
+    const node = findHierarchyNode(hierarchy, hierarchyKey)
+    if (node?.link && node.link !== selectedLinkRef.current) setSelectedLink(node.link)
+  }, [hierarchyKey, hierarchy])
+  // …and back: a 3-D click / an edit that moves the selection publishes it. Only
+  // on an actual CHANGE — re-deriving it every render would drag the shared key
+  // back onto a stale link whenever the other workspace selected a bodyless row.
+  const publishedLinkRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (publishedLinkRef.current === selectedLink) return
+    publishedLinkRef.current = selectedLink
+    if (!selectedLink) return
+    const node = flattenHierarchy(hierarchy).find((n) => n.link === selectedLink)
+    if (node) setHierarchyKey(node.key)
+  }, [selectedLink, hierarchy, setHierarchyKey])
 
   const setBuildPinnedPersist = (p: boolean): void => {
     setBuildPinned(p)
@@ -1093,24 +1117,11 @@ export function RobotView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editLink, dialogCtx, content, editMassEstimate, massMaterial, massInfill])
 
-  // The whole-robot mass breakdown (#555 part 2): each link's stored <inertial>
-  // mass + its provenance, totalled and sorted for the Build panel's table. Reads
-  // the authoritative persisted value (not a live estimate), so it's pure over
-  // `content`; the source label comes from robot.yml provenance.
-  const massSummary = useMemo<MassBreakdown | null>(() => {
-    const linkNames = parseAssembly(content).map((i) => i.link)
-    if (linkNames.length === 0) return null
-    const lm = defRef.current?.robot?.linkMass
-    const rows = linkNames.map((link) => {
-      const inertial = readInertial(content, link)
-      const grams = inertial ? kgToGrams(inertial.mass) : 0
-      const source = inertial ? lm?.[link]?.source ?? 'measured' : 'none'
-      return { link, grams, source }
-    })
-    // Sort order is irrelevant now only the total is shown (#567), but the
-    // breakdown is kept for a future stats surface; default (by mass) is fine.
-    return summariseMass(rows)
-  }, [content])
+  // The whole-robot mass total is now the hierarchy's mass COVERAGE (#719):
+  // counted over the robot's bodies (the board, placed parts and structural
+  // links) rather than raw URDF links, so the footer total and the tree's
+  // per-row badges can't disagree — and so a part with no 3-D body still counts
+  // as unweighed instead of quietly vanishing from the denominator.
 
   // Per-link masses for the CoM overlay (#558) — recomputed only on edit, held in
   // a ref so the render loop reads them without re-parsing the URDF every frame.
@@ -5395,6 +5406,8 @@ export function RobotView({
             onSetOpen={setBuildOpen}
             onSetPinned={setBuildPinnedPersist}
             assembly={assembly}
+            hierarchy={hierarchy}
+            coverage={massCoverageInfo}
             joints={joints}
             servos={bindings}
             bindableServos={servoList}
@@ -5402,10 +5415,15 @@ export function RobotView({
             onBindServo={handleBindServo}
             onRemoveMesh={handleDeleteLink}
             poses={poses}
-            selected={selectedLink}
-            onSelect={(link) => {
-              setSelectedLink(link)
-              if (link) zoomApiRef.current?.focusLink(link) // hierarchy click zooms to fit
+            selectedKey={hierarchyKey}
+            onSelectNode={(node) => {
+              // Same behaviour as Electronics' row click, in THIS workspace:
+              // share the selection, then zoom-fit the thing that was clicked.
+              setHierarchyKey(node.key)
+              if (node.link) {
+                setSelectedLink(node.link)
+                zoomApiRef.current?.focusLink(node.link)
+              }
             }}
             active={dialogCtx}
             onEdit={handleOpenProps}
@@ -5426,7 +5444,6 @@ export function RobotView({
             importing={importing}
             canEdit={canEdit}
             onOpenRobot={() => void handleOpenRobotFile()}
-            massSummary={massSummary}
           />
         )}
         {showPanel && dialogCtx && (
@@ -5522,6 +5539,18 @@ export function RobotView({
                   {comStatus.state === 'none'
                     ? `${Math.round(comStatus.massKg * 1000)} g · tag feet for stability`
                     : `${Math.round(comStatus.massKg * 1000)} g · ${comStatus.state} · ${comStatus.marginMm} mm`}
+                  {/* PARTIAL COVERAGE (#719): the CoM and its balance verdict are
+                      computed from the weighed parts ONLY. Say so on the readout —
+                      a "stable" from 4 of 12 parts must not read as authoritative. */}
+                  {!massCoverageInfo.complete && (
+                    <span
+                      className="robotview__hud-partial"
+                      title={`Only ${massCoverageInfo.known} of ${massCoverageInfo.total} parts have a known mass. The rest are LEFT OUT of this balance point — not estimated. Weigh them for a verdict you can trust.`}
+                    >
+                      {' '}
+                      · {massCoverageInfo.known}/{massCoverageInfo.total} weighed
+                    </span>
+                  )}
                 </span>
               )}
               {savingLabel && <span className="robotview__hud-pill">{savingLabel}</span>}

@@ -284,6 +284,7 @@ function BoardWindowApp(): JSX.Element {
         asWindow
         robot={robot}
         onChangeRobot={saveRobot}
+        folder={folder}
         joints={joints}
         jointLimits={jointLimits}
         libraries={libraries}

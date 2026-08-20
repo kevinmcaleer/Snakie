@@ -664,125 +664,19 @@
   border-color: rgba(220, 235, 245, 0.34);
 }
 
-/* Component hierarchy tree. */
+/* The slot the SHARED hierarchy panel sits in (#718). Its rows style themselves
+   (`uhier__*` in HierarchyPanel.css) and take their ink from this dock by
+   inheritance, so both workspaces draw the same tree. The browser's own row
+   styles left with the rows. */
 .wc__tree {
   padding: 0.25rem 0.3rem 0.4rem;
 }
 
-.wc__tree-group {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  width: 100%;
-  font-family: var(--font-ui), sans-serif;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--bptext, #d6dade);
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0.2rem 0.25rem;
-}
-
+/* Still used by the Connections table's disclosure rows. */
 .wc__tree-caret {
   width: 0.7rem;
   color: var(--bptext, #8b919b);
   opacity: 0.7;
-}
-
-.wc__tree-label {
-  flex: 1 1 auto;
-  text-align: left;
-}
-
-.wc__tree-count {
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
-  color: var(--bptext, #8b919b);
-  opacity: 0.7;
-}
-
-.wc__tree-list {
-  list-style: none;
-  margin: 0;
-  padding: 0 0 0 1rem;
-}
-
-.wc__tree-item {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.14rem 0.25rem;
-  border-radius: var(--radius);
-  font-family: var(--font-ui), sans-serif;
-  font-size: 0.72rem;
-  color: var(--bptext, #d6dade);
-}
-
-.wc__tree-item:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-/* #648 — the row for the part selected on the canvas. Same amber as the Part
-   Editor's layers panel, so "selected" reads the same across both hierarchies. */
-.wc__tree-item.is-selected,
-.wc__tree-item.is-selected:hover {
-  background: #ddad4b;
-  color: #1b1204;
-  font-weight: 600;
-}
-
-/* The delete button inherits the dark ink rather than staying pale-on-amber. */
-.wc__tree-item.is-selected .wc__parts-del,
-.wc__tree-item.is-selected .wc__parts-tag {
-  color: inherit;
-  opacity: 0.85;
-}
-
-/* #649 — docked parts sit indented under their carrier, with a guide line so the
-   relationship is readable at a glance rather than inferred from padding. */
-.wc__tree-list--nested {
-  padding-left: 0.7rem;
-  margin-left: 0.35rem;
-  border-left: 1px solid rgba(255, 255, 255, 0.16);
-}
-
-.wc__tree-item--board {
-  font-weight: 600;
-}
-
-.wc__tree-name {
-  flex: 1 1 auto;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-/* The row name is a button that zooms the canvas to fit that item (#…). Strip the
-   default button chrome so it still reads as a tree row; underline on hover. */
-.wc__tree-focus {
-  font: inherit;
-  color: inherit;
-  text-align: left;
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-}
-
-.wc__tree-focus:hover {
-  color: #fff;
-  text-decoration: underline;
-}
-
-.wc__tree-empty {
-  margin: 0.2rem 0.25rem;
-  padding-left: 0.4rem;
-}
-
-.wc__tree-item:hover .wc__parts-del,
-.wc__parts-del:focus-visible {
-  opacity: 1;
 }
 
 /* Project / robot name + description — inside the floating browser (#179). */
@@ -859,43 +753,6 @@
   min-height: 0;
   border-top: 1px solid var(--shellbd, var(--border));
   background: var(--panel2, var(--bg-elevated));
-}
-
-/* The "MCU" tag pinned on the microcontroller row in the browser tree — a small
-   green Soft Shell pill that reads over the blueprint-chrome browser. */
-.wc__parts-tag {
-  flex: 0 0 auto;
-  font-family: var(--font-mono);
-  font-size: 0.58rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: #8fe6b6;
-  background: rgba(38, 162, 105, 0.22);
-  border: 1px solid rgba(143, 230, 182, 0.4);
-  border-radius: var(--radius);
-  padding: 0 0.3rem;
-}
-
-/* Trash icon — hidden until the row is hovered (or the button focused). */
-.wc__parts-del {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.3rem;
-  height: 1.3rem;
-  padding: 0;
-  color: var(--text-muted);
-  background: none;
-  border: none;
-  border-radius: var(--radius);
-  cursor: pointer;
-  opacity: 0;
-}
-
-.wc__parts-del:hover {
-  color: #fff;
-  background: #c0392b;
 }
 
 /* Connections table */

@@ -27,7 +27,10 @@ import type { PartConnector, PartPinBuses, PartPinCapability, PartPinSignals } f
 import { cablePlugGeometry, cableRole, conductorColour, connectorFit, housingPlugAngle } from './cable'
 import { partSupplyVoltage } from '../../../shared/power-led'
 import type { SmokeSite } from '../../../shared/erc'
-import { BOARD_KEY, browserTree, countNodes, type BrowserNode } from './browser-tree'
+import { BOARD_KEY, type HierarchyNode, type MassCoverage } from './hierarchy-tree'
+import { HierarchyPanel } from './HierarchyPanel'
+import { useHierarchy } from './use-hierarchy'
+import { useHierarchySelection } from './hierarchy-selection'
 import { linkBaseName } from './sync-plan'
 import { boardBox, layoutPads, mcuSymbolLayout, padKey, padLabelPlacement, type PadPoint } from './board-layout'
 import {
@@ -654,6 +657,15 @@ function partSchematicPins(def: PartDefinition): { w: number; h: number; placed:
 export interface WiringCanvasProps {
   robot: RobotDefinition
   onChange: (next: RobotDefinition) => void
+  /**
+   * The project folder — needed to read the Build model for the shared
+   * hierarchy (#718). **Deliberately NOT optional**: both board hosts must
+   * supply it, or the popped-out window would quietly show a tree with no
+   * Build rows while the in-window pane showed the full one (the divergence
+   * that caused #453). `null`/`undefined` is a real answer ("no project yet"),
+   * but it has to be given.
+   */
+  folder: string | null | undefined
   /** The linked URDF's joint names — lets a servo's inspector bind to a joint (#). */
   joints?: string[]
   /** Each joint's real travel (deg / mm), to seed a new binding's joint range from
@@ -774,7 +786,7 @@ interface Drag {
   pinchWY?: number
 }
 
-export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, usedByCode, smoking, onDropPart, onShowHelp, focusedChrome = false, voltage, live, highlight, nets, onHighlightNet }: WiringCanvasProps): JSX.Element {
+export function WiringCanvas({ robot, onChange, folder, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, usedByCode, smoking, onDropPart, onShowHelp, focusedChrome = false, voltage, live, highlight, nets, onHighlightNet }: WiringCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
   // The focusable canvas root — focused when a part is selected so the Delete /
   // Backspace shortcut is scoped to THIS canvas (a selected part can't be nuked by
@@ -825,6 +837,19 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     setBrowserPinnedState(v)
     savePin(window.localStorage, PIN_KEYS.browser, v)
   }
+  // Whether the browser's Components branch is expanded.
+  const [compOpen, setCompOpen] = useState(true)
+  // The SHARED hierarchy (#718) — the exact tree the Build workspace shows. The
+  // live robot.yml + libraries come from props (they're fresher than disk while
+  // a part is being dragged); the Build model is read off the project folder by
+  // the hook, so both board hosts get it without either having to remember to
+  // pass it through.
+  const { nodes: hierarchy, coverage: massCoverageInfo } = useHierarchy({
+    folder,
+    robot,
+    libraries,
+    boardLabel: boardDef?.name
+  })
   const [, force] = useState(0) // re-render during a wire/pan/box drag (ref-driven)
   /**
    * The last REFUSED cable drop — the reason, and the socket it was dropped on
@@ -852,7 +877,12 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   // its pins' capability chips; a specific pin emphasises its own.
   const [hover, setHover] = useState<{ key: string; pin: number | null } | null>(null)
   // The selected placed part (#176) — shows a mini-toolbar (rotate/rename/delete).
-  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  // Held in the SHARED hierarchy selection (#718), not local state: the key is a
+  // unified-hierarchy key, so selecting a part here and switching to Build lands
+  // on the same component (and vice versa). A Build-only key (`link:…`) simply
+  // matches no canvas subject, which is exactly right — there's nothing here to
+  // ring.
+  const [selectedKey, setSelectedKey] = useHierarchySelection()
   // The selected WIRE (connection id), mutually exclusive with a selected part —
   // click a wire to select it (highlighted), Delete removes it (#…).
   const [selectedWire, setSelectedWire] = useState<string | null>(null)
@@ -1752,7 +1782,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     // below is a no-op for it — but the CONNECTIONS filter is not, and would strip
     // every wire attached to the board. The MCU is changed with the picker.
     if (key === BOARD_KEY) return
-    setSelectedKey((k) => (k === key ? null : k)) // drop a stale selection
+    if (selectedKey === key) setSelectedKey(null) // drop a stale selection
     // The part's Build body is NOT deleted with it (#626: it may be jointed into
     // the robot by now — flag, don't auto-delete). Record the stranded link here,
     // at the only moment anything still remembers it (the reference lives on the
@@ -2163,10 +2193,13 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   }
 
   /**
-   * Clicking a row in the project browser: zoom to it AND select it, so the row
+   * Clicking a row in the shared hierarchy: zoom to it AND select it, so the row
    * highlights, the canvas draws its selection ring, and a part gets its
    * mini-toolbar — exactly as clicking the thing on the canvas does. Zooming
    * without selecting left the browser unable to show what it had just navigated to.
+   *
+   * The Build workspace does the mirror image of this with `focusLink` (#718):
+   * one row, one behaviour, zoom-fitting in whichever workspace you're in.
    *
    * Focus is deliberately NOT moved to the canvas here (a canvas click does move
    * it, to scope the Delete key). In focused Board mode an unpinned browser hides
@@ -2175,8 +2208,10 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   const selectFromBrowser = (key: string): void => {
     const s = subjects.find((sub) => sub.key === key)
     const selectable = s?.kind === 'part' || s?.kind === 'board'
+    // The selection is shared, so it's recorded even for a row this canvas has
+    // no subject for — switching to Build then lands on the right component.
+    setSelectedKey(key)
     if (renderMode === 'lifelike' && selectable) {
-      setSelectedKey(key)
       setSelectedWire(null)
       setRenameText(null)
     }
@@ -3396,14 +3431,15 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         </div>
 
         {/* Fusion-360-style floating browser: project name + description + the
-            component hierarchy (MCU + parts), collapsible, over the canvas. */}
+            SHARED component hierarchy (#718), collapsible, over the canvas. */}
         <BoardBrowser
           name={robot.name ?? ''}
           description={robot.description ?? ''}
           onCommit={commitRobotMeta}
-          board={boardDef?.name}
-          boardMountedOn={robot.boardMountedOn}
-          parts={robot.parts}
+          hierarchy={hierarchy}
+          coverage={massCoverageInfo}
+          compOpen={compOpen}
+          onCompOpenChange={setCompOpen}
           selectedKey={selectedKey}
           onRemovePart={removePart}
           open={browserOpen}
@@ -3464,9 +3500,10 @@ function BoardBrowser({
   name,
   description,
   onCommit,
-  board,
-  boardMountedOn,
-  parts,
+  hierarchy,
+  coverage,
+  compOpen,
+  onCompOpenChange,
   selectedKey,
   onRemovePart,
   open,
@@ -3478,29 +3515,26 @@ function BoardBrowser({
   name: string
   description: string
   onCommit: (patch: { name?: string; description?: string }) => void
-  board?: string
-  /** The part the MCU is docked into, so it nests under it (#649). */
-  boardMountedOn?: string
-  parts: RobotPart[]
-  /** The canvas's selected subject key, mirrored as a highlighted row (#648). */
+  /** The SHARED hierarchy (#718) — the same rows the Build workspace renders. */
+  hierarchy: HierarchyNode[]
+  /** How much of the robot is actually weighed (#719). */
+  coverage: MassCoverage
+  compOpen: boolean
+  onCompOpenChange: (open: boolean) => void
+  /** The shared selection key, mirrored as a highlighted row (#648/#718). */
   selectedKey?: string | null
   onRemovePart: (id: string) => void
   /** Open state (lifted to WiringCanvas so the fit can inset for the browser). */
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** Zoom the canvas to fit a subject: `'board'` or a placed part's instance id. */
+  /** Select + zoom the canvas to fit a row (`'board'` or a part instance id). */
   onFocus: (key: string) => void
   /** Pin model (focused Board mode only) — matches the Build hierarchy: an
    *  unpinned panel auto-hides on blur; `undefined` disables pinning entirely. */
   pinned?: boolean
   onPin?: (v: boolean) => void
 }): JSX.Element {
-  const [compOpen, setCompOpen] = useState(true)
   const asideRef = useRef<HTMLElement | null>(null)
-  // Docked parts nest under their carrier (#649); the count still covers every
-  // depth, so collapsing a carrier doesn't appear to lose components.
-  const tree = useMemo(() => browserTree({ board, boardMountedOn, parts }), [board, boardMountedOn, parts])
-  const count = countNodes(tree)
   const pinnable = onPin !== undefined
 
   if (!open) {
@@ -3568,107 +3602,23 @@ function BoardBrowser({
 
       <RobotHeader name={name} description={description} onCommit={onCommit} />
 
+      {/* The ONE hierarchy (#718) — the same component, the same rows, the same
+          behaviours the Build workspace's dock shows. Build-only rows (joints,
+          structural links) render here too, dimmed and inert. */}
       <div className="wc__tree">
-        <button
-          type="button"
-          className="wc__tree-group"
-          onClick={() => setCompOpen((o) => !o)}
-          aria-expanded={compOpen}
-        >
-          <span className="wc__tree-caret" aria-hidden="true">
-            {compOpen ? '▾' : '▸'}
-          </span>
-          <span className="wc__tree-label">Components</span>
-          <span className="wc__tree-count">{count}</span>
-        </button>
-        {compOpen &&
-          (count === 0 ? (
-            <p className="wc__muted wc__tree-empty">No components yet — pick a board + add parts.</p>
-          ) : (
-            <BrowserRows
-              nodes={tree}
-              depth={0}
-              selectedKey={selectedKey}
-              onFocus={onFocus}
-              onRemovePart={onRemovePart}
-            />
-          ))}
+        <HierarchyPanel
+          nodes={hierarchy}
+          workspace="electronics"
+          selectedKey={selectedKey ?? null}
+          onSelect={(node) => onFocus(node.key)}
+          open={compOpen}
+          onToggleOpen={() => onCompOpenChange(!compOpen)}
+          onRemove={(node) => onRemovePart(node.key)}
+          coverage={coverage}
+          emptyHint="No components yet — pick a board + add parts."
+        />
       </div>
     </aside>
-  )
-}
-
-/**
- * One level of the browser's component tree (#649) — recursive, so a part docked
- * into a carrier renders indented beneath it. The selected row is highlighted so
- * the browser mirrors the canvas selection (#648).
- */
-function BrowserRows({
-  nodes,
-  depth,
-  selectedKey,
-  onFocus,
-  onRemovePart
-}: {
-  nodes: BrowserNode[]
-  depth: number
-  selectedKey?: string | null
-  onFocus: (key: string) => void
-  onRemovePart: (id: string) => void
-}): JSX.Element {
-  return (
-    <ul className={`wc__tree-list${depth > 0 ? ' wc__tree-list--nested' : ''}`}>
-      {nodes.map((n) => (
-        <li key={n.key}>
-          <div
-            className={`wc__tree-item${n.isBoard ? ' wc__tree-item--board' : ''}${
-              selectedKey === n.key ? ' is-selected' : ''
-            }`}
-            aria-current={selectedKey === n.key ? 'true' : undefined}
-          >
-            <button
-              type="button"
-              className="wc__tree-name wc__tree-focus"
-              onClick={() => onFocus(n.key)}
-              title={`Select and zoom to ${n.label}`}
-            >
-              {n.label}
-            </button>
-            {n.isBoard ? (
-              <span className="wc__parts-tag">MCU</span>
-            ) : (
-              <button
-                type="button"
-                className="wc__parts-del"
-                onClick={() => onRemovePart(n.key)}
-                title={`Remove ${n.label}`}
-                aria-label={`Remove ${n.label}`}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path
-                    d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7m4 4v6m4-6v6"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-            )}
-          </div>
-          {n.children.length > 0 && (
-            <BrowserRows
-              nodes={n.children}
-              depth={depth + 1}
-              selectedKey={selectedKey}
-              onFocus={onFocus}
-              onRemovePart={onRemovePart}
-            />
-          )}
-        </li>
-      ))}
-    </ul>
   )
 }
 
