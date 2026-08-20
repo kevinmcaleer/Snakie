@@ -1,5 +1,11 @@
 import { CollapsiblePanel } from './CollapsiblePanel'
-import { countComponents, type HierarchyNode, type HierarchyWorkspace } from './hierarchy-tree'
+import {
+  countComponents,
+  coverageLabel,
+  type HierarchyNode,
+  type HierarchyWorkspace,
+  type MassCoverage
+} from './hierarchy-tree'
 import type { JointType } from './robot-assembly'
 import './HierarchyPanel.css'
 
@@ -159,6 +165,8 @@ export interface HierarchyPanelProps {
   onContextMenu?: (e: React.MouseEvent, node: HierarchyNode) => void
   /** Remove a placed component (the board browser's bin). */
   onRemove?: (node: HierarchyNode) => void
+  /** Mass coverage readout under the tree (#719). Omit to hide it. */
+  coverage?: MassCoverage | null
   /** Shown in place of the tree when there is nothing yet. */
   emptyHint?: string
 }
@@ -174,8 +182,10 @@ export function HierarchyPanel({
   onEdit,
   onContextMenu,
   onRemove,
+  coverage,
   emptyHint
 }: HierarchyPanelProps): JSX.Element {
+  const label = coverage ? coverageLabel(coverage) : null
   return (
     <div className={`uhier uhier--${workspace}`}>
       <CollapsiblePanel
@@ -202,6 +212,18 @@ export function HierarchyPanel({
           />
         )}
       </CollapsiblePanel>
+      {label && (
+        <p
+          className={`uhier__coverage${coverage && !coverage.complete ? ' is-partial' : ''}`}
+          title={
+            coverage && !coverage.complete
+              ? 'The centre of mass is computed from the weighed parts only — the rest are left out, not guessed.'
+              : 'Every part has a known mass.'
+          }
+        >
+          {label}
+        </p>
+      )}
     </div>
   )
 }

@@ -3,7 +3,12 @@ import type { PartLibraryWithParts } from '../../../shared/part'
 import type { RobotDefinition } from '../../../shared/robot'
 import { blankRobot } from '../../../shared/robot'
 import { readRobotModel } from '../../../shared/krf'
-import { unifiedTree, type HierarchyNode } from './hierarchy-tree'
+import {
+  massCoverage,
+  unifiedTree,
+  type HierarchyNode,
+  type MassCoverage
+} from './hierarchy-tree'
 
 /**
  * THE HIERARCHY'S DATA (#718, epic #720) — one loader for all three mounts.
@@ -40,6 +45,9 @@ export interface UseHierarchyOptions {
 
 export interface UseHierarchyResult {
   nodes: HierarchyNode[]
+  /** How much of the robot is actually weighed (#719) — derived from the same
+   *  rows, so the badges, the readout and the total can't disagree. */
+  coverage: MassCoverage
   /** The robot.yml the tree was built from (live override or freshly loaded). */
   robot: RobotDefinition
 }
@@ -112,5 +120,6 @@ export function useHierarchy(opts: UseHierarchyOptions): UseHierarchyResult {
       }),
     [robot, model, urdf, libraries, baseLink, boardLabel]
   )
-  return { nodes, robot }
+  const coverage = useMemo(() => massCoverage(nodes), [nodes])
+  return { nodes, coverage, robot }
 }

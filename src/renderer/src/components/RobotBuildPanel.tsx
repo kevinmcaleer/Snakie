@@ -12,9 +12,8 @@ import { principalAxisName } from './robot-build'
 import { toDisplay, toNative, unitLabel, normPin, type MovableType } from './robot-pose'
 import { boundJoint, type BindableServo } from './servo-bind'
 import { shouldAutoHide } from './pin-overlay'
-import type { MassBreakdown } from './robot-mass'
 import { HierarchyPanel } from './HierarchyPanel'
-import { flattenHierarchy, jointKey, type HierarchyNode } from './hierarchy-tree'
+import { flattenHierarchy, jointKey, type HierarchyNode, type MassCoverage } from './hierarchy-tree'
 import type { ServoJointBinding } from '../../../shared/robot'
 import type { NamedPoseLike } from './robot-pose'
 import type { PropsContext } from './RobotPropertiesDialog'
@@ -62,6 +61,8 @@ export interface RobotBuildPanelProps {
    * board browser now appear in Build too.
    */
   hierarchy: HierarchyNode[]
+  /** How much of the robot is actually weighed (#719). */
+  coverage: MassCoverage
   /** The model's joints, servo bindings and named poses — extra tree branches. */
   joints: JointFull[]
   servos: ServoJointBinding[]
@@ -105,9 +106,6 @@ export interface RobotBuildPanelProps {
   canEdit: boolean
   /** Open a different robot `.urdf` via the native picker (works popped out). */
   onOpenRobot: () => void
-  /** The robot's total mass in grams + how many links are still un-weighed (#555 /
-   *  #567) — a compact footer readout; per-link mass lives in the Properties dialog. */
-  massSummary?: MassBreakdown | null
 }
 
 /** metres → integer mm (display) and back. */
@@ -479,6 +477,7 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
     onSetPinned,
     assembly,
     hierarchy,
+    coverage,
     joints,
     servos,
     poses,
@@ -506,8 +505,7 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
     canExport,
     importing,
     canEdit,
-    onOpenRobot,
-    massSummary
+    onOpenRobot
   } = props
   const dockRef = useRef<HTMLElement | null>(null)
   const prompt = usePrompt()
@@ -667,6 +665,7 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
             if (node.kind === 'joint' && node.joint) return openJointMenu(e, node.joint.name)
             if (node.link) openMenu(e, node.link)
           }}
+          coverage={coverage}
           emptyHint="Add a block or import an STL to start building."
         />
         {rootLink === null && assembly.length > 1 && (
@@ -808,18 +807,23 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
         )}
       </div>
 
-      {massSummary && massSummary.totalG > 0 && (
+      {/* The mass summary (#555/#567), now honest about coverage (#719): the
+          total is the sum of the WEIGHED parts, so it's a lower bound whenever
+          the hierarchy's coverage line above says less than "all". Same numbers,
+          one source — the old footer counted URDF links while the tree counted
+          parts, and the two could disagree. */}
+      {coverage.knownG > 0 && (
         <div
-          className="robotbuild__masstotal-bar"
+          className={`robotbuild__masstotal-bar${coverage.complete ? '' : ' is-partial'}`}
           title={
-            massSummary.unsetCount > 0
-              ? `${massSummary.unsetCount} link(s) still un-weighed — the total is a lower bound. Set a link's mass in its Properties.`
-              : 'Sum of every link’s mass'
+            coverage.complete
+              ? 'Sum of every part’s mass — every part is weighed.'
+              : `Only ${coverage.known} of ${coverage.total} parts are weighed, so this is a LOWER BOUND — the rest are left out, not guessed. Set a part's mass in its Properties.`
           }
         >
           <span>Total mass</span>
           <span className="robotbuild__masstotal-g">
-            {Math.round(massSummary.totalG)} g{massSummary.unsetCount > 0 ? '+' : ''}
+            {Math.round(coverage.knownG)} g{coverage.complete ? '' : '+'}
           </span>
         </div>
       )}

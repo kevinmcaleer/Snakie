@@ -364,3 +364,58 @@ export function countComponents(nodes: readonly HierarchyNode[]): number {
   return flattenHierarchy(nodes).filter((n) => n.kind === 'board' || n.kind === 'part').length
 }
 
+// ---------------------------------------------------------------------------
+// Mass coverage (#719) — honesty about how much of the robot is actually weighed
+// ---------------------------------------------------------------------------
+
+/** How much of the robot's mass is actually known. */
+export interface MassCoverage {
+  /** Bodies whose mass IS known (a positive `<inertial>` mass). */
+  known: number
+  /** Bodies in the hierarchy — the board, placed parts and structural links. */
+  total: number
+  /** Grams across the KNOWN bodies only. Never includes a guess. */
+  knownG: number
+  /** Every body has a known mass (and there is at least one body). */
+  complete: boolean
+}
+
+/**
+ * Count what the CoM is actually computed from (#719).
+ *
+ * Counted over the hierarchy's BODY rows — the board, placed parts and
+ * structural links — never over raw URDF links: a part and its link are ONE
+ * body and must not be counted twice, which is exactly what "use the placement
+ * mapping, not the links" means. Joint rows aren't bodies, so they're excluded.
+ * A part with no Build body at all still counts as an UNWEIGHED body: it is
+ * part of the robot, and its missing mass is precisely what the CoM leaves out.
+ *
+ * Pure. `known` counts what the CoM sums; `total - known` is what it silently
+ * omits.
+ */
+export function massCoverage(nodes: readonly HierarchyNode[]): MassCoverage {
+  let known = 0
+  let total = 0
+  let knownG = 0
+  for (const n of flattenHierarchy(nodes)) {
+    if (n.kind === 'joint') continue
+    total += 1
+    if (n.massG != null && n.massG > 0) {
+      known += 1
+      knownG += n.massG
+    }
+  }
+  return { known, total, knownG, complete: total > 0 && known === total }
+}
+
+/**
+ * The coverage sentence, or null when there's nothing to be honest about (an
+ * empty project). Deliberately the SAME shape at every coverage level — "0 of
+ * 12" is as informative as "4 of 12", and dropping the numbers at the extremes
+ * is how a partial CoM starts looking authoritative.
+ */
+export function coverageLabel(c: MassCoverage): string | null {
+  if (c.total === 0) return null
+  const noun = c.total === 1 ? 'part' : 'parts'
+  return `mass known for ${c.known} of ${c.total} ${noun}`
+}

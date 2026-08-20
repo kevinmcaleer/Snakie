@@ -27,7 +27,7 @@ import type { PartConnector, PartPinBuses, PartPinCapability, PartPinSignals } f
 import { cablePlugGeometry, cableRole, conductorColour, connectorFit, housingPlugAngle } from './cable'
 import { partSupplyVoltage } from '../../../shared/power-led'
 import type { SmokeSite } from '../../../shared/erc'
-import { BOARD_KEY, type HierarchyNode } from './hierarchy-tree'
+import { BOARD_KEY, type HierarchyNode, type MassCoverage } from './hierarchy-tree'
 import { HierarchyPanel } from './HierarchyPanel'
 import { useHierarchy } from './use-hierarchy'
 import { useHierarchySelection } from './hierarchy-selection'
@@ -844,7 +844,7 @@ export function WiringCanvas({ robot, onChange, folder, joints = [], jointLimits
   // a part is being dragged); the Build model is read off the project folder by
   // the hook, so both board hosts get it without either having to remember to
   // pass it through.
-  const { nodes: hierarchy } = useHierarchy({
+  const { nodes: hierarchy, coverage: massCoverageInfo } = useHierarchy({
     folder,
     robot,
     libraries,
@@ -3437,6 +3437,7 @@ export function WiringCanvas({ robot, onChange, folder, joints = [], jointLimits
           description={robot.description ?? ''}
           onCommit={commitRobotMeta}
           hierarchy={hierarchy}
+          coverage={massCoverageInfo}
           compOpen={compOpen}
           onCompOpenChange={setCompOpen}
           selectedKey={selectedKey}
@@ -3500,6 +3501,7 @@ function BoardBrowser({
   description,
   onCommit,
   hierarchy,
+  coverage,
   compOpen,
   onCompOpenChange,
   selectedKey,
@@ -3515,6 +3517,8 @@ function BoardBrowser({
   onCommit: (patch: { name?: string; description?: string }) => void
   /** The SHARED hierarchy (#718) — the same rows the Build workspace renders. */
   hierarchy: HierarchyNode[]
+  /** How much of the robot is actually weighed (#719). */
+  coverage: MassCoverage
   compOpen: boolean
   onCompOpenChange: (open: boolean) => void
   /** The shared selection key, mirrored as a highlighted row (#648/#718). */
@@ -3610,6 +3614,7 @@ function BoardBrowser({
           open={compOpen}
           onToggleOpen={() => onCompOpenChange(!compOpen)}
           onRemove={(node) => onRemovePart(node.key)}
+          coverage={coverage}
           emptyHint="No components yet — pick a board + add parts."
         />
       </div>

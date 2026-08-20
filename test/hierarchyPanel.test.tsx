@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { HierarchyPanel } from '../src/renderer/src/components/HierarchyPanel'
 import {
+  massCoverage,
   unifiedTree,
   type HierarchyNode,
   type HierarchyWorkspace
@@ -105,7 +106,7 @@ describe('HierarchyPanel — one tree, both workspaces', () => {
   })
 })
 
-describe('HierarchyPanel — mass badges', () => {
+describe('HierarchyPanel — mass badges (#719)', () => {
   it('shows grams for a weighed body and "? g" for an unweighed one', () => {
     const html = render('build')
     expect(html).toContain('9 g') // the servo's inertial
@@ -117,7 +118,22 @@ describe('HierarchyPanel — mass badges', () => {
     expect(render('build')).toContain('left OUT of the centre of mass')
   })
 
-  it('renders the empty hint when there is nothing yet', () => {
+  it('states coverage, amber while partial', () => {
+    const html = render('build', { coverage: massCoverage(fixtureNodes()) })
+    // 5 bodies: the MCU, the display, the servo, base_link and bracket.
+    expect(html).toContain('mass known for 1 of 5 parts')
+    expect(html).toContain('uhier__coverage is-partial')
+  })
+
+  it('drops the amber once every part is weighed', () => {
+    const html = render('build', {
+      coverage: { known: 4, total: 4, knownG: 100, complete: true }
+    })
+    expect(html).toContain('mass known for 4 of 4 parts')
+    expect(html).not.toContain('is-partial')
+  })
+
+  it('says nothing at all for an empty project', () => {
     const html = renderToStaticMarkup(
       <HierarchyPanel
         nodes={[]}
@@ -126,9 +142,11 @@ describe('HierarchyPanel — mass badges', () => {
         onSelect={() => {}}
         open
         onToggleOpen={() => {}}
+        coverage={{ known: 0, total: 0, knownG: 0, complete: false }}
         emptyHint="No components yet."
       />
     )
+    expect(html).not.toContain('uhier__coverage')
     expect(html).toContain('No components yet.')
   })
 })

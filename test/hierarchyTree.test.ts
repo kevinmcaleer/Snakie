@@ -3,10 +3,12 @@ import {
   BOARD_KEY,
   countComponents,
   countNodes,
+  coverageLabel,
   findHierarchyNode,
   flattenHierarchy,
   jointKey,
   linkKey,
+  massCoverage,
   unifiedTree,
   type HierarchyNode
 } from '../src/renderer/src/components/hierarchy-tree'
@@ -279,10 +281,10 @@ describe('unifiedTree — joining Electronics to Build', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Per-row mass (the badges' data)
+// Mass (#719)
 // ---------------------------------------------------------------------------
 
-describe('per-row mass', () => {
+describe('mass badges and coverage (#719)', () => {
   /** `urdfWith` links, with `mass` kg written onto `link`. */
   const weighed = (urdf: string, link: string, kg: number): string =>
     setInertial(urdf, link, { mass: kg, com: [0, 0, 0] })
@@ -324,10 +326,54 @@ describe('per-row mass', () => {
     expect(findHierarchyNode(tree, 's1')?.massSource).toBe('measured')
   })
 
-  it('a joint row never carries a mass — it is not a body', () => {
+  it('a part with no mass NEVER contributes to the total the CoM is built from', () => {
+    const urdf = weighed(urdfWith('SG90', 'bracket'), 'SG90', 0.009)
+    const c = massCoverage(unifiedTree({ parts: [part('s1', { urdfLink: 'SG90' })], urdf }))
+    // base_link + bracket + the servo = 3 bodies; only the servo is weighed.
+    expect(c.total).toBe(3)
+    expect(c.known).toBe(1)
+    expect(c.knownG).toBeCloseTo(9, 5)
+    expect(c.complete).toBe(false)
+  })
+
+  it('coverage counts BODIES, not links — a part and its link count once', () => {
     const urdf = weighed(urdfWith('SG90'), 'SG90', 0.009)
-    const joints = flattenHierarchy(unifiedTree({ urdf })).filter((n) => n.kind === 'joint')
-    expect(joints.length).toBeGreaterThan(0)
-    expect(joints.every((n) => n.massG === null)).toBe(true)
+    const linked = massCoverage(unifiedTree({ parts: [part('s1', { urdfLink: 'SG90' })], urdf }))
+    const bare = massCoverage(unifiedTree({ parts: [], urdf }))
+    // Attributing the link to a part must not add a body — it renames one.
+    expect(linked.total).toBe(bare.total)
+  })
+
+  it('joints are not bodies and are never counted', () => {
+    const urdf = urdfWith('a', 'b', 'c') // 3 joints, 4 links
+    const c = massCoverage(unifiedTree({ urdf }))
+    expect(c.total).toBe(4)
+  })
+
+  it('complete coverage when every body is weighed', () => {
+    let urdf = urdfWith('SG90')
+    urdf = weighed(urdf, 'SG90', 0.009)
+    urdf = weighed(urdf, 'base_link', 0.05)
+    const c = massCoverage(unifiedTree({ parts: [part('s1', { urdfLink: 'SG90' })], urdf }))
+    expect(c).toMatchObject({ known: 2, total: 2, complete: true })
+    expect(coverageLabel(c)).toBe('mass known for 2 of 2 parts')
+  })
+
+  it('says "0 of N" when nothing is weighed — the numbers never disappear', () => {
+    const c = massCoverage(unifiedTree({ parts: [part('a'), part('b')], urdf: '' }))
+    expect(c).toMatchObject({ known: 0, total: 2, knownG: 0, complete: false })
+    expect(coverageLabel(c)).toBe('mass known for 0 of 2 parts')
+  })
+
+  it('an empty project has nothing to say', () => {
+    const c = massCoverage(unifiedTree({ parts: [], urdf: '' }))
+    expect(c).toMatchObject({ known: 0, total: 0, complete: false })
+    expect(coverageLabel(c)).toBeNull()
+  })
+
+  it('singular for one part', () => {
+    expect(coverageLabel({ known: 0, total: 1, knownG: 0, complete: false })).toBe(
+      'mass known for 0 of 1 part'
+    )
   })
 })

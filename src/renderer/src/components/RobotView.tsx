@@ -167,11 +167,9 @@ import {
   kgToGrams,
   mmToM,
   mToMm,
-  summariseMass,
   DEFAULT_MATERIAL,
   DEFAULT_INFILL,
-  type MassEstimate,
-  type MassBreakdown
+  type MassEstimate
 } from './robot-mass'
 import { useHierarchy } from './use-hierarchy'
 import { useHierarchySelection } from './hierarchy-selection'
@@ -849,7 +847,7 @@ export function RobotView({
   // The identical rows the Electronics workspace renders. The URDF is this
   // view's LIVE buffer (unsaved edits must show up immediately); robot.yml and
   // the libraries are loaded by the hook, off the same buses the board hosts use.
-  const { nodes: hierarchy } = useHierarchy({
+  const { nodes: hierarchy, coverage: massCoverageInfo } = useHierarchy({
     folder: currentFolder || undefined,
     urdf: content,
     baseLink: chosenBase
@@ -1119,24 +1117,11 @@ export function RobotView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editLink, dialogCtx, content, editMassEstimate, massMaterial, massInfill])
 
-  // The whole-robot mass breakdown (#555 part 2): each link's stored <inertial>
-  // mass + its provenance, totalled and sorted for the Build panel's table. Reads
-  // the authoritative persisted value (not a live estimate), so it's pure over
-  // `content`; the source label comes from robot.yml provenance.
-  const massSummary = useMemo<MassBreakdown | null>(() => {
-    const linkNames = parseAssembly(content).map((i) => i.link)
-    if (linkNames.length === 0) return null
-    const lm = defRef.current?.robot?.linkMass
-    const rows = linkNames.map((link) => {
-      const inertial = readInertial(content, link)
-      const grams = inertial ? kgToGrams(inertial.mass) : 0
-      const source = inertial ? lm?.[link]?.source ?? 'measured' : 'none'
-      return { link, grams, source }
-    })
-    // Sort order is irrelevant now only the total is shown (#567), but the
-    // breakdown is kept for a future stats surface; default (by mass) is fine.
-    return summariseMass(rows)
-  }, [content])
+  // The whole-robot mass total is now the hierarchy's mass COVERAGE (#719):
+  // counted over the robot's bodies (the board, placed parts and structural
+  // links) rather than raw URDF links, so the footer total and the tree's
+  // per-row badges can't disagree — and so a part with no 3-D body still counts
+  // as unweighed instead of quietly vanishing from the denominator.
 
   // Per-link masses for the CoM overlay (#558) — recomputed only on edit, held in
   // a ref so the render loop reads them without re-parsing the URDF every frame.
@@ -5422,6 +5407,7 @@ export function RobotView({
             onSetPinned={setBuildPinnedPersist}
             assembly={assembly}
             hierarchy={hierarchy}
+            coverage={massCoverageInfo}
             joints={joints}
             servos={bindings}
             bindableServos={servoList}
@@ -5458,7 +5444,6 @@ export function RobotView({
             importing={importing}
             canEdit={canEdit}
             onOpenRobot={() => void handleOpenRobotFile()}
-            massSummary={massSummary}
           />
         )}
         {showPanel && dialogCtx && (
@@ -5554,6 +5539,18 @@ export function RobotView({
                   {comStatus.state === 'none'
                     ? `${Math.round(comStatus.massKg * 1000)} g · tag feet for stability`
                     : `${Math.round(comStatus.massKg * 1000)} g · ${comStatus.state} · ${comStatus.marginMm} mm`}
+                  {/* PARTIAL COVERAGE (#719): the CoM and its balance verdict are
+                      computed from the weighed parts ONLY. Say so on the readout —
+                      a "stable" from 4 of 12 parts must not read as authoritative. */}
+                  {!massCoverageInfo.complete && (
+                    <span
+                      className="robotview__hud-partial"
+                      title={`Only ${massCoverageInfo.known} of ${massCoverageInfo.total} parts have a known mass. The rest are LEFT OUT of this balance point — not estimated. Weigh them for a verdict you can trust.`}
+                    >
+                      {' '}
+                      · {massCoverageInfo.known}/{massCoverageInfo.total} weighed
+                    </span>
+                  )}
                 </span>
               )}
               {savingLabel && <span className="robotview__hud-pill">{savingLabel}</span>}

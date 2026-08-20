@@ -455,6 +455,11 @@
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
+/* Partial coverage (#719): the total is a LOWER BOUND (the "+"), so it reads
+   amber — a half-weighed robot must not look like a finished measurement. */
+.robotbuild__masstotal-bar.is-partial .robotbuild__masstotal-g {
+  color: var(--warn);
+}
 
 /* "Remove duplicate 3-D copy" on a servo that's already a joint (#) — a subtle
    amber affordance under the servo row; binding is the picker just above it. */

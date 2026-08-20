@@ -300,3 +300,18 @@
   color: inherit;
 }
 
+/* --- the coverage readout (#719) ------------------------------------------ */
+.uhier__coverage {
+  flex: 0 0 auto;
+  margin: 0.25rem 0.35rem 0.1rem;
+  font-family: var(--font-ui, sans-serif);
+  font-size: 0.58rem;
+  color: var(--uhier-muted);
+  opacity: 0.85;
+}
+
+/* Amber below full coverage — the CoM is a partial answer and must say so. */
+.uhier__coverage.is-partial {
+  color: var(--uhier-warn);
+  opacity: 1;
+}
