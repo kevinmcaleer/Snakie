@@ -36,6 +36,7 @@ import {
   jointNames,
   jointDisplayLimits,
   looseLinks,
+  effectiveBaseLink as computeBaseLink,
   parseAssembly,
   readAllJoints,
   readJoint,
@@ -172,6 +173,9 @@ import {
   type MassEstimate,
   type MassBreakdown
 } from './robot-mass'
+import { useHierarchy } from './use-hierarchy'
+import { useHierarchySelection } from './hierarchy-selection'
+import { findHierarchyNode, flattenHierarchy } from './hierarchy-tree'
 import type { MassEditorProps, ContactsEditorProps } from './RobotPropertiesDialog'
 import type { MeshTriangles } from './robot-mass-geometry'
 import { addContact, removeContact, setContact } from './robot-contacts'
@@ -836,17 +840,39 @@ export function RobotView({
       .map((i) => i.link)
       .filter((l) => !banned.has(l))
   }, [content, editLink])
-  // The effective base for the hierarchy's ★ marker: the user's chosen base if it's
-  // still a root, else the sole root of a single-tree robot, else null — meaning
-  // several loose parts and no base picked yet (the panel then prompts to pick one).
-  const effectiveBaseLink = useMemo(() => {
-    const roots = looseLinks(content) // every childless link
-    if (chosenBase && roots.includes(chosenBase)) return chosenBase
-    if (roots.length === 1) return roots[0] // a single-tree robot: its sole root
-    // Several roots + no explicit choice: honour the conventional `base_link` (the
-    // new-robot starter's base) if present, else prompt the user to pick one.
-    return roots.includes('base_link') ? 'base_link' : null
-  }, [content, chosenBase])
+  // The effective base for the hierarchy's anchor marker. The rule moved into
+  // `robot-assembly` with #718 so the Electronics hierarchy resolves the SAME
+  // base — two trees that disagreed about the root would not be one hierarchy.
+  const effectiveBaseLink = useMemo(() => computeBaseLink(content, chosenBase), [content, chosenBase])
+
+  // ── The shared hierarchy (#718) ──────────────────────────────────────────
+  // The identical rows the Electronics workspace renders. The URDF is this
+  // view's LIVE buffer (unsaved edits must show up immediately); robot.yml and
+  // the libraries are loaded by the hook, off the same buses the board hosts use.
+  const { nodes: hierarchy } = useHierarchy({
+    folder: currentFolder || undefined,
+    urdf: content,
+    baseLink: chosenBase
+  })
+  const [hierarchyKey, setHierarchyKey] = useHierarchySelection()
+  // Shared key → this view's selected link. A row with no 3-D body (a part that
+  // hasn't been added to Build yet, a joint) leaves the 3-D selection alone —
+  // the row still highlights, there is simply nothing to ring in the scene.
+  useEffect(() => {
+    const node = findHierarchyNode(hierarchy, hierarchyKey)
+    if (node?.link && node.link !== selectedLinkRef.current) setSelectedLink(node.link)
+  }, [hierarchyKey, hierarchy])
+  // …and back: a 3-D click / an edit that moves the selection publishes it. Only
+  // on an actual CHANGE — re-deriving it every render would drag the shared key
+  // back onto a stale link whenever the other workspace selected a bodyless row.
+  const publishedLinkRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (publishedLinkRef.current === selectedLink) return
+    publishedLinkRef.current = selectedLink
+    if (!selectedLink) return
+    const node = flattenHierarchy(hierarchy).find((n) => n.link === selectedLink)
+    if (node) setHierarchyKey(node.key)
+  }, [selectedLink, hierarchy, setHierarchyKey])
 
   const setBuildPinnedPersist = (p: boolean): void => {
     setBuildPinned(p)
@@ -5395,6 +5421,7 @@ export function RobotView({
             onSetOpen={setBuildOpen}
             onSetPinned={setBuildPinnedPersist}
             assembly={assembly}
+            hierarchy={hierarchy}
             joints={joints}
             servos={bindings}
             bindableServos={servoList}
@@ -5402,10 +5429,15 @@ export function RobotView({
             onBindServo={handleBindServo}
             onRemoveMesh={handleDeleteLink}
             poses={poses}
-            selected={selectedLink}
-            onSelect={(link) => {
-              setSelectedLink(link)
-              if (link) zoomApiRef.current?.focusLink(link) // hierarchy click zooms to fit
+            selectedKey={hierarchyKey}
+            onSelectNode={(node) => {
+              // Same behaviour as Electronics' row click, in THIS workspace:
+              // share the selection, then zoom-fit the thing that was clicked.
+              setHierarchyKey(node.key)
+              if (node.link) {
+                setSelectedLink(node.link)
+                zoomApiRef.current?.focusLink(node.link)
+              }
             }}
             active={dialogCtx}
             onEdit={handleOpenProps}

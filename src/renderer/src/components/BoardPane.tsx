@@ -246,6 +246,7 @@ export function BoardPane(): JSX.Element {
         isPython={isPython}
         robot={robot}
         onChangeRobot={saveRobot}
+        folder={folder}
         libraries={libraries}
         joints={joints}
         jointLimits={jointLimits}

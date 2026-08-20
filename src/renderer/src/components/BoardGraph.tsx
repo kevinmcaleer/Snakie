@@ -118,6 +118,13 @@ export interface BoardGraphProps {
   robot?: RobotDefinition
   /** Persist a changed robot definition (writes robot.yml). */
   onChangeRobot?: (next: RobotDefinition) => void
+  /**
+   * The project folder — the wiring canvas reads the Build model from it for the
+   * shared hierarchy (#718). **Deliberately NOT optional**: this component has
+   * two hosts (the in-window pane and the popped-out window) and a prop only one
+   * of them remembers to pass is exactly how they diverged in #453.
+   */
+  folder: string | null | undefined
   /** The linked URDF's joint names — for a servo's "drives joint" picker (#). */
   joints?: string[]
   /** Each joint's real travel (deg / mm) — seeds a new binding's joint range (#). */
@@ -341,6 +348,7 @@ export function BoardGraph({
   asWindow = false,
   robot,
   onChangeRobot,
+  folder,
   joints,
   jointLimits,
   libraries,
@@ -1252,6 +1260,7 @@ export function BoardGraph({
               renderMode={effectiveView}
               robot={robot as RobotDefinition}
               onChange={onChangeRobot as (next: RobotDefinition) => void}
+              folder={folder}
               joints={joints ?? []}
               jointLimits={jointLimits ?? {}}
               libraries={libraries ?? []}

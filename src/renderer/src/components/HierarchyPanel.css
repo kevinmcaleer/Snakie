@@ -1,0 +1,302 @@
+/* THE SHARED HIERARCHY PANEL (#718, epic #720) — one tree, two docks.
+   =========================================================================
+   Prefix `uhier__` (unified hierarchy). Panel CSS is GLOBAL here, and prefixes
+   have collided before (i2c-detect vs i2c-display), so nothing in this file may
+   be named after anything else.
+
+   The panel is mounted in two docks with deliberately different chrome: the
+   Build dock (themed panel — parchment in skeuomorph, slate in dark) and the
+   board browser (translucent DARK "blueprint chrome" in BOTH skins, so it reads
+   over the blue board). So the rows take their ink from the HOST via
+   `currentColor`/`inherit`, and the two colours that must not be inherited —
+   the selection fill and the partial-coverage amber — come from tokens, with a
+   single documented override for the always-dark browser chrome. */
+
+.uhier {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  /* Tokens the rows use, so the dark-chrome override below is a two-line diff
+     rather than a duplicate rule per element. */
+  --uhier-warn: var(--warn);
+  --uhier-muted: var(--text-muted);
+}
+
+/* The board browser is dark chrome in BOTH skins (`--bptext` is deliberately
+   the same value in each), so the theme's body/muted ink would be unreadable
+   there in the light skin. `--gold` is likewise one value in both skins and is
+   the app's "amber on dark chrome" token. */
+.wc__browser .uhier {
+  color: var(--bptext);
+  --uhier-warn: var(--gold);
+  --uhier-muted: var(--bptext);
+}
+
+.wc__browser .uhier .cpanel__toggle,
+.wc__browser .uhier .cpanel__chevron,
+.wc__browser .uhier .cpanel__badge {
+  color: var(--bptext);
+}
+
+/* --- the collapsible branch ---------------------------------------------- */
+.uhier__section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.uhier__section-body {
+  min-width: 0;
+}
+
+.uhier__empty {
+  margin: 0.2rem 0.35rem;
+  font-size: 0.62rem;
+  color: var(--uhier-muted);
+  opacity: 0.85;
+}
+
+/* --- the tree ------------------------------------------------------------ */
+.uhier__list {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 0.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.08rem;
+}
+
+/* Nested rows sit indented under their parent with a guide line, so "docked
+   into" / "jointed to" is readable rather than inferred from padding (#649). */
+.uhier__list--nested {
+  padding-left: 0.55rem;
+  margin-left: 0.4rem;
+  border-left: 1px solid currentColor;
+  border-left-color: rgba(128, 128, 128, 0.42);
+}
+
+.uhier__item {
+  min-width: 0;
+}
+
+.uhier__row {
+  display: flex;
+  align-items: center;
+  gap: 0.18rem;
+  padding: 0.1rem 0.2rem;
+  border-radius: 5px;
+  font-family: var(--font-ui, sans-serif);
+  font-size: 0.72rem;
+  color: inherit;
+}
+
+/* A neutral grey wash reads as "hover" on the parchment panel AND on the dark
+   board chrome, which a themed background could not do in both at once. */
+.uhier__row:hover {
+  background: rgba(128, 128, 128, 0.18);
+}
+
+/* Selected — the shared selection, so the same row highlights in whichever
+   workspace you switch to. `--accent` (never a hardcoded gold): brass on the
+   dark skin, a darker brass on parchment, both with `--accent-contrast` ink. */
+.uhier__row.is-selected,
+.uhier__row.is-selected:hover {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+}
+
+/* The row whose properties dialog is open — an outline, not a fill, so it can
+   sit alongside the selection without fighting it. */
+.uhier__row.is-active {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* Build-only rows (structural links, joints) are quieter everywhere — they are
+   structure, not components. */
+.uhier__row.is-buildonly .uhier__label {
+  font-style: italic;
+}
+
+/* …and DIMMED + INERT in Electronics (the epic's decision): shown so the tree
+   reads identically, but there is nothing on the board to select or zoom to. */
+.uhier__row.is-inactive {
+  opacity: 0.45;
+}
+
+.uhier__row.is-inactive:hover {
+  background: none;
+}
+
+.uhier__row.is-inactive .uhier__name {
+  cursor: default;
+}
+
+.uhier__base {
+  flex: 0 0 auto;
+  width: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  color: var(--uhier-muted);
+}
+
+.uhier__base.is-base {
+  color: var(--accent);
+}
+
+.uhier__row.is-selected .uhier__base.is-base {
+  color: inherit;
+}
+
+.uhier__glyph {
+  flex: 0 0 auto;
+  width: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  opacity: 0.75;
+}
+
+.uhier__glyph svg {
+  display: block;
+}
+
+.uhier__edit {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.05rem;
+  color: inherit;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.uhier__row:hover .uhier__edit,
+.uhier__edit.is-on,
+.uhier__edit:focus-visible {
+  opacity: 0.85;
+}
+
+.uhier__edit.is-on {
+  color: var(--accent);
+}
+
+.uhier__row.is-selected .uhier__edit.is-on {
+  color: inherit;
+}
+
+.uhier__edit:disabled {
+  opacity: 0;
+  cursor: default;
+}
+
+.uhier__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0.06rem 0.1rem;
+  cursor: pointer;
+}
+
+.uhier__name:not(:disabled):hover .uhier__label {
+  text-decoration: underline;
+}
+
+.uhier__label {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* --- mass badges (#719) --------------------------------------------------- */
+.uhier__mass {
+  flex: 0 0 auto;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.58rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: inherit;
+  opacity: 0.68;
+}
+
+/* "? g" — the honest badge. Amber, outlined, and never dimmed away: an unknown
+   mass is EXCLUDED from the centre of mass, so it has to be visible. */
+.uhier__mass--unknown {
+  padding: 0 0.22rem;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  color: var(--uhier-warn);
+  opacity: 1;
+}
+
+.uhier__row.is-selected .uhier__mass--unknown {
+  color: inherit;
+}
+
+.uhier__jointtype {
+  flex: 0 0 auto;
+  font-size: 0.55rem;
+  white-space: nowrap;
+  color: inherit;
+  opacity: 0.6;
+}
+
+.uhier__loose {
+  flex: 0 0 auto;
+  font-size: 0.6rem;
+  color: var(--uhier-warn);
+}
+
+.uhier__tag {
+  flex: 0 0 auto;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.52rem;
+  letter-spacing: 0.06em;
+  padding: 0 0.22rem;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.uhier__del {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.05rem;
+  color: inherit;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.uhier__row:hover .uhier__del,
+.uhier__del:focus-visible {
+  opacity: 0.85;
+}
+
+.uhier__del:hover {
+  color: var(--danger);
+}
+
+.uhier__row.is-selected .uhier__del:hover {
+  color: inherit;
+}
+

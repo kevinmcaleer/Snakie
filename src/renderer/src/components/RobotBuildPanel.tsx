@@ -1,20 +1,20 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type {
   AssemblyItem,
-  ChainNode,
   PrimitiveGeom,
   JointDef,
   JointFull,
   JointType,
   JointSpec
 } from './robot-assembly'
-import { buildChainTree } from './robot-assembly'
 import type { Vec3 } from './robot-build'
 import { principalAxisName } from './robot-build'
 import { toDisplay, toNative, unitLabel, normPin, type MovableType } from './robot-pose'
 import { boundJoint, type BindableServo } from './servo-bind'
 import { shouldAutoHide } from './pin-overlay'
 import type { MassBreakdown } from './robot-mass'
+import { HierarchyPanel } from './HierarchyPanel'
+import { flattenHierarchy, jointKey, type HierarchyNode } from './hierarchy-tree'
 import type { ServoJointBinding } from '../../../shared/robot'
 import type { NamedPoseLike } from './robot-pose'
 import type { PropsContext } from './RobotPropertiesDialog'
@@ -45,49 +45,9 @@ const PinIcon = ({ pinned }: { pinned: boolean }): JSX.Element => (
     />
   </svg>
 )
-const PENCIL = (
-  <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-    <path d="M11.5 1.5l3 3L5 14l-3.5.5L2 11z" fill="none" stroke="currentColor" strokeWidth="1.4" />
-  </svg>
-)
-// An anchor marks the base link (Fusion-style) — the part everything hangs off.
-const ANCHOR = (
-  <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-    <circle cx="8" cy="3" r="1.8" fill="none" stroke="currentColor" strokeWidth="1.3" />
-    <path
-      d="M8 4.8V14M4 8H2.4c0 3 2.4 4.8 5.6 4.8S13.6 11 13.6 8H12M4.8 10.2L8 13l3.2-2.8"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.3"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-)
-// Row type glyphs (#): tell a MESH-backed link apart from a primitive/block at a
-// glance — a little triangle-mesh vs a cube, sat between the elbow and the pencil.
-const MESH_ICON = (
-  <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
-    <path
-      d="M8 2.2l5.6 9.6H2.4z M8 2.2v9.6 M4.9 8.6h6.2"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinejoin="round"
-    />
-  </svg>
-)
-const CUBE_ICON = (
-  <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
-    <path
-      d="M8 2.3l5.4 3.1v5.2L8 13.7 2.6 10.6V5.4z M2.6 5.4L8 8.5l5.4-3.1 M8 8.5v5.2"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinejoin="round"
-    />
-  </svg>
-)
+// The row glyphs (anchor / mesh / cube / pencil / joint types) moved to
+// `HierarchyPanel` with the tree itself (#718) — they belong to the rows, and
+// both workspaces draw the same ones now.
 
 export interface RobotBuildPanelProps {
   open: boolean
@@ -95,6 +55,13 @@ export interface RobotBuildPanelProps {
   onSetOpen: (open: boolean) => void
   onSetPinned: (pinned: boolean) => void
   assembly: AssemblyItem[]
+  /**
+   * The SHARED hierarchy (#718) — the identical rows the Electronics workspace
+   * renders. Replaces this panel's own kinematic chain: a part and its link are
+   * one row here, and the board + placed parts that used to exist only in the
+   * board browser now appear in Build too.
+   */
+  hierarchy: HierarchyNode[]
   /** The model's joints, servo bindings and named poses — extra tree branches. */
   joints: JointFull[]
   servos: ServoJointBinding[]
@@ -108,8 +75,10 @@ export interface RobotBuildPanelProps {
    *  servo is already modelled as a joint (`meshLink` on the servo). */
   onRemoveMesh?: (link: string) => void
   poses: NamedPoseLike[]
-  selected: string | null
-  onSelect: (link: string | null) => void
+  /** The SHARED selection key (#718) — survives a workspace switch. */
+  selectedKey: string | null
+  /** A hierarchy row was clicked: select it + zoom-fit it in THIS workspace. */
+  onSelectNode: (node: HierarchyNode) => void
   /** The node whose context dialog is open (highlighted in the tree). */
   active: PropsContext | null
   onEdit: (link: string | null) => void
@@ -468,11 +437,6 @@ function MimicRatio({
   )
 }
 
-/** Kid-friendly label for a joint type (matches the joint editor's chips). */
-function jointTypeLabel(type: JointType): string {
-  return JOINT_KINDS.find((k) => k.id === type)?.label ?? type
-}
-
 /** A collapsible branch of the hierarchy tree (disclosure ▸/▾ + label + count). */
 function Section({
   id,
@@ -507,149 +471,6 @@ function Section({
   )
 }
 
-const INDENT = 14 // px of indent per depth level in the chain tree
-
-// A distinct glyph per joint type (#): a lock (fixed), a rotation arrow (hinge /
-// revolute), a spoked wheel (continuous) and a slider track (prismatic).
-const JOINT_ICONS: Record<JointType, JSX.Element> = {
-  fixed: (
-    <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
-      <path d="M5 7V5.2a3 3 0 0 1 6 0V7" fill="none" stroke="currentColor" strokeWidth="1.2" />
-      <rect x="3.6" y="7" width="8.8" height="6" rx="1.1" fill="none" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  ),
-  revolute: (
-    <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
-      <path d="M12.6 8a4.6 4.6 0 1 1-1.5-3.4" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <path d="M12.7 3.2v2.4h-2.4" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round" />
-    </svg>
-  ),
-  continuous: (
-    <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
-      <circle cx="8" cy="8" r="5.2" fill="none" stroke="currentColor" strokeWidth="1.2" />
-      <circle cx="8" cy="8" r="1.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M8 2.8v2M8 11.2v2M2.8 8h2M11.2 8h2" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
-    </svg>
-  ),
-  prismatic: (
-    <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
-      <path d="M3 8h10M4.6 5.8v4.4M11.4 5.8v4.4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <rect x="6.5" y="5.9" width="3" height="4.2" rx="0.9" fill="none" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  )
-}
-
-/** One JOINT row of the Chain tree (#): the connecting joint sits directly above its
- *  child link at the same indent — a type icon, the (editable) joint NAME, and its
- *  type badge. Click opens the joint dialog; right-click renames. */
-function JointRow({
-  node,
-  isActive,
-  onOpen,
-  onContextMenu
-}: {
-  node: ChainNode
-  isActive: boolean
-  onOpen: (child: string, joint: string) => void
-  onContextMenu: (e: React.MouseEvent, joint: string) => void
-}): JSX.Element | null {
-  if (!node.joint) return null
-  const j = node.joint
-  return (
-    <li className="robotbuild__joint-row" style={{ paddingLeft: node.depth * INDENT }}>
-      <span className="robotbuild__joint-elbow" aria-hidden="true">
-        ├
-      </span>
-      <span className="robotbuild__joint-icon" aria-hidden="true">
-        {JOINT_ICONS[j.type] ?? JOINT_ICONS.fixed}
-      </span>
-      <button
-        type="button"
-        className={`robotbuild__joint-name${isActive ? ' is-on' : ''}`}
-        title={`Joint “${j.name}” · ${jointTypeLabel(j.type)} · ${j.parent} → ${node.link} — click to edit, right-click to rename`}
-        onClick={() => onOpen(node.link, j.name)}
-        onContextMenu={(e) => onContextMenu(e, j.name)}
-      >
-        {j.name}
-      </button>
-      <span className="robotbuild__joint-badge">{jointTypeLabel(j.type)}</span>
-    </li>
-  )
-}
-
-/** One row of the kinematic Chain tree (#354): the part name (indented by depth), the
- *  joint type that connects it to its parent, and a "loose" flag for unconnected parts. */
-function ChainRow({
-  node,
-  isSel,
-  isEdit,
-  onSelect,
-  onEdit,
-  onContextMenu
-}: {
-  node: ChainNode
-  isSel: boolean
-  isEdit: boolean
-  onSelect: (link: string) => void
-  onEdit: (link: string | null) => void
-  onContextMenu: (e: React.MouseEvent, link: string) => void
-}): JSX.Element {
-  const geo = node.kind === 'mesh' ? node.mesh?.match(/\.(\w+)$/)?.[1]?.toLowerCase() ?? 'mesh' : node.kind
-  return (
-    <li
-      className={`robotbuild__part${isSel ? ' is-sel' : ''}${node.loose ? ' robotbuild__chain--loose' : ''}`}
-      style={{ paddingLeft: node.depth * INDENT }}
-      onContextMenu={(e) => onContextMenu(e, node.link)}
-    >
-      <div className="robotbuild__part-row">
-        {node.depth > 0 && (
-          <span className="robotbuild__chain-elbow" aria-hidden="true">
-            └
-          </span>
-        )}
-        <span
-          className={`robotbuild__rowbase${node.isBase ? ' is-base' : ''}`}
-          title={node.isBase ? 'This is the base — everything hangs off it' : undefined}
-          aria-hidden={node.isBase ? undefined : true}
-        >
-          {node.isBase ? ANCHOR : null}
-        </span>
-        <span
-          className="robotbuild__typeicon"
-          title={node.kind === 'mesh' ? 'Mesh part' : 'Primitive block'}
-          aria-hidden="true"
-        >
-          {node.kind === 'mesh' ? MESH_ICON : CUBE_ICON}
-        </span>
-        <button
-          type="button"
-          className={`robotbuild__edit${isEdit ? ' is-on' : ''}`}
-          onClick={() => onEdit(isEdit ? null : node.link)}
-          title={isEdit ? 'Close properties' : 'Edit properties'}
-          aria-label={`Edit ${node.link}`}
-        >
-          {PENCIL}
-        </button>
-        <button
-          type="button"
-          className="robotbuild__part-name"
-          title={`${node.link} — right-click for rename / base / delete / attach`}
-          onClick={() => onSelect(node.link)}
-          onContextMenu={(e) => onContextMenu(e, node.link)}
-        >
-          <span className="robotbuild__part-label">{node.link}</span>
-          <span className={`robotbuild__part-geo${node.kind === 'mesh' ? ' is-mesh' : ''}`}>{geo}</span>
-        </button>
-        {node.loose ? (
-          <span className="robotbuild__loose-tag" title="Not connected to the base — open it and pick a parent">
-            ⚠ loose
-          </span>
-        ) : null}
-      </div>
-    </li>
-  )
-}
-
 export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
   const {
     open,
@@ -657,11 +478,12 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
     onSetOpen,
     onSetPinned,
     assembly,
+    hierarchy,
     joints,
     servos,
     poses,
-    selected,
-    onSelect,
+    selectedKey,
+    onSelectNode,
     active,
     onEdit,
     onOpenJoint,
@@ -749,14 +571,16 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
     ]
   }
 
-  // The kinematic chain, flattened for an indented list: base's subtree first, then any
-  // loose (unconnected) parts. This replaces the flat Blocks/Meshes/Joints lists so the
-  // parent→child structure is always visible.
-  const tree = useMemo(() => buildChainTree(assembly, joints, rootLink), [assembly, joints, rootLink])
+  // Which hierarchy row has its properties dialog open — the row highlight. The
+  // dialog talks in links / joint names; the tree talks in row keys, so map once.
+  const activeKey = useMemo(() => {
+    if (active?.kind === 'joint') return jointKey(active.joint)
+    const link = active?.kind === 'link' ? active.link : null
+    if (!link) return null
+    return flattenHierarchy(hierarchy).find((n) => n.link === link)?.key ?? null
+  }, [active, hierarchy])
   const activeLink =
     active?.kind === 'link' ? active.link : active?.kind === 'joint' ? active.child : null
-  const activeJoint = active?.kind === 'joint' ? active.joint : null
-  const looseStart = tree.findIndex((n) => n.loose)
   // Servo bindings NOT backed by a breadboard servo part (manual / legacy), so they
   // aren't shown twice in the Servos section.
   const bindablePins = new Set(bindableServos.filter((s) => s.pin).map((s) => normPin(s.pin as string)))
@@ -819,34 +643,32 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
       )}
 
       <div className="robotbuild__tree">
-        {tree.length > 0 && (
-          <Section id="chain" label="Chain" count={tree.length} collapsed={collapsed} onToggle={toggle}>
-            {tree.map((node, i) => (
-              <Fragment key={node.link}>
-                {i === looseStart && looseStart > 0 && (
-                  <li className="robotbuild__loose-head" aria-hidden="true">
-                    Not connected
-                  </li>
-                )}
-                {/* The connecting joint sits directly above its child link (#). */}
-                <JointRow
-                  node={node}
-                  isActive={!!node.joint && activeJoint === node.joint.name}
-                  onOpen={onOpenJoint}
-                  onContextMenu={openJointMenu}
-                />
-                <ChainRow
-                  node={node}
-                  isSel={node.link === selected}
-                  isEdit={node.link === activeLink}
-                  onSelect={onSelect}
-                  onEdit={onEdit}
-                  onContextMenu={openMenu}
-                />
-              </Fragment>
-            ))}
-          </Section>
-        )}
+        {/* The ONE hierarchy (#718) — the same component and the same rows the
+            Electronics browser shows. Everything below (Servos, Poses) stays a
+            Build-only branch. */}
+        <HierarchyPanel
+          nodes={hierarchy}
+          workspace="build"
+          selectedKey={selectedKey}
+          onSelect={(node) => {
+            onSelectNode(node)
+            // A joint has no body to select — clicking it opens its editor,
+            // exactly as the old chain's joint row did.
+            if (node.kind === 'joint' && node.joint) onOpenJoint(node.joint.child, node.joint.name)
+          }}
+          open={!collapsed.chain}
+          onToggleOpen={() => toggle('chain')}
+          activeKey={activeKey}
+          onEdit={(node) => {
+            if (node.kind === 'joint' && node.joint) return onOpenJoint(node.joint.child, node.joint.name)
+            if (node.link) onEdit(node.link === activeLink ? null : node.link)
+          }}
+          onContextMenu={(e, node) => {
+            if (node.kind === 'joint' && node.joint) return openJointMenu(e, node.joint.name)
+            if (node.link) openMenu(e, node.link)
+          }}
+          emptyHint="Add a block or import an STL to start building."
+        />
         {rootLink === null && assembly.length > 1 && (
           <p className="robotbuild__hint">
             Several parts, no base yet — right-click a part ▸ <b>Make base</b> to start the chain.
@@ -983,9 +805,6 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
               )
             })}
           </Section>
-        )}
-        {assembly.length === 0 && (
-          <p className="robotbuild__hint">Add a block or import an STL to start building.</p>
         )}
       </div>
 
