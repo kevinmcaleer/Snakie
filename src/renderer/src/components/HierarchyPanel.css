@@ -223,31 +223,9 @@
 }
 
 /* --- mass badges (#719) --------------------------------------------------- */
-.uhier__mass {
-  flex: 0 0 auto;
-  font-family: var(--font-mono, monospace);
-  font-size: 0.58rem;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  color: inherit;
-  opacity: 0.68;
-}
-
 /* "? g" — the honest badge. Amber, outlined, and never dimmed away: an unknown
    mass is EXCLUDED from the centre of mass, so it has to be visible. */
-.uhier__mass--unknown {
-  padding: 0 0.22rem;
-  border: 1px solid currentColor;
-  border-radius: 6px;
-  color: var(--uhier-warn);
-  opacity: 1;
-}
-
-.uhier__row.is-selected .uhier__mass--unknown {
-  color: inherit;
-}
-
-.uhier__jointtype {
+.uhier__row.is-selected .uhier__jointtype {
   flex: 0 0 auto;
   font-size: 0.55rem;
   white-space: nowrap;

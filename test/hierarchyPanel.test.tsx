@@ -114,47 +114,15 @@ describe('HierarchyPanel — one tree, both workspaces', () => {
   })
 })
 
-describe('HierarchyPanel — mass badges (#719)', () => {
-  it('shows grams for a weighed body and "? g" for an unweighed one', () => {
-    const html = render('build')
-    expect(html).toContain('9 g') // the servo's inertial
-    expect(html).toContain('? g') // base_link / bracket / the display
-    expect(html).toContain('uhier__mass--unknown')
-  })
-
+describe('HierarchyPanel — mass in the tooltip (#719)', () => {
+  // The per-row BADGE was removed: a weight on every line is noise in a
+  // structure view. The guarantee it protected is not — an unweighed body must
+  // still never present a number it does not have, so the tooltip carries it.
   it('never invents a number — an unweighed body says so in its tooltip', () => {
-    expect(render('build')).toContain('left OUT of the centre of mass')
-  })
-
-  it('states coverage, amber while partial', () => {
-    const html = render('build', { coverage: massCoverage(fixtureNodes()) })
-    // 5 bodies: the MCU, the display, the servo, base_link and bracket.
-    expect(html).toContain('mass known for 1 of 5 parts')
-    expect(html).toContain('uhier__coverage is-partial')
-  })
-
-  it('drops the amber once every part is weighed', () => {
-    const html = render('build', {
-      coverage: { known: 4, total: 4, knownG: 100, complete: true }
-    })
-    expect(html).toContain('mass known for 4 of 4 parts')
-    expect(html).not.toContain('is-partial')
-  })
-
-  it('says nothing at all for an empty project', () => {
-    const html = renderToStaticMarkup(
-      <HierarchyPanel
-        nodes={[]}
-        workspace="electronics"
-        selectedKey={null}
-        onSelect={() => {}}
-        open
-        onToggleOpen={() => {}}
-        coverage={{ known: 0, total: 0, knownG: 0, complete: false }}
-        emptyHint="No components yet."
-      />
-    )
-    expect(html).not.toContain('uhier__coverage')
-    expect(html).toContain('No components yet.')
+    // `fixtureNodes()` carries an unweighed body (the OLED has no mass), so the
+    // ordinary fixture is enough to prove the rule.
+    const html = render('build')
+    expect(html).toContain('mass unknown')
+    expect(html).not.toContain('0 g')
   })
 })

@@ -25,7 +25,11 @@ import './HierarchyPanel.css'
  * than being hidden, so the shape of the tree is identical wherever you are
  * (the epic's decision — hiding them made the two trees look different again).
  *
- * Mass badges (#719) hang off these rows: grams when a body is weighed, a "?"
+ * Mass is NOT shown per row (it was, briefly). A weight on every line is noise
+ * in a structure view, and the number that actually matters — how much of the
+ * model is weighed at all — is the coverage line under the tree. The grams stay
+ * in each row's tooltip, so the detail is a hover away rather than always on.
+ * Formerly (#719): grams when a body is weighed, a "?"
  * when it isn't. Never a substituted default — an unknown mass must LOOK
  * unknown, because the CoM silently leaves it out.
  */
@@ -362,10 +366,8 @@ function Row({
       >
         <span className="uhier__label">{node.label}</span>
       </button>
-      {node.kind === 'joint' ? (
+      {node.kind === 'joint' && (
         <span className="uhier__jointtype">{jointTypeLabel(node.joint?.type ?? 'fixed')}</span>
-      ) : (
-        <MassBadge node={node} />
       )}
       {node.loose && (
         <span className="uhier__loose" title="Not connected to the base — open it and pick a parent">
@@ -388,27 +390,5 @@ function Row({
   )
 }
 
-/**
- * The per-row mass badge (#719): the grams when the body is weighed, a "?" when
- * it isn't. The "?" is the point — an unknown mass is EXCLUDED from the centre
- * of mass, so it has to be visible rather than quietly defaulted to something.
- */
-function MassBadge({ node }: { node: HierarchyNode }): JSX.Element {
-  if (node.massG == null) {
-    return (
-      <span
-        className="uhier__mass uhier__mass--unknown"
-        title={`${node.label} has no known mass — it is left OUT of the centre of mass. Weigh it in its Properties, or give the library part a mass.`}
-      >
-        ? g
-      </span>
-    )
-  }
-  return (
-    <span className="uhier__mass" title={`${formatGrams(node.massG)} — ${node.massSource}`}>
-      {formatGrams(node.massG)}
-    </span>
-  )
-}
 
 export default HierarchyPanel
