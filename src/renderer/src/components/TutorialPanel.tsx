@@ -124,8 +124,11 @@ export function TutorialPanel(): JSX.Element {
     if (seeded.current === key) return
     seeded.current = key
     seedLesson()
-    // The workspace the lesson is ABOUT. Absent ⇒ stay put.
-    if (lesson.view) switchWorkspace(lesson.view)
+    // The workspace the lesson is ABOUT. Absent ⇒ stay put. `carryLesson` marks
+    // this as a LESSON-driven switch, so these instructions come along into a
+    // workspace that hides its sidebar by default (Electronics/Build) — the one
+    // case where opening a panel for the user is what they asked for (#…).
+    if (lesson.view) switchWorkspace(lesson.view, { carryLesson: true })
   }, [course, lesson, lessonIndex, seedLesson, switchWorkspace])
 
   // ── Gallery: pick a course ────────────────────────────────────────────────

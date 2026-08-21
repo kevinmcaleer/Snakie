@@ -155,6 +155,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it no longer reads every folder in your home directory looking for a board.
 
 ### Fixed
+- **Build no longer opens the help panel every time you switch to it.** Switching
+  to the Build workspace kept reopening the lesson/help sidebar, however many
+  times you closed it. The cause was a "sticky lesson" rule that carried the
+  sidebar across on EVERY workspace switch whenever the workspace you were
+  leaving happened to have Learn or Help selected with its sidebar open — which,
+  in Code, is simply where you're left after reading one help article. Worse, it
+  wrote that open panel into Build's own remembered layout, so collapsing it
+  there could never stick.
+
+  Now every workspace keeps its own panel state: Build (and Electronics) opens
+  the way you last left it — collapsed by default — and a panel you open there
+  yourself stays open, across switches and restarts. A panel still appears when
+  something deliberately asks for one: a tutorial step that sends you to the
+  workspace it's about brings its instructions with it, and an instrument's or
+  part's `?` still opens the Help article beside the board. Sessions that already
+  had the stale open panel stored for Electronics/Build get it collapsed once on
+  upgrade.
 - **Instruments pop out into their own window in the browser too.** (#781) On
   app.snakie.org, undocking an instrument did nothing you could see: the
   instrument left the dock, no window opened, and there was no way to get it

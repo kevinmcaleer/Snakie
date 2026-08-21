@@ -8,7 +8,9 @@ import {
   defaultLayoutState,
   loadLayoutState,
   recordedHorizontal,
-  type StorageLike
+  resolveSwitchTarget,
+  type StorageLike,
+  type WorkspaceLayout
 } from '../src/renderer/src/store/layout'
 
 /** A Map-backed StorageLike for the loader. */
@@ -84,6 +86,93 @@ describe('workspace presets (epic #259; +Robot mode #320)', () => {
     a.workspaces.code.horizontal[0] = 99
     expect(WORKSPACE_PRESETS.code.horizontal[0]).not.toBe(99)
     expect(defaultLayoutState().workspaces.code.horizontal[0]).not.toBe(99)
+  })
+})
+
+describe('the lesson panel across a workspace switch (#…)', () => {
+  /** Code as it rests after the user has read ONE help article: the sidebar is
+   *  open (Code's default) and Help is still the selected view. This is the state
+   *  that used to force the help panel open in Build on EVERY switch. */
+  const codeReadingHelp: WorkspaceLayout = {
+    ...WORKSPACE_PRESETS.code,
+    activityView: 'help',
+    filesCollapsed: false
+  }
+  /** Switch workspaces the way the store does: only the target is recomputed. */
+  const switchTo = (
+    ws: Record<string, WorkspaceLayout>,
+    from: string,
+    to: string,
+    opts?: { carryLesson?: boolean }
+  ): Record<string, WorkspaceLayout> => ({
+    ...ws,
+    [to]: resolveSwitchTarget(ws[from], ws[to], opts)
+  })
+
+  it('a fresh Build session opens COLLAPSED, even with Help selected in Code', () => {
+    const fresh = defaultLayoutState().workspaces
+    expect(fresh.robot.filesCollapsed).toBe(true)
+    const build = resolveSwitchTarget(codeReadingHelp, fresh.robot)
+    expect(build.filesCollapsed).toBe(true)
+    expect(build).toEqual(fresh.robot) // nothing at all carried over
+  })
+
+  it('Electronics gets the same treatment (it shared the bug)', () => {
+    const fresh = defaultLayoutState().workspaces
+    expect(resolveSwitchTarget(codeReadingHelp, fresh.board).filesCollapsed).toBe(true)
+  })
+
+  it("the user's own expand survives a round-trip through another workspace", () => {
+    const ws = defaultLayoutState().workspaces as unknown as Record<string, WorkspaceLayout>
+    // The user opens Help in Build themselves (the activity bar's lesson path).
+    ws.robot = { ...ws.robot, activityView: 'help', filesCollapsed: false }
+    // Build → Code → Build, both plain switches.
+    const afterOut = switchTo(ws, 'robot', 'code')
+    const afterBack = switchTo(afterOut, 'code', 'robot')
+    expect(afterBack.robot.filesCollapsed).toBe(false)
+    expect(afterBack.robot.activityView).toBe('help')
+    // …and Code was not forced into the lesson view on the way past.
+    expect(afterBack.code.activityView).toBe(WORKSPACE_PRESETS.code.activityView)
+  })
+
+  it('a collapse in Build STICKS — the next switch in cannot undo it', () => {
+    const ws = defaultLayoutState().workspaces as unknown as Record<string, WorkspaceLayout>
+    ws.code = codeReadingHelp
+    ws.robot = { ...ws.robot, activityView: 'help', filesCollapsed: true } // user closed it
+    expect(switchTo(ws, 'code', 'robot').robot.filesCollapsed).toBe(true)
+  })
+
+  it('a LESSON that asks for the switch still opens its panel in Build', () => {
+    const fresh = defaultLayoutState().workspaces
+    const learning: WorkspaceLayout = {
+      ...WORKSPACE_PRESETS.code,
+      activityView: 'learn',
+      filesCollapsed: false
+    }
+    const build = resolveSwitchTarget(learning, fresh.robot, { carryLesson: true })
+    expect(build.filesCollapsed).toBe(false)
+    expect(build.activityView).toBe('learn')
+    // Only the lesson panel changes — the target's own geometry is untouched.
+    expect(build.horizontal).toEqual(fresh.robot.horizontal)
+    expect(build.centreCollapsed).toBe(fresh.robot.centreCollapsed)
+  })
+
+  it('a lesson-driven switch carries the Help library too', () => {
+    const build = resolveSwitchTarget(codeReadingHelp, defaultLayoutState().workspaces.robot, {
+      carryLesson: true
+    })
+    expect(build.filesCollapsed).toBe(false)
+    expect(build.activityView).toBe('help')
+  })
+
+  it('carries nothing when there is no lesson on screen to carry', () => {
+    const fresh = defaultLayoutState().workspaces
+    // A non-lesson view (the file tree) is never carried into a solo workspace…
+    const files: WorkspaceLayout = { ...WORKSPACE_PRESETS.code, filesCollapsed: false }
+    expect(resolveSwitchTarget(files, fresh.robot, { carryLesson: true })).toEqual(fresh.robot)
+    // …nor is a lesson view whose panel the user has collapsed.
+    const hidden: WorkspaceLayout = { ...codeReadingHelp, filesCollapsed: true }
+    expect(resolveSwitchTarget(hidden, fresh.robot, { carryLesson: true })).toEqual(fresh.robot)
   })
 })
 
@@ -169,7 +258,7 @@ describe('horizontal slot mapping — elided board/chat panels (#528)', () => {
 describe('loadLayoutState (corruption-safe, versioned)', () => {
   it('returns factory defaults with no stored state', () => {
     const s = loadLayoutState(storage())
-    expect(s.version).toBe(3)
+    expect(s.version).toBe(4)
     expect(s.active).toBe('code')
   })
 
@@ -190,7 +279,7 @@ describe('loadLayoutState (corruption-safe, versioned)', () => {
       }
     }
     const s = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(v1) }))
-    expect(s.version).toBe(3)
+    expect(s.version).toBe(4)
     expect(s.active).toBe('robot')
     // Code sizes reset to the corrected preset; the active view carries over.
     expect(s.workspaces.code.horizontal).toEqual(WORKSPACE_PRESETS.code.horizontal)
@@ -211,15 +300,48 @@ describe('loadLayoutState (corruption-safe, versioned)', () => {
       }
     }
     const s = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(v2) }))
-    expect(s.version).toBe(3)
+    expect(s.version).toBe(4)
     expect(s.workspaces.code.horizontal).toEqual(WORKSPACE_PRESETS.code.horizontal)
     expect(s.workspaces.code.vertical).toEqual(WORKSPACE_PRESETS.code.vertical)
     expect(WORKSPACE_PRESETS.code.horizontal).toEqual([20, 80, 0, 0])
     expect(WORKSPACE_PRESETS.code.vertical).toEqual([55, 45])
-    // A v3 envelope is left as-is (no further reset).
+    // A v3 envelope keeps its sizes (no further size reset).
     const v3 = { version: 3, active: 'code', workspaces: { code: { ...WORKSPACE_PRESETS.code, vertical: [50, 50] } } }
     const kept = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(v3) }))
     expect(kept.workspaces.code.vertical).toEqual([50, 50])
+  })
+
+  it('v3 → v4: a lesson panel the sticky rule forced into Electronics/Build is collapsed once (#…)', () => {
+    // What every affected session has stored: the sticky lesson wrote an open
+    // Help panel into the solo workspaces, and the user's own collapse never
+    // survived the next switch — so this flag is the bug, not a preference.
+    const v3 = {
+      version: 3,
+      active: 'code',
+      workspaces: {
+        code: { ...WORKSPACE_PRESETS.code, activityView: 'help' },
+        board: { ...WORKSPACE_PRESETS.board, activityView: 'help', filesCollapsed: false },
+        robot: { ...WORKSPACE_PRESETS.robot, activityView: 'help', filesCollapsed: false }
+      }
+    }
+    const s = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(v3) }))
+    expect(s.version).toBe(4)
+    expect(s.workspaces.robot.filesCollapsed).toBe(true)
+    expect(s.workspaces.board.filesCollapsed).toBe(true)
+    // Only that one flag is touched — Code (whose sidebar is open by design) and
+    // every other field are left exactly as the user had them.
+    expect(s.workspaces.code.filesCollapsed).toBe(false)
+    expect(s.workspaces.code.activityView).toBe('help')
+    expect(s.workspaces.robot.horizontal).toEqual(WORKSPACE_PRESETS.robot.horizontal)
+  })
+
+  it('v4 keeps a lesson panel the user opened in Build themselves (across a restart)', () => {
+    const saved = defaultLayoutState()
+    saved.workspaces.robot.activityView = 'help'
+    saved.workspaces.robot.filesCollapsed = false
+    const s = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(saved) }))
+    expect(s.workspaces.robot.filesCollapsed).toBe(false)
+    expect(s.workspaces.robot.activityView).toBe('help')
   })
 
   it('survives corrupt JSON and wrong shapes', () => {
