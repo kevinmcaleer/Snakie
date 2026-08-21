@@ -7,6 +7,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **The help and the autocomplete now teach whichever Python your board is
+  actually running.** (#763, epic #209) Snakie's reference pages and editor
+  completions were MicroPython throughout: `machine.Pin`, `time.sleep_ms`,
+  "Install packages (mip)" — and the only CircuitPython entries in the
+  completion list were two empty stubs. Plug in a CircuitPython board now and
+  the Help panel swaps its hardware section for **board · digitalio · analogio ·
+  pwmio · busio**, plus the three things that actually catch people out —
+  `code.py` and auto-reload, the read-only filesystem, and installing libraries
+  from the Adafruit bundle — while `machine.Pin`, `sleep_ms` and mip disappear
+  entirely. The completions follow the same catalogue, so `time.` on
+  CircuitPython offers `monotonic()` and not `sleep_ms()`, and typing `from
+  mach…` there gets a suggestion that says it doesn't exist on this runtime and
+  shows what to write instead. Right-click → *Help for symbol* on a `machine`
+  pasted out of a MicroPython tutorial opens the page that replaces it rather
+  than nothing. Plain Python — control flow, classes, types, built-ins — stays a
+  single set of pages shared by both, and the section that used to be called
+  "MicroPython Language" is now "Python Language" with the runtime-specific
+  pages split out beneath it. **With no board connected nothing is guessed:**
+  both runtimes are shown side by side, each entry labelled with the Python it
+  belongs to, and three pills at the top of the Help panel (Auto · MicroPython ·
+  CircuitPython) pin it to one if you're reading before you plug anything in.
+  There's also a new "Coming from MicroPython" page: the whole translation
+  table, `Pin(15)` → `board.D15`, on one screen.
 - **Electronics and Build now show the SAME component hierarchy.** (#718, epic
   #720) There used to be two trees describing one robot and disagreeing about
   it: the board browser listed the microcontroller and your placed parts nested

@@ -25,6 +25,7 @@ import {
 } from 'react'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { DEFAULT_EDITOR_THEME, editorThemeFor } from './editorThemes'
+import type { DialectPreference } from '../../../shared/dialect-api'
 
 /** How the notebook paper is drawn behind the editor. */
 export type EditorPaper = 'lines' | 'dots' | 'off'
@@ -52,6 +53,12 @@ export interface SettingsStore {
   breadboardBg: BreadboardBg
   /** Whether the status bar shows rotating 💡 discovery tips (#434). Default on. */
   showTips: boolean
+  /**
+   * Which Python the help pages and editor completions should teach (#763).
+   * `'auto'` (the default) follows the connected board; the explicit values are
+   * the override for reading before anything is plugged in.
+   */
+  helpDialect: DialectPreference
   setPaper: (paper: EditorPaper) => void
   /** Set the line spacing (clamped to [MIN, MAX]). */
   setLineSpacing: (px: number) => void
@@ -65,6 +72,8 @@ export interface SettingsStore {
   setBreadboardBg: (bg: BreadboardBg) => void
   /** Show/hide the status-bar discovery tips (#434). */
   setShowTips: (on: boolean) => void
+  /** Follow the board, or pin the help/completions to one runtime (#763). */
+  setHelpDialect: (pref: DialectPreference) => void
 }
 
 const SettingsContext = createContext<SettingsStore | null>(null)
@@ -96,6 +105,10 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
     'blueprint'
   )
   const [showTips, setShowTips] = useLocalStorage<boolean>('snakie.statusbar.tips', true)
+  const [helpDialect, setHelpDialect] = useLocalStorage<DialectPreference>(
+    'snakie.help.dialect',
+    'auto'
+  )
 
   // Apply the paper mode + spacing to the document root so the CSS ruled paper
   // and Monaco's line height both follow the same source of truth.
@@ -156,13 +169,15 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
       minimap,
       breadboardBg,
       showTips,
+      helpDialect,
       setPaper,
       setLineSpacing: (px: number) => setLineSpacingRaw(clampSpacing(px)),
       setEditorTheme,
       setCheckFirmwareUpdates,
       setMinimap,
       setBreadboardBg,
-      setShowTips
+      setShowTips,
+      setHelpDialect
     }),
     [
       paper,
@@ -172,13 +187,15 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
       minimap,
       breadboardBg,
       showTips,
+      helpDialect,
       setPaper,
       setLineSpacingRaw,
       setEditorTheme,
       setCheckFirmwareUpdates,
       setMinimap,
       setBreadboardBg,
-      setShowTips
+      setShowTips,
+      setHelpDialect
     ]
   )
 
