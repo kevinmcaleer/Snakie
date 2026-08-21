@@ -46,11 +46,16 @@ describe('MODULES catalog shape', () => {
     }
   })
 
-  it('bundled modules ship a .py file + a licence; mip modules carry a spec', () => {
+  it('every source kind carries what its installer needs to resolve it', () => {
     for (const m of MODULES) {
       if (m.source.kind === 'bundled') {
         expect(m.source.file.endsWith('.py')).toBe(true)
         expect(m.license).toBeTruthy()
+      } else if (m.source.kind === 'bundle') {
+        // An Adafruit bundle library is named ONCE: the bundle's index key is
+        // also the import name, and the install probes by import (#758).
+        expect(m.source.module.length).toBeGreaterThan(0)
+        expect(m.importName).toBe(m.source.module)
       } else {
         expect(m.source.spec.length).toBeGreaterThan(0)
       }
@@ -111,7 +116,9 @@ describe('groupByInstrument', () => {
 
   it('keeps per-instrument catalog order within a group', () => {
     const display = groupByInstrument().find((g) => g.instrument === 'i2c-display')
-    expect(display?.modules.map((m) => m.id)).toEqual(['ssd1306', 'sh1106'])
+    // The MicroPython drivers first, then the CircuitPython one (#758) — the
+    // group holds both runtimes' drivers, and the manager filters by dialect.
+    expect(display?.modules.map((m) => m.id)).toEqual(['ssd1306', 'sh1106', 'cp-ssd1306'])
   })
 })
 

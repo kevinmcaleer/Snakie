@@ -199,6 +199,18 @@ export function registerDeviceIpc(getWebContents: () => WebContents | undefined)
     wrap(() => getActive().writeFile(path, contents))
   )
 
+  // The same write, for a file that is NOT text (#758). Adafruit's CircuitPython
+  // bundle ships `.mpy` bytecode, and both device write paths already take bytes
+  // — the drive writes a Buffer, the raw REPL hex-encodes its chunks precisely
+  // so arbitrary bytes survive. What could not carry them was this boundary:
+  // sending a `.mpy` down the string channel would mangle it in the UTF-8
+  // round-trip and leave a file that imports as garbage. A separate channel
+  // rather than a union, so nothing can pass bytes where text is meant, or the
+  // reverse, by accident.
+  ipcMain.handle('device:writeFileBytes', (_e, path: string, contents: Uint8Array) =>
+    wrap(() => getActive().writeFile(path, Buffer.from(contents)))
+  )
+
   ipcMain.handle('device:remove', (_e, path: string) => wrap(() => getActive().remove(path)))
 
   ipcMain.handle('device:mkdir', (_e, path: string) => wrap(() => getActive().mkdir(path)))

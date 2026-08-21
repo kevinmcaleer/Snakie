@@ -24,17 +24,31 @@
  * `gamepad`, …) — they are restated here as a string union rather than imported,
  * to keep this module renderer-free.
  *
- * A module's `source` is EITHER:
+ * A module's `source` is ONE of:
  *   - `{ kind: 'bundled', file }` — a tiny, MIT-licensed driver stub SHIPPED with
  *     the app under `micropython/modules/<file>`. The main process reads it and
  *     writes it to the board over the raw REPL (the #108 instrument-library
  *     install path, generalised). Preferred for small drivers we can ship.
  *   - `{ kind: 'mip', spec }` — an official `mip` / `github:` spec (e.g.
- *     `'github:stlehmann/micropython-ssd1306/ssd1306.py'`). The main process
- *     builds a `mip.install(spec)` snippet (the #20 package-install path) for the
- *     renderer to run on the device. Used for drivers too large / not ours to
+ *     `'github:stlehmann/micropython-ssd1306/ssd1306.py'`), resolved on the HOST
+ *     and written as files (#776). Used for drivers too large / not ours to
  *     vendor, so we reference the upstream source instead of copying it.
+ *   - `{ kind: 'bundle', module }` — a library from the Adafruit CircuitPython
+ *     Library Bundle (#758), which is what CircuitPython has instead of `mip`.
+ *     Resolved by `circuitpy-bundle.ts` and written as `.mpy` BYTES.
+ *
+ * ## The source kind decides the DIALECT
+ *
+ * A driver is not portable between the two runtimes and pretending otherwise
+ * would put an INSTALL button in front of a user that could only ever fail. The
+ * shipped stubs and the `mip` specs are MicroPython code — they `import machine`
+ * and are installed by a MicroPython mechanism; the bundle is CircuitPython
+ * bytecode built against `board`/`digitalio`. So {@link moduleDialect} derives
+ * the runtime from the source kind rather than asking each entry to restate it,
+ * and the Modules manager shows a board only the half it can actually use.
  */
+
+import type { Dialect } from './dialect'
 
 /**
  * The dock instrument a module powers. A STRING-UNION mirror of the renderer's
@@ -75,6 +89,20 @@ export type ModuleSource =
        * e.g. `'github:stlehmann/micropython-ssd1306/ssd1306.py'`.
        */
       spec: string
+    }
+  | {
+      /**
+       * A library from the Adafruit CircuitPython Library Bundle (#758) — the
+       * `circup` source, and the only one CircuitPython has. Resolved on the
+       * host by `circuitpy-bundle.ts` and written as `.mpy` bytes.
+       */
+      kind: 'bundle'
+      /**
+       * The bundle's own library name — the index key AND the import name, e.g.
+       * `'adafruit_hcsr04'`. Its dependencies come from the index, so they are
+       * never restated here.
+       */
+      module: string
     }
 
 /** One installable module — a driver behind a dock instrument. */
@@ -314,6 +342,76 @@ export const MODULES: ModuleDef[] = [
     importName: 'tb6612',
     source: { kind: 'bundled', file: 'tb6612.py', version: '1.0.0' },
     license: 'MIT'
+  },
+
+  // === CircuitPython — the Adafruit bundle (#758, epic #209) ================
+  // Every entry above is MicroPython. These are the same sensors again, as
+  // CircuitPython knows them: Adafruit's own drivers, taken from the Library
+  // Bundle at the version it pins. They are NOT alternatives a MicroPython user
+  // could pick — `moduleDialect` files them under CircuitPython and the Modules
+  // manager hides them from a MicroPython board, because the `.mpy` would not
+  // import there.
+  //
+  // Bundle DEPENDENCIES are deliberately absent from this list:
+  // `adafruit_mpu6050` needs `adafruit_bus_device` and `adafruit_register`, and
+  // the resolver installs them from the index. Restating them here would give
+  // the manager rows for libraries nobody chose, and a second place to be wrong
+  // when Adafruit changes one.
+  {
+    id: 'cp-hcsr04',
+    name: 'HC-SR04 ultrasonic (CircuitPython)',
+    description: "Adafruit's driver for the HC-SR04 ultrasonic range finder.",
+    instrument: 'range',
+    importName: 'adafruit_hcsr04',
+    source: { kind: 'bundle', module: 'adafruit_hcsr04' }
+  },
+  {
+    id: 'cp-vl53l0x',
+    name: 'VL53L0X ToF (CircuitPython)',
+    description: 'I²C driver for the VL53L0X time-of-flight distance sensor.',
+    instrument: 'range',
+    importName: 'adafruit_vl53l0x',
+    source: { kind: 'bundle', module: 'adafruit_vl53l0x' }
+  },
+  {
+    id: 'cp-ssd1306',
+    name: 'SSD1306 OLED (CircuitPython)',
+    description: 'I²C / SPI driver for the SSD1306 128×64 monochrome OLED display.',
+    instrument: 'i2c-display',
+    importName: 'adafruit_ssd1306',
+    source: { kind: 'bundle', module: 'adafruit_ssd1306' }
+  },
+  {
+    id: 'cp-mpu6050',
+    name: 'MPU-6050 IMU (CircuitPython)',
+    description: '6-axis accelerometer + gyro over I²C (the common MPU-6050).',
+    instrument: 'imu',
+    importName: 'adafruit_mpu6050',
+    source: { kind: 'bundle', module: 'adafruit_mpu6050' }
+  },
+  {
+    id: 'cp-lsm6ds',
+    name: 'LSM6DS IMU (CircuitPython)',
+    description: '6-axis accelerometer + gyro (LSM6DSOX / LSM6DS33) over I²C.',
+    instrument: 'imu',
+    importName: 'adafruit_lsm6ds',
+    source: { kind: 'bundle', module: 'adafruit_lsm6ds' }
+  },
+  {
+    id: 'cp-neopixel',
+    name: 'NeoPixel (CircuitPython)',
+    description: 'WS2812 / NeoPixel addressable RGB LED strip driver.',
+    instrument: 'led',
+    importName: 'neopixel',
+    source: { kind: 'bundle', module: 'neopixel' }
+  },
+  {
+    id: 'cp-motor',
+    name: 'Motor / servo (CircuitPython)',
+    description: 'DC motors, stepper motors and servos over PWM — Adafruit’s motor library.',
+    instrument: 'motor',
+    importName: 'adafruit_motor',
+    source: { kind: 'bundle', module: 'adafruit_motor' }
   }
 ]
 
@@ -328,6 +426,36 @@ export function moduleById(id: string): ModuleDef | undefined {
 /** Every module powering a given instrument, in catalog order. Pure. */
 export function modulesForInstrument(instrument: InstrumentId): ModuleDef[] {
   return MODULES.filter((m) => m.instrument === instrument)
+}
+
+/**
+ * Which runtime a module's code is FOR, derived from where it comes from (#758).
+ *
+ * Not a field on the entry, because it is not an independent fact: a shipped
+ * stub and a `mip` spec are MicroPython source installed by a MicroPython
+ * mechanism, and an Adafruit bundle library is CircuitPython bytecode. Deriving
+ * it means the two can never disagree — adding a bundle module cannot forget to
+ * say it is CircuitPython. Pure.
+ */
+export function moduleDialect(def: ModuleDef): Dialect {
+  return def.source.kind === 'bundle' ? 'circuitpython' : 'micropython'
+}
+
+/**
+ * The modules a board of this dialect can actually install.
+ *
+ * `'unknown'` — and no dialect at all, which is what a disconnected board
+ * looks like — returns EVERYTHING, on purpose: with nothing connected there is
+ * no wrong answer to hide, and browsing the full catalog is how a user decides
+ * what to buy. Once a board says what it is, the other runtime's drivers go
+ * away rather than sit there offering an install that could only fail. Pure.
+ */
+export function modulesForDialect(
+  dialect: Dialect | undefined | null,
+  defs: ModuleDef[] = MODULES
+): ModuleDef[] {
+  if (!dialect || dialect === 'unknown') return [...defs]
+  return defs.filter((m) => moduleDialect(m) === dialect)
 }
 
 /** One instrument's modules, grouped together for the Modules manager. */

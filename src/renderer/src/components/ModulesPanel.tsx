@@ -4,9 +4,11 @@ import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import {
   groupByInstrument,
   MODULES,
+  modulesForDialect,
   type InstrumentId,
   type ModuleDef
 } from '../../../shared/modules-catalog'
+import { DIALECT_LABEL } from '../../../shared/dialect'
 import {
   buildRowStatuses,
   countStatuses,
@@ -54,9 +56,22 @@ const INSTRUMENT_TITLES: Record<InstrumentId, string> = {
   motor: 'Motor Driver'
 }
 
+/** What the source badge on a row says, per source kind (#758). */
+function sourceLabel(def: ModuleDef): string {
+  if (def.source.kind === 'bundled') return `bundled · ${def.license ?? 'stub'}`
+  if (def.source.kind === 'bundle') return 'Adafruit bundle'
+  return 'mip'
+}
+
 export function ModulesPanel(): JSX.Element {
   const status = useDeviceStatus()
   const connected = status.state === 'connected'
+  // Which runtime the board is running (#752). It decides which HALF of the
+  // catalog is shown: a MicroPython board can't import an Adafruit `.mpy`, and a
+  // CircuitPython board can't run a `machine`-based stub, so offering either the
+  // other's drivers would be an INSTALL button that could only ever fail (#758).
+  const dialect = connected ? status.runtime?.dialect : undefined
+  const catalog = useMemo(() => modulesForDialect(dialect, MODULES), [dialect])
 
   // The set of import-names found present on the board (the probe result). Empty
   // until/unless a probe runs; reset on disconnect.
@@ -84,12 +99,12 @@ export function ModulesPanel(): JSX.Element {
     }
     let active = true
     setProbing(true)
-    const names = MODULES.map((m) => m.importName)
+    const names = catalog.map((m) => m.importName)
     void (async (): Promise<void> => {
       try {
         const found = new Set(await window.api.modules.probeInstalled(names))
         const stale = await probeOutdatedModules(
-          MODULES.filter((m) => found.has(m.importName))
+          catalog.filter((m) => found.has(m.importName))
         ).catch(() => new Set<string>())
         if (active) {
           setInstalledNames(found)
@@ -107,7 +122,7 @@ export function ModulesPanel(): JSX.Element {
     return () => {
       active = false
     }
-  }, [connected, installDone])
+  }, [catalog, connected, installDone])
 
   const install = useCallback(async (def: ModuleDef): Promise<void> => {
     setInstalls((prev) => ({
@@ -140,12 +155,12 @@ export function ModulesPanel(): JSX.Element {
     }
   }, [])
 
-  const groups = useMemo(() => groupByInstrument(), [])
+  const groups = useMemo(() => groupByInstrument(catalog), [catalog])
   const statuses = useMemo(
-    () => buildRowStatuses(MODULES, installedNames, connected, installs, outdatedNames),
-    [installedNames, connected, installs, outdatedNames]
+    () => buildRowStatuses(catalog, installedNames, connected, installs, outdatedNames),
+    [catalog, installedNames, connected, installs, outdatedNames]
   )
-  const counts = useMemo(() => countStatuses(MODULES, statuses), [statuses])
+  const counts = useMemo(() => countStatuses(catalog, statuses), [catalog, statuses])
 
   const renderTag = (def: ModuleDef): JSX.Element => {
     const st = statuses[def.id] ?? 'available'
@@ -196,9 +211,7 @@ export function ModulesPanel(): JSX.Element {
             </div>
           )}
           <div className="mods__tag-foot">
-            <span className="mods__src">
-              {def.source.kind === 'bundled' ? `bundled · ${def.license ?? 'stub'}` : 'mip'}
-            </span>
+            <span className="mods__src">{sourceLabel(def)}</span>
             {action}
           </div>
         </div>
@@ -223,7 +236,20 @@ export function ModulesPanel(): JSX.Element {
       {!connected && (
         <p className="mods__hint" role="status">
           Connect a board to install modules and detect what&rsquo;s already on it.
-          You can still browse the catalog below.
+          You can still browse the catalog below — for both MicroPython and CircuitPython.
+        </p>
+      )}
+
+      {/* Say WHY the list got shorter. Silently hiding half the catalog when a
+          board connects would read as a bug; naming the runtime and where its
+          libraries come from turns it into an explanation (#758). */}
+      {connected && dialect && dialect !== 'unknown' && (
+        <p className="mods__hint mods__hint--dialect" role="status">
+          Showing <strong>{DIALECT_LABEL[dialect]}</strong> drivers, because that is what this
+          board runs.{' '}
+          {dialect === 'circuitpython'
+            ? 'They come from the Adafruit CircuitPython Library Bundle, matched to the board’s CircuitPython version.'
+            : 'CircuitPython’s Adafruit-bundle libraries won’t import here, so they are hidden.'}
         </p>
       )}
 

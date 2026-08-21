@@ -1,6 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import type { IpcResult } from '../device/types'
 import { MODULES, type ModuleDef } from '../../shared/modules-catalog'
+import type { RuntimeInfo } from '../../shared/dialect'
 import { planForId, type ModuleInstallPlan } from './resolve'
 
 /**
@@ -40,12 +41,18 @@ export function registerModulesIpc(): void {
   ipcMain.handle('modules:catalog', () => wrap<ModuleDef[]>(async () => MODULES))
 
   // Resolve a single module to the FILES that install it — a bundled stub read
-  // off disk, or an upstream package downloaded HERE (#776), because this
-  // process has the internet connection: the board hasn't got one, and the
-  // renderer's CSP forbids outbound requests. The renderer writes them over the
-  // device channel, so this layer still never touches the device singleton.
-  ipcMain.handle('modules:installPlan', (_e, id: string) =>
-    wrap<ModuleInstallPlan>(async () => planForId(id))
+  // off disk, an upstream package downloaded HERE (#776), or a library from the
+  // Adafruit CircuitPython bundle (#758) — because this process has the internet
+  // connection: the board hasn't got one, and the renderer's CSP forbids
+  // outbound requests. The renderer writes them over the device channel, so this
+  // layer still never touches the device singleton.
+  //
+  // `runtime` comes from the CALLER rather than from the device singleton, for
+  // that same reason. The Adafruit bundle is published per CircuitPython major
+  // version, so a bundle install needs to know what the board is running; the
+  // preload already holds that on the live session and passes it down.
+  ipcMain.handle('modules:installPlan', (_e, id: string, runtime?: RuntimeInfo | null) =>
+    wrap<ModuleInstallPlan>(async () => planForId(id, { runtime }))
   )
 
   // A driver/library was installed onto the board from SOME window (e.g. the Board

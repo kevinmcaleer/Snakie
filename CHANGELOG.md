@@ -7,6 +7,40 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **CircuitPython libraries install from the Adafruit bundle — the way
+  CircuitPython users expect.** (#758, epic #209) CircuitPython has no `mip` and
+  no package manager on the board at all; its libraries come from the Adafruit
+  CircuitPython Library Bundle, copied in from the computer — which is exactly
+  what `circup` does, and exactly the shape Snakie's installs already have.
+  Connect a CircuitPython board and the Modules panel now offers Adafruit's own
+  drivers: HC-SR04, VL53L0X, SSD1306, MPU-6050, LSM6DS, NeoPixel and the motor
+  library. Installing one downloads it on your computer and writes the `.mpy`
+  into `/lib`, dependencies and all — asking for the MPU-6050 quietly brings
+  `adafruit_bus_device` and `adafruit_register` with it, because without them the
+  driver imports and then fails. The archive is matched to the board's own
+  CircuitPython **major version**, read from the bundle's daily release rather
+  than assumed: `.mpy` bytecode is version-locked, so a 10.x file on a 9.x board
+  simply doesn't import. If the bundle no longer ships a version for your board,
+  the install says so and names both sides — which version the bundle offers and
+  which one the board runs — instead of failing later with an `ImportError` that
+  mentions neither.
+- **The Modules and Packages panels know which Python your board runs.** (#758,
+  epic #209) The module catalog now holds both runtimes' drivers, and a
+  connected board only ever sees its own: a MicroPython board is not offered an
+  Adafruit `.mpy` it cannot import, and a CircuitPython board is not offered a
+  `machine`-based stub it cannot run. A short line says which runtime is being
+  shown and why, so the shorter list reads as an explanation rather than a
+  missing feature. With nothing connected the whole catalog is still browsable.
+  The Packages tab — which searches micropython-lib and PyPI — now says plainly
+  on a CircuitPython board that those are MicroPython packages, and points at the
+  Modules panel instead.
+
+### Changed
+- Installing a driver can now write **binary** files to a board, not only source
+  text (#758). Both device write paths already carried bytes — the CIRCUITPY
+  drive writes them directly and the raw REPL hex-encodes its chunks precisely so
+  arbitrary bytes survive — but the boundary between them only carried strings,
+  which would have silently corrupted every `.mpy` in the UTF-8 round-trip.
 - **Electronics and Build now show the SAME component hierarchy.** (#718, epic
   #720) There used to be two trees describing one robot and disagreeing about
   it: the board browser listed the microcontroller and your placed parts nested

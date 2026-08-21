@@ -64,6 +64,20 @@
   line-height: 1.5;
 }
 
+/* "This board runs CircuitPython" (#758). Accent token only — a hardcoded gold
+   is unreadable on the parchment skin — and a rule rather than a fill, so it
+   reads as an aside in both the dark and the skeuomorph skins. */
+.pkgs__hint--dialect {
+  border-left: 2px solid var(--accent);
+  padding-left: 0.7rem;
+  margin: 0 0.85rem 0.35rem;
+}
+
+.pkgs__hint--dialect strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 /* --- Header + flash meter -------------------------------------------------- */
 
 .pkgs__header {
