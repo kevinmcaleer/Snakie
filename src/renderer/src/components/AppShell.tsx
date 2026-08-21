@@ -319,9 +319,10 @@ export function AppShell(): JSX.Element {
   // resurface the code panels. Only Code uses the resizable panel group.
   const soloWorkspace = robotMain || layout.active === 'board'
   // A solo workspace hides the sidebar by default. ONLY a lesson (the Learn
-  // tutorials or the Help library) shows there — carried in from another workspace
-  // or opened from the activity bar — so a stale `filesCollapsed:false` for the
-  // plain Files view can't resurface a file tree in Electronics/Build.
+  // tutorials or the Help library) shows there — opened from the activity bar, by
+  // a help deep-link, or carried in by a tutorial that asked for this workspace
+  // (#…) — so a stale `filesCollapsed:false` for the plain Files view can't
+  // resurface a file tree in Electronics/Build.
   const isLessonView = SOLO_PANEL_VIEWS.has(activityView)
   const soloLessonOpen = soloWorkspace && isLessonView && !layout.workspace.filesCollapsed
   const dockOpen = layout.workspace.dockOpen
@@ -1274,7 +1275,8 @@ export function AppShell(): JSX.Element {
           )}
         </PanelGroup>
         {/* Electronics + Build overlay the Code panel group (which stays mounted
-            underneath). A tutorial/help lesson carried in shows in a left panel. */}
+            underneath). A lesson — opened here, deep-linked, or carried in by a
+            tutorial that asked for this workspace — shows in a left panel. */}
         {soloWorkspace && (
           <div className="shell__solo shell__solo--overlay">
             {soloLessonOpen && (

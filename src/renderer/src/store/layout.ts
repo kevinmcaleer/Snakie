@@ -99,9 +99,13 @@ export interface WorkspaceLayout {
  *  v2 (#…): Electronics + Build were redesigned — Electronics hides code+console
  *  so the Board View fills the area; Build is the full-screen URDF editor with no
  *  code/board/instrument dock. A stored v1 envelope keeps the user's Code layout
- *  but resets those two workspaces to the new presets ({@link loadLayoutState}). */
+ *  but resets those two workspaces to the new presets ({@link loadLayoutState}).
+ *  v4 (#…): the "sticky lesson" used to REWRITE Electronics/Build's own panel
+ *  state on every switch, so a `filesCollapsed:false` stored for them is residue
+ *  of that bug rather than a choice the user could make stick — collapse it once
+ *  on load. */
 export interface LayoutState {
-  version: 3
+  version: 4
   active: WorkspaceId
   workspaces: Record<WorkspaceId, WorkspaceLayout>
 }
@@ -181,10 +185,45 @@ const VIEWS: ActivityView[] = [
 ]
 
 /** Sidebar views that are a guided lesson (the Learn tutorials + the Help
- *  library). When one of these is OPEN, it STAYS open across workspace switches
- *  so the user can follow the lesson while changing modes — even into Build,
- *  which otherwise hides the sidebar (#…). */
-const STICKY_LESSON_VIEWS: ReadonlySet<ActivityView> = new Set(['learn', 'help'])
+ *  library) — the only views a solo workspace (Electronics/Build) shows at all. */
+const LESSON_VIEWS: ReadonlySet<ActivityView> = new Set(['learn', 'help'])
+
+/** The SOLO workspaces: one main surface, sidebar hidden unless a lesson is
+ *  showing. Their panel state is the one the v4 migration re-collapses. */
+const SOLO_WORKSPACE_IDS = ['board', 'robot'] as const
+
+/** Why a workspace switch happened. */
+export interface SwitchOptions {
+  /** A LESSON asked for this switch — a tutorial step declaring the `view` it is
+   *  about, or any other deliberate "show them this over there". Only then does
+   *  an open Learn/Help panel follow the user into the target. */
+  carryLesson?: boolean
+}
+
+/**
+ * The layout the TARGET workspace should adopt when switching away from `from`.
+ *
+ * Every workspace remembers its OWN panel state, so a plain switch returns the
+ * target UNCHANGED — Build opens the way the user last left it (collapsed, per
+ * its preset), and a panel they expanded there is still expanded next time.
+ *
+ * Only a switch a lesson ASKED for (`carryLesson`) brings an open lesson panel
+ * along, so a tutorial that sends the learner to Build still has its
+ * instructions on screen. Before #…, EVERY switch did this whenever the
+ * outgoing workspace happened to have Learn/Help selected with its sidebar open
+ * — which in Code is the normal resting state after reading one help article —
+ * so Build re-opened the help panel every single time, overwriting the user's
+ * own collapse.
+ */
+export function resolveSwitchTarget(
+  from: WorkspaceLayout,
+  to: WorkspaceLayout,
+  opts: SwitchOptions = {}
+): WorkspaceLayout {
+  if (!opts.carryLesson) return to
+  if (from.filesCollapsed || !LESSON_VIEWS.has(from.activityView)) return to
+  return { ...to, activityView: from.activityView, filesCollapsed: false }
+}
 
 /** Validate one workspace's shape, falling back to `preset` field-by-field. */
 function sanitiseWorkspace(raw: unknown, preset: WorkspaceLayout): WorkspaceLayout {
@@ -265,7 +304,7 @@ export function defaultLayoutState(): LayoutState {
       vertical: [...WORKSPACE_PRESETS[id].vertical]
     }
   }
-  return { version: 3, active: 'code', workspaces }
+  return { version: 4, active: 'code', workspaces }
 }
 
 /** Storage surface the loader reads (injectable for tests). */
@@ -313,7 +352,7 @@ export function loadLayoutState(storage: StorageLike): LayoutState {
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<LayoutState>
       const ver = (parsed as { version?: number } | null)?.version
-      if (parsed && (ver === 1 || ver === 2 || ver === 3) && parsed.workspaces) {
+      if (parsed && (ver === 1 || ver === 2 || ver === 3 || ver === 4) && parsed.workspaces) {
         const state = defaultLayoutState()
         // Any retired active workspace (`lab`/`data`/`datalab` — Data Lab was
         // never surfaced and is retired in Soft Shell, #581) coerces to `code`
@@ -340,6 +379,16 @@ export function loadLayoutState(storage: StorageLike): LayoutState {
           const c = state.workspaces.code
           c.horizontal = [...WORKSPACE_PRESETS.code.horizontal] as [number, number, number, number]
           c.vertical = [...WORKSPACE_PRESETS.code.vertical] as [number, number]
+        }
+        // v3 → v4: until #…, switching INTO Electronics/Build rewrote their own
+        // `filesCollapsed` to false whenever the outgoing workspace had Learn/Help
+        // selected — so a stored open lesson panel there is the bug's residue, not
+        // a preference the user could make stick (collapsing it was undone by the
+        // next switch). Collapse it once; a deliberate open after this persists.
+        if (ver < 4) {
+          for (const id of SOLO_WORKSPACE_IDS) {
+            state.workspaces[id].filesCollapsed = WORKSPACE_PRESETS[id].filesCollapsed
+          }
         }
         ensureUsableConsole(state)
         return state
@@ -406,7 +455,10 @@ export interface LayoutStore {
   focus: boolean
   /** Latest sizes for a group (live ref-backed; safe to call every render). */
   getSizes: (group: 'horizontal' | 'vertical') => number[]
-  switchWorkspace: (id: WorkspaceId) => void
+  /** Show a workspace. Pass `{ carryLesson: true }` only when a LESSON asked for
+   *  the switch — an open Learn/Help panel then follows the user into the target
+   *  (a plain switch leaves the target's own panel state alone). */
+  switchWorkspace: (id: WorkspaceId, opts?: SwitchOptions) => void
   /** Restore the ACTIVE workspace to its factory preset. */
   resetActive: () => void
   setActivityView: (view: ActivityView) => void
@@ -508,7 +560,7 @@ export function LayoutProvider({
   )
 
   const switchWorkspace = useCallback(
-    (id: WorkspaceId): void => {
+    (id: WorkspaceId, opts?: SwitchOptions): void => {
       const s = stateRef.current as LayoutState
       if (s.active === id) {
         // Re-clicking the active workspace tab exits focus mode (a way back to
@@ -519,18 +571,10 @@ export function LayoutProvider({
         })
         return
       }
-      // Sticky lesson: if the OUTGOING workspace has a tutorial / help lesson
-      // open, carry it into the target so the user keeps following it across the
-      // switch (Build otherwise hides the sidebar). A collapsed lesson, or any
-      // non-lesson view, is left alone — so Build keeps its files-hidden default.
-      const cur = s.workspaces[s.active]
-      if (STICKY_LESSON_VIEWS.has(cur.activityView) && !cur.filesCollapsed) {
-        s.workspaces[id] = {
-          ...s.workspaces[id],
-          activityView: cur.activityView,
-          filesCollapsed: false
-        }
-      }
+      // The target keeps its OWN remembered panel state — a plain switch never
+      // opens a panel the user didn't ask for. Only a lesson-driven switch
+      // (`carryLesson`) carries an open Learn/Help panel across (#…).
+      s.workspaces[id] = resolveSwitchTarget(s.workspaces[s.active], s.workspaces[id], opts)
       s.active = id
       setActive(id)
       setWorkspace(s.workspaces[id])
