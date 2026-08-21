@@ -2,6 +2,7 @@ import { CollapsiblePanel } from './CollapsiblePanel'
 import {
   countComponents,
   coverageLabel,
+  type HierarchyJoint,
   type HierarchyNode,
   type HierarchyWorkspace,
   type MassCoverage
@@ -21,9 +22,25 @@ import './HierarchyPanel.css'
  * component.
  *
  * The one thing that DOES differ is what's live: rows that exist only in Build
- * (structural links, joints) render **dimmed and inert** in Electronics rather
- * than being hidden, so the shape of the tree is identical wherever you are
- * (the epic's decision — hiding them made the two trees look different again).
+ * (structural links) render **dimmed and inert** in Electronics rather than
+ * being hidden, so the shape of the tree is identical wherever you are (the
+ * epic's decision — hiding them made the two trees look different again).
+ *
+ * JOINTS ARE NOT ROWS (#720). They were, and a robot of any size then read as a
+ * list twice as long as its part count, half of it structural noise. A jointed
+ * row now carries a JOINT ICON instead — shaped by the joint's type, so the type
+ * label the joint row spelled out is now the glyph itself. Everything the joint
+ * row could do is still reachable, on the row it attaches:
+ *   · **edit** — click the icon (it's a button wherever `onEditJoint` is given);
+ *   · **rename / delete** — right-click the row, or the joint editor the icon
+ *     opens (rename and delete both live in there);
+ *   · **type**  — the glyph, its tooltip, and the row's own tooltip;
+ *   · **select** — the joint had no body to select or zoom to; the row it
+ *     attaches does, and that row is the selection now.
+ * A body has at most one parent joint, so the icon is never ambiguous; joints
+ * where a row is the PARENT belong to the rows nested beneath it, each carrying
+ * its own icon. A row with no joint (the base, a loose import, a part with no
+ * 3-D body) shows no icon — the column stays, so the labels still line up.
  *
  * Mass is NOT shown per row (it was, briefly). A weight on every line is noise
  * in a structure view, and the number that actually matters — how much of the
@@ -165,6 +182,15 @@ export interface HierarchyPanelProps {
   activeKey?: string | null
   /** Open a row's editor (the pencil). Omit to hide the pencil column. */
   onEdit?: (node: HierarchyNode) => void
+  /**
+   * Open the editor for the joint that attaches a row (#720) — the joint icon's
+   * click. Omit (Electronics does) and the icon is a plain marker: there is no
+   * joint editor in that workspace, and a live-looking control that does nothing
+   * is worse than a label.
+   */
+  onEditJoint?: (node: HierarchyNode, joint: HierarchyJoint) => void
+  /** The joint whose editor is open — lights up that row's joint icon. */
+  activeJoint?: string | null
   /** Right-click a row (rename / make base / delete). */
   onContextMenu?: (e: React.MouseEvent, node: HierarchyNode) => void
   /** Remove a placed component (the board browser's bin). */
@@ -184,6 +210,8 @@ export function HierarchyPanel({
   onToggleOpen,
   activeKey,
   onEdit,
+  onEditJoint,
+  activeJoint,
   onContextMenu,
   onRemove,
   coverage,
@@ -209,8 +237,10 @@ export function HierarchyPanel({
             workspace={workspace}
             selectedKey={selectedKey}
             activeKey={activeKey}
+            activeJoint={activeJoint}
             onSelect={onSelect}
             onEdit={onEdit}
+            onEditJoint={onEditJoint}
             onContextMenu={onContextMenu}
             onRemove={onRemove}
           />
@@ -236,8 +266,10 @@ interface RowContext {
   workspace: HierarchyWorkspace
   selectedKey: string | null
   activeKey?: string | null
+  activeJoint?: string | null
   onSelect: (node: HierarchyNode) => void
   onEdit?: (node: HierarchyNode) => void
+  onEditJoint?: (node: HierarchyNode, joint: HierarchyJoint) => void
   onContextMenu?: (e: React.MouseEvent, node: HierarchyNode) => void
   onRemove?: (node: HierarchyNode) => void
 }
@@ -261,20 +293,34 @@ function HierarchyRows({
   )
 }
 
+/** How a row's connections read in prose — the answer to "several joints?": a
+ *  body has ONE parent joint, and any number of bodies hanging off it. Both ends
+ *  are stated, so a row that fans out doesn't look like a leaf. */
+function jointSummary(node: HierarchyNode): string[] {
+  const out: string[] = []
+  if (node.joint) out.push(`jointed to ${node.joint.parent} (${jointTypeLabel(node.joint.type)})`)
+  if (node.jointedChildren > 0) {
+    out.push(`${node.jointedChildren} part${node.jointedChildren === 1 ? '' : 's'} joined to it`)
+  }
+  return out
+}
+
 /** The row's title text — says what it is, what it weighs and what a click does. */
 function rowTitle(node: HierarchyNode, inert: boolean): string {
-  if (node.kind === 'joint' && node.joint) {
-    const j = node.joint
-    const what = `Joint “${j.name}” · ${jointTypeLabel(j.type)} · ${j.parent} → ${j.child}`
-    return inert ? `${what} — lives in the Build workspace` : `${what} — click to edit, right-click to rename`
-  }
   const body =
     node.link === null
       ? 'no 3-D body yet — use Sync to add one'
       : `3-D body: ${node.link}`
   const mass = node.massG == null ? 'mass unknown' : `${formatGrams(node.massG)} (${node.massSource})`
-  const what = `${node.label} · ${body} · ${mass}`
+  const what = [node.label, body, ...jointSummary(node), mass].join(' · ')
   return inert ? `${what} — lives in the Build workspace` : `${what} — click to select and zoom to it`
+}
+
+/** The joint icon's own tooltip — everything the deleted joint ROW said, plus
+ *  what the icon does when it is a control rather than a marker. */
+function jointTitle(joint: HierarchyJoint, editable: boolean): string {
+  const what = `Joint “${joint.name}” · ${jointTypeLabel(joint.type)} · ${joint.parent} → ${joint.child}`
+  return editable ? `${what} — click to edit, right-click to rename` : `${what} — edit it in the Build workspace`
 }
 
 function Row({
@@ -282,8 +328,10 @@ function Row({
   workspace,
   selectedKey,
   activeKey,
+  activeJoint,
   onSelect,
   onEdit,
+  onEditJoint,
   onContextMenu,
   onRemove
 }: RowContext & { node: HierarchyNode }): JSX.Element {
@@ -293,26 +341,23 @@ function Row({
   const inert = node.buildOnly && workspace === 'electronics'
   const isSelected = selectedKey === node.key
   const isActive = activeKey != null && activeKey === node.key
-  const glyph =
-    node.kind === 'joint'
-      ? JOINT_ICONS[node.joint?.type ?? 'fixed'] ?? JOINT_ICONS.fixed
-      : node.link === null
-        ? GHOST_ICON
-        : node.geometry === 'mesh'
-          ? MESH_ICON
-          : CUBE_ICON
+  const glyph = node.link === null ? GHOST_ICON : node.geometry === 'mesh' ? MESH_ICON : CUBE_ICON
   const glyphTitle =
-    node.kind === 'joint'
-      ? jointTypeLabel(node.joint?.type ?? 'fixed')
-      : node.link === null
-        ? 'No 3-D body yet'
-        : node.geometry === 'mesh'
-          ? 'Mesh body'
-          : 'Stand-in / primitive body'
+    node.link === null
+      ? 'No 3-D body yet'
+      : node.geometry === 'mesh'
+        ? 'Mesh body'
+        : 'Stand-in / primitive body'
   // Nothing to edit on a row with no 3-D body — its properties (size, mass,
   // joint) all live on the body it hasn't got yet. A live-looking pencil that
   // does nothing is worse than no pencil.
-  const noBody = node.kind !== 'joint' && node.link === null
+  const noBody = node.link === null
+  // The joint that attaches this row (#720). A control where there's an editor
+  // to open, a marker otherwise — and always the same fixed-width column, so a
+  // jointless row doesn't shunt its label out of line with its neighbours'.
+  const joint = node.joint
+  const jointEditable = !!joint && !!onEditJoint && !inert
+  const jointOn = !!joint && activeJoint != null && activeJoint === joint.name
 
   return (
     <div
@@ -337,6 +382,23 @@ function Row({
       <span className="uhier__glyph" title={glyphTitle} aria-hidden="true">
         {glyph}
       </span>
+      {joint == null ? (
+        <span className="uhier__joint uhier__joint--none" aria-hidden="true" />
+      ) : jointEditable ? (
+        <button
+          type="button"
+          className={`uhier__joint${jointOn ? ' is-on' : ''}`}
+          onClick={() => onEditJoint?.(node, joint)}
+          title={jointTitle(joint, true)}
+          aria-label={`Edit joint ${joint.name}`}
+        >
+          {JOINT_ICONS[joint.type] ?? JOINT_ICONS.fixed}
+        </button>
+      ) : (
+        <span className="uhier__joint" title={jointTitle(joint, false)}>
+          {JOINT_ICONS[joint.type] ?? JOINT_ICONS.fixed}
+        </span>
+      )}
       {onEdit && (
         <button
           type="button"
@@ -366,9 +428,6 @@ function Row({
       >
         <span className="uhier__label">{node.label}</span>
       </button>
-      {node.kind === 'joint' && (
-        <span className="uhier__jointtype">{jointTypeLabel(node.joint?.type ?? 'fixed')}</span>
-      )}
       {node.loose && (
         <span className="uhier__loose" title="Not connected to the base — open it and pick a parent">
           ⚠

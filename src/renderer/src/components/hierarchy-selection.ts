@@ -13,8 +13,10 @@
  * too (the `storage` event fans a change between windows for free).
  *
  * The stored value is a unified-hierarchy KEY (`'board'`, a part instance id,
- * `link:…`, `joint:…`) — workspace-independent by construction, which is the
- * whole point: each workspace maps the key onto its own subject.
+ * `link:…`) — workspace-independent by construction, which is the whole point:
+ * each workspace maps the key onto its own subject. A key that no longer names
+ * a row simply selects nothing (a `joint:…` key stored before #720 dropped the
+ * joint rows, say) — the store is deliberately not a schema.
  */
 import { useCallback, useSyncExternalStore } from 'react'
 

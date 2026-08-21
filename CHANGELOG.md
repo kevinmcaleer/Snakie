@@ -15,11 +15,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   behaviours. Now there is one tree, in one component, in both workspaces — a
   part and its 3-D body are a single row, carrier nesting is preserved (a XIAO
   still sits inside its expansion base), and rows that only exist in Build
-  (joints, structural blocks) appear in Electronics too, dimmed and inert,
-  rather than being hidden — so the shape of the tree reads identically wherever
-  you are. Clicking a row selects it and zooms to fit it in whichever workspace
-  you're in, and the selection now survives switching workspace (it even
-  carries into the popped-out Board View window).
+  (structural blocks) appear in Electronics too, dimmed and inert, rather than
+  being hidden — so the shape of the tree reads identically wherever you are.
+  Only PARTS are rows: a part that's jointed to another carries a joint icon
+  shaped by the joint's type, rather than the joint taking a row of its own and
+  doubling the length of the list. Click the icon to edit that joint (right-click
+  the row to rename it); a part with nothing above it — the base, a stray import
+  — simply hasn't got one. It also *looks* the same in both places now: the
+  hierarchy carries its own card — surface, hairline, ink and spacing — instead
+  of borrowing whatever chrome the dock around it happened to have, so the Build
+  tree reads as the board browser's tree rather than as bare rows floating on the
+  3-D scene. Every colour in it is a theme token, so it stays readable on the
+  dark skin and on parchment. Clicking a row selects it and zooms to fit it in
+  whichever workspace you're in, and the selection now survives switching
+  workspace (it even carries into the popped-out Board View window).
 - **Honest mass: the robot tells you how much of it has actually been weighed.**
   (#719, epic #720) The centre of mass has always been computed from the parts
   whose mass is known, silently leaving the rest out — so a balance verdict from

@@ -1,42 +1,67 @@
-/* THE SHARED HIERARCHY PANEL (#718, epic #720) — one tree, two docks.
+/* THE SHARED HIERARCHY PANEL (#718, epic #720) — one tree, one look, two docks.
    =========================================================================
    Prefix `uhier__` (unified hierarchy). Panel CSS is GLOBAL here, and prefixes
    have collided before (i2c-detect vs i2c-display), so nothing in this file may
    be named after anything else.
 
-   The panel is mounted in two docks with deliberately different chrome: the
-   Build dock (themed panel — parchment in skeuomorph, slate in dark) and the
-   board browser (translucent DARK "blueprint chrome" in BOTH skins, so it reads
-   over the blue board). So the rows take their ink from the HOST via
-   `currentColor`/`inherit`, and the two colours that must not be inherited —
-   the selection fill and the partial-coverage amber — come from tokens, with a
-   single documented override for the always-dark browser chrome. */
+   ONE LOOK (#720). The panel used to take its chrome from whatever dock it was
+   dropped into, and the two docks are nothing alike: the board browser is a
+   card — translucent DARK "blueprint chrome" in BOTH skins so it reads over the
+   blue board — while the Build dock is fully transparent over the 3-D stage, so
+   the same tree arrived there as bare rows floating on the scene. The browser's
+   card is the one Kevin wants, so the PANEL now owns that card and both docks
+   get it.
+
+   It cannot be the browser's card, though: those colours are always-dark by
+   design (#181), and the Build dock sits on parchment in the skeuomorph skin,
+   where dark-on-dark ink is unreadable. So the card is described by TOKENS —
+   surface, edge, ink, muted, warn — whose default values are the THEME's own
+   materials (`--glass`, `--shellbd`, `--text`…), which each skin already
+   defines for both. The board browser then overrides exactly those tokens:
+   blueprint ink, and NO surface, because the host card already is one and a
+   second card inside it would just draw a box round the tree.
+
+   That leaves one set of rules, one geometry, one density, and per-skin values
+   supplied by the theme rather than by the dock. */
 
 .uhier {
   display: flex;
   flex-direction: column;
+  /* Never shrink: the card has to be as tall as the rows inside it, or the tree
+     spills out of its own background. The dock above scrolls instead. */
+  flex: 0 0 auto;
   min-height: 0;
   min-width: 0;
-  /* Tokens the rows use, so the dark-chrome override below is a two-line diff
-     rather than a duplicate rule per element. */
-  --uhier-warn: var(--warn);
+  /* The panel's whole palette, in one place. A host overrides these — never the
+     rules below — so "looks the same in both docks" survives a restyle. */
+  --uhier-ink: var(--text);
   --uhier-muted: var(--text-muted);
+  --uhier-warn: var(--warn);
+  /* The theme's own translucent panel + hairline: dark glass on the dark skin,
+     warm white glass on parchment. Both skins define both. */
+  --uhier-surface: var(--glass);
+  --uhier-edge: var(--shellbd, var(--border));
+
+  color: var(--uhier-ink);
+  background: var(--uhier-surface);
+  border: 1px solid var(--uhier-edge);
+  border-radius: 10px;
+  /* The browser's old `.wc__tree` padding, now the panel's own — so the tree
+     breathes the same amount whichever dock it is in. */
+  padding: 0.25rem 0.3rem 0.4rem;
 }
 
 /* The board browser is dark chrome in BOTH skins (`--bptext` is deliberately
    the same value in each), so the theme's body/muted ink would be unreadable
    there in the light skin. `--gold` is likewise one value in both skins and is
-   the app's "amber on dark chrome" token. */
+   the app's "amber on dark chrome" token. The surface goes away because the
+   browser IS the card. */
 .wc__browser .uhier {
-  color: var(--bptext);
-  --uhier-warn: var(--gold);
+  --uhier-ink: var(--bptext);
   --uhier-muted: var(--bptext);
-}
-
-.wc__browser .uhier .cpanel__toggle,
-.wc__browser .uhier .cpanel__chevron,
-.wc__browser .uhier .cpanel__badge {
-  color: var(--bptext);
+  --uhier-warn: var(--gold);
+  --uhier-surface: transparent;
+  --uhier-edge: transparent;
 }
 
 /* --- the collapsible branch ---------------------------------------------- */
@@ -44,6 +69,20 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+
+/* The branch header takes the panel's ink, not the dock's — the one rule that
+   replaced a per-host override, and the reason the header reads the same in
+   both. (Beats `.cpanel__toggle`'s own colour + hover on specificity, so the
+   hover is restated here rather than lost.) */
+.uhier__section > .cpanel__head .cpanel__toggle,
+.uhier__section > .cpanel__head .cpanel__chevron,
+.uhier__section > .cpanel__head .cpanel__badge {
+  color: var(--uhier-muted);
+}
+
+.uhier__section > .cpanel__head .cpanel__toggle:hover {
+  color: var(--uhier-ink);
 }
 
 .uhier__section-body {
@@ -99,7 +138,10 @@
 
 /* Selected — the shared selection, so the same row highlights in whichever
    workspace you switch to. `--accent` (never a hardcoded gold): brass on the
-   dark skin, a darker brass on parchment, both with `--accent-contrast` ink. */
+   dark skin, a darker brass on parchment, both with `--accent-contrast` ink.
+   The Build workspace remaps `--accent` to gold for ALL of its panels (#580),
+   so the highlight is the workspace's brass in each — deliberately the token,
+   not a value, so the hierarchy can't disagree with the dock around it. */
 .uhier__row.is-selected,
 .uhier__row.is-selected:hover {
   background: var(--accent);
@@ -114,7 +156,7 @@
   outline-offset: -1px;
 }
 
-/* Build-only rows (structural links, joints) are quieter everywhere — they are
+/* Build-only rows (structural links) are quieter everywhere — they are
    structure, not components. */
 .uhier__row.is-buildonly .uhier__label {
   font-style: italic;
@@ -222,15 +264,53 @@
   text-overflow: ellipsis;
 }
 
-/* --- mass badges (#719) --------------------------------------------------- */
-/* "? g" — the honest badge. Amber, outlined, and never dimmed away: an unknown
-   mass is EXCLUDED from the centre of mass, so it has to be visible. */
-.uhier__row.is-selected .uhier__jointtype {
+/* --- the joint icon (#720) ------------------------------------------------ */
+/* Joints stopped being rows: a jointed row carries its joint's glyph instead.
+   The column is ALWAYS there (empty on an unjointed row) so every label starts
+   at the same x — the whole point of the icon is that you can scan the column. */
+.uhier__joint {
   flex: 0 0 auto;
-  font-size: 0.55rem;
-  white-space: nowrap;
+  width: 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   color: inherit;
-  opacity: 0.6;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  /* Quieter than the body glyph — it describes the LINE between two parts, not
+     the part. Full strength on hover/open, where it is the thing you're aiming at. */
+  opacity: 0.62;
+}
+
+.uhier__joint svg {
+  display: block;
+}
+
+button.uhier__joint {
+  cursor: pointer;
+}
+
+.uhier__row:hover button.uhier__joint,
+button.uhier__joint:focus-visible {
+  opacity: 1;
+}
+
+/* The joint whose editor is open — the heir to the joint row's own highlight. */
+button.uhier__joint.is-on {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.uhier__row.is-selected button.uhier__joint.is-on {
+  color: inherit;
+}
+
+/* An unjointed row (the base, a loose import, a part with no 3-D body yet):
+   the column, none of the ink. */
+.uhier__joint--none {
+  opacity: 0;
 }
 
 .uhier__loose {
