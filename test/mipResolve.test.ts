@@ -4,6 +4,7 @@ import {
   MipResolveError,
   deviceDirsFor,
   joinDevicePath,
+  normaliseMipTarget,
   resolveMipSpec,
   rewriteMipUrl,
   splitMipRef,
@@ -128,7 +129,8 @@ describe('resolveMipSpec — single-file specs', () => {
       {
         path: '/lib/ssd1306.py',
         contents: '# ssd1306',
-        url: `${RAW}/stlehmann/micropython-ssd1306/HEAD/ssd1306.py`
+        url: `${RAW}/stlehmann/micropython-ssd1306/HEAD/ssd1306.py`,
+        package: 'github:stlehmann/micropython-ssd1306/ssd1306.py'
       }
     ])
   })
@@ -216,6 +218,223 @@ describe('resolveMipSpec — package specs with a package.json', () => {
   })
 })
 
+/**
+ * WHERE A DEPENDENCY LANDS (#785) — the half that fetching-only tests miss.
+ *
+ * The block above proves a dependency is FETCHED. That is not the same claim as
+ * "it was put somewhere the board can import it", and the difference is the
+ * whole bug: `/lib/modulino/lib/vl53l4cd.py` is a downloaded, present,
+ * completely unimportable file, because `sys.path` holds `/lib` and nothing
+ * below it. The install reports success either way.
+ *
+ * So these pin the TARGET PATH of a dependency, per file and as a property:
+ * every path is `<install target>/<what that file's OWN package declared>`, and
+ * a dependency's files are SIBLINGS of the package that pulled them in, never
+ * children of it. `MipResolvedFile.package` is what makes that expressible —
+ * without knowing whose file a path is, "the dependency is in the right place"
+ * cannot be stated at all.
+ */
+describe('resolveMipSpec — a dependency is a SIBLING of the package that needs it', () => {
+  /**
+   * The real Arduino Modulino shape (verified against the live package): a
+   * package that declares a `lib/` subfolder OF ITS OWN — `modulino/lib/
+   * vl53l4cd.py`, imported relatively as `from .lib.vl53l4cd import …` — while
+   * separately depending on three packages whose modules are imported BY NAME.
+   * The two are easy to confuse, which is precisely why the placement rule has
+   * to be pinned rather than eyeballed.
+   */
+  const MODULINO = 'github:arduino/arduino-modulino-mpy'
+  const MODULINO_JSON = `${RAW}/arduino/arduino-modulino-mpy/HEAD/package.json`
+  const LTR_JSON = `${RAW}/arduino/micropython-ltr-381rgb-01/main/package.json`
+  const HS_JSON = `${RAW}/jposada202020/MicroPython_HS3003/master/package.json`
+  const LSM_JSON = `${MIP_DEFAULT_INDEX}/package/py/lsm6dsox/latest.json`
+
+  const bodies = (): Record<string, string> => ({
+    [MODULINO_JSON]: JSON.stringify({
+      urls: [
+        ['modulino/__init__.py', 'github:arduino/modulino-mpy/src/modulino/__init__.py'],
+        ['modulino/distance.py', 'github:arduino/modulino-mpy/src/modulino/distance.py'],
+        ['modulino/lib/vl53l4cd.py', 'github:arduino/modulino-mpy/src/modulino/lib/vl53l4cd.py']
+      ],
+      deps: [
+        ['lsm6dsox', 'latest'],
+        ['github:arduino/micropython-ltr-381rgb-01', 'main'],
+        ['github:jposada202020/MicroPython_HS3003', 'master']
+      ],
+      version: '1.2.0'
+    }),
+    [`${RAW}/arduino/modulino-mpy/HEAD/src/modulino/__init__.py`]: '# init',
+    [`${RAW}/arduino/modulino-mpy/HEAD/src/modulino/distance.py`]: 'from .lib.vl53l4cd import X',
+    [`${RAW}/arduino/modulino-mpy/HEAD/src/modulino/lib/vl53l4cd.py`]: '# vl53l4cd',
+    // An INDEX dependency: content-addressed `hashes` rather than `urls`.
+    [LSM_JSON]: JSON.stringify({ v: 1, version: '1.1.0', hashes: [['lsm6dsox.py', '0203e2eb']] }),
+    [`${MIP_DEFAULT_INDEX}/file/02/0203e2eb`]: '# lsm6dsox',
+    [LTR_JSON]: JSON.stringify({
+      urls: [
+        ['ltr381rgb/__init__.py', 'github:arduino/micropython-ltr-381rgb-01/src/ltr381rgb/__init__.py'],
+        ['ltr381rgb/device.py', 'github:arduino/micropython-ltr-381rgb-01/src/ltr381rgb/device.py']
+      ]
+    }),
+    [`${RAW}/arduino/micropython-ltr-381rgb-01/main/src/ltr381rgb/__init__.py`]: '# ltr',
+    [`${RAW}/arduino/micropython-ltr-381rgb-01/main/src/ltr381rgb/device.py`]: '# ltr device',
+    [HS_JSON]: JSON.stringify({
+      urls: [
+        ['micropython_hs3003/__init__.py', 'github:jposada202020/MicroPython_HS3003/micropython_hs3003/__init__.py'],
+        ['micropython_hs3003/hs3003.py', 'github:jposada202020/MicroPython_HS3003/micropython_hs3003/hs3003.py']
+      ]
+    }),
+    [`${RAW}/jposada202020/MicroPython_HS3003/master/micropython_hs3003/__init__.py`]: '# hs',
+    [`${RAW}/jposada202020/MicroPython_HS3003/master/micropython_hs3003/hs3003.py`]: '# hs3003'
+  })
+
+  it('puts every declared dependency at the install ROOT, not inside the package', async () => {
+    // The exact paths four Modulino parts need. `/lib/lsm6dsox.py` is what
+    // `from lsm6dsox import LSM6DSOX` resolves to; `/lib/modulino/lsm6dsox.py`
+    // is a file the board can never see.
+    const out = await resolveMipSpec(MODULINO, { fetchText: fakeFetch(bodies()) })
+    const paths = out.files.map((f) => f.path)
+    expect(paths).toContain('/lib/lsm6dsox.py')
+    expect(paths).toContain('/lib/ltr381rgb/__init__.py')
+    expect(paths).toContain('/lib/ltr381rgb/device.py')
+    expect(paths).toContain('/lib/micropython_hs3003/__init__.py')
+    expect(paths).toContain('/lib/micropython_hs3003/hs3003.py')
+  })
+
+  it('installs ALL the declared dependencies, never a subset', async () => {
+    // Movement needs lsm6dsox, Light needs ltr381rgb, Thermo needs
+    // micropython_hs3003. Two out of three is an install that reports success
+    // and then fails at `import` on whichever part drew the short straw.
+    const out = await resolveMipSpec(MODULINO, { fetchText: fakeFetch(bodies()) })
+    expect(out.packages).toEqual([
+      MODULINO,
+      'lsm6dsox',
+      'github:arduino/micropython-ltr-381rgb-01',
+      'github:jposada202020/MicroPython_HS3003'
+    ])
+    const byPackage = new Set(out.files.map((f) => f.package))
+    for (const dep of out.packages.slice(1)) expect(byPackage.has(dep)).toBe(true)
+  })
+
+  it('never nests a dependency inside a directory the ROOT package claimed', async () => {
+    // The property, stated as a property rather than as five paths: whatever a
+    // dependency declares, it may not land under `/lib/modulino`. This is the
+    // shape of the bug — a dep's own path joined onto the parent package's
+    // directory instead of the install target.
+    const out = await resolveMipSpec(MODULINO, { fetchText: fakeFetch(bodies()) })
+    const rootDirs = out.files
+      .filter((f) => f.package === MODULINO)
+      .map((f) => f.path.slice(0, f.path.indexOf('/', out.target.length + 1)))
+      .filter((d) => d.length > out.target.length)
+    for (const file of out.files) {
+      if (file.package === MODULINO) continue
+      for (const dir of rootDirs) {
+        expect(file.path.startsWith(`${dir}/`)).toBe(false)
+      }
+    }
+  })
+
+  it("keeps a dependency's OWN folder structure, anchored to the target", async () => {
+    // A dependency that ships a package directory keeps it — `ltr381rgb/` is
+    // the module name the board imports — but relative to `/lib`, not to
+    // whatever pulled it in.
+    const out = await resolveMipSpec(MODULINO, { fetchText: fakeFetch(bodies()) })
+    const ltr = out.files.filter((f) => f.package === 'github:arduino/micropython-ltr-381rgb-01')
+    expect(ltr.map((f) => f.path).sort()).toEqual([
+      '/lib/ltr381rgb/__init__.py',
+      '/lib/ltr381rgb/device.py'
+    ])
+  })
+
+  it("leaves the package's OWN subfolder alone — it is not a dependency", async () => {
+    // `modulino/lib/vl53l4cd.py` is declared by the Modulino package itself and
+    // imported relatively (`from .lib.vl53l4cd import …`), so it belongs inside
+    // the package. Hoisting it to `/lib/vl53l4cd.py` would break the very
+    // import the rest of this rule protects.
+    const out = await resolveMipSpec(MODULINO, { fetchText: fakeFetch(bodies()) })
+    const vl = out.files.find((f) => f.path.endsWith('vl53l4cd.py'))
+    expect(vl?.path).toBe('/lib/modulino/lib/vl53l4cd.py')
+    expect(vl?.package).toBe(MODULINO)
+  })
+
+  it('anchors a dependency to a CUSTOM target too, not to the package', async () => {
+    const out = await resolveMipSpec(MODULINO, { fetchText: fakeFetch(bodies()), target: '/flash/lib' })
+    expect(out.target).toBe('/flash/lib')
+    expect(out.files.map((f) => f.path)).toContain('/flash/lib/lsm6dsox.py')
+    expect(out.files.every((f) => f.path.startsWith('/flash/lib/'))).toBe(true)
+  })
+
+  it('resolves a dependency that declares its own lib/ folder against the TARGET', async () => {
+    // The adversarial shape, and the one that tells the two bugs apart: a
+    // dependency whose declared path STARTS with `lib/`. Joined onto the parent
+    // it reads `/lib/pkg/lib/driver.py` — indistinguishable at a glance from a
+    // package's legitimate own subfolder, and exactly what was reported on the
+    // board. Joined onto the target it is `/lib/lib/driver.py`.
+    const fetchText = fakeFetch({
+      [`${RAW}/o/pkg/HEAD/package.json`]: JSON.stringify({
+        urls: [['pkg/__init__.py', 'github:o/pkg/pkg/__init__.py']],
+        deps: [['github:o/dep', '']]
+      }),
+      [`${RAW}/o/pkg/HEAD/pkg/__init__.py`]: '# pkg',
+      [`${RAW}/o/dep/HEAD/package.json`]: JSON.stringify({
+        urls: [['lib/driver.py', 'github:o/dep/lib/driver.py']]
+      }),
+      [`${RAW}/o/dep/HEAD/lib/driver.py`]: '# driver'
+    })
+    const out = await resolveMipSpec('github:o/pkg', { fetchText })
+    const driver = out.files.find((f) => f.package === 'github:o/dep')
+    expect(driver?.path).toBe('/lib/lib/driver.py')
+    expect(driver?.path).not.toBe('/lib/pkg/lib/driver.py')
+  })
+
+  it('attributes each file to the package that DECLARED it', async () => {
+    // Provenance is what lets the install log name the dependencies it brought,
+    // and what lets every check above say whose file a path is.
+    const out = await resolveMipSpec(MODULINO, { fetchText: fakeFetch(bodies()) })
+    const owner = (p: string): string | undefined => out.files.find((f) => f.path === p)?.package
+    expect(owner('/lib/modulino/__init__.py')).toBe(MODULINO)
+    expect(owner('/lib/lsm6dsox.py')).toBe('lsm6dsox')
+    expect(owner('/lib/micropython_hs3003/hs3003.py')).toBe(
+      'github:jposada202020/MicroPython_HS3003'
+    )
+  })
+})
+
+describe('normaliseMipTarget — an install directory is ABSOLUTE', () => {
+  it('anchors a bare folder name, so the paths written match the folders created', () => {
+    // `lib` is the placeholder a part author is shown for a mip driver's
+    // install folder. Unanchored it produced RELATIVE device paths, while
+    // `deviceDirsFor` anchored the same paths when creating their directories —
+    // so the folders were made at `/lib` and the files written relative to the
+    // board's working directory. They agreed only while that was `/`.
+    expect(normaliseMipTarget('lib')).toBe('/lib')
+    expect(normaliseMipTarget('/lib')).toBe('/lib')
+    expect(normaliseMipTarget('/lib/')).toBe('/lib')
+    expect(normaliseMipTarget('./lib')).toBe('/lib')
+    expect(normaliseMipTarget('')).toBe('/')
+  })
+
+  it('refuses a target that climbs out of the directory it was pointed at', () => {
+    expect(() => normaliseMipTarget('lib/../..')).toThrow(MipResolveError)
+  })
+
+  it('makes every resolved path absolute even for a relative target', async () => {
+    const fetchText = fakeFetch({
+      [`${RAW}/o/r/HEAD/package.json`]: JSON.stringify({
+        urls: [['pkg/__init__.py', 'github:o/r/pkg/__init__.py']],
+        deps: [['github:o/dep', '']]
+      }),
+      [`${RAW}/o/r/HEAD/pkg/__init__.py`]: '# pkg',
+      [`${RAW}/o/dep/HEAD/package.json`]: JSON.stringify({ urls: [['dep.py', 'dep.py']] }),
+      [`${RAW}/o/dep/HEAD/dep.py`]: '# dep'
+    })
+    const out = await resolveMipSpec('github:o/r', { fetchText, target: 'lib' })
+    expect(out.target).toBe('/lib')
+    expect(out.files.map((f) => f.path).sort()).toEqual(['/lib/dep.py', '/lib/pkg/__init__.py'])
+    // The directories the write leg creates now describe the same paths.
+    expect(deviceDirsFor(out.files.map((f) => f.path))).toEqual(['/lib', '/lib/pkg'])
+  })
+})
+
 describe('resolveMipSpec — index packages', () => {
   it('asks the index for the SOURCE variant and downloads its content-addressed files', async () => {
     // `py` rather than an .mpy bytecode version: Snakie cannot know the board's
@@ -231,7 +450,8 @@ describe('resolveMipSpec — index packages', () => {
       {
         path: '/lib/umqtt/simple.py',
         contents: '# simple',
-        url: `${MIP_DEFAULT_INDEX}/file/ab/abcdef123456`
+        url: `${MIP_DEFAULT_INDEX}/file/ab/abcdef123456`,
+        package: 'umqtt.simple'
       }
     ])
   })

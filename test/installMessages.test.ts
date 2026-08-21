@@ -112,4 +112,38 @@ describe('hostInstallNote', () => {
     expect(note).toContain('1 file')
     expect(note).not.toContain('1 files')
   })
+
+  it('names the dependencies that came with it, so the install is not silent', () => {
+    // Four Modulino parts work only because these three arrive too, at the
+    // install root. A user who suspects they are missing should be able to read
+    // the answer off the install log instead of listing /lib on the board (#785).
+    const note = hostInstallNote({
+      name: 'Arduino Modulino',
+      spec: 'github:arduino/arduino-modulino-mpy',
+      fileCount: 25,
+      target: '/lib',
+      dependencies: [
+        'lsm6dsox',
+        'github:arduino/micropython-ltr-381rgb-01',
+        'github:jposada202020/MicroPython_HS3003'
+      ]
+    })
+    expect(note).toContain('its dependencies')
+    expect(note).toContain('lsm6dsox')
+    expect(note).toContain('github:arduino/micropython-ltr-381rgb-01')
+    expect(note).toContain('github:jposada202020/MicroPython_HS3003')
+  })
+
+  it('says "its dependency" for one, and nothing at all for none', () => {
+    const one = hostInstallNote({
+      name: 'x',
+      spec: 'github:o/r',
+      fileCount: 2,
+      target: '/lib',
+      dependencies: ['github:o/dep']
+    })
+    expect(one).toContain('its dependency github:o/dep')
+    const none = hostInstallNote({ name: 'x', spec: 'github:o/r', fileCount: 1, target: '/lib' })
+    expect(none).not.toContain('dependenc')
+  })
 })

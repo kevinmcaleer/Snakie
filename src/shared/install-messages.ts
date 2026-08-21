@@ -204,8 +204,21 @@ export function hostInstallNote(options: {
   fileCount: number
   /** The install directory (`/lib`). */
   target: string
+  /**
+   * The TRANSITIVE DEPENDENCIES that came with it — `MipResolution.packages`
+   * minus the root spec — named for the same reason
+   * {@link bundleInstallNote} names them: a user who asked for one driver and
+   * got 25 files deserves to know why, and a user checking whether the install
+   * really brought `lsm6dsox` should be able to read that off the install log
+   * instead of listing `/lib` on the board (#785).
+   */
+  dependencies?: readonly string[]
 }): string {
-  const { name, spec, fileCount, target } = options
+  const { name, spec, fileCount, target, dependencies = [] } = options
   const files = fileCount === 1 ? '1 file' : `${fileCount} files`
-  return `Downloaded ${name} (${spec}) on your computer — ${files} into ${target}.`
+  const deps =
+    dependencies.length > 0
+      ? ` with ${dependencies.length === 1 ? 'its dependency' : 'its dependencies'} ${dependencies.join(', ')}`
+      : ''
+  return `Downloaded ${name} (${spec})${deps} on your computer — ${files} into ${target}.`
 }
