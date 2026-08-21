@@ -1,13 +1,53 @@
 /**
- * MicroPython firmware-version detection (#173).
+ * Firmware-version detection — MicroPython (#173) and CircuitPython (#757).
  *
- * Pure helpers (no IO) so they're unit-testable: read the device's running
- * MicroPython version from its REPL boot banner, find the newest stable version
- * the firmware catalog offers, and decide whether an update is available. The
- * catalog fetch + the device connection live in the caller (StatusBar).
+ * Pure helpers (no IO) so they're unit-testable: work out what a board is
+ * running, find the newest stable build its runtime publishes for it, and decide
+ * whether an update is available. The catalog fetch + the device connection live
+ * in the caller (StatusBar).
+ *
+ * The two runtimes are found out about in genuinely different ways, and the
+ * difference is not cosmetic:
+ *
+ *  - **MicroPython** is read from the REPL boot banner in the console buffer,
+ *    and matched to the catalog by CHIP FAMILY, because a MicroPython build
+ *    serves every board on that chip. That path is unchanged.
+ *  - **CircuitPython** is read from the session's own {@link RuntimeInfo} — the
+ *    dialect probe already asked (#752) — and matched by **Board ID**, because
+ *    CircuitPython builds are per board. No board id, no offer: there is no
+ *    "near enough" build to fall back to.
+ *
+ * Neither ever offers a pre-release. Both runtimes publish them in the same
+ * catalog as their stable builds.
  */
-import { compareVersions, isNewer } from '../../../shared/part-registry'
+import type { RuntimeInfo } from '../../../shared/dialect'
+import {
+  findBoardBuilds,
+  isStableRelease,
+  bareVersion,
+  newestStableVersion,
+  type FirmwareRuntime
+} from '../../../shared/firmware-runtime'
+import { isNewerVersion } from '../../../shared/version-compare'
 import type { FirmwareCatalog } from '../../../preload/index.d'
+
+/**
+ * An available firmware update, named by the runtime it is FOR.
+ *
+ * The runtime is carried rather than assumed so the prompt can say which Python
+ * it is offering — telling a CircuitPython user that MicroPython 1.28 is
+ * available would be nonsense, and the old prompt was hard-coded to say exactly
+ * that.
+ */
+export interface FirmwareUpdate {
+  runtime: FirmwareRuntime
+  /** What the board is running now. */
+  current: string
+  /** The newest stable build available for it. */
+  latest: string
+  /** CircuitPython only: the board id the build was matched on. */
+  boardId?: string
+}
 
 /**
  * The MOST-RECENT `MicroPython v…` banner line in `text` — the currently
@@ -67,12 +107,6 @@ function familyInKey(catalogFamily: string, key: string): boolean {
   return fam === key
 }
 
-/** A stable `MAJOR.MINOR[.PATCH]` release, or null for preview/nightly/date tags. */
-function stableVersion(v: string): string | null {
-  const m = /^v?(\d+\.\d+(?:\.\d+)?)$/.exec(String(v ?? '').trim())
-  return m ? m[1] : null
-}
-
 /**
  * The newest STABLE MicroPython version in the catalog. When `family` (a coarse
  * key from {@link firmwareFamilyFromBanner}) is given, the search is SCOPED to
@@ -94,8 +128,9 @@ export function latestCatalogVersion(
     for (const model of fam.models ?? [])
       for (const variant of model.variants ?? [])
         for (const v of variant.versions ?? []) {
-          const ver = stableVersion(v.version)
-          if (ver && (best === null || compareVersions(ver, best) > 0)) best = ver
+          if (!isStableRelease(v.version)) continue
+          const ver = bareVersion(v.version)
+          if (best === null || isNewerVersion(ver, best)) best = ver
         }
   }
   return best
@@ -115,7 +150,7 @@ export function newerFirmware(
 ): { current: string; latest: string } | null {
   if (!deviceVersion) return null
   const latest = latestCatalogVersion(catalog, family)
-  return latest && isNewer(latest, deviceVersion) ? { current: deviceVersion, latest } : null
+  return latest && isNewerVersion(latest, deviceVersion) ? { current: deviceVersion, latest } : null
 }
 
 /**
@@ -143,4 +178,72 @@ export function firmwareUpdateFromConsole(
   const family = firmwareFamilyFromBanner(banner)
   if (!version || !family) return null // partial banner / unidentified board — wait
   return newerFirmware(version, catalog, family)
+}
+
+/**
+ * Whether a newer stable CircuitPython exists for the board this session is
+ * talking to (#757).
+ *
+ * Matched on the **Board ID** — CircuitPython builds are per board, so the
+ * board's own build is the only honest comparison. Everything about this is
+ * deliberately strict, because the alternative to "no offer" is offering a
+ * firmware that will leave the board with the wrong pins:
+ *
+ *  - not CircuitPython ⇒ null (a MicroPython board is the other path's job).
+ *  - no board id ⇒ null. `boot_out.txt` is how the id is known, and it is only
+ *    read when a CIRCUITPY drive was unambiguously paired to this port (#753).
+ *    Without it we know the version but not the board, which is not enough.
+ *  - the board id is not in the catalog ⇒ null. No build exists to offer.
+ *  - the running version isn't a version (a branch name, a blank) ⇒ null, via
+ *    {@link isNewerVersion}'s guard.
+ *  - only pre-release builds are newer ⇒ null. CircuitPython publishes its
+ *    alphas and betas here, and an alpha is never an update.
+ */
+export function circuitPythonUpdate(
+  runtime: RuntimeInfo | null | undefined,
+  catalog: FirmwareCatalog | null | undefined
+): FirmwareUpdate | null {
+  if (!runtime || runtime.dialect !== 'circuitpython') return null
+  const current = runtime.version ? bareVersion(runtime.version) : ''
+  const boardId = runtime.boardId
+  if (!current || !boardId) return null
+
+  // Every build published for THIS board — a board may appear twice (a `.uf2`
+  // and a `.bin`), and both carry the same versions, so the newest across them
+  // is the board's newest.
+  const builds = findBoardBuilds(catalog, boardId)
+  if (builds.length === 0) return null
+
+  let latest: string | null = null
+  for (const build of builds) {
+    const newest = newestStableVersion(build.variant.versions, isNewerVersion)
+    if (!newest) continue
+    const version = bareVersion(newest.version)
+    if (latest === null || isNewerVersion(version, latest)) latest = version
+  }
+  if (!latest || !isNewerVersion(latest, current)) return null
+  return { runtime: 'circuitpython', current, latest, boardId }
+}
+
+/**
+ * How each runtime writes a version. MicroPython says `v1.28.0`, everywhere
+ * from its banner to its download page; CircuitPython says `10.2.1`, with no
+ * `v`. Small, but the prompt is the one place a user checks a version against
+ * what their board printed, and `vSomething` a board never said reads as a
+ * different thing entirely.
+ */
+export function displayVersion(runtime: FirmwareRuntime, version: string): string {
+  return runtime === 'micropython' ? `v${bareVersion(version)}` : bareVersion(version)
+}
+
+/**
+ * The MicroPython path, wrapped to carry its runtime like the CircuitPython one
+ * does, so the caller holds one shape and the prompt can name what it offers.
+ */
+export function microPythonUpdate(
+  consoleText: string,
+  catalog: FirmwareCatalog | null | undefined
+): FirmwareUpdate | null {
+  const found = firmwareUpdateFromConsole(consoleText, catalog)
+  return found ? { runtime: 'micropython', ...found } : null
 }

@@ -750,6 +750,14 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
       // An ambiguous pairing deliberately yields nothing: writing to the wrong
       // board's drive is worse than falling back to the REPL (#753).
       this.mount = paired.drive?.mountPath ?? null
+      // The drive's `boot_out.txt` carries the per-board build id, which the
+      // REPL probe cannot ask for — `sys.implementation` has no such field. It
+      // is the only precise key for a CircuitPython firmware-update check
+      // (#757), so carry it on the session rather than re-reading the drive
+      // later. Only ever from a drive we actually paired to THIS port: an
+      // ambiguous pairing leaves it absent, and absent means "offer nothing".
+      const boardId = paired.drive?.runtime.boardId
+      if (boardId && this.runtime) this.runtime = { ...this.runtime, boardId }
     } catch {
       // Detection is an optimisation over the REPL, never a prerequisite.
     }

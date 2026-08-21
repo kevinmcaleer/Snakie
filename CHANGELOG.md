@@ -7,6 +7,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **A CircuitPython board is told when a newer CircuitPython is out — and never
+  told about MicroPython.** (#757, epic #209) Snakie already offered MicroPython
+  updates once per connection; the same prompt now covers CircuitPython, and it
+  names the runtime it's offering, so nobody is told about a release for a Python
+  their board isn't running. It's matched on the **Board ID** from `boot_out.txt`
+  rather than the chip family, because CircuitPython ships a separate build per
+  board — so what you're offered is your board's own newest build, not the newest
+  build for something with the same chip in it. Where that id can't be
+  established, or the board isn't in the catalog, you're told nothing rather than
+  offered a guess. Pre-releases are never offered: CircuitPython publishes its
+  alphas and betas in the same list as its stable builds, and `10.3.0-alpha.1`
+  really is "newer" than `10.2.1` — it's just not an update.
+
 - **You can now choose which Python you're flashing.** (#756, epic #209) The
   flash dialog was MicroPython all the way down and offered no way to say
   otherwise — there was no runtime selector at all. There is one now, at the top,
@@ -176,6 +189,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it no longer reads every folder in your home directory looking for a board.
 
 ### Fixed
+- **A board whose firmware version isn't a version is no longer told to update.**
+  (#757) A vendor MicroPython build was reporting its *branch name* where the
+  version goes. The comparison turned anything non-numeric into `0`, so that
+  board read as `0.0.0` and every build in the catalog looked like an upgrade
+  from it. An unrecognisable version now compares as "no update" — we don't know
+  what it's running, and that isn't evidence that it's behind.
 - **Build no longer opens the help panel every time you switch to it.** Switching
   to the Build workspace kept reopening the lesson/help sidebar, however many
   times you closed it. The cause was a "sticky lesson" rule that carried the
