@@ -120,13 +120,21 @@ export interface EsptoolInfo {
 }
 
 /**
- * One downloadable firmware build (a single `.uf2` for one version), the leaf
- * of the catalog cascade.
+ * One downloadable firmware build (a single file for one version), the leaf of
+ * the catalog cascade.
  */
 export interface FirmwareVersion {
-  /** Version label, e.g. `v1.28.0` (or a preview/nightly tag). */
+  /**
+   * Version label — `v1.28.0` (MicroPython), `10.2.1` (CircuitPython), or a
+   * preview/nightly/pre-release tag (`1.24.0-preview.42`, `10.3.0-alpha.1`).
+   */
   version: string
-  /** Absolute URL of the `.uf2` file on micropython.org. */
+  /**
+   * Absolute URL of the firmware file. `micropython.org` for MicroPython builds;
+   * `downloads.circuitpython.org/bin/<board_id>/…` for CircuitPython ones, whose
+   * path carries the per-board id (#756). The EXTENSION is what decides how it
+   * is flashed — see `flashTargetForDownload`.
+   */
   url: string
 }
 

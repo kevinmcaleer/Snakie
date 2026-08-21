@@ -23,6 +23,10 @@ import {
 } from './status-tips'
 import { isVirtualPort, VIRTUAL_PORT_SHORT } from '../../../shared/virtual-device'
 import { runtimeLabel } from '../../../shared/dialect'
+import {
+  FIRMWARE_RUNTIME_LABEL,
+  firmwareRuntimeForDialect
+} from '../../../shared/firmware-runtime'
 import type { FirmwareCatalog, UpdateStatus } from '../../../preload/index.d'
 import { BulbIcon } from './ui-icons'
 import './StatusBar.css'
@@ -177,6 +181,15 @@ export function StatusBar({
   // renders nothing rather than guessing MicroPython, which is exactly the
   // assumption the CircuitPython epic (#209) exists to remove.
   const runtime = connected ? runtimeLabel(status.runtime ?? null) : ''
+  /**
+   * Which Python the flash dialog should OPEN on (#756). The connected board's
+   * own dialect when it said, MicroPython otherwise — the dialog's own selector
+   * is what actually decides, this only saves a step. A board that never
+   * identified itself gets the historical default rather than a guess dressed up
+   * as detection.
+   */
+  const flashRuntime = firmwareRuntimeForDialect(status.runtime?.dialect) ?? 'micropython'
+  const flashRuntimeLabel = FIRMWARE_RUNTIME_LABEL[flashRuntime]
   // Offline mode (#135): connected to the built-in simulated device, not real
   // hardware — surfaced with a distinct label + badge so it's never mistaken
   // for a physical board.
@@ -518,9 +531,9 @@ export function StatusBar({
             title={
               fwUpdate
                 ? `MicroPython v${fwUpdate.latest} available (device runs v${fwUpdate.current}). Flash firmware.`
-                : 'Flash MicroPython firmware to the device (ESP via esptool, RP2040 via UF2)'
+                : `Flash ${flashRuntimeLabel} firmware to the device (ESP via esptool, UF2 boards by drive copy)`
             }
-            aria-label="Flash MicroPython firmware"
+            aria-label={`Flash ${flashRuntimeLabel} firmware`}
           >
             <span aria-hidden="true">⚡</span>
             <span>Flash firmware</span>
@@ -529,7 +542,13 @@ export function StatusBar({
         </div>
       </div>
 
-      {flasherOpen && <FirmwareFlasher onClose={() => setFlasherOpen(false)} />}
+      {flasherOpen && (
+        <FirmwareFlasher
+          onClose={() => setFlasherOpen(false)}
+          runtime={flashRuntime}
+          boardId={status.runtime?.boardId}
+        />
+      )}
     </footer>
   )
 }

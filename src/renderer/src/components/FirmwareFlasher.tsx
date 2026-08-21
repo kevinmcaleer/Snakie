@@ -13,6 +13,16 @@ import {
   firmwareMismatch,
   methodForBoardType
 } from '../../../shared/board-profiles'
+import {
+  FIRMWARE_RUNTIMES,
+  FIRMWARE_RUNTIME_HOST,
+  FIRMWARE_RUNTIME_LABEL,
+  findBoardBuilds,
+  flashTargetForDownload,
+  flashTargetForFamily,
+  isVendorUf2Family,
+  type FirmwareRuntime
+} from '../../../shared/firmware-runtime'
 import { useFocusTrap } from '../hooks/useFocusTrap'
 import { hasWebUSB, isElectron } from '../lib/platform'
 import { flashEspInBrowser, requestEspPort } from '../lib/webFirmware/espFlash'
@@ -23,6 +33,20 @@ import './FirmwareFlasher.css'
 interface FirmwareFlasherProps {
   /** Close the modal (ignored while a flash is in progress). */
   onClose: () => void
+  /**
+   * Which runtime the dialog OPENS on (#756). The user can always change it; this
+   * only saves a step when the caller already knows — the status bar passes the
+   * connected board's own dialect, so a CircuitPython board doesn't open on a
+   * MicroPython catalog.
+   */
+  runtime?: FirmwareRuntime
+  /**
+   * The connected board's CircuitPython **Board ID**, when one could be
+   * established (`boot_out.txt`, #753). Used to pre-select that board's exact
+   * build. Absent means we could not identify the board, and the dialog says so
+   * rather than pre-selecting a plausible-looking one.
+   */
+  boardId?: string
 }
 
 const BOARD_LABELS: Record<BoardType, string> = {
@@ -47,24 +71,6 @@ function isEspBoard(b: BoardType): boolean {
 
 /** Where the firmware to flash comes from (`.uf2` or `.bin`). */
 type Source = 'local' | 'catalog'
-
-/**
- * Map a catalog `family` to the flash `{ board, offset }` for a catalog flash
- * (issue #125). MUST match `flashTargetForFamily` in
- * `src/main/firmware/catalog.ts` (the canonical, unit-tested copy); replicated
- * here — rather than imported from `src/main` — so the renderer bundle stays
- * free of main-only modules, mirroring `sanitiseBoardId`.
- */
-const ESP_BOOTLOADER_OFFSET: Record<string, string> = { esp32: '0x1000', esp32s2: '0x1000' }
-
-function flashTargetForFamily(family: string): { board: BoardType; offset?: string } {
-  const fam = family.trim().toLowerCase()
-  if (fam.startsWith('rp2')) return { board: 'rp2040' }
-  if (fam.startsWith('nrf') || fam === 'microbit') return { board: 'microbit' }
-  if (fam === 'esp8266') return { board: 'esp8266', offset: '0x0' }
-  if (fam.startsWith('esp')) return { board: 'esp32', offset: ESP_BOOTLOADER_OFFSET[fam] ?? '0x0' }
-  return { board: 'rp2040' }
-}
 
 /**
  * FIRMWARE FLASHER MODAL (issues #14, #64, #125; Web W3 issue #284).
@@ -105,8 +111,21 @@ function flashTargetForFamily(family: string): { board: BoardType; offset?: stri
  * catalog-download source is hidden outside Electron; only "Local file" is
  * offered there. `isElectron()`/`hasWebUSB()` from `lib/platform` decide
  * which path a given render takes.
+ *
+ * **Which Python** (#756, epic #209). The dialog used to be MicroPython all the
+ * way down, with no way to say otherwise. A Runtime choice now sits at the top
+ * and drives everything below it: which catalogs are fetched (micropython.org's
+ * or circuitpython.org's), what the copy says, and — for CircuitPython, whose
+ * builds are per BOARD rather than per chip — which board's build is
+ * pre-selected, matched on the Board ID from `boot_out.txt`. When that id can't
+ * be established the dialog says so and pre-selects nothing: a guessed `.uf2`
+ * flashes without complaint and leaves a board needing a re-flash.
  */
-export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element {
+export function FirmwareFlasher({
+  onClose,
+  runtime: initialRuntime,
+  boardId
+}: FirmwareFlasherProps): JSX.Element {
   const [candidates, setCandidates] = useState<BoardCandidate[]>([])
   const [board, setBoard] = useState<BoardType>('esp32')
   /** The chosen board profile (#682) — drives the mechanics below it. */
@@ -148,7 +167,11 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   // Move focus into the dialog on open, trap Tab, and restore it on close.
   const dialogRef = useFocusTrap<HTMLDivElement>()
 
-  // --- Catalog (download-from-MicroPython.org) state (issue #64) ---
+  // --- Which Python is being flashed (#756) ---
+  const [runtime, setRuntime] = useState<FirmwareRuntime>(initialRuntime ?? 'micropython')
+  const runtimeLabel = FIRMWARE_RUNTIME_LABEL[runtime]
+
+  // --- Catalog (download-from-micropython.org / circuitpython.org) state (#64) ---
   const [source, setSource] = useState<Source>('local')
   const [catalog, setCatalog] = useState<FirmwareCatalog | null>(null)
   const [catalogLoading, setCatalogLoading] = useState(false)
@@ -324,7 +347,7 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
     setCatalogLoading(true)
     setCatalogError(null)
     try {
-      const fetched = await window.api.firmware.fetchCatalog()
+      const fetched = await window.api.firmware.fetchCatalog(runtime)
       setCatalog(fetched)
     } catch (err) {
       setCatalog(null)
@@ -332,13 +355,29 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
     } finally {
       setCatalogLoading(false)
     }
-  }, [])
+  }, [runtime])
 
   // When the user switches to the catalog source (any board), fetch it once.
   useEffect(() => {
     if (source !== 'catalog') return
     if (!catalog && !catalogLoading && !catalogError) void loadCatalog()
   }, [source, catalog, catalogLoading, catalogError, loadCatalog])
+
+  /**
+   * Switching runtime throws the catalog away rather than filtering it: the two
+   * are different lists of different builds, and a selection carried across
+   * would name a build that no longer exists. The fetch effect above then
+   * re-runs for the new runtime.
+   */
+  const handleRuntimeChange = useCallback((next: FirmwareRuntime): void => {
+    setRuntime(next)
+    setCatalog(null)
+    setCatalogError(null)
+    setSelFamily('')
+    setSelModel('')
+    setSelVariant('')
+    setSelVersionUrl('')
+  }, [])
 
   const families = useMemo(() => catalog?.families ?? [], [catalog])
   const family = useMemo(
@@ -387,10 +426,46 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   )
   const versions = useMemo(() => variant?.versions ?? [], [variant])
 
+  /**
+   * The CircuitPython Board ID we are working with, if any (#756).
+   *
+   * A board named by hand wins over one detected from a drive: the user has just
+   * told us what they are holding. Empty when neither is known — CircuitPython
+   * builds are per board, so an unknown board means we offer nothing rather than
+   * pre-select something that looks close.
+   */
+  const activeBoardId = profileId ? (profile?.circuitPythonBoardId ?? '') : (boardId ?? '')
+
+  /** Every CircuitPython build published for that board (`.uf2` and `.bin` both,
+   *  where a board has both). Empty for MicroPython, whose builds are per chip. */
+  const boardBuilds = useMemo(
+    () => (runtime === 'circuitpython' ? findBoardBuilds(catalog, activeBoardId) : []),
+    [runtime, catalog, activeBoardId]
+  )
+
+  /**
+   * Which of those to open on. A drive copy is preferred where the board offers
+   * one: it needs no esptool on PATH and has no offset to get wrong.
+   */
+  const matchedBuild = useMemo(() => {
+    const driveCopy = boardBuilds.find(
+      (b) => flashTargetForDownload(b.family, b.variant.versions[0]?.url ?? '').board === 'rp2040'
+    )
+    return driveCopy ?? boardBuilds[0]
+  }, [boardBuilds])
+
+  const matchKey = matchedBuild
+    ? `${matchedBuild.family}|${matchedBuild.model.label}|${matchedBuild.variant.title}`
+    : ''
+  /** The match already applied to the dropdowns, so a user's later change sticks. */
+  const appliedMatchRef = useRef<string>('')
+
   // Pre-select a sensible Family once the catalog arrives: prefer one whose
   // flash target matches the currently selected board (so an ESP user lands on
   // an ESP family), then `rp2`, then the first family. For a detected micro:bit,
   // prefer the family matching its generation (nrf52 for v2, nrf51 for v1).
+  // A CircuitPython board matched by its Board ID overrides this entirely (the
+  // effects below run after it and are far more precise).
   useEffect(() => {
     if (families.length === 0) return
     if (selFamily && families.some((f) => f.family === selFamily)) return
@@ -404,12 +479,30 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
     setSelFamily(preferred.family)
   }, [families, selFamily, board, detectedMicrobit])
 
+  // Point the cascade at the matched board's family. Declared AFTER the generic
+  // pre-select above so that, on the render where both fire, this one's write is
+  // the one that lands.
+  useEffect(() => {
+    if (!matchedBuild || appliedMatchRef.current === matchKey) return
+    setSelFamily(matchedBuild.family)
+  }, [matchedBuild, matchKey])
+
   // Reset downstream selections whenever the upstream selection changes.
   useEffect(() => {
     setSelModel('')
     setSelVariant('')
     setSelVersionUrl('')
   }, [selFamily])
+
+  // …then select the matched Model + Variant, once the family has settled (and
+  // AFTER the reset above, which would otherwise wipe them in the same commit).
+  useEffect(() => {
+    if (!matchedBuild || appliedMatchRef.current === matchKey) return
+    if (selFamily !== matchedBuild.family) return
+    appliedMatchRef.current = matchKey
+    setSelModel(`${matchedBuild.model.vendor}|${matchedBuild.model.model}`)
+    setSelVariant(matchedBuild.variant.title)
+  }, [matchedBuild, matchKey, selFamily])
 
   // Auto-pick the sole variant + newest version once a Model is chosen.
   useEffect(() => {
@@ -421,22 +514,37 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
     else setSelVersionUrl('')
   }, [versions])
 
-  // For a CATALOG flash the selected family is authoritative: sync the Board
-  // type to its flash target and pre-fill the offset (still user-editable in the
-  // Flash offset field) per chip (issue #125). This surfaces the right inputs
-  // (port/offset for ESP, boot drive for RP2040) automatically.
+  // For a CATALOG flash the selection is authoritative: sync the Board type to
+  // its flash target and pre-fill the offset (still user-editable in the Flash
+  // offset field) per chip (issue #125). This surfaces the right inputs
+  // (port/offset for ESP, boot drive for a UF2 board) automatically.
+  //
+  // Once a VERSION is picked its URL decides, not the family — on CircuitPython
+  // the same ESP32-S3 board is published both as a `.uf2` and as a `.bin`, and
+  // handing the `.uf2` to esptool writes the container and kills the board.
   useEffect(() => {
     if (source !== 'catalog' || !selFamily) return
-    const target = flashTargetForFamily(selFamily)
+    const target = selVersionUrl
+      ? flashTargetForDownload(selFamily, selVersionUrl)
+      : flashTargetForFamily(selFamily)
     setBoard(target.board)
     setOffset(target.offset ?? DEFAULT_OFFSET[target.board])
-  }, [source, selFamily])
+  }, [source, selFamily, selVersionUrl])
 
   const serialCandidates = candidates.filter((c) => c.source === 'serial')
   // Drive candidates relevant to the selected board (RP2040 vs micro:bit drives).
   const uf2Candidates = candidates.filter((c) => c.source === 'uf2-drive' && c.board === board)
 
   const usingCatalog = source === 'catalog'
+  /**
+   * The selected build is a `.uf2` for a board whose bootloader volume the
+   * VENDOR names — `FEATHERBOOT`, `QTPY_BOOT`, `ARDUINO`, … — rather than
+   * `RPI-RP2` (#756). The mechanism is identical, but telling a Feather owner to
+   * look for an RPI-RP2 drive sends them hunting for something that will never
+   * appear. Detection itself is vendor-neutral: it goes by `INFO_UF2.TXT`, the
+   * marker the UF2 spec defines for exactly this purpose.
+   */
+  const vendorUf2 = board === 'rp2040' && usingCatalog && isVendorUf2Family(selFamily)
   /**
    * The chosen file is the wrong KIND for how this board flashes (#685).
    *
@@ -551,10 +659,10 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
         return
       }
       if (usingCatalog) {
-        // Derive the flash target from the selected family (authoritative for a
-        // catalog flash); the user may have edited the offset, so prefer the
-        // field value over the family default (issue #125).
-        const target = flashTargetForFamily(selFamily)
+        // Derive the flash target from the selected DOWNLOAD (its extension is
+        // the mechanism; the family only supplies the ESP offset). The user may
+        // have edited the offset, so prefer the field value over the default.
+        const target = flashTargetForDownload(selFamily, selVersionUrl)
         const esp = isEspBoard(target.board)
         await window.api.firmware.downloadAndFlash({
           url: selVersionUrl,
@@ -622,11 +730,11 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label="Flash MicroPython firmware"
+        aria-label={`Flash ${runtimeLabel} firmware`}
         onClick={(e) => e.stopPropagation()}
       >
         <header className="firmware-modal__header">
-          <h2 className="firmware-modal__title">Flash MicroPython firmware</h2>
+          <h2 className="firmware-modal__title">Flash {runtimeLabel} firmware</h2>
           <button
             type="button"
             className="firmware-modal__close"
@@ -639,6 +747,41 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
         </header>
 
         <div className="firmware-modal__body">
+          {/* WHICH PYTHON (#756). First, because it decides everything under it:
+              which catalog is fetched, what the copy says, and — on
+              CircuitPython — which board's build is pre-selected. There was no
+              choice here at all before; the dialog just assumed MicroPython. */}
+          <div className="firmware-field">
+            <span className="firmware-field__label" id="firmware-runtime-label">
+              Runtime
+            </span>
+            <div
+              className="firmware-source-toggle"
+              role="radiogroup"
+              aria-labelledby="firmware-runtime-label"
+            >
+              {FIRMWARE_RUNTIMES.map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  role="radio"
+                  aria-checked={runtime === r}
+                  className={`firmware-source-tab ${runtime === r ? 'is-active' : ''}`}
+                  onClick={() => handleRuntimeChange(r)}
+                  disabled={flashing}
+                >
+                  {FIRMWARE_RUNTIME_LABEL[r]}
+                </button>
+              ))}
+            </div>
+            <p className="firmware-hint">
+              Builds come from <strong>{FIRMWARE_RUNTIME_HOST[runtime]}</strong>.
+              {runtime === 'circuitpython'
+                ? ' CircuitPython builds are per BOARD, not per chip — the wrong board’s build flashes without complaint and comes up with the wrong pins.'
+                : ' MicroPython builds are per chip family.'}
+            </p>
+          </div>
+
           {/* Name the board FIRST (#682): it fills in the board type, the flash
               offset and the firmware family, and warns if the chosen build is for
               a different chip. Optional — "Other" leaves every field manual. */}
@@ -678,6 +821,30 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
               </p>
             )}
             {mismatch && <p className="firmware-hint firmware-hint--warn">{mismatch}</p>}
+            {/* CircuitPython is matched per BOARD, so say plainly whether we know
+                which board this is — and, when we don't, that we are offering
+                nothing rather than a near-enough build (#756). */}
+            {runtime === 'circuitpython' && activeBoardId && matchedBuild && (
+              <p className="firmware-hint">
+                Board ID <code>{activeBoardId}</code> — pre-selected{' '}
+                <strong>{matchedBuild.model.label}</strong> from{' '}
+                {FIRMWARE_RUNTIME_HOST.circuitpython}.
+              </p>
+            )}
+            {runtime === 'circuitpython' && activeBoardId && catalog && !matchedBuild && (
+              <p className="firmware-hint firmware-hint--warn">
+                No CircuitPython build is published for Board ID{' '}
+                <code>{activeBoardId}</code>. Nothing has been pre-selected — choose the board
+                yourself below, or check circuitpython.org.
+              </p>
+            )}
+            {runtime === 'circuitpython' && !activeBoardId && (
+              <p className="firmware-hint">
+                Snakie couldn’t establish this board’s CircuitPython Board ID, so nothing is
+                pre-selected. Name the board above, or pick it from the list below — a build for
+                the wrong board flashes without error and comes up with the wrong pins.
+              </p>
+            )}
             {board !== 'rp2040' && board !== 'microbit' && (
               <label className="firmware-check">
                 <input
@@ -801,7 +968,11 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
           ) : isElectron() ? (
             <div className="firmware-field">
               <label className="firmware-field__label" htmlFor="firmware-mount">
-                {board === 'microbit' ? 'micro:bit drive (MICROBIT)' : 'RP2040 boot drive (RPI-RP2)'}
+                {board === 'microbit'
+                  ? 'micro:bit drive (MICROBIT)'
+                  : vendorUf2
+                    ? 'UF2 bootloader drive'
+                    : 'RP2040 boot drive (RPI-RP2)'}
               </label>
               <div className="firmware-field__row">
                 <select
@@ -826,13 +997,15 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
                 <p className="firmware-hint">
                   {board === 'microbit'
                     ? 'No MICROBIT drive detected. Plug the micro:bit in via USB, then press Detect.'
-                    : 'No RPI-RP2 drive detected. Hold BOOTSEL while plugging the board in, then press Detect.'}
+                    : vendorUf2
+                      ? 'No UF2 bootloader drive detected. Double-tap the board’s RESET button so its bootloader volume mounts (each vendor names its own — FEATHERBOOT, QTPY_BOOT, ARDUINO…), then press Detect.'
+                      : 'No RPI-RP2 drive detected. Hold BOOTSEL while plugging the board in, then press Detect.'}
                 </p>
               )}
               {selectedMaintenance && (
                 <p className="firmware-banner firmware-banner--warn">
                   This micro:bit is in <strong>maintenance mode</strong> (the MAINTENANCE drive),
-                  which is for interface-firmware updates — MicroPython can’t be flashed here and
+                  which is for interface-firmware updates — {runtimeLabel} can’t be flashed here and
                   doing so can soft-brick the board. Unplug it and plug it back in{' '}
                   <strong>without holding the reset button</strong> so the MICROBIT drive appears,
                   then press Detect.
@@ -907,7 +1080,7 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
                   onClick={() => setSource('catalog')}
                   disabled={flashing}
                 >
-                  Download from MicroPython.org
+                  Download from {FIRMWARE_RUNTIME_HOST[runtime]}
                 </button>
                 <button
                   type="button"
@@ -926,7 +1099,9 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
           {usingCatalog ? (
             <div className="firmware-field">
               <div className="firmware-field__row">
-                <span className="firmware-field__label">MicroPython.org firmware</span>
+                <span className="firmware-field__label">
+                  {FIRMWARE_RUNTIME_HOST[runtime]} firmware
+                </span>
                 <button
                   type="button"
                   className="btn btn--ghost btn--sm"

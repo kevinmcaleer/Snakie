@@ -50,7 +50,7 @@ export const HELP_SECTIONS: HelpNode[] = [
       { id: 'gs-instruments', kind: 'article', title: 'Using instruments', accent: '#8b5fc0' },
       { id: 'gs-board-view', kind: 'article', title: 'The Board View', accent: '#2f7c70' },
       { id: 'gs-files', kind: 'article', title: 'Files & sync', accent: '#c07a2a' },
-      { id: 'gs-firmware', kind: 'article', title: 'Flash MicroPython firmware', accent: '#c2483a' },
+      { id: 'gs-firmware', kind: 'article', title: 'Flash firmware', accent: '#c2483a' },
       { id: 'gs-packages', kind: 'article', title: 'Install packages', accent: '#3f74ad' },
       { id: 'gs-validation', kind: 'article', title: 'Problems & validation', accent: '#b58a2e' },
       { id: 'gs-git', kind: 'article', title: 'Version control (Git)', accent: '#37884a' },

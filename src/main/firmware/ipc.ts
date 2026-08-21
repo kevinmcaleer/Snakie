@@ -8,6 +8,7 @@
  */
 import { dialog, ipcMain, BrowserWindow, type WebContents } from 'electron'
 import type { FlashMethod } from '../../shared/board-profiles'
+import type { FirmwareRuntime } from '../../shared/firmware-runtime'
 import type { IpcResult } from '../device/types'
 import { detectBoards } from './detect'
 import { detectEsptool, flash } from './flasher'
@@ -101,8 +102,11 @@ export function registerFirmwareIpc(getWindow: () => BrowserWindow | undefined):
     wrap<FlashResult>(() => flash(opts, sendProgress))
   )
 
-  ipcMain.handle(FIRMWARE_CHANNELS.fetchCatalog, () =>
-    wrap<FirmwareCatalog>(() => fetchFirmwareCatalog())
+  // `runtime` picks which set of catalogs to fetch — MicroPython's or
+  // CircuitPython's (#756). Absent ⇒ MicroPython, so nothing that predates the
+  // runtime choice changes behaviour.
+  ipcMain.handle(FIRMWARE_CHANNELS.fetchCatalog, (_e, runtime?: FirmwareRuntime) =>
+    wrap<FirmwareCatalog>(() => fetchFirmwareCatalog(runtime))
   )
 
   ipcMain.handle(FIRMWARE_CHANNELS.downloadAndFlash, (_e, opts: DownloadAndFlashOptions) =>

@@ -10,6 +10,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 // and this raises the ceiling so the per-channel fan-out never warns.
 ipcRenderer.setMaxListeners(40)
 import type { FlashMethod } from '../shared/board-profiles'
+import type { FirmwareRuntime } from '../shared/firmware-runtime'
 import type {
   CircuitPyDrive,
   ConnectOptions,
@@ -634,11 +635,13 @@ const firmware = {
   flash: (opts: FlashOptions): Promise<FlashResult> =>
     unwrap(ipcRenderer.invoke('firmware:flash', opts)),
   /**
-   * Fetch the MicroPython UF2 firmware catalog (Family → Model → Variant →
-   * Version cascade) from Thonny's curated list. Throws when offline.
+   * Fetch a runtime's firmware catalog (Family → Model → Variant → Version
+   * cascade) from Thonny's curated lists. `runtime` chooses MicroPython
+   * (micropython.org) or CircuitPython (downloads.circuitpython.org) and
+   * defaults to MicroPython (#756). Throws when offline.
    */
-  fetchCatalog: (): Promise<FirmwareCatalog> =>
-    unwrap(ipcRenderer.invoke('firmware:fetchCatalog')),
+  fetchCatalog: (runtime?: FirmwareRuntime): Promise<FirmwareCatalog> =>
+    unwrap(ipcRenderer.invoke('firmware:fetchCatalog', runtime)),
   /**
    * Download a catalog `.uf2` to a temp file then flash it onto the boot drive.
    * Emits one combined progress stream (download %, copy %, then `done`) via

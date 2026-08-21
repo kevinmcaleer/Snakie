@@ -11,10 +11,13 @@
  *    the more common `esp32` and let the user override in the UI.
  *
  *  - **UF2 boot drive** — an RP2040 held in BOOTSEL mode mounts as a small FAT
- *    volume labelled `RPI-RP2`. We scan the platform's mount points for that
- *    label/marker and surface it as an `rp2040` candidate. The scanning itself
- *    lives in `fs/volumes.ts`, shared with the CIRCUITPY detection (#753) —
- *    the platforms differ, the boards don't.
+ *    volume labelled `RPI-RP2`. Every other UF2 board mounts one too, under a
+ *    name its vendor chose (`FEATHERBOOT`, `QTPY_BOOT`, `ARDUINO`, …), so the
+ *    marker that actually identifies them is the spec's `INFO_UF2.TXT` rather
+ *    than any label (#756). We scan the platform's mount points for it and
+ *    surface each as a drive-copy candidate, named from its own info file. The
+ *    scanning itself lives in `fs/volumes.ts`, shared with the CIRCUITPY
+ *    detection (#753) — the platforms differ, the boards don't.
  *
  * Detection never throws for the caller: failures in one strategy are swallowed
  * so the other can still contribute candidates.
@@ -79,26 +82,82 @@ async function detectEspFromSerial(): Promise<BoardCandidate[]> {
   return candidates
 }
 
-/** A directory looks like an RP2040 boot drive if it carries the UF2 markers.
- *  The BOOTSEL FAT volume always contains INFO_UF2.TXT (and usually INDEX.HTM). */
-const looksLikeRp2040Drive = (dir: string): Promise<boolean> =>
+/** A directory looks like a UF2 bootloader drive if it carries the UF2 markers.
+ *  The FAT volume always contains INFO_UF2.TXT (and usually INDEX.HTM). */
+const looksLikeUf2Drive = (dir: string): Promise<boolean> =>
   volumeHasFile(dir, ['INFO_UF2.TXT', 'INDEX.HTM'])
 
-/** Detect an RP2040 in BOOTSEL mode among `volumes` by its UF2 marker.
- *  Exported (over the volume list rather than the live filesystem) so the
- *  scanning rule is testable against a fixture directory. */
+/**
+ * The machine-readable fields a UF2 bootloader publishes about itself.
+ *
+ * `INFO_UF2.TXT` is defined by the UF2 specification, which says flashing tools
+ * may use its presence as the indication that a directory is a connected UF2
+ * board, and gives the file this shape:
+ *
+ *   UF2 Bootloader v1.1.3 SFA
+ *   Model: Arduino Zero
+ *   Board-ID: SAMD21G18A-Zero-v0
+ *
+ * Reading it is what lets a non-RP2040 UF2 board be named honestly (#756).
+ * CircuitPython's SAMD / SAME / i.MX RT / nRF52 boards each mount a volume the
+ * VENDOR named — `FEATHERBOOT`, `QTPY_BOOT`, `ARDUINO` — so there is no label to
+ * match on, and calling every one of them "RP2040 (RPI-RP2)" (which is what the
+ * label used to say) is simply wrong.
+ *
+ * Pure + exported for unit testing.
+ */
+export function uf2InfoFields(text: string): { model?: string; boardId?: string } {
+  const out: { model?: string; boardId?: string } = {}
+  for (const line of text.split(/\r?\n/)) {
+    const model = /^model\s*:\s*(.+?)\s*$/i.exec(line)
+    if (model && !out.model) out.model = model[1]
+    const boardId = /^board-?\s*id\s*:\s*(.+?)\s*$/i.exec(line)
+    if (boardId && !out.boardId) out.boardId = boardId[1]
+  }
+  return out
+}
+
+/**
+ * How to describe a UF2 boot drive to the user. An RP2040 in BOOTSEL keeps its
+ * familiar wording; anything else is named from its own `INFO_UF2.TXT`, falling
+ * back to the volume name rather than borrowing the RP2040's.
+ */
+function uf2DriveLabel(
+  mountPath: string,
+  volumeName: string,
+  info: { model?: string; boardId?: string }
+): string {
+  if (volumeName.toUpperCase().includes('RPI-RP2')) return `${mountPath} — RP2040 (RPI-RP2)`
+  const name = info.model ?? info.boardId ?? volumeName
+  const where = volumeName ? ` (${volumeName})` : ''
+  return name ? `${mountPath} — ${name}${where} UF2 bootloader` : `${mountPath} — UF2 bootloader`
+}
+
+/**
+ * Detect a board in UF2 bootloader mode among `volumes` by its `INFO_UF2.TXT`
+ * marker — an RP2040 holding BOOTSEL, and equally an Adafruit/Seeed/Arduino
+ * board whose bootloader volume its vendor named something else.
+ *
+ * All of them report `board: 'rp2040'`, which is the flasher's DRIVE-COPY
+ * dispatch rather than a claim about the chip: `flash` treats `rp2040` and
+ * `microbit` identically bar the wording.
+ *
+ * Exported (over the volume list rather than the live filesystem) so the
+ * scanning rule is testable against a fixture directory.
+ */
 export async function detectRp2040Drive(volumes: Volume[]): Promise<BoardCandidate[]> {
   const candidates: BoardCandidate[] = []
   for (const vol of volumes) {
     // A label match is a strong signal; otherwise probe the contents (which is
     // the only option on Windows, where a volume is a bare drive letter).
     const labelled = vol.name.toUpperCase().includes('RPI-RP2')
-    if (labelled || (vol.probeContents && (await looksLikeRp2040Drive(vol.mountPath)))) {
+    if (labelled || (vol.probeContents && (await looksLikeUf2Drive(vol.mountPath)))) {
+      const text = await readVolumeFile(vol.mountPath, 'INFO_UF2.TXT')
       candidates.push({
         board: 'rp2040',
         source: 'uf2-drive',
         mountPath: vol.mountPath,
-        label: `${vol.mountPath} — RP2040 (RPI-RP2)`
+        label: uf2DriveLabel(vol.mountPath, vol.name, text ? uf2InfoFields(text) : {})
       })
     }
   }

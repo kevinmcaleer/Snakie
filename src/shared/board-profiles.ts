@@ -38,6 +38,18 @@ export interface BoardProfile {
   label: string
   chipFamily: string
   method: FlashMethod
+  /**
+   * The board's **CircuitPython Board ID** — the per-board key circuitpython.org
+   * publishes builds under, and the same string `boot_out.txt` prints (#756).
+   *
+   * Present only where a CircuitPython build genuinely exists for the board and
+   * the id has been checked against the published catalog. Absent means exactly
+   * that: CircuitPython has no build here (it dropped ESP8266 and the nRF51
+   * micro:bit v1), or the profile names a chip generically rather than a board.
+   * Never fill this in by guessing the slug — flashing another board's `.uf2`
+   * leaves a board that needs re-flashing before it will talk again.
+   */
+  circuitPythonBoardId?: string
   /** esptool `write_flash` offset. Absent for non-esptool methods. */
   offset?: string
   /** Recommended baud; absent ⇒ the flasher default. */
@@ -92,6 +104,7 @@ export const BOARD_PROFILES: BoardProfile[] = [
     model: 'XIAO ESP32-S3',
     label: 'Seeed Studio XIAO ESP32-S3',
     ...ESP32_S3,
+    circuitPythonBoardId: 'seeed_xiao_esp32s3',
     eraseByDefault: true,
     preferredBuild: {
       name: 'ESP32_GENERIC_S3-SPIRAM_OCT',
@@ -106,21 +119,24 @@ export const BOARD_PROFILES: BoardProfile[] = [
     vendor: 'Seeed Studio',
     model: 'XIAO ESP32-C3',
     label: 'Seeed Studio XIAO ESP32-C3',
-    ...ESP32_C3
+    ...ESP32_C3,
+    circuitPythonBoardId: 'seeed_xiao_esp32c3'
   },
   {
     id: 'xiao-esp32c6',
     vendor: 'Seeed Studio',
     model: 'XIAO ESP32-C6',
     label: 'Seeed Studio XIAO ESP32-C6',
-    ...ESP32_C6
+    ...ESP32_C6,
+    circuitPythonBoardId: 'seeed_xiao_esp32c6'
   },
   {
     id: 'xiao-rp2040',
     vendor: 'Seeed Studio',
     model: 'XIAO RP2040',
     label: 'Seeed Studio XIAO RP2040',
-    ...RP2
+    ...RP2,
+    circuitPythonBoardId: 'seeeduino_xiao_rp2040'
   },
   {
     id: 'xiao-rp2350',
@@ -128,7 +144,8 @@ export const BOARD_PROFILES: BoardProfile[] = [
     model: 'XIAO RP2350',
     label: 'Seeed Studio XIAO RP2350',
     chipFamily: 'rp2',
-    method: 'uf2'
+    method: 'uf2',
+    circuitPythonBoardId: 'seeeduino_xiao_rp2350'
   },
   {
     id: 'pico',
@@ -136,6 +153,7 @@ export const BOARD_PROFILES: BoardProfile[] = [
     model: 'Pico',
     label: 'Raspberry Pi Pico',
     ...RP2,
+    circuitPythonBoardId: 'raspberry_pi_pico',
     notes: 'Hold BOOTSEL while plugging in, so the RPI-RP2 drive appears.'
   },
   {
@@ -144,6 +162,9 @@ export const BOARD_PROFILES: BoardProfile[] = [
     model: 'Pico W',
     label: 'Raspberry Pi Pico W',
     ...RP2,
+    // A different CircuitPython build from the plain Pico — same chip, different
+    // board — which is exactly why the id is per board rather than per family.
+    circuitPythonBoardId: 'raspberry_pi_pico_w',
     notes: 'Hold BOOTSEL while plugging in, so the RPI-RP2 drive appears.'
   },
   {
@@ -152,6 +173,7 @@ export const BOARD_PROFILES: BoardProfile[] = [
     model: 'Pico 2',
     label: 'Raspberry Pi Pico 2',
     ...RP2,
+    circuitPythonBoardId: 'raspberry_pi_pico2',
     notes: 'Hold BOOTSEL while plugging in, so the RP2350 drive appears.'
   },
   {
@@ -194,9 +216,12 @@ export const BOARD_PROFILES: BoardProfile[] = [
     model: 'micro:bit v2',
     label: 'BBC micro:bit v2',
     chipFamily: 'nrf52',
-    method: 'daplink'
+    method: 'daplink',
+    circuitPythonBoardId: 'microbit_v2'
   },
   {
+    // No `circuitPythonBoardId`: CircuitPython has no nRF51 build, so the v1 can
+    // only ever be flashed with MicroPython here.
     id: 'microbit-v1',
     vendor: 'BBC',
     model: 'micro:bit v1',

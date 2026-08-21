@@ -107,25 +107,67 @@ describe('boot-loop guards', () => {
 })
 
 /**
- * The two copies of the offset rule must never disagree (#684).
+ * There is exactly ONE copy of the offset rule (#684, #756).
  *
- * `flashTargetForFamily` is duplicated — once in `src/main/firmware/catalog.ts`
- * (canonical) and once inside `FirmwareFlasher.tsx`, so the renderer bundle stays
- * free of main-only modules. A silent divergence there flashes to the wrong
- * address, which succeeds and leaves the board dead.
+ * `flashTargetForFamily` used to be duplicated — once in
+ * `src/main/firmware/catalog.ts` and once inside `FirmwareFlasher.tsx`, so the
+ * renderer bundle stayed free of main-only modules — and this suite existed to
+ * catch the two drifting apart. A silent divergence flashes to the wrong
+ * address, which succeeds and leaves the board dead. #756 moved the rule into
+ * `src/shared/firmware-runtime.ts`, which both sides import, so the two copies
+ * cannot drift because there are no longer two. This pins that.
  */
-describe('the mirrored offset rule stays in step', () => {
+describe('the offset rule has exactly one home', () => {
   const RENDERER = readFileSync('src/renderer/src/components/FirmwareFlasher.tsx', 'utf8')
+  const MAIN = readFileSync('src/main/firmware/catalog.ts', 'utf8')
+  const SHARED = readFileSync('src/shared/firmware-runtime.ts', 'utf8')
 
-  it('both copies list the same 0x1000 exceptions', () => {
+  it('the shared module is the only place the 0x1000 exceptions are listed', () => {
     // The S2 shares the original ESP32's 0x1000; everything from the S3 on is 0x0.
-    expect(RENDERER).toContain("esp32: '0x1000'")
-    expect(RENDERER).toContain("esp32s2: '0x1000'")
+    expect(SHARED).toContain("esp32: '0x1000'")
+    expect(SHARED).toContain("esp32s2: '0x1000'")
+    // …and neither consumer re-states them.
+    expect(RENDERER).not.toContain("esp32s2: '0x1000'")
+    expect(MAIN).not.toContain("esp32s2: '0x1000'")
   })
 
-  it('the renderer no longer infers the offset from "is it plain esp32"', () => {
+  it('both consumers get the rule by importing it', () => {
+    expect(RENDERER).toContain("from '../../../shared/firmware-runtime'")
+    expect(MAIN).toContain("from '../../shared/firmware-runtime'")
+  })
+
+  it('nobody infers the offset from "is it plain esp32"', () => {
     // That inference is what got the S2 wrong.
-    expect(RENDERER).not.toContain("fam === 'esp32' ? '0x1000' : '0x0'")
+    for (const src of [SHARED, RENDERER, MAIN]) {
+      expect(src).not.toContain("fam === 'esp32' ? '0x1000' : '0x0'")
+    }
+  })
+})
+
+/**
+ * A profile's `circuitPythonBoardId` is a per-BOARD key, and a wrong one flashes
+ * a board that then needs re-flashing before it will talk (#756). So it must
+ * look like a real CircuitPython board id, and no two profiles may claim the
+ * same one.
+ */
+describe('CircuitPython board ids on profiles', () => {
+  it('are lower_snake_case slugs, as circuitpython.org publishes them', () => {
+    for (const b of BOARD_PROFILES) {
+      if (!b.circuitPythonBoardId) continue
+      expect(b.circuitPythonBoardId, b.id).toMatch(/^[a-z0-9][a-z0-9_.]*$/)
+    }
+  })
+
+  it('are unique — two boards never share a build', () => {
+    const ids = BOARD_PROFILES.map((b) => b.circuitPythonBoardId).filter(Boolean)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('are absent where CircuitPython has no build at all', () => {
+    // CircuitPython dropped ESP8266, and never supported the nRF51 micro:bit v1.
+    for (const id of ['esp8266', 'microbit-v1']) {
+      expect(BOARD_PROFILES.find((b) => b.id === id)?.circuitPythonBoardId, id).toBeUndefined()
+    }
   })
 })
 

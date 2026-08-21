@@ -7,6 +7,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **You can now choose which Python you're flashing.** (#756, epic #209) The
+  flash dialog was MicroPython all the way down and offered no way to say
+  otherwise — there was no runtime selector at all. There is one now, at the top,
+  and it drives everything below it: which catalog is fetched (micropython.org's
+  or circuitpython.org's), what every label says, and which board's build is
+  offered. If a board is already connected the dialog opens on whatever that
+  board says it is running, rather than assuming. CircuitPython builds are per
+  **board**, not per chip — `raspberry_pi_pico` and `raspberry_pi_pico_w` are
+  different files — so Snakie matches your board to its own build using the
+  **Board ID** from `boot_out.txt` on the CIRCUITPY drive, and pre-selects it.
+  When that id can't be established it pre-selects **nothing** and says so:
+  another board's `.uf2` flashes without a single error message and comes up with
+  the wrong pins. Boards that CircuitPython publishes twice — the same ESP32-S3
+  as a `.uf2` for its bootloader drive AND as a `.bin` for esptool — now read as
+  two clearly named choices instead of one list with every version in it twice,
+  and the flash mechanism is taken from the file you actually picked rather than
+  from its chip family, so a UF2 container can never be handed to esptool. Board
+  detection also stopped calling every UF2 bootloader an RP2040: a Feather, QT Py
+  or Metro names its own volume (`FEATHERBOOT`, `QTPY_BOOT`, `ARDUINO`…), and
+  Snakie now reads the board's name out of the `INFO_UF2.TXT` the UF2 spec
+  defines and shows that instead.
 - **Electronics and Build now show the SAME component hierarchy.** (#718, epic
   #720) There used to be two trees describing one robot and disagreeing about
   it: the board browser listed the microcontroller and your placed parts nested
