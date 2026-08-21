@@ -65,6 +65,42 @@ export const FIRMWARE_RUNTIME_HOST: Record<FirmwareRuntime, string> = {
 }
 
 /**
+ * A glyph per runtime for the dialog's Runtime picker — a `<path d>` string drawn
+ * in a 24×24 box and stroked in `currentColor`, which is exactly the idiom the
+ * instrument registry uses (`INSTRUMENTS[].icon`), so this doesn't become a
+ * one-off icon language.
+ *
+ * These are deliberately NOT the MicroPython or CircuitPython marks. Those are
+ * the projects' trademarks and redrawing them into our chrome opens a licensing
+ * question we have no need to open; these are plain original glyphs in the app's
+ * own line style. Each keys off the half of the name that DIFFERS, because that
+ * is the only thing separating the two choices:
+ *
+ *  - **Micro**Python → a microcontroller: a chip body with its die and two legs
+ *    down each side. A compact, centred mass.
+ *  - **Circuit**Python → PCB routing: two traces stepping up at the 45° a router
+ *    uses, with a round pad at each end of the lower one. An open diagonal sweep.
+ *
+ * Mass vs. sweep is what keeps them apart at 16px, where finer detail is gone —
+ * checked by rendering both at 16/18/24px rather than assumed. Legs shorter than
+ * ~3 units and a third leg per side both blur into the body at that size.
+ * They ride ALONGSIDE the text labels, never instead of them: picking the wrong
+ * one here flashes the wrong firmware, so the words stay.
+ */
+export const FIRMWARE_RUNTIME_ICON: Record<FirmwareRuntime, string> = {
+  // chip body · die · two legs down each side
+  micropython:
+    'M6.5 6.5 h11 v11 h-11 Z M9.5 9.5 h5 v5 h-5 Z ' +
+    'M3 9.5 h3.5 M3 14.5 h3.5 M17.5 9.5 h3.5 M17.5 14.5 h3.5',
+  // pad · trace · pad, with a second trace routed parallel above
+  circuitpython:
+    'M5 19 m-2 0 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0 ' +
+    'M7 19 h2.5 l4 -4 h2.5 ' +
+    'M18 15 m-2 0 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0 ' +
+    'M4 11 h3.5 l4 -4 h5'
+}
+
+/**
  * The runtime to flash for a session's {@link Dialect}, or null when the board
  * never said what it runs. Null is not "assume MicroPython" — assuming is the
  * habit this epic exists to remove — it is "leave the choice where it was".

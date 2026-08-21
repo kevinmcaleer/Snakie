@@ -16,6 +16,7 @@ import {
 import {
   FIRMWARE_RUNTIMES,
   FIRMWARE_RUNTIME_HOST,
+  FIRMWARE_RUNTIME_ICON,
   FIRMWARE_RUNTIME_LABEL,
   findBoardBuilds,
   flashTargetForDownload,
@@ -756,23 +757,67 @@ export function FirmwareFlasher({
               Runtime
             </span>
             <div
-              className="firmware-source-toggle"
+              className="firmware-runtime"
               role="radiogroup"
               aria-labelledby="firmware-runtime-label"
             >
-              {FIRMWARE_RUNTIMES.map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  role="radio"
-                  aria-checked={runtime === r}
-                  className={`firmware-source-tab ${runtime === r ? 'is-active' : ''}`}
-                  onClick={() => handleRuntimeChange(r)}
-                  disabled={flashing}
-                >
-                  {FIRMWARE_RUNTIME_LABEL[r]}
-                </button>
-              ))}
+              {FIRMWARE_RUNTIMES.map((r) => {
+                const on = runtime === r
+                return (
+                  <button
+                    key={r}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    className={`firmware-runtime__tab${on ? ' firmware-runtime__tab--on' : ''}`}
+                    title={`${FIRMWARE_RUNTIME_LABEL[r]} — builds from ${FIRMWARE_RUNTIME_HOST[r]}`}
+                    onClick={() => handleRuntimeChange(r)}
+                    disabled={flashing}
+                  >
+                    <svg
+                      className="firmware-runtime__icon"
+                      viewBox="0 0 24 24"
+                      width="18"
+                      height="18"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d={FIRMWARE_RUNTIME_ICON[r]}
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    {/* The name STAYS. An icon-only control here would be a guess
+                        about which firmware to write to someone's board. */}
+                    <span className="firmware-runtime__name">{FIRMWARE_RUNTIME_LABEL[r]}</span>
+                    {/* Selected is a tick, a heavier ring and bolder text as well
+                        as an accent — so it survives being read in greyscale.
+                        Always rendered (hidden, not removed) so choosing a
+                        runtime doesn't shuffle the labels sideways. */}
+                    <svg
+                      className="firmware-runtime__tick"
+                      viewBox="0 0 16 16"
+                      width="13"
+                      height="13"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d="M3 8.5 L6.5 12 L13 4.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </button>
+                )
+              })}
             </div>
             <p className="firmware-hint">
               Builds come from <strong>{FIRMWARE_RUNTIME_HOST[runtime]}</strong>.
