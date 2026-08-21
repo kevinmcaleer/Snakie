@@ -13,7 +13,7 @@ import { toDisplay, toNative, unitLabel, normPin, type MovableType } from './rob
 import { boundJoint, type BindableServo } from './servo-bind'
 import { shouldAutoHide } from './pin-overlay'
 import { HierarchyPanel } from './HierarchyPanel'
-import { flattenHierarchy, jointKey, type HierarchyNode, type MassCoverage } from './hierarchy-tree'
+import { flattenHierarchy, type HierarchyNode, type MassCoverage } from './hierarchy-tree'
 import type { ServoJointBinding } from '../../../shared/robot'
 import type { NamedPoseLike } from './robot-pose'
 import type { PropsContext } from './RobotPropertiesDialog'
@@ -84,7 +84,7 @@ export interface RobotBuildPanelProps {
   active: PropsContext | null
   onEdit: (link: string | null) => void
   onOpenJoint: (child: string, joint: string) => void
-  /** Rename a joint (right-click a joint row) — cascades servo map + poses. */
+  /** Rename a joint (right-click the row it attaches) — cascades servo map + poses. */
   onRenameJoint: (oldName: string, newName: string) => void
   onOpenServo: (pin: string) => void
   /** Bind a servo to the next free pin + open its editor. */
@@ -512,70 +512,83 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
   // Which tree branches are collapsed (all expanded by default).
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const toggle = (id: string): void => setCollapsed((c) => ({ ...c, [id]: !c[id] }))
-  // Right-click menu (Fusion-style): rename / make base / delete a part.
-  const [menu, setMenu] = useState<{ pos: ContextMenuPosition; link: string } | null>(null)
-  const openMenu = (e: React.MouseEvent, link: string): void => {
+  // Right-click menu (Fusion-style): rename / make base / delete a part — plus
+  // this row's JOINT, since #720 stopped giving joints rows of their own. The
+  // menu is keyed on the NODE, not just the link, so it can offer both.
+  const [menu, setMenu] = useState<{ pos: ContextMenuPosition; node: HierarchyNode } | null>(null)
+  const openMenu = (e: React.MouseEvent, node: HierarchyNode): void => {
     if (!canEdit) return
     e.preventDefault()
     e.stopPropagation()
-    setMenu({ pos: { x: e.clientX, y: e.clientY }, link })
+    setMenu({ pos: { x: e.clientX, y: e.clientY }, node })
   }
-  // Right-click a joint row → rename the joint.
-  const [jmenu, setJmenu] = useState<{ pos: ContextMenuPosition; joint: string } | null>(null)
-  const openJointMenu = (e: React.MouseEvent, joint: string): void => {
-    if (!canEdit) return
-    e.preventDefault()
-    e.stopPropagation()
-    setJmenu({ pos: { x: e.clientX, y: e.clientY }, joint })
-  }
-  const jointMenuItems = (joint: string): ContextMenuItem[] => [
-    {
-      key: 'rename',
-      label: 'Rename joint…',
-      onSelect: () => {
-        void (async () => {
-          const to = await prompt('Rename joint', joint)
-          if (to && to.trim() && to.trim() !== joint) onRenameJoint(joint, to.trim())
-        })()
-      }
-    }
-  ]
-  const menuItems = (link: string): ContextMenuItem[] => {
+  const menuItems = (node: HierarchyNode): ContextMenuItem[] => {
+    const link = node.link
     const isBase = link === rootLink
-    return [
-      {
-        key: 'rename',
-        label: 'Rename…',
-        onSelect: () => {
-          void (async () => {
-            const to = await prompt('Rename part', link)
-            if (to && to.trim() && to.trim() !== link) onRename(link, to.trim())
-          })()
+    const items: ContextMenuItem[] = []
+    if (link) {
+      items.push(
+        {
+          key: 'rename',
+          label: 'Rename…',
+          onSelect: () => {
+            void (async () => {
+              const to = await prompt('Rename part', link)
+              if (to && to.trim() && to.trim() !== link) onRename(link, to.trim())
+            })()
+          }
+        },
+        {
+          key: 'base',
+          label: isBase ? 'Base (already)' : 'Make base',
+          disabled: isBase,
+          onSelect: () => onMakeBase(link)
+        },
+        {
+          key: 'delete',
+          label: 'Delete',
+          danger: true,
+          disabled: isBase,
+          onSelect: () => onDelete(link)
         }
-      },
-      {
-        key: 'base',
-        label: isBase ? 'Base (already)' : 'Make base',
-        disabled: isBase,
-        onSelect: () => onMakeBase(link)
-      },
-      {
-        key: 'delete',
-        label: 'Delete',
-        danger: true,
-        disabled: isBase,
-        onSelect: () => onDelete(link)
-      }
-    ]
+      )
+    }
+    // The joint that attaches this row. Its editor (opened here or by the row's
+    // joint icon) is where its type, axis, limits and DELETE live.
+    const j = node.joint
+    if (j) {
+      items.push(
+        {
+          key: 'joint-edit',
+          label: `Edit joint “${j.name}”…`,
+          onSelect: () => onOpenJoint(j.child, j.name)
+        },
+        {
+          key: 'joint-rename',
+          label: 'Rename joint…',
+          onSelect: () => {
+            void (async () => {
+              const to = await prompt('Rename joint', j.name)
+              if (to && to.trim() && to.trim() !== j.name) onRenameJoint(j.name, to.trim())
+            })()
+          }
+        }
+      )
+    }
+    return items
   }
 
   // Which hierarchy row has its properties dialog open — the row highlight. The
   // dialog talks in links / joint names; the tree talks in row keys, so map once.
+  // A JOINT has no row of its own since #720: the row it attaches highlights
+  // instead (and its joint icon lights up), so opening a joint still shows you
+  // where in the tree you are.
   const activeKey = useMemo(() => {
-    if (active?.kind === 'joint') return jointKey(active.joint)
+    const rows = flattenHierarchy(hierarchy)
+    if (active?.kind === 'joint') return rows.find((n) => n.joint?.name === active.joint)?.key ?? null
     const link = active?.kind === 'link' ? active.link : null
     if (!link) return null
-    return flattenHierarchy(hierarchy).find((n) => n.link === link)?.key ?? null
+    return rows.find((n) => n.link === link)?.key ?? null
   }, [active, hierarchy])
   const activeLink =
     active?.kind === 'link' ? active.link : active?.kind === 'joint' ? active.child : null
@@ -648,22 +661,19 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
           nodes={hierarchy}
           workspace="build"
           selectedKey={selectedKey}
-          onSelect={(node) => {
-            onSelectNode(node)
-            // A joint has no body to select — clicking it opens its editor,
-            // exactly as the old chain's joint row did.
-            if (node.kind === 'joint' && node.joint) onOpenJoint(node.joint.child, node.joint.name)
-          }}
+          onSelect={onSelectNode}
           open={!collapsed.chain}
           onToggleOpen={() => toggle('chain')}
           activeKey={activeKey}
+          activeJoint={active?.kind === 'joint' ? active.joint : null}
           onEdit={(node) => {
-            if (node.kind === 'joint' && node.joint) return onOpenJoint(node.joint.child, node.joint.name)
             if (node.link) onEdit(node.link === activeLink ? null : node.link)
           }}
+          // The joint icon opens the joint editor — the one thing the deleted
+          // joint row's own pencil did (#720).
+          onEditJoint={(_node, joint) => onOpenJoint(joint.child, joint.name)}
           onContextMenu={(e, node) => {
-            if (node.kind === 'joint' && node.joint) return openJointMenu(e, node.joint.name)
-            if (node.link) openMenu(e, node.link)
+            if (node.link) openMenu(e, node)
           }}
           coverage={coverage}
           emptyHint="Add a block or import an STL to start building."
@@ -861,10 +871,7 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
         </button>
       </div>
       {menu && (
-        <ContextMenu position={menu.pos} items={menuItems(menu.link)} onClose={() => setMenu(null)} />
-      )}
-      {jmenu && (
-        <ContextMenu position={jmenu.pos} items={jointMenuItems(jmenu.joint)} onClose={() => setJmenu(null)} />
+        <ContextMenu position={menu.pos} items={menuItems(menu.node)} onClose={() => setMenu(null)} />
       )}
     </aside>
   )

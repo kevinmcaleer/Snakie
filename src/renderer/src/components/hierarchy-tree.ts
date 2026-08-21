@@ -21,9 +21,20 @@
  *      this node's link) — which is what makes the Build chain readable;
  *   3. else a root.
  *
- * Nodes that exist only in Build (structural links, joints) are flagged
- * `buildOnly`; per the epic's decision they render DIMMED AND INERT in
- * Electronics rather than being hidden, so the tree structure is identical.
+ * Nodes that exist only in Build (structural links) are flagged `buildOnly`; per
+ * the epic's decision they render DIMMED AND INERT in Electronics rather than
+ * being hidden, so the tree structure is identical.
+ *
+ * JOINTS ARE NOT ROWS (#720). They were, briefly — one row per joint, directly
+ * above the row it attached — and that doubled the length of every list for
+ * information that is structural noise. A joint is now a PROPERTY of the body it
+ * attaches: `node.joint` is the joint whose child is this node's link (null for
+ * the base, for a loose import, for anything with no 3-D body), and the panel
+ * draws it as an icon on the row. Because a URDF body has at most one parent
+ * joint, that is exactly ONE icon per joint, carried by the child — every joint
+ * in the model is still reachable, and reachable in only one place. The other
+ * end of the relationship is `jointedChildren`: how many bodies hang off this
+ * one, which are precisely the rows nested underneath it.
  *
  * Deliberately total, like the browser tree it replaces: a dangling `mountedOn`
  * or a carrier cycle leaves a node at the top level rather than losing it or
@@ -53,16 +64,15 @@ export const BOARD_KEY = 'board'
 export type HierarchyWorkspace = 'electronics' | 'build'
 
 /**
- * What a row IS.
+ * What a row IS. Every row is a BODY — there is no joint row (#720).
  *  - `board` — the microcontroller (an Electronics row, possibly with a link)
  *  - `part`  — a placed library part (ditto)
  *  - `link`  — a URDF link with no Electronics part: a structural block, an
  *              imported STL, an orphan. Build-only.
- *  - `joint` — the joint attaching a link to its parent. Build-only.
  */
-export type HierarchyKind = 'board' | 'part' | 'link' | 'joint'
+export type HierarchyKind = 'board' | 'part' | 'link'
 
-/** The joint a `kind: 'joint'` row describes. */
+/** The joint a row carries — the one that attaches its body to its parent. */
 export interface HierarchyJoint {
   name: string
   type: JointType
@@ -75,9 +85,8 @@ export interface HierarchyNode {
   /**
    * Stable, workspace-independent selection key — this is what a shared
    * selection stores, so it must not change when you switch workspace.
-   * `'board'` for the MCU, the instance id for a placed part, `link:<name>` /
-   * `joint:<name>` for Build-only rows (namespaced so they can't collide with
-   * a part id).
+   * `'board'` for the MCU, the instance id for a placed part, `link:<name>` for
+   * a Build-only row (namespaced so it can't collide with a part id).
    */
   key: string
   label: string
@@ -86,8 +95,15 @@ export interface HierarchyNode {
   link: string | null
   /** The Electronics row id (`'board'` for the MCU); null for a Build-only row. */
   partId: string | null
-  /** Set only on `kind: 'joint'` rows. */
+  /**
+   * The joint that attaches this row's body to its parent — **null when it has
+   * none**: the base, a loose import, a part with no 3-D body yet. This is the
+   * joint the row's joint icon shows and opens.
+   */
   joint: HierarchyJoint | null
+  /** How many OTHER bodies are jointed to this one (it is their parent). Those
+   *  are the rows nested under it, each carrying its own joint. */
+  jointedChildren: number
   /** True when this row exists only in Build — dimmed + inert in Electronics. */
   buildOnly: boolean
   /** This link is the kinematic base (the anchor everything hangs off). */
@@ -127,8 +143,6 @@ export interface UnifiedTreeInput {
 
 /** The selection key of a Build-only link row. */
 export const linkKey = (link: string): string => `link:${link}`
-/** The selection key of a joint row. */
-export const jointKey = (joint: string): string => `joint:${joint}`
 
 /** The label a placed part shows: its own label, else the library part id. */
 function partLabel(p: RobotPart): string {
@@ -164,10 +178,23 @@ export function unifiedTree(input: UnifiedTreeInput): HierarchyNode[] {
     (link ? geomOf.get(link) : undefined) ?? 'none'
   /** The joint whose CHILD is this link (its attachment to its parent). */
   const jointOfChild = new Map<string, HierarchyJoint>()
+  /** How many joints hang a body off this link (this link is the parent). */
+  const childrenOfLink = new Map<string, number>()
   for (const j of joints) {
-    if (!j.child || jointOfChild.has(j.child)) continue
+    if (!j.child) continue
+    // A joint pointing at a link that isn't in the model attaches nothing, and
+    // must not inflate a row's connection count.
+    if (links.has(j.child) && links.has(j.parent)) {
+      childrenOfLink.set(j.parent, (childrenOfLink.get(j.parent) ?? 0) + 1)
+    }
+    if (jointOfChild.has(j.child)) continue // a body has ONE parent joint: the first wins
     jointOfChild.set(j.child, { name: j.name, type: j.type, parent: j.parent, child: j.child })
   }
+  /** A body's joints, as the rows carry them (#720) — no joint has its own row. */
+  const jointsOf = (link: string | null): { joint: HierarchyJoint | null; jointedChildren: number } => ({
+    joint: (link ? jointOfChild.get(link) : undefined) ?? null,
+    jointedChildren: (link ? childrenOfLink.get(link) : undefined) ?? 0
+  })
 
   // --- who owns which link ---------------------------------------------------
   // Claims resolve in the SAME trust order computeSyncPlan uses: recorded links
@@ -220,7 +247,7 @@ export function unifiedTree(input: UnifiedTreeInput): HierarchyNode[] {
       kind: 'board',
       link: boardLink,
       partId: BOARD_KEY,
-      joint: null,
+      ...jointsOf(boardLink),
       buildOnly: false,
       isBase: !!boardLink && chainInfo.get(boardLink)?.isBase === true,
       loose: !!boardLink && chainInfo.get(boardLink)?.loose === true,
@@ -237,7 +264,7 @@ export function unifiedTree(input: UnifiedTreeInput): HierarchyNode[] {
       kind: 'part',
       link,
       partId: row.id,
-      joint: null,
+      ...jointsOf(link),
       buildOnly: false,
       isBase: !!link && chainInfo.get(link)?.isBase === true,
       loose: !!link && chainInfo.get(link)?.loose === true,
@@ -256,7 +283,7 @@ export function unifiedTree(input: UnifiedTreeInput): HierarchyNode[] {
       kind: 'link',
       link: c.link,
       partId: null,
-      joint: null,
+      ...jointsOf(c.link),
       buildOnly: true,
       isBase: c.isBase,
       loose: c.loose,
@@ -305,26 +332,8 @@ export function unifiedTree(input: UnifiedTreeInput): HierarchyNode[] {
     const node = nodes.get(key) as HierarchyNode
     const parent = parentOf.get(key)
     const into = parent === undefined || inCycle(key) ? roots : (nodes.get(parent) as HierarchyNode).children
-    // The joint that attaches this row sits directly ABOVE it, at the same
-    // depth — how the Build chain has always drawn it.
-    const j = node.link ? jointOfChild.get(node.link) : undefined
-    if (j) {
-      into.push({
-        key: jointKey(j.name),
-        label: j.name,
-        kind: 'joint',
-        link: null,
-        partId: null,
-        joint: j,
-        buildOnly: true,
-        isBase: false,
-        loose: false,
-        geometry: 'none',
-        massG: null,
-        massSource: 'none',
-        children: []
-      })
-    }
+    // One row per BODY (#720). The joint that attaches this row used to be a row
+    // of its own, directly above; it now rides on `node.joint` as an icon.
     into.push(node)
   }
   return roots
@@ -386,7 +395,8 @@ export interface MassCoverage {
  * Counted over the hierarchy's BODY rows — the board, placed parts and
  * structural links — never over raw URDF links: a part and its link are ONE
  * body and must not be counted twice, which is exactly what "use the placement
- * mapping, not the links" means. Joint rows aren't bodies, so they're excluded.
+ * mapping, not the links" means. Since #720 every row IS a body (joints are a
+ * property of the row they attach, not rows), so this counts rows.
  * A part with no Build body at all still counts as an UNWEIGHED body: it is
  * part of the robot, and its missing mass is precisely what the CoM leaves out.
  *
@@ -398,7 +408,6 @@ export function massCoverage(nodes: readonly HierarchyNode[]): MassCoverage {
   let total = 0
   let knownG = 0
   for (const n of flattenHierarchy(nodes)) {
-    if (n.kind === 'joint') continue
     total += 1
     if (n.massG != null && n.massG > 0) {
       known += 1

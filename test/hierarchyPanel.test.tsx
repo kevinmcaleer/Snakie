@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { HierarchyPanel } from '../src/renderer/src/components/HierarchyPanel'
 import {
-  massCoverage,
   unifiedTree,
   type HierarchyNode,
   type HierarchyWorkspace
@@ -46,6 +45,9 @@ const render = (workspace: HierarchyWorkspace, over?: Partial<Parameters<typeof 
       open
       onToggleOpen={() => {}}
       onEdit={() => {}}
+      // Mirrors the real mounts (#720): only Build has a joint editor to open,
+      // so only Build passes the handler that makes the joint icon a control.
+      onEditJoint={workspace === 'build' ? () => {} : undefined}
       onRemove={() => {}}
       {...over}
     />
@@ -73,7 +75,6 @@ describe('HierarchyPanel — one tree, both workspaces', () => {
   it('shows Build-only rows in Electronics too — dimmed, not hidden', () => {
     const html = render('electronics')
     expect(labels(html)).toContain('base_link') // a structural link
-    expect(labels(html)).toContain('SG90_joint') // a joint
     const inert = rowClasses(html).filter((c) => c.includes('is-inactive'))
     expect(inert.length).toBeGreaterThan(0)
     // …and every dimmed row is a Build-only one, never a component.
@@ -87,9 +88,13 @@ describe('HierarchyPanel — one tree, both workspaces', () => {
 
   it('an inert row is really inert — its buttons are disabled', () => {
     const html = render('electronics')
-    // The joint row's name button carries the disabled attribute.
-    const jointRow = html.slice(html.indexOf('SG90_joint') - 900, html.indexOf('SG90_joint') + 60)
-    expect(jointRow).toContain('disabled')
+    // `base_link` is a Build-only structural row: its name button carries the
+    // disabled attribute. (It used to be the joint row that proved this; joints
+    // stopped being rows in #720, so the structural link stands in — the rule
+    // being pinned, "Build-only ⇒ not clickable in Electronics", is unchanged.)
+    const at = html.indexOf('>base_link<')
+    expect(at).toBeGreaterThan(-1)
+    expect(html.slice(at - 900, at)).toContain('disabled')
   })
 
   it('the components count is the board + parts, not every row', () => {
@@ -111,6 +116,52 @@ describe('HierarchyPanel — one tree, both workspaces', () => {
       expect(html).toContain('aria-current="true"')
       expect(rowClasses(html).filter((c) => c.includes('is-selected'))).toHaveLength(1)
     }
+  })
+})
+
+describe('HierarchyPanel — the joint icon (#720)', () => {
+  /** The class of every row's joint cell, in render order. */
+  const jointCells = (html: string): string[] =>
+    [...html.matchAll(/<(?:button|span)[^>]*class="(uhier__joint[^"]*)"/g)].map((m) => m[1])
+
+  it('gives every row a joint column, inked only where there IS a joint', () => {
+    const html = render('build')
+    const cells = jointCells(html)
+    // One cell per row — the column never disappears, so the labels of jointed
+    // and unjointed rows stay in the same place.
+    expect(cells).toHaveLength(rowClasses(html).length)
+    // The fixture: SG90 and bracket hang off base_link; the MCU, the bodyless
+    // Display and base_link itself have nothing above them.
+    expect(cells.filter((c) => c.includes('uhier__joint--none'))).toHaveLength(3)
+  })
+
+  it('names the joint, its type and its two ends in the icon tooltip', () => {
+    // Everything the deleted joint ROW spelled out is still one hover away.
+    const html = render('build')
+    expect(html).toContain('Joint “SG90_joint” · Fixed · base_link → SG90')
+    expect(html).toContain('aria-label="Edit joint SG90_joint"')
+  })
+
+  it('is a BUTTON in Build and a plain marker in Electronics', () => {
+    // Electronics passes no `onEditJoint`: there is no joint editor there, and a
+    // live-looking control that does nothing is worse than a label.
+    expect(render('build')).toContain('<button type="button" class="uhier__joint"')
+    const elec = render('electronics')
+    expect(elec).not.toContain('<button type="button" class="uhier__joint"')
+    expect(elec).toContain('class="uhier__joint" title="Joint “SG90_joint”')
+  })
+
+  it('lights up the icon of the joint whose editor is open', () => {
+    const html = render('build', { activeJoint: 'SG90_joint' })
+    expect((html.match(/class="uhier__joint is-on"/g) ?? []).length).toBe(1)
+  })
+
+  it("states a row's connections both ways in its tooltip", () => {
+    // A part with several joints is one joint UP and N parts DOWN; the row says
+    // so, rather than leaving a fan-out looking like a leaf.
+    const html = render('build')
+    expect(html).toContain('jointed to base_link (Fixed)')
+    expect(html).toContain('2 parts joined to it')
   })
 })
 

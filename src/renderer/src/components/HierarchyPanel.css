@@ -222,15 +222,53 @@
   text-overflow: ellipsis;
 }
 
-/* --- mass badges (#719) --------------------------------------------------- */
-/* "? g" — the honest badge. Amber, outlined, and never dimmed away: an unknown
-   mass is EXCLUDED from the centre of mass, so it has to be visible. */
-.uhier__row.is-selected .uhier__jointtype {
+/* --- the joint icon (#720) ------------------------------------------------ */
+/* Joints stopped being rows: a jointed row carries its joint's glyph instead.
+   The column is ALWAYS there (empty on an unjointed row) so every label starts
+   at the same x — the whole point of the icon is that you can scan the column. */
+.uhier__joint {
   flex: 0 0 auto;
-  font-size: 0.55rem;
-  white-space: nowrap;
+  width: 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   color: inherit;
-  opacity: 0.6;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  /* Quieter than the body glyph — it describes the LINE between two parts, not
+     the part. Full strength on hover/open, where it is the thing you're aiming at. */
+  opacity: 0.62;
+}
+
+.uhier__joint svg {
+  display: block;
+}
+
+button.uhier__joint {
+  cursor: pointer;
+}
+
+.uhier__row:hover button.uhier__joint,
+button.uhier__joint:focus-visible {
+  opacity: 1;
+}
+
+/* The joint whose editor is open — the heir to the joint row's own highlight. */
+button.uhier__joint.is-on {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.uhier__row.is-selected button.uhier__joint.is-on {
+  color: inherit;
+}
+
+/* An unjointed row (the base, a loose import, a part with no 3-D body yet):
+   the column, none of the ink. */
+.uhier__joint--none {
+  opacity: 0;
 }
 
 .uhier__loose {

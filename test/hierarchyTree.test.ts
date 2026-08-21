@@ -6,12 +6,12 @@ import {
   coverageLabel,
   findHierarchyNode,
   flattenHierarchy,
-  jointKey,
   linkKey,
   massCoverage,
   unifiedTree,
   type HierarchyNode
 } from '../src/renderer/src/components/hierarchy-tree'
+import { readAllJoints } from '../src/renderer/src/components/robot-assembly'
 import { addBoxLink, blankUrdf, setInertial } from '../src/renderer/src/components/robot-assembly'
 import type { RobotPart } from '../src/shared/robot'
 import type { PartDefinition, PartLibraryWithParts } from '../src/shared/part'
@@ -170,7 +170,7 @@ describe('unifiedTree — joining Electronics to Build', () => {
       urdf
     })
     const rows = flattenHierarchy(tree)
-    // base_link (build-only) + the fixed joint + the part. No separate "SG90" row.
+    // base_link (build-only) + the part. No separate "SG90" row.
     expect(rows.filter((n) => n.label === 'SG90' && n.kind === 'link')).toHaveLength(0)
     const servo = findHierarchyNode(tree, 's1')
     expect(servo?.link).toBe('SG90')
@@ -227,17 +227,6 @@ describe('unifiedTree — joining Electronics to Build', () => {
     expect(findHierarchyNode(tree, 'exp')?.children.map((n) => n.key)).toContain('s1')
   })
 
-  it('the joint row sits directly above the row it attaches', () => {
-    const urdf = urdfWith('SG90')
-    const tree = unifiedTree({ parts: [part('s1', { urdfLink: 'SG90' })], urdf })
-    const rows = flattenHierarchy(tree)
-    const at = rows.findIndex((n) => n.key === 's1')
-    expect(rows[at - 1].key).toBe(jointKey('SG90_joint'))
-    expect(rows[at - 1].kind).toBe('joint')
-    expect(rows[at - 1].buildOnly).toBe(true)
-    expect(rows[at - 1].joint).toMatchObject({ parent: 'base_link', child: 'SG90', type: 'fixed' })
-  })
-
   it('with no Build model at all, the tree is exactly the Electronics one', () => {
     const withUrdf = unifiedTree({ board: 'Pico', parts: [part('a')], urdf: '' })
     expect(keys(withUrdf)).toEqual([BOARD_KEY, 'a'])
@@ -276,7 +265,81 @@ describe('unifiedTree — joining Electronics to Build', () => {
     const urdf = urdfWith('SG90', 'bracket')
     const tree = unifiedTree({ board: 'Pico', parts: [part('s1', { urdfLink: 'SG90' })], urdf })
     expect(countComponents(tree)).toBe(2) // the MCU + the servo
-    expect(countNodes(tree)).toBeGreaterThan(2) // …plus base_link, bracket, joints
+    expect(countNodes(tree)).toBeGreaterThan(2) // …plus base_link and bracket
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Joints ride on the rows they attach (#720) — they are NOT rows
+// ---------------------------------------------------------------------------
+
+/**
+ * Replaces the old "the joint row sits directly above the row it attaches"
+ * contract. That test pinned a real behaviour — every joint visible, at the
+ * right depth, flagged Build-only — and what replaces it has to pin the same
+ * guarantees on the new shape: no joint is lost, none is duplicated, and the row
+ * that carries one is the CHILD, so the icon means "how I attach upwards".
+ */
+describe('unifiedTree — a joint is a property of the row it attaches (#720)', () => {
+  it('a jointed row carries its joint; no joint has a row of its own', () => {
+    const urdf = urdfWith('SG90')
+    const tree = unifiedTree({ parts: [part('s1', { urdfLink: 'SG90' })], urdf })
+    const rows = flattenHierarchy(tree)
+    // base_link + the servo. Nothing else — the joint is not a row.
+    expect(rows).toHaveLength(2)
+    expect(findHierarchyNode(tree, 's1')?.joint).toMatchObject({
+      name: 'SG90_joint',
+      parent: 'base_link',
+      child: 'SG90',
+      type: 'fixed'
+    })
+  })
+
+  it('EVERY joint in the model is carried, exactly once, by its child', () => {
+    // The property the old joint rows gave for free and the icon must keep: one
+    // icon per joint, so nothing in the model becomes unreachable.
+    const urdf = urdfWith('SG90', 'bracket', 'wheel')
+    const tree = unifiedTree({ parts: [part('s1', { urdfLink: 'SG90' })], urdf })
+    const carried = flattenHierarchy(tree)
+      .map((n) => n.joint)
+      .filter((j): j is NonNullable<typeof j> => j != null)
+    expect(carried.map((j) => j.name).sort()).toEqual(readAllJoints(urdf).map((j) => j.name).sort())
+    // …and the carrier is always the CHILD, never the parent.
+    for (const n of flattenHierarchy(tree)) if (n.joint) expect(n.joint.child).toBe(n.link)
+  })
+
+  it('a row with nothing above it carries NO joint — the base and a stray import', () => {
+    const urdf = `${blankUrdf('bot').replace('</robot>', '')}  <link name="stray"><visual><geometry><box size="1 1 1"/></geometry></visual></link>\n</robot>`
+    const tree = unifiedTree({ parts: [part('p1')], urdf })
+    expect(findHierarchyNode(tree, linkKey('base_link'))?.joint).toBeNull()
+    expect(findHierarchyNode(tree, linkKey('stray'))?.joint).toBeNull()
+    // A part with no 3-D body at all has no joint either — nothing to attach.
+    expect(findHierarchyNode(tree, 'p1')?.joint).toBeNull()
+  })
+
+  it('counts the OTHER end too: how many parts hang off this one', () => {
+    // The answer to "what about a part with several joints": it has one joint
+    // UP (at most) and any number DOWN, and the rows below it carry those.
+    const urdf = urdfWith('SG90', 'bracket')
+    const tree = unifiedTree({ urdf })
+    expect(findHierarchyNode(tree, linkKey('base_link'))?.jointedChildren).toBe(2)
+    expect(findHierarchyNode(tree, linkKey('SG90'))?.jointedChildren).toBe(0)
+  })
+
+  it('a joint pointing at a link that is not in the model inflates nothing', () => {
+    const urdf = `${urdfWith('SG90').replace('</robot>', '')}  <joint name="ghost" type="fixed"><parent link="base_link"/><child link="nowhere"/></joint>\n</robot>`
+    const tree = unifiedTree({ urdf })
+    expect(findHierarchyNode(tree, linkKey('base_link'))?.jointedChildren).toBe(1)
+  })
+
+  it('the tree is exactly as long as the robot has bodies', () => {
+    // The whole point of the change: list length tracks the part count, not the
+    // part count PLUS the joint count.
+    const urdf = urdfWith('SG90', 'bracket', 'wheel')
+    const tree = unifiedTree({ board: 'Pico', parts: [part('s1', { urdfLink: 'SG90' })], urdf })
+    // 4 links (base + 3) − 1 claimed by the servo = 3 build-only rows, + the
+    // servo + the MCU = 5. The 3 joints add nothing.
+    expect(countNodes(tree)).toBe(5)
   })
 })
 
