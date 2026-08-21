@@ -128,9 +128,12 @@ if (!w.api) {
     fs: {
       openFolderDialog: P(null),
       openFileDialog: P(null),
+      saveFileDialog: P(null),
       readDir: P([]),
       readFile: P(''),
+      readFileBytes: P(new Uint8Array()),
       writeFile: P(undefined),
+      writeFileBytes: P(undefined),
       mkdir: P(undefined),
       rename: P(undefined),
       remove: P(undefined),

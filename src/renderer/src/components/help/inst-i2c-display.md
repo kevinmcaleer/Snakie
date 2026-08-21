@@ -25,3 +25,13 @@ while True:
 ```
 
 No program running? The panel offers **Run display demo** (I²C) or **Run ST7789 demo** (SPI).
+
+## Sprite editor
+The **✎ Sprites** key opens the **Sprite editor** — draw 1-bit sprites and frame
+animations for LED matrices and OLEDs on a pixel grid, with a filmstrip of
+frames, onion skinning and live playback. Save animations as **`.spr`** (a tiny
+self-describing container whose frames are `framebuf.MONO_HLSB` bytes — see
+`examples/sprites/play_spr.py`), export single frames as **PBM**, export/import
+**PNG · JPEG · animated GIF**, or export a ready-to-import **MicroPython
+module**. It opens with a pair of blinking eyes sized for the Arduino Modulino
+LED Matrix (12×8).

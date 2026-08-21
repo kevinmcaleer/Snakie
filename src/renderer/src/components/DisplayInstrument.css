@@ -56,6 +56,12 @@
   text-shadow: 0 0 6px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
+/* The Sprite-editor launcher key — a mode-row sibling, accent on hover. */
+.i2cd__sprites:hover {
+  color: var(--accent);
+  border-color: var(--accent-border);
+}
+
 .i2cd__size {
   display: inline-flex;
   align-items: center;
