@@ -96,6 +96,77 @@
   color: #9a8f75;
 }
 
+/* --- Which Python the help teaches (#763) ------------------------------- *
+ * Three pills (Auto · MicroPython · CircuitPython) with a caption saying where
+ * the current answer came from. Own BEM prefix (`help-dialect__`) because
+ * instrument/panel CSS is global and `help__` is already taken by the plate,
+ * search and article chrome.
+ *
+ * Colours are SELF-CONTAINED parchment, like the rest of this panel (see the
+ * file header): the Help Library is deliberately the same warm library surface
+ * under every skin, so these read identically in the dark and skeuomorph themes
+ * rather than needing a per-theme pair. */
+.help-dialect {
+  flex: 0 0 auto;
+  margin: 0 12px 8px;
+}
+.help-dialect__row {
+  display: flex;
+  gap: 3px;
+  padding: 2px;
+  background: #e3dbc7;
+  border: 1px solid #b3a684;
+  border-radius: 5px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+.help-dialect__pill {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 3px 4px;
+  font-family: var(--font-ui), Helvetica, sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #6a5f45;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.help-dialect__pill:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+.help-dialect__pill.is-on {
+  color: #4a3410;
+  background: linear-gradient(180deg, #f4dca0, #e9cd82);
+  border-color: #d7bb7e;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+.help-dialect__caption {
+  margin-top: 4px;
+  font-family: var(--font-mono), 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: #7d7359;
+}
+
+/* "These examples are MicroPython" note above an article body. */
+.help-dialect__note {
+  margin-bottom: 0.9rem;
+  padding: 0.5rem 0.7rem;
+  background: #f7ecd2;
+  border: 1px solid #d7bb7e;
+  border-left: 3px solid #c99b3e;
+  border-radius: 5px;
+  color: #4a3d1d;
+  font-size: 0.78rem;
+}
+.help-dialect__note p {
+  margin: 0;
+}
+
 /* --- Tree ------------------------------------------------------------- */
 .help-tree {
   flex: 1 1 auto;

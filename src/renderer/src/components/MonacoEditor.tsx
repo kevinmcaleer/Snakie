@@ -26,6 +26,8 @@ import {
 import { registerInlineCompletions } from './inline-completions'
 import { setActiveEditor, dispatchOpenFind, dispatchOpenHelp } from './editorBridge'
 import { resolveHelpTarget } from './context-help'
+import { setCompletionDialect } from './micropython-completions'
+import { useHelpDialect } from '../hooks/useHelpDialect'
 import { validateFormat, formatKindForName } from './format-validate'
 import {
   clearFormatDiagnostics,
@@ -225,6 +227,11 @@ export function MonacoEditor(): JSX.Element {
   // Linting on/off (issue #65), persisted. When off the lint effect no-ops and
   // clears markers + the shared diagnostics store.
   const [lintingEnabled] = useLocalStorage<boolean>('snakie.lintingEnabled', true)
+  // Which Python the suggestions should describe (#763). Follows the connected
+  // board (or the Help panel's override), and the completion provider reads it
+  // through a module-level setter so it switches LIVE — the provider is
+  // registered once for the page but the right answer changes on connect.
+  const { dialect: helpDialect } = useHelpDialect()
 
   const containerRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
@@ -254,6 +261,15 @@ export function MonacoEditor(): JSX.Element {
   activeIdRef.current = activeId
   setDiagnosticsRef.current = setDiagnostics
   setLinterToolRef.current = setLinterTool
+  // Read inside the context-help action, which is registered once with the editor.
+  const helpDialectRef = useRef(helpDialect)
+  helpDialectRef.current = helpDialect
+
+  // Point the completion provider at the runtime in use. Cheap, idempotent, and
+  // the next keystroke completes against the new catalogue.
+  useEffect(() => {
+    setCompletionDialect(helpDialect)
+  }, [helpDialect])
 
   // Create the editor once.
   useEffect(() => {
@@ -330,7 +346,10 @@ export function MonacoEditor(): JSX.Element {
         const word = pos ? ed.getModel()?.getWordAtPosition(pos)?.word : undefined
         if (!word) return
         const libs = await window.api.parts.listLibraries().catch(() => [])
-        const target = resolveHelpTarget(word, libs)
+        // Dialect-aware (#763): `I2C` means different pages on the two runtimes,
+        // and a MicroPython name on a CircuitPython board resolves to the page
+        // that says what to write instead.
+        const target = resolveHelpTarget(word, libs, helpDialectRef.current)
         if (target) dispatchOpenHelp(target.articleId)
       }
     })

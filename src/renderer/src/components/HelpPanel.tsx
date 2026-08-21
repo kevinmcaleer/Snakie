@@ -1,13 +1,20 @@
 import { useCallback, useEffect, useMemo, useState, type JSX } from 'react'
 import { Markdown } from './Markdown'
 import {
-  HELP_SECTIONS,
   DEFAULT_EXPANDED,
   detectProjectParts,
+  dialectNote,
+  helpTreeFor,
   type HelpNode,
   type ProjectPart
 } from './help-content'
 import { HELP_ARTICLES } from './help-articles'
+import { useHelpDialect } from '../hooks/useHelpDialect'
+import {
+  DIALECT_PREFERENCE_LABEL,
+  type DialectPreference
+} from '../../../shared/dialect-api'
+import { DIALECT_LABEL } from '../../../shared/dialect'
 import { parsePartHelp, defaultExampleName } from './part-help-meta'
 import { ShelfIcon, TomeIcon, OpenBookIcon, ClosedBookIcon, PageIcon, CursorIcon } from './help-icons'
 import { subscribeActiveEditor } from './editorBridge'
@@ -39,6 +46,10 @@ function openDocs(): void {
 export function HelpPanel({ target }: { target?: { id: string; nonce: number } }): JSX.Element {
   const { openFiles, activeId, openBuffer, currentFolder } = useWorkspace()
   const source = openFiles.find((f) => f.id === activeId)?.content ?? ''
+
+  // Which Python the reference pages should teach (#763). Follows the connected
+  // board unless the reader has overridden it — see useHelpDialect.
+  const { dialect, preference, source: dialectFrom, boardDialect, setPreference } = useHelpDialect()
 
   // Parts PLACED on the board (robot.yml) — so the "In This Project" section
   // (and the embedded Board mode's routed part help, modes review) covers parts
@@ -128,9 +139,11 @@ export function HelpPanel({ target }: { target?: { id: string; nonce: number } }
     return m
   }, [projectParts])
 
-  // The full tree = the dynamic project section (when any) + the evergreen ones.
+  // The full tree = the dynamic project section (when any) + the evergreen ones,
+  // pruned to the runtime in use so a CircuitPython reader is never offered a
+  // page that teaches `machine.Pin`.
   const tree = useMemo<HelpNode[]>(() => {
-    const roots = [...HELP_SECTIONS]
+    const roots = helpTreeFor(dialect)
     if (projectParts.length > 0) {
       roots.unshift({
         id: 'in-this-project',
@@ -150,7 +163,7 @@ export function HelpPanel({ target }: { target?: { id: string; nonce: number } }
       })
     }
     return roots
-  }, [projectParts])
+  }, [projectParts, dialect])
 
   // Highlight the at-cursor part (doesn't force its article open).
   const cursorPart = projectParts.find((p) => p.atCursor)
@@ -252,6 +265,9 @@ export function HelpPanel({ target }: { target?: { id: string; nonce: number } }
     const meta = isPart ? parsePartHelp(partHelp.get(selected) ?? '') : null
     const body = meta ? meta.body : (HELP_ARTICLES[selected] ?? '')
     const showActions = meta && (meta.guideUrl || meta.exampleCode)
+    // A page whose EXAMPLES are MicroPython, opened on a CircuitPython session
+    // (the instrument pages — the on-device library still needs `machine`, #760).
+    const note = dialectNote(selected, dialect)
     return (
       <div className="help">
         <div className="help__plate">
@@ -288,6 +304,11 @@ export function HelpPanel({ target }: { target?: { id: string; nonce: number } }
               )}
             </div>
           )}
+          {note && (
+            <div className="help-dialect__note" role="note">
+              <Markdown source={note} />
+            </div>
+          )}
           {body ? <Markdown source={body} /> : <p className="help__empty">No help written for this page yet.</p>}
           <button
             type="button"
@@ -322,6 +343,37 @@ export function HelpPanel({ target }: { target?: { id: string; nonce: number } }
           placeholder="Search the library…"
           aria-label="Search the help library"
         />
+      </div>
+      <div className="help-dialect" role="group" aria-label="Which Python the help teaches">
+        <div className="help-dialect__row">
+          {(['auto', 'micropython', 'circuitpython'] as DialectPreference[]).map((p) => (
+            <button
+              key={p}
+              type="button"
+              className={`help-dialect__pill${preference === p ? ' is-on' : ''}`}
+              aria-pressed={preference === p}
+              onClick={() => setPreference(p)}
+              title={
+                p === 'auto'
+                  ? 'Follow whichever runtime the connected board reports'
+                  : `Always show ${DIALECT_PREFERENCE_LABEL[p]} help and completions`
+              }
+            >
+              {DIALECT_PREFERENCE_LABEL[p]}
+            </button>
+          ))}
+        </div>
+        <div className="help-dialect__caption">
+          {dialectFrom === 'board'
+            ? `Following the board — ${DIALECT_LABEL[boardDialect ?? 'unknown']}`
+            : dialectFrom === 'manual'
+              ? `Pinned to ${DIALECT_LABEL[dialect]}`
+              : boardDialect
+                ? // Connected, but the probe couldn't say which Python it is. We
+                  // show both rather than picking one — see #770.
+                  'The board didn’t say which Python — showing both'
+                : 'No board connected — showing both, each labelled'}
+        </div>
       </div>
       <div className="help-tree" role="tree" aria-label="Help contents">
         {tree.map((n) => renderNode(n, 0))}

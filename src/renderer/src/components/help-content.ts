@@ -4,8 +4,24 @@
  * Static contents (Getting Started · Reference · Instruments) plus a runtime
  * "In This Project" section built by {@link detectProjectParts} from the active
  * file's hardware usage. Article bodies live in {@link ./help-articles}.
+ *
+ * ## Dialect (#763, epic #209)
+ *
+ * Pages carry a {@link DialectScope}, and {@link helpTreeFor} prunes the tree to
+ * the runtime in use — so a CircuitPython session is never offered "Pins & GPIO"
+ * teaching `machine.Pin`, and a MicroPython one isn't shown `digitalio`. Pages
+ * with no scope are plain Python (control flow, types, the panels themselves)
+ * and appear on both.
+ *
+ * An UNESTABLISHED dialect shows everything, because somebody reading before
+ * they plug a board in should not be shown one runtime's answer as if it were
+ * the only one — see `inScope` in `shared/dialect-api.ts`.
+ *
+ * To add a page: drop `./help/<id>.md`, add a node here with the right `scope`.
  */
 import { INSTRUMENTS } from './instruments-registry'
+import { inScope, type DialectScope } from '../../../shared/dialect-api'
+import type { Dialect } from '../../../shared/dialect'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
 
 export type HelpKind = 'shelf' | 'collection' | 'section' | 'article'
@@ -23,6 +39,8 @@ export interface HelpNode {
   live?: boolean
   /** Runtime: the part whose declaration the caret is on. */
   atCursor?: boolean
+  /** Which runtimes this page is true for. Absent = plain Python, so both. */
+  scope?: DialectScope
 }
 
 /** Icon accents for the evergreen sections (from the design tokens). */
@@ -30,7 +48,10 @@ const A = {
   gettingStarted: '#37884a',
   reference: '#b58a2e',
   language: '#3f74ad',
-  buses: '#8b5fc0',
+  micropython: '#3f74ad',
+  // Purple sets the CircuitPython book apart at a glance from the blue
+  // MicroPython one, which matters most when both are on screen (`unknown`).
+  circuitpython: '#7a4fa8',
   pinouts: '#c07a2a',
   instruments: '#2f7c70',
   page: '#8a7f62',
@@ -46,12 +67,61 @@ export const HELP_SECTIONS: HelpNode[] = [
     accent: A.gettingStarted,
     children: [
       { id: 'gs-connect', kind: 'article', title: 'Connect your board', accent: '#3f74ad' },
-      { id: 'gs-run', kind: 'article', title: 'Write & run code', accent: '#37a04f' },
+      // "Write & run code" means something different on each runtime: MicroPython
+      // runs what Snakie sends, CircuitPython boots code.py and re-runs it on
+      // every save. Two pages rather than one hedged page.
+      {
+        id: 'gs-run',
+        kind: 'article',
+        title: 'Write & run code',
+        accent: '#37a04f',
+        scope: 'micropython'
+      },
+      {
+        id: 'cp-code-py',
+        kind: 'article',
+        title: 'Write & run code (code.py)',
+        accent: '#37a04f',
+        scope: 'circuitpython'
+      },
+      {
+        id: 'cp-readonly',
+        kind: 'article',
+        title: 'The read-only filesystem',
+        accent: '#c2483a',
+        scope: 'circuitpython'
+      },
       { id: 'gs-instruments', kind: 'article', title: 'Using instruments', accent: '#8b5fc0' },
       { id: 'gs-board-view', kind: 'article', title: 'The Board View', accent: '#2f7c70' },
       { id: 'gs-files', kind: 'article', title: 'Files & sync', accent: '#c07a2a' },
-      { id: 'gs-firmware', kind: 'article', title: 'Flash firmware', accent: '#c2483a' },
-      { id: 'gs-packages', kind: 'article', title: 'Install packages', accent: '#3f74ad' },
+      {
+        id: 'gs-firmware',
+        kind: 'article',
+        title: 'Flash MicroPython firmware',
+        accent: '#c2483a',
+        scope: 'micropython'
+      },
+      {
+        id: 'cp-firmware',
+        kind: 'article',
+        title: 'Flash CircuitPython firmware',
+        accent: '#c2483a',
+        scope: 'circuitpython'
+      },
+      {
+        id: 'gs-packages',
+        kind: 'article',
+        title: 'Install packages (mip)',
+        accent: '#3f74ad',
+        scope: 'micropython'
+      },
+      {
+        id: 'cp-libraries',
+        kind: 'article',
+        title: 'Install libraries (the bundle)',
+        accent: '#3f74ad',
+        scope: 'circuitpython'
+      },
       { id: 'gs-validation', kind: 'article', title: 'Problems & validation', accent: '#b58a2e' },
       { id: 'gs-git', kind: 'article', title: 'Version control (Git)', accent: '#37884a' },
       { id: 'gs-chat', kind: 'article', title: 'AI chat & autocomplete', accent: '#8b5fc0' },
@@ -78,14 +148,15 @@ export const HELP_SECTIONS: HelpNode[] = [
     title: 'Reference',
     accent: A.reference,
     children: [
+      // Plain Python — identical on both runtimes, so it is NOT duplicated per
+      // dialect. Keep it that way: anything that would need a different example
+      // on CircuitPython belongs in one of the two hardware sections below.
       {
-        id: 'ref-language',
+        id: 'ref-python',
         kind: 'section',
-        title: 'MicroPython Language',
+        title: 'Python Language',
         accent: A.language,
         children: [
-          { id: 'ref-pins', kind: 'article', title: 'Pins & GPIO', accent: A.page },
-          { id: 'ref-timing', kind: 'article', title: 'Timing', accent: A.page },
           { id: 'ref-print', kind: 'article', title: 'print & the REPL', accent: A.page },
           { id: 'ref-flow', kind: 'article', title: 'Control flow', accent: A.page },
           { id: 'ref-functions', kind: 'article', title: 'Functions', accent: A.page },
@@ -97,15 +168,39 @@ export const HELP_SECTIONS: HelpNode[] = [
         ]
       },
       {
-        id: 'ref-buses',
+        id: 'ref-micropython',
         kind: 'section',
-        title: 'Buses',
-        accent: A.buses,
+        title: 'MicroPython Hardware',
+        accent: A.micropython,
+        scope: 'micropython',
         children: [
+          { id: 'ref-pins', kind: 'article', title: 'Pins & GPIO', accent: A.page },
+          { id: 'ref-timing', kind: 'article', title: 'Timing', accent: A.page },
           { id: 'ref-i2c', kind: 'article', title: 'I²C', accent: A.page },
           { id: 'ref-spi', kind: 'article', title: 'SPI', accent: A.page },
           { id: 'ref-uart', kind: 'article', title: 'UART', accent: A.page },
           { id: 'ref-pwm', kind: 'article', title: 'PWM', accent: A.page }
+        ]
+      },
+      {
+        id: 'ref-circuitpython',
+        kind: 'section',
+        title: 'CircuitPython Hardware',
+        accent: A.circuitpython,
+        scope: 'circuitpython',
+        children: [
+          { id: 'cp-board', kind: 'article', title: 'board — this board’s pins', accent: A.page },
+          { id: 'cp-digitalio', kind: 'article', title: 'Pins & GPIO (digitalio)', accent: A.page },
+          { id: 'cp-analogio', kind: 'article', title: 'Analogue (analogio)', accent: A.page },
+          { id: 'cp-pwmio', kind: 'article', title: 'PWM (pwmio)', accent: A.page },
+          { id: 'cp-busio', kind: 'article', title: 'I²C, SPI & UART (busio)', accent: A.page },
+          { id: 'cp-timing', kind: 'article', title: 'Timing', accent: A.page },
+          {
+            id: 'cp-from-micropython',
+            kind: 'article',
+            title: 'Coming from MicroPython',
+            accent: A.page
+          }
         ]
       },
       {
@@ -125,8 +220,60 @@ export const DEFAULT_EXPANDED = new Set([
   'getting-started',
   'instruments',
   'reference',
-  'ref-language'
+  'ref-python',
+  'ref-micropython',
+  'ref-circuitpython'
 ])
+
+/**
+ * The contents as one runtime sees them.
+ *
+ * Prunes every node whose {@link HelpNode.scope} excludes `dialect`, depth
+ * first, and drops a branch that ends up empty — so a MicroPython session never
+ * sees an empty "CircuitPython Hardware" book. `unknown` keeps everything (see
+ * the module note): with no board attached, showing one runtime's pages as if
+ * they were the only ones is the mistake, not showing both.
+ */
+export function helpTreeFor(dialect: Dialect, nodes: HelpNode[] = HELP_SECTIONS): HelpNode[] {
+  const out: HelpNode[] = []
+  for (const node of nodes) {
+    if (!inScope(node.scope, dialect)) continue
+    if (!node.children) {
+      out.push(node)
+      continue
+    }
+    const children = helpTreeFor(dialect, node.children)
+    // A branch that has lost all its pages has nothing left to open.
+    if (children.length === 0) continue
+    out.push({ ...node, children })
+  }
+  return out
+}
+
+/**
+ * Articles that are reachable on every dialect but whose EXAMPLES are
+ * MicroPython — the instrument pages, because Snakie's on-device instrument
+ * library is built on `machine` and has not been ported yet (#760).
+ *
+ * Rather than hide the panels' documentation from a CircuitPython user, or
+ * quietly show them `machine.Pin` as if it would run, the article view prints
+ * {@link dialectNote} above the body. The unit test keeps this list honest: any
+ * CircuitPython-visible page containing MicroPython-only code must be in it.
+ */
+export const MICROPYTHON_EXAMPLE_ARTICLES = new Set(
+  INSTRUMENTS.map((d) => `inst-${d.id}`)
+)
+
+/**
+ * The warning to print above an article whose code won't run on this dialect,
+ * or `null` when there is nothing to say. Pure, so the wording is pinned by a
+ * test rather than buried in JSX.
+ */
+export function dialectNote(articleId: string, dialect: Dialect): string | null {
+  if (dialect !== 'circuitpython') return null
+  if (!MICROPYTHON_EXAMPLE_ARTICLES.has(articleId)) return null
+  return "The examples on this page are MicroPython — Snakie's on-device instrument library uses `machine`, which CircuitPython doesn't have. The panel itself works the same way; the code to drive it doesn't run on this board yet."
+}
 
 /** A part surfaced in "In This Project". */
 export interface ProjectPart {

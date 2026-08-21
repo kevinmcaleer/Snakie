@@ -27,10 +27,13 @@ blink(led, times=10)          # override by name
 ## Docstrings
 
 ```python
-def read_average(adc, samples=8):
-    """Mean of several ADC reads (smooths a noisy pot)."""
-    return sum(adc.read_u16() for _ in range(samples)) / samples
+def read_average(read, samples=8):
+    """Mean of several sensor reads (smooths a noisy pot)."""
+    return sum(read() for _ in range(samples)) / samples
 ```
+
+Passing the *reading function* in rather than the sensor keeps this portable —
+call it with whatever your runtime's analogue page gives you.
 
 ## lambda — a tiny inline function
 
