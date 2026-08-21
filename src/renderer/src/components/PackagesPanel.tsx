@@ -510,6 +510,18 @@ function PackagesTab(): JSX.Element {
         </p>
       )}
 
+      {/* This tab searches micropython-lib and PyPI — MicroPython's library
+          world. CircuitPython's is the Adafruit bundle, and its libraries are
+          not here and would not import if they were. Rather than hide the tab,
+          say where a CircuitPython user should actually be looking (#758). */}
+      {connected && status.runtime?.dialect === 'circuitpython' && (
+        <p className="pkgs__hint pkgs__hint--dialect" role="status">
+          This board runs <strong>CircuitPython</strong>. These are MicroPython packages — most
+          won&rsquo;t import on it. CircuitPython libraries come from the Adafruit bundle: install
+          them from the <strong>Modules</strong> panel.
+        </p>
+      )}
+
       <details
         className="pkgs__advanced"
         open={showAdvanced}

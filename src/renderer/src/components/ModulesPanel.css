@@ -60,6 +60,21 @@
   line-height: 1.5;
 }
 
+/* The "these are CircuitPython drivers" note (#758). Themed entirely through
+   the accent token — a hardcoded gold is unreadable on the parchment skin — and
+   marked with a rule rather than a fill so it reads as an aside, not an error,
+   in both the dark and the skeuomorph skins. */
+.mods__hint--dialect {
+  border-left: 2px solid var(--accent);
+  padding-left: 0.7rem;
+  margin: 0 0.85rem 0.35rem;
+}
+
+.mods__hint--dialect strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 /* --- Instrument groups ---------------------------------------------------- */
 
 .mods__group {

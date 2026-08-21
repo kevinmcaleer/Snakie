@@ -56,6 +56,15 @@ export function classifyBundledCopy(
  * Tolerant of any device error: a failed `stat` reads as unmanaged (skip), a
  * failed line-read as outdated (see {@link ModuleFreshness}) — either way it
  * cannot throw, so a busy board degrades to a quiet probe, not a crash.
+ *
+ * **Adafruit bundle modules are presence-only, deliberately (#758).** The whole
+ * check rests on reading a `__version__ = "…"` LINE out of the installed file,
+ * and a bundle library is `.mpy` bytecode: the version string is in there, in
+ * the constant pool, but not on a line and not at a stable offset. Scraping it
+ * out of a binary would be a check that quietly starts lying the next time the
+ * `.mpy` format changes, which is worse than not offering an update at all. So
+ * a bundle module reads as INSTALLED once it imports, and re-installing it is
+ * how you update it — the same limit part-folder COPY drivers have.
  */
 export async function probeOutdatedModules(defs: ModuleDef[]): Promise<Set<string>> {
   const outdated = new Set<string>()

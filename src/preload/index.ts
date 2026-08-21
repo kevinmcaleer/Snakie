@@ -39,13 +39,14 @@ import type {
   InstallResult,
   PackageInfo
 } from '../shared/packages/types'
-import type { ModuleInstallPlan } from '../main/modules/resolve'
+import type { ModuleInstallPlan, ModulePlanFile } from '../main/modules/resolve'
 import {
   importProbeSnippet,
   MODULE_PRESENT,
   type ModuleDef
 } from '../shared/modules-catalog'
 import { writeFailureMessage } from '../shared/install-messages'
+import type { RuntimeInfo } from '../shared/dialect'
 import { deviceDirsFor } from '../shared/mip-resolve'
 import type {
   CopilotDeviceCode,
@@ -341,7 +342,7 @@ const updates = {
  */
 async function writeFilesToBoard(
   name: string,
-  files: { path: string; contents: string }[],
+  files: ModulePlanFile[],
   onStep: (message: string) => void
 ): Promise<{ ok: boolean; log: string }> {
   if (files.length === 0) {
@@ -357,7 +358,17 @@ async function writeFilesToBoard(
     for (const file of files) {
       current = file.path
       onStep(`Writing ${++done}/${files.length} — ${file.path}…`)
-      await unwrap<void>(ipcRenderer.invoke('device:writeFile', file.path, file.contents))
+      // A base64 file is BINARY — an Adafruit `.mpy` (#758). It goes down the
+      // bytes channel, never the text one: a `.mpy` that took the string route
+      // would be silently corrupted by the UTF-8 round-trip and land as a file
+      // that imports as garbage.
+      if (file.encoding === 'base64') {
+        await unwrap<void>(
+          ipcRenderer.invoke('device:writeFileBytes', file.path, Buffer.from(file.contents, 'base64'))
+        )
+      } else {
+        await unwrap<void>(ipcRenderer.invoke('device:writeFile', file.path, file.contents))
+      }
     }
     return { ok: true, log: `Wrote ${files.map((f) => f.path).join(', ')}` }
   } catch (err) {
@@ -458,6 +469,25 @@ export interface ModuleInstallResult {
 }
 
 /**
+ * What the board says it is, or `null` if nothing is connected.
+ *
+ * An install plan needs this for one source only — the Adafruit CircuitPython
+ * bundle, which publishes `.mpy` per CircuitPython MAJOR version (#758). Read
+ * here, at the moment of the install, rather than passed in by each caller: the
+ * runtime is a fact about the session, not about the click, and every caller
+ * remembering to forward it is a caller that can forget. Never throws — a
+ * disconnected board yields `null`, and the plan refuses with a reason.
+ */
+async function connectedRuntime(): Promise<RuntimeInfo | null> {
+  try {
+    const status = await unwrap<DeviceStatus>(ipcRenderer.invoke('device:getStatus'))
+    return status?.runtime ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Per-module installer API (issue #120, reworked by #776) — the renderer-facing
  * half of the "modular installs" subsystem.
  *
@@ -480,10 +510,11 @@ export interface ModuleInstallResult {
 const modules = {
   /** The full installable-module catalog (offline-safe), grouped by the UI. */
   catalog: (): Promise<ModuleDef[]> => unwrap(ipcRenderer.invoke('modules:catalog')),
-  /** Resolve one module id to the files that install it (bundled, or downloaded
-   *  from its upstream spec). */
-  installPlan: (id: string): Promise<ModuleInstallPlan> =>
-    unwrap(ipcRenderer.invoke('modules:installPlan', id)),
+  /** Resolve one module id to the files that install it (a bundled stub, an
+   *  upstream `mip` spec, or an Adafruit bundle library for the CircuitPython
+   *  version this board is running). */
+  installPlan: async (id: string): Promise<ModuleInstallPlan> =>
+    unwrap(ipcRenderer.invoke('modules:installPlan', id, await connectedRuntime())),
   /**
    * Install module `id` onto the connected device. Requires an active
    * connection. `onProgress` receives lifecycle events; the resolved
@@ -499,7 +530,9 @@ const modules = {
 
     let plan: ModuleInstallPlan
     try {
-      plan = await unwrap<ModuleInstallPlan>(ipcRenderer.invoke('modules:installPlan', id))
+      plan = await unwrap<ModuleInstallPlan>(
+        ipcRenderer.invoke('modules:installPlan', id, await connectedRuntime())
+      )
     } catch (err) {
       // Main already composed the explanation (it knows WHY the download
       // failed); pass it through rather than restating it as "install failed".

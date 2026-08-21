@@ -113,6 +113,87 @@ export function writeFailureMessage(options: {
   ).replace(/\s+/g, ' ')
 }
 
+/**
+ * The same two failures, worded for the ADAFRUIT BUNDLE route (#758).
+ *
+ * A CircuitPython install fails in the same two places and for the same
+ * reasons, but the nouns differ enough to matter: there is no `mip` spec to
+ * name, the source is a bundle rather than a repository, and — uniquely — an
+ * install can fail because the BOARD'S CIRCUITPYTHON IS THE WRONG VERSION,
+ * which "copy the files in yourself" is the wrong advice for. `.mpy` bytecode is
+ * published per CircuitPython major, so the fix is to update the board.
+ */
+function bundleAdvice(kind: MipFailureKind): string {
+  switch (kind) {
+    case 'unsupported':
+      return (
+        'Update CircuitPython on the board to a version the bundle still ships, or copy the ' +
+        'library into /lib yourself with the Files panel.'
+      )
+    case 'not-found':
+      return (
+        'That library is not in the bundle at the version it pins, so it has been renamed or ' +
+        'withdrawn upstream — please report it so the catalog can be corrected.'
+      )
+    default:
+      return advice(kind)
+  }
+}
+
+/**
+ * The message shown when a CircuitPython library could not be resolved out of
+ * the Adafruit bundle. Names what failed, where CircuitPython libraries come
+ * from, which library it stopped on, and what to do — so it can never degrade
+ * into a bare HTTP status.
+ */
+export function bundleFailureMessage(options: {
+  /** The driver's display name. */
+  name: string
+  /** The bundle library being resolved when it failed. */
+  module: string
+  /** Why resolution failed. */
+  kind: MipFailureKind
+  /** The underlying detail (a version mismatch, a URL and status, …). */
+  detail: string
+}): string {
+  const { name, module, kind, detail } = options
+  return (
+    `Couldn't install ${name}: CircuitPython libraries come from the Adafruit CircuitPython ` +
+    `Library Bundle, which Snakie downloads on your computer and copies into /lib — but ` +
+    `${module} couldn't be resolved: ${detail}. ${bundleAdvice(kind)}`
+  ).replace(/\s+/g, ' ')
+}
+
+/** What the user is told about where a BUNDLE install's files came from. */
+export function bundleInstallNote(options: {
+  /** Every bundle library installed, in install order — dependencies first, the
+   *  library that was actually asked for LAST. */
+  modules: readonly string[]
+  /** The driver's display name. */
+  name: string
+  /** How many files were written. */
+  fileCount: number
+  /** The CircuitPython major the `.mpy` files were built for. */
+  major: number
+  /** The install directory (`/lib`). */
+  target: string
+}): string {
+  const { name, modules, fileCount, major, target } = options
+  const files = fileCount === 1 ? '1 file' : `${fileCount} files`
+  // `modules` ends with the library that was asked for; everything before it
+  // came along because the index said it was needed. Naming them matters — a
+  // user who asked for one driver and got seven files deserves to know why.
+  const dependencies = modules.slice(0, -1)
+  const deps =
+    dependencies.length > 0
+      ? ` with ${dependencies.length === 1 ? 'its dependency' : 'its dependencies'} ${dependencies.join(', ')}`
+      : ''
+  return (
+    `Downloaded ${name} from the Adafruit CircuitPython Library Bundle for CircuitPython ` +
+    `${major}${deps} — ${files} into ${target}.`
+  )
+}
+
 /** What the user is told about where an install's files came from and went. */
 export function hostInstallNote(options: {
   /** The driver or package's display name. */

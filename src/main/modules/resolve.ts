@@ -7,13 +7,26 @@ import {
   MODULES_LIB_DIR,
   type ModuleDef
 } from '../../shared/modules-catalog'
-import { hostInstallNote, resolveFailureMessage } from '../../shared/install-messages'
+import {
+  bundleFailureMessage,
+  bundleInstallNote,
+  hostInstallNote,
+  resolveFailureMessage
+} from '../../shared/install-messages'
 import {
   httpMipFetch,
   MipResolveError,
   resolveMipSpec,
   type MipFetch
 } from '../../shared/mip-resolve'
+import {
+  BundleResolveError,
+  circuitPythonMajor,
+  resolveBundleModule,
+  selectBundleMajor
+} from '../../shared/circuitpy-bundle'
+import type { RuntimeInfo } from '../../shared/dialect'
+import { createBundleHost, type BundleHost } from './bundle'
 
 /**
  * Per-module install resolution (issue #120, reworked by #776).
@@ -29,6 +42,15 @@ import {
  *     SOURCE back (exactly how the #108 banner installs `instruments.py`).
  *   - `mip`     → resolve the spec HERE, over the network, past the renderer's
  *     CSP ({@link resolveMipSpec}) — the package's own files, its `deps` and all.
+ *   - `bundle`  → the Adafruit CircuitPython Library Bundle (#758), the only
+ *     library source CircuitPython has. Needs the BOARD'S CircuitPython version,
+ *     because `.mpy` bytecode is published per major — hence the `runtime` on
+ *     {@link ModulePlanRequest}, which the preload reads off the live session.
+ *
+ * `bundle` is also the one source whose files are BYTES rather than text, so a
+ * plan file carries an `encoding`. `.mpy` fetched or written as UTF-8 would be
+ * silently corrupt — the exact failure `mip-resolve.ts` refuses `.mpy` to avoid
+ * — so it travels base64 and is decoded back to bytes at the write.
  *
  * That used to be `mip.install(<spec>)` run ON the board, which needed the
  * BOARD to have an internet connection. Most don't: a Tiny 2350 or a non-W Pico
@@ -76,11 +98,24 @@ export function readBundledModuleSource(file: string): string {
 }
 
 /**
+ * One file in a plan. `contents` is SOURCE TEXT unless `encoding` says
+ * otherwise — `'base64'` marks a binary file (an Adafruit `.mpy`) that the
+ * writer must decode back to bytes. Absent means `'utf8'`, so every plan built
+ * before #758 keeps its meaning.
+ */
+export interface ModulePlanFile {
+  path: string
+  contents: string
+  encoding?: 'utf8' | 'base64'
+}
+
+/**
  * What `modules:installPlan` returns for the renderer to ACT on: the FILES to
- * put on the board, and where. One shape for both sources (#776) — a bundled
- * stub is a one-entry list, an upstream package is however many its
- * `package.json` and `deps` came to — because the renderer's job is the same
- * either way: create each ancestor directory, then write.
+ * put on the board, and where. One shape for every source (#776, #758) — a
+ * bundled stub is a one-entry list, an upstream package is however many its
+ * `package.json` and `deps` came to, an Adafruit library however many its
+ * archive and bundle dependencies came to — because the renderer's job is the
+ * same either way: create each ancestor directory, then write.
  */
 export interface ModuleInstallPlan {
   /** The catalog id this plan installs. */
@@ -88,26 +123,93 @@ export interface ModuleInstallPlan {
   /** The module name importable on the board once installed (probe key). */
   importName: string
   /** Every file to write, parents-before-children in dependency order. */
-  files: { path: string; contents: string }[]
+  files: ModulePlanFile[]
   /** The upstream spec these files came from, when there was one (for logs). */
   spec?: string
   /** Non-fatal notes to surface in the UI (e.g. provenance / source hint). */
   notes: string[]
 }
 
-/** Options for building a plan. Only tests pass anything. */
+/** Options for building a plan. */
 export interface ModulePlanRequest {
   /** Injected in tests so host resolution never touches the network. */
   fetchText?: MipFetch
+  /**
+   * What the connected board is running. Only the `bundle` source needs it —
+   * the Adafruit bundle is published per CircuitPython MAJOR version, and
+   * installing a 10.x `.mpy` on a 9.x board produces an ImportError that says
+   * nothing about versions. Absent ⇒ a bundle install refuses rather than
+   * guessing.
+   */
+  runtime?: RuntimeInfo | null
+  /** Injected in tests so the bundle route never touches the network. */
+  bundle?: BundleHost
+}
+
+/**
+ * Resolve a CircuitPython library out of the Adafruit bundle (#758).
+ *
+ * Two things make this different from the `mip` arm. The BOARD'S VERSION is an
+ * input — `.mpy` is built per CircuitPython major, so a mismatch is refused up
+ * front with a sentence that names both sides rather than letting the board
+ * raise an ImportError later. And the files are BYTES: they are base64'd onto
+ * the plan and decoded at the write, because a `.mpy` that ever became a string
+ * would be corrupt by the time anyone noticed.
+ */
+async function buildBundlePlan(
+  def: ModuleDef,
+  module: string,
+  request: ModulePlanRequest
+): Promise<ModuleInstallPlan> {
+  const host = request.bundle ?? createBundleHost()
+  try {
+    const release = await host.release()
+    const major = selectBundleMajor(release, circuitPythonMajor(request.runtime ?? null))
+    const resolved = await resolveBundleModule(module, {
+      index: await host.index(),
+      major,
+      fetchBinary: host.fetchBinary,
+      inflate: host.inflate,
+      target: MODULES_LIB_DIR
+    })
+    return {
+      id: def.id,
+      importName: def.importName,
+      files: resolved.files.map((f) => ({
+        path: f.path,
+        contents: Buffer.from(f.bytes).toString('base64'),
+        encoding: 'base64' as const
+      })),
+      spec: module,
+      notes: [
+        bundleInstallNote({
+          name: def.name,
+          modules: resolved.modules,
+          fileCount: resolved.files.length,
+          major: resolved.major,
+          target: MODULES_LIB_DIR
+        })
+      ]
+    }
+  } catch (err) {
+    throw new Error(
+      bundleFailureMessage({
+        name: def.name,
+        module,
+        kind: err instanceof BundleResolveError ? err.kind : 'network',
+        detail: err instanceof Error ? err.message : String(err)
+      })
+    )
+  }
 }
 
 /**
  * Build a {@link ModuleInstallPlan} for one catalog module def.
  *
- * Offline for the `bundled` arm (a disk read); the `mip` arm reaches the
- * network, which is the whole point — this process has the internet connection
- * and the board does not. Throws for an unresolvable source, with a message
- * already composed for a human, so the IPC `wrap` reports it cleanly.
+ * Offline for the `bundled` arm (a disk read); the `mip` and `bundle` arms reach
+ * the network, which is the whole point — this process has the internet
+ * connection and the board does not. Throws for an unresolvable source, with a
+ * message already composed for a human, so the IPC `wrap` reports it cleanly.
  */
 export async function buildModuleInstallPlan(
   def: ModuleDef,
@@ -125,6 +227,10 @@ export async function buildModuleInstallPlan(
     }
     if (def.license) notes.push(`${def.name} — bundled ${def.license} driver.`)
     return { id: def.id, importName: def.importName, files: [{ path, contents }], notes }
+  }
+
+  if (def.source.kind === 'bundle') {
+    return buildBundlePlan(def, def.source.module, request)
   }
 
   // An upstream package: fetch it HERE and hand back its files. The resolver's

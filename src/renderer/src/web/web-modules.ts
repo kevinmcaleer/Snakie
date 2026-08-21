@@ -86,6 +86,20 @@ async function planFor(id: string): Promise<InstallPlan> {
     // honest error rather than a stub's silent one.
     throw new Error(`${def.source.file} isn't bundled in the web build yet.`)
   }
+  if (def.source.kind === 'bundle') {
+    // The Adafruit CircuitPython bundle (#758) is published ONLY as GitHub
+    // release assets, and those redirect to a host that answers with no
+    // `Access-Control-Allow-Origin` header at all — so no page can read them,
+    // whatever the CSP says (the same wall `web-hosts.ts` documents for
+    // gitlab.com). This is not something a wider allowlist would fix, so say so
+    // plainly and point at the app that can.
+    throw new Error(
+      `Couldn't install ${def.name}: CircuitPython libraries come from the Adafruit ` +
+        'CircuitPython Library Bundle, which is published as GitHub release downloads that a ' +
+        'web page is not allowed to read. Install it from the Snakie desktop app, or copy the ' +
+        'library into /lib yourself with the Files panel.'
+    )
+  }
   const spec = def.source.spec
   try {
     const resolved = await resolveMipSpec(spec, { fetchText: webMipFetch(), target: LIB_DIR })
