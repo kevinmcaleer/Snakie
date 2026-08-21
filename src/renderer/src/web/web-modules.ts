@@ -113,7 +113,8 @@ async function planFor(id: string): Promise<InstallPlan> {
           name: def.name,
           spec,
           fileCount: resolved.files.length,
-          target: LIB_DIR
+          target: resolved.target,
+          dependencies: resolved.packages.slice(1)
         })
       ]
     }

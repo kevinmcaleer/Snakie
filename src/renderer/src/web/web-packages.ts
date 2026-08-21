@@ -83,7 +83,13 @@ export function createWebPackagesApi(): Record<string, unknown> {
         })
         files = resolved.files.map((f) => ({ path: f.path, contents: f.contents }))
         notes.push(
-          hostInstallNote({ name, spec: name, fileCount: resolved.files.length, target })
+          hostInstallNote({
+            name,
+            spec: name,
+            fileCount: resolved.files.length,
+            target: resolved.target,
+            dependencies: resolved.packages.slice(1)
+          })
         )
       } catch (err) {
         emit({ name, state: 'error', message: `Failed to install ${name}` })

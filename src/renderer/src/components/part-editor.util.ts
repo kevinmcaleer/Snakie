@@ -2680,6 +2680,20 @@ export function moveDriver(list: DriverFile[], i: number, delta: -1 | 1): Driver
  * The empty-source/empty-target warnings state the REAL consequence: those rows
  * are dropped by `normalisePart` on save, which is otherwise invisible. Pure.
  */
+/**
+ * Is `target` a folder the board actually imports FROM — i.e. does it end in
+ * `lib`? `lib`, `/lib` and a mounted `/sd/lib` all qualify; `lib/modulino` does
+ * not. Used only to warn an author, never to rewrite what they typed. Pure.
+ */
+function isImportRootFolder(target: string): boolean {
+  const segments = String(target ?? '')
+    .trim()
+    .replace(/\\/g, '/')
+    .split('/')
+    .filter((s) => s !== '' && s !== '.')
+  return segments.length === 0 || segments[segments.length - 1] === 'lib'
+}
+
 export function driverRowWarnings(d: DriverFile, partFiles: string[] | null): string[] {
   const warns: string[] = []
   const src = String(d.source ?? '').trim()
@@ -2704,6 +2718,16 @@ export function driverRowWarnings(d: DriverFile, partFiles: string[] | null): st
   } else if (method === 'mip') {
     if (/\.(py|mpy)$/i.test(target)) {
       warns.push('mip treats the target as an install FOLDER — a file path here lands in the wrong place.')
+    } else if (target && !isImportRootFolder(target)) {
+      // The install folder is also the root every TRANSITIVE DEPENDENCY lands
+      // in, and a dependency is imported by name off `sys.path` — which holds
+      // `lib`, not a folder inside a package. `lib/modulino` would put the
+      // Modulino package's vl53l4cd / lsm6dsox / ltr381rgb drivers somewhere no
+      // import can reach, and the install would still report success (#785).
+      warns.push(
+        'mip installs this package AND its dependencies into this folder, so it must be one ' +
+          'the board imports from (lib) — inside another package they cannot be imported.'
+      )
     }
   } else {
     // copy — a URL or a file shipped beside the part.

@@ -102,6 +102,18 @@ describe('driverRowWarnings', () => {
     expect(driverRowWarnings({ source: 'github:me/repo/x.py', target: 'lib' }, null)).toEqual([])
   })
 
+  it('flags a mip install folder INSIDE a package — where dependencies go to die', () => {
+    // mip's target is the root its transitive dependencies land in too, and a
+    // dependency is imported by name off `sys.path`. `lib/modulino` installs a
+    // package whose dependencies no import can reach, and reports success (#785).
+    expect(
+      driverRowWarnings({ source: 'github:arduino/arduino-modulino-mpy', target: 'lib/modulino' }, null)[0]
+    ).toMatch(/dependencies/)
+    // A folder the board imports from is fine, wherever it is mounted.
+    expect(driverRowWarnings({ source: 'github:me/repo', target: '/lib' }, null)).toEqual([])
+    expect(driverRowWarnings({ source: 'github:me/repo', target: '/sd/lib' }, null)).toEqual([])
+  })
+
   it('flags a copy target that is not a full file path', () => {
     expect(driverRowWarnings(copy({ target: 'lib' }), null)[0]).toMatch(/full destination/)
   })

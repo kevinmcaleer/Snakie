@@ -221,6 +221,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it no longer reads every folder in your home directory looking for a board.
 
 ### Fixed
+- **A package's dependencies now provably land where the board can import them,
+  and the install says which ones came along.** (#785) A dependency has to be
+  installed at the install ROOT — `/lib/lsm6dsox.py`, on the board's `sys.path`
+  — because it is imported by name. Written under the package that asked for it,
+  it is a downloaded, present, completely unreachable file, and the install
+  still reports success. Snakie's resolver was doing the right thing, but
+  nothing said so: the tests proved the files were *fetched*, which is a
+  different claim from *put in the right place*, and a resolution's files
+  carried no record of **whose** they were, so the placement rule could not even
+  be stated. Every resolved file now names the package that declared it, the
+  device path is computed in exactly one place that can only ever see the
+  install target — so "relative to the package that pulled this in" is not
+  expressible — and the rule is pinned per-dependency and as a property.
+
+  Two real faults came out of the same look. An install folder given as `lib`
+  (the placeholder a part author is shown) produced **relative** device paths,
+  while the directories for those same paths were created **absolute** — they
+  only ever agreed because a board's working directory happens to be `/`; a
+  target is now anchored before anything is joined to it. And an install was
+  silent about what it brought: installing the Arduino Modulino package quietly
+  installs three more packages, and the only way to check was to list `/lib` on
+  the board. The install note now names them, on the desktop and the web, for
+  driver and package installs alike. The Part Editor also warns an author whose
+  `mip` install folder points *inside* another package — that folder is the root
+  its dependencies land in too.
 - **The Build workspace could overwrite the file you had open with a 3-D robot
   model. It can't any more.** (#782) Building in the Build workspace edits the
   project's robot model — but it saved that model through *whatever tab the

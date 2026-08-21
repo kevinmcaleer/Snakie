@@ -247,7 +247,11 @@ export async function buildModuleInstallPlan(
         name: def.name,
         spec,
         fileCount: resolved.files.length,
-        target: MODULES_LIB_DIR
+        target: resolved.target,
+        // Root first, so everything after it came along transitively — the
+        // `lsm6dsox` / `ltr381rgb` / `micropython_hs3003` that make Movement,
+        // Light and Thermo work, installed BESIDE the package at the root.
+        dependencies: resolved.packages.slice(1)
       })
     )
     return {

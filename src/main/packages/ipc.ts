@@ -3,7 +3,7 @@ import type { IpcResult } from '../device/types'
 import { CURATED_PACKAGES } from '../../shared/packages/registry'
 import { searchPackages } from '../../shared/packages/search'
 import { installNotes, installTarget } from '../../shared/packages/install'
-import { resolveFailureMessage } from '../../shared/install-messages'
+import { hostInstallNote, resolveFailureMessage } from '../../shared/install-messages'
 import { httpMipFetch, MipResolveError, resolveMipSpec } from '../../shared/mip-resolve'
 import type { InstallOptions, PackageInfo } from '../../shared/packages/types'
 
@@ -74,7 +74,20 @@ export function registerPackagesIpc(): void {
         })
         return {
           files: resolved.files.map((f) => ({ path: f.path, contents: f.contents })),
-          notes: installNotes(opts)
+          // The provenance note the web backend already emits: what was
+          // downloaded, WHICH DEPENDENCIES came with it, and where they went.
+          // A package install that quietly brings four more packages should say
+          // so — reading it off the board was the only way to tell (#785).
+          notes: [
+            hostInstallNote({
+              name,
+              spec: name,
+              fileCount: resolved.files.length,
+              target: resolved.target,
+              dependencies: resolved.packages.slice(1)
+            }),
+            ...installNotes(opts)
+          ]
         }
       } catch (err) {
         throw new Error(

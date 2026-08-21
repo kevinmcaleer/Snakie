@@ -30,6 +30,16 @@
  *     <version>.json`, whose `hashes` name content-addressed files under
  *     `<index>/file/<xx>/<hash>`.
  *
+ * **Where a file lands is `<target>/<the path its OWN package declared>`, always
+ * — including a dependency's.** `mip` installs a dependency at the install root
+ * for a hard reason: it is imported by NAME, resolved against `sys.path`, which
+ * holds the target (`/lib`) and nothing below it. A dependency written under the
+ * package that asked for it — `/lib/modulino/lib/vl53l4cd.py` rather than
+ * `/lib/vl53l4cd.py` — is unreachable, and the install still reports success
+ * (#785). So a dependency is a SIBLING of the package that needs it, never a
+ * child, and {@link addFile} is the single place allowed to compute a device
+ * path so there is nowhere for a parent-relative base to creep back in.
+ *
  * Deliberately NOT covered (see the module docs / issue #776):
  *   - `.mpy` bytecode installs. `mip` picks a `.mpy` variant when the board's
  *     bytecode version is known; we only ever install SOURCE `.py`, because
@@ -98,6 +108,20 @@ export interface MipResolvedFile {
   contents: string
   /** Where it came from — kept for the install log / provenance note. */
   url: string
+  /**
+   * The package spec that DECLARED this file — the root spec for the package
+   * the user asked for, or a dependency's own spec for a file that came along
+   * transitively.
+   *
+   * Recorded because "where a file lands" is only meaningful once you know
+   * whose file it is. A dependency's files must be siblings of the package that
+   * pulled them in, never children of it (#785): `vl53l4cd` belongs at
+   * `/lib/vl53l4cd.py`, on the board's `sys.path`, not at
+   * `/lib/modulino/lib/vl53l4cd.py` where no `import vl53l4cd` can reach it.
+   * Without this, a test can only prove a file was FETCHED, which is exactly
+   * the coverage that passed while the placement was wrong.
+   */
+  package: string
 }
 
 /** Options for {@link resolveMipSpec}. Only `fetchText` is required. */
@@ -106,7 +130,17 @@ export interface MipResolveOptions {
   fetchText: MipFetch
   /** Package index base URL. Defaults to {@link MIP_DEFAULT_INDEX}. */
   index?: string
-  /** On-device install directory. Defaults to {@link MIP_DEFAULT_TARGET}. */
+  /**
+   * On-device install directory — the ROOT every resolved path is anchored to,
+   * a package's own files and its dependencies' alike. Defaults to
+   * {@link MIP_DEFAULT_TARGET} and is normalised by
+   * {@link normaliseMipTarget}, so `lib` and `/lib` mean the same folder.
+   *
+   * It should be a directory the board IMPORTS FROM, because a dependency
+   * installed here is imported by name off `sys.path`. Pointing it inside
+   * another package's folder installs a package whose dependencies no import
+   * can reach (#785).
+   */
   target?: string
   /** Branch / tag / index version, as `mip`'s `version=` argument. */
   version?: string
@@ -122,6 +156,13 @@ export interface MipResolution {
   files: MipResolvedFile[]
   /** Every package spec that was resolved, root first — for the install log. */
   packages: string[]
+  /**
+   * The install directory every path in {@link files} is anchored to, absolute
+   * and normalised ({@link normaliseMipTarget}). Handed back because it is the
+   * ONE base a resolved path may be built from, so a caller (or a test) can
+   * check a placement without re-deriving it.
+   */
+  target: string
 }
 
 /** The subset of a `mip` `package.json` this resolver reads. */
@@ -199,6 +240,33 @@ export function joinDevicePath(target: string, relative: string): string {
 }
 
 /**
+ * Anchor an install target to an ABSOLUTE on-device directory.
+ *
+ * The target reaches us from three places that disagree about leading slashes:
+ * {@link MIP_DEFAULT_TARGET} (`/lib`), the Packages panel's advanced field, and
+ * a part's driver row — whose placeholder is literally `lib`. An unanchored
+ * `lib` used to travel straight through {@link joinDevicePath} and produce
+ * RELATIVE device paths (`lib/thing.py`), while {@link deviceDirsFor} anchored
+ * the same paths when it created their directories (`/lib`). The two only ever
+ * agreed because a board's working directory happens to be `/`: an install ran
+ * after any `os.chdir` would create the folders in one place and write the
+ * files in another. `MipResolvedFile.path` says "absolute"; this is what makes
+ * it true.
+ *
+ * `..` is refused here for the same reason {@link joinDevicePath} refuses it —
+ * a target is caller-supplied, and no install may climb out of the directory it
+ * was pointed at.
+ */
+export function normaliseMipTarget(target: string): string {
+  const raw = String(target ?? '').trim().replace(/\\/g, '/')
+  const segments = raw.split('/').filter((s) => s !== '' && s !== '.')
+  if (segments.some((s) => s === '..')) {
+    throw new MipResolveError('malformed', `unusable install directory: ${target}`)
+  }
+  return segments.length === 0 ? '/' : `/${segments.join('/')}`
+}
+
+/**
  * Every directory that must exist before `paths` can be written, parents first
  * and de-duplicated. MicroPython has no recursive `mkdir`, so a package that
  * installs `/lib/modulino/__init__.py` needs `/lib` and `/lib/modulino` created
@@ -237,8 +305,28 @@ interface Ctx {
   seenPaths: Set<string>
 }
 
-/** Fetch one file and record it, honouring the file-count guard. */
-async function addFile(ctx: Ctx, devicePath: string, url: string): Promise<void> {
+/**
+ * Fetch one file and record it, honouring the file-count guard.
+ *
+ * THE ONE PLACE a device path is computed, and deliberately so. Every file —
+ * the package's own and every transitive dependency's alike — lands at
+ * `<install target>/<the path that file's OWN package declared>`. There is no
+ * parameter for "relative to the package that pulled this in", because that is
+ * the shape of the bug (#785): a dependency written under its parent, e.g.
+ * `/lib/modulino/lib/vl53l4cd.py`, is off `sys.path` and unimportable, and the
+ * install still reports success. `mip` places a dependency at the target root
+ * for exactly this reason — a dependency is a SIBLING of the package that needs
+ * it, never a child — so keeping the join in one function that only ever sees
+ * `ctx.target` makes the wrong placement unrepresentable rather than merely
+ * absent.
+ */
+async function addFile(
+  ctx: Ctx,
+  pkg: string,
+  declared: string,
+  url: string
+): Promise<void> {
+  const devicePath = joinDevicePath(ctx.target, declared)
   if (ctx.seenPaths.has(devicePath)) return
   if (ctx.files.length >= ctx.maxFiles) {
     throw new MipResolveError(
@@ -255,7 +343,7 @@ async function addFile(ctx: Ctx, devicePath: string, url: string): Promise<void>
   }
   const contents = await ctx.fetchText(url)
   ctx.seenPaths.add(devicePath)
-  ctx.files.push({ path: devicePath, contents, url })
+  ctx.files.push({ path: devicePath, contents, url, package: pkg })
 }
 
 /**
@@ -267,7 +355,9 @@ async function resolveJson(
   ctx: Ctx,
   jsonSpec: string,
   version: string | undefined,
-  depth: number
+  depth: number,
+  /** The package spec these files belong to — recorded on every file it adds. */
+  pkg: string
 ): Promise<void> {
   const url = rewriteMipUrl(jsonSpec, version || 'HEAD')
   if (!url) {
@@ -277,30 +367,31 @@ async function resolveJson(
   ctx.seenPackages.add(url)
 
   const raw = await ctx.fetchText(url)
-  let pkg: MipPackageJson
+  let json: MipPackageJson
   try {
-    pkg = JSON.parse(raw) as MipPackageJson
+    json = JSON.parse(raw) as MipPackageJson
   } catch {
     throw new MipResolveError('malformed', 'the package index returned something that is not JSON', url)
   }
-  if (!pkg || typeof pkg !== 'object') {
+  if (!json || typeof json !== 'object') {
     throw new MipResolveError('malformed', 'the package description is not a JSON object', url)
   }
 
   // The package.json's own directory — `urls` entries may be relative to it.
   const baseUrl = url.slice(0, url.lastIndexOf('/'))
 
-  for (const entry of pkg.hashes ?? []) {
+  for (const entry of json.hashes ?? []) {
     if (!Array.isArray(entry) || entry.length < 2) continue
     const [devicePath, hash] = entry
     await addFile(
       ctx,
-      joinDevicePath(ctx.target, devicePath),
+      pkg,
+      devicePath,
       `${ctx.index}/file/${String(hash).slice(0, 2)}/${hash}`
     )
   }
 
-  for (const entry of pkg.urls ?? []) {
+  for (const entry of json.urls ?? []) {
     if (!Array.isArray(entry) || entry.length < 2) continue
     const [devicePath, source] = entry
     const absolute = isRemoteMipSpec(source) ? source : `${baseUrl}/${source}`
@@ -308,10 +399,14 @@ async function resolveJson(
     if (!fileUrl) {
       throw new MipResolveError('malformed', `package names an unfetchable url: ${source}`, url)
     }
-    await addFile(ctx, joinDevicePath(ctx.target, devicePath), fileUrl)
+    await addFile(ctx, pkg, devicePath, fileUrl)
   }
 
-  for (const dep of pkg.deps ?? []) {
+  // A DEPENDENCY, resolved against the same `ctx.target` as everything else —
+  // never against this package's own directory. That is what puts `lsm6dsox` on
+  // the board's `sys.path` instead of inside `modulino/` where the Movement,
+  // Light, Thermo and Distance modules could never import it (#785).
+  for (const dep of json.deps ?? []) {
     const [depSpec, depVersion] = Array.isArray(dep) ? dep : [dep, undefined]
     if (!depSpec) continue
     await resolvePackage(ctx, String(depSpec), depVersion, depth + 1)
@@ -342,11 +437,11 @@ async function resolvePackage(
       const url = rewriteMipUrl(spec, effectiveVersion || 'HEAD')
       if (!url) throw new MipResolveError('malformed', `not a resolvable spec: ${spec}`)
       const name = spec.split('/').pop() ?? ''
-      await addFile(ctx, joinDevicePath(ctx.target, name), url)
+      await addFile(ctx, spec, name, url)
       return
     }
     const jsonSpec = /\.json$/i.test(spec) ? spec : `${spec.replace(/\/+$/, '')}/package.json`
-    await resolveJson(ctx, jsonSpec, effectiveVersion, depth)
+    await resolveJson(ctx, jsonSpec, effectiveVersion, depth, spec)
     return
   }
 
@@ -357,7 +452,8 @@ async function resolvePackage(
     ctx,
     `${ctx.index}/package/py/${spec}/${indexVersion}.json`,
     effectiveVersion,
-    depth
+    depth,
+    spec
   )
 }
 
@@ -375,7 +471,7 @@ export async function resolveMipSpec(
   const ctx: Ctx = {
     fetchText: options.fetchText,
     index: (options.index ?? MIP_DEFAULT_INDEX).replace(/\/+$/, ''),
-    target: options.target ?? MIP_DEFAULT_TARGET,
+    target: normaliseMipTarget(options.target ?? MIP_DEFAULT_TARGET),
     maxFiles: options.maxFiles ?? DEFAULT_MAX_FILES,
     maxDepth: options.maxDepth ?? DEFAULT_MAX_DEPTH,
     files: [],
@@ -387,7 +483,7 @@ export async function resolveMipSpec(
   if (ctx.files.length === 0) {
     throw new MipResolveError('malformed', 'the package description lists no files')
   }
-  return { files: ctx.files, packages: ctx.packages }
+  return { files: ctx.files, packages: ctx.packages, target: ctx.target }
 }
 
 /**
