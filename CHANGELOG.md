@@ -216,8 +216,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `framebuf` formats, so "gray4" can't be misread as four grey levels. Populated
   for the **Modulino LED Matrix** (12 × 8) and the **XIAO Expansion Base**'s
   onboard 0.96" SSD1306 (128 × 64). Reading it back on the board is a follow-up.
-
-### Changed
 - The per-platform mount-point scanning behind board detection is now in one
   place (`fs/volumes.ts`) instead of being hand-rolled once per board type, and
   it no longer reads every folder in your home directory looking for a board.
