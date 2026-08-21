@@ -45,8 +45,37 @@ export interface GitStatus {
   changed: GitFileStatus[]
   /** Untracked files (not yet known to git). */
   untracked: GitFileStatus[]
+  /**
+   * Whether the repo has at least one commit. False for a freshly-initialised
+   * repo (unborn HEAD), where `branch` names a branch that does not exist yet
+   * and there is nothing to diff, push or discard against.
+   */
+  hasCommits: boolean
   /** Set when the folder is a repo but status could not be read fully. */
   warning?: string
+}
+
+/**
+ * What `git init` actually did, so the panel can say it in words rather than
+ * silently changing the view (issue #783). Creating a repository writes to the
+ * user's disk, so the report is part of the contract, not a nicety.
+ */
+export interface GitInitResult {
+  /** The folder that now holds `.git`. */
+  root: string
+  /** Branch the new repo starts on — the user's `init.defaultBranch`. */
+  branch?: string
+  /**
+   * True when this call created a `.gitignore`. False when the folder already
+   * had one (never overwritten) or when writing it failed — see `warning`.
+   */
+  wroteGitignore: boolean
+  /** Number of files git can now see as untracked, for the report. */
+  untrackedCount: number
+  /** Set when the repo was created but a follow-up step did not fully succeed. */
+  warning?: string
+  /** One-line human-readable report of what happened. */
+  summary: string
 }
 
 /** Result of listing branches. */

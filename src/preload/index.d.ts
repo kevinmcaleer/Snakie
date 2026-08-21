@@ -126,6 +126,7 @@ export type {
   GitStatus,
   GitBranchList,
   GitDiff,
+  GitInitResult,
   GitRemoteResult
 } from '../main/git/types'
 

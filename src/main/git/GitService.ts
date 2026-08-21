@@ -1,8 +1,13 @@
+import { constants as fsConstants } from 'fs'
+import { access, realpath, writeFile } from 'fs/promises'
+import { join } from 'path'
 import { simpleGit, type SimpleGit, type StatusResult } from 'simple-git'
+import { SNAKIE_GITIGNORE, gitFailureText, initSummary } from './init-support'
 import type {
   GitBranchList,
   GitDiff,
   GitFileStatus,
+  GitInitResult,
   GitRemoteResult,
   GitStatus
 } from './types'
@@ -70,6 +75,27 @@ export class GitService {
   }
 
   /**
+   * Whether the repo has at least one commit. A freshly-initialised repo has an
+   * unborn HEAD: `git status` still names a branch, but `rev-parse HEAD` fails
+   * and there is nothing to diff or push against.
+   */
+  private async hasCommits(): Promise<boolean> {
+    const git = this.git
+    if (!git) return false
+    try {
+      // `--quiet` so an unborn HEAD exits 1 silently instead of printing
+      // "fatal: Needed a single revision" into Snakie's console on every
+      // status refresh of a brand-new repo. That quiet exit is NOT an
+      // exception as far as simple-git is concerned — it just yields empty
+      // output — so the resolved value decides, not the absence of a throw.
+      const head = (await git.revparse(['--verify', '--quiet', 'HEAD'])).trim()
+      return head.length > 0
+    } catch {
+      return false
+    }
+  }
+
+  /**
    * Classify a single file from a {@link StatusResult} into the UI buckets.
    * `index`/`workingDir` are the porcelain single-letter codes simple-git
    * surfaces per file.
@@ -106,7 +132,8 @@ export class GitService {
       behind: 0,
       staged: [],
       changed: [],
-      untracked: []
+      untracked: [],
+      hasCommits: false
     }
     if (!this.git) return empty
 
@@ -121,7 +148,7 @@ export class GitService {
         ...empty,
         isRepo: true,
         root,
-        warning: err instanceof Error ? err.message : String(err)
+        warning: gitFailureText(err)
       }
     }
 
@@ -166,7 +193,94 @@ export class GitService {
       behind: s.behind ?? 0,
       staged,
       changed,
-      untracked
+      untracked,
+      hasCommits: await this.hasCommits()
+    }
+  }
+
+  /**
+   * Create a Git repository in the open folder (issue #783).
+   *
+   * Deliberately does THREE things and no more:
+   *
+   *  1. `git init` in the open folder, honouring the user's own
+   *     `init.defaultBranch` rather than forcing a branch name on them.
+   *  2. Writes a starter `.gitignore` — but only when the folder does not
+   *     already have one, which is never overwritten.
+   *  3. Reports what it did, including the number of files now waiting.
+   *
+   * It does NOT stage or commit. An initial commit made on the user's behalf
+   * would sweep up every file in the folder — including anything they have not
+   * looked at — into permanent history, from a single click. Leaving the repo
+   * empty means the panel's own Untracked list IS the review step: the user
+   * sees exactly what is about to go in, can discard or ignore anything that
+   * should not, and then commits with the commit box like any other commit. The
+   * cost is a repo with no HEAD for a few minutes, which the panel labels
+   * plainly ("no commits yet") and every operation here already tolerates.
+   *
+   * Refuses (rather than nesting a second repo) when the folder is already
+   * inside a working tree, and translates a missing `git` into a sentence that
+   * says so.
+   */
+  async init(): Promise<GitInitResult> {
+    const dir = this.dir
+    if (!dir) throw new Error('No folder is open. Open a folder first, then initialise it.')
+
+    // Nesting a repo inside a repo is almost never meant, and is fiddly to
+    // unpick afterwards — refuse and name the repository that already covers
+    // this folder. (The panel only offers the button when status says
+    // `isRepo:false`, so this is a guard against a stale view, not the norm.)
+    const existing = await this.repoRoot()
+    if (existing) {
+      // git reports the RESOLVED path, so compare like with like — otherwise a
+      // folder reached through a symlink (every macOS temp dir, and plenty of
+      // real home directories) reads as "inside" itself.
+      const here = await realpath(dir).catch(() => dir)
+      throw new Error(
+        existing === here
+          ? `${dir} is already a Git repository.`
+          : `${dir} is already inside the Git repository at ${existing}. Initialising here would nest a second repository inside it.`
+      )
+    }
+
+    const git = this.require()
+    try {
+      await git.init()
+    } catch (err) {
+      throw new Error(`Could not create a repository in ${dir} — ${gitFailureText(err)}`)
+    }
+
+    // Rebind to the repository we just created (it is its own root now).
+    const root = (await this.openRepo(dir)) ?? dir
+
+    // Starter .gitignore, only when the folder does not already have one. A
+    // failure here is a warning, not an error: the repository exists either way
+    // and saying "init failed" would be a lie.
+    let wroteGitignore = false
+    let warning: string | undefined
+    const ignorePath = join(root, '.gitignore')
+    try {
+      await access(ignorePath, fsConstants.F_OK)
+    } catch {
+      try {
+        await writeFile(ignorePath, SNAKIE_GITIGNORE, 'utf-8')
+        wroteGitignore = true
+      } catch (err) {
+        warning = `The repository was created, but the starter .gitignore could not be written: ${gitFailureText(err)}`
+      }
+    }
+
+    const after = await this.status()
+    const branch = after.branch
+    const untrackedCount = after.untracked.length
+
+    return {
+      root,
+      branch,
+      wroteGitignore,
+      untrackedCount,
+      warning,
+      summary: initSummary({ branch, wroteGitignore, untrackedCount })
     }
   }
 

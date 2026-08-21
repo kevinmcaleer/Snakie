@@ -7,6 +7,39 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **A folder that isn't a repository yet can become one from the Source Control
+  pane.** (#783) It used to say "not a Git repository" and offer you nothing but
+  a different folder — so starting version control meant leaving Snakie for a
+  terminal. There's now an **Initialise Repository** button in that empty state.
+  It confirms first, because it writes to your disk, then creates the repository
+  and reports back in words: which branch git started you on, whether it added a
+  `.gitignore`, and how many files are now waiting.
+
+  It does **not** commit anything. An initial commit made on your behalf would
+  sweep every file in the folder — including whatever you haven't looked at — into
+  permanent history from a single click, so instead your files appear under
+  **Untracked** and you choose what goes into the first commit with the commit box
+  like any other commit. Until you make it, the branch chip reads **no commits
+  yet**, because the branch really is only a name so far.
+
+  A starter `.gitignore` is written **only** when the folder doesn't already have
+  one — an existing one is never touched. It's a short list of things this
+  computer generates and can regenerate (`__pycache__/`, `*.pyc`, `.DS_Store`,
+  Snakie's own `robot.yml.bak` rescue copies, editor scratch files) and nothing
+  else. Your `.py` sources, `robot.yml`, `.urdf` models, the `meshes/` those
+  models are useless without, and any vendored `.py`/`.mpy` drivers all stay
+  tracked: a first commit that quietly omits a robot's meshes is a much worse
+  outcome than one that includes a stray `.pyc`.
+
+  Failures say so. Git not installed reads as "Git is not installed on this
+  computer" with where to get it, rather than the bare `spawn git ENOENT` Node
+  hands you; a folder that already sits inside another repository is refused by
+  name, rather than nesting a second one inside it; and a `.gitignore` that
+  can't be written is reported as a warning next to a repository that was still
+  created, rather than as a failure that wasn't. Source Control is desktop-only,
+  so none of this appears in the browser build, which has no filesystem and no
+  local git to run.
+
 - **A CircuitPython board is told when a newer CircuitPython is out — and never
   told about MicroPython.** (#757, epic #209) Snakie already offered MicroPython
   updates once per connection; the same prompt now covers CircuitPython, and it

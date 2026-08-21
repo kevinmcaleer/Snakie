@@ -3,8 +3,15 @@ Keep your project's history with the built-in Source Control panel.
 ## Point it at your project
 
 Open **Source Control** in the activity bar. It follows your working folder
-(the one open in Local files). If the folder isn't a Git repository yet, use
-**Init** to create one.
+(the one open in Local files). If the folder isn't a Git repository yet, hit
+**Initialise Repository**. Snakie confirms first, then creates the repository
+and — only if the folder doesn't already have one — a starter `.gitignore` that
+keeps `__pycache__`, `.DS_Store` and `.bak` files out of your history while
+leaving your code, `robot.yml`, URDF models and their `meshes/` tracked.
+
+Nothing is committed for you: every file turns up under **Untracked** so you
+can see exactly what's about to go into the first commit. Until you make it,
+the branch chip reads **no commits yet** — the branch is just a name so far.
 
 ## The everyday loop
 

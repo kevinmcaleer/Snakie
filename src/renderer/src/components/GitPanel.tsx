@@ -20,9 +20,13 @@ import type {
  * push/pull, and an inline unified-diff view.
  *
  * Everything degrades gracefully: a non-repo folder shows a clear empty state
- * (not an error), and every async action surfaces failures inline rather than
- * throwing. Git itself runs in the main process, so this component is purely a
- * thin view over the IPC bridge.
+ * (not an error) with an **Initialise Repository** button (#783), and every
+ * async action surfaces failures inline rather than throwing. Git itself runs
+ * in the main process, so this component is purely a thin view over the IPC
+ * bridge.
+ *
+ * This panel is desktop-only — `AppShell` never mounts it in the web build,
+ * which has no filesystem and no local `git` to run.
  */
 
 /** A short glyph + label for each file-status kind, for the row marker. */
@@ -160,6 +164,39 @@ export function GitPanel(): JSX.Element {
     }
   }, [])
 
+  /**
+   * Create a repository in the open folder (#783).
+   *
+   * Confirmed first, because this writes a `.git` folder to the user's disk and
+   * is not something to discover by way of a stray click. The result is
+   * reported verbatim — what was created, whether a `.gitignore` was written,
+   * and how many files are now waiting — and any failure (no git installed, the
+   * folder already inside a repo, an unwritable disk) is shown as words rather
+   * than swallowed.
+   */
+  const initRepo = useCallback(async (): Promise<void> => {
+    if (!repoPath) return
+    const ok = window.confirm(
+      `Create a Git repository in:\n\n${repoPath}\n\n` +
+        'This adds a .git folder here, plus a starter .gitignore if the folder ' +
+        "doesn't already have one. Nothing is committed — you choose what goes " +
+        'into the first commit.'
+    )
+    if (!ok) return
+    setBusy(true)
+    setError(null)
+    setNotice(null)
+    try {
+      const result = await window.api.git.init()
+      setNotice(result.warning ? `${result.summary} ${result.warning}` : result.summary)
+      await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }, [repoPath, refresh])
+
   const commit = useCallback(async (): Promise<void> => {
     const msg = message.trim()
     if (!msg) {
@@ -198,14 +235,49 @@ export function GitPanel(): JSX.Element {
         <p className="git__empty-note">
           <code>{repoPath}</code> is not a Git repository.
         </p>
+        <p className="git__empty-note">
+          Initialising one adds a <code>.git</code> folder here — and a starter{' '}
+          <code>.gitignore</code> if this folder doesn&apos;t already have one. Nothing is
+          committed: your files show up as <em>Untracked</em> so you can pick what goes into
+          the first commit.
+        </p>
         <div className="git__empty-actions">
-          <button type="button" className="git__btn" onClick={() => void openWorkspaceFolder()}>
+          <button
+            type="button"
+            className="git__btn git__btn--primary"
+            disabled={busy}
+            title={`Run git init in ${repoPath}`}
+            onClick={() => void initRepo()}
+          >
+            {busy ? 'Initialising…' : 'Initialise Repository'}
+          </button>
+          <button
+            type="button"
+            className="git__btn"
+            disabled={busy}
+            onClick={() => void openWorkspaceFolder()}
+          >
             Open a different folder…
           </button>
-          <button type="button" className="git__btn" onClick={() => void refresh()}>
+          <button
+            type="button"
+            className="git__btn"
+            disabled={busy}
+            onClick={() => void refresh()}
+          >
             Re-check
           </button>
         </div>
+        {error && (
+          <p className="git__error" role="alert">
+            {error}
+          </p>
+        )}
+        {notice && (
+          <p className="git__notice" role="status">
+            {notice}
+          </p>
+        )}
       </div>
     )
   }
@@ -280,6 +352,17 @@ export function GitPanel(): JSX.Element {
             ⎇
           </span>
           {status?.branch ?? 'detached'}
+          {/* A repo that has just been initialised has an unborn HEAD: the
+              branch exists only as a name until the first commit creates it.
+              Say so, rather than letting the toolbar imply a history. (#783) */}
+          {status?.isRepo && !status.hasCommits && (
+            <span
+              className="git__unborn"
+              title={`${status.branch ?? 'This branch'} doesn't exist yet — your first commit creates it.`}
+            >
+              no commits yet
+            </span>
+          )}
           {status && (status.ahead > 0 || status.behind > 0) && (
             <span className="git__sync-counts">
               {status.ahead > 0 && <span title="Ahead">↑{status.ahead}</span>}
