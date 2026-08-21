@@ -6,6 +6,8 @@ import {
   downloadKind,
   findBoardBuilds,
   firmwareRuntimeForDialect,
+  FIRMWARE_RUNTIMES,
+  FIRMWARE_RUNTIME_ICON,
   flashTargetForDownload,
   isStableRelease,
   isVendorUf2Family,
@@ -286,5 +288,28 @@ describe('stable releases', () => {
       { version: '10.1.0', url: 'https://x/101.uf2' }
     ]
     expect(newestStableVersion(shuffled, isNewerVersion)?.version).toBe('10.2.1')
+  })
+})
+
+/**
+ * The Runtime picker's glyphs. Mostly presentation — but a `<path d>` is a
+ * string, and a typo'd one renders as NOTHING with no error anywhere, leaving a
+ * button that silently loses its icon. Two runtimes sharing one glyph would be
+ * just as quiet, and this control decides which firmware gets written to a
+ * board, so "the two options look identical" is worth pinning.
+ */
+describe('runtime glyphs', () => {
+  it('gives every runtime a drawable path', () => {
+    for (const r of FIRMWARE_RUNTIMES) {
+      const d = FIRMWARE_RUNTIME_ICON[r]
+      // Starts with an absolute moveto and uses only SVG path syntax — a stray
+      // character makes the browser drop the path from that point on.
+      expect(d, r).toMatch(/^M[\d\s.-]/)
+      expect(d, r).toMatch(/^[MmLlHhVvAaCcQqZz\d\s.,-]+$/)
+    }
+  })
+
+  it('draws the two runtimes differently', () => {
+    expect(FIRMWARE_RUNTIME_ICON.micropython).not.toBe(FIRMWARE_RUNTIME_ICON.circuitpython)
   })
 })

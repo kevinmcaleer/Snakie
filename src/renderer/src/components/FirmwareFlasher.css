@@ -197,6 +197,75 @@
   font-weight: 600;
 }
 
+/*
+ * Runtime picker — MicroPython vs CircuitPython, with a glyph each.
+ *
+ * Its own `firmware-runtime__*` block rather than a modifier on
+ * `.firmware-source-tab`: panel CSS here is global, and the icon layout must not
+ * leak into the Source toggle further down the same dialog.
+ *
+ * The surrounding modal is a fixed dark surface in BOTH skins (see the top of
+ * this file), so these buttons match it rather than inventing a second palette;
+ * the glyphs are `currentColor` and the only theme-varying token in play is
+ * `--accent`, which is legible on this surface in dark and skeuomorph alike.
+ */
+.firmware-runtime {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.firmware-runtime__tab {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: #161a22;
+  color: #e6e6e6;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+.firmware-runtime__tab:hover:not(:disabled) {
+  opacity: 1;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Selected reads four ways — tick, ring weight, bolder name, accent — so it
+   still reads with the colour taken away (#188's greyscale rule). */
+.firmware-runtime__tab--on {
+  opacity: 1;
+  font-weight: 600;
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, #161a22);
+}
+
+.firmware-runtime__tab:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.firmware-runtime__icon,
+.firmware-runtime__tick {
+  flex: 0 0 auto;
+}
+
+.firmware-runtime__tick {
+  /* Hidden, not removed: the space stays reserved so switching runtime doesn't
+     nudge the names sideways. */
+  visibility: hidden;
+}
+
+.firmware-runtime__tab--on .firmware-runtime__tick {
+  visibility: visible;
+}
+
 /* Firmware-source toggle (Local file vs Download from MicroPython.org) — #64. */
 .firmware-source-toggle {
   display: flex;
@@ -221,10 +290,13 @@
   border-color: rgba(255, 255, 255, 0.3);
 }
 
+/* Accent, not the old hardcoded blue: the Runtime picker directly above now
+   marks its selection with `--accent`, and two segmented controls in one dialog
+   disagreeing about what "selected" looks like reads as a bug. */
 .firmware-source-tab.is-active {
   opacity: 1;
-  border-color: rgba(120, 170, 255, 0.7);
-  background: #1b2433;
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, #161a22);
 }
 
 .firmware-source-tab:disabled {

@@ -70,6 +70,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Modules panel instead.
 
 ### Changed
+- **The flash dialog's Runtime choice now has a picture on it.** MicroPython and
+  CircuitPython were two identical text buttons, told apart only by reading them
+  — on the one control in Snakie where picking the wrong option writes the wrong
+  firmware to your board. Each now carries a glyph: a **chip** for MicroPython (a
+  microcontroller — the *micro* half of the name) and a **routed PCB trace** for
+  CircuitPython (the *circuit* half). Neither is the project's own logo — those
+  are trademarks — they're simple original drawings in Snakie's line style, one a
+  compact block and the other an open diagonal, so they stay apart at icon size.
+  The names stay next to them: an icon-only control here would be asking you to
+  guess. The selected runtime is now marked by a tick, a heavier ring and bolder
+  text as well as the accent colour, so it reads without relying on colour at
+  all, and the Source toggle below it uses the same accent instead of the old
+  hardcoded blue.
 - Installing a driver can now write **binary** files to a board, not only source
   text (#758). Both device write paths already carried bytes — the CIRCUITPY
   drive writes them directly and the raw REPL hex-encodes its chunks precisely so
