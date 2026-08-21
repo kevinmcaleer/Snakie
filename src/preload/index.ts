@@ -62,6 +62,7 @@ import type {
 import type {
   GitBranchList,
   GitDiff,
+  GitInitResult,
   GitRemoteResult,
   GitStatus
 } from '../main/git/types'
@@ -703,6 +704,13 @@ const git = {
     unwrap(ipcRenderer.invoke('git:openRepo', path)),
   /** Working-tree status: branch, ahead/behind, staged/changed/untracked. */
   status: (): Promise<GitStatus> => unwrap(ipcRenderer.invoke('git:status')),
+  /**
+   * Create a repository in the open folder (#783). Writes `.git` and — only
+   * when the folder has none — a starter `.gitignore`; never commits. Rejects
+   * with a readable message when git is missing or the folder is already inside
+   * a repository, so a failure is never silent.
+   */
+  init: (): Promise<GitInitResult> => unwrap(ipcRenderer.invoke('git:init')),
   /** Stage a single file. */
   stage: (file: string): Promise<void> => unwrap(ipcRenderer.invoke('git:stage', file)),
   /** Unstage a single file. */

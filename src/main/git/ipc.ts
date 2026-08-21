@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import type { IpcResult } from '../device/types'
 import { GitService } from './GitService'
-import type { GitBranchList, GitDiff, GitRemoteResult, GitStatus } from './types'
+import type { GitBranchList, GitDiff, GitInitResult, GitRemoteResult, GitStatus } from './types'
 
 /**
  * IPC for the built-in version-control (Git) layer (issue #15).
@@ -46,6 +46,12 @@ export function registerGitIpc(): void {
 
   // Working-tree status (branch, ahead/behind, staged/changed/untracked).
   ipcMain.handle('git:status', () => wrap<GitStatus>(() => service.status()))
+
+  // Create a repository in the open folder (issue #783). Unlike `git:status`,
+  // this one DOES reject on failure — the user asked for a write to their disk,
+  // so "git isn't installed" or "this folder is already inside a repo" has to
+  // reach them as words, not as a button that appears to do nothing.
+  ipcMain.handle('git:init', () => wrap<GitInitResult>(() => service.init()))
 
   ipcMain.handle('git:stage', (_e, file: string) =>
     wrap<void>(() => service.stage(file))

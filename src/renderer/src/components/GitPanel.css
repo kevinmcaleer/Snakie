@@ -37,7 +37,18 @@
 
 .git__empty-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+/* The "Initialise Repository" result / failure (#783) reads inside the empty
+   state, where the surrounding notes are already flush with the padding. */
+.git--empty .git__error,
+.git--empty .git__notice {
+  align-self: stretch;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 
 /* --- Toolbar --------------------------------------------------------------- */
@@ -62,6 +73,21 @@
 
 .git__branch-icon {
   color: var(--text-muted);
+}
+
+/* Unborn HEAD: a freshly-initialised repo whose branch is still only a name
+   (#783). Both tokens are theme-defined, so this reads in dark and skeuomorph. */
+.git__unborn {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-sunken);
+  color: var(--accent);
+  font-weight: 500;
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
 .git__sync-counts {
