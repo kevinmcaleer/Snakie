@@ -155,6 +155,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it no longer reads every folder in your home directory looking for a board.
 
 ### Fixed
+- **The Build workspace could overwrite the file you had open with a 3-D robot
+  model. It can't any more.** (#782) Building in the Build workspace edits the
+  project's robot model — but it saved that model through *whatever tab the
+  editor happened to have focused*. If that was your program, your program was
+  replaced by the robot model, on screen and on disk. The only check was "is
+  this a saved file", which a `.py` passes.
+
+  A robot model now goes to a `.urdf` or it goes nowhere. Where a model is
+  written is decided from the document itself — the file it came from, or the
+  `.urdf` open in the editor — never from what has focus, and a target that
+  isn't a `.urdf` is **refused, and says so**, rather than falling back to
+  something plausible. The same rule applies wherever a model is written: the
+  part-placement bridge, the Sync reconcile, and the robot.yml `urdf:` link
+  itself, which can no longer be pointed at a non-`.urdf` file.
+- **Sync no longer adds a second, third and fourth copy of your microcontroller
+  to the 3-D view.** (#782) A part that lost track of which 3-D body was its own
+  could still recognise it by name; the microcontroller couldn't — its only
+  identity was a note in `robot.yml`, so if that note went missing (which an
+  ordinary save could do), Sync reported the board as having no body and
+  reconciling made another one, identical to the one already there. The board is
+  now identified exactly the way a part is, so a lost note costs nothing, and
+  running Sync twice leaves the model exactly as it was.
+- **A deleted part can no longer leave a connection behind that breaks the whole
+  robot.** (#782) A `<joint>` referring to a link that isn't in the model is
+  invalid — the file fails to load in any 3-D viewer, so one stray connection
+  costs you the entire robot rather than one part. Snakie now refuses to write
+  one: a joint is never created for a body that isn't there, and any that is
+  found is dropped as the file is saved.
 - **Build no longer opens the help panel every time you switch to it.** Switching
   to the Build workspace kept reopening the lesson/help sidebar, however many
   times you closed it. The cause was a "sticky lesson" rule that carried the

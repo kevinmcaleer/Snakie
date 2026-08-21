@@ -1040,11 +1040,50 @@ function renderJointBlock(j: JointFull): string {
 }
 
 /**
+ * Every `<joint>` whose `<parent>` or `<child>` names a link the document does
+ * not define (#782). A joint with a missing child is invalid URDF: no consumer
+ * can build the tree, so the whole model fails to load — one stranded joint
+ * costs the user the entire robot, not one part.
+ */
+export function danglingJoints(urdf: string): JointFull[] {
+  const links = new Set(parseAssembly(urdf).map((i) => i.link))
+  return readAllJoints(urdf).filter((j) => !links.has(j.child) || !links.has(j.parent))
+}
+
+/**
+ * Drop every joint that references a link the document doesn't define (#782).
+ *
+ * The rule this enforces at the write choke point: **prefer emitting neither
+ * over a dangling reference**. A joint exists to attach a link; without that
+ * link it carries no information a consumer can use, and keeping it costs the
+ * whole document. Returns the text unchanged when there is nothing to prune, so
+ * it is safe to run on every write (an unchanged document hashes the same).
+ */
+export function pruneDanglingJoints(urdf: string): string {
+  const links = new Set(parseAssembly(urdf).map((i) => i.link))
+  return urdf.replace(/\s*<joint\b[^>]*>[\s\S]*?<\/joint>/gi, (block) => {
+    const ref = (attr: 'parent' | 'child'): string | undefined =>
+      new RegExp(`<${attr}\\b[^>]*\\blink\\s*=\\s*"([^"]+)"`, 'i').exec(block)?.[1]
+    const parent = ref('parent')
+    const child = ref('child')
+    // An unparseable joint is left alone — this prunes DANGLING refs, it isn't a
+    // general-purpose validator, and silently eating a joint we didn't understand
+    // would be its own kind of data loss.
+    if (!parent || !child) return block
+    return links.has(parent) && links.has(child) ? block : '\n'
+  })
+}
+
+/**
  * The Join tool (#354): connect `child` (Component 2) under `parent` (Component 1)
  * at joint origin `xyz`. If the child already has a parent joint it is re-parented
  * (parent + origin rewritten, type/axis/limits preserved); otherwise a new fixed
  * joint is created. Refuses a no-op or a re-parent that would form a cycle
  * (parent within the child's own subtree) — returns the URDF unchanged.
+ *
+ * It also refuses when either end is not a link this document defines (#782):
+ * minting `<joint><child link="X"/></joint>` for an X that doesn't exist writes
+ * an unloadable model, and there is nothing useful to write instead.
  */
 export function connectJoint(
   urdf: string,
@@ -1053,6 +1092,8 @@ export function connectJoint(
   const { parent, child } = opts
   const xyz: Vec3 = [...(opts.xyz ?? [0, 0, 0])] as Vec3
   if (!parent || !child || parent === child) return urdf
+  const links = new Set(parseAssembly(urdf).map((i) => i.link))
+  if (!links.has(parent) || !links.has(child)) return urdf
   // A URDF is a tree: attaching `child` under one of its own descendants (or
   // itself) would create a loop the loader can't build.
   if (subtreeOf(urdf, child).has(parent)) return urdf

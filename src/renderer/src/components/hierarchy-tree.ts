@@ -55,7 +55,7 @@ import {
   type JointType
 } from './robot-assembly'
 import type { MassSource } from './robot-mass'
-import { resolveDef, resolvePartLink } from './sync-plan'
+import { resolveBoardLink, resolveDef, resolvePartLink } from './sync-plan'
 
 /** The key the microcontroller row uses (matches the wiring canvas subject key). */
 export const BOARD_KEY = 'board'
@@ -201,11 +201,19 @@ export function unifiedTree(input: UnifiedTreeInput): HierarchyNode[] {
   // first (board, then parts), then legacy name-matches over what's left — so a
   // name-match can never steal a link another row explicitly recorded.
   const claimed = new Set<string>()
-  const boardLink = input.boardLink && links.has(input.boardLink) ? input.boardLink : null
-  if (boardLink) claimed.add(boardLink)
+  const recordedBoard = input.boardLink && links.has(input.boardLink) ? input.boardLink : null
+  if (recordedBoard) claimed.add(recordedBoard)
   for (const row of parts) {
     if (row.urdfLink && links.has(row.urdfLink)) claimed.add(row.urdfLink)
   }
+  // The board resolves through the SAME recorded-then-name-match rule as a part
+  // (#782) — the sync plan does this too, and the two must agree about which
+  // link is the board's body or one view offers to create what the other shows.
+  const boardLink = input.board
+    ? resolveBoardLink(links, claimed, resolveDef(libraries, undefined, input.board), input.board, input.boardLink)
+        .link
+    : null
+  if (boardLink) claimed.add(boardLink)
   const linkOfPart = new Map<string, string | null>()
   const ownerOfLink = new Map<string, string>()
   if (boardLink) ownerOfLink.set(boardLink, BOARD_KEY)

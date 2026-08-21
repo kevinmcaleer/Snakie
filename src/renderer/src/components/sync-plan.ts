@@ -105,6 +105,38 @@ export function resolvePartLink(
 }
 
 /**
+ * The MCU board's ACTUAL Build link right now — the SAME two-step identity a
+ * part row gets: the recorded link (`RobotModel.boardLink`) while it still
+ * exists, else an unclaimed name match on the link the mint would have made.
+ *
+ * The board had only step one (#782 fault 2). A part row that loses its record
+ * still recognises its own body by name, so a lost record costs nothing; the
+ * board, with no fallback, reported `missing-body` and the reconcile MINTED A
+ * SECOND BODY — `Pimoroni_Tiny_2350`, `_2`, `_3`, byte-identical, because the
+ * board's origin is `boardX/boardY` and never moves. The record is losable in
+ * ordinary use: it is merged into robot.yml in MAIN seconds after the click,
+ * and any whole-document `robot:save` from a host that hasn't reloaded yet (a
+ * canvas drag, a wire, a rename — `WiringCanvas.persist` writes `robot.robot`
+ * straight from its props) writes the pre-merge model back over it.
+ *
+ * Identification must therefore not DEPEND on the record — which is exactly the
+ * rule `RobotPart.urdfLink` already follows. Exported so the unified hierarchy
+ * (#718) resolves the board the same way the plan does; if the two disagreed,
+ * one view would show the board's body and the other would offer to create it.
+ */
+export function resolveBoardLink(
+  links: Set<string>,
+  claimed: Set<string>,
+  boardDef: PartDefinition | undefined,
+  boardId: string,
+  recorded: string | undefined
+): { link: string | null; dangling: boolean } {
+  if (recorded && links.has(recorded)) return { link: recorded, dangling: false }
+  const matched = nameMatch(links, claimed, linkBaseName(boardDef?.name || boardId))
+  return { link: matched, dangling: Boolean(recorded) }
+}
+
+/**
  * Compare the manifest against the URDF and return every mismatch. Pure.
  *
  * `urdfText` may be empty/absent (no Build model yet) — then every part is
@@ -134,14 +166,13 @@ export function computeSyncPlan(
   }
 
   // --- the MCU board (not a RobotPart; its record lives on the model) --------
-  if (robot.board && !recordedBoard) {
+  // Resolved through the same recorded-then-name-match rule as a part, so a lost
+  // `boardLink` re-finds the body instead of minting a duplicate (#782).
+  if (robot.board) {
     const def = resolveDef(libraries, undefined, robot.board)
-    items.push({
-      kind: 'missing-body',
-      partId: 'board',
-      label: def?.name || robot.board,
-      dangling: Boolean(model?.boardLink)
-    })
+    const { link, dangling } = resolveBoardLink(links, claimed, def, robot.board, model?.boardLink)
+    if (link) claimed.add(link)
+    else items.push({ kind: 'missing-body', partId: 'board', label: def?.name || robot.board, dangling })
   }
 
   // --- placed parts ----------------------------------------------------------

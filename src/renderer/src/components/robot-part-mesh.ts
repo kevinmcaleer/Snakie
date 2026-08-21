@@ -21,11 +21,13 @@ import {
   addMeshLink,
   blankUrdf,
   meshImportScale,
+  pruneDanglingJoints,
   rootLink,
   setInertial,
   type InertialSpec
 } from './robot-assembly'
 import { isAbsolutePath } from './robot-mesh'
+import { isUrdfPath } from './urdf-target'
 
 /**
  * Serialise ALL part-body drops. Each does a read-modify-write of a `.urdf` through the
@@ -37,13 +39,26 @@ let chain: Promise<void> = Promise.resolve()
 
 /**
  * Whether a URDF filename from `robot.yml` is safe to write to: a bare in-project
- * relative path — not absolute, and not escaping the project via `..`. A crafted
- * `robot: { urdf: '../../evil.urdf' }` must not redirect a drop's file write out of
- * the project folder (#406 review).
+ * relative path — not absolute, not escaping the project via `..`, and NAMING A
+ * `.urdf`. A crafted `robot: { urdf: '../../evil.urdf' }` must not redirect a
+ * drop's file write out of the project folder (#406 review), and a
+ * `robot: { urdf: 'main.py' }` — however it got there — must not redirect it onto
+ * the user's program (#782). The extension check is the second half of that
+ * guard: `robot.urdf` is a link the user can set by picking a file, so the value
+ * is not trusted to be a robot model just because the field is called `urdf`.
  */
 export function safeUrdfName(name: string): boolean {
   if (!name || isAbsolutePath(name)) return false
-  return !/(^|[/\\])\.\.([/\\]|$)/.test(name)
+  if (/(^|[/\\])\.\.([/\\]|$)/.test(name)) return false
+  return isUrdfPath(name)
+}
+
+/** Shout when a robot-document write is refused. Silence is how #782 stayed
+ *  invisible until a user's file was already gone. */
+function refuseWrite(path: string): void {
+  console.error(
+    `[snakie] refusing to write a robot model to "${path}" — a URDF may only be written to a .urdf path (#782)`
+  )
 }
 
 /**
@@ -138,7 +153,11 @@ export async function queueUrdfEdit(
   urdfName: string,
   edit: (urdf: string) => string | null
 ): Promise<boolean> {
-  if (!folder || !safeUrdfName(urdfName)) return false
+  if (!folder) return false
+  if (!safeUrdfName(urdfName)) {
+    refuseWrite(urdfName)
+    return false
+  }
   let wrote = false
   const run = chain.then(async () => {
     const urdfPath = `${folder.replace(/[/\\]$/, '')}/${urdfName}`
@@ -148,9 +167,40 @@ export async function queueUrdfEdit(
     } catch {
       return // no URDF — nothing to edit
     }
-    const next = edit(urdf)
-    if (next == null || next === urdf) return
+    const edited = edit(urdf)
+    if (edited == null) return
+    // Never let an edit leave a joint whose child link isn't in the document —
+    // that URDF fails to load in ANY consumer (#782 fault 3). Prefer emitting
+    // neither over a dangling reference.
+    const next = pruneDanglingJoints(edited)
+    if (next === urdf) return
     await window.api.fs.writeFile(urdfPath, next)
+    wrote = true
+    window.api.robot.notifyUrdfChanged()
+  })
+  chain = run.catch(() => undefined)
+  await run
+  return wrote
+}
+
+/**
+ * Write a COMPLETE robot document to `path`, on the same serialisation chain as
+ * every other bridge write, and announce it (#782).
+ *
+ * The path is checked before anything is written: a robot document is a
+ * whole-file replacement, so landing it on the wrong file destroys that file.
+ * A non-`.urdf` path is refused loudly and nothing is written — there is no
+ * fallback path, by design. Resolves true when it wrote.
+ */
+export async function writeUrdfDocument(path: string, text: string): Promise<boolean> {
+  if (!isUrdfPath(path)) {
+    refuseWrite(path)
+    return false
+  }
+  let wrote = false
+  const run = chain.then(async () => {
+    const next = pruneDanglingJoints(text)
+    await window.api.fs.writeFile(path, next)
     wrote = true
     window.api.robot.notifyUrdfChanged()
   })
@@ -180,7 +230,11 @@ export async function attachPartBody(
    *  the legacy stagger. */
   atOrigin: [number, number, number] | null
 ): Promise<string | null> {
-  if (!folder || !safeUrdfName(urdfName)) return null
+  if (!folder) return null
+  if (!safeUrdfName(urdfName)) {
+    refuseWrite(urdfName)
+    return null
+  }
   let created: string | null = null
   const run = chain.then(async () => {
     const dir = folder.replace(/[/\\]$/, '')
@@ -223,7 +277,8 @@ export async function attachPartBody(
       const inertial = partInertial(part, box.size[2])
       if (inertial) urdf = setInertial(urdf, link, inertial)
     }
-    await window.api.fs.writeFile(urdfPath, urdf)
+    // A body is a link AND its joint — never one without the other (#782).
+    await window.api.fs.writeFile(urdfPath, pruneDanglingJoints(urdf))
     created = link
     // Tell every window's Build view the URDF changed on disk (#716) — without
     // this, an open Robot View shows the new part only after a remount.
