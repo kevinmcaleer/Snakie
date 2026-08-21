@@ -81,6 +81,7 @@ import {
 } from '../lib/instrumentsLib'
 import { announceSaved, useWorkspace } from '../store/workspace'
 import { readRobotModel } from '../../../shared/krf'
+import { isUrdfPath } from './urdf-target'
 import { useEditorSettings } from '../store/settings'
 import './AppShell.css'
 
@@ -789,7 +790,11 @@ export function AppShell(): JSX.Element {
           if (!currentFolder) return
           const robot = await window.api.robot.load(currentFolder).catch(() => null)
           const rel = robot ? readRobotModel(robot)?.urdf : undefined
-          if (!rel) return
+          // robot.yml's `urdf:` is a link the user sets by picking a file, so it
+          // is not trusted to name a robot model (#782). This handler REPLACES a
+          // buffer's text with whatever is at that path — pointed at a `.py` it
+          // would be reading and re-announcing the user's program as the robot.
+          if (!rel || !isUrdfPath(rel)) return
           const path = `${currentFolder.replace(/[/\\]$/, '')}/${rel.replace(/^[/\\]/, '')}`
           const content = await window.api.fs.readFile(path).catch(() => null)
           if (content == null) return

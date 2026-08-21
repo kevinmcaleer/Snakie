@@ -233,15 +233,33 @@ describe('unifiedTree — joining Electronics to Build', () => {
     expect(withUrdf.every((n) => n.link === null && !n.buildOnly)).toBe(true)
   })
 
-  it('records the MCU board link from the model, and only from there', () => {
+  it('resolves the MCU board link the same way a part row resolves its own', () => {
     const urdf = urdfWith('XIAO')
     const linked = unifiedTree({ board: 'XIAO', boardLink: 'XIAO', urdf })
     expect(findHierarchyNode(linked, BOARD_KEY)?.link).toBe('XIAO')
-    // A DANGLING record falls back to "no body" — never to a name guess, which
-    // is what computeSyncPlan reports too, so the tree and the Sync badge agree.
+    // A DANGLING (or missing) record falls back to the NAME MATCH, exactly like
+    // a legacy part row — changed by #782. It used to fall back to "no body",
+    // which meant a board whose record was lost read as having none, the Sync
+    // plan offered to create one, and each click minted another byte-identical
+    // `Pimoroni_Tiny_2350_N`. Identity must not depend on a record that an
+    // ordinary stale whole-document save can erase.
     const dangling = unifiedTree({ board: 'XIAO', boardLink: 'gone', urdf })
-    expect(findHierarchyNode(dangling, BOARD_KEY)?.link).toBeNull()
-    expect(findHierarchyNode(dangling, linkKey('XIAO'))?.buildOnly).toBe(true)
+    expect(findHierarchyNode(dangling, BOARD_KEY)?.link).toBe('XIAO')
+    // …and the link is then the board's body, not a stray Build-only row.
+    expect(findHierarchyNode(dangling, linkKey('XIAO'))).toBeNull()
+  })
+
+  it('the board name match never steals a link a PART recorded', () => {
+    // The fallback is a last resort, not a licence to share: a part that
+    // explicitly recorded the link keeps it, and the board comes up bodiless.
+    const urdf = urdfWith('XIAO')
+    const tree = unifiedTree({
+      board: 'XIAO',
+      parts: [part('x1', { urdfLink: 'XIAO' })],
+      urdf
+    })
+    expect(findHierarchyNode(tree, 'x1')?.link).toBe('XIAO')
+    expect(findHierarchyNode(tree, BOARD_KEY)?.link).toBeNull()
   })
 
   it('a loose (unjointed) import is a root marked loose', () => {

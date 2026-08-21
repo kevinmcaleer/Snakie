@@ -65,6 +65,8 @@ import {
   meshImportScale
 } from './robot-assembly'
 import { canReRoot, reRoot } from './robot-reroot'
+import { resolveUrdfWriteTarget } from './urdf-target'
+import { writeUrdfDocument } from './robot-part-mesh'
 import { createBoneMode, duplicateNames, type BoneModeHandle } from './robot-bone-mode'
 import { createComOverlay, poseBalance, type ComOverlayHandle, type ComStatus } from './robot-com-overlay'
 import { readLinkMasses } from './robot-com'
@@ -212,6 +214,15 @@ export interface RobotViewProps {
   /** URDF text to render. When omitted, the active editor file is used (opening
    *  a `.urdf`). Provided directly by the docked Robot-mode panel (#320). */
   urdfContent?: string
+  /**
+   * The FILE `urdfContent` was read from — where an edit to it must be written
+   * (#782). A view handed its text is editing the PROJECT's robot, not the
+   * focused editor tab, and writing the model back through `activeFile` is what
+   * replaced a user's `.py` with generated URDF. Absent/null with a
+   * `urdfContent` (e.g. the bundled demo arm) means "no file" and every builder
+   * edit is refused rather than redirected somewhere plausible.
+   */
+  urdfPath?: string | null
   /** The URDF's folder — the base for resolving relative / `package://` mesh
    *  refs. When omitted it's derived from the active local file's path. */
   basePath?: string
@@ -324,6 +335,7 @@ const STEREO_DEPTH_DEFAULT = 0.064
 
 export function RobotView({
   urdfContent,
+  urdfPath,
   basePath,
   compact = false,
   homeOnMount = false
@@ -334,11 +346,32 @@ export function RobotView({
   const { openFiles, activeId, currentFolder, updateContent, saveFile, openBuffer, openFile } =
     useWorkspace()
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
-  const content = urdfContent ?? activeFile?.content ?? ''
+  // Optimistic text for a FILE-target edit (#782): the disk write comes back to
+  // us through a fresh `urdfContent` a moment later, so hold our own version in
+  // the meantime or the next edit would build on the pre-edit document. Any new
+  // `urdfContent` — ours returning, or another window's write — retires it.
+  const [localUrdf, setLocalUrdf] = useState<string | null>(null)
+  useEffect(() => setLocalUrdf(null), [urdfContent])
+  const content = localUrdf ?? urdfContent ?? activeFile?.content ?? ''
+  /**
+   * WHERE AN EDIT TO THIS DOCUMENT IS WRITTEN (#782) — decided from data, not
+   * from whatever tab is focused. `urdfContent` means the document came from a
+   * file of its own (`urdfPath`); otherwise the document IS the active buffer.
+   * Either way the target must be a `.urdf`, or the edit is refused: this is a
+   * whole-document write, and landing it on the wrong file destroys that file.
+   */
+  const writeTarget = resolveUrdfWriteTarget(
+    urdfContent !== undefined ? (urdfPath ?? null) : null,
+    activeFile
+  )
+  /** The document's OWN file, or null when it has none (an unsaved buffer, the
+   *  bundled demo arm). Everything that treats a path as "this robot's path" —
+   *  mesh import, tidy export, external-mesh copies — uses this, never
+   *  `activeFile.path`, which in a handed-in document is some other file. */
+  const docPath = writeTarget.kind === 'refuse' ? null : writeTarget.path
   // Where to resolve mesh files from: an explicit base (docked panel) else the
-  // open local file's folder (opening a `.urdf` from a project).
-  const effectiveBase =
-    basePath ?? (activeFile && activeFile.source === 'local' ? dirname(activeFile.path) : '')
+  // document's own folder (opening a `.urdf` from a project).
+  const effectiveBase = basePath ?? (docPath ? dirname(docPath) : '')
 
   const mountRef = useRef<HTMLDivElement>(null)
   const cubeMountRef = useRef<HTMLDivElement>(null)
@@ -680,7 +713,7 @@ export function RobotView({
   // it, but a hand-edited file can break it; surface a friendly error.
   const dupJointNames = useMemo(() => duplicateNames(jointNames(content)), [content])
   // Import is only possible for a saved local `.urdf` (a file we can edit).
-  const canImport = poseUI && activeFile?.source === 'local' && !!activeFile.path
+  const canImport = poseUI && !!docPath
   const [importing, setImporting] = useState(false)
   // Meshes this URDF points at that live OUTSIDE the project folder (#407) — they
   // load now but go missing if the project is moved/shared. Offer to copy them in.
@@ -775,8 +808,9 @@ export function RobotView({
   buildOpenRef.current = buildOpen && poseUI
   selectedLinkRef.current = selectedLink
   editLinkRef.current = editLink
-  // Editing needs a real saved file (so the URDF text can be written next to it).
-  const canEdit = poseUI && activeFile?.source === 'local' && !!activeFile.path
+  // Editing needs somewhere legitimate to write the model — a `.urdf` of its own
+  // (#782), not merely "some saved file is focused".
+  const canEdit = poseUI && writeTarget.kind !== 'refuse'
   const canEditRef = useRef(false)
   canEditRef.current = canEdit
   const [buildTool, setBuildTool] = useState<BuildTool>('select')
@@ -896,16 +930,38 @@ export function RobotView({
       histRef.current = historyPush(histRef.current, contentRef.current, 50)
     }
   }
-  // Low-level: patch the buffer + schedule the deferred save. NO checkpoint.
+  // Low-level: persist the edited document to its OWN file. NO checkpoint.
+  //
+  // The target is `writeTarget`, never `activeFile` (#782): a buffer target is
+  // the open `.urdf` this view is editing (patch it + schedule the deferred
+  // save), a file target is the project `.urdf` behind a handed-in document
+  // (write it through the bridge's serialisation chain, which announces the
+  // change so this and every other view re-reads it). A refusal writes NOTHING
+  // and says so — there is no third file that would have been a good guess.
   const applyUrdf = (next: string): void => {
-    if (!activeFile || activeFile.source !== 'local' || !activeFile.path) return
-    updateContent(activeFile.id, next)
-    pendingSaveRef.current = activeFile.id
+    if (writeTarget.kind === 'buffer') {
+      updateContent(writeTarget.id, next)
+      pendingSaveRef.current = writeTarget.id
+      return
+    }
+    if (writeTarget.kind === 'file') {
+      setLocalUrdf(next) // hold it until the write returns through `urdfContent`
+      void writeUrdfDocument(writeTarget.path, next).catch((err) =>
+        setSavingLabel(`save failed: ${err instanceof Error ? err.message : String(err)}`)
+      )
+      return
+    }
+    console.error(`[snakie] ${writeTarget.reason} (#782)`)
+    setSavingLabel(writeTarget.reason)
   }
   // Commit a builder edit (the one choke point → one undo step per action).
   const commitUrdf = (next: string): void => {
     if (next === contentRef.current) return
-    if (!activeFile || activeFile.source !== 'local' || !activeFile.path) return
+    if (writeTarget.kind === 'refuse') {
+      console.error(`[snakie] ${writeTarget.reason} (#782)`)
+      setSavingLabel(writeTarget.reason)
+      return
+    }
     syncPresent()
     histRef.current = historyPush(histRef.current, next, 50)
     applyUrdf(next)
@@ -2484,11 +2540,11 @@ export function RobotView({
 
   // Export a clean, tidy copy of the current URDF into the project's `urdf/`
   // folder (#315). Re-loads unchanged in the viewer; just consistently formatted.
-  const canExport = !!activeFile && activeFile.source === 'local' && !!activeFile.path && !!content.trim()
+  const canExport = !!docPath && !!content.trim()
   const handleExportUrdf = async (): Promise<void> => {
-    if (!activeFile || activeFile.source !== 'local' || !activeFile.path) return
+    if (!docPath) return
     const name = robotNameOf(content)
-    const path = urdfExportPath(dirname(activeFile.path), name)
+    const path = urdfExportPath(dirname(docPath), name)
     const dir = path.slice(0, path.lastIndexOf('/'))
     try {
       await window.api.fs.mkdir(dir)
@@ -2504,10 +2560,10 @@ export function RobotView({
   }
 
   const handleImportStl = async (): Promise<void> => {
-    if (!activeFile || activeFile.source !== 'local' || !activeFile.path) return
+    if (!docPath) return
     setImporting(true)
     try {
-      const res = await window.api.robot.importMesh(activeFile.path)
+      const res = await window.api.robot.importMesh(docPath)
       if (res.cancelled || !res.rel) {
         if (res.error) setSavingLabel(`import failed: ${res.error}`)
         return
@@ -2518,7 +2574,7 @@ export function RobotView({
       // ONE measurement (#742) and ONE threshold: `meshImportScale` owns the
       // mm→m rule the part-drop bridge already uses, so an imported mesh and a
       // dropped library part can't disagree about the same file.
-      const scale = meshImportScale({}, await measureMeshFile(`${dirname(activeFile.path)}/${res.rel}`))
+      const scale = meshImportScale({}, await measureMeshFile(`${dirname(docPath)}/${res.rel}`))
       // Add the mesh attached to the base with a movable joint, staggered so it lands
       // beside the base (not on top of it). Select it + reframe so the user can see it.
       const linkBase = res.name?.replace(/\.(stl|dae)$/i, '') ?? 'part'
@@ -2551,7 +2607,7 @@ export function RobotView({
   // each `<mesh filename>` to the copied path (#407), so the robot is self-contained.
   // One commitUrdf (⇒ one undo step + one save); the banner clears as refs re-resolve.
   const handleCopyExternalMeshes = async (): Promise<void> => {
-    if (!activeFile?.path || externalMeshRefs.length === 0 || copyingMeshes) return
+    if (!docPath || externalMeshRefs.length === 0 || copyingMeshes) return
     setCopyingMeshes(true)
     try {
       const rewrites: { ref: string; rel: string }[] = []
@@ -2559,7 +2615,7 @@ export function RobotView({
       const total = externalMeshRefs.length
       for (const { ref, abs } of externalMeshRefs) {
         setSavingLabel(`copying meshes… ${rewrites.length + failed + 1}/${total}`)
-        const res = await window.api.robot.importMesh(activeFile.path, abs)
+        const res = await window.api.robot.importMesh(docPath, abs)
         if (res.error || !res.rel) {
           failed += 1
           continue
