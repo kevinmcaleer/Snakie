@@ -24,8 +24,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (#719, epic #720) The centre of mass has always been computed from the parts
   whose mass is known, silently leaving the rest out — so a balance verdict from
   4 of 12 parts looked exactly like one from all 12. Every row in the hierarchy
-  now carries its weight, or an amber **"? g"** when it hasn't got one; a line
-  under the tree states the coverage ("mass known for 4 of 12 parts") and turns
+  now carries its weight in its tooltip, stated as unknown when there isn't one;
+  a line under the tree states the coverage ("mass known for 4 of 12 parts") and turns
   amber below full; the Build panel's total is marked as the lower bound it is;
   and the centre-of-mass overlay's readout says "4/12 weighed" while the picture
   is partial. Nothing is ever invented to fill a gap — no family estimates, no
