@@ -187,6 +187,107 @@ describe('buildCatalog', () => {
   })
 })
 
+/**
+ * CircuitPython catalogs (#756) — the SAME schema from the same Thonny `data/`
+ * directory, with two differences that reach `buildCatalog`: some entries carry
+ * no `title` (and none of the DAPLink ones carry `popular`), and 148 boards are
+ * published in BOTH the UF2 and the esptool catalog, so a naive merge produced
+ * one variant listing every version twice.
+ */
+describe('buildCatalog — CircuitPython sources', () => {
+  const cpUf2 = {
+    vendor: 'Adafruit',
+    model: 'Feather RP2040',
+    family: 'rp2',
+    // No `title`, no `popular` — the CircuitPython DAPLink catalog has neither.
+    info_url: 'https://circuitpython.org/board/adafruit_feather_rp2040/',
+    downloads: [
+      {
+        version: '10.2.1',
+        url: 'https://downloads.circuitpython.org/bin/adafruit_feather_rp2040/en_US/adafruit-circuitpython-adafruit_feather_rp2040-en_US-10.2.1.uf2'
+      }
+    ]
+  }
+
+  it('falls back to the model when an entry carries no title', () => {
+    const cat = buildCatalog([cpUf2])
+    const variant = cat.families[0].models[0].variants[0]
+    expect(variant.title).toBe('Feather RP2040')
+    expect(variant.popular).toBe(false)
+    expect(variant.infoUrl).toBe('https://circuitpython.org/board/adafruit_feather_rp2040/')
+  })
+
+  it('keeps the SAMD / SAME / i.MX RT families CircuitPython adds', () => {
+    const cat = buildCatalog(
+      ['samd21', 'samd51', 'same51', 'same54', 'mimxrt10xx'].map((family) => ({
+        vendor: 'V',
+        model: `M-${family}`,
+        family,
+        downloads: [{ version: '10.2.1', url: `https://x/${family}.uf2` }]
+      }))
+    )
+    expect(cat.families.map((f) => f.family)).toEqual([
+      'mimxrt10xx',
+      'samd21',
+      'samd51',
+      'same51',
+      'same54'
+    ])
+  })
+
+  it("keeps CircuitPython's micro:bit `.combined.hex` build", () => {
+    const cat = buildCatalog([
+      {
+        vendor: 'BBC',
+        model: 'micro:bit v2',
+        family: 'nrf52',
+        downloads: [
+          {
+            version: '10.2.1',
+            url: 'https://downloads.circuitpython.org/bin/microbit_v2/en_US/adafruit-circuitpython-microbit_v2-en_US-10.2.1.combined.hex'
+          }
+        ]
+      }
+    ])
+    expect(cat.families[0].models[0].variants[0].versions).toHaveLength(1)
+  })
+
+  it('splits a board published BOTH ways into one variant per flash mechanism', () => {
+    // The real overlap: the same ESP32-S3 board, same version, in both catalogs.
+    const base = {
+      vendor: 'Seeed Studio',
+      model: 'Seeed Studio XIAO ESP32S3',
+      family: 'esp32s3',
+      info_url: 'https://circuitpython.org/board/seeed_xiao_esp32s3/'
+    }
+    const stem =
+      'https://downloads.circuitpython.org/bin/seeed_xiao_esp32s3/en_US/adafruit-circuitpython-seeed_xiao_esp32s3-en_US-10.2.1'
+    const cat = buildCatalog([
+      { ...base, downloads: [{ version: '10.2.1', url: `${stem}.uf2` }] },
+      { ...base, downloads: [{ version: '10.2.1', url: `${stem}.bin` }] }
+    ])
+    const variants = cat.families[0].models[0].variants
+    // Two variants (sorted by title, as every variant list is), not one variant
+    // listing 10.2.1 twice.
+    expect(variants.map((v) => v.title)).toEqual([
+      'Seeed Studio XIAO ESP32S3 (esptool .bin)',
+      'Seeed Studio XIAO ESP32S3 (UF2)'
+    ])
+    const byTitle = (needle: string) => variants.find((v) => v.title.includes(needle))!
+    // Each variant lists its version exactly once, with the right file.
+    expect(byTitle('UF2').versions.map((v) => v.url)).toEqual([`${stem}.uf2`])
+    expect(byTitle('esptool').versions.map((v) => v.url)).toEqual([`${stem}.bin`])
+    // …and the board id survives the split on both.
+    expect(variants.every((v) => v.infoUrl === base.info_url)).toBe(true)
+  })
+
+  it('leaves a single-mechanism variant completely alone (MicroPython is untouched)', () => {
+    const cat = buildCatalog(SAMPLE)
+    const titles = cat.families.flatMap((f) => f.models.flatMap((m) => m.variants.map((v) => v.title)))
+    expect(titles).toEqual(['ESP32 (SPIRAM)', 'Pico', 'Pico 2'])
+  })
+})
+
 describe('flashTargetForFamily', () => {
   it('maps esp32 to esp32 board at 0x1000', () => {
     expect(flashTargetForFamily('esp32')).toEqual({ board: 'esp32', offset: '0x1000' })

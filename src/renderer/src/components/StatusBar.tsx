@@ -8,10 +8,13 @@ import { CoffeeLink } from './CoffeeLink'
 import { updateButtonView } from './updateButton'
 import { liveWarningVisible } from './instrument-host'
 import {
+  circuitPythonUpdate,
+  displayVersion,
   lastMicropythonBanner,
   micropythonVersionFromBanner,
   firmwareFamilyFromBanner,
-  firmwareUpdateFromConsole
+  microPythonUpdate,
+  type FirmwareUpdate
 } from './firmware-version'
 import {
   STATUS_TIPS,
@@ -23,6 +26,10 @@ import {
 } from './status-tips'
 import { isVirtualPort, VIRTUAL_PORT_SHORT } from '../../../shared/virtual-device'
 import { runtimeLabel } from '../../../shared/dialect'
+import {
+  FIRMWARE_RUNTIME_LABEL,
+  firmwareRuntimeForDialect
+} from '../../../shared/firmware-runtime'
 import type { FirmwareCatalog, UpdateStatus } from '../../../preload/index.d'
 import { BulbIcon } from './ui-icons'
 import './StatusBar.css'
@@ -88,8 +95,10 @@ export function StatusBar({
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
 
   const [flasherOpen, setFlasherOpen] = useState(false)
-  // A newer MicroPython than the connected device is running (#173), + dismissal.
-  const [fwUpdate, setFwUpdate] = useState<{ current: string; latest: string } | null>(null)
+  // A newer build than the connected device is running — MicroPython (#173) or
+  // CircuitPython (#757) — plus dismissal. The update names its own runtime, so
+  // the prompt never tells a CircuitPython user about a MicroPython release.
+  const [fwUpdate, setFwUpdate] = useState<FirmwareUpdate | null>(null)
   const [fwDismissed, setFwDismissed] = useState(false)
   const [update, setUpdate] = useState<UpdateStatus | null>(null)
   const [version, setVersion] = useState<string>('')
@@ -177,6 +186,22 @@ export function StatusBar({
   // renders nothing rather than guessing MicroPython, which is exactly the
   // assumption the CircuitPython epic (#209) exists to remove.
   const runtime = connected ? runtimeLabel(status.runtime ?? null) : ''
+  /**
+   * Which Python the flash dialog should OPEN on (#756). The connected board's
+   * own dialect when it said, MicroPython otherwise — the dialog's own selector
+   * is what actually decides, this only saves a step. A board that never
+   * identified itself gets the historical default rather than a guess dressed up
+   * as detection.
+   */
+  const flashRuntime = firmwareRuntimeForDialect(status.runtime?.dialect) ?? 'micropython'
+  const flashRuntimeLabel = FIRMWARE_RUNTIME_LABEL[flashRuntime]
+  /**
+   * Which firmware-update check applies (#757). A BOOLEAN rather than the
+   * dialect string, deliberately: the MicroPython effect below depends on it,
+   * and `undefined → 'micropython'` (which is what a MicroPython connect does a
+   * beat after connecting) must not count as a change and re-run it.
+   */
+  const circuitPython = status.runtime?.dialect === 'circuitpython'
   // Offline mode (#135): connected to the built-in simulated device, not real
   // hardware — surfaced with a distinct label + badge so it's never mistaken
   // for a physical board.
@@ -192,6 +217,37 @@ export function StatusBar({
             ? 'Error'
             : 'Disconnected'
 
+  /**
+   * Detect a newer CircuitPython for the connected board (#757).
+   *
+   * Nothing is scraped here: the session already probed what it is talking to
+   * (#752) and, where a CIRCUITPY drive was unambiguously paired to this port,
+   * already read the per-board id out of `boot_out.txt` (#753). So this is one
+   * catalog fetch and one pure decision. A board with no id yields no offer —
+   * CircuitPython builds are per board, and there is no near-enough build.
+   *
+   * Runs only for a CircuitPython session, so the MicroPython path below is
+   * untouched and the two can never both fire.
+   */
+  useEffect(() => {
+    if (!connected || !settings.checkFirmwareUpdates || !circuitPython) return
+    let alive = true
+    void (async () => {
+      let catalog: FirmwareCatalog
+      try {
+        catalog = await window.api.firmware.fetchCatalog('circuitpython')
+      } catch {
+        return // offline / catalog unreachable — degrade silently
+      }
+      if (alive) setFwUpdate(circuitPythonUpdate(status.runtime, catalog))
+    })()
+    return () => {
+      alive = false
+    }
+    // `status.runtime` is the whole input: a re-probe (or a different board)
+    // re-runs the check, and nothing else needs to.
+  }, [connected, settings.checkFirmwareUpdates, circuitPython, status.runtime])
+
   // Detect a newer MicroPython for the connected device (#173): read its running
   // version from the REPL boot banner and compare against the firmware catalog's
   // newest stable build. Runs once per connection, only when the setting is on.
@@ -201,6 +257,10 @@ export function StatusBar({
       setFwDismissed(false)
       return
     }
+    // A CircuitPython board is the effect above's job — and its banner does not
+    // say "MicroPython", so this would find nothing anyway. Returning keeps it
+    // from also subscribing to the data stream for a board it can't help.
+    if (circuitPython) return
     let alive = true
     let catalog: FirmwareCatalog | null = null
     let done = false
@@ -228,8 +288,8 @@ export function StatusBar({
         }
       }
       // The pure decision (scoped to the device's own family) lives in
-      // `firmwareUpdateFromConsole` so it's unit-tested against the race.
-      if (alive) setFwUpdate(firmwareUpdateFromConsole(consoleStore.getAll(), catalog))
+      // `microPythonUpdate` so it's unit-tested against the race.
+      if (alive) setFwUpdate(microPythonUpdate(consoleStore.getAll(), catalog))
     }
     void run() // seed from any banner already in the console
     const decoder = new TextDecoder()
@@ -242,7 +302,7 @@ export function StatusBar({
       alive = false
       off()
     }
-  }, [connected, settings.checkFirmwareUpdates, consoleStore])
+  }, [connected, settings.checkFirmwareUpdates, consoleStore, circuitPython])
 
   const lines = activeFile ? activeFile.content.split('\n').length : null
 
@@ -484,11 +544,15 @@ export function StatusBar({
           ))}
         <CoffeeLink />
         <div className="statusbar__flash-wrap">
-          {/* Newer-firmware prompt, anchored above the flash button (#173). */}
+          {/* Newer-firmware prompt, anchored above the flash button (#173, #757).
+              It names the runtime it is offering — a CircuitPython board must
+              never be told a MicroPython release is available. */}
           {fwUpdate && !fwDismissed && (
             <div className="statusbar__fw-popup" role="status">
               <span className="statusbar__fw-text">
-                MicroPython <strong>v{fwUpdate.latest}</strong> is available (device runs v{fwUpdate.current}).
+                {FIRMWARE_RUNTIME_LABEL[fwUpdate.runtime]}{' '}
+                <strong>{displayVersion(fwUpdate.runtime, fwUpdate.latest)}</strong> is available
+                (device runs {displayVersion(fwUpdate.runtime, fwUpdate.current)}).
               </span>
               <button
                 type="button"
@@ -517,10 +581,10 @@ export function StatusBar({
             onClick={() => setFlasherOpen(true)}
             title={
               fwUpdate
-                ? `MicroPython v${fwUpdate.latest} available (device runs v${fwUpdate.current}). Flash firmware.`
-                : 'Flash MicroPython firmware to the device (ESP via esptool, RP2040 via UF2)'
+                ? `${FIRMWARE_RUNTIME_LABEL[fwUpdate.runtime]} ${displayVersion(fwUpdate.runtime, fwUpdate.latest)} available (device runs ${displayVersion(fwUpdate.runtime, fwUpdate.current)}). Flash firmware.`
+                : `Flash ${flashRuntimeLabel} firmware to the device (ESP via esptool, UF2 boards by drive copy)`
             }
-            aria-label="Flash MicroPython firmware"
+            aria-label={`Flash ${flashRuntimeLabel} firmware`}
           >
             <span aria-hidden="true">⚡</span>
             <span>Flash firmware</span>
@@ -529,7 +593,13 @@ export function StatusBar({
         </div>
       </div>
 
-      {flasherOpen && <FirmwareFlasher onClose={() => setFlasherOpen(false)} />}
+      {flasherOpen && (
+        <FirmwareFlasher
+          onClose={() => setFlasherOpen(false)}
+          runtime={flashRuntime}
+          boardId={status.runtime?.boardId}
+        />
+      )}
     </footer>
   )
 }
