@@ -664,12 +664,14 @@
   border-color: rgba(220, 235, 245, 0.34);
 }
 
-/* The slot the SHARED hierarchy panel sits in (#718). Its rows style themselves
-   (`uhier__*` in HierarchyPanel.css) and take their ink from this dock by
-   inheritance, so both workspaces draw the same tree. The browser's own row
-   styles left with the rows. */
+/* The slot the SHARED hierarchy panel sits in (#718). The panel styles itself
+   entirely — chrome, ink, density (`uhier__*` in HierarchyPanel.css) — so that
+   it looks the same in this dock and in the Build dock (#720); this slot only
+   has to stop the flex column from squeezing it. Its ink comes from the
+   `.wc__browser .uhier` token override, NOT from inheriting this dock. */
 .wc__tree {
-  padding: 0.25rem 0.3rem 0.4rem;
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 /* Still used by the Connections table's disclosure rows. */
