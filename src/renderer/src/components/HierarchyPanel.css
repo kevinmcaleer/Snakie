@@ -34,13 +34,16 @@
   min-width: 0;
   /* The panel's whole palette, in one place. A host overrides these — never the
      rules below — so "looks the same in both docks" survives a restyle. */
-  --uhier-ink: var(--text);
-  --uhier-muted: var(--text-muted);
-  --uhier-warn: var(--warn);
-  /* The theme's own translucent panel + hairline: dark glass on the dark skin,
-     warm white glass on parchment. Both skins define both. */
-  --uhier-surface: var(--glass);
-  --uhier-edge: var(--shellbd, var(--border));
+  --uhier-ink: var(--bptext);
+  --uhier-muted: var(--bptext);
+  --uhier-warn: var(--gold);
+  /* Blueprint chrome, in BOTH docks and both skins. The hierarchy is one surface
+     wherever it appears — the same reasoning as the mini board (#181) and the
+     instrument suite: a structure view reads better on its own dark card than
+     re-tinted per theme, and identical-in-both-places was the whole point of
+     merging the two trees. */
+  --uhier-surface: var(--bpsurface);
+  --uhier-edge: var(--bpedge);
 
   color: var(--uhier-ink);
   background: var(--uhier-surface);
@@ -56,10 +59,10 @@
    there in the light skin. `--gold` is likewise one value in both skins and is
    the app's "amber on dark chrome" token. The surface goes away because the
    browser IS the card. */
+/* The board browser's HOST card is already blueprint chrome, so the panel must
+   not paint a second one on top of it. Ink is inherited from the base now that
+   the base is blueprint too — this override is purely "don't double up". */
 .wc__browser .uhier {
-  --uhier-ink: var(--bptext);
-  --uhier-muted: var(--bptext);
-  --uhier-warn: var(--gold);
   --uhier-surface: transparent;
   --uhier-edge: transparent;
 }
