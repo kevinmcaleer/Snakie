@@ -31,6 +31,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   The same order holds in the editor stage, in `PartMeshView`, and in the URDF
   that `addMeshLink` and `swapLinkVisualToMesh` write. Absent means no
   translation, so parts authored before this need no migration. (#788)
+- **Type a quote and the project's sprites are right there.** (#791, part of
+  epic #789) Inside a string literal, autocomplete offers every `.spr` in the
+  project — the file's **own folder first**, then the rest of the project — each
+  with its size and frame count on the line (`eyes.spr`, `12×8 · 3 frames`), so
+  the choice is informed rather than a bare filename. A typo in a sprite name
+  used to fail **at runtime, on the board**, which is the worst possible place to
+  learn about it; and the second benefit is the bigger one — you now find out
+  which sprites exist by typing, instead of by opening a file browser.
+
+  It offers inside a string and **nowhere else**: never in code, never in a `#`
+  comment, never in a docstring, and never inside a template or a glob
+  (`f"{stem}.spr"`, `"%s.spr"`, `"frames/*.spr"`) that no completion could
+  correct. It uses the reference rule #790 settled rather than a second copy of
+  it, and every name it offers is checked back through that rule — where two
+  folders hold the same filename, the nearer one wins the short name and the
+  other is offered by full path instead of quietly naming its rival. A project
+  with no sprites offers nothing at all rather than an empty popup. The one
+  visible trade: inside a string you no longer get the module catalogue
+  (`machine`, `time`…) suggested, which was never a useful thing to write there.
+
+  The file list is a snapshot, never built on a keystroke — refreshed when the
+  file or project folder changes, marked stale the moment a file is saved or a
+  `.spr` is written from the Sprite editor, and re-walked in the background at
+  most every few seconds. Sizes come from the cache #790 already fills, so
+  nothing is read from disk while you type.
 - **A sprite in your code draws itself, right there in the line.** (#790, part of
   epic #789) Name a `.spr` in a Python file and the sprite appears beside the
   string — at about line height, **always visible, not on hover**. Hover only
