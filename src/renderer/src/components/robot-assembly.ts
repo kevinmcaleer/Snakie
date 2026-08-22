@@ -7,6 +7,7 @@
 import type { PrimitiveKind, Vec3 } from './robot-build'
 import { isExternalMeshRef, resolveMeshPath } from './robot-mesh'
 import { isIdentityRotation, meshRotationRpy, type MeshRotation } from '../../../shared/mesh-rotation'
+import { isZeroOffset, meshOffsetXyz, type MeshOffset } from '../../../shared/mesh-offset'
 
 /**
  * A minimal, VALID starter URDF: one `base_link` with a small box so the pose
@@ -146,19 +147,33 @@ export function meshImportScale(
 }
 
 /**
- * The `<origin>` line a mesh visual needs to carry the part's stored orientation
- * correction (#741), or `''` when there is nothing to correct.
+ * The `<origin>` line a mesh visual needs to carry the part's stored corrections
+ * — its orientation (#741) and its position (#788) — or `''` when there is
+ * nothing to correct.
  *
  * It goes on the **visual**, not on the placement joint (Kevin's call on #741):
- * the rotation describes the MESH — "this STL was authored lying on its side" —
- * so it must stay attached to the mesh. On the joint it would fight the user the
- * moment they re-joint the part in Build, and it would be silently lost if the
- * joint were ever rebuilt. Emitting nothing for the identity keeps every URDF
- * this function has ever written byte-identical.
+ * the corrections describe the MESH — "this STL was authored lying on its side,
+ * with its origin on a build-plate corner" — so they must stay attached to the
+ * mesh. On the joint they would fight the user the moment they re-joint the part
+ * in Build, and would be silently lost if the joint were ever rebuilt. Emitting
+ * nothing when BOTH are identity keeps every URDF this has ever written
+ * byte-identical.
+ *
+ * ONE ORDER, EVERYWHERE. URDF defines `<origin xyz rpy>` as rotate-by-rpy then
+ * translate-by-xyz, both in the link frame — which is exactly the order
+ * `mesh-offset.ts` specifies and the two three.js views apply (a `THREE.Group`
+ * composes `T · R · S`, so its `position` is applied after its `rotation`). That
+ * is why the offset is written out with no compensation term: it is the stored
+ * millimetres ÷ 1000 and nothing else. Introduce a compensation here and the
+ * editor stage, the catalog turntable and Build would each need the same one.
  */
-export function meshVisualOrigin(rotation?: MeshRotation | null, indent = '      '): string {
-  if (isIdentityRotation(rotation)) return ''
-  return `${indent}<origin xyz="0 0 0" rpy="${meshRotationRpy(rotation)}"/>\n`
+export function meshVisualOrigin(
+  rotation?: MeshRotation | null,
+  indent = '      ',
+  offset?: MeshOffset | null
+): string {
+  if (isIdentityRotation(rotation) && isZeroOffset(offset)) return ''
+  return `${indent}<origin xyz="${meshOffsetXyz(offset)}" rpy="${meshRotationRpy(rotation)}"/>\n`
 }
 
 export function addMeshLink(
@@ -175,6 +190,10 @@ export function addMeshLink(
      *  VISUAL's origin rpy, so a mesh that was authored on its side stands up.
      *  Absent/identity ⇒ no `<origin>` at all. */
     rotation?: MeshRotation | null
+    /** The part's stored mesh position in millimetres (#788) — written as the
+     *  VISUAL's origin xyz (÷1000), applied AFTER the rotation, so a mesh whose
+     *  origin was a build-plate corner lands where the part says. */
+    offset?: MeshOffset | null
   }
 ): { urdf: string; link: string } {
   // Attach under the UI's chosen base if given (it can differ from the doc-first
@@ -196,7 +215,7 @@ export function addMeshLink(
   const block =
     `  <link name="${name}">\n` +
     `    <visual>\n` +
-    meshVisualOrigin(opts.rotation) +
+    meshVisualOrigin(opts.rotation, '      ', opts.offset) +
     `      <geometry><mesh filename="${opts.meshRel}"${s}/></geometry>\n` +
     `    </visual>\n` +
     `  </link>\n` +
@@ -871,7 +890,10 @@ export function swapLinkVisualToMesh(
   scale?: number,
   /** The part's stored mesh orientation (#741) — the placeholder had none, so an
    *  upgrade to the real mesh must bring the correction with it. */
-  rotation?: MeshRotation | null
+  rotation?: MeshRotation | null,
+  /** The part's stored mesh position (#788) — same reasoning: the box it
+   *  replaces never needed one, so this is the first chance to apply it. */
+  offset?: MeshOffset | null
 ): string {
   const span = linkSpan(urdf, link)
   if (!span) return urdf
@@ -882,7 +904,7 @@ export function swapLinkVisualToMesh(
     scale && scale !== 1 ? ` scale="${fmtNum(scale)} ${fmtNum(scale)} ${fmtNum(scale)}"` : ''
   const replacement =
     `<visual>\n` +
-    meshVisualOrigin(rotation) +
+    meshVisualOrigin(rotation, '      ', offset) +
     `      <geometry><mesh filename="${meshRel}"${s}/></geometry>\n` +
     `    </visual>`
   const nextBody = body.slice(0, vis.index) + replacement + body.slice(vis.index + vis[0].length)

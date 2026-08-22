@@ -6,6 +6,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Position a linked 3-D model: nudge it, or snap a corner to the origin.** #741
+  let you turn a model the right way up; this is the other half. An STL's origin
+  is wherever the exporter left it — often a corner of the build plate — and
+  until now the only fix was to re-export from CAD. The Part Editor's **3-D** tab
+  grows a **Position** panel:
+
+  - **Nudge** along X, Y or Z by a step you choose — **0.1, 1 or 10 mm**. Fixed
+    millimetres, not a fraction of the model: the same button moves a 5 mm sensor
+    and a 100 mm battery the same distance, the number that lands in `parts.yml`
+    is one you picked, and 10 mm is exactly one square of the stage's grid.
+  - **Snap** a feature you name onto the origin. Pick `min` / `centre` / `max`
+    for each axis and the three picks between them name any **corner**, **edge
+    midpoint**, **face centre** or the **centre** — 27 in all, one rule. Snakie
+    does the arithmetic and nothing else: following the Join tool's lesson,
+    there is no auto-fit and no inferring which feature you probably meant.
+
+  New `PartDefinition.meshOffset`: `[x, y, z]` **millimetres** in the part's
+  frame, applied **after** `meshRotation`. That order is URDF's own
+  (`<visual><origin xyz rpy>` is rotate-then-translate), so the offset is written
+  out as the stored millimetres ÷ 1000 with no compensation term — and it is what
+  makes a nudge travel along the axis you pressed however the model is turned.
+  The same order holds in the editor stage, in `PartMeshView`, and in the URDF
+  that `addMeshLink` and `swapLinkVisualToMesh` write. Absent means no
+  translation, so parts authored before this need no migration. (#788)
+
 ### Fixed
 - **A linked 3-D model no longer gets left behind when a part changes library,
   and a missing one now says so.** Linking an STL in the Part Editor's 3-D tab

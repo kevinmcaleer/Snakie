@@ -172,6 +172,9 @@ const EVERY_FIELD: Required<PartDefinition> = {
   // Deliberately NOT the identity: `[0, 0, 0]` means "no correction" and is
   // dropped by design, which would make this field look like a broken one.
   meshRotation: [90, 0, -90],
+  // Same rule for the position correction (#788), and deliberately unlike
+  // `com_xyz` below so a writer that confused the two would be caught.
+  meshOffset: [-13.25, 24.5, 0],
 
   // --- Mass / centre of mass / contacts ------------------------------------
   mass_g: 9,

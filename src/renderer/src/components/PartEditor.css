@@ -274,6 +274,23 @@
   font-weight: 600;
 }
 
+/* A segmented group of mutually-exclusive choices in the 3-D tab (#788): the
+   nudge step, and each axis's snap pick. The buttons themselves are ordinary
+   `.pe__btn`s — the selected one takes `.pe__btn--primary` — so this only has to
+   join them into one control and stop them stretching. No colours of its own,
+   which is what keeps it correct in BOTH the dark and parchment skins. */
+.pe__meshsteps {
+  display: flex;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.pe__meshsteps .pe__btn {
+  flex: 1;
+  min-width: 0;
+  padding-inline: 0.35rem;
+}
+
 .pe__hint code {
   font-family: var(--font-mono);
   background: var(--bg-sunken);

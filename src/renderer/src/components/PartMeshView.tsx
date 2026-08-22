@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { loadMeshObject, meshUpAxisFix, neutralMaterial } from './robot-mesh-load'
 import { meshRotationRadians, type MeshRotation } from '../../../shared/mesh-rotation'
+import type { MeshOffset } from '../../../shared/mesh-offset'
 import './PartMeshView.css'
 
 /**
@@ -24,6 +25,15 @@ import './PartMeshView.css'
  * view and as the URDF a placed part gets. A part squared up in the editor
  * therefore looks square here too.
  *
+ * `meshOffset` (#788) is applied in that same chain, on the same group as the
+ * rotation and therefore after it — but be clear about what it does here:
+ * **nothing visible**, and necessarily so. This view normalises the model onto a
+ * unit box centred on its own bounding-box centre, and a pure translation cannot
+ * survive that any more than a scale can. It is carried anyway so the transform
+ * chain is identical in all three consumers, which is what stops the three
+ * drifting apart; the place to judge an offset is the editor's stage, which
+ * draws the origin, the grid and the part's footprint to judge it against.
+ *
  * Imported lazily by the details view, so three.js and the STL/DAE parsers stay
  * out of the main renderer chunk.
  */
@@ -36,6 +46,10 @@ export interface PartMeshViewProps {
   label: string
   /** The part's stored orientation correction (#741), degrees. Absent ⇒ none. */
   rotation?: MeshRotation | null
+  /** The part's stored position correction (#788), millimetres, applied after
+   *  the rotation. Carried for consistency; see the note above about why a
+   *  bounding-box-framed preview cannot show a translation. */
+  offset?: MeshOffset | null
 }
 
 type Phase = 'loading' | 'ready' | 'error'
@@ -45,13 +59,14 @@ const CAMERA_DISTANCE = 2.6
 /** Idle turntable speed (radians/second). Stops for good on first interaction. */
 const SPIN_RATE = 0.35
 
-export function PartMeshView({ path, label, rotation }: PartMeshViewProps): JSX.Element {
+export function PartMeshView({ path, label, rotation, offset }: PartMeshViewProps): JSX.Element {
   const mountRef = useRef<HTMLDivElement | null>(null)
   const [phase, setPhase] = useState<Phase>('loading')
-  // Converted OUT HERE, so the effect depends on three plain numbers rather than
-  // on the array's identity: a parent re-render handing back an equal
-  // `[90, 0, 0]` must not tear the scene down and reload the STL.
+  // Converted OUT HERE, so the effect depends on plain numbers rather than on
+  // the arrays' identity: a parent re-render handing back an equal `[90, 0, 0]`
+  // must not tear the scene down and reload the STL.
   const [rx, ry, rz] = meshRotationRadians(rotation)
+  const [ox, oy, oz] = offset ?? [0, 0, 0]
 
   useEffect(() => {
     const mount = mountRef.current
@@ -131,14 +146,17 @@ export function PartMeshView({ path, label, rotation }: PartMeshViewProps): JSX.
           setPhase('error')
           return
         }
-        // Three frames, one nesting — the same order the URDF uses (#741):
+        // Three frames, one nesting — the same order the URDF uses (#741, #788):
         //   1. the loaded object → the part's Z-up frame (`meshUpAxisFix`);
-        //   2. the part's stored orientation correction, applied in THAT frame;
+        //   2. the part's stored corrections, applied in THAT frame — rotation
+        //      then offset, which is what a group's `T · R · S` composition
+        //      gives when both ride on the same object;
         //   3. the whole stage laid down −90° for three's Y-up world.
         obj.rotation.x = meshUpAxisFix(path)
         const oriented = new THREE.Group()
         // 'ZYX' is three's spelling of URDF's rpy product, Rz·Ry·Rx.
         oriented.rotation.set(rx, ry, rz, 'ZYX')
+        oriented.position.set(ox, oy, oz)
         oriented.add(obj)
         const stage = new THREE.Group()
         stage.rotation.x = -Math.PI / 2
@@ -188,7 +206,7 @@ export function PartMeshView({ path, label, rotation }: PartMeshViewProps): JSX.
       renderer.dispose()
       renderer.domElement.remove()
     }
-  }, [path, rx, ry, rz])
+  }, [path, rx, ry, rz, ox, oy, oz])
 
   return (
     <div className="pmv">

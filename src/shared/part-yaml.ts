@@ -18,6 +18,7 @@
 
 import { parse, stringify } from 'yaml'
 import { coerceMeshRotation } from './mesh-rotation'
+import { coerceMeshOffset } from './mesh-offset'
 import {
   coerceConnectorKind,
   coerceConnectorVariant,
@@ -541,6 +542,10 @@ export function partToYaml(part: PartDefinition): string {
     // an identity or garbage rotation never reaches the file even if the caller
     // didn't normalise first.
     meshRotation: coerceMeshRotation(part.meshRotation),
+    // The position correction (#788) — coerced on write like the rotation, so a
+    // zero or garbage offset never reaches the file. Millimetres, part frame,
+    // applied AFTER the rotation.
+    meshOffset: coerceMeshOffset(part.meshOffset),
     // Mass in grams + optional CoM in mm (#554).
     mass_g: part.mass_g,
     com_xyz: part.com_xyz,
@@ -897,6 +902,9 @@ export function partFromYaml(text: string): PartDefinition {
   // The orientation correction (#741). The coercer drops a malformed OR identity
   // rotation, so `[0, 0, 0]` on disk reads back as "no correction".
   assign('meshRotation', coerceMeshRotation(raw.meshRotation))
+  // The position correction (#788). Same rule: a malformed OR zero offset reads
+  // back as "no translation", so `[0, 0, 0]` on disk means absence.
+  assign('meshOffset', coerceMeshOffset(raw.meshOffset))
   // Mass in grams (#554); ignore non-positive/garbage so a bad file doesn't
   // poison the CoM maths downstream.
   const massG = num(raw.mass_g)

@@ -348,9 +348,13 @@ export async function attachPartBody(
         scale,
         parent: rootLink(urdf),
         at,
-        // The part's stored orientation correction (#741) rides in as the
-        // VISUAL's rpy, so a mesh authored on its side lands standing up.
-        rotation: part.meshRotation
+        // The part's stored corrections ride in as the VISUAL's origin: the
+        // rotation as `rpy` (#741) so a mesh authored on its side lands standing
+        // up, and the position as `xyz` (#788) so one whose origin was a
+        // build-plate corner lands where the part says. URDF applies them in
+        // that order, which is the order every other consumer uses.
+        rotation: part.meshRotation,
+        offset: part.meshOffset
       }))
       const inertial = partInertial(part)
       if (inertial) urdf = setInertial(urdf, link, inertial)
