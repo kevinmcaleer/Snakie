@@ -257,7 +257,11 @@ if (!w.api) {
       installLibrary: P({ ok: false }),
       checkUpdates: P([]),
       cachedUpdates: P([]),
-      listPartFiles: P([])
+      listPartFiles: P([]),
+      // #741: linking a 3-D model copies a file into the parts folder, which
+      // needs main. Say so, rather than letting the deep stub resolve `[]` and
+      // the 3-D view report a mysterious failure.
+      importMesh: P({ ok: false, error: 'Linking a 3-D model needs the desktop app.' })
     },
     plugins: {
       list: P([]),

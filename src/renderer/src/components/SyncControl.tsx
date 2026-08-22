@@ -137,7 +137,11 @@ export function SyncControl({ folder }: { folder: string | null | undefined }): 
       if (!res?.rel) return
       const rel = res.rel
       const scale = meshImportScale(def, res.maxDim)
-      await queueUrdfEdit(folder, urdfName, (urdf) => swapLinkVisualToMesh(urdf, item.link, rel, scale))
+      await queueUrdfEdit(folder, urdfName, (urdf) =>
+        // The part's mesh orientation (#741) travels with the upgrade — the box
+        // it replaces never needed one, so this is the first chance to apply it.
+        swapLinkVisualToMesh(urdf, item.link, rel, scale, def.meshRotation)
+      )
     },
     [folder, robot, urdfName, resolveDef]
   )

@@ -1320,6 +1320,20 @@ export interface PartDefinition {
    * {@link meshUnits}. Absent ⇒ use `meshUnits` (or the bbox heuristic).
    */
   meshScale?: number
+  /**
+   * A standing orientation correction for the linked {@link mesh} (#741), as
+   * `[x, y, z]` **degrees** in the URDF roll-pitch-yaw convention (fixed-axis
+   * XYZ: `R = Rz(yaw)·Ry(pitch)·Rx(roll)`). Absent ⇒ identity, so every part
+   * authored before this field existed keeps working unchanged.
+   *
+   * A downloaded STL follows no convention; Snakie's is board-flat-in-XY, Z up,
+   * underside on `z = 0`. This is how a mesh that arrived lying on its side is
+   * squared up **without rewriting the user's file** — the correction is stored
+   * and every consumer honours it (the Part Editor's 3-D view, the details-page
+   * turntable, and the `<visual><origin rpy>` of the URDF link a placed part
+   * gets). See `src/shared/mesh-rotation.ts` for the maths and the reasoning.
+   */
+  meshRotation?: [number, number, number]
 
   // --- Mass / centre of mass (#554, epic #535 §1) --------------------------
   /**

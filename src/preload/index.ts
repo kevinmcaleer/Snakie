@@ -981,6 +981,22 @@ export interface PartsWriteResult {
 }
 
 /**
+ * Result of linking a 3-D model to a part (#741). Mirrors the main-process
+ * `MeshImportResult`, plus the picker's `cancelled` — never rejects, so the
+ * Part Editor's 3-D view shows failures in its own status line.
+ */
+export interface PartMeshImportResult {
+  ok: boolean
+  /** The bare filename to record as the part's `mesh`, when `ok`. */
+  filename?: string
+  /** A byte-identical file was already in the folder; nothing was copied. */
+  reused?: boolean
+  /** The user dismissed the file picker — not an error, and not a link. */
+  cancelled?: boolean
+  error?: string
+}
+
+/**
  * Result of reading a part driver file's source (#184). Mirrors the main-process
  * `DriverSourceResult` — never rejects, so the install banner shows errors inline.
  */
@@ -1049,6 +1065,24 @@ const parts = {
    */
   listPartFiles: (libraryId: string, partId: string): Promise<string[]> =>
     ipcRenderer.invoke('parts:listPartFiles', { libraryId, partId }),
+  /**
+   * Link a 3-D model to a part (#741): pick an STL/DAE (or pass `source` to skip
+   * the picker) and COPY it into `<parts>/<lib>/<part>/`, so the model travels
+   * with the part folder. `replaces` names the mesh the part currently
+   * references — the one file this import is allowed to overwrite (#750).
+   * Resolves to {@link PartMeshImportResult}; never rejects.
+   */
+  importMesh: (
+    libraryId: string,
+    partId: string,
+    opts?: { source?: string; replaces?: string }
+  ): Promise<PartMeshImportResult> =>
+    ipcRenderer.invoke('parts:importMesh', {
+      libraryId,
+      partId,
+      source: opts?.source,
+      replaces: opts?.replaces
+    }),
   /**
    * Per bundled part: has the user edited it, and does this app ship a newer
    * version than the installed copy (#643)? An edited part is never overwritten by

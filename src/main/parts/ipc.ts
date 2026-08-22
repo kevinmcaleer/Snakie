@@ -18,10 +18,12 @@
  *   parts:checkUpdates    → which installed libraries have a newer registry version
  *   parts:bundledStatus   → per bundled part: edited? behind the shipped bundle?
  *   parts:resetToBundled  → restore one bundled part to the version this app ships
+ *   parts:importMesh      → copy a chosen STL/DAE into the part's own folder (#741)
  */
 
-import { BrowserWindow, ipcMain, shell } from 'electron'
+import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { promises as fsp } from 'fs'
+import { MESH_EXTENSIONS } from '../../shared/part-mesh-file'
 import {
   LOCAL_LIBRARY_ID,
   bundledPartStatuses,
@@ -29,7 +31,9 @@ import {
   deleteLibrary,
   deletePart,
   ensureLibrary,
+  importPartMesh,
   partsDir,
+  type MeshImportResult,
   promoteToStandard,
   publishStandardLibrary,
   readDriverSource,
@@ -149,6 +153,49 @@ export function registerPartsIpc(): void {
   // Editor's Drivers section can offer them and flag a source that isn't there.
   ipcMain.handle('parts:listPartFiles', (_e, args: { libraryId: string; partId: string }) =>
     listPartDriverFiles(args?.libraryId ?? '', args?.partId ?? '')
+  )
+
+  // #741: link a 3-D model to the part being edited — a native picker (skipped
+  // when the renderer already has a path), then a copy INTO the part's own
+  // folder. The copy is the point: the mesh has to travel with the part.
+  ipcMain.handle(
+    'parts:importMesh',
+    async (
+      e,
+      args: { libraryId: string; partId: string; source?: string; replaces?: string }
+    ): Promise<MeshImportResult & { cancelled?: boolean }> => {
+      try {
+        let source = args?.source?.trim()
+        if (!source) {
+          const win = BrowserWindow.fromWebContents(e.sender) ?? undefined
+          const opts = {
+            title: 'Link a 3-D model',
+            properties: ['openFile' as const],
+            filters: [
+              { name: '3D model', extensions: [...MESH_EXTENSIONS] },
+              { name: 'All files', extensions: ['*'] }
+            ]
+          }
+          const picked = win
+            ? await dialog.showOpenDialog(win, opts)
+            : await dialog.showOpenDialog(opts)
+          if (picked.canceled || picked.filePaths.length === 0) return { ok: false, cancelled: true }
+          source = picked.filePaths[0]
+        }
+        // NB: no `parts:didChange` broadcast. This writes an asset beside
+        // `parts.yml` and changes nothing another window can see until the part
+        // is SAVED — and that save broadcasts. Refreshing every window here
+        // would reset their selections for nothing.
+        return await importPartMesh(
+          args?.libraryId ?? '',
+          args?.partId ?? '',
+          source,
+          args?.replaces || undefined
+        )
+      } catch (err) {
+        return { ok: false, error: (err as Error).message }
+      }
+    }
   )
 
   // #643: which bundled parts the user has edited, and which the app now ships a

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
-import { maxSpan } from '../src/renderer/src/components/robot-mesh-load'
+import { maxSpan, meshUpAxisFix } from '../src/renderer/src/components/robot-mesh-load'
 import { stlMaxDim } from '../src/main/robot/ipc'
 import { meshImportScale } from '../src/renderer/src/components/robot-assembly'
 
@@ -123,5 +123,33 @@ describe('maxSpan', () => {
 
   it('is 0 for an empty geometry rather than -Infinity', () => {
     expect(maxSpan(new THREE.BufferGeometry())).toBe(0)
+  })
+})
+
+/**
+ * ONE FRAME FOR BOTH KINDS (#741). A part's `meshRotation` is expressed in the
+ * part's own Z-up frame, so a viewer has to get an STL and a DAE into that same
+ * frame before applying it — otherwise the same stored numbers would mean two
+ * different things depending on which file the user happened to download.
+ */
+describe('meshUpAxisFix', () => {
+  it('leaves an STL alone — no up-axis of its own, so URDF/CAD Z-up applies', () => {
+    expect(meshUpAxisFix('/parts/x/model.stl')).toBe(0)
+    expect(meshUpAxisFix('/parts/x/MODEL.STL')).toBe(0)
+  })
+
+  it('un-does ColladaLoader’s Y-up so a DAE speaks the same Z-up', () => {
+    expect(meshUpAxisFix('/parts/x/arm.dae')).toBeCloseTo(Math.PI / 2, 12)
+  })
+
+  it('composed with the viewer’s −90° stage, each kind ends where it did before', () => {
+    // The stage lays the whole Z-up frame down by −90° for three's Y-up world.
+    const stage = -Math.PI / 2
+    expect(stage + meshUpAxisFix('m.stl')).toBeCloseTo(-Math.PI / 2, 12) // as PartMeshView always did
+    expect(stage + meshUpAxisFix('m.dae')).toBeCloseTo(0, 12) // DAE left alone, as before
+  })
+
+  it('treats an unknown kind as already Z-up rather than guessing', () => {
+    expect(meshUpAxisFix('m.obj')).toBe(0)
   })
 })

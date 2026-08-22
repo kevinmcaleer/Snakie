@@ -5,7 +5,7 @@ import type { Api } from './index'
 // renderer can import them from this single UI-facing module.
 export type { BoardSourcePayload, InstrumentOpenPayload, InstrumentConn } from './index'
 export type { FindCommandPayload, FindStatusPayload } from './index'
-export type { PartsWriteResult, DriverSourceResult } from './index'
+export type { PartsWriteResult, DriverSourceResult, PartMeshImportResult } from './index'
 
 // Re-export the Parts Library + Part Editor types (#129 / #130) so the parts
 // panel + editor can import them from this single UI-facing module.

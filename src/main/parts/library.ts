@@ -57,6 +57,7 @@ import {
   type SeedManifest
 } from '../../shared/bundled-seed'
 import { bumpPatch, compareVersions } from '../../shared/part-registry'
+import { MESH_EXTENSIONS, meshAssetName, resolveMeshTarget } from '../../shared/part-mesh-file'
 import { reportError, reporter } from '../report-error'
 import type { PartDefinition, PartLibrary, PartLibraryWithParts } from '../../shared/part'
 
@@ -904,6 +905,88 @@ export function resolvePartAsset(libraryId: string, partId: string, filename: st
   const partDir = join(partsDir(), libId, pId)
   if (!isContainedFile(partDir, file)) return null
   return join(partDir, file)
+}
+
+/** Result of linking a 3-D mesh into a part folder (#741). Never throws across IPC. */
+export interface MeshImportResult {
+  ok: boolean
+  /** The bare filename to record in `parts.yml`'s `mesh:`, when `ok`. */
+  filename?: string
+  /** True when a byte-identical file was already there and nothing was copied. */
+  reused?: boolean
+  error?: string
+}
+
+/**
+ * Copy a chosen STL/DAE into a part's own folder and hand back the filename to
+ * record as `mesh:` (#741).
+ *
+ * THE COPY IS THE POINT. A part folder is the unit that gets zipped, committed
+ * and published, so a mesh living in `~/Downloads` is a link that travels
+ * nowhere; before this the only way to attach one was to copy the file by hand
+ * and edit two lines of `parts.yml`.
+ *
+ * Collisions obey #750's second rule — never delete (or overwrite) a file this
+ * part did not author:
+ *
+ *  - the mesh the part CURRENTLY references (`replaces`) may be overwritten;
+ *    that is what a Replace button means, and it keeps the filename stable;
+ *  - a byte-identical file already in the folder is re-used, copying nothing —
+ *    re-linking the same STL twice must not litter the folder;
+ *  - any other collision takes the next free `name-2.stl`.
+ *
+ * The destination is always `<userData>/parts/...`, never the bundled repo copy.
+ * A symlinked SOURCE is fine (the user picked it in a native dialog and
+ * `copyFile` dereferences it); it is the destination side that is guarded.
+ */
+export async function importPartMesh(
+  libraryId: string,
+  partId: string,
+  source: string,
+  replaces?: string
+): Promise<MeshImportResult> {
+  try {
+    const libId = sanitiseId(libraryId) || LOCAL_LIBRARY_ID
+    const pId = sanitiseId(partId)
+    if (!pId) return { ok: false, error: 'This part has no id yet — name it before linking a model.' }
+    const desired = meshAssetName(source)
+    if (!desired) {
+      return { ok: false, error: `Snakie can open ${MESH_EXTENSIONS.map((e) => `.${e}`).join(' and ')} models; that file is neither.` }
+    }
+    const bytes = await fsp.readFile(source)
+
+    const partDir = join(partsDir(), libId, pId)
+    await fsp.mkdir(partDir, { recursive: true })
+    const taken = (await fsp.readdir(partDir, { withFileTypes: true }))
+      .filter((e) => e.isFile())
+      .map((e) => e.name)
+
+    // Which of the candidate names already hold EXACTLY these bytes. Only the
+    // handful of names the resolver could pick are hashed, not the whole folder.
+    const stem = desired.slice(0, desired.lastIndexOf('.'))
+    const ext = desired.slice(desired.lastIndexOf('.'))
+    const sourceHash = createHash('sha256').update(bytes).digest('hex')
+    const identical: string[] = []
+    for (const name of taken) {
+      if (name !== desired && !name.startsWith(`${stem}-`)) continue
+      if (!name.endsWith(ext)) continue
+      try {
+        const buf = await fsp.readFile(join(partDir, name))
+        if (createHash('sha256').update(buf).digest('hex') === sourceHash) identical.push(name)
+      } catch {
+        // Unreadable → treat as "not identical"; the resolver skips past it.
+      }
+    }
+
+    const target = resolveMeshTarget({ desired, taken, identical, replaces })
+    if (!isContainedFile(partDir, target.name)) {
+      return { ok: false, error: `Unsafe mesh filename: ${target.name}` }
+    }
+    if (target.write) await fsp.writeFile(join(partDir, target.name), bytes)
+    return { ok: true, filename: target.name, reused: !target.write }
+  } catch (err) {
+    return { ok: false, error: (err as Error).message }
+  }
 }
 
 /**

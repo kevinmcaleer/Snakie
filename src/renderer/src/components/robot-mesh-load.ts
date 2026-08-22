@@ -29,6 +29,29 @@ export function neutralMaterial(): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({ color: 0x9aa0a6, metalness: 0.1, roughness: 0.85 })
 }
 
+/**
+ * The X-rotation (radians) that puts a LOADED object into the part's own **Z-up**
+ * frame — the frame URDF works in, and the one a part's `meshRotation` (#741) is
+ * expressed in.
+ *
+ * The two loaders hand back objects in different frames and that difference has
+ * to be spent somewhere:
+ *
+ *  - an **STL** carries no up-axis, and URDF/CAD convention makes it Z-up
+ *    already → no correction;
+ *  - a **DAE** declares its own `up_axis` and `ColladaLoader` has already applied
+ *    it, leaving the scene Y-up like three itself → rotate it BACK by +90° so it
+ *    speaks the same Z-up as everything else.
+ *
+ * A viewer then lays the whole Z-up stage down by −90° once, for three's Y-up
+ * world. Net result for each kind is exactly what the views did before this
+ * existed; the gain is that there is now a single frame in which a rotation
+ * means the same thing for both.
+ */
+export function meshUpAxisFix(path: string): number {
+  return meshKind(path) === 'dae' ? Math.PI / 2 : 0
+}
+
 /** A small wireframe cube standing in for a mesh that failed to load (#319). */
 export function placeholderMesh(material: THREE.Material | null): THREE.Mesh {
   const mat = material ?? new THREE.MeshStandardMaterial({ color: 0xb4544e, wireframe: true })

@@ -65,6 +65,7 @@ import { connectablePinCount,
 } from '../../../shared/part'
 import type { RobotPart } from '../../../shared/robot'
 import { coerceDisplay, coerceElectrical } from '../../../shared/part-yaml'
+import { coerceMeshRotation } from '../../../shared/mesh-rotation'
 import { flattenPartPins } from '../../../shared/netlist'
 
 /** The pin types the editor offers, in UI order. */
@@ -2212,6 +2213,11 @@ export function normalisePart(part: PartDefinition): PartDefinition {
   set('mesh', text(part.mesh))
   if (part.meshUnits === 'mm' || part.meshUnits === 'm') out.meshUnits = part.meshUnits
   if (typeof part.meshScale === 'number' && part.meshScale > 0) out.meshScale = part.meshScale
+  // The orientation correction (#741) — the SAME coercer the YAML round-trip
+  // uses, so the editor and the on-disk form can't disagree about what a valid
+  // rotation is (and an identity one is dropped in both).
+  const meshRotation = coerceMeshRotation(part.meshRotation)
+  if (meshRotation) out.meshRotation = meshRotation
   // Mass (grams) + optional CoM (mm) (#554). A non-positive mass is dropped, so
   // "unset" and "zero" both mean fall back to a volume estimate downstream.
   if (typeof part.mass_g === 'number' && Number.isFinite(part.mass_g) && part.mass_g > 0) {

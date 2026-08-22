@@ -261,7 +261,10 @@ export async function attachPartBody(
         linkBase: part.name || part.id,
         scale,
         parent: rootLink(urdf),
-        at
+        at,
+        // The part's stored orientation correction (#741) rides in as the
+        // VISUAL's rpy, so a mesh authored on its side lands standing up.
+        rotation: part.meshRotation
       }))
       const inertial = partInertial(part)
       if (inertial) urdf = setInertial(urdf, link, inertial)

@@ -6,6 +6,7 @@
  */
 import type { PrimitiveKind, Vec3 } from './robot-build'
 import { isExternalMeshRef, resolveMeshPath } from './robot-mesh'
+import { isIdentityRotation, meshRotationRpy, type MeshRotation } from '../../../shared/mesh-rotation'
 
 /**
  * A minimal, VALID starter URDF: one `base_link` with a small box so the pose
@@ -144,6 +145,22 @@ export function meshImportScale(
   return 1
 }
 
+/**
+ * The `<origin>` line a mesh visual needs to carry the part's stored orientation
+ * correction (#741), or `''` when there is nothing to correct.
+ *
+ * It goes on the **visual**, not on the placement joint (Kevin's call on #741):
+ * the rotation describes the MESH — "this STL was authored lying on its side" —
+ * so it must stay attached to the mesh. On the joint it would fight the user the
+ * moment they re-joint the part in Build, and it would be silently lost if the
+ * joint were ever rebuilt. Emitting nothing for the identity keeps every URDF
+ * this function has ever written byte-identical.
+ */
+export function meshVisualOrigin(rotation?: MeshRotation | null, indent = '      '): string {
+  if (isIdentityRotation(rotation)) return ''
+  return `${indent}<origin xyz="0 0 0" rpy="${meshRotationRpy(rotation)}"/>\n`
+}
+
 export function addMeshLink(
   urdf: string,
   opts: {
@@ -154,6 +171,10 @@ export function addMeshLink(
     /** Joint origin in metres (#716: the mirrored board position). Absent ⇒ the
      *  legacy X-stagger, so imports still land beside the base, not on it. */
     at?: [number, number, number]
+    /** The part's stored mesh orientation in degrees (#741) — written as the
+     *  VISUAL's origin rpy, so a mesh that was authored on its side stands up.
+     *  Absent/identity ⇒ no `<origin>` at all. */
+    rotation?: MeshRotation | null
   }
 ): { urdf: string; link: string } {
   // Attach under the UI's chosen base if given (it can differ from the doc-first
@@ -175,6 +196,7 @@ export function addMeshLink(
   const block =
     `  <link name="${name}">\n` +
     `    <visual>\n` +
+    meshVisualOrigin(opts.rotation) +
     `      <geometry><mesh filename="${opts.meshRel}"${s}/></geometry>\n` +
     `    </visual>\n` +
     `  </link>\n` +
@@ -846,7 +868,10 @@ export function swapLinkVisualToMesh(
   urdf: string,
   link: string,
   meshRel: string,
-  scale?: number
+  scale?: number,
+  /** The part's stored mesh orientation (#741) — the placeholder had none, so an
+   *  upgrade to the real mesh must bring the correction with it. */
+  rotation?: MeshRotation | null
 ): string {
   const span = linkSpan(urdf, link)
   if (!span) return urdf
@@ -857,6 +882,7 @@ export function swapLinkVisualToMesh(
     scale && scale !== 1 ? ` scale="${fmtNum(scale)} ${fmtNum(scale)} ${fmtNum(scale)}"` : ''
   const replacement =
     `<visual>\n` +
+    meshVisualOrigin(rotation) +
     `      <geometry><mesh filename="${meshRel}"${s}/></geometry>\n` +
     `    </visual>`
   const nextBody = body.slice(0, vis.index) + replacement + body.slice(vis.index + vis[0].length)
