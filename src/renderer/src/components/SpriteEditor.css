@@ -129,8 +129,21 @@
   border-color: var(--danger);
 }
 
+/* Pinned to the right of the bar, and set apart. It was simply the last of ~15
+   similar buttons in a wrapping toolbar, so on the web -- where there is no
+   window chrome to close from -- people could not find the way out at all.
+   The full-screen catalog and the part details view both isolate their ✕ on the
+   right; this matches them. `margin-left: auto` survives the wrap, so it stays
+   at the far end of whatever row it lands on. */
 .spred__btn--close {
   padding-inline: 0.45rem;
+  margin-left: auto;
+  border-left: var(--border-w, 1px) solid var(--border);
+  padding-left: 0.6rem;
+}
+
+.spred__btn--close:hover:not(:disabled) {
+  color: var(--danger, #c2483a);
 }
 
 .spred__btn--play {
