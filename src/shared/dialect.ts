@@ -29,6 +29,8 @@
  *     makes drive-only identification possible (#753).
  */
 
+import { delScratch } from './device-scratch'
+
 /** Which Python implementation a connected board is running. */
 export type Dialect = 'micropython' | 'circuitpython' | 'unknown'
 
@@ -72,24 +74,27 @@ const P_MACHINE = 'SNKMACH '
  * so a missing attribute degrades to an empty line rather than a traceback.
  */
 export const RUNTIME_PROBE_PY = [
-  'import sys as _s',
-  "_n=getattr(_s.implementation,'name','')",
+  'import sys as _snk_s',
+  "_snk_n=getattr(_snk_s.implementation,'name','')",
   // `sys.implementation.version` is a tuple, and CircuitPython's has FOUR
   // elements — the release level, which is `''` for a stable build. Joining it
   // whole produced '10.2.1.' with a trailing dot on every CircuitPython board.
   // Empty components are dropped, so a pre-release ('beta') still comes through.
-  "_v='.'.join(str(x) for x in getattr(_s.implementation,'version',()) if str(x))",
-  "_m=''",
+  "_snk_v='.'.join(str(x) for x in getattr(_snk_s.implementation,'version',()) if str(x))",
+  "_snk_m=''",
   'try:',
-  ' import os as _o',
-  ' _u=_o.uname()',
-  " _v=getattr(_u,'version','') or _v",
-  " _m=getattr(_u,'machine','')",
+  ' import os as _snk_o',
+  ' _snk_u=_snk_o.uname()',
+  " _snk_v=getattr(_snk_u,'version','') or _snk_v",
+  " _snk_m=getattr(_snk_u,'machine','')",
   'except Exception:',
-  " _m=getattr(_s.implementation,'_machine','')",
-  `print(${JSON.stringify(P_NAME)}+_n)`,
-  `print(${JSON.stringify(P_VERSION)}+_v)`,
-  `print(${JSON.stringify(P_MACHINE)}+_m)`
+  " _snk_m=getattr(_snk_s.implementation,'_machine','')",
+  `print(${JSON.stringify(P_NAME)}+_snk_n)`,
+  `print(${JSON.stringify(P_VERSION)}+_snk_v)`,
+  `print(${JSON.stringify(P_MACHINE)}+_snk_m)`,
+  // The probe runs on connect, so anything it left bound would be the FIRST
+  // thing the Inspect panel showed the user as "their" variables (#798).
+  delScratch('_snk_n', '_snk_v', '_snk_m', '_snk_s', '_snk_o', '_snk_u')
 ].join('\n')
 
 /** `'circuitpython'` / `'MicroPython'` / anything → a {@link Dialect}. */

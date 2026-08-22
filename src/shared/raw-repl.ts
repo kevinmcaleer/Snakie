@@ -19,6 +19,7 @@
  *   4. Ctrl-B — back to the friendly REPL.
  */
 import { buildControlLine } from './control'
+import { delScratch, scratchBlock } from './device-scratch'
 
 const CTRL_A = '\x01'
 const CTRL_B = '\x02'
@@ -319,25 +320,31 @@ export class RawReplClient {
   }
 
   // ── Filesystem helpers (same snippets as the desktop) ──────────────────────
+  // Including the same `_snk_` scratch-name discipline (#798): these run in the
+  // board's `__main__` too, so a temporary left bound here is a variable the
+  // Inspect panel would attribute to the user.
   async listDir(path = '/'): Promise<DirEntry[]> {
-    const code = [
-      'import os, json',
-      'def _ls(p):',
-      '    out=[]',
-      '    try:',
-      '        it=os.ilistdir(p)',
-      '    except AttributeError:',
-      '        it=[(n,0,0) for n in os.listdir(p)]',
-      '    for e in it:',
-      '        name=e[0]; typ=e[1] if len(e)>1 else 0',
-      '        full=(p.rstrip("/")+"/"+name) if p else name',
-      '        isdir=(typ & 0x4000)!=0',
-      '        try: size=0 if isdir else os.stat(full)[6]',
-      '        except OSError: size=0',
-      '        out.append([name,isdir,size])',
-      '    return out',
-      `print(json.dumps(_ls(${pyStr(path)})))`
-    ].join('\n')
+    const code = scratchBlock(
+      [
+        'import os, json',
+        'def _snk_ls(p):',
+        '    out=[]',
+        '    try:',
+        '        it=os.ilistdir(p)',
+        '    except AttributeError:',
+        '        it=[(n,0,0) for n in os.listdir(p)]',
+        '    for e in it:',
+        '        name=e[0]; typ=e[1] if len(e)>1 else 0',
+        '        full=(p.rstrip("/")+"/"+name) if p else name',
+        '        isdir=(typ & 0x4000)!=0',
+        '        try: size=0 if isdir else os.stat(full)[6]',
+        '        except OSError: size=0',
+        '        out.append([name,isdir,size])',
+        '    return out',
+        `print(json.dumps(_snk_ls(${pyStr(path)})))`
+      ],
+      '_snk_ls'
+    )
     const raw = (await this.eval(code)).trim()
     const parsed = (raw ? JSON.parse(raw) : []) as [string, boolean, number][]
     return parsed.map(([name, isDir, size]) => ({ name, isDir, size }))
@@ -355,32 +362,40 @@ export class RawReplClient {
    * hex to keep about 25 bytes.
    */
   async readFileLine(path: string, prefix: string): Promise<string> {
-    const code = [
-      `_l = ''`,
-      `try:`,
-      `    with open(${pyStr(path)}) as _f:`,
-      `        for _x in _f:`,
-      `            if _x.startswith(${pyStr(prefix)}):`,
-      `                _l = _x`,
-      `                break`,
-      `except OSError:`,
-      `    pass`,
-      `print(_l)`,
-      `del _l`
-    ].join('\n')
+    const code = scratchBlock(
+      [
+        `_snk_l = ''`,
+        `try:`,
+        `    with open(${pyStr(path)}) as _snk_f:`,
+        `        for _snk_x in _snk_f:`,
+        `            if _snk_x.startswith(${pyStr(prefix)}):`,
+        `                _snk_l = _snk_x`,
+        `                break`,
+        `except OSError:`,
+        `    pass`,
+        `print(_snk_l)`
+      ],
+      '_snk_l',
+      '_snk_f',
+      '_snk_x'
+    )
     return (await this.eval(code)).trim()
   }
 
   async readFileBytes(path: string): Promise<Uint8Array> {
-    const code = [
-      'import sys',
-      'try:\n import ubinascii\nexcept ImportError:\n import binascii as ubinascii',
-      `with open(${pyStr(path)},'rb') as f:`,
-      '    while True:',
-      '        b=f.read(256)',
-      '        if not b: break',
-      '        sys.stdout.write(ubinascii.hexlify(b))'
-    ].join('\n')
+    const code = scratchBlock(
+      [
+        'import sys',
+        'try:\n import ubinascii\nexcept ImportError:\n import binascii as ubinascii',
+        `with open(${pyStr(path)},'rb') as _snk_f:`,
+        '    while True:',
+        '        _snk_b=_snk_f.read(256)',
+        '        if not _snk_b: break',
+        '        sys.stdout.write(ubinascii.hexlify(_snk_b))'
+      ],
+      '_snk_f',
+      '_snk_b'
+    )
     const hex = (await this.eval(code)).trim()
     const out = new Uint8Array(hex.length / 2)
     for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.substr(i * 2, 2), 16)
@@ -389,8 +404,13 @@ export class RawReplClient {
 
   async writeFile(path: string, contents: string | Uint8Array, chunkSize = 256): Promise<void> {
     const bytes = typeof contents === 'string' ? enc.encode(contents) : contents
+    // `_snk_f` outlives its snippet on purpose — the next chunk writes through
+    // it — so it carries the prefix and is unbound on close (#798).
     await this.eval(
-      ['try:\n import ubinascii\nexcept ImportError:\n import binascii as ubinascii', `_f=open(${pyStr(path)},'wb')`].join('\n')
+      [
+        'try:\n import ubinascii\nexcept ImportError:\n import binascii as ubinascii',
+        `_snk_f=open(${pyStr(path)},'wb')`
+      ].join('\n')
     )
     try {
       for (let i = 0; i < bytes.length || i === 0; i += chunkSize) {
@@ -398,11 +418,15 @@ export class RawReplClient {
         if (slice.length === 0 && i > 0) break
         let hex = ''
         for (const b of slice) hex += b.toString(16).padStart(2, '0')
-        await this.eval(`_f.write(ubinascii.unhexlify(${pyStr(hex)}))`)
+        await this.eval(`_snk_f.write(ubinascii.unhexlify(${pyStr(hex)}))`)
         if (slice.length < chunkSize) break
       }
     } finally {
-      await this.eval('_f.close()').catch(() => undefined)
+      // Guarded close, then the unbind — a handle left bound holds the file open
+      // on the board for as long as the name lives.
+      await this.eval(
+        ['try: _snk_f.close()', 'except Exception: pass', delScratch('_snk_f')].join('\n')
+      ).catch(() => undefined)
     }
   }
 
@@ -414,30 +438,40 @@ export class RawReplClient {
   }
   async remove(path: string): Promise<void> {
     await this.eval(
-      [
-        'import os',
-        `_s = [${pyStr(path)}]`,
-        'while _s:',
-        '    _p = _s[-1]',
-        '    if (os.stat(_p)[0] & 0x4000) != 0:',
-        '        _c = os.listdir(_p)',
-        '        if _c:',
-        "            _s.extend([_p + '/' + _x for _x in _c])",
-        '        else:',
-        '            os.rmdir(_p); _s.pop()',
-        '    else:',
-        '        os.remove(_p); _s.pop()'
-      ].join('\n')
+      scratchBlock(
+        [
+          'import os',
+          `_snk_s = [${pyStr(path)}]`,
+          'while _snk_s:',
+          '    _snk_p = _snk_s[-1]',
+          '    if (os.stat(_snk_p)[0] & 0x4000) != 0:',
+          '        _snk_c = os.listdir(_snk_p)',
+          '        if _snk_c:',
+          "            _snk_s.extend([_snk_p + '/' + _snk_x for _snk_x in _snk_c])",
+          '        else:',
+          '            os.rmdir(_snk_p); _snk_s.pop()',
+          '    else:',
+          '        os.remove(_snk_p); _snk_s.pop()'
+        ],
+        '_snk_s',
+        '_snk_p',
+        '_snk_c'
+      )
     )
   }
   async stat(path: string): Promise<StatResult> {
-    const code = [
-      'import os, json',
-      `st=os.stat(${pyStr(path)})`,
-      'isdir=(st[0] & 0x4000)!=0',
-      'mtime=st[8] if len(st)>8 else None',
-      'print(json.dumps([isdir, st[6], mtime]))'
-    ].join('\n')
+    const code = scratchBlock(
+      [
+        'import os, json',
+        `_snk_st=os.stat(${pyStr(path)})`,
+        '_snk_isdir=(_snk_st[0] & 0x4000)!=0',
+        '_snk_mtime=_snk_st[8] if len(_snk_st)>8 else None',
+        'print(json.dumps([_snk_isdir, _snk_st[6], _snk_mtime]))'
+      ],
+      '_snk_st',
+      '_snk_isdir',
+      '_snk_mtime'
+    )
     const [isDir, size, mtime] = JSON.parse((await this.eval(code)).trim()) as [boolean, number, number | null]
     return { isDir, size, mtime: mtime ?? undefined }
   }

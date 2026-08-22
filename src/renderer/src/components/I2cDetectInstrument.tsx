@@ -7,6 +7,7 @@ import { i2cOptions, i2cBuses, sdaOptions, sclOptions, type I2cOption, type I2cP
 import { hexAddr, knownDevicesFor, partsForAddress } from './i2c-known-devices'
 import { addPartsToProject } from './project-parts'
 import { useBoards } from './use-boards'
+import { delScratch } from '../../../shared/device-scratch'
 import type { BoardDefinition } from '../../../shared/board'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
 import './I2cDetectInstrument.css'
@@ -47,10 +48,13 @@ function scanSnippet(bus: number, sda: number, scl: number): string {
   return [
     'from machine import I2C, Pin',
     'try:',
-    `    _b = I2C(${bus}, sda=Pin(${sda}), scl=Pin(${scl}))`,
-    "    print('SNKI2C ' + ' '.join('%02x' % a for a in _b.scan()))",
+    `    _snk_b = I2C(${bus}, sda=Pin(${sda}), scl=Pin(${scl}))`,
+    "    print('SNKI2C ' + ' '.join('%02x' % a for a in _snk_b.scan()))",
     'except Exception as e:',
-    "    print('SNKI2CERR ' + repr(e))"
+    "    print('SNKI2CERR ' + repr(e))",
+    // The scan's own bus object, unbound again — it held the peripheral and
+    // showed up in Inspect as if the user had made it (#798).
+    delScratch('_snk_b')
   ].join('\n')
 }
 

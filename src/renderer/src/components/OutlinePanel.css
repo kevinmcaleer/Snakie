@@ -5,13 +5,25 @@
  * the shared design tokens from index.css so it tracks the active theme.
  */
 
+/* A flex column that fills its split pane, so the symbol list below can own the
+   scrolling (#796). `min-height: 0` on both the column and the list is what
+   lets the list shrink below its content instead of pushing past the pane and
+   being clipped. */
 .outline {
-  padding: 0.4rem 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
   font-size: 13px;
   color: var(--text);
 }
 
+/* The empty states fill the pane and scroll if the pane is very short. */
 .outline__hint {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   margin: 0;
   padding: 0.75rem 1rem;
   color: var(--text-muted);
@@ -24,9 +36,15 @@
   border-radius: 4px;
 }
 
+/* THE scrolling region of the Outline pane: functions, classes and constants
+   scroll here rather than running off the bottom (#796). The vertical padding
+   lives on the list (not on `.outline`) so it scrolls with the symbols. */
 .outline__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   margin: 0;
-  padding: 0;
+  padding: 0.4rem 0;
   list-style: none;
 }
 
