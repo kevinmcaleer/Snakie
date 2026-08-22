@@ -1,4 +1,5 @@
 import { ipcMain, type WebContents } from 'electron'
+import { delScratch } from '../../shared/device-scratch'
 import { isVirtualPort, VIRTUAL_PORT_PATH, VIRTUAL_PORT_LABEL } from '../../shared/virtual-device'
 import { MicroPythonDevice } from './MicroPythonDevice'
 import { SimulatedDevice } from './SimulatedDevice'
@@ -174,10 +175,13 @@ export function registerDeviceIpc(getWebContents: () => WebContents | undefined)
       const code = [
         'import os',
         'try:',
-        '    _s = os.statvfs("/")',
-        '    print("SNKDF", _s[0] * _s[2], _s[0] * _s[3])',
+        '    _snk_s = os.statvfs("/")',
+        '    print("SNKDF", _snk_s[0] * _snk_s[2], _snk_s[0] * _snk_s[3])',
         'except Exception:',
-        '    print("SNKDF -1 -1")'
+        '    print("SNKDF -1 -1")',
+        // The gauge polls, so this tuple was permanently resident on the board
+        // and shown in the Inspect panel as one of the user's variables (#798).
+        delScratch('_snk_s')
       ].join('\n')
       const { stdout } = await getActive().exec(code)
       const m = /SNKDF\s+(-?\d+)\s+(-?\d+)/.exec(stdout ?? '')

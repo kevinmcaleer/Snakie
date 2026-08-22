@@ -3,6 +3,7 @@ import './PackagesPanel.css'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
 import { parsePyImports } from './part-imports'
+import { delScratch } from '../../../shared/device-scratch'
 import { isNewerVersion } from '../../../shared/version-compare'
 import {
   libEntryToPackage,
@@ -214,10 +215,15 @@ function PackagesTab(): JSX.Element {
     let active = true
     // os.statvfs -> (f_bsize, f_frsize, f_blocks, f_bfree, f_bavail, ...).
     // total = f_frsize * f_blocks; used = total - (f_frsize * free blocks).
-    const snippet =
-      "import os\n" +
-      "s=os.statvfs('/')\n" +
-      "print(s[1]*s[2], s[1]*(s[2]-(s[4] if s[4] else s[3])))"
+    // `_snk_s` rather than a bare `s`: this polls, so a plain name would sit in
+    // the board's globals between runs and show up in Inspect as the user's own
+    // variable (#798). `delScratch` unbinds it once the figures are printed.
+    const snippet = [
+      'import os',
+      "_snk_s=os.statvfs('/')",
+      'print(_snk_s[1]*_snk_s[2], _snk_s[1]*(_snk_s[2]-(_snk_s[4] if _snk_s[4] else _snk_s[3])))',
+      delScratch('_snk_s')
+    ].join('\n')
     window.api.device
       .eval(snippet)
       .then((out) => {

@@ -17,6 +17,7 @@
 import { loadMicroPython } from '@micropython/micropython-webassembly-pyscript/micropython.mjs'
 import type { MicroPythonInstance } from '@micropython/micropython-webassembly-pyscript/micropython.mjs'
 import mpWasmUrl from '@micropython/micropython-webassembly-pyscript/micropython.wasm?url'
+import { delScratch } from '../../../shared/device-scratch'
 import { SIM_MACHINE_PY } from '../../../shared/sim-machine'
 import { INSTRUMENTS_PY, SNAKIE_PY } from './web-lib-sources'
 
@@ -39,9 +40,18 @@ const writeVfsFile = (mpi: MicroPythonInstance, path: string, source: string): v
     .join('')
   const dir = path.slice(0, path.lastIndexOf('/')) || '/'
   mpi.runPython(
-    `import os\ntry:\n    os.mkdir(${JSON.stringify(dir)})\nexcept OSError:\n    pass\n` +
-      `_d = bytes.fromhex(${JSON.stringify(hex)})\n` +
-      `_f = open(${JSON.stringify(path)}, 'wb')\n_f.write(_d)\n_f.close()\ndel _d, _f`
+    [
+      `import os`,
+      `try:`,
+      `    os.mkdir(${JSON.stringify(dir)})`,
+      `except OSError:`,
+      `    pass`,
+      `_snk_d = bytes.fromhex(${JSON.stringify(hex)})`,
+      `_snk_f = open(${JSON.stringify(path)}, 'wb')`,
+      `_snk_f.write(_snk_d)`,
+      `_snk_f.close()`,
+      delScratch('_snk_d', '_snk_f')
+    ].join('\n')
   )
 }
 

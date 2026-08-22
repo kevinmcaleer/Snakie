@@ -289,6 +289,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   style outranks any stylesheet rule. The scrolling now belongs to the list
   inside each pane, the way the Files view has always done it, with the count and
   **Refresh** staying put at the top while the rows move under them. (#796)
+- **The Inspect panel lists your variables, not Snakie's.** Everything Snakie
+  asks a board to do — list a folder, gauge the flash, upload a file — runs as a
+  snippet in the board's `__main__`, the same namespace your program uses. Every
+  temporary those snippets bound stayed bound, so a program with no variables of
+  its own was reported as **"3 variables"**: a spent file handle, an
+  `os.statvfs()` tuple from the flash gauge, and a chunk of the last file
+  uploaded, still holding its bytes.
+
+  Snippets now clean up after themselves, which also gives a Pico back the
+  memory they were pinning — a chunk left over from an upload holds the whole
+  file. The cleanup runs even when a snippet *fails*, which is exactly when
+  someone opens the inspector to find out what happened. The few names that must
+  outlive a single snippet, such as the file handle a chunked upload writes
+  through, carry a `_snk_` prefix and are filtered from the panel by that one
+  rule — not by a list of single letters, which could never tell Snakie's `_s`
+  from yours. (#798)
 - **A linked 3-D model no longer gets left behind when a part changes library,
   and a missing one now says so.** Linking an STL in the Part Editor's 3-D tab
   copies it into the part's folder — but saving the part into a *different*

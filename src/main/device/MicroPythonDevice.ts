@@ -3,6 +3,7 @@ import { stat } from 'fs/promises'
 import { join } from 'path'
 import { SerialPort } from 'serialport'
 import { buildControlLine } from '../../shared/control'
+import { delScratch, scratchBlock } from '../../shared/device-scratch'
 import {
   RUNTIME_PROBE_PY,
   parseRuntimeProbe,
@@ -811,24 +812,27 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
   async listDir(path = '/'): Promise<DirEntry[]> {
     const mount = await this.driveMount()
     if (mount) return driveListDir(mount, path)
-    const code = [
-      'import os, json',
-      `def _ls(p):`,
-      '    out=[]',
-      '    try:',
-      '        it=os.ilistdir(p)',
-      '    except AttributeError:',
-      '        it=[(n,0,0) for n in os.listdir(p)]',
-      '    for e in it:',
-      '        name=e[0]; typ=e[1] if len(e)>1 else 0',
-      '        full=(p.rstrip("/")+"/"+name) if p else name',
-      '        isdir=(typ & 0x4000)!=0',
-      '        try: size=0 if isdir else os.stat(full)[6]',
-      '        except OSError: size=0',
-      '        out.append([name,isdir,size])',
-      '    return out',
-      `print(json.dumps(_ls(${pyStr(path)})))`
-    ].join('\n')
+    const code = scratchBlock(
+      [
+        'import os, json',
+        `def _snk_ls(p):`,
+        '    out=[]',
+        '    try:',
+        '        it=os.ilistdir(p)',
+        '    except AttributeError:',
+        '        it=[(n,0,0) for n in os.listdir(p)]',
+        '    for e in it:',
+        '        name=e[0]; typ=e[1] if len(e)>1 else 0',
+        '        full=(p.rstrip("/")+"/"+name) if p else name',
+        '        isdir=(typ & 0x4000)!=0',
+        '        try: size=0 if isdir else os.stat(full)[6]',
+        '        except OSError: size=0',
+        '        out.append([name,isdir,size])',
+        '    return out',
+        `print(json.dumps(_snk_ls(${pyStr(path)})))`
+      ],
+      '_snk_ls'
+    )
     const raw = (await this.eval(code)).trim()
     const parsed = JSON.parse(raw) as [string, boolean, number][]
     return parsed.map(([name, isDir, size]) => ({ name, isDir, size }))
@@ -845,15 +849,19 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
     const mount = await this.driveMount()
     if (mount) return driveReadFileBytes(mount, path)
     // `ubinascii` is exposed as `binascii` on some ports; import defensively.
-    const code = [
-      'import sys',
-      'try:\n import ubinascii\nexcept ImportError:\n import binascii as ubinascii',
-      `with open(${pyStr(path)},'rb') as f:`,
-      '    while True:',
-      '        b=f.read(256)',
-      '        if not b: break',
-      '        sys.stdout.write(ubinascii.hexlify(b))'
-    ].join('\n')
+    const code = scratchBlock(
+      [
+        'import sys',
+        'try:\n import ubinascii\nexcept ImportError:\n import binascii as ubinascii',
+        `with open(${pyStr(path)},'rb') as _snk_f:`,
+        '    while True:',
+        '        _snk_b=_snk_f.read(256)',
+        '        if not _snk_b: break',
+        '        sys.stdout.write(ubinascii.hexlify(_snk_b))'
+      ],
+      '_snk_f',
+      '_snk_b'
+    )
     const hex = (await this.eval(code)).trim()
     return Buffer.from(hex, 'hex')
   }
@@ -873,19 +881,23 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
   async readFileLine(path: string, prefix: string): Promise<string> {
     const mount = await this.driveMount()
     if (mount) return driveReadFileLine(mount, path, prefix)
-    const code = [
-      `_l = ''`,
-      `try:`,
-      `    with open(${pyStr(path)}) as _f:`,
-      `        for _x in _f:`,
-      `            if _x.startswith(${pyStr(prefix)}):`,
-      `                _l = _x`,
-      `                break`,
-      `except OSError:`,
-      `    pass`,
-      `print(_l)`,
-      `del _l`
-    ].join('\n')
+    const code = scratchBlock(
+      [
+        `_snk_l = ''`,
+        `try:`,
+        `    with open(${pyStr(path)}) as _snk_f:`,
+        `        for _snk_x in _snk_f:`,
+        `            if _snk_x.startswith(${pyStr(prefix)}):`,
+        `                _snk_l = _snk_x`,
+        `                break`,
+        `except OSError:`,
+        `    pass`,
+        `print(_snk_l)`
+      ],
+      '_snk_l',
+      '_snk_f',
+      '_snk_x'
+    )
     return (await this.eval(code)).trim()
   }
 
@@ -899,21 +911,29 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
     if (mount) return driveWriteFile(mount, path, contents)
     const data = Buffer.isBuffer(contents) ? contents : Buffer.from(contents, 'utf8')
     // Open the file once, then stream hex chunks via repeated exec calls so we
-    // never put a multi-megabyte literal on a single line.
+    // never put a multi-megabyte literal on a single line. `_snk_f` is the one
+    // scratch global that must OUTLIVE its snippet — the handle is what the next
+    // chunk writes to — so it carries the prefix and is unbound on close (#798).
     const open = [
       'import sys',
       'try:\n import ubinascii\nexcept ImportError:\n import binascii as ubinascii',
-      `_f=open(${pyStr(path)},'wb')`
+      `_snk_f=open(${pyStr(path)},'wb')`
     ].join('\n')
     await this.replWrite(() => this.eval(open))
     try {
       for (let i = 0; i < data.length; i += chunkSize) {
         const slice = data.subarray(i, i + chunkSize)
         const hex = slice.toString('hex')
-        await this.replWrite(() => this.eval(`_f.write(ubinascii.unhexlify(${pyStr(hex)}))`))
+        await this.replWrite(() => this.eval(`_snk_f.write(ubinascii.unhexlify(${pyStr(hex)}))`))
       }
     } finally {
-      await this.eval('_f.close()').catch(() => undefined)
+      // Close AND unbind: a handle left bound holds the file open on the board
+      // for as long as the name lives, whichever way the transfer ended. The
+      // close is guarded so the unbind still runs when there is nothing to close
+      // (an `open()` that failed never bound it).
+      await this.eval(
+        ['try: _snk_f.close()', 'except Exception: pass', delScratch('_snk_f')].join('\n')
+      ).catch(() => undefined)
     }
   }
 
@@ -925,22 +945,30 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
     if (mount) return driveRemove(mount, path)
     await this.replWrite(() =>
       this.eval(
-        [
-          'import os',
-          `_s = [${pyStr(path)}]`,
-          'while _s:',
-          '    _p = _s[-1]',
-          '    if (os.stat(_p)[0] & 0x4000) != 0:',
-          '        _c = os.listdir(_p)',
-          '        if _c:',
-          "            _s.extend([_p + '/' + _x for _x in _c])",
-          '        else:',
-          '            os.rmdir(_p)',
-          '            _s.pop()',
-          '    else:',
-          '        os.remove(_p)',
-          '        _s.pop()'
-        ].join('\n')
+        // In a `scratchBlock` because this one RAISES on a path that isn't there
+        // — the error still reaches the caller, but the walk's stack doesn't stay
+        // bound on the board afterwards (#798).
+        scratchBlock(
+          [
+            'import os',
+            `_snk_s = [${pyStr(path)}]`,
+            'while _snk_s:',
+            '    _snk_p = _snk_s[-1]',
+            '    if (os.stat(_snk_p)[0] & 0x4000) != 0:',
+            '        _snk_c = os.listdir(_snk_p)',
+            '        if _snk_c:',
+            "            _snk_s.extend([_snk_p + '/' + _snk_x for _snk_x in _snk_c])",
+            '        else:',
+            '            os.rmdir(_snk_p)',
+            '            _snk_s.pop()',
+            '    else:',
+            '        os.remove(_snk_p)',
+            '        _snk_s.pop()'
+          ],
+          '_snk_s',
+          '_snk_p',
+          '_snk_c'
+        )
       )
     )
   }
@@ -963,13 +991,18 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
   async stat(path: string): Promise<StatResult> {
     const mount = await this.driveMount()
     if (mount) return driveStat(mount, path)
-    const code = [
-      'import os, json',
-      `st=os.stat(${pyStr(path)})`,
-      'isdir=(st[0] & 0x4000)!=0',
-      'mtime=st[8] if len(st)>8 else None',
-      'print(json.dumps([isdir, st[6], mtime]))'
-    ].join('\n')
+    const code = scratchBlock(
+      [
+        'import os, json',
+        `_snk_st=os.stat(${pyStr(path)})`,
+        '_snk_isdir=(_snk_st[0] & 0x4000)!=0',
+        '_snk_mtime=_snk_st[8] if len(_snk_st)>8 else None',
+        'print(json.dumps([_snk_isdir, _snk_st[6], _snk_mtime]))'
+      ],
+      '_snk_st',
+      '_snk_isdir',
+      '_snk_mtime'
+    )
     const raw = (await this.eval(code)).trim()
     const [isDir, size, mtime] = JSON.parse(raw) as [boolean, number, number | null]
     return { isDir, size, mtime: mtime ?? undefined }

@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events'
+import { scratchBlock } from '../../shared/device-scratch'
 import { VIRTUAL_PORT_PATH } from '../../shared/virtual-device'
 import { MicroPythonRuntime, type ReplRuntime } from './MicroPythonRuntime'
 import { isProbeCode, simulateProbeResponse, simulatedTelemetryFrame } from '../../shared/simulation'
@@ -227,22 +228,25 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
   private static readonly SYSTEM_DIRS = new Set(['dev', 'proc', 'tmp', 'home'])
 
   async listDir(path = '/'): Promise<DirEntry[]> {
-    const code = [
-      'import os, json',
-      'def _ls(p):',
-      '    out=[]',
-      '    try: it=os.ilistdir(p)',
-      '    except AttributeError: it=[(n,0,0) for n in os.listdir(p)]',
-      '    for e in it:',
-      '        name=e[0]; typ=e[1] if len(e)>1 else 0',
-      '        full=(p.rstrip("/")+"/"+name) if p else name',
-      '        isdir=(typ & 0x4000)!=0',
-      '        try: size=0 if isdir else os.stat(full)[6]',
-      '        except OSError: size=0',
-      '        out.append([name,isdir,size])',
-      '    return out',
-      `print(json.dumps(_ls(${pyStr(path)})))`
-    ].join('\n')
+    const code = scratchBlock(
+      [
+        'import os, json',
+        'def _snk_ls(p):',
+        '    out=[]',
+        '    try: it=os.ilistdir(p)',
+        '    except AttributeError: it=[(n,0,0) for n in os.listdir(p)]',
+        '    for e in it:',
+        '        name=e[0]; typ=e[1] if len(e)>1 else 0',
+        '        full=(p.rstrip("/")+"/"+name) if p else name',
+        '        isdir=(typ & 0x4000)!=0',
+        '        try: size=0 if isdir else os.stat(full)[6]',
+        '        except OSError: size=0',
+        '        out.append([name,isdir,size])',
+        '    return out',
+        `print(json.dumps(_snk_ls(${pyStr(path)})))`
+      ],
+      '_snk_ls'
+    )
     const raw = (await this.runtime.runCaptured(code)).trim()
     const parsed = JSON.parse(raw) as [string, boolean, number][]
     const isRoot = path === '' || path === '/'
@@ -253,23 +257,31 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
 
   async readFile(path: string): Promise<string> {
     // Text read (the simulator's files are source); exact bytes via stdout.write.
-    const code = `import sys\nwith open(${pyStr(path)}) as f:\n    sys.stdout.write(f.read())`
+    const code = scratchBlock(
+      ['import sys', `with open(${pyStr(path)}) as _snk_f:`, '    sys.stdout.write(_snk_f.read())'],
+      '_snk_f'
+    )
     return this.runtime.runCaptured(code)
   }
 
   async readFileLine(path: string, prefix: string): Promise<string> {
-    const code = [
-      `_l = ''`,
-      `try:`,
-      `    with open(${pyStr(path)}) as _f:`,
-      `        for _x in _f:`,
-      `            if _x.startswith(${pyStr(prefix)}):`,
-      `                _l = _x`,
-      `                break`,
-      `except OSError:`,
-      `    pass`,
-      `print(_l)`
-    ].join('\n')
+    const code = scratchBlock(
+      [
+        `_snk_l = ''`,
+        `try:`,
+        `    with open(${pyStr(path)}) as _snk_f:`,
+        `        for _snk_x in _snk_f:`,
+        `            if _snk_x.startswith(${pyStr(prefix)}):`,
+        `                _snk_l = _snk_x`,
+        `                break`,
+        `except OSError:`,
+        `    pass`,
+        `print(_snk_l)`
+      ],
+      '_snk_l',
+      '_snk_f',
+      '_snk_x'
+    )
     return (await this.runtime.runCaptured(code)).trim()
   }
 
@@ -279,14 +291,18 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
     // directories first — otherwise writing e.g. `/lib/instruments.py` fails with
     // OSError. Then hex-encode the body so arbitrary (incl. binary) content
     // survives without escaping.
-    const code = [
-      mkParentsSnippet(path),
-      `_d=bytes.fromhex(${pyStr(data.toString('hex'))})`,
-      `with open(${pyStr(path)},'wb') as f:`,
-      '    f.write(_d)'
-    ]
-      .filter(Boolean)
-      .join('\n')
+    // `_snk_d` holds the whole file, so leaving it bound kept a copy of the last
+    // upload resident on the board — and showed it in the Inspect panel (#798).
+    const code = scratchBlock(
+      [
+        mkParentsSnippet(path),
+        `_snk_d=bytes.fromhex(${pyStr(data.toString('hex'))})`,
+        `with open(${pyStr(path)},'wb') as _snk_f:`,
+        '    _snk_f.write(_snk_d)'
+      ].filter(Boolean),
+      '_snk_d',
+      '_snk_f'
+    )
     await this.runtime.runCaptured(code)
   }
 
@@ -294,22 +310,27 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
     // Recursive, mirroring MicroPythonDevice.remove: files delete directly;
     // directory trees walk depth-first (children, then the emptied dir) (#219).
     await this.runtime.runCaptured(
-      [
-        'import os',
-        `_s = [${pyStr(path)}]`,
-        'while _s:',
-        '    _p = _s[-1]',
-        '    if (os.stat(_p)[0] & 0x4000) != 0:',
-        '        _c = os.listdir(_p)',
-        '        if _c:',
-        "            _s.extend([_p + '/' + _x for _x in _c])",
-        '        else:',
-        '            os.rmdir(_p)',
-        '            _s.pop()',
-        '    else:',
-        '        os.remove(_p)',
-        '        _s.pop()'
-      ].join('\n')
+      scratchBlock(
+        [
+          'import os',
+          `_snk_s = [${pyStr(path)}]`,
+          'while _snk_s:',
+          '    _snk_p = _snk_s[-1]',
+          '    if (os.stat(_snk_p)[0] & 0x4000) != 0:',
+          '        _snk_c = os.listdir(_snk_p)',
+          '        if _snk_c:',
+          "            _snk_s.extend([_snk_p + '/' + _snk_x for _snk_x in _snk_c])",
+          '        else:',
+          '            os.rmdir(_snk_p)',
+          '            _snk_s.pop()',
+          '    else:',
+          '        os.remove(_snk_p)',
+          '        _snk_s.pop()'
+        ],
+        '_snk_s',
+        '_snk_p',
+        '_snk_c'
+      )
     )
   }
 
@@ -322,12 +343,16 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
   }
 
   async stat(path: string): Promise<StatResult> {
-    const code = [
-      'import os, json',
-      `st=os.stat(${pyStr(path)})`,
-      'isdir=(st[0] & 0x4000)!=0',
-      'print(json.dumps([isdir, st[6], st[8] if len(st)>8 else None]))'
-    ].join('\n')
+    const code = scratchBlock(
+      [
+        'import os, json',
+        `_snk_st=os.stat(${pyStr(path)})`,
+        '_snk_isdir=(_snk_st[0] & 0x4000)!=0',
+        'print(json.dumps([_snk_isdir, _snk_st[6], _snk_st[8] if len(_snk_st)>8 else None]))'
+      ],
+      '_snk_st',
+      '_snk_isdir'
+    )
     const raw = (await this.runtime.runCaptured(code)).trim()
     const [isDir, size, mtime] = JSON.parse(raw) as [boolean, number, number | null]
     return { isDir, size, mtime: mtime ?? undefined }
@@ -351,16 +376,20 @@ function mkParentsSnippet(path: string): string {
   const slash = path.lastIndexOf('/')
   const dir = slash > 0 ? path.slice(0, slash) : ''
   if (!dir || dir === '/') return ''
-  return [
-    'import os',
-    '_cur=""',
-    `for _s in ${pyStr(dir)}.strip("/").split("/"):`,
-    '    _cur+="/"+_s',
-    '    try:',
-    '        os.mkdir(_cur)',
-    '    except OSError:',
-    '        pass'
-  ].join('\n')
+  return scratchBlock(
+    [
+      'import os',
+      '_snk_cur=""',
+      `for _snk_seg in ${pyStr(dir)}.strip("/").split("/"):`,
+      '    _snk_cur+="/"+_snk_seg',
+      '    try:',
+      '        os.mkdir(_snk_cur)',
+      '    except OSError:',
+      '        pass'
+    ],
+    '_snk_cur',
+    '_snk_seg'
+  )
 }
 
 /**
