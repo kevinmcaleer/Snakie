@@ -42,7 +42,6 @@
  */
 import type { Expr, Name, Stmt } from '../ast'
 import { unwrap } from '../ast'
-import { textOf } from '../expr'
 import type { TextEdit } from '../text'
 import { defineRule } from '../types'
 import type { RefactorContext, RefactorMatch } from '../types'
@@ -87,6 +86,57 @@ function displaySize(expr: Expr): number | null {
   }
 }
 
+/**
+ * Is this element plain data — a literal, or a nested display of literals?
+ *
+ * The three ways out this rule offers (a `bytes` literal, a file read on
+ * demand, computing the values) all assume the table *is* data. A list of
+ * twelve `Servo(…)` objects is none of those things: the objects have to exist,
+ * they cannot be re-read from flash, and telling someone to move them into a
+ * `.bin` is nonsense. So a display whose elements are calls, names or
+ * expressions is left alone, however long it runs.
+ */
+function isConstantData(expr: Expr, depth: number): boolean {
+  const e = unwrap(expr)
+  if (e.type === 'Constant') return true
+  // A negative number is a unary minus over a constant, not a constant.
+  if (e.type === 'UnaryOp' && e.op !== 'not') return isConstantData(e.operand, depth)
+  if (depth >= 4) return false
+  switch (e.type) {
+    case 'List':
+    case 'Tuple':
+    case 'Set':
+      return e.elts.every((el) => isConstantData(el, depth + 1))
+    case 'Dict':
+      return (
+        e.keys.every((k) => k != null && isConstantData(k, depth + 1)) &&
+        e.values.every((v) => isConstantData(v, depth + 1))
+      )
+    default:
+      return false
+  }
+}
+
+/** Is every entry of this display plain data? */
+function isDataTable(display: Expr): boolean {
+  return isConstantData(display, 0)
+}
+
+/**
+ * How much of a literal's source is data rather than commentary.
+ *
+ * The character count stands in for "how much heap this builds", so the bytes
+ * a comment occupies must not be counted: `[2, 3, 4, 5]` under four lines of
+ * explanation is a four-slot list, not half a kilobyte.
+ */
+function dataChars(ctx: RefactorContext, expr: Expr): number {
+  let chars = expr.end - expr.start
+  for (const c of ctx.comments) {
+    if (c.start >= expr.start && c.end <= expr.end) chars -= c.end - c.start
+  }
+  return chars
+}
+
 /** The `NAME = <display>` this module-level statement is, or null. */
 function tableOf(stmt: Stmt): { target: Name; value: Expr } | null {
   if (stmt.type === 'Assign') {
@@ -128,11 +178,12 @@ export const largeModuleTableRule = defineRule<TableMatch>({
       const display = unwrap(table.value)
       const count = displaySize(display)
       if (count == null) continue
+      // Only a table of data has the ways out this rule points at.
+      if (!isDataTable(display)) continue
 
-      const source = textOf(ctx, display)
       // Either a lot of elements, or a lot of source: a dict of twelve servo
       // trim tuples is only twelve entries and still half a kilobyte of heap.
-      if (count <= MAX_ELEMENTS && source.length <= MAX_SOURCE_CHARS) continue
+      if (count <= MAX_ELEMENTS && dataChars(ctx, display) <= MAX_SOURCE_CHARS) continue
 
       const name = table.target.id
       const kind = DISPLAY_KINDS[display.type] ?? 'table'

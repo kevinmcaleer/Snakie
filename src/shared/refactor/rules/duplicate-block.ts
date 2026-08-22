@@ -34,7 +34,7 @@
  */
 import type { AnyNode, Stmt } from '../ast'
 import { walk } from '../ast'
-import { lineStart } from '../text'
+import { indentAt, lineEnd, lineStart } from '../text'
 import type { TextEdit } from '../text'
 import { defineRule } from '../types'
 import type { RefactorContext, RefactorMatch } from '../types'
@@ -97,39 +97,82 @@ function isDocstring(stmt: Stmt): boolean {
 }
 
 /**
- * The run's source text with its own indentation removed and line endings
- * normalised, so the same block matches itself at any nesting level. Returns
- * null when the run is not worth comparing.
+ * One statement, reduced to a comparable shape: its own lines with its own
+ * indentation stripped, trailing spaces trimmed and line endings normalised, plus
+ * whatever sits between it and the next statement.
+ *
+ * Chunking per *statement* rather than per run is what keeps `detect` cheap. A
+ * block of n statements has O(n²) runs in it, and normalising each one from
+ * scratch made a 2,000-line module cost a third of a second on every re-lint;
+ * with the pieces precomputed, a run is a join of pieces that already exist.
  */
-function runOf(ctx: RefactorContext, list: Stmt[], from: number, to: number): Run | null {
-  const stmts = list.slice(from, to + 1)
+interface Chunk {
+  /** Dedented text of this statement's own lines; null when it shares a line. */
+  text: string | null
+  /** Non-blank lines in `text`. */
+  lines: number
+  /** Dedented text of the blank/comment lines before the next statement. */
+  gap: string
+  /** Non-blank lines in `gap`. */
+  gapLines: number
+  stmt: Stmt
+}
+
+/** Strip `prefix` from each line, trim line ends, normalise `\r\n`. */
+function normalise(raw: string, prefix: string): { text: string; lines: number } {
+  let lines = 0
+  const out = raw.split(/\r?\n/).map((line) => {
+    if (!line.trim()) return ''
+    lines++
+    // A line shallower than the statement itself — a docstring's own text, say —
+    // is left as it is, so it compares as the literal it is at any nesting level.
+    const body = line.startsWith(prefix) ? line.slice(prefix.length) : line
+    return body.replace(/\s+$/, '')
+  })
+  return { text: out.join('\n'), lines }
+}
+
+/** Reduce one statement list to its chunks, in order. */
+function chunksOf(ctx: RefactorContext, list: Stmt[]): Chunk[] {
+  return list.map((stmt, i) => {
+    const at = lineStart(ctx.src, stmt.start)
+    // A statement sharing its line with another (`a = 1; b = 2`) has no shape of
+    // its own to compare, so no run may start at or run through it.
+    if (ctx.src.slice(at, stmt.start).trim() !== '') {
+      return { text: null, lines: 0, gap: '', gapLines: 0, stmt }
+    }
+    const prefix = indentAt(ctx.src, stmt.start)
+    const own = normalise(ctx.src.slice(at, lineEnd(ctx.src, stmt.end)), prefix)
+    const next = list[i + 1]
+    const between = next ? ctx.src.slice(lineEnd(ctx.src, stmt.end), lineStart(ctx.src, next.start)) : ''
+    const gap = normalise(between, prefix)
+    return { text: own.text, lines: own.lines, gap: gap.text, gapLines: gap.lines, stmt }
+  })
+}
+
+/** The run `[from..to]`, or null when it is not worth comparing. */
+function runOf(chunks: Chunk[], from: number, to: number): Run | null {
+  let key = ''
+  let lines = 0
+  for (let i = from; i <= to; i++) {
+    const chunk = chunks[i]
+    if (chunk.text == null) return null
+    // The gap after the last statement belongs to whatever follows, not to us.
+    if (i > from) key += chunks[i - 1].gap
+    key += chunk.text
+    lines += chunk.lines + (i < to ? chunk.gapLines : 0)
+  }
+  if (lines < MIN_LINES) return null
+
+  const stmts = chunks.slice(from, to + 1).map((c) => c.stmt)
   if (stmts.every((s) => UNREMARKABLE.has(s.type))) return null
   if (stmts.every(isDocstring)) return null
 
-  const first = stmts[0]
-  const last = stmts[stmts.length - 1]
-  const at = lineStart(ctx.src, first.start)
-  // A run that shares its first line with something else has no clean shape.
-  if (ctx.src.slice(at, first.start).trim() !== '') return null
-
-  const raw = ctx.src.slice(at, last.end)
-  const lines = raw.split(/\r?\n/)
-  let common = Infinity
-  for (const line of lines) {
-    if (!line.trim()) continue
-    common = Math.min(common, /^[ \t]*/.exec(line)![0].length)
-  }
-  if (!Number.isFinite(common)) return null
-
-  const body = lines.map((line) => (line.trim() ? line.slice(common).replace(/\s+$/, '') : ''))
-  const realLines = body.filter((line) => line !== '').length
-  if (realLines < MIN_LINES) return null
-
   return {
-    key: body.join('\n'),
-    start: first.start,
-    end: last.end,
-    lines: realLines,
+    key,
+    start: stmts[0].start,
+    end: stmts[stmts.length - 1].end,
+    lines,
     statements: stmts.length
   }
 }
@@ -160,22 +203,41 @@ export const duplicateBlockRule = defineRule<DuplicateBlockMatch>({
   hintOnly: true,
 
   detect(ctx: RefactorContext): RefactorMatch<DuplicateBlockMatch>[] {
-    const groups = new Map<string, Run[]>()
-
+    // Pass one: reduce every statement in the file to its comparable shape, and
+    // count how often each one appears on its own.
+    const blocks: Chunk[][] = []
+    const seen = new Map<string, number>()
     walk(ctx.module as AnyNode, (node) => {
       for (const list of listsOf(node)) {
-        for (let from = 0; from + MIN_STATEMENTS <= list.length; from++) {
-          const limit = Math.min(list.length - 1, from + MAX_STATEMENTS - 1)
-          for (let to = from + MIN_STATEMENTS - 1; to <= limit; to++) {
-            const run = runOf(ctx, list, from, to)
-            if (!run) continue
-            const found = groups.get(run.key)
-            if (found) found.push(run)
-            else groups.set(run.key, [run])
-          }
+        if (list.length < MIN_STATEMENTS) continue
+        const chunks = chunksOf(ctx, list)
+        blocks.push(chunks)
+        for (const chunk of chunks) {
+          if (chunk.text == null) continue
+          seen.set(chunk.text, (seen.get(chunk.text) ?? 0) + 1)
         }
       }
     })
+
+    // Pass two: a repeated run has to *start* with a repeated statement, so only
+    // those few positions are worth growing a run from. Without this filter the
+    // O(n²) window scan walks every statement in the file.
+    const groups = new Map<string, Run[]>()
+    for (const chunks of blocks) {
+      for (let from = 0; from + MIN_STATEMENTS <= chunks.length; from++) {
+        const head = chunks[from].text
+        if (head == null || (seen.get(head) ?? 0) < 2) continue
+        const limit = Math.min(chunks.length - 1, from + MAX_STATEMENTS - 1)
+        for (let to = from + MIN_STATEMENTS - 1; to <= limit; to++) {
+          if (chunks[to].text == null) break
+          const run = runOf(chunks, from, to)
+          if (!run) continue
+          const found = groups.get(run.key)
+          if (found) found.push(run)
+          else groups.set(run.key, [run])
+        }
+      }
+    }
 
     const repeated = [...groups.values()]
       .map(spread)

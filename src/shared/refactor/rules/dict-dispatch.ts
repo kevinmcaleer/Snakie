@@ -34,6 +34,16 @@
  *
  * - **fewer than three branches** — two cases are an `if`/`else`, and a table
  *   costs more than it saves;
+ * - **an `else` value that is not a literal** — it becomes `.get`'s second
+ *   argument, which Python evaluates on *every* call, including the ones that
+ *   find their key. `else: return cfg.trim` starts raising `AttributeError` on
+ *   the calls that used to succeed; `else: return total / count` starts
+ *   dividing by a zero it never reached; `else: return fallback` starts reading
+ *   a name the branch above it may never have bound. A number, a string, `None`
+ *   or a tuple of those cannot do any of that;
+ * - **values that read a name the file rebinds** — the table is built once, at
+ *   import. A `global TRIM` that `calibrate()` writes went on changing what the
+ *   chain returned; the table would have frozen the value it had at start-up;
  * - **an assignment chain with no `else`** — the chain leaves the target at
  *   whatever it already held; `TABLE.get(key)` would overwrite it with `None`;
  * - **a `return` chain with no `else` that is not the last statement of its
@@ -179,6 +189,112 @@ function keyIdentity(expr: Expr): string | null {
   // this is two adjacent literals the parser joined into one constant.
   if (body.includes(quote) || body.includes('\\') || /[\r\n]/.test(body)) return null
   return `s:${body}`
+}
+
+/**
+ * Is this expression a literal all the way down — a number, a string, a bool,
+ * `None`, a signed number, or a tuple of those?
+ *
+ * This is the bar the `else` value has to clear, and purity is not enough for
+ * it. `TABLE.get(key, default)` evaluates `default` on **every** call, where
+ * the chain only ran the `else` when nothing matched. `cfg.trim` is pure and
+ * raises `AttributeError` when `cfg` is None; `total / count` is pure and
+ * divides by zero; `fallback` is pure and may never have been bound. All three
+ * would start failing on calls that used to succeed. A literal cannot raise,
+ * cannot allocate, and cannot read anything.
+ */
+function isLiteralExpression(expr: Expr): boolean {
+  const e = unwrap(expr)
+  // An f-string's braces hold real expressions, so it is not a literal.
+  if (e.type === 'Constant') return !(e.prefix ?? '').includes('f')
+  // `-1` and `+2`; `literalNumber` says no to `-"a"`, which would raise.
+  if (e.type === 'UnaryOp') return literalNumber(e) != null
+  if (e.type === 'Tuple') return e.elts.every(isLiteralExpression)
+  return false
+}
+
+/**
+ * Every offset at which the file binds each name, in any scope.
+ *
+ * Deliberately blunter than `scope.ts`: a `global TRIM` inside a function binds
+ * the module's `TRIM`, and a parameter that merely shares the name is a reason
+ * to decline even though it binds something else. One site, above the table, is
+ * the only shape we will build a value on.
+ */
+function bindingSites(module: Module): Map<string, number[]> {
+  const out = new Map<string, number[]>()
+  const add = (name: string, at: number): void => {
+    const list = out.get(name)
+    if (list) list.push(at)
+    else out.set(name, [at])
+  }
+  const bindTarget = (expr: Expr | undefined): void => {
+    if (!expr) return
+    const e = unwrap(expr)
+    // `a.b = 1` and `a[i] = 1` mutate; they do not bind a name.
+    if (e.type === 'Name') add(e.id, e.start)
+    else if (e.type === 'Tuple' || e.type === 'List') for (const el of e.elts) bindTarget(el)
+    else if (e.type === 'Starred') bindTarget(e.value)
+  }
+  walk(module as AnyNode, (n) => {
+    switch (n.type) {
+      case 'Assign':
+        for (const t of n.targets) bindTarget(t)
+        break
+      case 'AugAssign':
+      case 'AnnAssign':
+      case 'For':
+        bindTarget(n.target)
+        break
+      case 'With':
+        for (const item of n.items) bindTarget(item.optionalVars)
+        break
+      case 'Delete':
+        for (const t of n.targets) bindTarget(t)
+        break
+      case 'Import':
+      case 'ImportFrom':
+        for (const a of n.names) add(a.asname ?? a.name.split('.')[0], a.start)
+        break
+      case 'FunctionDef':
+      case 'ClassDef':
+        add(n.name, n.nameStart)
+        break
+      case 'Param':
+        add(n.name, n.start)
+        break
+      case 'ExceptHandler':
+        if (n.name) add(n.name, n.start)
+        break
+      case 'NamedExpr':
+        add(n.target.id, n.target.start)
+        break
+      case 'Global':
+      case 'Nonlocal':
+        for (const x of n.names) add(x, n.start)
+        break
+      default:
+        break
+    }
+  })
+  return out
+}
+
+/**
+ * The first offset generated code may occupy. A `#!` line has to stay line 1
+ * and a PEP 263 coding cookie has to stay inside the first two, so the walk up
+ * over a comment block must never climb past either of them.
+ */
+function headerFloor(src: string): number {
+  let at = 0
+  for (let line = 0; line < 2; line++) {
+    const end = lineEnd(src, at)
+    const text = src.slice(at, end)
+    const shebang = line === 0 && text.startsWith('#!')
+    if (!shebang && !/^#.*coding[:=]\s*[-\w.]+/.test(text)) break
+    at = end
+  }
+  return at
 }
 
 /** Can this expression be dropped into a dict literal or an argument list as-is? */
@@ -330,8 +446,10 @@ function analyse(ctx: RefactorContext, head: IfStmt): Dispatch | null {
   if (elseStmt) {
     const value = valueOf(elseStmt)
     if (!value) return null
-    // The default stays where it is, as `.get`'s second argument, so unlike the
-    // table's values it may go on reading the function's own locals.
+    // The default becomes `.get`'s second argument, and Python evaluates that
+    // on every call — including the ones whose key is in the table, which never
+    // reached the `else` at all. Only a literal is safe to promote like that.
+    if (!isLiteralExpression(value)) return null
     defaultText = textOf(ctx, value).trim()
   } else if (shape === 'assign') {
     // No `else`: the chain leaves the target alone, `.get` would set it to None.
@@ -365,13 +483,24 @@ function analyse(ctx: RefactorContext, head: IfStmt): Dispatch | null {
     if (!ctx.src.slice(prev, anchor).trim().startsWith('#')) break
     anchor = prev
   }
+  // …but never above a shebang or a coding cookie, which have to stay put.
+  anchor = Math.max(anchor, headerFloor(ctx.src))
   if (anchor > replaceStart) return null
 
   // The table's values leave the function behind, so every name they read has to
-  // be one the module has already bound by the time the table is built.
-  const visible = namesVisibleAt(ctx, anchor)
-  for (const name of namesRead(moved as AnyNode[])) {
-    if (!visible.has(name)) return null
+  // be one the module has already bound by the time the table is built — and one
+  // nothing rebinds afterwards, because the table is built exactly once. A
+  // `global TRIM` that `calibrate()` writes went on changing what the chain
+  // returned; a table would have frozen whatever `TRIM` held at import.
+  const read = namesRead(moved as AnyNode[])
+  if (read.size > 0) {
+    const visible = namesVisibleAt(ctx, anchor)
+    const bound = bindingSites(ctx.module)
+    for (const name of read) {
+      if (!visible.has(name)) return null
+      const sites = bound.get(name)
+      if (!sites || sites.length !== 1 || sites[0] >= anchor) return null
+    }
   }
 
   return {

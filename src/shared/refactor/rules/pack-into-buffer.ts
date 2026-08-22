@@ -47,9 +47,15 @@ interface PackMatch {
   loopKind: 'for' | 'while'
 }
 
-/** Is `name` bound to `struct`/`ustruct` by an `import` in this file? */
+/**
+ * Is `name` bound to `struct`/`ustruct` by an `import` in this file?
+ *
+ * The import has to be there. Taking the *spelling* `struct.pack(…)` as proof
+ * on its own would claim any object a file happens to have called `struct` —
+ * and without an import, a bare `struct` cannot be the module: it is whatever
+ * else the file bound to that name.
+ */
 function isStructAlias(ctx: RefactorContext, name: string): boolean {
-  if (STRUCT_MODULES.includes(name)) return true
   let found = false
   walk(ctx.module as AnyNode, (node) => {
     if (node.type !== 'Import') return

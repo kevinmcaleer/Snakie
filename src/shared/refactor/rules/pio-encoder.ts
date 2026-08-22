@@ -43,10 +43,12 @@
  * handler you already have.
  *
  * Deliberately narrow. Two pin reads and a counter also describes a pair of
- * independent button counters, which PIO would not improve. This fires only when
- * the two channels are *combined* — shifted together, compared with each other,
- * or used as one index into a transition table — because combining them is what
- * makes it quadrature decoding rather than two unrelated inputs.
+ * independent button counters, and two pin reads *subtracted* is how a line
+ * follower computes its steering error — neither has anything to do with PIO.
+ * So this fires only when the two channels are packed into one reading with a
+ * shift or a mask, or compared with each other for equality, because that gray-
+ * code shape is what makes it quadrature decoding rather than two unrelated
+ * inputs.
  */
 import type { AnyNode, Call, Expr, ForStmt, FunctionDef, Stmt, WhileStmt } from '../ast'
 import { unwrap, walk } from '../ast'
@@ -58,11 +60,15 @@ import type { RefactorContext, RefactorMatch } from '../types'
 type Loop = ForStmt | WhileStmt
 
 /**
- * Expression shapes that *combine* two values. A tuple or an argument list does
- * not count — `a, b = pin_a.value(), pin_b.value()` puts both channels in one
- * node without doing anything quadrature-ish with them.
+ * Quadrature decoding packs the two channel bits together — `(a << 1) | b`,
+ * `state ^ last`, `(prev << 2) | now`. Deliberately bitwise only: subtracting
+ * one sensor from the other is a *differential error term*, which is how a line
+ * follower steers, and calling that a broken encoder would be nonsense.
  */
-const COMBINING = new Set(['BinOp', 'Compare', 'BoolOp', 'IfExp'])
+const BIT_OPS = new Set(['<<', '>>', '|', '&', '^'])
+
+/** The other quadrature shape: asking whether the two channels agree. */
+const EQUALITY_OPS = new Set(['==', '!='])
 
 interface EncoderMatch {
   /** How to name the offender in the message. */
@@ -146,7 +152,7 @@ function channelsIn(ctx: RefactorContext, root: AnyNode, named: Map<string, stri
   return out
 }
 
-/** Are the two channels combined into a single value anywhere in here? */
+/** Are the two channels packed together, or compared with each other? */
 function combinesChannels(
   ctx: RefactorContext,
   stmts: readonly Stmt[],
@@ -155,7 +161,10 @@ function combinesChannels(
   let found = false
   walkBody(stmts, (node) => {
     if (found) return false
-    if (!COMBINING.has(node.type)) return undefined
+    const shaped =
+      (node.type === 'BinOp' && BIT_OPS.has(node.op)) ||
+      (node.type === 'Compare' && node.ops.every((op) => EQUALITY_OPS.has(op)))
+    if (!shaped) return undefined
     if (channelsIn(ctx, node, named).size >= 2) found = true
     return undefined
   })

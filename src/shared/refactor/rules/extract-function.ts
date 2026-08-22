@@ -312,10 +312,13 @@ function interpolatedNames(raw: string): string[] {
   return out
 }
 
-/** One name an f-string mentions, with the literal's offset. */
+/** One name an f-string mentions, with the literal it was written in. */
 interface FieldRead {
   name: string
+  /** The literal's offset — where the read happens, for the escape analysis. */
   at: number
+  /** The literal itself, for the walk up to its enclosing scope. */
+  node: AnyNode
 }
 
 /**
@@ -333,7 +336,9 @@ function fieldReads(nodes: readonly AnyNode[]): FieldRead[] {
       if (n.type !== 'Constant') return undefined
       const literal = n as Constant
       if (literal.kind !== 'string' || !literal.raw.includes('{')) return undefined
-      for (const name of interpolatedNames(literal.raw)) out.push({ name, at: literal.start })
+      for (const name of interpolatedNames(literal.raw)) {
+        out.push({ name, at: literal.start, node: literal })
+      }
       return undefined
     })
   }
@@ -662,20 +667,21 @@ function loopAround(first: Stmt, fn: FunctionDef): AnyNode | null {
 }
 
 /**
- * Can a closure read `name` *while the block is running*?
+ * Names a closure can read *while the block is running*.
  *
  * A nested `def` closes over the enclosing function's variable, not over a
  * copy. Once the block moves out, the enclosing function's binding stops
- * changing until the call returns — so a closure that already exists and gets
- * called from inside the block would read a stale value. That is invisible in
- * the diff and can hang a robot (an IRQ handler's counter that never moves), so
- * decline instead.
+ * changing until the call returns — so a closure that already exists and is
+ * called from inside the block reads a stale value. Nothing in the diff shows
+ * that, and it can hang a robot (an IRQ handler's counter that never moves), so
+ * the rule declines instead.
  *
  * A closure created *after* the block cannot be called from inside it — its
  * `def` has not run yet — unless a loop brings the block round again.
  */
-function readByLiveClosure(fn: FunctionDef, name: string, run: Run, first: Stmt): boolean {
+function namesReadByLiveClosures(fn: FunctionDef, run: Run, first: Stmt): Set<string> {
   const loop = loopAround(first, fn)
+  const out = new Set<string>()
   const live = (node: AnyNode, at: number): boolean => {
     if (at >= run.regionStart && at < run.regionEnd) return false
     const scope = liveScopeAround(node, fn)
@@ -684,10 +690,13 @@ function readByLiveClosure(fn: FunctionDef, name: string, run: Run, first: Stmt)
     return loop != null && loop.start <= scope.start && scope.end <= loop.end
   }
   for (const use of nameUses(bodyOf(fn))) {
-    if (use.kind !== 'read' || use.name !== name) continue
-    if (live(use.node, use.node.start)) return true
+    if (use.kind === 'read' && live(use.node, use.node.start)) out.add(use.name)
   }
-  return false
+  for (const read of fieldReads(bodyOf(fn))) {
+    // The `{…}` of an f-string inside a closure reads it just the same.
+    if (live(read.node, read.at)) out.add(read.name)
+  }
+  return out
 }
 
 /**
@@ -847,7 +856,8 @@ function analyse(ctx: RefactorContext): ExtractMatch | null {
   const rebindable = namesRebindableByNestedScopes(fn)
   if (params.some((name) => rebindable.has(name))) return null
   if (returns.some((name) => rebindable.has(name))) return null
-  if (written.some((name) => readByLiveClosure(fn, name, run, first))) return null
+  const liveClosureReads = namesReadByLiveClosures(fn, run, first)
+  if (written.some((name) => liveClosureReads.has(name))) return null
 
   const name = freshFunctionName(baseName(stmts, returns), takenNames(ctx, fn))
   if (!name) return null

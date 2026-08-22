@@ -1,8 +1,8 @@
 """A short program carrying a lot of labels.
 
-Twenty-six instructions and fourteen assembler directives — `label()`,
-`wrap()` and `wrap_target()` mark positions rather than occupying slots, so
-counting them would put this at forty and condemn a program that fits.
+Thirty instructions and fourteen assembler directives — `label()`, `wrap()` and
+`wrap_target()` mark positions rather than occupying slots, so counting them
+would put this at forty-four and condemn a program that fits.
 """
 import rp2
 from machine import Pin

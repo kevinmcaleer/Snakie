@@ -247,12 +247,23 @@ export const integerAccumulatorRule = defineRule<AccumulatorMatch>({
       if (!augs.every((a) => a.op === '+' && addsWholeNumbers(a.value, floatNames))) return
 
       reported.add(key)
+      const initial = textOf(ctx, initialiser.value)
+      const kind = loopKindOf(loop)
+      // Only claim "whole numbers" when every addend is written as one. A bare
+      // name might be a sampled integer or it might be a float this file never
+      // sees — `for length in bone_lengths` is as likely as `for pixel in row`
+      // — so where the file cannot say, the hint asks instead of asserting.
+      const certain = augs.every((a) => isIntLiteral(a.value))
+      const message = certain
+        ? `\`${name}\` starts at \`${initial}\` but this \`${kind}\` only ever adds whole numbers — on a chip with no FPU each float add is a soft-float library call`
+        : `\`${name}\` starts at \`${initial}\` and nothing this \`${kind}\` adds to it is written as a fraction — if those values really are whole numbers, keeping the sum in integers skips a soft-float library call on every pass`
+
       out.push({
         ruleId: 'integer-accumulator',
         start: node.start,
         end: node.end,
-        message: `\`${name}\` starts at \`${textOf(ctx, initialiser.value)}\` but this \`${loopKindOf(loop)}\` only ever adds whole numbers — on a chip with no FPU each float add is a soft-float library call`,
-        data: { augAssign: node, name, initial: textOf(ctx, initialiser.value) }
+        message,
+        data: { augAssign: node, name, initial }
       })
     })
 

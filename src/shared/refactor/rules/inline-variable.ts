@@ -53,7 +53,8 @@
 import type { AnyNode, Assign, Expr, Name, Stmt } from '../ast'
 import { unwrap, walk } from '../ast'
 import { isPureExpression, textOf } from '../expr'
-import { bodyOf, nameUses, namesRead, referencesTo, scopeOf } from '../scope'
+import type { NameUse, Scope } from '../scope'
+import { bodyOf, nameUses, namesRead, scopeOf } from '../scope'
 import { lineEnd, lineStart } from '../text'
 import type { TextEdit } from '../text'
 import { defineRule } from '../types'
@@ -276,16 +277,18 @@ function containsFString(expr: Expr): boolean {
   return found
 }
 
-/** Does anything in the file declare one of these names `global`/`nonlocal`? */
-function declaredElsewhere(ctx: RefactorContext, names: Iterable<string>): boolean {
-  const wanted = new Set(names)
-  let found = false
+/**
+ * Every name the file declares `global` or `nonlocal`. Gathered once per
+ * `detect` rather than per candidate: a name in here can be rewritten by a call
+ * that never mentions it, so it is never safe to move an expression past one.
+ */
+function declaredNames(ctx: RefactorContext): Set<string> {
+  const out = new Set<string>()
   walk(ctx.module as AnyNode, (n) => {
-    if (n.type !== 'Global' && n.type !== 'Nonlocal') return undefined
-    if (n.names.some((name) => wanted.has(name))) found = true
+    if (n.type === 'Global' || n.type === 'Nonlocal') for (const name of n.names) out.add(name)
     return undefined
   })
-  return found
+  return out
 }
 
 /**
@@ -340,6 +343,19 @@ export const inlineVariableRule = defineRule<InlineVariableMatch>({
 
   detect(ctx: RefactorContext): RefactorMatch<InlineVariableMatch>[] {
     const out: RefactorMatch<InlineVariableMatch>[] = []
+    const declared = declaredNames(ctx)
+
+    // One binding analysis per scope, not one per assignment: `detect` runs on
+    // every re-lint, and a long module has a lot of assignments in few scopes.
+    const cache = new Map<Scope, NameUse[]>()
+    const usesIn = (scope: Scope): NameUse[] => {
+      let uses = cache.get(scope)
+      if (!uses) {
+        uses = nameUses(bodyOf(scope))
+        cache.set(scope, uses)
+      }
+      return uses
+    }
 
     walk(ctx.module as AnyNode, (node) => {
       if (node.type !== 'Assign') return
@@ -368,9 +384,9 @@ export const inlineVariableRule = defineRule<InlineVariableMatch>({
       // A parameter already has a meaning at the top of the function; removing
       // an assignment to one does not remove the name.
       if (scope.params.some((p) => p.name === name)) return
-      if (declaredElsewhere(ctx, [name])) return
+      if (declared.has(name)) return
 
-      const uses = referencesTo(scope, name)
+      const uses = usesIn(scope).filter((u) => u.name === name)
       const writes = uses.filter((u) => u.kind === 'write')
       const reads = uses.filter((u) => u.kind === 'read')
       // Exactly one binding (ours) and exactly one reader, or the name is
@@ -398,8 +414,8 @@ export const inlineVariableRule = defineRule<InlineVariableMatch>({
 
       // Nothing between the two points may rewrite what the expression reads.
       const ingredients = namesRead([assign.value as AnyNode])
-      if (declaredElsewhere(ctx, ingredients)) return
-      for (const use of nameUses(bodyOf(scope))) {
+      if ([...ingredients].some((n) => declared.has(n))) return
+      for (const use of usesIn(scope)) {
         if (use.kind !== 'write' || !ingredients.has(use.name)) continue
         if (use.node.start >= assign.end && use.node.start < read.start) return
       }

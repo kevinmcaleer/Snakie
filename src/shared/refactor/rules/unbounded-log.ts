@@ -48,6 +48,20 @@
  * `for i in range(10)` is not an unbounded loop and never fires: filling a
  * lookup table is not a leak.
  *
+ * Three more shapes that look like the smell and are not:
+ *
+ * - **A loop with a `break` or a `return` in it.** `while True:` is only half
+ *   the story; read-until-EOF stops when the data does, and the list it fills is
+ *   bounded by however much arrived. The warning asserts "a loop that never
+ *   ends", so a loop that plainly can end must not get it.
+ * - **The list handed to a call.** `trim(rows, 64)` and `flush(pending)` are how
+ *   a cap is spelled once it outgrows an `if`, and from the loop they look
+ *   exactly like `render(rows)`. Only calls that are read-only by definition —
+ *   `len`, `print` and friends — leave the hint standing.
+ * - **`batch = []` *inside* the loop.** That is a fresh list every pass and the
+ *   old one is collected; it is the streaming fix this hint asks for, so
+ *   flagging it would be pointing at the cure.
+ *
  * It also stays on plain names. `self.rows.append(…)` leaks exactly as badly,
  * but proving that `self` is the same object at the `[]` and at the `append`
  * needs more than this file's text can give us, so an attribute is left alone

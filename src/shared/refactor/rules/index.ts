@@ -100,10 +100,22 @@ import { timerCallbackAllocationRule } from './timer-callback-allocation' // 89
 // R6b — board-specific optimisation (§3.7)
 import { tryNativeEmitterRule } from './try-native-emitter' // 43
 import { convertToViperRule } from './convert-to-viper' // 44
+import { viperPointerBufferRule } from './viper-pointer-buffer' // 45
+import { inlineAssemblerHintRule } from './inline-assembler-hint' // 46
+import { wastedEmitterRule } from './wasted-emitter' // 47
+import { viperOverflowWarningRule } from './viper-overflow-warning' // 48
 import { pioNeopixelRule } from './pio-neopixel' // 49
 import { pioEncoderRule } from './pio-encoder' // 50
+import { pioPulseMeasureRule } from './pio-pulse-measure' // 51
+import { pioPulseTrainRule } from './pio-pulse-train' // 52
+import { pioBitBangedProtocolRule } from './pio-bit-banged-protocol' // 53
+import { pioStateMachineBudgetRule } from './pio-state-machine-budget' // 54
+import { pioProgramTooLongRule } from './pio-program-too-long' // 55
 import { readIntoBufferRule } from './readinto-buffer' // 57
 import { memoryviewSliceRule } from './memoryview-slice' // 58
+import { useArrayNotListRule } from './use-array-not-list' // 59
+import { nameTheRegisterRule } from './name-the-register' // 60
+import { gcCollectInLoopRule } from './gc-collect-in-loop' // 61
 import { freezeLargeTableRule } from './freeze-large-table' // 62
 import { crossCompileMpyRule } from './cross-compile-mpy' // 63
 
@@ -212,10 +224,22 @@ export const MICROPYTHON_RULES: RefactorRule<unknown>[] = [
 export const BOARD_RULES: RefactorRule<unknown>[] = [
   tryNativeEmitterRule,
   convertToViperRule,
+  viperPointerBufferRule,
+  inlineAssemblerHintRule,
+  wastedEmitterRule,
+  viperOverflowWarningRule,
   pioNeopixelRule,
   pioEncoderRule,
+  pioPulseMeasureRule,
+  pioPulseTrainRule,
+  pioBitBangedProtocolRule,
+  pioStateMachineBudgetRule,
+  pioProgramTooLongRule,
   readIntoBufferRule,
   memoryviewSliceRule,
+  useArrayNotListRule,
+  nameTheRegisterRule,
+  gcCollectInLoopRule,
   freezeLargeTableRule,
   crossCompileMpyRule
 ]

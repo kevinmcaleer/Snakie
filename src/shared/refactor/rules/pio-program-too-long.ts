@@ -2,7 +2,7 @@
  * Rule 55 — **This PIO program will not fit** (epic #634 §3.7, board-specific).
  *
  * ```python
- * # before — 42 instructions, one per step  # after — the table lives in RAM
+ * # before — 43 instructions, one per phase # after — the table lives in RAM
  * @rp2.asm_pio(set_init=(PIO.OUT_LOW,) * 4) @rp2.asm_pio(out_init=(PIO.OUT_LOW,) * 4)
  * def half_step():                          def half_step():
  *     label("forward")                          wrap_target()
@@ -18,7 +18,7 @@
  *
  * A PIO block has exactly **32 instruction slots**, and they are shared by all
  * four state machines in that block. Your program is assembled and copied into
- * those slots when you construct the `StateMachine`, so a 42-instruction program
+ * those slots when you construct the `StateMachine`, so a 43-instruction program
  * cannot be loaded at all, and a 20-instruction one leaves only 12 slots for
  * every other program in the same block. The error, when it comes, is a
  * run-time `OSError`/`ValueError` from the constructor rather than anything the

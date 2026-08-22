@@ -203,14 +203,15 @@ export const batchFileWritesRule = defineRule<BatchWriteMatch>({
   hintOnly: true,
 
   detect(ctx: RefactorContext): RefactorMatch<BatchWriteMatch>[] {
-    const handles = fileHandles(ctx)
-    if (handles.size === 0) return []
+    // One ScopeFiles per scope, built the first time a candidate call needs it.
+    const cache = new Map<Scope, ScopeFiles>()
 
     const out: RefactorMatch<BatchWriteMatch>[] = []
     walk(ctx.module as AnyNode, (node) => {
       if (node.type !== 'Call') return
-      const hit = fileMethodCall(node, handles)
+      const hit = fileMethodCall(node)
       if (!hit) return
+      if (!resolvesToFile(node, hit.handle, cache)) return
       // Stops at a function boundary: a write inside a helper `def` that a loop
       // calls is not something this file can count the iterations of.
       const loop = enclosingLoop(node)
