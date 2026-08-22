@@ -31,34 +31,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   The same order holds in the editor stage, in `PartMeshView`, and in the URDF
   that `addMeshLink` and `swapLinkVisualToMesh` write. Absent means no
   translation, so parts authored before this need no migration. (#788)
-
-### Fixed
-- **A linked 3-D model no longer gets left behind when a part changes library,
-  and a missing one now says so.** Linking an STL in the Part Editor's 3-D tab
-  copies it into the part's folder — but saving the part into a *different*
-  library moved only `parts.yml`. The image and help ride in memory and made the
-  trip; the mesh exists only on disk and did not, so the 9V battery ended up with
-  `mesh: battery-9v.stl` in `snakie-standard/` and the actual model still sitting
-  in `my-parts/`. A save now brings the model with the part, and reports the
-  filename when it cannot find one at all rather than writing a dangling
-  reference and calling it a success.
-
-  **`meshUnits` is recorded when the model is linked.** An `.stl` states no
-  units, so the link step is the last moment anything can measure the geometry
-  and write a conclusion down; without it a 48 mm part read as metres arrives
-  1000× too big. The guess is stored as the ordinary, editable `meshUnits` field
-  and named in the confirmation message, so a wrong one is a visible click to
-  correct.
-
-  **A broken mesh no longer looks like a rendering bug.** "This part has no
-  model" and "this part's model is missing" used to render identically — a plain
-  footprint block, with nothing said. A part that declares a `mesh:` and doesn't
-  get one still gets a block (a part with no body is worse), but now reports it
-  in the status bar, naming the part and the file. The same silent-failure shape
-  is fixed on the placeholder→mesh upgrade in Sync, and in both stubbed bridges
-  that used to answer with a bare `{}`. (#787)
-
-### Added
 - **A sprite in your code draws itself, right there in the line.** (#790, part of
   epic #789) Name a `.spr` in a Python file and the sprite appears beside the
   string — at about line height, **always visible, not on hover**. Hover only
@@ -232,6 +204,214 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   The Packages tab — which searches micropython-lib and PyPI — now says plainly
   on a CircuitPython board that those are MicroPython packages, and points at the
   Modules panel instead.
+
+### Fixed
+- **A linked 3-D model no longer gets left behind when a part changes library,
+  and a missing one now says so.** Linking an STL in the Part Editor's 3-D tab
+  copies it into the part's folder — but saving the part into a *different*
+  library moved only `parts.yml`. The image and help ride in memory and made the
+  trip; the mesh exists only on disk and did not, so the 9V battery ended up with
+  `mesh: battery-9v.stl` in `snakie-standard/` and the actual model still sitting
+  in `my-parts/`. A save now brings the model with the part, and reports the
+  filename when it cannot find one at all rather than writing a dangling
+  reference and calling it a success.
+
+  **`meshUnits` is recorded when the model is linked.** An `.stl` states no
+  units, so the link step is the last moment anything can measure the geometry
+  and write a conclusion down; without it a 48 mm part read as metres arrives
+  1000× too big. The guess is stored as the ordinary, editable `meshUnits` field
+  and named in the confirmation message, so a wrong one is a visible click to
+  correct.
+
+  **A broken mesh no longer looks like a rendering bug.** "This part has no
+  model" and "this part's model is missing" used to render identically — a plain
+  footprint block, with nothing said. A part that declares a `mesh:` and doesn't
+  get one still gets a block (a part with no body is worse), but now reports it
+  in the status bar, naming the part and the file. The same silent-failure shape
+  is fixed on the placeholder→mesh upgrade in Sync, and in both stubbed bridges
+  that used to answer with a bare `{}`. (#787)
+- **A package's dependencies now provably land where the board can import them,
+  and the install says which ones came along.** (#785) A dependency has to be
+  installed at the install ROOT — `/lib/lsm6dsox.py`, on the board's `sys.path`
+  — because it is imported by name. Written under the package that asked for it,
+  it is a downloaded, present, completely unreachable file, and the install
+  still reports success. Snakie's resolver was doing the right thing, but
+  nothing said so: the tests proved the files were *fetched*, which is a
+  different claim from *put in the right place*, and a resolution's files
+  carried no record of **whose** they were, so the placement rule could not even
+  be stated. Every resolved file now names the package that declared it, the
+  device path is computed in exactly one place that can only ever see the
+  install target — so "relative to the package that pulled this in" is not
+  expressible — and the rule is pinned per-dependency and as a property.
+
+  Two real faults came out of the same look. An install folder given as `lib`
+  (the placeholder a part author is shown) produced **relative** device paths,
+  while the directories for those same paths were created **absolute** — they
+  only ever agreed because a board's working directory happens to be `/`; a
+  target is now anchored before anything is joined to it. And an install was
+  silent about what it brought: installing the Arduino Modulino package quietly
+  installs three more packages, and the only way to check was to list `/lib` on
+  the board. The install note now names them, on the desktop and the web, for
+  driver and package installs alike. The Part Editor also warns an author whose
+  `mip` install folder points *inside* another package — that folder is the root
+  its dependencies land in too.
+- **The Build workspace could overwrite the file you had open with a 3-D robot
+  model. It can't any more.** (#782) Building in the Build workspace edits the
+  project's robot model — but it saved that model through *whatever tab the
+  editor happened to have focused*. If that was your program, your program was
+  replaced by the robot model, on screen and on disk. The only check was "is
+  this a saved file", which a `.py` passes.
+
+  A robot model now goes to a `.urdf` or it goes nowhere. Where a model is
+  written is decided from the document itself — the file it came from, or the
+  `.urdf` open in the editor — never from what has focus, and a target that
+  isn't a `.urdf` is **refused, and says so**, rather than falling back to
+  something plausible. The same rule applies wherever a model is written: the
+  part-placement bridge, the Sync reconcile, and the robot.yml `urdf:` link
+  itself, which can no longer be pointed at a non-`.urdf` file.
+- **Sync no longer adds a second, third and fourth copy of your microcontroller
+  to the 3-D view.** (#782) A part that lost track of which 3-D body was its own
+  could still recognise it by name; the microcontroller couldn't — its only
+  identity was a note in `robot.yml`, so if that note went missing (which an
+  ordinary save could do), Sync reported the board as having no body and
+  reconciling made another one, identical to the one already there. The board is
+  now identified exactly the way a part is, so a lost note costs nothing, and
+  running Sync twice leaves the model exactly as it was.
+- **A deleted part can no longer leave a connection behind that breaks the whole
+  robot.** (#782) A `<joint>` referring to a link that isn't in the model is
+  invalid — the file fails to load in any 3-D viewer, so one stray connection
+  costs you the entire robot rather than one part. Snakie now refuses to write
+  one: a joint is never created for a body that isn't there, and any that is
+  found is dropped as the file is saved.
+- **A board whose firmware version isn't a version is no longer told to update.**
+  (#757) A vendor MicroPython build was reporting its *branch name* where the
+  version goes. The comparison turned anything non-numeric into `0`, so that
+  board read as `0.0.0` and every build in the catalog looked like an upgrade
+  from it. An unrecognisable version now compares as "no update" — we don't know
+  what it's running, and that isn't evidence that it's behind.
+- **Build no longer opens the help panel every time you switch to it.** Switching
+  to the Build workspace kept reopening the lesson/help sidebar, however many
+  times you closed it. The cause was a "sticky lesson" rule that carried the
+  sidebar across on EVERY workspace switch whenever the workspace you were
+  leaving happened to have Learn or Help selected with its sidebar open — which,
+  in Code, is simply where you're left after reading one help article. Worse, it
+  wrote that open panel into Build's own remembered layout, so collapsing it
+  there could never stick.
+
+  Now every workspace keeps its own panel state: Build (and Electronics) opens
+  the way you last left it — collapsed by default — and a panel you open there
+  yourself stays open, across switches and restarts. A panel still appears when
+  something deliberately asks for one: a tutorial step that sends you to the
+  workspace it's about brings its instructions with it, and an instrument's or
+  part's `?` still opens the Help article beside the board. Sessions that already
+  had the stale open panel stored for Electronics/Build get it collapsed once on
+  upgrade.
+- **Instruments pop out into their own window in the browser too.** (#781) On
+  app.snakie.org, undocking an instrument did nothing you could see: the
+  instrument left the dock, no window opened, and there was no way to get it
+  back except toggling its kind off and on. The pop-out control called
+  `instruments.openWindow`, which outside Electron landed on a stub that
+  returned and did nothing at all.
+
+  It now opens a real, resizable browser window — and, importantly, a LIVE one.
+  A pop-up is its own JavaScript world, so a window that built its own backend
+  would be watching a second, separate simulator (and a USB board can only be
+  open in one place at a time, so it could not join in at all). Instead the
+  editor tab lends the pop-out its own device: same telemetry, same
+  `sendControl`, one board. Close the window and the instrument re-docks, exactly
+  as it does on the desktop. If the browser blocks the pop-up, the instrument
+  comes straight back to the dock and says why; if the editor tab it belongs to
+  is gone, the window says that too instead of showing a dead dial.
+
+  Two smaller things came out of the same fix: the offline service worker was
+  answering *any* navigation with the app shell, so the instrument window would
+  have opened the whole editor inside itself; and a detached instrument now
+  uses the Soft Shell fonts the rest of the app does.
+- A unit test no longer depends on what is plugged into the machine running it.
+  (#773) The CircuitPython file-routing tests exercise one case — a drive that
+  ejected — that made the device re-resolve its mount, and re-resolution is the
+  one step that leaves the test's temp directory and scans the developer's real
+  volumes (and, if it finds a board, their real serial ports). That is unbounded
+  I/O: it is why that single case timed out repeatedly under a loaded suite
+  while passing every time on its own. The scan is now stubbed — the logic under
+  test is untouched, and two cases now assert something they could not before:
+  that the device really does look again when the marker file is gone, and that
+  a drive still present does **not** cost a rescan on every file operation.
+- **Pin labels are the same size on every board with the same hardware.** (#778)
+  A Tiny 2350's pin names didn't match a Modulino LED Matrix's, even though both
+  carry an ordinary 2.54 mm header. Label size wasn't a setting: it was derived
+  from the tightest gap between *any* two pins, measured in pixels of the part's
+  own fit-to-footprint box — an accident of the outline, not of the hardware. So
+  the same header was typeset one size on a 18 mm board and another on a 41 mm
+  one, and a placed part's silk labels carried its body scale on top of that,
+  setting identical pins in nearly twice the type on a big part as on a small one.
+
+  Labels are now sized the way everything else on a part already is: physically.
+  A label is as big as the room its pin really has — its neighbour's distance in
+  millimetres at the canvas' pixels-per-millimetre — so identical hardware drawn
+  at the same scale reads at the same size, whatever board it sits on.
+
+  The density shrink is still there, because it is the only thing keeping a Servo
+  2040's eighteen servo headers legible, but it now applies **per board edge**. A
+  label is anchored to the edge its pin faces and can only collide with the other
+  labels on that edge, so the Tiny 2350's QWIIC contacts — 1.2 mm apart, and
+  labelling off the bottom — no longer shrink the castellations down both sides.
+  Pins that draw no label at all (a servo header's V+/GND rows) no longer shrink
+  their neighbours either.
+- **A running Snakie can no longer undo an edit you made to a part outside it.**
+  (#750) The parts library is a folder of plain text files, so a script, an
+  editor and `git checkout` are all perfectly good ways to change a part — but
+  the app assumed it was the only author. It held each part in memory from the
+  moment the library loaded and, on the next save, wrote that copy back over
+  whatever was on disk. Corrected I²C addresses reverted to their 8-bit values,
+  QWIIC socket rotations flipped so GND sat on the wrong contact of a power
+  connector, and a module lost its whole template — four times in one session,
+  silently each time, because a save reported success.
+
+  A part now carries a stamp of the exact file it was read from, and a save that
+  presents a stamp the file no longer matches is **refused**, with a message
+  asking you to reopen the part. Nothing is written, so nothing is lost.
+
+  The same save also used to prune the part's folder to match its own idea of
+  the part's contents: every `image.*` and any `help.md`, whether the part
+  referenced them or not. That is how a hand-written `help.md` and a `.stl` mesh
+  were deleted from disk. A save now only removes an asset the part's own
+  previous `parts.yml` named, and only when it is being replaced or cleared —
+  anything else beside `parts.yml` is left alone. The dev "Update Standard"
+  mirror and the bundled-library refresh follow the same rule: they copy over
+  the top rather than emptying the folder first, and the mirror refuses outright
+  when the copy it would overwrite carries a newer version than the one being
+  promoted.
+- **Snakie downloads packages, instead of asking the board to.** (#776,
+  supersedes #769) Installing a driver or a package used to run `mip.install()`
+  **on the board** — which quietly required the *board* to have its own internet
+  connection. Most don't: a Pico, a Tiny 2350, any board without a radio could
+  never install anything this way. Even a Wi-Fi board needed `mip`, an optional
+  micropython-lib package that CircuitPython and many vendor builds leave out,
+  so the failure usually arrived as a bare
+  `ImportError("no module named 'mip'")`.
+
+  Now the machine with the internet connection does the downloading. Snakie
+  resolves the package on your computer and writes its files to the board, which
+  only has to do the thing every board can do: accept files. That reaches a
+  CIRCUITPY drive or the serial REPL through the same path every other file
+  write uses, so one route covers MicroPython and CircuitPython, wired and
+  wireless boards, and the simulator — which could never install anything
+  before. Whole packages come across, not just single files: the Modulino driver
+  installs all 25 of its files, including its three transitive dependencies.
+  It applies to the Packages panel too, not just drivers.
+
+  When an install can't proceed, the message now says which half failed —
+  downloading the package, or writing it to the board — and what to do about it,
+  instead of handing back the board's `ImportError`.
+- **An onboard LED's real size survived saving and vanished on loading.** The
+  YAML writer passes an LED through whole but the reader rebuilt it field by
+  field, so `sizeMm` (and a hand-placed silk label) were dropped on the next
+  load — the bundled LED Bar has authored 2.5 mm segments that never reached the
+  renderer. The reader now names them, and `single` LEDs are drawn life-size like
+  NeoPixels already were, so a 5 mm LED on a 20 mm module reads as the quarter of
+  the board it is. Its glow is a fixed ring around the package rather than a
+  multiple of it, so an ordinary indicator looks exactly as it did.
 
 ### Changed
 - **The flash dialog's Runtime choice now has a picture on it.** MicroPython and
@@ -419,190 +599,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The per-platform mount-point scanning behind board detection is now in one
   place (`fs/volumes.ts`) instead of being hand-rolled once per board type, and
   it no longer reads every folder in your home directory looking for a board.
-
-### Fixed
-- **A package's dependencies now provably land where the board can import them,
-  and the install says which ones came along.** (#785) A dependency has to be
-  installed at the install ROOT — `/lib/lsm6dsox.py`, on the board's `sys.path`
-  — because it is imported by name. Written under the package that asked for it,
-  it is a downloaded, present, completely unreachable file, and the install
-  still reports success. Snakie's resolver was doing the right thing, but
-  nothing said so: the tests proved the files were *fetched*, which is a
-  different claim from *put in the right place*, and a resolution's files
-  carried no record of **whose** they were, so the placement rule could not even
-  be stated. Every resolved file now names the package that declared it, the
-  device path is computed in exactly one place that can only ever see the
-  install target — so "relative to the package that pulled this in" is not
-  expressible — and the rule is pinned per-dependency and as a property.
-
-  Two real faults came out of the same look. An install folder given as `lib`
-  (the placeholder a part author is shown) produced **relative** device paths,
-  while the directories for those same paths were created **absolute** — they
-  only ever agreed because a board's working directory happens to be `/`; a
-  target is now anchored before anything is joined to it. And an install was
-  silent about what it brought: installing the Arduino Modulino package quietly
-  installs three more packages, and the only way to check was to list `/lib` on
-  the board. The install note now names them, on the desktop and the web, for
-  driver and package installs alike. The Part Editor also warns an author whose
-  `mip` install folder points *inside* another package — that folder is the root
-  its dependencies land in too.
-- **The Build workspace could overwrite the file you had open with a 3-D robot
-  model. It can't any more.** (#782) Building in the Build workspace edits the
-  project's robot model — but it saved that model through *whatever tab the
-  editor happened to have focused*. If that was your program, your program was
-  replaced by the robot model, on screen and on disk. The only check was "is
-  this a saved file", which a `.py` passes.
-
-  A robot model now goes to a `.urdf` or it goes nowhere. Where a model is
-  written is decided from the document itself — the file it came from, or the
-  `.urdf` open in the editor — never from what has focus, and a target that
-  isn't a `.urdf` is **refused, and says so**, rather than falling back to
-  something plausible. The same rule applies wherever a model is written: the
-  part-placement bridge, the Sync reconcile, and the robot.yml `urdf:` link
-  itself, which can no longer be pointed at a non-`.urdf` file.
-- **Sync no longer adds a second, third and fourth copy of your microcontroller
-  to the 3-D view.** (#782) A part that lost track of which 3-D body was its own
-  could still recognise it by name; the microcontroller couldn't — its only
-  identity was a note in `robot.yml`, so if that note went missing (which an
-  ordinary save could do), Sync reported the board as having no body and
-  reconciling made another one, identical to the one already there. The board is
-  now identified exactly the way a part is, so a lost note costs nothing, and
-  running Sync twice leaves the model exactly as it was.
-- **A deleted part can no longer leave a connection behind that breaks the whole
-  robot.** (#782) A `<joint>` referring to a link that isn't in the model is
-  invalid — the file fails to load in any 3-D viewer, so one stray connection
-  costs you the entire robot rather than one part. Snakie now refuses to write
-  one: a joint is never created for a body that isn't there, and any that is
-  found is dropped as the file is saved.
-- **A board whose firmware version isn't a version is no longer told to update.**
-  (#757) A vendor MicroPython build was reporting its *branch name* where the
-  version goes. The comparison turned anything non-numeric into `0`, so that
-  board read as `0.0.0` and every build in the catalog looked like an upgrade
-  from it. An unrecognisable version now compares as "no update" — we don't know
-  what it's running, and that isn't evidence that it's behind.
-- **Build no longer opens the help panel every time you switch to it.** Switching
-  to the Build workspace kept reopening the lesson/help sidebar, however many
-  times you closed it. The cause was a "sticky lesson" rule that carried the
-  sidebar across on EVERY workspace switch whenever the workspace you were
-  leaving happened to have Learn or Help selected with its sidebar open — which,
-  in Code, is simply where you're left after reading one help article. Worse, it
-  wrote that open panel into Build's own remembered layout, so collapsing it
-  there could never stick.
-
-  Now every workspace keeps its own panel state: Build (and Electronics) opens
-  the way you last left it — collapsed by default — and a panel you open there
-  yourself stays open, across switches and restarts. A panel still appears when
-  something deliberately asks for one: a tutorial step that sends you to the
-  workspace it's about brings its instructions with it, and an instrument's or
-  part's `?` still opens the Help article beside the board. Sessions that already
-  had the stale open panel stored for Electronics/Build get it collapsed once on
-  upgrade.
-- **Instruments pop out into their own window in the browser too.** (#781) On
-  app.snakie.org, undocking an instrument did nothing you could see: the
-  instrument left the dock, no window opened, and there was no way to get it
-  back except toggling its kind off and on. The pop-out control called
-  `instruments.openWindow`, which outside Electron landed on a stub that
-  returned and did nothing at all.
-
-  It now opens a real, resizable browser window — and, importantly, a LIVE one.
-  A pop-up is its own JavaScript world, so a window that built its own backend
-  would be watching a second, separate simulator (and a USB board can only be
-  open in one place at a time, so it could not join in at all). Instead the
-  editor tab lends the pop-out its own device: same telemetry, same
-  `sendControl`, one board. Close the window and the instrument re-docks, exactly
-  as it does on the desktop. If the browser blocks the pop-up, the instrument
-  comes straight back to the dock and says why; if the editor tab it belongs to
-  is gone, the window says that too instead of showing a dead dial.
-
-  Two smaller things came out of the same fix: the offline service worker was
-  answering *any* navigation with the app shell, so the instrument window would
-  have opened the whole editor inside itself; and a detached instrument now
-  uses the Soft Shell fonts the rest of the app does.
-- A unit test no longer depends on what is plugged into the machine running it.
-  (#773) The CircuitPython file-routing tests exercise one case — a drive that
-  ejected — that made the device re-resolve its mount, and re-resolution is the
-  one step that leaves the test's temp directory and scans the developer's real
-  volumes (and, if it finds a board, their real serial ports). That is unbounded
-  I/O: it is why that single case timed out repeatedly under a loaded suite
-  while passing every time on its own. The scan is now stubbed — the logic under
-  test is untouched, and two cases now assert something they could not before:
-  that the device really does look again when the marker file is gone, and that
-  a drive still present does **not** cost a rescan on every file operation.
-- **Pin labels are the same size on every board with the same hardware.** (#778)
-  A Tiny 2350's pin names didn't match a Modulino LED Matrix's, even though both
-  carry an ordinary 2.54 mm header. Label size wasn't a setting: it was derived
-  from the tightest gap between *any* two pins, measured in pixels of the part's
-  own fit-to-footprint box — an accident of the outline, not of the hardware. So
-  the same header was typeset one size on a 18 mm board and another on a 41 mm
-  one, and a placed part's silk labels carried its body scale on top of that,
-  setting identical pins in nearly twice the type on a big part as on a small one.
-
-  Labels are now sized the way everything else on a part already is: physically.
-  A label is as big as the room its pin really has — its neighbour's distance in
-  millimetres at the canvas' pixels-per-millimetre — so identical hardware drawn
-  at the same scale reads at the same size, whatever board it sits on.
-
-  The density shrink is still there, because it is the only thing keeping a Servo
-  2040's eighteen servo headers legible, but it now applies **per board edge**. A
-  label is anchored to the edge its pin faces and can only collide with the other
-  labels on that edge, so the Tiny 2350's QWIIC contacts — 1.2 mm apart, and
-  labelling off the bottom — no longer shrink the castellations down both sides.
-  Pins that draw no label at all (a servo header's V+/GND rows) no longer shrink
-  their neighbours either.
-- **A running Snakie can no longer undo an edit you made to a part outside it.**
-  (#750) The parts library is a folder of plain text files, so a script, an
-  editor and `git checkout` are all perfectly good ways to change a part — but
-  the app assumed it was the only author. It held each part in memory from the
-  moment the library loaded and, on the next save, wrote that copy back over
-  whatever was on disk. Corrected I²C addresses reverted to their 8-bit values,
-  QWIIC socket rotations flipped so GND sat on the wrong contact of a power
-  connector, and a module lost its whole template — four times in one session,
-  silently each time, because a save reported success.
-
-  A part now carries a stamp of the exact file it was read from, and a save that
-  presents a stamp the file no longer matches is **refused**, with a message
-  asking you to reopen the part. Nothing is written, so nothing is lost.
-
-  The same save also used to prune the part's folder to match its own idea of
-  the part's contents: every `image.*` and any `help.md`, whether the part
-  referenced them or not. That is how a hand-written `help.md` and a `.stl` mesh
-  were deleted from disk. A save now only removes an asset the part's own
-  previous `parts.yml` named, and only when it is being replaced or cleared —
-  anything else beside `parts.yml` is left alone. The dev "Update Standard"
-  mirror and the bundled-library refresh follow the same rule: they copy over
-  the top rather than emptying the folder first, and the mirror refuses outright
-  when the copy it would overwrite carries a newer version than the one being
-  promoted.
-- **Snakie downloads packages, instead of asking the board to.** (#776,
-  supersedes #769) Installing a driver or a package used to run `mip.install()`
-  **on the board** — which quietly required the *board* to have its own internet
-  connection. Most don't: a Pico, a Tiny 2350, any board without a radio could
-  never install anything this way. Even a Wi-Fi board needed `mip`, an optional
-  micropython-lib package that CircuitPython and many vendor builds leave out,
-  so the failure usually arrived as a bare
-  `ImportError("no module named 'mip'")`.
-
-  Now the machine with the internet connection does the downloading. Snakie
-  resolves the package on your computer and writes its files to the board, which
-  only has to do the thing every board can do: accept files. That reaches a
-  CIRCUITPY drive or the serial REPL through the same path every other file
-  write uses, so one route covers MicroPython and CircuitPython, wired and
-  wireless boards, and the simulator — which could never install anything
-  before. Whole packages come across, not just single files: the Modulino driver
-  installs all 25 of its files, including its three transitive dependencies.
-  It applies to the Packages panel too, not just drivers.
-
-  When an install can't proceed, the message now says which half failed —
-  downloading the package, or writing it to the board — and what to do about it,
-  instead of handing back the board's `ImportError`.
-- **An onboard LED's real size survived saving and vanished on loading.** The
-  YAML writer passes an LED through whole but the reader rebuilt it field by
-  field, so `sizeMm` (and a hand-placed silk label) were dropped on the next
-  load — the bundled LED Bar has authored 2.5 mm segments that never reached the
-  renderer. The reader now names them, and `single` LEDs are drawn life-size like
-  NeoPixels already were, so a 5 mm LED on a 20 mm module reads as the quarter of
-  the board it is. Its glow is a fixed ring around the package rather than a
-  multiple of it, so an ordinary indicator looks exactly as it did.
 
 ## [0.44.0] - 2026-08-16
 
