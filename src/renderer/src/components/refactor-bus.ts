@@ -71,6 +71,11 @@ export function suppressPreview(ruleId: string): void {
   }
 }
 
+/** Has the user turned the preview off for at least one rule? */
+export function hasSuppressedPreviews(): boolean {
+  return suppressedIds().size > 0
+}
+
 /** Show previews for every rule again (offered in Settings). */
 export function clearSuppressedPreviews(): void {
   try {

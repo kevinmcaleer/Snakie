@@ -11,6 +11,8 @@ import { useFocusTrap } from '../hooks/useFocusTrap'
 import type { Theme } from '../hooks/useTheme'
 import { ChatSettings } from './ChatSettings'
 import { BulbIcon } from './ui-icons'
+import { useLocalStorage } from '../hooks/useLocalStorage'
+import { clearSuppressedPreviews, hasSuppressedPreviews } from './refactor-bus'
 import './SettingsDialog.css'
 
 /**
@@ -232,6 +234,11 @@ function EditorTab(): JSX.Element {
     setCheckFirmwareUpdates,
     setMinimap
   } = useEditorSettings()
+  // Refactoring hints (#634 §9). Read here through the same localStorage keys
+  // the editor reads, rather than the settings store, because the engine is
+  // shared with the web build and has no Electron settings behind it.
+  const [styleHints, setStyleHints] = useLocalStorage<boolean>('snakie.refactor.styleHints', false)
+  const [skipPreviews, setSkipPreviews] = useState(() => hasSuppressedPreviews())
 
   return (
     <>
@@ -312,6 +319,35 @@ function EditorTab(): JSX.Element {
         <label className="settings-check">
           <input type="checkbox" checked={minimap} onChange={(e) => setMinimap(e.target.checked)} />
           <span>Show the editor mini-map</span>
+        </label>
+      </section>
+
+      <section className="settings-section">
+        <h3 className="settings-section__title">Refactoring hints</h3>
+        <p className="settings-section__hint">
+          Snakie always points out the MicroPython ones — a tick counter that will wrap, an
+          interrupt handler that allocates — because those are bugs waiting to happen. Turn this
+          on to also see the style suggestions: guard clauses, simpler loops, names for magic
+          numbers. Right-click → Refactor… offers everything either way.
+        </p>
+        <label className="settings-check">
+          <input
+            type="checkbox"
+            checked={styleHints}
+            onChange={(e) => setStyleHints(e.target.checked)}
+          />
+          <span>Show style suggestions in Problems</span>
+        </label>
+        <label className="settings-check">
+          <input
+            type="checkbox"
+            checked={!skipPreviews}
+            onChange={(e) => {
+              if (e.target.checked) clearSuppressedPreviews()
+              setSkipPreviews(!e.target.checked)
+            }}
+          />
+          <span>Always preview a refactoring before applying it</span>
         </label>
       </section>
 
