@@ -7,6 +7,7 @@ import { useSnakiePresence } from './snakie-presence'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useInstrumentWorkspace } from '../store/workspace'
 import { displayDemo, DISPLAY_DEMO_NAME, displaySpiDemo, DISPLAY_SPI_DEMO_NAME } from './display-demo'
+import { openSpriteEditor } from './sprite-editor-bus'
 import {
   DISPLAY_GEOMETRIES,
   blankGrid,
@@ -353,6 +354,18 @@ export function DisplayInstrument({
         <div className="i2cd__modes" role="tablist" aria-label="Display mode">
           <ModeTab label="Mirror" active={mode === 'mirror'} onClick={() => setMode('mirror')} />
           <ModeTab label="Push" active={mode === 'push'} onClick={() => setMode('push')} />
+          {/* The Sprite editor launcher — the overlay is hosted by the main
+              window's AppShell, so the key only appears while docked there. */}
+          {docked && (
+            <button
+              type="button"
+              className="i2cd__mode i2cd__sprites"
+              onClick={openSpriteEditor}
+              title="Open the Sprite editor — draw 1-bit sprites & animations for LED matrices and OLEDs"
+            >
+              ✎ Sprites
+            </button>
+          )}
           <span className="i2cd__spacer" />
           <label className="i2cd__size">
             <span className="i2cd__size-lbl">SIZE</span>

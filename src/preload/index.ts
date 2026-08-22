@@ -274,8 +274,10 @@ const fs = {
    * `defaultName` seeds the dialog's default path. Resolves to the chosen path,
    * or null if the user cancels.
    */
-  saveFileDialog: (defaultName?: string): Promise<string | null> =>
-    unwrap(ipcRenderer.invoke('fs:saveFileDialog', defaultName)),
+  saveFileDialog: (
+    defaultName?: string,
+    opts?: { filters?: { name: string; extensions: string[] }[] }
+  ): Promise<string | null> => unwrap(ipcRenderer.invoke('fs:saveFileDialog', defaultName, opts)),
   /** List a directory's entries (directories first, then alphabetical). */
   readDir: (path: string): Promise<FsEntry[]> => unwrap(ipcRenderer.invoke('fs:readDir', path)),
   /** Read a file's contents (UTF-8). */
@@ -288,6 +290,11 @@ const fs = {
   /** Write contents to a file (created/overwritten). */
   writeFile: (path: string, contents: string): Promise<void> =>
     unwrap(ipcRenderer.invoke('fs:writeFile', path, contents)),
+  /** Write raw bytes to a file (binary PBM / `.spr` sprite exports). */
+  writeFileBytes: (path: string, bytes: Uint8Array): Promise<void> =>
+    unwrap(
+      ipcRenderer.invoke('fs:writeFileBase64', path, Buffer.from(bytes).toString('base64'))
+    ),
   /** Create a directory (recursive). */
   mkdir: (path: string): Promise<void> => unwrap(ipcRenderer.invoke('fs:mkdir', path)),
   /** Rename / move a path. */

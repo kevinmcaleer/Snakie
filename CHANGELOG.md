@@ -7,6 +7,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **A Sprite editor for LED matrices and OLED displays.** The Display
+  instrument grows a **✎ Sprites** key that opens a full-screen pixel editor:
+  set the sprite size (presets from the 12×8 Arduino Modulino / UNO R4 LED
+  matrix up to a full 128×64 SSD1306), draw with pencil / eraser / flood-fill,
+  nudge, flip, invert and clear a frame, and build animations on a **filmstrip**
+  of frames — add, duplicate, reorder, delete — with onion skinning, live
+  playback at the chosen frame rate, and undo/redo throughout. The editor opens
+  with a pair of blinking eyes drawn for the Modulino LED Matrix
+  (`examples/sprites/` has the same animation as a `.spr`, a PBM frame, an
+  exported MicroPython module, and players for the Modulino matrix and an
+  SSD1306 OLED).
+
+  Animations save as **`.spr`** — a new Snakie container built for
+  microcontrollers after a survey of the prior art (PicoGraphics'
+  raw `.rgb332` spritesheets, Thumby's headerless `.bin` sprites, Badgeware's
+  PNG/GIF loaders): a 16-byte self-describing header (magic `SNKS`, size, pixel
+  format, frame count, frame duration) followed by frames whose bytes are
+  exactly `framebuf.MONO_HLSB`, so MicroPython plays one straight from flash
+  through a single reusable frame buffer in ~20 lines with no decoder
+  (`examples/sprites/play_spr.py`). Single frames import/export as **PBM**
+  (P1 + P4 — a P4 raster is byte-identical to MONO_HLSB, so it too loads with
+  one `readinto`), and the editor also exports a ready-to-import **MicroPython
+  module** and round-trips **PNG, JPEG and animated GIF** (GIF timings are kept,
+  bright-on-black art is auto-repolarised, and integer-upscaled pixel art is
+  folded back to its true grid). 1-bit today; the `.spr` format byte mirrors
+  framebuf's constants so higher bit depths can arrive without a format break.
+  The local-file layer gains binary writes (`fs.writeFileBytes`) and filtered
+  save dialogs to carry the new formats.
 - **A folder that isn't a repository yet can become one from the Source Control
   pane.** (#783) It used to say "not a Git repository" and offer you nothing but
   a different folder — so starting version control meant leaving Snakie for a

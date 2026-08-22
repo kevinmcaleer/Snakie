@@ -21,6 +21,11 @@ const BoardPane = lazy(() => import('./BoardPane'))
 // The mini 3-D Robot panel (Robot mode, #320) — lazy so three.js only loads
 // when you enter Robot mode.
 const RobotDockPanel = lazy(() => import('./RobotDockPanel'))
+// The Sprite editor overlay (launched from the Display instrument's SPRITES
+// key) — lazy so the canvas editor + codecs load only when opened.
+const SpriteEditor = lazy(() =>
+  import('./SpriteEditor').then((m) => ({ default: m.SpriteEditor }))
+)
 import { MiniViewer } from './MiniViewer'
 import { useTheme } from '../hooks/useTheme'
 import { Toolbar } from './Toolbar'
@@ -51,6 +56,7 @@ import { IS_WEB } from '../lib/env'
 import { StatusBar } from './StatusBar'
 import { SettingsDialog, type SettingsTab } from './SettingsDialog'
 import { OPEN_SETTINGS_EVENT } from './settingsBus'
+import { OPEN_SPRITE_EDITOR_EVENT } from './sprite-editor-bus'
 import { HELP_EVENT, type HelpEventDetail } from './editorBridge'
 import { InstrumentLibBanner } from './InstrumentLibBanner'
 import { NoticeStack } from './Notice'
@@ -1068,6 +1074,15 @@ export function AppShell(): JSX.Element {
   // The Parts Library + Part Editor live in the Board Viewer window now (it's the
   // only place that uses parts), so the main window no longer hosts them.
 
+  // The Sprite editor overlay — opened by the Display instrument's SPRITES key
+  // via the window-event seam (the Part Editor pattern).
+  const [spriteOpen, setSpriteOpen] = useState(false)
+  useEffect(() => {
+    const handler = (): void => setSpriteOpen(true)
+    window.addEventListener(OPEN_SPRITE_EDITOR_EVENT, handler)
+    return () => window.removeEventListener(OPEN_SPRITE_EDITOR_EVENT, handler)
+  }, [])
+
   return (
     <div className="shell">
       {/* Top-of-screen manila notification offering a one-click install of the
@@ -1415,6 +1430,12 @@ export function AppShell(): JSX.Element {
           setTheme={setTheme}
           onClose={() => setSettingsOpen(false)}
         />
+      )}
+
+      {spriteOpen && (
+        <Suspense fallback={null}>
+          <SpriteEditor onClose={() => setSpriteOpen(false)} />
+        </Suspense>
       )}
 
     </div>

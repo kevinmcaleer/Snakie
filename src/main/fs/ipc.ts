@@ -69,16 +69,21 @@ export function registerFsIpc(getWindow: () => BrowserWindow | undefined): void 
       })
   )
 
-  ipcMain.handle('fs:saveFileDialog', (_e, defaultPath?: string) =>
-    wrap(async () => {
-      const win = getWindow()
-      const options = defaultPath ? { defaultPath } : {}
-      const result = win
-        ? await dialog.showSaveDialog(win, options)
-        : await dialog.showSaveDialog(options)
-      if (result.canceled || !result.filePath) return null
-      return result.filePath
-    })
+  ipcMain.handle(
+    'fs:saveFileDialog',
+    (_e, defaultPath?: string, opts?: { filters?: { name: string; extensions: string[] }[] }) =>
+      wrap(async () => {
+        const win = getWindow()
+        const options = {
+          ...(defaultPath ? { defaultPath } : {}),
+          ...(opts?.filters ? { filters: opts.filters } : {})
+        }
+        const result = win
+          ? await dialog.showSaveDialog(win, options)
+          : await dialog.showSaveDialog(options)
+        if (result.canceled || !result.filePath) return null
+        return result.filePath
+      })
   )
 
   ipcMain.handle('fs:readDir', (_e, path: string) => wrap(() => readDir(path)))
@@ -94,6 +99,14 @@ export function registerFsIpc(getWindow: () => BrowserWindow | undefined): void 
   ipcMain.handle('fs:writeFile', (_e, path: string, contents: string) =>
     wrap(async () => {
       await fs.writeFile(path, contents, 'utf-8')
+    })
+  )
+
+  // Binary write (base64) — the mirror of `fs:readFileBase64`, for files a
+  // utf-8 write would corrupt (binary PBM / .spr sprite exports).
+  ipcMain.handle('fs:writeFileBase64', (_e, path: string, b64: string) =>
+    wrap(async () => {
+      await fs.writeFile(path, Buffer.from(b64, 'base64'))
     })
   )
 
