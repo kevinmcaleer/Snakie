@@ -282,9 +282,13 @@
 .git__stage-all {
   flex: 0 0 auto;
   padding: 0.15rem 0.5rem;
-  background: var(--bg-sunken);
-  color: var(--text-muted);
-  border: 1px solid var(--border);
+  /* The commit button's treatment (.git__btn--primary): an accent fill with
+     white on it. The quiet version -- muted ink on a sunken panel -- was
+     unreadable on the light skin, where both tokens land close together. A
+     bulk action wants to look deliberate anyway. */
+  background: var(--accent);
+  color: #fff;
+  border: 1px solid var(--accent);
   border-radius: 999px;
   font-family: inherit;
   font-size: 0.68rem;
@@ -297,9 +301,11 @@
 
 .git__stage-all:hover:not(:disabled),
 .git__stage-all:focus-visible {
-  background: var(--bg-elevated);
-  border-color: var(--accent);
-  color: var(--accent);
+  /* Brighten rather than invert, so the contrast never drops on hover -- the
+     bug this rule replaced. */
+  filter: brightness(1.08);
+  background: var(--accent);
+  color: #fff;
 }
 
 .git__stage-all:disabled {
