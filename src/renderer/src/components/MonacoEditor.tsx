@@ -40,6 +40,7 @@ import {
   clearBoardPinDiagnostics,
   registerBoardPinCodeActions
 } from './board-pin-diagnostics'
+import { clearRefactorCache, registerRefactorCodeActions, tidyFile } from './refactor-code-actions'
 import { boardPartFor } from './part-editor.util'
 import { DEFAULT_BOARD_ID } from './board-defs'
 import { PARTS_CHANGED_EVENT } from './PartsPanel'
@@ -73,6 +74,11 @@ registerInlineCompletions(monaco)
 // Register the board-aware I2C/SPI/UART pin quick-fix provider once at module
 // load. Idempotent + HMR-guarded; offers "change the bus id" on a mismatch.
 registerBoardPinCodeActions(monaco)
+
+// Register the refactoring provider (#634) once at module load. Idempotent +
+// HMR-guarded; turns the shared engine's offers into `refactor.*` code actions
+// whose command opens the diff preview rather than rewriting the file outright.
+registerRefactorCodeActions(monaco)
 
 /** Monaco marker owner used for plugin-sourced diagnostics. */
 const PLUGIN_MARKER_OWNER = 'snakie-plugins'
@@ -375,6 +381,33 @@ export function MonacoEditor(): JSX.Element {
       }
     })
 
+    // Right-click Refactor… (#634): opens Monaco's code-action picker filtered
+    // to `refactor.*`, listing what the shared engine offers for the selection.
+    // Every entry previews its diff before it touches the file, and a file that
+    // doesn't parse offers nothing at all.
+    editor.addAction({
+      id: 'snakie.refactor',
+      label: 'Refactor… (Snakie)',
+      contextMenuGroupId: 'navigation',
+      contextMenuOrder: 1.2,
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyR],
+      precondition: 'editorLangId == python',
+      run: (ed) => {
+        void ed.getAction('editor.action.refactor')?.run()
+      }
+    })
+
+    // Tidy this file (#634 R7): apply every provably-safe refactoring at once,
+    // as one preview and one undo step. Kept off the speed/RAM trade-off rules.
+    editor.addAction({
+      id: 'snakie.refactor.tidyFile',
+      label: 'Tidy this file (Snakie)',
+      contextMenuGroupId: 'navigation',
+      contextMenuOrder: 1.3,
+      precondition: 'editorLangId == python',
+      run: () => tidyFile(monaco)
+    })
+
     // Inline sprite thumbnails (#790): a `.spr` named in a string literal draws
     // itself beside the code, and clicking it opens that file in the Sprite
     // editor. Attached here (rather than in its own effect) so it is disposed
@@ -402,6 +435,7 @@ export function MonacoEditor(): JSX.Element {
       modelStore.forEach((m) => {
         clearModelDiagnostics(m.uri.toString())
         clearFormatDiagnostics(m.uri.toString())
+        clearRefactorCache(m.uri.toString())
         m.dispose()
       })
       modelStore.clear()

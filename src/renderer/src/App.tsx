@@ -1,5 +1,6 @@
 import { AppShell } from './components/AppShell'
 import { PromptProvider } from './components/PromptModal'
+import { RefactorPreview } from './components/RefactorPreview'
 import { UpdateNotifier } from './components/UpdateNotifier'
 import { WorkspaceProvider } from './store/workspace'
 import { DiagnosticsProvider } from './store/diagnostics'
@@ -24,6 +25,9 @@ function App(): JSX.Element {
                   <TutorialsProvider>
                     <AppShell />
                     <UpdateNotifier />
+                    {/* The refactoring diff preview (#634): renders nothing
+                        until a refactoring is proposed from the editor. */}
+                    <RefactorPreview />
                   </TutorialsProvider>
                 </ConsoleProvider>
               </DiagnosticsProvider>
