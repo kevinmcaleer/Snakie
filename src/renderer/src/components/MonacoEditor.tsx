@@ -48,6 +48,10 @@ import {
   type SpriteThumbScope,
   type SpriteThumbnailController
 } from './sprite-decorations'
+import {
+  attachSpriteCompletions,
+  type SpriteCompletionsController
+} from './sprite-completion-source'
 import { openSpriteEditor } from './sprite-editor-bus'
 
 // Register the plugin quick-fix (lightbulb) provider exactly once at module
@@ -277,6 +281,9 @@ export function MonacoEditor(): JSX.Element {
   // `refresh()` rather than a re-attach.
   const spriteThumbsRef = useRef<SpriteThumbnailController | null>(null)
   const spriteScopeRef = useRef<SpriteThumbScope>({ fileDir: null, projectRoot: null })
+  // Sprite name completions (#791) read the SAME scope — one folder rule for the
+  // thumbnail beside a name and for the list a name is picked from.
+  const spriteCompletionsRef = useRef<SpriteCompletionsController | null>(null)
 
   // Point the completion provider at the runtime in use. Cheap, idempotent, and
   // the next keystroke completes against the new catalogue.
@@ -376,12 +383,19 @@ export function MonacoEditor(): JSX.Element {
       onOpen: (path) => openSpriteEditor(path)
     })
 
+    // Sprite name completions (#791): typing a quote offers the project's `.spr`
+    // files. This installs the SOURCE the one registered `python` completion
+    // provider reads — it does not register a provider of its own.
+    spriteCompletionsRef.current = attachSpriteCompletions(() => spriteScopeRef.current)
+
     const modelStore = models.current
     return () => {
       changeDisposable.dispose()
       setActiveEditor(null)
       spriteThumbsRef.current?.dispose()
       spriteThumbsRef.current = null
+      spriteCompletionsRef.current?.dispose()
+      spriteCompletionsRef.current = null
       editor.dispose()
       editorRef.current = null
       modelStore.forEach((m) => {
@@ -472,6 +486,10 @@ export function MonacoEditor(): JSX.Element {
       local
     }
     spriteThumbsRef.current?.refresh()
+    // Same folders, same moment: re-index the project's `.spr` files (#791) so
+    // the completion list is warm before the first quote is typed, rather than
+    // being built on the keystroke that needs it.
+    spriteCompletionsRef.current?.refresh()
   }, [activeFile, activeFile?.id, activeFile?.path, activeFile?.source, currentFolder])
 
   // Reactive linting: when the active file's content changes (or the active
