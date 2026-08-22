@@ -7,6 +7,48 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Right-click your code and Snakie offers to tidy it — and explains why.**
+  Select some Python, right-click **Refactor…** (or <kbd>Ctrl/Cmd</kbd>+<kbd>⇧</kbd>+<kbd>R</kbd>),
+  and you get concrete, safe rewrites: *Convert to guard clause*, *Merge nested
+  conditions*, *Iterate over the items directly*, *Wrap the constant in
+  `const()`*. Every one shows you a **diff before it touches your file**, comes
+  back with a single <kbd>Cmd</kbd>+<kbd>Z</kbd>, and carries a **Why?** link
+  into a help page that teaches the principle behind it.
+
+  The catalogue is deliberately not just "Python tidying". Snakie's users are
+  learners writing robot code on a microcontroller, which makes a whole class of
+  smell worth flagging that desktop tooling has no reason to care about — and
+  these are the ones that actually make a robot work better:
+
+  - **A raw `ticks_ms()` subtraction is a bug, not a style nit.** Tick counters
+    *wrap*; `ticks_us()` roughly every 17 minutes. Subtract two of them with a
+    plain `-` and, at the wrap, the result goes hugely negative and your timer
+    either fires on every pass forever or never fires again. It cannot show up
+    on the bench, because the bench session is shorter than the wrap.
+  - **An `.irq()` handler with no
+    `micropython.alloc_emergency_exception_buf()`** gives you no traceback at
+    all when it fails — just silence, at 3am, with the robot halfway down a
+    corridor. One line fixes it, and almost nobody writes it.
+  - **Allocating inside an interrupt handler**, re-creating a `Pin()` every loop
+    iteration, `s += "…"` in a loop, a blocking `time.sleep()` inside an `async
+    def` — each flagged with what it costs you on a board with 264 KB.
+
+  Nothing is guessed. A file that does not parse offers *nothing*, rewrites are
+  ranged text edits so your comments and formatting outside them survive
+  byte-for-byte, Snakie matches your file's own indentation rather than imposing
+  four spaces, and where a rule cannot *prove* your code still means the same
+  thing it declines instead of trying. A learner who accepts a bad "fix" and
+  breaks their robot will not trust the feature again.
+
+  The whole engine is dependency-free TypeScript, so it works with **no Python
+  installed** and in **Snakie for Web** — which is exactly the classroom that
+  needs it most. Board-specific advice is the opposite: it appears *only* when a
+  board is plugged in and Snakie has asked that firmware what it actually
+  supports, and speed hints can be **benchmarked on the real device** before you
+  accept them, so when `@micropython.native` buys you 4% you see 4% and skip it.
+
+  Plugins can contribute rules too, via `@plugin.refactor` — a school can ship
+  its own house style. Issues #799–#808, #451; epic #634.
 - **Stage a whole group in the Source Control panel, in one click.** Staging
   twenty new files one **＋** at a time was twenty clicks. Each group header now
   carries its own button — **Stage 12 untracked** on the *Untracked* list,
