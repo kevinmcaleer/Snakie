@@ -41,7 +41,7 @@ import {
   registerBoardPinCodeActions
 } from './board-pin-diagnostics'
 import { clearRefactorCache, registerRefactorCodeActions, tidyFile } from './refactor-code-actions'
-import { refactorHints } from './refactor-hints'
+import { refactorHints, rulesCoveredByLinter } from './refactor-hints'
 import { getCachedCapabilities } from '../lib/board-capabilities'
 import { boardPartFor } from './part-editor.util'
 import { DEFAULT_BOARD_ID } from './board-defs'
@@ -294,6 +294,11 @@ export function MonacoEditor(): JSX.Element {
   const setRefactorHintsRef = useRef(setRefactorHints)
   const setLinterToolRef = useRef(setLinterTool)
   const styleHintsRef = useRef(styleHints)
+  // The latest ruff diagnostics, read by the refactoring hint pass so it can
+  // stay quiet about anything ruff has already flagged (#634 §5). A ref, not
+  // a dependency: the two passes finish on different schedules and neither
+  // should re-trigger the other.
+  const lintDiagnosticsRef = useRef<Diagnostic[]>([])
   updateContentRef.current = updateContent
   saveFileRef.current = saveFile
   activeIdRef.current = activeId
@@ -605,6 +610,7 @@ export function MonacoEditor(): JSX.Element {
           applyDiagnostics(m, diagnostics)
           // Publish to the shared store so the Problems panel mirrors the
           // squiggles painted above.
+          lintDiagnosticsRef.current = diagnostics
           setDiagnosticsRef.current(diagnostics)
           // Probe which linter tool the host found (drives the "install ruff"
           // hint). Only meaningful for Python files; ignore failures.
@@ -757,7 +763,10 @@ export function MonacoEditor(): JSX.Element {
       const hints = refactorHints(file.content, {
         includeStyleHints: styleHintsRef.current,
         capabilities: getCachedCapabilities(),
-        fileName: file.name
+        fileName: file.name,
+        // Don't say what ruff has already said (#634 §5). Ruff's row keeps its
+        // autofix; our explanation stays a click away on the right-click menu.
+        alreadyReported: rulesCoveredByLinter(lintDiagnosticsRef.current)
       })
       monaco.editor.setModelMarkers(
         m,

@@ -11,7 +11,8 @@ import {
   REFACTOR_SOURCE,
   diagnosticSources,
   mergeDiagnostics,
-  refactorHints
+  refactorHints,
+  rulesCoveredByLinter
 } from '../src/renderer/src/components/refactor-hints'
 import { ALL_RULES } from '../src/shared/refactor/rules'
 import type { Diagnostic } from '../src/main/plugins/types'
@@ -132,5 +133,42 @@ describe('Problems-panel merge (#634 §5)', () => {
         diag({ source: 'refactor' })
       ])
     ).toEqual(['refactor', 'ruff'])
+  })
+})
+
+describe('deferring to ruff (#634 §5)', () => {
+  it('stays quiet about a smell ruff already reported', () => {
+    const covered = rulesCoveredByLinter([
+      diag({ source: 'ruff', message: 'B006: Do not use mutable data structures for argument defaults' })
+    ])
+    expect(covered.has('mutable-default')).toBe(true)
+
+    const src = 'def log(entry, seen=[]):\n    seen.append(entry)\n    return seen\n'
+    const withoutRuff = refactorHints(src, { includeStyleHints: true })
+    expect(withoutRuff.some((h) => h.ruleId === 'mutable-default')).toBe(true)
+
+    const withRuff = refactorHints(src, { includeStyleHints: true, alreadyReported: covered })
+    expect(withRuff.some((h) => h.ruleId === 'mutable-default')).toBe(false)
+  })
+
+  it('reads the rule code out of the message the bundled linter builds', () => {
+    expect(rulesCoveredByLinter([diag({ source: 'ruff', message: 'E722: Do not use bare except' })]))
+      .toContain('specific-exception')
+    // Only ruff's rows carry codes; another producer saying "E722" means nothing.
+    expect(
+      rulesCoveredByLinter([diag({ source: 'refactor', message: 'E722: something' })]).size
+    ).toBe(0)
+    expect(rulesCoveredByLinter([diag({ source: 'ruff', message: 'no code here' })]).size).toBe(0)
+  })
+
+  it('maps every entry to a rule that actually exists', () => {
+    // A typo here would silently stop the deduplication for that code.
+    const codes = ['F401', 'B006', 'E722', 'E711', 'E712', 'UP032', 'PLR1714', 'SIM401', 'SIM108', 'SIM118', 'SIM115']
+    const ids = new Set(ALL_RULES.map((r) => r.id))
+    for (const code of codes) {
+      const covered = rulesCoveredByLinter([diag({ source: 'ruff', message: `${code}: text` })])
+      expect(covered.size, code).toBeGreaterThan(0)
+      for (const id of covered) expect(ids, `${code} -> ${id}`).toContain(id)
+    }
   })
 })

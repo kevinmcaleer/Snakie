@@ -105,3 +105,67 @@ export function mergeDiagnostics(...groups: readonly Diagnostic[][]): Diagnostic
 export function diagnosticSources(diagnostics: readonly Diagnostic[]): string[] {
   return [...new Set(diagnostics.map((d) => d.source))].sort()
 }
+
+/**
+ * Smells ruff already reports, mapped to the rule of ours that would say the
+ * same thing (epic #634 §5).
+ *
+ * The epic's wording is that ours wins "if it produces a better-explained fix".
+ * In practice every rule of ours carries a "Why?" article, so that test would
+ * always come out in our favour — and the user would get two rows for one
+ * problem, which is worse than either. So the policy here is the simpler half
+ * of §5: **defer to ruff and don't double-report.** Ruff's row keeps its
+ * autofix, and our explanation is still one click away in the Refactoring book
+ * and on the right-click menu, which is where somebody goes when they want to
+ * understand rather than just clear a squiggle.
+ *
+ * Keyed on ruff's code, which the bundled linter prefixes into the message
+ * (`"B006: Do not use mutable data structures…"`).
+ */
+const RUFF_OVERLAP: Record<string, readonly string[]> = {
+  // Unused import / unused local — rule 32 is a deliberate no-op for this
+  // reason, but list it so the intent is visible in one place.
+  F401: ['ruff-owned-unused'],
+  F841: ['ruff-owned-unused'],
+  // Mutable default argument.
+  B006: ['mutable-default'],
+  // Bare `except:`, and `except: pass`.
+  E722: ['specific-exception', 'except-pass'],
+  // `== None` / `!= None`, and `== True` / `== False`.
+  E711: ['simplify-comparison'],
+  E712: ['simplify-comparison'],
+  // `.format()` / `%` that could be an f-string.
+  UP032: ['use-fstring'],
+  UP031: ['use-fstring'],
+  // Repeated `x == a or x == b`.
+  PLR1714: ['membership-test'],
+  // `if k in d: … else: …` that is `d.get`.
+  SIM401: ['dict-get-default'],
+  // `if c: x = a else: x = b`.
+  SIM108: ['conditional-expression'],
+  // `for k in d.keys()`.
+  SIM118: ['iterate-dict-items'],
+  // `open()` without a `with`.
+  SIM115: ['use-with']
+}
+
+/** Ruff's rule code, which the bundled linter prefixes into the message. */
+function ruffCode(diagnostic: Diagnostic): string | null {
+  if (diagnostic.source !== 'ruff') return null
+  const m = /^([A-Z]+\d+):/.exec(diagnostic.message)
+  return m ? m[1] : null
+}
+
+/**
+ * Which of our rules another producer has already covered, so the hint pass can
+ * stay quiet about them. Pass the result as {@link HintOptions.alreadyReported}.
+ */
+export function rulesCoveredByLinter(diagnostics: readonly Diagnostic[]): Set<string> {
+  const out = new Set<string>()
+  for (const d of diagnostics) {
+    const code = ruffCode(d)
+    if (!code) continue
+    for (const ruleId of RUFF_OVERLAP[code] ?? []) out.add(ruleId)
+  }
+  return out
+}
