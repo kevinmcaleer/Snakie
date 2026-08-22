@@ -40,113 +40,30 @@
  * records #790 already built. Both are injected, so a completion request costs
  * a scan of the text before the cursor and nothing else.
  *
- * ── One thing that is genuinely new here ────────────────────────────────────
- * {@link pythonLexState} answers a question `sprite-refs.ts` does not: not
+ * ── Where the cursor is ─────────────────────────────────────────────────────
+ * {@link pythonLexState} answers a question the reference rule does not: not
  * "which literals in this file name a sprite" but "what is the lexical state at
- * the cursor". `findSpriteRefs` only reports CLOSED literals that already name a
- * `.spr`, and a half-typed `"ey` is neither. The two scanners share their
- * treatment of prefixes, escapes and triple quotes by construction (both follow
- * Python's own lexing), and folding them into one exported tokeniser is the
- * obvious follow-up — see the note in the PR.
+ * the cursor" — `findSpriteRefs` only reports CLOSED literals that already name
+ * a `.spr`, and a half-typed `"ey` is neither. Phase 2 shipped its own scanner
+ * for it; #797 folded both onto the one tokeniser in `sprite-refs.ts`, so they
+ * now share their treatment of prefixes, escapes and triple quotes by
+ * construction rather than by two authors reading the same Python rules. It is
+ * re-exported here because this is the module that asks the question.
  */
 import {
   SPRITE_EXT,
   isSpriteRefText,
   normalisePath,
+  pythonLexState,
   resolveSpriteRef,
   spriteSearchDirs,
+  type PythonLexState,
+  type Quote,
   type SpriteRefScope
 } from './sprite-refs'
 
-/** Python string prefixes (`r`, `b`, `u`, `f`, and pairs) — as in `sprite-refs`. */
-const STRING_PREFIX = /^[rRbBuUfF]{0,2}$/
-
-/** A quote that can open a Python string literal. */
-export type Quote = '"' | "'"
-
-/** The lexical state at the end of a source prefix. */
-export type PythonLexState =
-  | { kind: 'code' }
-  | { kind: 'comment' }
-  | {
-      kind: 'string'
-      quote: Quote
-      /** True for `"""…` / `'''…` — a docstring, never a sprite reference. */
-      triple: boolean
-      /** True when the literal carries an `r` prefix (backslashes are literal). */
-      raw: boolean
-      /** Offset of the first character INSIDE the quotes. */
-      bodyStart: number
-    }
-
-/**
- * What is the cursor sitting in?
- *
- * Walks `source` (everything BEFORE the cursor — the caller never has to hand
- * over the whole buffer) tracking code / comment / string, and reports the state
- * it ends in. One pass, no allocation per character.
- *
- * A regex over the current line cannot answer this: it cannot see that the line
- * is inside a docstring opened forty lines up, and it mis-pairs quotes after an
- * apostrophe in a comment. Both mistakes would put a sprite popup somewhere a
- * sprite name can never go.
- */
-export function pythonLexState(source: string): PythonLexState {
-  let i = 0
-  const n = source.length
-
-  while (i < n) {
-    const c = source[i]
-    if (c === '#') {
-      while (i < n && source[i] !== '\n') i++
-      if (i >= n) return { kind: 'comment' }
-      continue // sitting on the newline, which the next pass eats as code
-    }
-    if (c !== '"' && c !== "'") {
-      i++
-      continue
-    }
-
-    // A quote. Look back over the letters immediately before it: a valid string
-    // prefix (`r"…"`, `rb'…'`) belongs to this literal — anything else means the
-    // quote opens a plain literal.
-    let p = i
-    while (p > 0 && /[A-Za-z]/.test(source[p - 1])) p--
-    const letters = source.slice(p, i)
-    const standalone = p === 0 || !/[A-Za-z0-9_]/.test(source[p - 1])
-    const prefix = standalone && STRING_PREFIX.test(letters) ? letters : ''
-    const raw = /[rR]/.test(prefix)
-
-    const quote = c as Quote
-    const triple = source.startsWith(quote.repeat(3), i)
-    const close = triple ? quote.repeat(3) : quote
-    i += close.length
-    const bodyStart = i
-
-    let closed = false
-    while (i < n) {
-      const ch = source[i]
-      if (ch === '\\' && !raw && i + 1 < n) {
-        i += 2 // an escape (including a line continuation) stays in the literal
-        continue
-      }
-      if (ch === '\n' && !triple) break // unterminated — Python would not accept it
-      if (source.startsWith(close, i)) {
-        closed = true
-        break
-      }
-      i++
-    }
-
-    if (!closed) {
-      // Ran out of text INSIDE the literal — that is where the cursor is.
-      if (i >= n) return { kind: 'string', quote, triple, raw, bodyStart }
-      continue // a single-quoted literal that never closed; back to code
-    }
-    i += close.length
-  }
-  return { kind: 'code' }
-}
+export { pythonLexState }
+export type { PythonLexState, Quote }
 
 /**
  * True when the text typed inside the quotes could still grow into a `.spr`

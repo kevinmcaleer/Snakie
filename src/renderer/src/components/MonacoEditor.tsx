@@ -53,6 +53,7 @@ import {
   type SpriteCompletionsController
 } from './sprite-completion-source'
 import { openSpriteEditor } from './sprite-editor-bus'
+import { dirname, isLocalSource } from './sprite-refs'
 
 // Register the plugin quick-fix (lightbulb) provider exactly once at module
 // load, mirroring the completion provider. The function is idempotent and
@@ -477,11 +478,14 @@ export function MonacoEditor(): JSX.Element {
   // can't read it), and an untitled buffer has none — both fall back to the
   // project folder, and a reference with nowhere to resolve draws nothing.
   useEffect(() => {
-    const local = activeFile?.source === 'local'
-    const path = local ? activeFile.path : ''
-    const cut = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
+    // Both halves come from `sprite-refs.ts` (#797): `isLocalSource` is the same
+    // judgement the "used in" scan makes about a board buffer, and `dirname` the
+    // same folder rule the scan resolves its own sources against — including a
+    // file sitting AT a root, which the copy that used to live here dropped.
+    const local = isLocalSource(activeFile?.source)
+    const path = local ? (activeFile?.path ?? '') : ''
     spriteScopeRef.current = {
-      fileDir: cut > 0 ? path.slice(0, cut) : null,
+      fileDir: dirname(path),
       projectRoot: currentFolder,
       local
     }

@@ -674,6 +674,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The per-platform mount-point scanning behind board detection is now in one
   place (`fs/volumes.ts`) instead of being hand-rolled once per board type, and
   it no longer reads every folder in your home directory looking for a board.
+- **The sprite reference rules are back down to one copy each** (#797, epic
+  #789). The inline thumbnail (#790), the filename autocomplete (#791) and the
+  "used in" back-link (#792) shipped as three phases, and the later two each grew
+  their own copy of a rule the first already had: a Python tokeniser, a
+  `dirname`, "which candidate does this reference mean", and "a file opened off
+  the board isn't on this filesystem". All four now live once, in
+  `sprite-refs.ts`, with both scanners built on the one tokeniser. Nothing
+  changes on screen — except that a Python file sitting at a filesystem root
+  (`/main.py`) now looks for its sprites beside itself, which the editor's own
+  copy of `dirname` had been skipping.
 
 ## [0.44.0] - 2026-08-16
 

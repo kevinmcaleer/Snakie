@@ -42,6 +42,23 @@
  * quotes after an apostrophe in a comment. The scanner below walks the source
  * once tracking code / comment / string state, which costs one pass and removes
  * a whole family of "why is there a thumbnail there" reports.
+ *
+ * ── What #797 folded back in ────────────────────────────────────────────────
+ * Phases 2 and 3 each grew their own copy of a rule that was already half-here,
+ * and both asked for the merge. All four now live in this file, once:
+ *
+ *  - {@link scanPythonStrings} — ONE tokeniser. {@link findSpriteRefs} (which
+ *    literals name a sprite) and {@link pythonLexState} (what is the cursor
+ *    sitting in) are both built on it, so prefixes, escapes and triple quotes
+ *    cannot be handled two ways.
+ *  - {@link dirname} — the folder a file's relative names resolve against,
+ *    beside {@link joinPath} rather than re-derived by every caller.
+ *  - {@link chooseSpriteCandidate} — {@link resolveSpriteRef} says where to
+ *    LOOK, in order; this says which of those the reference then means. The
+ *    lookup stays the caller's (a cache, a walk's file list); the ordering rule
+ *    does not.
+ *  - {@link isLocalSource} — a buffer opened off the BOARD keeps its sprites in
+ *    flash, so a local miss proves nothing about it.
  */
 
 /** The file extension a sprite reference must end with (case-insensitive). */
@@ -132,6 +149,48 @@ export function joinPath(dir: string, rel: string): string {
   return normalisePath(`${dir.replace(/[/\\]+$/, '')}${sep}${rel}`)
 }
 
+/**
+ * The folder a file's relative references resolve against — what
+ * {@link SpriteRefScope.fileDir} wants — or null when the path has no folder at
+ * all (an unsaved untitled buffer, or no file at all).
+ *
+ * A file sitting AT a root (`/main.py`, `C:\main.py`) keeps its separator: the
+ * bare head would otherwise be `''` or `C:`, and BOTH of those join as a
+ * RELATIVE path, quietly resolving the sprite somewhere else entirely.
+ *
+ * That case is why this is a function and not a `lastIndexOf` at each call
+ * site. The "used in" scan (#792) worked it out; the editor's own copy, which
+ * fed the same field for the thumbnails, gave up and returned null instead —
+ * two spellings of one rule, disagreeing, which is exactly what #797 is for.
+ */
+export function dirname(path: string): string | null {
+  const idx = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
+  if (idx < 0) return null
+  const head = path.slice(0, idx)
+  return normalisePath(/^([A-Za-z]:)?$/.test(head) ? path.slice(0, idx + 1) : head)
+}
+
+/**
+ * True when a buffer's own files are on THIS filesystem.
+ *
+ * One judgement, reached twice: a `main.py` opened off the BOARD resolves its
+ * `eyes.spr` in the board's flash, which the local filesystem cannot read. So a
+ * local miss for a device buffer means "not here", never "missing".
+ *
+ * What each phase then DOES with it differs, and rightly: the thumbnail still
+ * draws a sprite it happens to find in the project folder but never marks one
+ * broken (`SpriteThumbScope.local`), while the "used in" scan declines to read
+ * the buffer at all, because a hit there would have been resolved against the
+ * wrong filesystem. The shared part is only this — which is what drifts.
+ *
+ * Takes the buffer's `source` field loosely so both the workspace store's
+ * `FileSource` and this module's DOM-free callers can ask without importing
+ * React (#797).
+ */
+export function isLocalSource(source: string | null | undefined): boolean {
+  return source === 'local'
+}
+
 /** Where a relative sprite name is looked for: the file's folder, then the root. */
 export interface SpriteRefScope {
   /** Folder of the file doing the referencing (null for an unsaved buffer). */
@@ -168,43 +227,127 @@ export function resolveSpriteRef(text: string, scope: SpriteRefScope): string[] 
   return out
 }
 
-// ── The scanner ─────────────────────────────────────────────────────────────
+// ── Which candidate the reference actually means ────────────────────────────
+
+/** What a caller's lookup knows about one candidate. */
+export type CandidateState =
+  /** The file is there. */
+  | 'yes'
+  /** The file is not there (or is there and is not a sprite). */
+  | 'no'
+  /** Nobody has looked yet — an answer may still be on its way. */
+  | 'unknown'
+
+/** Which candidate won, and whether the question is even settled yet. */
+export interface SpriteCandidateChoice {
+  /** The candidate the reference means — absent when none is known to exist. */
+  path?: string
+  /** Its index in the candidate list, or -1 when there is no winner. */
+  index: number
+  /**
+   * True when there is no winner AND some candidate has never been looked at,
+   * so "broken" would be premature. False the moment a winner is found: an
+   * unchecked FARTHER candidate cannot unseat a nearer one that exists.
+   */
+  pending: boolean
+}
+
+/**
+ * The candidate a reference actually means: the FIRST one that exists.
+ *
+ * {@link resolveSpriteRef} puts the candidates in preference order — beside the
+ * file, then the project root — and stops there, because deciding which of them
+ * is real is I/O and this module does none. But the rule for ACTING on that
+ * order is not I/O, and it was written twice: the inline thumbnail picked the
+ * first candidate its cache called `ok` (#790), and "used in" refused a
+ * reference whose nearer candidate existed (#792). Same rule, one home (#797).
+ *
+ * Why it matters that they agree: `sprites/play.py` naming `"eyes.spr"` means
+ * `sprites/eyes.spr` when that exists, and the root's namesake only otherwise.
+ * If the thumbnail and the back-link disagreed about that, clicking a sprite
+ * would open a file that does not list the code you clicked from.
+ *
+ * `look` is the caller's own lookup — a thumbnail cache record, a set of the
+ * `.spr` files a walk saw — and receives the candidate's index too, for callers
+ * that already have their answers in an array.
+ */
+export function chooseSpriteCandidate(
+  candidates: readonly string[],
+  look: (path: string, index: number) => CandidateState
+): SpriteCandidateChoice {
+  let pending = false
+  for (let i = 0; i < candidates.length; i++) {
+    const state = look(candidates[i], i)
+    if (state === 'yes') return { path: candidates[i], index: i, pending: false }
+    if (state === 'unknown') pending = true
+  }
+  return { index: -1, pending }
+}
+
+// ── The Python tokeniser ────────────────────────────────────────────────────
 
 /** Python string prefixes we understand (`r`, `b`, `u`, `f`, and pairs of them). */
 const STRING_PREFIX = /^[rRbBuUfF]{0,2}$/
 
-/**
- * Resolve the escapes inside a non-raw literal, or return null when it contains
- * an escape we will not guess at. Only `\\` and `\'`/`\"`/`\/` appear in real
- * file names; `\n`, `\t`, `\x41` and friends mean this literal is not a plain
- * path, so the whole reference is dropped rather than half-decoded.
- */
-function unescapeLiteral(raw: string): string | null {
-  if (!raw.includes('\\')) return raw
-  let out = ''
-  for (let i = 0; i < raw.length; i++) {
-    if (raw[i] !== '\\') {
-      out += raw[i]
-      continue
+/** A quote that can open a Python string literal. */
+export type Quote = '"' | "'"
+
+/** The lexical state a source ENDS in — what the cursor at its end sits in. */
+export type PythonLexState =
+  | { kind: 'code' }
+  | { kind: 'comment' }
+  | {
+      kind: 'string'
+      quote: Quote
+      /** True for `"""…` / `'''…` — a docstring, never a sprite reference. */
+      triple: boolean
+      /** True when the literal carries an `r` prefix (backslashes are literal). */
+      raw: boolean
+      /** Offset of the first character INSIDE the quotes. */
+      bodyStart: number
     }
-    const next = raw[++i]
-    if (next === '\\' || next === '/' || next === "'" || next === '"') out += next
-    else return null
-  }
-  return out
+
+/** One string literal the tokeniser walked past. */
+export interface PythonStringToken {
+  quote: Quote
+  /** True for a `"""…"""` literal — spans lines, and is a docstring, not a use. */
+  triple: boolean
+  /** True when an `r` prefix makes the backslashes ordinary characters. */
+  raw: boolean
+  /** The text between the quotes, exactly as written — escapes NOT resolved. */
+  body: string
+  /** Offset of the first character inside the quotes. */
+  bodyStart: number
+  /** False when the literal ran into a line break, or the end of the source. */
+  closed: boolean
+  /** 1-based line the OPENING quote sits on. */
+  line: number
+  /** 1-based column of the opening quote. */
+  startColumn: number
+  /** 1-based column just past the closing quote, on the line that closed it. */
+  endColumn: number
 }
 
 /**
- * Every sprite reference in a Python source, in document order.
+ * Walk Python source once, reporting every string literal on the way and
+ * returning the lexical state the source ENDS in.
  *
- * One pass, no allocation per character: comments and triple-quoted strings are
- * skipped wholesale, and only single-quoted literals are tested against
- * {@link isSpriteRefText}. Cheap enough to run on every edit — the expensive
- * part of a thumbnail is reading and rendering the `.spr`, which is cached
- * elsewhere by path.
+ * Those are the two questions this epic asks of Python text, and they were
+ * answered by two scanners until #797: "which literals does this file contain"
+ * ({@link findSpriteRefs}) and "what is the cursor sitting in"
+ * ({@link pythonLexState} — a half-typed `"ey` is not a literal any file
+ * contains, so the first question cannot answer the second). They agreed about
+ * prefixes, escapes and triple quotes only because two authors read the same
+ * Python lexing rules; now they agree by construction.
+ *
+ * Cheap enough to run on every edit, and on every keystroke inside a string:
+ * one pass, no allocation per character, and the token is only built when
+ * somebody is listening — {@link pythonLexState} allocates nothing at all.
  */
-export function findSpriteRefs(source: string): SpriteRef[] {
-  const refs: SpriteRef[] = []
+export function scanPythonStrings(
+  source: string,
+  onString?: (token: PythonStringToken) => void
+): PythonLexState {
   let i = 0
   let line = 1
   let col = 1
@@ -224,7 +367,8 @@ export function findSpriteRefs(source: string): SpriteRef[] {
     }
     if (c === '#') {
       while (i < n && source[i] !== '\n') i++
-      continue
+      if (i >= n) return { kind: 'comment' }
+      continue // sitting on the newline, which the next pass eats as code
     }
     if (c !== '"' && c !== "'") {
       i++
@@ -242,16 +386,16 @@ export function findSpriteRefs(source: string): SpriteRef[] {
     const prefix = standalone && STRING_PREFIX.test(letters) ? letters : ''
     const raw = /[rR]/.test(prefix)
 
-    const quote = c
+    const quote = c as Quote
     const triple = source.startsWith(quote.repeat(3), i)
     const close = triple ? quote.repeat(3) : quote
+    const openLine = line
     const openCol = col
     i += close.length
     col += close.length
 
-    // Consume the body. A triple-quoted string spans lines and is never a
-    // reference (a docstring that mentions a sprite is not a use of it); a
-    // single-quoted one ends at its quote, or at the line end if unterminated.
+    // Consume the body. A triple-quoted string spans lines; a single-quoted one
+    // ends at its quote, or at the line end if it was left unterminated.
     const bodyStart = i
     let closed = false
     while (i < n) {
@@ -286,17 +430,88 @@ export function findSpriteRefs(source: string): SpriteRef[] {
       col++
     }
 
-    const body = source.slice(bodyStart, i)
+    const bodyEnd = i
     if (closed) {
       i += close.length
       col += close.length
+    } else if (i >= n) {
+      // Ran out of text INSIDE the literal — that is where the cursor is.
+      return { kind: 'string', quote, triple, raw, bodyStart }
     }
-    if (!triple && closed) {
-      const text = raw ? body : unescapeLiteral(body)
-      if (text !== null && isSpriteRefText(text)) {
-        refs.push({ text, line, startColumn: openCol, endColumn: col })
-      }
-    }
+    onString?.({
+      quote,
+      triple,
+      raw,
+      body: source.slice(bodyStart, bodyEnd),
+      bodyStart,
+      closed,
+      line: openLine,
+      startColumn: openCol,
+      endColumn: col
+    })
   }
+  return { kind: 'code' }
+}
+
+/**
+ * Resolve the escapes inside a non-raw literal, or return null when it contains
+ * an escape we will not guess at. Only `\\` and `\'`/`\"`/`\/` appear in real
+ * file names; `\n`, `\t`, `\x41` and friends mean this literal is not a plain
+ * path, so the whole reference is dropped rather than half-decoded.
+ */
+function unescapeLiteral(raw: string): string | null {
+  if (!raw.includes('\\')) return raw
+  let out = ''
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i] !== '\\') {
+      out += raw[i]
+      continue
+    }
+    const next = raw[++i]
+    if (next === '\\' || next === '/' || next === "'" || next === '"') out += next
+    else return null
+  }
+  return out
+}
+
+/**
+ * Every sprite reference in a Python source, in document order.
+ *
+ * A triple-quoted literal is never a reference (a docstring that mentions a
+ * sprite is not a use of it) and neither is an unterminated one; the rest are
+ * unescaped and put to {@link isSpriteRefText}. A literal that survives that
+ * cannot span lines — the only way into a second line is a `\`-newline
+ * continuation, and {@link unescapeLiteral} refuses that escape — so the
+ * token's opening line is the whole reference's line.
+ */
+export function findSpriteRefs(source: string): SpriteRef[] {
+  const refs: SpriteRef[] = []
+  scanPythonStrings(source, (token) => {
+    if (token.triple || !token.closed) return
+    const text = token.raw ? token.body : unescapeLiteral(token.body)
+    if (text !== null && isSpriteRefText(text)) {
+      refs.push({
+        text,
+        line: token.line,
+        startColumn: token.startColumn,
+        endColumn: token.endColumn
+      })
+    }
+  })
   return refs
+}
+
+/**
+ * What is the cursor sitting in?
+ *
+ * `source` is everything BEFORE the cursor — the caller never has to hand over
+ * the whole buffer — and the answer is the state that prefix ends in.
+ *
+ * A regex over the current line cannot answer this: it cannot see that the line
+ * is inside a docstring opened forty lines up, and it mis-pairs quotes after an
+ * apostrophe in a comment. Both mistakes would put a sprite popup somewhere a
+ * sprite name can never go.
+ */
+export function pythonLexState(source: string): PythonLexState {
+  return scanPythonStrings(source)
 }

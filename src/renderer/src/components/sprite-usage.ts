@@ -17,7 +17,9 @@
  * Which text names a sprite, and which file that name means, is `sprite-refs.ts`
  * — settled once in phase 1 and imported by all three phases. This module only
  * answers the reverse question: given a sprite path, which of the sources I was
- * handed resolve TO it.
+ * handed resolve TO it. `dirname`, `chooseSpriteCandidate` and `isLocalSource`
+ * are borrowed from there too: this module wrote its own of each before #797
+ * folded them back in.
  *
  * ── What the scan covers ────────────────────────────────────────────────────
  * Every `.py` file under the open project folder, plus every open LOCAL `.py`
@@ -53,7 +55,15 @@
  * on, and an over-count is what turns "nothing references it" into a lie.
  */
 import type { FsEntry } from '../../../main/fs/types'
-import { SPRITE_EXT, findSpriteRefs, normalisePath, resolveSpriteRef } from './sprite-refs'
+import {
+  SPRITE_EXT,
+  chooseSpriteCandidate,
+  dirname,
+  findSpriteRefs,
+  isLocalSource,
+  normalisePath,
+  resolveSpriteRef
+} from './sprite-refs'
 
 /** Most `.py` files read in one scan. A MicroPython project is a handful; the
  *  cap is here so a project folder that happens to sit above a huge tree can't
@@ -100,18 +110,12 @@ export function baseNameOf(path: string): string {
 }
 
 /**
- * The folder a file's relative references resolve against, or null when the
- * path has no folder at all (an unsaved untitled buffer).
- *
- * A file sitting AT a root (`/main.py`, `C:\main.py`) keeps its separator: the
- * bare head would otherwise be `''` or `C:`, which joins the wrong way.
+ * The folder a file's relative references resolve against — `dirname` from
+ * `sprite-refs.ts`, under the name this module reads better with. Phase 3 wrote
+ * its own until #797 put it beside `joinPath`, where the rule it has to agree
+ * with lives.
  */
-export function sourceDir(path: string): string | null {
-  const idx = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
-  if (idx < 0) return null
-  const head = path.slice(0, idx)
-  return normalisePath(/^([A-Za-z]:)?$/.test(head) ? path.slice(0, idx + 1) : head)
-}
+export { dirname as sourceDir } from './sprite-refs'
 
 /** One file the scan can read: an open buffer's text, or a file read from disk. */
 export interface UsageSource {
@@ -182,11 +186,15 @@ export function findSpriteUses(
         fileDir: source.dir,
         projectRoot: scope.projectRoot
       })
-      const index = candidates.indexOf(want)
-      if (index < 0) continue
       // A nearer candidate that EXISTS wins — this reference means that file,
-      // not ours, and counting it here would over-claim.
-      if (candidates.slice(0, index).some((path) => present.has(path))) continue
+      // not ours, and counting it here would over-claim. `present` always holds
+      // the sprite being edited, so the winner is ours exactly when no nearer
+      // candidate is on disk. The ordering rule is `sprite-refs.ts`'s; the
+      // "is it there" is ours, from what the walk saw.
+      const choice = chooseSpriteCandidate(candidates, (path) =>
+        present.has(path) ? 'yes' : 'no'
+      )
+      if (choice.path !== want) continue
       const key = `${source.path || source.id || source.name}\u0000${ref.line}`
       if (seen.has(key)) continue
       seen.add(key)
@@ -223,11 +231,13 @@ export interface OpenBuffer {
 export function bufferSources(files: readonly OpenBuffer[]): UsageSource[] {
   const out: UsageSource[] = []
   for (const file of files) {
-    if (file.source !== 'local' || !isPythonFile(file.name)) continue
+    // `isLocalSource` is the same judgement the inline thumbnail makes about a
+    // board buffer (`SpriteThumbScope.local`) — settled once in `sprite-refs.ts`.
+    if (!isLocalSource(file.source) || !isPythonFile(file.name)) continue
     out.push({
       path: file.path ? normalisePath(file.path) : '',
       name: file.name,
-      dir: file.path ? sourceDir(file.path) : null,
+      dir: file.path ? dirname(file.path) : null,
       text: file.content,
       dirty: file.dirty,
       id: file.id
@@ -416,7 +426,7 @@ export async function scanProjectFiles(
       sources.push({
         path: normalisePath(path),
         name: baseNameOf(path),
-        dir: sourceDir(path),
+        dir: dirname(path),
         text
       })
     })
