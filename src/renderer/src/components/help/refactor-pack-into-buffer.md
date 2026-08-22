@@ -26,7 +26,7 @@ fault and is not.
 format string, same output, no allocation, no garbage, no collector pause.
 It is the single cheapest fix in the catalogue for a loop that stalls.
 
-This one is `hintOnly`. Turning `pack` into `pack_into` means choosing where
+Snakie only points here. Turning `pack` into `pack_into` means choosing where
 the buffer lives, how big it is, what offset each write lands at, and whether
 anything downstream held on to the old `bytes` object — decisions about your
 framing that a rewrite cannot make for you. So the rule points at the call and

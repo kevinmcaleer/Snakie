@@ -37,7 +37,7 @@ loop plausibly has something worth freeing up.
 
 The same honesty applies to the rewrite itself: the loop it produces is still
 a spin loop until you put more work in it. It is the enabling step, not the
-finished article — hence `severity: 'hint'` and `a judgement call`, so
+finished article — so Snakie flags it as a suggestion rather than a fix, and
 "Tidy this file" never does this behind your back. One further difference
 worth knowing: the original ran its body first and slept afterwards, whereas
 the rewrite waits one period before the first pass. For a periodic task that

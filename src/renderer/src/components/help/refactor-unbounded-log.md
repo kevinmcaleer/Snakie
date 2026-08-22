@@ -33,7 +33,7 @@ There are two good fixes and the code cannot tell us which one is wanted:
 
 Which is right depends on whether the data is wanted later or only recently,
 and on whether there is a filesystem worth writing to. That is a design
-decision, so the rule is `hintOnly`: it points at the list, explains what will
+decision, so Snakie only points: it flags the list, explains what will
 happen, and never rewrites anything.
 
 It goes out of its way not to cry wolf. It fires only on a list that starts

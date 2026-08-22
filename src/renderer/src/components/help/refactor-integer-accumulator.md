@@ -34,7 +34,7 @@ further from the physical quantity, and it puts the burden of remembering the
 scale on whoever reads it next. Worth it in a sampling loop; not worth it in a
 function that runs twice.
 
-So the rule is `hintOnly`: it points at the accumulation, names the float that
+So Snakie only points: it flags the accumulation, names the float that
 started it, and lets the author decide. There is no mechanical rewrite,
 because choosing the new unit is the entire job.
 

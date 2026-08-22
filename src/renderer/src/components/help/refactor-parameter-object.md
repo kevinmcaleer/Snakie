@@ -42,7 +42,7 @@ decisions about this program, and picking one silently would rewrite every
 call site on a guess. Snakie makes no change — the panel shows the explanation
 and the "Why?" article, never a diff.
 
-The threshold is `ctx.settings.maxParameters` (5 by default), and what counts
+The threshold is five parameters, and what counts
 is exactly what the epic's example makes unreadable: **the values the caller
 has to type, in order, with no name attached.** So the count leaves out
 

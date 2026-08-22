@@ -33,7 +33,7 @@ erase-rewrite cycle on *every single iteration*.
 The fix is to collect a few hundred samples in a list or a `bytearray` and
 write them in one call. That is a real change in behaviour — pull the power
 mid-batch and the unwritten samples are gone — so it is a trade the author has
-to make deliberately. Hence `hintOnly`: the rule points at the write, explains
+to make deliberately. So Snakie only points: it flags the write, explains
 what it costs, and changes nothing.
 
 ## Before you apply it
