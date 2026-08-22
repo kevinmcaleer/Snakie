@@ -290,6 +290,72 @@ def _run_lint(params: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def _normalise_refactoring(item: Any, provider: str) -> Optional[Dict[str, Any]]:
+    """Coerce one plugin refactoring offer into the wire shape, or drop it.
+
+    Anything missing a title or a ranged fix is discarded rather than passed on:
+    the editor's contract is that every offer can be previewed as a diff, and an
+    offer with no edits has nothing to show.
+    """
+    if not isinstance(item, dict):
+        return None
+    title = item.get("title")
+    fixes = item.get("fixes")
+    if not isinstance(title, str) or not title.strip():
+        return None
+    if not isinstance(fixes, list) or not fixes:
+        return None
+    clean_fixes: List[Dict[str, Any]] = []
+    for f in fixes:
+        if isinstance(f, dict) and isinstance(f.get("edit"), dict):
+            clean_fixes.append(f)
+    if not clean_fixes:
+        return None
+    out: Dict[str, Any] = {
+        "title": title,
+        "message": str(item.get("message") or title),
+        "fixes": clean_fixes,
+        "safe": bool(item.get("safe", False)),
+        "provider": provider,
+    }
+    for key in ("line", "column", "endLine", "endColumn"):
+        value = item.get(key)
+        if isinstance(value, int):
+            out[key] = value
+    article = item.get("helpArticle")
+    if isinstance(article, str) and article:
+        out["helpArticle"] = article
+    return out
+
+
+def _run_refactor(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Run every registered refactoring provider (epic #634 §6, issue #808).
+
+    Mirrors :func:`_run_lint` exactly, including its isolation: one provider
+    raising is reported to stderr and skipped, so a broken plugin cannot take
+    the whole Refactor… menu down with it.
+    """
+    ctx = Context.from_dict(params.get("context"))
+    offers: List[Dict[str, Any]] = []
+    for provider in plugin.refactorings:
+        try:
+            result = provider.handler(ctx)
+        except Exception as exc:  # noqa: BLE001 - per-provider isolation
+            print(
+                f"snakie.host: refactoring provider {provider.name!r} failed: {exc}",
+                file=sys.stderr,
+            )
+            continue
+        if result is None:
+            continue
+        items = result if isinstance(result, (list, tuple)) else [result]
+        for raw in items:
+            offer = _normalise_refactoring(raw, provider.name)
+            if offer is not None:
+                offers.append(offer)
+    return {"refactorings": offers}
+
+
 # ---------------------------------------------------------------------------
 # Motion Studio managed blocks (#413) — read the guarded, versioned pose /
 # sequence / servo assignments back out of an exported ``.py`` so the Robot View
@@ -525,6 +591,9 @@ class Host:
         if method == "lint":
             self._ensure_discovered()
             return _run_lint(params)
+        if method == "refactor":
+            self._ensure_discovered()
+            return _run_refactor(params)
         if method == "motion.read":
             return _motion_read(params)
         if method == "motion.check":
