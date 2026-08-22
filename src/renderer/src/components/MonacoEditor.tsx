@@ -43,6 +43,12 @@ import {
 import { boardPartFor } from './part-editor.util'
 import { DEFAULT_BOARD_ID } from './board-defs'
 import { PARTS_CHANGED_EVENT } from './PartsPanel'
+import {
+  attachSpriteThumbnails,
+  type SpriteThumbScope,
+  type SpriteThumbnailController
+} from './sprite-decorations'
+import { openSpriteEditor } from './sprite-editor-bus'
 
 // Register the plugin quick-fix (lightbulb) provider exactly once at module
 // load, mirroring the completion provider. The function is idempotent and
@@ -219,7 +225,8 @@ function editorMetricsFor(
  *  - the editor auto-lays-out, so it tracks panel resizes
  */
 export function MonacoEditor(): JSX.Element {
-  const { openFiles, activeId, revealRequest, updateContent, saveFile } = useWorkspace()
+  const { openFiles, activeId, revealRequest, updateContent, saveFile, currentFolder } =
+    useWorkspace()
   const { setDiagnostics, setLinterTool, clear: clearDiagnostics } = useDiagnostics()
   // Notebook line spacing (issues #80/#81) — drives Monaco's line height to match
   // the ruled-paper CSS period.
@@ -264,6 +271,12 @@ export function MonacoEditor(): JSX.Element {
   // Read inside the context-help action, which is registered once with the editor.
   const helpDialectRef = useRef(helpDialect)
   helpDialectRef.current = helpDialect
+
+  // Inline sprite thumbnails (#790). The controller is created with the editor
+  // and reads its resolution scope through a ref, so a file/folder change costs a
+  // `refresh()` rather than a re-attach.
+  const spriteThumbsRef = useRef<SpriteThumbnailController | null>(null)
+  const spriteScopeRef = useRef<SpriteThumbScope>({ fileDir: null, projectRoot: null })
 
   // Point the completion provider at the runtime in use. Cheap, idempotent, and
   // the next keystroke completes against the new catalogue.
@@ -354,10 +367,21 @@ export function MonacoEditor(): JSX.Element {
       }
     })
 
+    // Inline sprite thumbnails (#790): a `.spr` named in a string literal draws
+    // itself beside the code, and clicking it opens that file in the Sprite
+    // editor. Attached here (rather than in its own effect) so it is disposed
+    // BEFORE the editor is, and torn down with it.
+    spriteThumbsRef.current = attachSpriteThumbnails(monaco, editor, {
+      getScope: () => spriteScopeRef.current,
+      onOpen: (path) => openSpriteEditor(path)
+    })
+
     const modelStore = models.current
     return () => {
       changeDisposable.dispose()
       setActiveEditor(null)
+      spriteThumbsRef.current?.dispose()
+      spriteThumbsRef.current = null
       editor.dispose()
       editorRef.current = null
       modelStore.forEach((m) => {
@@ -432,6 +456,23 @@ export function MonacoEditor(): JSX.Element {
       editor.setModel(model)
     }
   }, [activeFile, activeFile?.id, activeFile?.content, activeFile?.name])
+
+  // Keep the sprite-thumbnail resolver pointed at the right folders (#790): a
+  // `.spr` named in code is looked for beside the file first, then in the open
+  // project folder. A DEVICE buffer's own folder is on the board (the local fs
+  // can't read it), and an untitled buffer has none — both fall back to the
+  // project folder, and a reference with nowhere to resolve draws nothing.
+  useEffect(() => {
+    const local = activeFile?.source === 'local'
+    const path = local ? activeFile.path : ''
+    const cut = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
+    spriteScopeRef.current = {
+      fileDir: cut > 0 ? path.slice(0, cut) : null,
+      projectRoot: currentFolder,
+      local
+    }
+    spriteThumbsRef.current?.refresh()
+  }, [activeFile, activeFile?.id, activeFile?.path, activeFile?.source, currentFolder])
 
   // Reactive linting: when the active file's content changes (or the active
   // file switches), debounce then run all plugin linters and paint the results

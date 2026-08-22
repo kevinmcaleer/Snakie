@@ -42,4 +42,14 @@ describe('Sprite editor overlay', () => {
   it('exposes the launch event name the Display instrument dispatches', () => {
     expect(OPEN_SPRITE_EDITOR_EVENT).toBe('snakie:open-sprite-editor')
   })
+
+  it('accepts a file to open (#790) without disturbing the draft-backed render', () => {
+    // Clicking an inline sprite thumbnail opens the overlay ON a `.spr`; the
+    // load itself is an effect, so the first paint is still the ordinary editor.
+    const out = renderToStaticMarkup(
+      <SpriteEditor openPath="/proj/eyes.spr" onClose={() => undefined} />
+    )
+    expect(out).toContain('role="dialog"')
+    expect(out).toContain('SPRITE EDITOR')
+  })
 })

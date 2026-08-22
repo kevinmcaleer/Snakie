@@ -41,6 +41,22 @@
   margin-right: 0.3rem;
 }
 
+/* The file this document was opened from (#790) — Save writes back over it, so
+   the name is shown rather than left to be guessed from the NAME field. */
+.spred__file {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--accent);
+  border: var(--border-w, 1px) solid var(--border);
+  border-radius: 4px;
+  padding: 0.1rem 0.35rem;
+  margin-right: 0.3rem;
+  max-width: 16ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .spred__spacer {
   flex: 1;
 }

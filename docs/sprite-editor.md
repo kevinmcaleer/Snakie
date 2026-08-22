@@ -70,12 +70,49 @@ drive non-framebuf targets (e.g. the Arduino Modulino LED Matrix) pixel-by-pixel
   automatically, and integer-upscaled pixel art (a 12×8 sprite shared at ×10) is
   detected and folded back to its true grid.
 
+## Sprites in the code: what counts as a reference
+
+A `.spr` named in an open Python file draws itself inline, at about line height,
+**always visible** — clicking it opens that sprite for editing (#790). Two more
+features hang off the same question (autocompleting sprite names, #791; the
+"used in" back-link, #792), so the rule is settled once, in one pure module,
+`sprite-refs.ts`:
+
+> A sprite reference is a **single-quoted Python string literal whose text names
+> a `.spr` file**, resolved against the file's own folder first and then the
+> project root. Anything else does **nothing**.
+
+| Written as | Recognised? | Why |
+| --- | --- | --- |
+| `Spr("eyes.spr")` | ✅ | a literal naming one file |
+| `SPR_FILE = "sprites/eyes.spr"` | ✅ | the rule keys off the LITERAL, not off any loader name — which is what `examples/sprites/play_spr.py` actually writes |
+| `r"art\eyes.spr"`, `b"eyes.spr"` | ✅ | string prefixes are understood |
+| `"/home/kev/eyes.spr"` | ✅ | absolute — taken at its word |
+| `f"{stem}.spr"`, `"%s.spr" % s` | ❌ | a template: the real name is unknowable |
+| `name + ".spr"` | ❌ | the name is in a variable |
+| `"frames/*.spr"` | ❌ | a glob names many files, or none |
+| `# eyes.spr`, `"""…eyes.spr…"""` | ❌ | a comment or a docstring mentions a sprite; it does not use one |
+
+The refusals are deliberate: **a thumbnail beside the wrong sprite is worse than
+no thumbnail**. What is *shown* follows the same principle — a multi-frame
+animation shows its first inked frame and holds still (a cycling image in a code
+editor competes with the text), a reference that resolves to a file that is not
+there is drawn as a broken marker rather than vanishing, and a reference with
+nowhere to resolve against at all (an unsaved buffer, no project folder open)
+draws nothing, because "I cannot tell" is not the same as "it is broken".
+
+Reading and rendering happens once per file per mtime (`sprite-thumb-cache.ts`);
+the paint pass itself is synchronous and does no I/O, so typing costs nothing.
+
 ## Where the code lives
 
 Pure, node-tested logic: `sprite-model.ts` (document + edits),
 `sprite-codecs.ts` (PBM / `.spr` / draft JSON), `sprite-export.ts` (the `.py`
-module), the pure half of `sprite-image-io.ts` (threshold / polarity / descale);
-`sprite-seed.ts` is the bundled blinking-eyes starter. The DOM half of
-`sprite-image-io.ts` does canvas/`gifenc`/WebCodecs encoding-decoding, and
+module), the pure half of `sprite-image-io.ts` (threshold / polarity / descale),
+`sprite-refs.ts` (the reference rule above) and `sprite-thumb.ts` (a frame → an
+SVG data URI); `sprite-seed.ts` is the bundled blinking-eyes starter. The DOM
+half of `sprite-image-io.ts` does canvas/`gifenc`/WebCodecs encoding-decoding,
+`sprite-thumb-cache.ts` is the path+mtime cache behind the inline thumbnails and
+`sprite-decorations.ts` their Monaco glue (wired up in `MonacoEditor.tsx`), and
 `SpriteEditor.tsx` is the overlay UI (launched via `sprite-editor-bus.ts` from
-`DisplayInstrument.tsx`, hosted in `AppShell.tsx`).
+`DisplayInstrument.tsx` or from an inline thumbnail, hosted in `AppShell.tsx`).

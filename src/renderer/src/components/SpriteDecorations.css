@@ -1,0 +1,74 @@
+/**
+ * Inline sprite thumbnails in the code editor (#790).
+ *
+ * The chip is deliberately a little DEVICE rather than a piece of text: gold
+ * pixels on a dark panel, because that is what the sprite will be on the board.
+ * That reads correctly on both editor surfaces — high contrast against the light
+ * Skeuomorph parchment, and separated from the dark ruled paper by its edge — so
+ * only the EDGE and the shadow are themed, not the panel.
+ *
+ * `sprthumb` is a unique BEM prefix: Monaco's inline class names are global, so
+ * a shared prefix would collide with another panel's rules.
+ */
+
+:root {
+  --sprthumb-panel: #101216;
+  --sprthumb-edge: rgba(226, 232, 245, 0.28);
+  --sprthumb-shadow: rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme='skeuomorph'] {
+  --sprthumb-panel: #14161d;
+  --sprthumb-edge: rgba(60, 45, 18, 0.5);
+  --sprthumb-shadow: rgba(92, 63, 12, 0.28);
+}
+
+/* The chip itself. The injected glyph is a space, so the sprite arrives as the
+   background image (width comes from the per-sprite rule the controller
+   injects); `color: transparent` keeps the glyph from showing through. */
+.sprthumb {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 1.15em;
+  height: 1.15em;
+  margin: 0 0.2em;
+  vertical-align: -0.22em;
+  overflow: hidden;
+  border: 1px solid var(--sprthumb-edge);
+  border-radius: 3px;
+  background-color: var(--sprthumb-panel);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  box-shadow: 0 1px 2px var(--sprthumb-shadow);
+  color: transparent;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sprthumb:hover {
+  border-color: var(--accent);
+}
+
+/* A reference we could resolve but could not draw: the file is missing, or it
+   is not a sprite. It must read as BROKEN — a reference to a file that is not
+   there is exactly what the user needs to see — so it keeps the same slot in
+   the line but swaps the panel for a dashed warning marker. */
+.sprthumb--broken {
+  width: auto;
+  min-width: 1.05em;
+  height: auto;
+  padding: 0 0.15em;
+  border: 1px dashed var(--danger);
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  color: var(--danger);
+  font-size: 0.85em;
+  text-align: center;
+  cursor: help;
+}
+
+.sprthumb--broken:hover {
+  border-color: var(--danger);
+}
