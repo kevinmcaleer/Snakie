@@ -38,7 +38,12 @@
  */
 import type * as Monaco from 'monaco-editor/esm/vs/editor/editor.api'
 import { isElectron } from '../lib/platform'
-import { findSpriteRefs, resolveSpriteRef, type SpriteRefScope } from './sprite-refs'
+import {
+  chooseSpriteCandidate,
+  findSpriteRefs,
+  resolveSpriteRef,
+  type SpriteRefScope
+} from './sprite-refs'
 import { spriteSummary } from './sprite-thumb'
 import { spriteThumbCache, type SpriteThumbRecord } from './sprite-thumb-cache'
 import './SpriteDecorations.css'
@@ -65,6 +70,9 @@ export interface SpriteThumbScope extends SpriteRefScope {
    * local fs cannot read, so a miss there means "not here", not "missing": the
    * thumbnail still draws if the sprite also happens to be in the project
    * folder, but nothing is ever marked broken. Defaults to true.
+   *
+   * Derive it with `isLocalSource` from `sprite-refs.ts` — the same call the
+   * "used in" scan makes when it declines to read a device buffer at all (#797).
    */
   local?: boolean
 }
@@ -125,11 +133,19 @@ export function attachSpriteThumbnails(
       if (!candidates.length) continue // nowhere to look — say nothing
       for (const path of candidates) wanted.push(path)
 
+      // Which candidate this reference MEANS: the nearest one that is really
+      // there. The order is `sprite-refs.ts`'s (and the same one "used in" acts
+      // on); what the cache knows is ours, including "nobody has looked yet".
       const known = candidates.map((path) => cache.peek(path))
-      const hit = known.find((record) => record?.state === 'ok')
+      const choice = chooseSpriteCandidate(candidates, (_path, i) => {
+        const record = known[i]
+        if (!record) return 'unknown'
+        return record.state === 'ok' ? 'yes' : 'no'
+      })
+      const hit = choice.index < 0 ? undefined : known[choice.index]
       // Still loading (some candidate has never been looked at): leave the line
       // alone rather than flashing a broken marker that resolves a tick later.
-      if (!hit && known.some((record) => record === undefined)) continue
+      if (!hit && choice.pending) continue
       // A board file's sprites live on the board — a local miss proves nothing.
       if (!hit && scope.local === false) continue
 

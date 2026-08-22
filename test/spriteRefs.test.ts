@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   SPRITE_EXT,
+  chooseSpriteCandidate,
+  dirname,
   findSpriteRefs,
   isAbsolutePath,
   isSpriteRefText,
   joinPath,
   normalisePath,
+  pythonLexState,
   resolveSpriteRef,
   spriteSearchDirs
 } from '../src/renderer/src/components/sprite-refs'
@@ -209,5 +212,109 @@ describe('resolving a reference to candidate files', () => {
 
   it('exports the extension the rest of the epic keys off', () => {
     expect(SPRITE_EXT).toBe('.spr')
+  })
+})
+
+// ── The rules #797 folded back in ───────────────────────────────────────────
+// Each of these was written twice before the phases were merged. The tests are
+// the properties that keep them ONE rule, not restatements of the code.
+
+describe('the folder a file resolves against', () => {
+  it('always joins back to an absolute path when the file was absolute', () => {
+    // The whole reason `dirname` exists: the bare head of `/main.py` is `''` and
+    // of `C:\main.py` is `C:`, and both of those join RELATIVE — the sprite
+    // silently resolves against the process's working directory instead.
+    for (const path of ['/main.py', 'C:\\main.py', '/proj/code/play.py', 'C:\\proj\\play.py']) {
+      const dir = dirname(path)
+      expect(dir, path).not.toBeNull()
+      expect(isAbsolutePath(joinPath(dir as string, 'eyes.spr')), path).toBe(true)
+    }
+  })
+
+  it('is the folder the file is IN, and nothing when it is in none', () => {
+    expect(dirname('/proj/code/play.py')).toBe('/proj/code')
+    expect(dirname('untitled-1.py')).toBeNull()
+    expect(dirname('')).toBeNull()
+  })
+})
+
+describe('which candidate a reference means', () => {
+  const candidates = ['/proj/code/eyes.spr', '/proj/eyes.spr']
+  const exists =
+    (...there: string[]) =>
+    (path: string): 'yes' | 'no' =>
+      there.includes(path) ? 'yes' : 'no'
+
+  it('is the nearest one that exists — a farther namesake never wins', () => {
+    expect(chooseSpriteCandidate(candidates, exists(...candidates)).path).toBe(candidates[0])
+    expect(chooseSpriteCandidate(candidates, exists(candidates[1])).path).toBe(candidates[1])
+    expect(chooseSpriteCandidate(candidates, exists()).path).toBeUndefined()
+    expect(chooseSpriteCandidate([], exists()).index).toBe(-1)
+  })
+
+  it('an unchecked FARTHER candidate cannot unsettle a nearer one that exists', () => {
+    // What "pending" is for: it means "do not call this broken yet", and a hit
+    // already answers the question however little is known about the rest.
+    const choice = chooseSpriteCandidate(candidates, (path) =>
+      path === candidates[0] ? 'yes' : 'unknown'
+    )
+    expect(choice.path).toBe(candidates[0])
+    expect(choice.pending).toBe(false)
+  })
+
+  it('is pending only while an unlooked-at candidate could still be the answer', () => {
+    expect(chooseSpriteCandidate(candidates, () => 'unknown').pending).toBe(true)
+    expect(chooseSpriteCandidate(candidates, () => 'no').pending).toBe(false)
+  })
+})
+
+describe('one tokeniser, two questions', () => {
+  /** Offset of a 1-based line/column in an LF-only source. */
+  const offsetAt = (source: string, line: number, column: number): number => {
+    const lines = source.split('\n')
+    let offset = 0
+    for (let i = 0; i < line - 1; i++) offset += lines[i].length + 1
+    return offset + column - 1
+  }
+
+  const source = [
+    '# eyes.spr in a comment',
+    '"""',
+    'a docstring naming eyes.spr',
+    '"""',
+    'A = "eyes.spr"',
+    "B = 'sprites/mouth.spr'  # trailing",
+    'C = f"{stem}.spr"',
+    'D = "unterminated.spr',
+    'E = r"raw\\eyes.spr"'
+  ].join('\n')
+
+  it('the scanner and the cursor agree about where a literal is open', () => {
+    // The anti-drift property. `findSpriteRefs` says "here is a reference";
+    // `pythonLexState` is asked what the cursor just inside that quote sits in,
+    // and must say the very same literal — same body offset, not a docstring.
+    // Before #797 these were two scanners agreeing by hand.
+    const refs = findSpriteRefs(source)
+    expect(refs.map((r) => r.text)).toEqual(['eyes.spr', 'sprites/mouth.spr', 'raw\\eyes.spr'])
+    for (const ref of refs) {
+      const inside = offsetAt(source, ref.line, ref.startColumn + 1)
+      const state = pythonLexState(source.slice(0, inside))
+      expect(state.kind, ref.text).toBe('string')
+      expect(state, ref.text).toMatchObject({ triple: false, bodyStart: inside })
+    }
+  })
+
+  it('a comment and a docstring are nowhere a reference could sit, at any column', () => {
+    // The other half of that agreement: the places `findSpriteRefs` refuses to
+    // report are places the cursor rule refuses to offer in. A `.spr` named in
+    // either is a mention, not a use — line 1 is the comment, line 3 the
+    // docstring's body, and no column of either is a single-quoted literal.
+    const lines = source.split('\n')
+    for (const line of [1, 3]) {
+      for (let column = 2; column <= lines[line - 1].length + 1; column++) {
+        const state = pythonLexState(source.slice(0, offsetAt(source, line, column)))
+        expect(state.kind === 'string' && !state.triple, `${line}:${column}`).toBe(false)
+      }
+    }
   })
 })
