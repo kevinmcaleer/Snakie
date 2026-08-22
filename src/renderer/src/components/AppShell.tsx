@@ -56,7 +56,7 @@ import { IS_WEB } from '../lib/env'
 import { StatusBar } from './StatusBar'
 import { SettingsDialog, type SettingsTab } from './SettingsDialog'
 import { OPEN_SETTINGS_EVENT } from './settingsBus'
-import { OPEN_SPRITE_EDITOR_EVENT } from './sprite-editor-bus'
+import { OPEN_SPRITE_EDITOR_EVENT, type OpenSpriteEditorDetail } from './sprite-editor-bus'
 import { HELP_EVENT, type HelpEventDetail } from './editorBridge'
 import { InstrumentLibBanner } from './InstrumentLibBanner'
 import { NoticeStack } from './Notice'
@@ -1074,11 +1074,17 @@ export function AppShell(): JSX.Element {
   // The Parts Library + Part Editor live in the Board Viewer window now (it's the
   // only place that uses parts), so the main window no longer hosts them.
 
-  // The Sprite editor overlay — opened by the Display instrument's SPRITES key
-  // via the window-event seam (the Part Editor pattern).
-  const [spriteOpen, setSpriteOpen] = useState(false)
+  // The Sprite editor overlay — opened by the Display instrument's SPRITES key,
+  // or by clicking an inline sprite thumbnail in the code editor (#790), via the
+  // window-event seam (the Part Editor pattern). The event carries the `.spr` to
+  // load, or null for the parked draft; the state holds a `{ path }` box so
+  // re-opening the SAME file remounts the editor onto it.
+  const [spriteOpen, setSpriteOpen] = useState<OpenSpriteEditorDetail | null>(null)
   useEffect(() => {
-    const handler = (): void => setSpriteOpen(true)
+    const handler = (e: Event): void => {
+      const detail = (e as CustomEvent<OpenSpriteEditorDetail>).detail
+      setSpriteOpen({ path: detail?.path ?? null })
+    }
     window.addEventListener(OPEN_SPRITE_EDITOR_EVENT, handler)
     return () => window.removeEventListener(OPEN_SPRITE_EDITOR_EVENT, handler)
   }, [])
@@ -1434,7 +1440,7 @@ export function AppShell(): JSX.Element {
 
       {spriteOpen && (
         <Suspense fallback={null}>
-          <SpriteEditor onClose={() => setSpriteOpen(false)} />
+          <SpriteEditor openPath={spriteOpen.path} onClose={() => setSpriteOpen(null)} />
         </Suspense>
       )}
 

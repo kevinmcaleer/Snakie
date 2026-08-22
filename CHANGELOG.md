@@ -59,6 +59,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   that used to answer with a bare `{}`. (#787)
 
 ### Added
+- **A sprite in your code draws itself, right there in the line.** (#790, part of
+  epic #789) Name a `.spr` in a Python file and the sprite appears beside the
+  string — at about line height, **always visible, not on hover**. Hover only
+  helps someone who already suspects there is something worth hovering; the thing
+  MakeCode gets for free is that the artwork is simply *there*. Click the sprite
+  and it opens in the Sprite editor on that file, where **Save .spr** writes
+  straight back over it and the code repaints with the new artwork.
+
+  The reference rule is settled once and exported (`sprite-refs.ts`), because
+  #791's autocomplete and #792's back-link inherit it: a **string literal whose
+  text names a `.spr` file**, looked for beside the file first and then in the
+  project folder. Templates (`f"{stem}.spr"`, `"%s.spr"`), globs, variables,
+  comments and docstrings are deliberately ignored rather than guessed at — a
+  thumbnail beside the wrong sprite is worse than none. An animation shows its
+  first inked frame and holds still (a cycling image competes with the code for
+  attention; the hover says how many frames there are), a reference to a file
+  that is not there is drawn as a broken marker instead of quietly vanishing, and
+  a reference with nowhere to resolve against draws nothing, because "I cannot
+  tell" is not "it is broken". Sprites are read and rendered once per file per
+  mtime and cached, so the decorations never touch the disk on a keystroke.
 - **A Sprite editor for LED matrices and OLED displays.** The Display
   instrument grows a **✎ Sprites** key that opens a full-screen pixel editor:
   set the sprite size (presets from the 12×8 Arduino Modulino / UNO R4 LED

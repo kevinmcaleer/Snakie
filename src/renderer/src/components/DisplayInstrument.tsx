@@ -360,7 +360,7 @@ export function DisplayInstrument({
             <button
               type="button"
               className="i2cd__mode i2cd__sprites"
-              onClick={openSpriteEditor}
+              onClick={() => openSpriteEditor()}
               title="Open the Sprite editor — draw 1-bit sprites & animations for LED matrices and OLEDs"
             >
               ✎ Sprites

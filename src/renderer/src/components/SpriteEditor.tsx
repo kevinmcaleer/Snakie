@@ -53,6 +53,7 @@ import {
   rasterToSprite
 } from './sprite-image-io'
 import { seedSprite } from './sprite-seed'
+import { invalidateSpriteThumb } from './sprite-thumb-cache'
 import './SpriteEditor.css'
 
 /**
@@ -133,9 +134,16 @@ function cssToken(name: string, fallback: string): string {
 
 export interface SpriteEditorProps {
   onClose: () => void
+  /**
+   * A `.spr` to open for editing (#790 — clicking an inline sprite thumbnail in
+   * the code editor). The editor loads it in place of the parked draft, and
+   * "Save .spr" then writes straight back over it instead of asking. Null/absent
+   * resumes the draft, which is what the Display instrument's SPRITES key wants.
+   */
+  openPath?: string | null
 }
 
-export function SpriteEditor({ onClose }: SpriteEditorProps): JSX.Element {
+export function SpriteEditor({ onClose, openPath = null }: SpriteEditorProps): JSX.Element {
   const { openBuffer } = useInstrumentWorkspace()
   // The parked draft is read ONCE (lazy useState) — useHistory takes a value.
   const [initialDoc] = useState<SpriteDoc>(loadDraft)
@@ -152,12 +160,19 @@ export function SpriteEditor({ onClose }: SpriteEditorProps): JSX.Element {
   const [scale, setScale] = useState<number>(8)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<string | null>(null)
+  // The file this document came from, when it was opened from one (#790). Set
+  // once the load succeeds, so a failed open can't leave Save pointed at a file
+  // whose contents are not on screen.
+  const [filePath, setFilePath] = useState<string | null>(null)
 
-  // Park the draft, debounced — a drag produces a state change per pixel.
+  // Park the draft, debounced — a drag produces a state change per pixel. A
+  // file-backed document (#790) is NOT parked: the file is its safety net, and
+  // opening a sprite from code must not overwrite the doodle you left here.
   useEffect(() => {
+    if (filePath) return undefined
     const t = window.setTimeout(() => saveDraft(doc), 400)
     return () => window.clearTimeout(t)
-  }, [doc])
+  }, [doc, filePath])
 
   // Keep the selection on a frame that exists (deletes clamp it back in).
   const frameCount = doc.frames.length
@@ -169,6 +184,36 @@ export function SpriteEditor({ onClose }: SpriteEditorProps): JSX.Element {
     setNote(message)
     window.setTimeout(() => setNote((n) => (n === message ? null : n)), 3200)
   }, [])
+
+  // ── Opened from a file (#790) ─────────────────────────────────────────────
+  // Load the `.spr` the caller asked for. A failure is REPORTED, never
+  // swallowed: the overlay stays on the draft and says why, rather than showing
+  // the wrong sprite under that file's name.
+  useEffect(() => {
+    if (!openPath) return undefined
+    let alive = true
+    setBusy(true)
+    void (async () => {
+      try {
+        const bytes = await window.api.fs.readFileBytes(openPath)
+        const name = openPath.split(/[/\\]/).pop() ?? 'sprite'
+        const next = sprToDoc(name.replace(/\.[^.]+$/, ''), decodeSpr(bytes))
+        if (!alive) return
+        reset(next)
+        setSelected(0)
+        setPlaying(false)
+        setFilePath(openPath)
+        flash(`Editing ${name} — Save .spr writes straight back to it.`)
+      } catch (err) {
+        if (alive) flash(err instanceof Error ? err.message : `Couldn't open ${openPath}.`)
+      } finally {
+        if (alive) setBusy(false)
+      }
+    })()
+    return () => {
+      alive = false
+    }
+  }, [openPath, reset, flash])
 
   // ── Playback ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -397,6 +442,8 @@ export function SpriteEditor({ onClose }: SpriteEditorProps): JSX.Element {
       reset(next)
       setSelected(0)
       setPlaying(false)
+      // Imported artwork is not the file we opened (#790) — Save asks again.
+      setFilePath(null)
       flash(
         `Imported ${next.frames.length} frame${next.frames.length === 1 ? '' : 's'} (${next.width}×${next.height}) from ${name}.`
       )
@@ -433,7 +480,10 @@ export function SpriteEditor({ onClose }: SpriteEditorProps): JSX.Element {
       }
       if (format === 'spr') {
         const path = await writeOut(`${stem}.spr`, 'Snakie sprite', ['spr'], encodeSpr(doc))
-        if (path) flash(`Saved ${doc.frames.length} frame${doc.frames.length === 1 ? '' : 's'} to ${path}.`)
+        if (path) {
+          invalidateSpriteThumb(path)
+          flash(`Saved ${doc.frames.length} frame${doc.frames.length === 1 ? '' : 's'} to ${path}.`)
+        }
         return
       }
       if (format === 'pbm') {
@@ -504,20 +554,32 @@ export function SpriteEditor({ onClose }: SpriteEditorProps): JSX.Element {
   const onSave = useCallback(async (): Promise<void> => {
     setBusy(true)
     try {
-      const path = await writeOut(`${stem}.spr`, 'Snakie sprite', ['spr'], encodeSpr(doc))
-      if (path) flash(`Saved ${doc.frames.length} frame${doc.frames.length === 1 ? '' : 's'} to ${path}.`)
+      // Opened from a file: save means SAVE, over that file — no dialog. That is
+      // what closes the loop for #790's click-the-thumbnail-to-edit. New/Import
+      // clear `filePath`, so this can only ever write back what it opened.
+      let path: string | null = filePath
+      if (path) await window.api.fs.writeFileBytes(path, encodeSpr(doc))
+      else path = await writeOut(`${stem}.spr`, 'Snakie sprite', ['spr'], encodeSpr(doc))
+      if (!path) return
+      // Drop the cached thumbnail so the inline decorations in open code repaint
+      // with the new artwork instead of waiting out the cache's TTL.
+      invalidateSpriteThumb(path)
+      flash(`Saved ${doc.frames.length} frame${doc.frames.length === 1 ? '' : 's'} to ${path}.`)
     } catch (err) {
       flash(err instanceof Error ? err.message : 'Save failed.')
     } finally {
       setBusy(false)
     }
-  }, [doc, stem, writeOut, flash])
+  }, [doc, stem, filePath, writeOut, flash])
 
   const onNew = useCallback((): void => {
     if (window.confirm('Start a new blank sprite? This clears the current drawing.')) {
       reset(newSprite('sprite', doc.width, doc.height, doc.fps))
       setSelected(0)
       setPlaying(false)
+      // A blank sprite is no longer the file we opened (#790) — Save must ask
+      // again rather than quietly emptying that `.spr`.
+      setFilePath(null)
     }
   }, [reset, doc])
 
@@ -528,6 +590,12 @@ export function SpriteEditor({ onClose }: SpriteEditorProps): JSX.Element {
       {/* ── Title bar ─────────────────────────────────────────────────────── */}
       <div className="spred__bar">
         <span className="spred__title">SPRITE EDITOR</span>
+        {/* Opened from a file (#790): say which one, because Save overwrites it. */}
+        {filePath && (
+          <span className="spred__file" title={filePath}>
+            {filePath.split(/[/\\]/).pop()}
+          </span>
+        )}
         <label className="spred__field spred__field--name">
           <span>NAME</span>
           <input
