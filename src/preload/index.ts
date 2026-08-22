@@ -64,6 +64,8 @@ import type {
   GitDiff,
   GitInitResult,
   GitRemoteResult,
+  GitStageResult,
+  GitStageScope,
   GitStatus
 } from '../main/git/types'
 import type {
@@ -720,6 +722,15 @@ const git = {
   init: (): Promise<GitInitResult> => unwrap(ipcRenderer.invoke('git:init')),
   /** Stage a single file. */
   stage: (file: string): Promise<void> => unwrap(ipcRenderer.invoke('git:stage', file)),
+  /**
+   * Stage a whole group at once (#794) — `untracked`, `changed`, or `all`.
+   * Only files git already reports in that group are staged, so `.gitignore` is
+   * honoured by construction and conflicted files are left alone. Resolves with
+   * a receipt (count + paths + summary); rejects with a readable message when
+   * git fails, rather than resolving silently.
+   */
+  stageAll: (scope?: GitStageScope): Promise<GitStageResult> =>
+    unwrap(ipcRenderer.invoke('git:stageAll', scope)),
   /** Unstage a single file. */
   unstage: (file: string): Promise<void> => unwrap(ipcRenderer.invoke('git:unstage', file)),
   /** Discard working-tree changes for a file (or delete it, if untracked). */
