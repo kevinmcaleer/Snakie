@@ -11,7 +11,7 @@ def blink(count):                   def blink(count):
 
 ## Why it matters
 
-a `Pin`, `PWM` or `I2C` object is not a value, it is a driver.
+A `Pin`, `PWM` or `I2C` object is not a value, it is a driver.
 Rebuilding one every time round the loop allocates a fresh object on a heap
 that has no room to spare, hands the collector work it did not need, and on
 several ports re-runs the peripheral's *initialisation* — re-arming the pad,

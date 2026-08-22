@@ -14,7 +14,7 @@ while True:                       DEBUG = False
 
 ## Why it matters
 
-on a microcontroller `print` is not free and it is not
+On a microcontroller `print` is not free and it is not
 asynchronous. It formats the arguments, then **blocks** until the bytes have
 been pushed out of the UART or USB CDC — and if nothing is draining the other
 end, it can block for a very long time. At 115200 baud a forty-character line
