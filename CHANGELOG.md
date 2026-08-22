@@ -281,6 +281,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Modules panel instead.
 
 ### Fixed
+- **The Inspect panel scrolls.** A file with more than a dozen top-level symbols
+  ran off the bottom of the Outline pane with no way to reach the rest, and the
+  Variables list below it did the same. There *was* an `overflow: auto` on each
+  pane — it simply never applied: `react-resizable-panels` writes
+  `overflow: hidden` as an inline style on every panel it renders, and an inline
+  style outranks any stylesheet rule. The scrolling now belongs to the list
+  inside each pane, the way the Files view has always done it, with the count and
+  **Refresh** staying put at the top while the rows move under them. (#796)
 - **A linked 3-D model no longer gets left behind when a part changes library,
   and a missing one now says so.** Linking an STL in the Part Editor's 3-D tab
   copies it into the part's folder — but saving the part into a *different*

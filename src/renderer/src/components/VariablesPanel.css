@@ -5,21 +5,32 @@
  * Uses the shared design tokens from index.css so it tracks the active theme.
  */
 
+/* Fills its split pane as a flex column so the variables list below can own the
+   scrolling (#796): toolbar and error pinned, list scrolls. */
 .vars {
   display: flex;
   flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
   font-size: 13px;
   color: var(--text);
 }
 
 .vars__hint {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   margin: 0;
   padding: 0.85rem 1rem;
   color: var(--text-muted);
   line-height: 1.5;
 }
 
+/* Stays put while the list scrolls under it — the count and Refresh are the
+   pane's controls, not part of its content. */
 .vars__toolbar {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -54,6 +65,7 @@
 }
 
 .vars__error {
+  flex: 0 0 auto;
   margin: 0;
   padding: 0.6rem 0.85rem;
   color: var(--danger, #c0392b);
@@ -63,7 +75,11 @@
   word-break: break-word;
 }
 
+/* THE scrolling region of the Variables pane (#796). */
 .vars__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   margin: 0;
   padding: 0;
   list-style: none;
