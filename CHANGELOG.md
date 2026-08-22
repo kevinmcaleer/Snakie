@@ -80,6 +80,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `.spr` is written from the Sprite editor, and re-walked in the background at
   most every few seconds. Sizes come from the cache #790 already fills, so
   nothing is read from disk while you type.
+- **The Sprite editor tells you where a sprite is used — or that nothing uses
+  it.** (#792, part of epic #789) Open a `.spr` for editing and a line under the
+  toolbar names the files that reference it, each one a click away from the exact
+  line: `eyes.spr is used in 2 files:` `play_spr.py:12` `demo.py:3`. When nothing
+  references it, it says so in as many words — `Nothing references eyes.spr —
+  searched 14 Python files.` — because that is the answer that tells you the
+  sprite is safe to delete, and an empty area would only read as "still loading".
+
+  The search covers **every `.py` under the open project folder**, not just the
+  files you happen to have open: a sprite goes stale in the file you closed three
+  weeks ago, which is exactly the file an open-files-only answer would miss.
+  Dependency and cache trees (`node_modules`, `__pycache__`, dot-folders) are
+  skipped, and it stops at 500 files, breadth-first, so a project folder that
+  happens to sit above something enormous still gets an answer. **Open buffers
+  beat disk**, so a reference you just typed and have not saved counts (its chip
+  is dashed, to say the file on disk does not agree yet) and one you just deleted
+  stops counting. It re-reads the project when a file is saved beneath the
+  overlay, and on the ↻ button; it never runs on a keystroke — the sprite editor
+  has no code in it to type. Saving a new drawing now adopts the file it was
+  saved to, so **Save .spr** stops asking twice and the new sprite gets its
+  own "used in" answer immediately.
+
+  Uses the reference rule #790 exported (`sprite-refs.ts`), so what counts as a
+  use is exactly what draws a thumbnail — including that a relative name means
+  the sprite beside the file before the one in the project root, and that a name
+  built at runtime is invisible to both.
 - **A sprite in your code draws itself, right there in the line.** (#790, part of
   epic #789) Name a `.spr` in a Python file and the sprite appears beside the
   string — at about line height, **always visible, not on hover**. Hover only

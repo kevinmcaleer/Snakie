@@ -104,13 +104,59 @@ draws nothing, because "I cannot tell" is not the same as "it is broken".
 Reading and rendering happens once per file per mtime (`sprite-thumb-cache.ts`);
 the paint pass itself is synchronous and does no I/O, so typing costs nothing.
 
+## "Used in": the way back
+
+While a `.spr` is open in the Sprite editor — clicked from an inline thumbnail,
+or just saved from a drawing — a line under the toolbar says which files
+reference it, each a click away:
+
+> `eyes.spr is used in 2 files:`  `play_spr.py:12`  `demo.py:3`
+
+and when none do, it says exactly that:
+
+> `Nothing references eyes.spr — searched 14 Python files.`
+
+That sentence is the point of the feature (#792). An empty list reads as "not
+loaded yet"; a sentence is an answer, and "nothing references this" is what tells
+you a sprite is safe to delete.
+
+**What is searched**: every `.py` under the open project folder — skipping
+`node_modules`, `__pycache__`, dot-folders and other dependency/cache trees, 500
+files at most, breadth-first so the shallow ones win if that cap bites — **plus
+every open local Python buffer**. Not "open files only": a sprite goes stale in
+the file you closed three weeks ago, which is exactly the file an open-files-only
+answer would miss. Files opened from the BOARD are excluded, because their
+sprites live in flash rather than on this filesystem.
+
+**Buffers beat disk.** Where a file is both open and on disk, the buffer's text
+is what gets scanned — so a reference you just typed and have not saved counts,
+and one you just deleted stops counting. A chip with a dashed border is a
+reference that so far exists only in the buffer.
+
+**Staying current**: the project is read when the overlay opens on a file, again
+whenever a file is saved beneath it, and on demand from the ↻ button. Never per
+keystroke — there is no code to type in the sprite editor, and the scan is
+asynchronous, so it can never block the drawing.
+
+**Shadowing**: a relative name resolves against the referencing file's own folder
+before the project root, so `sprites/play.py` naming `"eyes.spr"` counts as a use
+of `sprites/eyes.spr` when that exists — and *not* of the root's namesake. The
+walk notes every `.spr` it passes, so honouring that costs no extra reads.
+
+**What it cannot see** is the rule above: a name assembled at runtime
+(`open(stem + ".spr")`) is invisible to the search exactly as it is invisible to
+the inline thumbnail. "Nothing references it" means "nothing *names* it" — the
+same guarantee phases 1 and 2 give.
+
 ## Where the code lives
 
 Pure, node-tested logic: `sprite-model.ts` (document + edits),
 `sprite-codecs.ts` (PBM / `.spr` / draft JSON), `sprite-export.ts` (the `.py`
 module), the pure half of `sprite-image-io.ts` (threshold / polarity / descale),
-`sprite-refs.ts` (the reference rule above) and `sprite-thumb.ts` (a frame → an
-SVG data URI); `sprite-seed.ts` is the bundled blinking-eyes starter. The DOM
+`sprite-refs.ts` (the reference rule above), `sprite-usage.ts` (the "used in"
+answer, including the project walk — the filesystem arrives as a parameter, so it
+is tested against an in-memory tree) and `sprite-thumb.ts` (a frame → an SVG data
+URI); `sprite-seed.ts` is the bundled blinking-eyes starter. The DOM
 half of `sprite-image-io.ts` does canvas/`gifenc`/WebCodecs encoding-decoding,
 `sprite-thumb-cache.ts` is the path+mtime cache behind the inline thumbnails and
 `sprite-decorations.ts` their Monaco glue (wired up in `MonacoEditor.tsx`), and
