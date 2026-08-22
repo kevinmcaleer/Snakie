@@ -58,6 +58,39 @@ export function meshAssetName(source: string): string | null {
   return `${stem || 'model'}.${ext}`
 }
 
+/**
+ * Above this many mesh units across, a model was surely authored in millimetres.
+ *
+ * THE ONE PLACE THE mm-vs-m RULE LIVES. `meshImportScale` (robot-assembly.ts)
+ * reads the same constant, so the guess made when a model is LINKED and the
+ * guess made when it is PLACED cannot drift apart — a disagreement between them
+ * ships a part a thousand times too big.
+ */
+export const MESH_MM_SPAN_THRESHOLD = 3
+
+/**
+ * Which units a freshly-linked model was authored in, from its largest
+ * bounding-box span in its own units (#787).
+ *
+ * WHY AT LINK TIME. An `.stl` records no units at all, so this cannot be
+ * recovered later from the file — the only moment the app can look at the
+ * geometry and write down a conclusion is when it copies the file in. A part
+ * that carries `mesh:` but no `meshUnits:` leaves every later consumer guessing,
+ * and a 48 mm battery read as 48 metres arrives 1000× too big (#787 fault 2).
+ *
+ * The guess is recorded as an ORDINARY, EDITABLE field rather than applied
+ * invisibly: it appears in the 3-D tab's Units control and in `parts.yml`, so a
+ * wrong guess is one visible click to correct instead of an unexplained size.
+ *
+ * `undefined` when the span could not be measured (a DAE, or a malformed STL) —
+ * absence keeps the existing bounding-box fallback rather than inventing a
+ * value the file never supported.
+ */
+export function inferMeshUnits(maxDim: number | undefined): 'mm' | 'm' | undefined {
+  if (typeof maxDim !== 'number' || !Number.isFinite(maxDim) || maxDim <= 0) return undefined
+  return maxDim > MESH_MM_SPAN_THRESHOLD ? 'mm' : 'm'
+}
+
 /** The `-N` variant of a filename: `model.stl` + 2 → `model-2.stl`. */
 function variant(name: string, n: number): string {
   const dot = name.lastIndexOf('.')

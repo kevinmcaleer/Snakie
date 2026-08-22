@@ -13,6 +13,7 @@ import { useHistory } from './use-history'
 import { PartSchematicView } from './PartSchematicView'
 import { partMeshRef } from './part-details'
 import { meshImportScale } from './robot-assembly'
+import { inferMeshUnits } from '../../../shared/part-mesh-file'
 import {
   formatMeshRotation,
   rotateMesh,
@@ -1314,7 +1315,14 @@ export function PartEditor({
       payload.rear = { ...(clean.rear ?? {}), imageData: part.rear.imageData }
     }
     try {
-      const res: PartsWriteResult = await window.api.parts.savePart(libId, payload)
+      const res: PartsWriteResult = await window.api.parts.savePart(libId, payload, {
+        // The folder this part was OPENED from. When the save lands in a
+        // different one — another library, or a renamed id — the main process
+        // brings the linked model with it (#787). The image and help ride in
+        // memory and move for free; the mesh only exists on disk, so it used to
+        // be left behind.
+        assetsFrom: { libraryId: openedLibId, partId: openedId ?? undefined }
+      })
       if (res?.ok) {
         setOpenedId(clean.id)
         setOpenedLibId(res.libraryId ?? libId)
@@ -1323,7 +1331,17 @@ export function PartEditor({
         // the pre-save one and be refused as stale (#750).
         sourceHashRef.current = res.sourceHash
         if (nextVersion !== part.version) patch({ version: nextVersion }) // reflect the bump in the field
-        setStatus({ kind: 'ok', text: `Saved "${clean.name}" to ${res.libraryId ?? libId} (v${nextVersion}).` })
+        // A part whose `mesh:` names a file that isn't beside it is broken, and
+        // nothing downstream can tell that from "no model" (#787). The save DID
+        // work, so this is a warning on a success — not an error.
+        setStatus(
+          res.missingMesh
+            ? {
+                kind: 'error',
+                text: `Saved "${clean.name}" to ${res.libraryId ?? libId} (v${nextVersion}) — but its 3-D model "${res.missingMesh}" is not in the part folder. Re-link it in the 3-D tab, or it will show as a plain block in Build.`
+              }
+            : { kind: 'ok', text: `Saved "${clean.name}" to ${res.libraryId ?? libId} (v${nextVersion}).` }
+        )
         onSaved(res.libraryId ?? libId, res.id ?? clean.id)
       } else if (res?.conflict) {
         // Not a broken save — a refused one. The file moved under us, so the
@@ -5216,12 +5234,22 @@ function ModelView({
         onNotify({ kind: 'error', text: res.error ?? 'Could not link that model.' })
         return
       }
-      patch({ mesh: res.filename })
+      // Record the units NOW (#787 fault 2). An `.stl` states none, so this is
+      // the only moment the geometry can be looked at and a conclusion written
+      // down — without it a 48 mm part read as metres arrives 1000× too big.
+      // An EXPLICIT choice the part already carries is never overwritten: the
+      // guess fills a blank, it does not overrule the author.
+      const units =
+        part.meshUnits === undefined && part.meshScale === undefined
+          ? inferMeshUnits(res.maxDim)
+          : undefined
+      patch(units ? { mesh: res.filename, meshUnits: units } : { mesh: res.filename })
+      const sized = units ? ` It measures ${units === 'mm' ? 'millimetres' : 'metres'} — change that under Units if it looks wrong.` : ''
       onNotify({
         kind: 'ok',
         text: res.reused
-          ? `Linked ${res.filename} — that exact file was already in the part folder.`
-          : `Copied ${res.filename} into the part folder. Save the part to keep the link.`
+          ? `Linked ${res.filename} — that exact file was already in the part folder.${sized}`
+          : `Copied ${res.filename} into the part folder. Save the part to keep the link.${sized}`
       })
     } catch (e) {
       onNotify({

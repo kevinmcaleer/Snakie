@@ -4,7 +4,8 @@ import type { RobotDefinition } from '../../../shared/robot'
 import { blankRobot } from '../../../shared/robot'
 import { readRobotModel } from '../../../shared/krf'
 import { computeSyncPlan, reAddedPartRow, type SyncItem } from './sync-plan'
-import { attachPartBody, mirroredOrigin, queueUrdfEdit } from './robot-part-mesh'
+import { attachPartBody, mirroredOrigin, partBodyPlan, queueUrdfEdit } from './robot-part-mesh'
+import { errorMessage, reportError } from '../lib/report-error'
 import { canvasPxPerMm, postAddBodyDims } from './project-parts'
 import {
   meshImportScale,
@@ -109,16 +110,20 @@ export function SyncControl({ folder }: { folder: string | null | undefined }): 
         }
         if (!def) return
         const at = mirroredOrigin({ x: robot.boardX, y: robot.boardY }, def, pxPerMm)
-        const link = await attachPartBody(folder, urdfName, boardLib, def, at)
-        if (link) await window.api.robot.patchModel(folder, { boardLink: link }).catch(() => undefined)
+        const body = await attachPartBody(folder, urdfName, boardLib, def, at)
+        if (body.problem) reportError('build: part mesh', body.problem, { notify: body.problem })
+        if (body.link) {
+          await window.api.robot.patchModel(folder, { boardLink: body.link }).catch(() => undefined)
+        }
         return
       }
       const row = robot.parts.find((p) => p.id === item.partId)
       const def = row && resolveDef(row.lib, row.part)
       if (!row || !def) return
       const at = mirroredOrigin(row, def, pxPerMm)
-      const link = await attachPartBody(folder, urdfName, row.lib, def, at)
-      if (link) await window.api.robot.patchPartLinks(folder, [{ partId: row.id, link }])
+      const body = await attachPartBody(folder, urdfName, row.lib, def, at)
+      if (body.problem) reportError('build: part mesh', body.problem, { notify: body.problem })
+      if (body.link) await window.api.robot.patchPartLinks(folder, [{ partId: row.id, link: body.link }])
     },
     [folder, robot, libraries, urdfName, resolveDef]
   )
@@ -133,10 +138,17 @@ export function SyncControl({ folder }: { folder: string | null | undefined }): 
       if (!row || !def?.mesh) return
       const res = await window.api.robot
         .importPartMesh(`${folder.replace(/[/\\]$/, '')}/${urdfName}`, row.lib, def.id, def.mesh)
-        .catch(() => null)
-      if (!res?.rel) return
-      const rel = res.rel
-      const scale = meshImportScale(def, res.maxDim)
+        .catch((err: unknown) => ({ error: errorMessage(err) }))
+      const plan = partBodyPlan(def, res)
+      if (plan.body !== 'mesh') {
+        // The SAME swallow as #787 fault 3, one screen along: a failed copy used
+        // to make this button do nothing at all, with the placeholder it was
+        // meant to replace still sitting there looking correct.
+        if (plan.problem) reportError('build: upgrade to mesh', plan.problem, { notify: plan.problem })
+        return
+      }
+      const rel = plan.meshRel
+      const scale = meshImportScale(def, 'maxDim' in res ? res.maxDim : undefined)
       await queueUrdfEdit(folder, urdfName, (urdf) =>
         // The part's mesh orientation (#741) travels with the upgrade — the box
         // it replaces never needed one, so this is the first chance to apply it.

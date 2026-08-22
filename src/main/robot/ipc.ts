@@ -16,6 +16,7 @@ import { blankRobot, type RobotDefinition, type RobotPart } from '../../shared/r
 import { readRobotModel } from '../../shared/krf'
 import { generateSkeleton, skeletonJson } from '../../shared/skeleton'
 import { resolvePartAsset } from '../parts/library'
+import { stlMaxDim } from './stl-measure'
 
 /** Result of importing a mesh: the path relative to the URDF's folder, or a
  *  cancellation. */
@@ -32,59 +33,12 @@ export interface ImportMeshResult {
 }
 
 /**
- * The largest bounding-box span of an STL (binary OR ASCII), in the file's own
- * units — a cheap DOM/three-free parse so the mm→m import heuristic works
- * without the renderer.  Returns undefined for a malformed buffer (caller falls
- * back to declared units).
- *
- * THE DELIBERATE TWIN of the renderer's `maxSpan` in
- * `src/renderer/src/components/robot-mesh-load.ts` (#742). That one uses
- * three.js, which isn't available here — so this is the one duplicate the
- * refactor kept rather than removed. The two MUST agree: the number they
- * produce picks the mm→m import scale, so a disagreement ships a part a
- * thousand times too big. `test/meshMeasure.test.ts` holds them against the
- * same fixtures; change one and run it.
- *
- * Exported for that test only.
+ * Re-exported from `./stl-measure` so existing importers (and
+ * `test/meshMeasure.test.ts`) keep their import path. It moved out of this file
+ * in #787 because `parts/library.ts` needs it too, and this module already
+ * imports THAT one — measuring from there would have closed an import cycle.
  */
-export function stlMaxDim(buf: Buffer): number | undefined {
-  let minX = Infinity, minY = Infinity, minZ = Infinity
-  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity
-  const grow = (x: number, y: number, z: number): void => {
-    if (x < minX) minX = x
-    if (x > maxX) maxX = x
-    if (y < minY) minY = y
-    if (y > maxY) maxY = y
-    if (z < minZ) minZ = z
-    if (z > maxZ) maxZ = z
-  }
-  const tris = buf.length >= 84 ? buf.readUInt32LE(80) : 0
-  if (tris > 0 && buf.length === 84 + tris * 50) {
-    // BINARY STL: exactly 84 + 50·tris bytes. Each triangle: normal(12) + 3 verts(36) + attr(2).
-    for (let t = 0; t < tris; t++) {
-      const base = 84 + t * 50 + 12 // skip the facet normal
-      for (let v = 0; v < 3; v++) {
-        const o = base + v * 12
-        grow(buf.readFloatLE(o), buf.readFloatLE(o + 4), buf.readFloatLE(o + 8))
-      }
-    }
-  } else {
-    // ASCII STL: `vertex <x> <y> <z>` lines.
-    const text = buf.toString('utf-8')
-    if (!/^\s*solid\b/i.test(text)) return undefined
-    // The `-` inside the class is what lets a negative EXPONENT (e.g. 1.5e-3) match.
-    const re = /\bvertex\s+([-\d.eE+]+)\s+([-\d.eE+]+)\s+([-\d.eE+]+)/g
-    let m: RegExpExecArray | null
-    let found = false
-    while ((m = re.exec(text))) {
-      found = true
-      grow(Number(m[1]), Number(m[2]), Number(m[3]))
-    }
-    if (!found) return undefined
-  }
-  const span = Math.max(maxX - minX, maxY - minY, maxZ - minZ)
-  return Number.isFinite(span) ? span : undefined
-}
+export { stlMaxDim }
 
 /** Copy `src` into `<urdfDir>/meshes/`, never overwriting (appends -1, -2 …). */
 async function copyIntoMeshes(urdfPath: string, src: string): Promise<{ rel: string; name: string }> {

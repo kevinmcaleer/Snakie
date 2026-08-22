@@ -23,6 +23,7 @@ import type { PartDefinition, PartLibraryWithParts } from '../../../shared/part'
 import type { RobotDefinition, RobotPart } from '../../../shared/robot'
 import { readRobotModel } from '../../../shared/krf'
 import { attachPartBody, mirroredOrigin } from './robot-part-mesh'
+import { errorMessage, reportError } from '../lib/report-error'
 import { BODY_CAP_PX, PX_PER_MM_DEFAULT } from './WiringCanvas'
 
 /** What a board host lends the shared add sequence. `libraries` feeds part
@@ -145,10 +146,16 @@ export function addPartsToProject(host: PartsProjectHost, items: AddPartItem[]):
     const links: { partId: string; link: string }[] = []
     for (let i = 0; i < placed.length; i++) {
       const at = mirroredOrigin(placed[i], items[i].part, pxPerMm)
-      const link = await attachPartBody(folder, urdfName, items[i].libraryId, items[i].part, at).catch(
-        () => null
+      const body = await attachPartBody(folder, urdfName, items[i].libraryId, items[i].part, at).catch(
+        (err: unknown) => ({ link: null, problem: errorMessage(err) })
       )
-      if (link) links.push({ partId: placed[i].id, link })
+      // A part that declares a mesh and didn't get one still gets a box — but
+      // the user is told, in the status bar, rather than left with a mystery
+      // block that reads as a rendering bug (#787 fault 3).
+      if (body.problem) {
+        reportError('build: part mesh', body.problem, { notify: body.problem })
+      }
+      if (body.link) links.push({ partId: placed[i].id, link: body.link })
     }
     if (links.length === 0) return
     // Targeted merge in MAIN against the file's current state — a part deleted

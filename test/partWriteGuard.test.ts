@@ -265,6 +265,125 @@ describe('a linked mesh + its orientation, through a real save (#741)', () => {
   })
 })
 
+/**
+ * THE #787 REGRESSION, through the real writer on a real folder.
+ *
+ * What actually happened to the 9V battery: it was authored in `my-parts`, its
+ * STL was copied into `my-parts/9v-battery/`, and it was then saved into
+ * `snakie-standard` — which wrote the `parts.yml` (`mesh:`, `meshRotation:` and
+ * all) into `snakie-standard/9v-battery/` and left the 591 KB model behind. The
+ * image made the trip because it rides in memory as a data URL; the mesh exists
+ * only on disk, so it did not.
+ *
+ * Every save reported success. Nothing anywhere said the reference now pointed
+ * at a file that was not there, which is why finding it took a directory
+ * listing.
+ *
+ * Both halves are asserted: the model FOLLOWS the part, and when it cannot be
+ * found the save SAYS SO instead of quietly writing a dangling reference.
+ */
+describe('a part that changes library takes its 3-D model with it (#787)', () => {
+  const FROM = 'my-parts'
+  const STL = 'solid battery\nfacet normal 0 0 1\nendsolid battery\n'
+  const fromDir = join(partsRoot, FROM, PART)
+
+  beforeEach(() => {
+    // The part as it sits in the library it was authored in.
+    mkdirSync(fromDir, { recursive: true })
+    writeFileSync(
+      join(fromDir, 'parts.yml'),
+      yamlFor({ address: 0x3e, height: 48.5, mesh: 'battery-9v.stl', meshRotation: '[0, 0, 90]' }),
+      'utf-8'
+    )
+    writeFileSync(join(fromDir, 'battery-9v.stl'), STL, 'utf-8')
+    rmSync(partDir, { recursive: true, force: true })
+  })
+
+  it('carries the model into the library it is saved to', async () => {
+    const opened = (await readLibraries())
+      .find((l) => l.id === FROM)
+      ?.parts?.find((p) => p.id === PART)
+    expect(opened?.mesh).toBe('battery-9v.stl')
+
+    const res = await writePart(LIB, opened!, { assetsFrom: { libraryId: FROM } })
+    expect(res.ok).toBe(true)
+    // THE BUG: this file used to be absent, and nothing said so.
+    expect(existsSync(join(partDir, 'battery-9v.stl'))).toBe(true)
+    expect(readFileSync(join(partDir, 'battery-9v.stl'), 'utf-8')).toBe(STL)
+    expect(res.missingMesh).toBeUndefined()
+  })
+
+  it('leaves the original where it was — a move is a copy, not a cut', async () => {
+    const opened = (await readLibraries())
+      .find((l) => l.id === FROM)
+      ?.parts?.find((p) => p.id === PART)
+    await writePart(LIB, opened!, { assetsFrom: { libraryId: FROM } })
+    // #750's rule reaches this too: the source folder is not ours to empty.
+    expect(existsSync(join(fromDir, 'battery-9v.stl'))).toBe(true)
+  })
+
+  it('never overwrites a same-named model already in the destination', async () => {
+    const theirs = 'solid THEIRS\nendsolid THEIRS\n'
+    mkdirSync(partDir, { recursive: true })
+    writeFileSync(join(partDir, 'battery-9v.stl'), theirs, 'utf-8')
+    const opened = (await readLibraries())
+      .find((l) => l.id === FROM)
+      ?.parts?.find((p) => p.id === PART)
+    const res = await writePart(LIB, opened!, { assetsFrom: { libraryId: FROM } })
+    expect(res.ok).toBe(true)
+    expect(readFileSync(join(partDir, 'battery-9v.stl'), 'utf-8')).toBe(theirs)
+  })
+
+  it('SAYS SO when the model cannot be found — a save must not write a dangling link', async () => {
+    // The exact end state #787 reported: a `mesh:` with no file behind it.
+    rmSync(join(fromDir, 'battery-9v.stl'), { force: true })
+    const opened = (await readLibraries())
+      .find((l) => l.id === FROM)
+      ?.parts?.find((p) => p.id === PART)
+    const res = await writePart(LIB, opened!, { assetsFrom: { libraryId: FROM } })
+    // The write itself is fine — parts.yml is on disk and correct.
+    expect(res.ok).toBe(true)
+    // But the one thing it could not make true is reported, by name.
+    expect(res.missingMesh).toBe('battery-9v.stl')
+  })
+
+  it('carries the model when the part is RENAMED, not moved', async () => {
+    // The other half of the same class: either half of `<lib>/<part>` can change
+    // under a part, and both send the save to a folder the model isn't in.
+    const opened = (await readLibraries())
+      .find((l) => l.id === FROM)
+      ?.parts?.find((p) => p.id === PART)
+    const renamed = join(partsRoot, FROM, 'pp3-battery')
+    const res = await writePart(
+      FROM,
+      { ...opened!, id: 'pp3-battery', sourceHash: undefined },
+      { assetsFrom: { libraryId: FROM, partId: PART } }
+    )
+    expect(res.ok).toBe(true)
+    expect(existsSync(join(renamed, 'battery-9v.stl'))).toBe(true)
+    expect(res.missingMesh).toBeUndefined()
+  })
+
+  it('says nothing about a part that has no model at all', async () => {
+    const opened = (await readLibraries())
+      .find((l) => l.id === FROM)
+      ?.parts?.find((p) => p.id === PART)
+    const res = await writePart(LIB, { ...opened!, mesh: undefined }, { assetsFrom: { libraryId: FROM } })
+    expect(res.ok).toBe(true)
+    expect(res.missingMesh).toBeUndefined()
+  })
+
+  it('refuses to satisfy a reference that escapes the part folder', async () => {
+    const opened = (await readLibraries())
+      .find((l) => l.id === FROM)
+      ?.parts?.find((p) => p.id === PART)
+    const res = await writePart(LIB, { ...opened!, mesh: '../../../etc/passwd' }, { assetsFrom: { libraryId: FROM } })
+    expect(res.ok).toBe(true)
+    expect(res.missingMesh).toBe('../../../etc/passwd')
+    expect(existsSync(join(partsRoot, LIB, 'passwd'))).toBe(false)
+  })
+})
+
 describe('importPartMesh — copying a chosen model into the part folder (#741)', () => {
   const source = join(USER_DATA, 'downloads', 'Battery 9V.stl')
   const other = join(USER_DATA, 'downloads', 'battery-9v.stl')
@@ -339,6 +458,47 @@ describe('importPartMesh — copying a chosen model into the part folder (#741)'
     const res = await importPartMesh(LIB, fresh, source)
     expect(res.ok).toBe(true)
     expect(existsSync(join(partsRoot, LIB, fresh, res.filename!))).toBe(true)
+  })
+
+  /**
+   * #787 fault 2: the 9V battery saved `mesh:` and `meshRotation:` but no
+   * `meshUnits:`. An `.stl` states no units, so the link step is the last moment
+   * anything can look at the geometry — after it, the size is a guess every
+   * consumer re-makes for itself.
+   */
+  it('measures the model as it copies it, so the caller can record meshUnits', async () => {
+    const mm = join(USER_DATA, 'downloads', 'in-mm.stl')
+    writeFileSync(
+      mm,
+      [
+        'solid mm',
+        'facet normal 0 0 1 outer loop',
+        'vertex 0 0 0',
+        'vertex 26.5 0 0',
+        'vertex 0 48.5 0',
+        'endloop endfacet',
+        'endsolid mm'
+      ].join('\n'),
+      'utf-8'
+    )
+    const res = await importPartMesh(LIB, 'measured-part', mm)
+    expect(res.ok).toBe(true)
+    expect(res.maxDim).toBeCloseTo(48.5, 6)
+  })
+
+  it('measures a re-used file too — the answer must not depend on copying', async () => {
+    const first = await importPartMesh(LIB, 'reuse-part', source)
+    const again = await importPartMesh(LIB, 'reuse-part', source)
+    expect(again.reused).toBe(true)
+    expect(again.maxDim).toEqual(first.maxDim)
+  })
+
+  it('declines to measure what it cannot parse, rather than inventing a size', async () => {
+    const dae = join(USER_DATA, 'downloads', 'model.dae')
+    writeFileSync(dae, '<COLLADA/>', 'utf-8')
+    const res = await importPartMesh(LIB, 'dae-part', dae)
+    expect(res.ok).toBe(true)
+    expect(res.maxDim).toBeUndefined()
   })
 })
 

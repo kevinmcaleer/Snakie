@@ -28,6 +28,7 @@ import {
 } from './robot-assembly'
 import { isAbsolutePath } from './robot-mesh'
 import { isUrdfPath } from './urdf-target'
+import { errorMessage } from '../lib/report-error'
 
 /**
  * Serialise ALL part-body drops. Each does a read-modify-write of a `.urdf` through the
@@ -93,6 +94,70 @@ export function placeholderBoxSpec(part: PartDefinition): {
     rgb = [toward((n >> 16) & 0xff), toward((n >> 8) & 0xff), toward(n & 0xff)]
   }
   return { size: [wMm / 1000, dMm / 1000, hMm / 1000], rgb }
+}
+
+/**
+ * What came back from copying a part's model into the project. One shape for
+ * BOTH failure modes — a reported one (`{ error }`) and a thrown one, which the
+ * caller converts — so neither can arrive as a bare `null` that says nothing.
+ */
+export interface MeshCopyOutcome {
+  /** The mesh path relative to the URDF's folder, when the copy succeeded. */
+  rel?: string
+  /** The copied STL's largest span in its own units, for the mm→m scale. */
+  maxDim?: number
+  /** Why there is no `rel`. */
+  error?: string
+}
+
+/** What body a placed part should get, and whether anything went wrong getting it. */
+export type PartBodyPlan =
+  /** The part's own model, copied into the project — `meshRel` is URDF-relative. */
+  | { body: 'mesh'; meshRel: string }
+  /**
+   * The footprint box. `problem` is set ONLY when the box is a fallback for a
+   * mesh that should have been there — i.e. it is never set for a part that
+   * simply has no model.
+   */
+  | { body: 'box'; problem?: string }
+
+/**
+ * Decide a placed part's body from the outcome of the mesh copy (#787 fault 3).
+ *
+ * THE DISTINCTION THIS EXISTS TO MAKE. Before this, `attachPartBody` asked one
+ * question — "did the copy hand back a `rel`?" — and answered a missing mesh and
+ * an absent mesh identically, with a silent placeholder box. The two are not the
+ * same thing:
+ *
+ *  - a part with **no** `mesh:` is *supposed* to get a footprint box (#716) —
+ *    that is most of the standard library, and saying anything about it would be
+ *    noise on every single drop;
+ *  - a part that **declares** a `mesh:` and doesn't get one is broken. The file
+ *    is missing from the part folder, unreadable, or was never copied there —
+ *    which is exactly the 9V battery of #787. Rendering it as a generic block
+ *    with no word said reads as a *rendering* bug, and it took a filesystem
+ *    listing to discover otherwise.
+ *
+ * The box is still produced in that second case — a part with no body at all is
+ * worse than one with a stand-in — but it comes with something to say. Pure, so
+ * the rule is tested rather than inferred from the URDF that comes out.
+ */
+export function partBodyPlan(
+  part: Pick<PartDefinition, 'mesh' | 'id' | 'name'>,
+  copy: MeshCopyOutcome | null | undefined
+): PartBodyPlan {
+  if (copy?.rel) return { body: 'mesh', meshRel: copy.rel }
+  const mesh = typeof part.mesh === 'string' ? part.mesh.trim() : ''
+  // No model declared: the footprint box IS the right answer. Say nothing.
+  if (!mesh) return { body: 'box' }
+  const who = (part.name || part.id || 'This part').trim() || 'This part'
+  const why = copy?.error?.trim()
+  return {
+    body: 'box',
+    problem:
+      `${who} links the 3-D model “${mesh}”, but it could not be read from the part's folder` +
+      `${why ? ` — ${why}` : ''}. Showing a plain block instead; re-link the model in the Part Editor's 3-D tab.`
+  }
 }
 
 /**
@@ -209,6 +274,16 @@ export async function writeUrdfDocument(path: string, text: string): Promise<boo
   return wrote
 }
 
+/** What {@link attachPartBody} did: the link it created, and anything the user
+ *  needs to be told about it. */
+export interface AttachedPartBody {
+  /** The created link name, or `null` when nothing was written. */
+  link: string | null
+  /** Set when the part declares a mesh that could not be attached (#787) — the
+   *  part still got a footprint box, but the caller must SAY so. */
+  problem?: string
+}
+
 /**
  * Give `part` its Build-workspace body in the project URDF `urdfName`: the
  * bundled mesh when it has one, else the footprint box; at the mirrored board
@@ -216,10 +291,17 @@ export async function writeUrdfDocument(path: string, text: string): Promise<boo
  * declares mass. Creates a blank URDF at that name if the project had none.
  * Only touches the `.urdf` file (+ its `meshes/`) — the CALLER links `urdfName`
  * in `robot.yml` and persists the returned link name as `RobotPart.urdfLink`.
- * Resolves to the created link name, or `null` when nothing was written (no
- * folder / unsafe name). Best-effort on the mesh copy: a failed copy degrades to
- * the footprint box so the part still has a body. Announces the URDF change so
- * an open Build view refreshes (#716 — previously only a remount noticed).
+ *
+ * Best-effort on the mesh copy: a failed copy still degrades to the footprint
+ * box, so the part always has a body. What CHANGED in #787 is that it no longer
+ * does so silently — {@link partBodyPlan} separates "this part has no model"
+ * from "this part's model is missing", and the second comes back as `problem`
+ * for the caller to surface. A generic block with nothing said reads as a
+ * rendering bug; it took a filesystem listing to discover the 9V battery's STL
+ * had never been copied.
+ *
+ * Announces the URDF change so an open Build view refreshes (#716 — previously
+ * only a remount noticed).
  */
 export async function attachPartBody(
   folder: string,
@@ -229,21 +311,24 @@ export async function attachPartBody(
   /** Joint origin in metres (the caller's mirrored board position), or null for
    *  the legacy stagger. */
   atOrigin: [number, number, number] | null
-): Promise<string | null> {
-  if (!folder) return null
+): Promise<AttachedPartBody> {
+  if (!folder) return { link: null }
   if (!safeUrdfName(urdfName)) {
     refuseWrite(urdfName)
-    return null
+    return { link: null }
   }
   let created: string | null = null
+  let problem: string | undefined
   const run = chain.then(async () => {
     const dir = folder.replace(/[/\\]$/, '')
     const urdfPath = `${dir}/${urdfName}`
     // Copy the part's bundled STL into <dir>/meshes/ (collision-safe, in main).
-    const res = part.mesh
+    // A THROWN failure is turned into the same shape a reported one has, so both
+    // reach `partBodyPlan` with something to say rather than as a bare null.
+    const res: MeshCopyOutcome | null = part.mesh
       ? await window.api.robot
           .importPartMesh(urdfPath, libraryId, part.id, part.mesh)
-          .catch(() => null)
+          .catch((err: unknown): MeshCopyOutcome => ({ error: errorMessage(err) }))
       : null
     // Read the project URDF, or start a blank one if the project had none.
     let urdf: string
@@ -253,11 +338,12 @@ export async function attachPartBody(
       urdf = blankUrdf('my_robot')
     }
     const at = atOrigin ?? undefined
+    const plan = partBodyPlan(part, res)
     let link: string
-    if (res?.rel) {
-      const scale = meshImportScale(part, res.maxDim)
+    if (plan.body === 'mesh') {
+      const scale = meshImportScale(part, res?.maxDim)
       ;({ urdf, link } = addMeshLink(urdf, {
-        meshRel: res.rel,
+        meshRel: plan.meshRel,
         linkBase: part.name || part.id,
         scale,
         parent: rootLink(urdf),
@@ -269,6 +355,7 @@ export async function attachPartBody(
       const inertial = partInertial(part)
       if (inertial) urdf = setInertial(urdf, link, inertial)
     } else {
+      problem = plan.problem
       const box = placeholderBoxSpec(part)
       ;({ urdf, link } = addBoxLink(urdf, {
         linkBase: part.name || part.id,
@@ -290,5 +377,5 @@ export async function attachPartBody(
   // Keep the chain alive even if this drop throws, so a later drop still runs.
   chain = run.catch(() => undefined)
   await run
-  return created
+  return { link: created, problem }
 }

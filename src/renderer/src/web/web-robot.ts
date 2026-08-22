@@ -296,9 +296,13 @@ export function createWebRobotApi(fs: WebRobotFs): Record<string, unknown> {
       }
     },
 
-    // Parts libraries aren't on the web yet — RobotView treats a rel-less result
-    // as "no mesh to attach" and still writes a valid URDF.
-    importPartMesh: async (): Promise<Record<string, never>> => ({}),
+    // Parts libraries aren't on the web yet, so a mesh-linked part still gets a
+    // footprint box and a valid URDF. It says WHY now (#787): a bare `{}` was
+    // indistinguishable from a part that simply has no model, so the stand-in
+    // looked like a rendering bug rather than a missing capability.
+    importPartMesh: async (): Promise<ImportMeshResult> => ({
+      error: 'Parts libraries are desktop-only, so this part’s 3-D model isn’t available here.'
+    }),
 
     onChanged: (cb: () => void): (() => void) => {
       subs.add(cb)

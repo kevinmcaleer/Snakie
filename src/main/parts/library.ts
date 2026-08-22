@@ -58,6 +58,7 @@ import {
 } from '../../shared/bundled-seed'
 import { bumpPatch, compareVersions } from '../../shared/part-registry'
 import { MESH_EXTENSIONS, meshAssetName, resolveMeshTarget } from '../../shared/part-mesh-file'
+import { stlMaxDim } from '../robot/stl-measure'
 import { reportError, reporter } from '../report-error'
 import type { PartDefinition, PartLibrary, PartLibraryWithParts } from '../../shared/part'
 
@@ -621,6 +622,15 @@ export interface WriteResult {
    * a reload rather than an ordinary error.
    */
   conflict?: boolean
+  /**
+   * The part was written, but the model its `mesh:` names is NOT in the folder
+   * it was written to (#787) — the filename, so the caller can say which.
+   *
+   * Not an error: the `parts.yml` is on disk and correct. It is the one thing a
+   * successful save cannot make true on its own, and staying quiet about it is
+   * how the 9V battery shipped a reference to a file that was never there.
+   */
+  missingMesh?: string
   /** The stamp of the file as just written — the caller's new baseline, so the
    *  next save in the same session isn't mistaken for a stale one (#750). */
   sourceHash?: string
@@ -634,6 +644,24 @@ export interface WritePartOptions {
    * `promoteToStandard`). Never for an editor save.
    */
   force?: boolean
+  /**
+   * The folder this part was OPENED from, when the save is landing somewhere
+   * else — so a mesh left behind there can follow it (#787).
+   *
+   * This is the whole of the #787 bug. A part's image and help ride in memory as
+   * a data URL and a string, so "save it somewhere else" carries them for free;
+   * the mesh exists only on disk, so it did not move. Linking wrote
+   * `battery-9v.stl` into `my-parts/9v-battery/`, the save then wrote the
+   * `parts.yml` — reference, rotation and all — into
+   * `snakie-standard/9v-battery/`, and the two halves of the part ended up in
+   * different folders with nothing said.
+   *
+   * BOTH halves of the folder name matter, because either can change under a
+   * part: picking a different library in the save dropdown (what happened to the
+   * 9V battery), or editing the part's id, which sends the save to a new folder
+   * just the same.
+   */
+  assetsFrom?: { libraryId?: string; partId?: string }
 }
 
 /**
@@ -818,11 +846,63 @@ export async function writePart(
 
     const text = partToYaml(toWrite)
     await fsp.writeFile(ymlPath, text, 'utf-8')
+
+    // --- 3) The mesh must be in the folder the part was just written to (#787).
+    const missingMesh = await settleMesh(partDir, toWrite.mesh, opts.assetsFrom, libId, partId)
+
     // Hand back the new baseline so the caller's NEXT save isn't taken for stale.
-    return { ok: true, id: partId, libraryId: libId, sourceHash: hashText(text) }
+    return { ok: true, id: partId, libraryId: libId, sourceHash: hashText(text), missingMesh }
   } catch (err) {
     return { ok: false, error: (err as Error).message }
   }
+}
+
+/**
+ * Make the part's `mesh:` reference true where the part now lives, or say it
+ * isn't (#787). Returns the filename that is still missing, or `undefined`.
+ *
+ * A `parts.yml` naming a model that is not beside it is a broken part, and until
+ * this the app never checked. Two things happen here, in order:
+ *
+ *  1. **Carry.** If the model is absent from the destination but present in the
+ *     folder the part was opened from, copy it across. That is a part MOVING
+ *     library — the `parts.yml` moves, so its assets must move with it.
+ *  2. **Report.** If it still isn't there, the save succeeded but the reference
+ *     is dangling; hand the name back so the editor can say so.
+ *
+ * Never destructive: this only ever ADDS a file to the destination, and never
+ * overwrites one already there (a same-named model already in the destination is
+ * that folder's own, and #750's rule says it is not this save's to replace).
+ */
+async function settleMesh(
+  partDir: string,
+  mesh: string | undefined,
+  assetsFrom: WritePartOptions['assetsFrom'],
+  libId: string,
+  partId: string
+): Promise<string | undefined> {
+  const name = typeof mesh === 'string' ? mesh.trim() : ''
+  if (!name) return undefined
+  // A reference that escapes the part folder was never resolvable; the readers
+  // reject it too, so report it rather than trying to satisfy it.
+  if (!isContainedFile(partDir, name)) return name
+  const dest = join(partDir, name)
+  if (existsSync(dest)) return undefined
+
+  // Where the part came FROM: either half may have changed — a different library
+  // (the 9V battery) or a renamed id — and both send the save to a new folder.
+  const fromLib = sanitiseId(assetsFrom?.libraryId ?? '') || libId
+  const fromPart = sanitiseId(assetsFrom?.partId ?? '') || partId
+  const fromDir = join(partsDir(), fromLib, fromPart)
+  if (fromDir !== partDir && isContainedFile(fromDir, name) && existsSync(join(fromDir, name))) {
+    try {
+      await fsp.copyFile(join(fromDir, name), dest)
+      return undefined
+    } catch (err) {
+      reportError('parts: carry the linked mesh to the new part folder', err)
+    }
+  }
+  return existsSync(dest) ? undefined : name
 }
 
 /** Result of reading a part driver file's source (never throws across IPC). */
@@ -914,6 +994,14 @@ export interface MeshImportResult {
   filename?: string
   /** True when a byte-identical file was already there and nothing was copied. */
   reused?: boolean
+  /**
+   * The linked STL's largest bounding-box span in its OWN units (#787), so the
+   * caller can record `meshUnits` at link time. An `.stl` states no units, so
+   * this is the only moment the app can look at the geometry and write a
+   * conclusion down. Undefined for a `.dae` or an unparsable file — the caller
+   * then records nothing rather than inventing a value.
+   */
+  maxDim?: number
   error?: string
 }
 
@@ -983,7 +1071,12 @@ export async function importPartMesh(
       return { ok: false, error: `Unsafe mesh filename: ${target.name}` }
     }
     if (target.write) await fsp.writeFile(join(partDir, target.name), bytes)
-    return { ok: true, filename: target.name, reused: !target.write }
+    // Measure the model NOW so the caller can record `meshUnits` (#787 fault 2).
+    // An STL carries no units; after this moment there is nothing left to read
+    // them off, and a part with `mesh:` but no `meshUnits:` leaves every
+    // consumer re-guessing — which is how a 48 mm battery becomes 48 metres.
+    const maxDim = /\.stl$/i.test(target.name) ? stlMaxDim(bytes) : undefined
+    return { ok: true, filename: target.name, reused: !target.write, maxDim }
   } catch (err) {
     return { ok: false, error: (err as Error).message }
   }

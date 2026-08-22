@@ -982,6 +982,9 @@ export interface PartsWriteResult {
   /** The save was REFUSED because `parts.yml` changed on disk since it was read
    *  (#750) — the UI asks for a reload rather than reporting a broken save. */
   conflict?: boolean
+  /** The part was written, but the model its `mesh:` names is not in the folder
+   *  it was written to (#787) — the filename, so the UI can say which. */
+  missingMesh?: string
   /** The stamp of the file as just written: the caller's new baseline, so the
    *  next save in the same session isn't mistaken for a stale one (#750). */
   sourceHash?: string
@@ -998,6 +1001,10 @@ export interface PartMeshImportResult {
   filename?: string
   /** A byte-identical file was already in the folder; nothing was copied. */
   reused?: boolean
+  /** For an STL: its largest bounding-box span in its own units (#787), so the
+   *  caller can record `meshUnits` at link time — the only moment it is
+   *  knowable, since an `.stl` states no units. Undefined for a `.dae`. */
+  maxDim?: number
   /** The user dismissed the file picker — not an error, and not a link. */
   cancelled?: boolean
   error?: string
@@ -1035,9 +1042,19 @@ const parts = {
    * Persist a part to `<parts>/<libraryId>/<part.id>/parts.yml` (+ image asset).
    * Defaults to the auto-created local "my-parts" library when `libraryId` is
    * omitted. Resolves to {@link PartsWriteResult} — never rejects.
+   *
+   * `opts.assetsFrom` names the folder the part was OPENED from (library + id).
+   * When the save lands somewhere else — a different library, or a renamed id —
+   * a linked model sitting in the old folder is copied across with it (#787):
+   * the image and help ride in memory and move for free; the mesh only exists on
+   * disk.
    */
-  savePart: (libraryId: string | undefined, part: PartDefinition): Promise<PartsWriteResult> =>
-    ipcRenderer.invoke('parts:savePart', { libraryId, part }),
+  savePart: (
+    libraryId: string | undefined,
+    part: PartDefinition,
+    opts?: { assetsFrom?: { libraryId?: string; partId?: string } }
+  ): Promise<PartsWriteResult> =>
+    ipcRenderer.invoke('parts:savePart', { libraryId, part, assetsFrom: opts?.assetsFrom }),
   /** Delete a part folder (no-op if it doesn't exist). */
   deletePart: (libraryId: string, partId: string): Promise<PartsWriteResult> =>
     ipcRenderer.invoke('parts:deletePart', { libraryId, partId }),

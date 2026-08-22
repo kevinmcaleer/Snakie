@@ -6,6 +6,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **A linked 3-D model no longer gets left behind when a part changes library,
+  and a missing one now says so.** Linking an STL in the Part Editor's 3-D tab
+  copies it into the part's folder — but saving the part into a *different*
+  library moved only `parts.yml`. The image and help ride in memory and made the
+  trip; the mesh exists only on disk and did not, so the 9V battery ended up with
+  `mesh: battery-9v.stl` in `snakie-standard/` and the actual model still sitting
+  in `my-parts/`. A save now brings the model with the part, and reports the
+  filename when it cannot find one at all rather than writing a dangling
+  reference and calling it a success.
+
+  **`meshUnits` is recorded when the model is linked.** An `.stl` states no
+  units, so the link step is the last moment anything can measure the geometry
+  and write a conclusion down; without it a 48 mm part read as metres arrives
+  1000× too big. The guess is stored as the ordinary, editable `meshUnits` field
+  and named in the confirmation message, so a wrong one is a visible click to
+  correct.
+
+  **A broken mesh no longer looks like a rendering bug.** "This part has no
+  model" and "this part's model is missing" used to render identically — a plain
+  footprint block, with nothing said. A part that declares a `mesh:` and doesn't
+  get one still gets a block (a part with no body is worse), but now reports it
+  in the status bar, naming the part and the file. The same silent-failure shape
+  is fixed on the placeholder→mesh upgrade in Sync, and in both stubbed bridges
+  that used to answer with a bare `{}`. (#787)
+
 ### Added
 - **A Sprite editor for LED matrices and OLED displays.** The Display
   instrument grows a **✎ Sprites** key that opens a full-screen pixel editor:
