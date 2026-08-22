@@ -210,6 +210,22 @@ export function SpriteEditor({ onClose }: SpriteEditorProps): JSX.Element {
     if (!ctx) return
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     const lit = cssToken('--gold', '#d9a441')
+    /**
+     * One lit pixel, with softened corners — the MakeCode micro:bit LED look.
+     * A hard square reads as a filled cell of a grid; a rounded one reads as a
+     * LIGHT, which is what the sprite will actually be on the panel.
+     *
+     * The radius is a quarter of the cell so it scales with zoom, and is capped
+     * so a big cell doesn't turn into a circle. Below ~4px there is no room for
+     * a curve, so it stays square rather than smearing into a blob.
+     */
+    const px = (x: number, y: number): void => {
+      const size = cell - 2
+      const r = size >= 4 ? Math.min(4, size * 0.25) : 0
+      ctx.beginPath()
+      ctx.roundRect(x * cell + 1, y * cell + 1, size, size, r)
+      ctx.fill()
+    }
     ctx.fillStyle = '#101216'
     ctx.fillRect(0, 0, w, h)
     // Onion skin: the previous frame, faint, under the live pixels.
@@ -218,16 +234,14 @@ export function SpriteEditor({ onClose }: SpriteEditorProps): JSX.Element {
       ctx.fillStyle = 'rgba(160, 170, 200, 0.22)'
       for (let y = 0; y < doc.height; y++) {
         for (let x = 0; x < doc.width; x++) {
-          if (prev.pixels[y][x]) ctx.fillRect(x * cell + 1, y * cell + 1, cell - 2, cell - 2)
+          if (prev.pixels[y][x]) px(x, y)
         }
       }
     }
     ctx.fillStyle = lit
     for (let y = 0; y < doc.height; y++) {
       for (let x = 0; x < doc.width; x++) {
-        if (shownFrame.pixels[y][x]) {
-          ctx.fillRect(x * cell + 1, y * cell + 1, cell - 2, cell - 2)
-        }
+        if (shownFrame.pixels[y][x]) px(x, y)
       }
     }
     // The pixel lattice on top (skipped at tiny cells where it would swamp).
