@@ -65,6 +65,9 @@ function broadcastPartsChanged(exceptSenderId?: number): void {
 interface SavePartArgs {
   libraryId?: string
   part: PartDefinition
+  /** The folder the part was OPENED from (#787) — so a linked model left behind
+   *  there follows the part when the save lands in a different one. */
+  assetsFrom?: { libraryId?: string; partId?: string }
 }
 
 /** Payload for `parts:deletePart`. */
@@ -110,7 +113,7 @@ export function registerPartsIpc(): void {
     } else {
       await ensureLibrary({ id: libraryId, name: libraryId })
     }
-    const res = await writePart(libraryId, args.part)
+    const res = await writePart(libraryId, args.part, { assetsFrom: args?.assetsFrom })
     broadcastPartsChanged(e.sender.id)
     return res
   })

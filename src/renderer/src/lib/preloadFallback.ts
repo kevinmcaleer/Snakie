@@ -179,7 +179,10 @@ if (!w.api) {
       // backend over this; see web/web-robot.ts).
       save: P({ ok: false, error: 'Saving robot.yml is not available here.' }),
       importMesh: P({ cancelled: true }),
-      importPartMesh: P({}),
+      // error:false → `{}` used to mean "no mesh to attach", indistinguishable
+      // from a part that has none, so a stubbed bridge silently produced a
+      // placeholder box (#787 fault 3). Say why instead.
+      importPartMesh: P({ error: 'Copying a part’s 3-D model is not available here.' }),
       patchModel: P({ ok: false }),
       patchPartLinks: P({ ok: false }),
       onChanged: unsub,

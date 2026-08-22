@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { MESH_EXTENSIONS, meshAssetName, resolveMeshTarget } from '../src/shared/part-mesh-file'
+import {
+  MESH_EXTENSIONS,
+  MESH_MM_SPAN_THRESHOLD,
+  inferMeshUnits,
+  meshAssetName,
+  resolveMeshTarget
+} from '../src/shared/part-mesh-file'
+import { meshImportScale } from '../src/renderer/src/components/robot-assembly'
 
 /**
  * Where a linked mesh lands (#741).
@@ -136,5 +143,46 @@ describe('resolveMeshTarget', () => {
   it('an empty folder is not a special case', () => {
     expect(resolveMeshTarget({ desired: 'a.stl' })).toEqual({ name: 'a.stl', write: true })
     expect(resolveMeshTarget({ desired: 'a.stl', taken: [] })).toEqual({ name: 'a.stl', write: true })
+  })
+})
+
+/**
+ * `meshUnits` AT LINK TIME (#787 fault 2).
+ *
+ * The 9V battery of #787 saved `mesh:` and `meshRotation:` but no `meshUnits:`.
+ * An `.stl` records no units, so nothing downstream can recover them — the part
+ * is then at the mercy of a heuristic every consumer re-runs for itself, and a
+ * 48 mm battery read as 48 metres arrives 1000× too big.
+ *
+ * The property that matters is not the threshold but that the LINK-time
+ * conclusion and the PLACE-time one are the SAME rule. If they could disagree,
+ * writing the field down would make the part worse rather than better.
+ */
+describe('inferMeshUnits — what the link step writes down', () => {
+  it('reads a model measured in the tens or hundreds as millimetres', () => {
+    expect(inferMeshUnits(48.5)).toBe('mm') // the 9V battery of #787
+    expect(inferMeshUnits(3.5)).toBe('mm')
+  })
+
+  it('reads a model well under a metre across as metres', () => {
+    expect(inferMeshUnits(0.0485)).toBe('m')
+    expect(inferMeshUnits(MESH_MM_SPAN_THRESHOLD)).toBe('m')
+  })
+
+  it('declines to guess when the file could not be measured', () => {
+    // Absence keeps the existing bbox fallback; a made-up value would not.
+    for (const bad of [undefined, 0, -1, NaN, Infinity]) {
+      expect(inferMeshUnits(bad as number | undefined), String(bad)).toBeUndefined()
+    }
+  })
+
+  it('agrees with the scale the PLACEMENT path picks, for every span', () => {
+    for (const span of [0.001, 0.05, 1, 2.999, 3, 3.001, 48.5, 250, 1e4]) {
+      const units = inferMeshUnits(span)
+      expect(units, String(span)).toBeDefined()
+      expect(meshImportScale({ meshUnits: units }, span), String(span)).toBe(
+        meshImportScale({}, span)
+      )
+    }
   })
 })

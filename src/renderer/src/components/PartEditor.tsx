@@ -13,6 +13,20 @@ import { useHistory } from './use-history'
 import { PartSchematicView } from './PartSchematicView'
 import { partMeshRef } from './part-details'
 import { meshImportScale } from './robot-assembly'
+import { inferMeshUnits } from '../../../shared/part-mesh-file'
+import {
+  CENTRE_ANCHOR,
+  MESH_NUDGE_STEPS_MM,
+  OFFSET_AXIS_INDEX,
+  describeAnchor,
+  formatMeshOffset,
+  nudgeMeshOffset,
+  setMeshOffsetAxis,
+  snapOffsetFor,
+  type MeshAnchor,
+  type MeshAnchorAxis,
+  type MeshOffset
+} from '../../../shared/mesh-offset'
 import {
   formatMeshRotation,
   rotateMesh,
@@ -1314,7 +1328,14 @@ export function PartEditor({
       payload.rear = { ...(clean.rear ?? {}), imageData: part.rear.imageData }
     }
     try {
-      const res: PartsWriteResult = await window.api.parts.savePart(libId, payload)
+      const res: PartsWriteResult = await window.api.parts.savePart(libId, payload, {
+        // The folder this part was OPENED from. When the save lands in a
+        // different one — another library, or a renamed id — the main process
+        // brings the linked model with it (#787). The image and help ride in
+        // memory and move for free; the mesh only exists on disk, so it used to
+        // be left behind.
+        assetsFrom: { libraryId: openedLibId, partId: openedId ?? undefined }
+      })
       if (res?.ok) {
         setOpenedId(clean.id)
         setOpenedLibId(res.libraryId ?? libId)
@@ -1323,7 +1344,17 @@ export function PartEditor({
         // the pre-save one and be refused as stale (#750).
         sourceHashRef.current = res.sourceHash
         if (nextVersion !== part.version) patch({ version: nextVersion }) // reflect the bump in the field
-        setStatus({ kind: 'ok', text: `Saved "${clean.name}" to ${res.libraryId ?? libId} (v${nextVersion}).` })
+        // A part whose `mesh:` names a file that isn't beside it is broken, and
+        // nothing downstream can tell that from "no model" (#787). The save DID
+        // work, so this is a warning on a success — not an error.
+        setStatus(
+          res.missingMesh
+            ? {
+                kind: 'error',
+                text: `Saved "${clean.name}" to ${res.libraryId ?? libId} (v${nextVersion}) — but its 3-D model "${res.missingMesh}" is not in the part folder. Re-link it in the 3-D tab, or it will show as a plain block in Build.`
+              }
+            : { kind: 'ok', text: `Saved "${clean.name}" to ${res.libraryId ?? libId} (v${nextVersion}).` }
+        )
         onSaved(res.libraryId ?? libId, res.id ?? clean.id)
       } else if (res?.conflict) {
         // Not a broken save — a refused one. The file moved under us, so the
@@ -5140,6 +5171,21 @@ const MESH_AXES: { axis: MeshAxis; label: string; hint: string }[] = [
 /** Which slot of `meshRotation` an axis occupies. */
 const AXIS_INDEX: Record<MeshAxis, 0 | 1 | 2> = { x: 0, y: 1, z: 2 }
 
+/** The nudge axes, with what moving along each one is FOR (#788). */
+const MESH_MOVE_AXES: { axis: MeshAxis; label: string; hint: string }[] = [
+  { axis: 'x', label: 'X', hint: 'Slide left / right across the board' },
+  { axis: 'y', label: 'Y', hint: 'Slide forward / back across the board' },
+  { axis: 'z', label: 'Z', hint: 'Raise / lower — Z = 0 is the surface the part rests on' }
+]
+
+/** The per-axis snap picks, in the order the buttons sit (#788). Labelled by
+ *  what the user is looking at, not by the field name. */
+const ANCHOR_PICKS: { value: MeshAnchorAxis; label: string }[] = [
+  { value: 'min', label: 'min' },
+  { value: 'centre', label: 'centre' },
+  { value: 'max', label: 'max' }
+]
+
 /** `41.2` — one decimal, no trailing `.0`, for the size readouts. */
 function mm(n: number): string {
   return (Math.round(n * 10) / 10).toString()
@@ -5155,10 +5201,19 @@ function mm(n: number): string {
  *  - **Link** copies the chosen file INTO this part's own folder, because a part
  *    folder is the unit that gets zipped, committed and published — a `mesh:`
  *    pointing at `~/Downloads` travels nowhere.
- *  - **Orientation is stored, never baked.** The user's file is left exactly as
- *    supplied; the correction rides on the part as `meshRotation` and every
- *    consumer honours it (this stage, the catalog turntable, and the URDF
- *    `<visual>` origin a placed part gets).
+ *  - **Orientation and position are stored, never baked.** The user's file is
+ *    left exactly as supplied; the corrections ride on the part as
+ *    `meshRotation` (#741) and `meshOffset` (#788) and every consumer honours
+ *    them (this stage, the catalog turntable, and the URDF `<visual>` origin a
+ *    placed part gets).
+ *
+ * Position (#788) is the other half of orientation, and it works the way the
+ * Robot View's Join tool does: **the user names the feature, the tool does the
+ * arithmetic.** There is no auto-fit and no inference of what they probably
+ * meant — #785's lesson is that guessing was wrong often enough to be worse than
+ * useless. So there are exactly two mechanisms: nudge along an axis by a step
+ * they chose, and snap a feature they picked (a corner, an edge midpoint, a face
+ * centre, or the centre) onto the origin.
  *
  * Laid out like the Schematic view — controls left, live stage right — so the
  * tab feels like the two beside it rather than a new place.
@@ -5180,6 +5235,11 @@ function ModelView({
   const [measured, setMeasured] = useState<MeshMeasurement | null>(null)
   const [fitSignal, setFitSignal] = useState(0)
   const [busy, setBusy] = useState(false)
+  // The nudge step in millimetres, and the feature the user has picked to snap
+  // (#788). Both are UI state, not part data: what is persisted is only where
+  // the model ended up, never how it got there.
+  const [stepMm, setStepMm] = useState<number>(1)
+  const [anchor, setAnchor] = useState<MeshAnchor>(CENTRE_ANCHOR)
   const mesh = useMemo(
     () => partMeshRef(part, { partsFolder, libraryId }),
     [part, partsFolder, libraryId]
@@ -5194,6 +5254,7 @@ function ModelView({
   // here is the size the part will actually be in Build.
   const scaleMm = meshImportScale(part, measured?.rawSpan) * 1000
   const rotation: MeshRotation | undefined = part.meshRotation
+  const offset: MeshOffset | undefined = part.meshOffset
 
   const link = async (replace: boolean): Promise<void> => {
     if (!window.api.parts.importMesh) {
@@ -5216,12 +5277,22 @@ function ModelView({
         onNotify({ kind: 'error', text: res.error ?? 'Could not link that model.' })
         return
       }
-      patch({ mesh: res.filename })
+      // Record the units NOW (#787 fault 2). An `.stl` states none, so this is
+      // the only moment the geometry can be looked at and a conclusion written
+      // down — without it a 48 mm part read as metres arrives 1000× too big.
+      // An EXPLICIT choice the part already carries is never overwritten: the
+      // guess fills a blank, it does not overrule the author.
+      const units =
+        part.meshUnits === undefined && part.meshScale === undefined
+          ? inferMeshUnits(res.maxDim)
+          : undefined
+      patch(units ? { mesh: res.filename, meshUnits: units } : { mesh: res.filename })
+      const sized = units ? ` It measures ${units === 'mm' ? 'millimetres' : 'metres'} — change that under Units if it looks wrong.` : ''
       onNotify({
         kind: 'ok',
         text: res.reused
-          ? `Linked ${res.filename} — that exact file was already in the part folder.`
-          : `Copied ${res.filename} into the part folder. Save the part to keep the link.`
+          ? `Linked ${res.filename} — that exact file was already in the part folder.${sized}`
+          : `Copied ${res.filename} into the part folder. Save the part to keep the link.${sized}`
       })
     } catch (e) {
       onNotify({
@@ -5235,7 +5306,7 @@ function ModelView({
 
   const unlink = (): void => {
     const was = part.mesh
-    patch({ mesh: undefined, meshRotation: undefined })
+    patch({ mesh: undefined, meshRotation: undefined, meshOffset: undefined })
     onNotify({
       kind: 'info',
       text: was
@@ -5246,6 +5317,21 @@ function ModelView({
 
   const nudge = (axis: MeshAxis, deg: number): void =>
     patch({ meshRotation: rotateMesh(rotation, axis, deg) })
+
+  const move = (axis: MeshAxis, mm: number): void =>
+    patch({ meshOffset: nudgeMeshOffset(offset, axis, mm) })
+
+  /** Put the picked feature of the model's bounding box on the origin (#788).
+   *  Needs a measurement, because the box is what the arithmetic is about. */
+  const snap = (): void => {
+    const bounds = measured?.boundsMm
+    if (!bounds) {
+      onNotify({ kind: 'error', text: 'Snapping needs the model measured — wait for the 3-D view to load it.' })
+      return
+    }
+    patch({ meshOffset: snapOffsetFor(bounds, anchor) })
+    onNotify({ kind: 'ok', text: `Snapped the model’s ${describeAnchor(anchor)} to the origin.` })
+  }
 
   const declared = part.dimensions
   const size = measured?.sizeMm
@@ -5422,6 +5508,128 @@ function ModelView({
             </button>
           </div>
         </section>
+
+        <section className="pe__section">
+          <h3 className="pe__h">Position</h3>
+          <p className="pe__hint">
+            An STL’s origin is wherever the exporter left it — often a corner of the build plate. Move the
+            model until it sits where the part needs it. The offset is applied <strong>after</strong> the
+            rotation, so a nudge always travels along the axis you press.
+          </p>
+
+          <div className="pe__row pe__subitem">
+            <span className="pe__padname">Step</span>
+            <div className="pe__meshsteps" role="group" aria-label="Nudge step">
+              {MESH_NUDGE_STEPS_MM.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  className={`pe__btn${stepMm === s ? ' pe__btn--primary' : ''}`}
+                  aria-pressed={stepMm === s}
+                  onClick={() => setStepMm(s)}
+                >
+                  {s} mm
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {MESH_MOVE_AXES.map(({ axis, label, hint }) => (
+            <div className="pe__row pe__subitem" key={axis} title={hint}>
+              <span className="pe__padname">{label}</span>
+              <button
+                type="button"
+                className="pe__btn"
+                onClick={() => move(axis, -stepMm)}
+                aria-label={`Move the model ${stepMm} millimetres in the negative ${label} direction`}
+              >
+                −{stepMm}
+              </button>
+              <button
+                type="button"
+                className="pe__btn"
+                onClick={() => move(axis, stepMm)}
+                aria-label={`Move the model ${stepMm} millimetres in the positive ${label} direction`}
+              >
+                +{stepMm}
+              </button>
+              <label className="pe__num">
+                <span>mm</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={offset?.[OFFSET_AXIS_INDEX[axis]] ?? 0}
+                  onChange={(e) => {
+                    const n = Number(e.target.value)
+                    patch({
+                      meshOffset: setMeshOffsetAxis(offset, axis, Number.isFinite(n) ? n : 0)
+                    })
+                  }}
+                />
+              </label>
+            </div>
+          ))}
+
+          <p className="pe__hint">
+            Or pick the feature that belongs at the origin — one end of each axis, or its middle. Three
+            picks name any <strong>corner</strong>, <strong>edge</strong>, <strong>face</strong> or the{' '}
+            <strong>centre</strong>. Snakie does the arithmetic; it never guesses which one you meant.
+          </p>
+          {MESH_MOVE_AXES.map(({ axis, label }) => (
+            <div className="pe__row pe__subitem" key={`anchor-${axis}`}>
+              <span className="pe__padname">{label}</span>
+              <div className="pe__meshsteps" role="group" aria-label={`Which end of ${label} snaps`}>
+                {ANCHOR_PICKS.map(({ value, label: pick }) => {
+                  const on = anchor[OFFSET_AXIS_INDEX[axis]] === value
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      className={`pe__btn${on ? ' pe__btn--primary' : ''}`}
+                      aria-pressed={on}
+                      onClick={() =>
+                        setAnchor((a) => {
+                          const next: MeshAnchor = [a[0], a[1], a[2]]
+                          next[OFFSET_AXIS_INDEX[axis]] = value as MeshAnchorAxis
+                          return next
+                        })
+                      }
+                    >
+                      {pick}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+          <div className="pe__row">
+            <button
+              type="button"
+              className="pe__btn pe__btn--primary pe__grow"
+              disabled={!measured?.boundsMm}
+              onClick={snap}
+              title={
+                measured?.boundsMm
+                  ? `Move the model so its ${describeAnchor(anchor)} sits at (0, 0, 0)`
+                  : 'Waiting for the 3-D view to measure the model'
+              }
+            >
+              Snap {describeAnchor(anchor)} to origin
+            </button>
+          </div>
+
+          <div className="pe__row">
+            <span className="pe__grow pe__hint">Offset: {formatMeshOffset(offset)}</span>
+            <button
+              type="button"
+              className="pe__btn"
+              disabled={!offset}
+              onClick={() => patch({ meshOffset: undefined })}
+            >
+              Reset
+            </button>
+          </div>
+        </section>
       </div>
 
       <div className="pe__preview">
@@ -5442,6 +5650,7 @@ function ModelView({
               <PartMeshStage
                 path={mesh.path}
                 rotation={rotation}
+                offset={offset}
                 scaleMm={scaleMm}
                 dimensions={declared}
                 label={part.name || part.id}

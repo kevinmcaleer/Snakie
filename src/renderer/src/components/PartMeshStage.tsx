@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { loadMeshObject, meshUpAxisFix, neutralMaterial } from './robot-mesh-load'
 import { meshRotationRadians, type MeshRotation } from '../../../shared/mesh-rotation'
+import type { MeshBounds, MeshOffset } from '../../../shared/mesh-offset'
 import './PartMeshStage.css'
 
 /**
@@ -31,7 +32,11 @@ import './PartMeshStage.css'
  *      (an STL is already there; a DAE has been Y-upped by its loader);
  *   2. `scaled` applies millimetres-per-mesh-unit;
  *   3. `oriented` applies the part's stored `meshRotation` — a `THREE.Euler` in
- *      `'ZYX'` order, which is three's spelling of URDF's `rpy` product;
+ *      `'ZYX'` order, which is three's spelling of URDF's `rpy` product — AND
+ *      its `meshOffset` as that same group's `position`. One group carries both
+ *      deliberately: three composes an object's matrix as `T · R · S`, so the
+ *      translation lands AFTER the rotation, in the part's frame — exactly what
+ *      URDF's `<origin xyz rpy>` means and what `mesh-offset.ts` specifies;
  *   4. `root` lays the whole Z-up stage down −90° about X for three's Y-up world.
  *
  * Because step 4 is a quarter turn it PERMUTES axes rather than skewing them, so
@@ -47,6 +52,9 @@ export interface PartMeshStageProps {
   path: string
   /** The part's stored orientation correction (#741), degrees. */
   rotation?: MeshRotation | null
+  /** The part's stored position correction (#788), millimetres in the part
+   *  frame, applied AFTER the rotation. */
+  offset?: MeshOffset | null
   /** Millimetres per mesh unit — the part's effective scale × 1000. */
   scaleMm: number
   /** The part's declared footprint in millimetres, for the ghost outline. */
@@ -68,6 +76,15 @@ export interface MeshMeasurement {
   /** The model's size in the PART frame, millimetres, at the applied scale and
    *  AFTER the orientation correction — i.e. what you are looking at. */
   sizeMm: [number, number, number] | null
+  /**
+   * The model's extent in the PART frame, millimetres, rotated and scaled but
+   * with the OFFSET TAKEN BACK OUT — the box `snapOffsetFor` works from (#788).
+   *
+   * Un-offset on purpose: snapping then answers from a property of the model
+   * rather than from wherever it currently sits, so snapping the same corner
+   * twice gives the same offset instead of compounding.
+   */
+  boundsMm: MeshBounds | null
 }
 
 type Phase = 'loading' | 'ready' | 'error'
@@ -132,6 +149,23 @@ function measurePartFrame(model: THREE.Object3D): {
   }
 }
 
+/**
+ * The measured box with the applied offset taken back out — the box a snap
+ * works from (#788). A pure translation, so this is exact rather than an
+ * approximation, and it is why snapping is idempotent.
+ */
+function unoffsetBounds(
+  measured: { size: [number, number, number]; min: [number, number, number] },
+  offset: readonly [number, number, number]
+): MeshBounds {
+  const min: [number, number, number] = [
+    measured.min[0] - offset[0],
+    measured.min[1] - offset[1],
+    measured.min[2] - offset[2]
+  ]
+  return { min, max: [min[0] + measured.size[0], min[1] + measured.size[1], min[2] + measured.size[2]] }
+}
+
 /** Read a CSS custom property off the mount as a three colour (theme-aware at
  *  mount time), falling back when the token is missing or unparsable. */
 function tokenColour(el: HTMLElement, name: string, fallback: number): THREE.Color {
@@ -147,6 +181,7 @@ function tokenColour(el: HTMLElement, name: string, fallback: number): THREE.Col
 export function PartMeshStage({
   path,
   rotation,
+  offset,
   scaleMm,
   dimensions,
   label,
@@ -161,6 +196,7 @@ export function PartMeshStage({
   // hands back an equal-but-new array — which would rebuild the grid and the
   // ghost footprint on every keystroke in the panel beside it.
   const [rx, ry, rz] = meshRotationRadians(rotation)
+  const [ox, oy, oz] = offset ?? [0, 0, 0]
   const width = dimensions && dimensions.width > 0 ? dimensions.width : 0
   const depth = dimensions && dimensions.height > 0 ? dimensions.height : 0
   // The latest callback without making it a dependency (a parent's inline arrow
@@ -309,15 +345,27 @@ export function PartMeshStage({
     const mount = mountRef.current
     if (!stage || !mount) return
 
-    // 'ZYX' is three's spelling of URDF's rpy product, Rz·Ry·Rx.
+    // 'ZYX' is three's spelling of URDF's rpy product, Rz·Ry·Rx. The offset goes
+    // on the SAME group's position, because three composes `T · R · S` — so the
+    // translation is applied after the rotation, in the part's frame, exactly as
+    // URDF's `<origin xyz rpy>` and `mesh-offset.ts` both define it.
     stage.oriented.rotation.set(rx, ry, rz, 'ZYX')
+    stage.oriented.position.set(ox, oy, oz)
     const s = Number.isFinite(scaleMm) && scaleMm > 0 ? scaleMm : 1
     stage.scaled.scale.setScalar(s)
     stage.root.updateMatrixWorld(true)
 
     const measured = stage.model ? measurePartFrame(stage.model) : null
     stage.size = measured?.size ?? null
-    if (stage.model) measuredRef.current?.({ rawSpan: stage.rawSpan, sizeMm: stage.size })
+    if (stage.model) {
+      measuredRef.current?.({
+        rawSpan: stage.rawSpan,
+        sizeMm: stage.size,
+        // Reported WITHOUT the offset, so a snap answers from the model rather
+        // than from where it currently sits (#788).
+        boundsMm: measured ? unoffsetBounds(measured, [ox, oy, oz]) : null
+      })
+    }
 
     // --- the reference geometry: grid, ghost footprint, axis triad ---------
     const w = width
@@ -363,7 +411,7 @@ export function PartMeshStage({
     axes.renderOrder = 2
     stage.reference.add(axes)
     stage.root.updateMatrixWorld(true)
-  }, [rx, ry, rz, scaleMm, width, depth, phase])
+  }, [rx, ry, rz, ox, oy, oz, scaleMm, width, depth, phase])
 
   // --- 4) Framing ---------------------------------------------------------
   // Separate so a rotation nudge does NOT yank the camera: you are judging the

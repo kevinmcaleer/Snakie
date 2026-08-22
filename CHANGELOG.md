@@ -7,6 +7,58 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Position a linked 3-D model: nudge it, or snap a corner to the origin.** #741
+  let you turn a model the right way up; this is the other half. An STL's origin
+  is wherever the exporter left it — often a corner of the build plate — and
+  until now the only fix was to re-export from CAD. The Part Editor's **3-D** tab
+  grows a **Position** panel:
+
+  - **Nudge** along X, Y or Z by a step you choose — **0.1, 1 or 10 mm**. Fixed
+    millimetres, not a fraction of the model: the same button moves a 5 mm sensor
+    and a 100 mm battery the same distance, the number that lands in `parts.yml`
+    is one you picked, and 10 mm is exactly one square of the stage's grid.
+  - **Snap** a feature you name onto the origin. Pick `min` / `centre` / `max`
+    for each axis and the three picks between them name any **corner**, **edge
+    midpoint**, **face centre** or the **centre** — 27 in all, one rule. Snakie
+    does the arithmetic and nothing else: following the Join tool's lesson,
+    there is no auto-fit and no inferring which feature you probably meant.
+
+  New `PartDefinition.meshOffset`: `[x, y, z]` **millimetres** in the part's
+  frame, applied **after** `meshRotation`. That order is URDF's own
+  (`<visual><origin xyz rpy>` is rotate-then-translate), so the offset is written
+  out as the stored millimetres ÷ 1000 with no compensation term — and it is what
+  makes a nudge travel along the axis you pressed however the model is turned.
+  The same order holds in the editor stage, in `PartMeshView`, and in the URDF
+  that `addMeshLink` and `swapLinkVisualToMesh` write. Absent means no
+  translation, so parts authored before this need no migration. (#788)
+
+### Fixed
+- **A linked 3-D model no longer gets left behind when a part changes library,
+  and a missing one now says so.** Linking an STL in the Part Editor's 3-D tab
+  copies it into the part's folder — but saving the part into a *different*
+  library moved only `parts.yml`. The image and help ride in memory and made the
+  trip; the mesh exists only on disk and did not, so the 9V battery ended up with
+  `mesh: battery-9v.stl` in `snakie-standard/` and the actual model still sitting
+  in `my-parts/`. A save now brings the model with the part, and reports the
+  filename when it cannot find one at all rather than writing a dangling
+  reference and calling it a success.
+
+  **`meshUnits` is recorded when the model is linked.** An `.stl` states no
+  units, so the link step is the last moment anything can measure the geometry
+  and write a conclusion down; without it a 48 mm part read as metres arrives
+  1000× too big. The guess is stored as the ordinary, editable `meshUnits` field
+  and named in the confirmation message, so a wrong one is a visible click to
+  correct.
+
+  **A broken mesh no longer looks like a rendering bug.** "This part has no
+  model" and "this part's model is missing" used to render identically — a plain
+  footprint block, with nothing said. A part that declares a `mesh:` and doesn't
+  get one still gets a block (a part with no body is worse), but now reports it
+  in the status bar, naming the part and the file. The same silent-failure shape
+  is fixed on the placeholder→mesh upgrade in Sync, and in both stubbed bridges
+  that used to answer with a bare `{}`. (#787)
+
+### Added
 - **A Sprite editor for LED matrices and OLED displays.** The Display
   instrument grows a **✎ Sprites** key that opens a full-screen pixel editor:
   set the sprite size (presets from the 12×8 Arduino Modulino / UNO R4 LED

@@ -216,7 +216,12 @@ export function PartDetailsView({
               <Suspense fallback={<div className="pdt__stage-note">Loading the 3-D model…</div>}>
                 {/* The stored orientation correction (#741) — the catalog shows
                     the part the way the Part Editor squared it up. */}
-                <PartMeshView path={mesh.path} label={part.name} rotation={part.meshRotation} />
+                <PartMeshView
+                  path={mesh.path}
+                  label={part.name}
+                  rotation={part.meshRotation}
+                  offset={part.meshOffset}
+                />
               </Suspense>
             )}
           </div>

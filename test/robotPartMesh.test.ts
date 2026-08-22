@@ -19,6 +19,7 @@ describe('safeUrdfName — the part-drop URDF write guard (#406)', () => {
 
 import {
   mirroredOrigin,
+  partBodyPlan,
   partInertial,
   placeholderBoxSpec
 } from '../src/renderer/src/components/robot-part-mesh'
@@ -74,6 +75,58 @@ describe('placeholderBoxSpec — the footprint stand-in (#716)', () => {
     expect(rgb[1]).toBeGreaterThan(0.302)
     expect(rgb[2]).toBeGreaterThan(0.243)
     expect(placeholderBoxSpec(part({ pcbColor: undefined })).rgb).toEqual([0.55, 0.55, 0.55])
+  })
+})
+
+/**
+ * THE #787 REGRESSION. A part that declares a `mesh:` whose file is absent must
+ * not quietly produce a box.
+ *
+ * The 9V battery had `mesh: battery-9v.stl` in its `parts.yml` and no `.stl` in
+ * its folder. Every consumer treated that exactly like a part with no model at
+ * all: `attachPartBody` asked only "did the copy hand back a rel?", got nothing,
+ * and dropped a footprint box without a word. The result looked like a
+ * *rendering* bug, and finding out otherwise took a filesystem listing.
+ *
+ * The box itself is not the mistake — a part with no body is worse than one with
+ * a stand-in. The silence is. So the rule under test is a two-sided one:
+ * silence for a part that never had a model, and something to say for one whose
+ * model is broken.
+ */
+describe('partBodyPlan — box vs mesh, and when to say so (#787)', () => {
+  it('takes the copied mesh when there is one', () => {
+    expect(partBodyPlan(part({ mesh: 'battery-9v.stl' }), { rel: 'meshes/battery-9v.stl' })).toEqual(
+      { body: 'mesh', meshRel: 'meshes/battery-9v.stl' }
+    )
+  })
+
+  it('boxes a part with NO model, and says nothing — that is most of the library', () => {
+    // Noise on every drop of every meshless part is how a real warning gets
+    // ignored, so this half of the rule matters as much as the other.
+    for (const p of [part(), part({ mesh: '' }), part({ mesh: '   ' })]) {
+      expect(partBodyPlan(p, null)).toEqual({ body: 'box' })
+      expect(partBodyPlan(p, { error: 'no such file' })).toEqual({ body: 'box' })
+    }
+  })
+
+  it('boxes a part whose DECLARED model is missing — but reports it', () => {
+    const plan = partBodyPlan(part({ mesh: 'battery-9v.stl', name: '9V Battery' }), null)
+    expect(plan.body).toBe('box') // still gets a body
+    const problem = (plan as { problem?: string }).problem
+    expect(problem, 'a missing mesh must not be silent').toBeTruthy()
+    // Names the part AND the file, so the message points at the folder to look in.
+    expect(problem).toContain('9V Battery')
+    expect(problem).toContain('battery-9v.stl')
+  })
+
+  it('passes the underlying reason through when the copy gave one', () => {
+    const plan = partBodyPlan(part({ mesh: 'm.stl' }), { error: 'Refusing symlinked part mesh' })
+    expect((plan as { problem?: string }).problem).toContain('Refusing symlinked part mesh')
+  })
+
+  it('still names the part when it has no name to use', () => {
+    const plan = partBodyPlan({ id: '', name: '', mesh: 'm.stl' }, null)
+    expect((plan as { problem?: string }).problem).toBeTruthy()
   })
 })
 

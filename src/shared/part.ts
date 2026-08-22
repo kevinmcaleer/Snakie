@@ -1334,6 +1334,26 @@ export interface PartDefinition {
    * gets). See `src/shared/mesh-rotation.ts` for the maths and the reasoning.
    */
   meshRotation?: [number, number, number]
+  /**
+   * A standing POSITION correction for the linked {@link mesh} (#788), as
+   * `[x, y, z]` **millimetres** in the part's own frame. Absent ⇒ no
+   * translation, so every part authored before this field existed keeps working
+   * unchanged.
+   *
+   * An STL's origin is wherever the exporter left it — often a corner of the
+   * build plate, sometimes a point outside the model entirely — and a part whose
+   * mesh is offset sits wrong on the board in Build. Like {@link meshRotation}
+   * this is stored rather than baked: the user's file is untouched and every
+   * consumer honours the correction.
+   *
+   * **Applied AFTER the rotation**, in the part's frame:
+   * `p_part = R(meshRotation)·p_mesh + meshOffset`. That is what URDF's
+   * `<visual><origin xyz rpy>` already means, so the boundary is a ÷1000 and
+   * nothing else, and it is what makes a nudge move the model along the axis the
+   * user pressed however the model is turned. See `src/shared/mesh-offset.ts`
+   * for the maths and the full reasoning.
+   */
+  meshOffset?: [number, number, number]
 
   // --- Mass / centre of mass (#554, epic #535 §1) --------------------------
   /**

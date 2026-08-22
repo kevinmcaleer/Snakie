@@ -192,6 +192,95 @@ describe('partToYaml / partFromYaml round-trip', () => {
     })
   })
 
+  /**
+   * THE SAME ROUND-TRIP, FOR THE POSITION (#788).
+   *
+   * `meshOffset` joins the same three rebuild-from-scratch sinks, and the same
+   * failure mode is waiting: add the field to `PartDefinition`, forget one of
+   * them, and the user's careful snap is gone the next time they open the part —
+   * silently, and only they will notice. This has cost the repo `suggests`, the
+   * electrical block and `rear.imageData` already.
+   */
+  describe('the mesh position (#788)', () => {
+    const moved = (o: unknown): PartDefinition =>
+      normalisePart({
+        id: 'off',
+        name: 'Off',
+        headers: [],
+        mesh: 'model.stl',
+        meshOffset: o as [number, number, number]
+      })
+
+    it('survives normalise → serialise → parse → normalise unchanged', () => {
+      for (const o of [[1, 0, 0], [0, -24.25, 0], [-13.25, -24.25, 0], [0.125, -0.5, 17.375], [980, -1020, 4]]) {
+        const before = moved(o)
+        expect(before.meshOffset, `normalisePart dropped ${o}`).toEqual(o)
+        const yaml = partToYaml(before)
+        expect(yaml, `partToYaml dropped ${o}`).toContain('meshOffset')
+        const after = normalisePart(partFromYaml(yaml))
+        expect(after.meshOffset, `the round-trip changed ${o}`).toEqual(o)
+        // The WHOLE part, not just the field.
+        expect(after).toEqual(before)
+      }
+    })
+
+    it('survives a SECOND round-trip — a save, a reload and a save again', () => {
+      const once = normalisePart(partFromYaml(partToYaml(moved([-13.25, -24.25, 0]))))
+      const twice = normalisePart(partFromYaml(partToYaml(once)))
+      expect(twice).toEqual(once)
+    })
+
+    it('travels alongside a rotation without either disturbing the other', () => {
+      // The two corrections are independent fields with one composition order
+      // between them; a writer that dropped one while keeping the other would
+      // leave a part half-corrected, which is worse than uncorrected.
+      const both = normalisePart({
+        id: 'both',
+        name: 'Both',
+        headers: [],
+        mesh: 'model.stl',
+        meshRotation: [0, 0, 90],
+        meshOffset: [-13.25, -24.25, 0]
+      })
+      const after = normalisePart(partFromYaml(partToYaml(both)))
+      expect(after.meshRotation).toEqual([0, 0, 90])
+      expect(after.meshOffset).toEqual([-13.25, -24.25, 0])
+      expect(after).toEqual(both)
+    })
+
+    it('writes nothing at all for zero (absent IS "don’t move it")', () => {
+      expect(moved([0, 0, 0]).meshOffset).toBeUndefined()
+      expect(partToYaml(moved([0, 0, 0]))).not.toContain('meshOffset')
+    })
+
+    it('ignores a malformed offset rather than poisoning the placement', () => {
+      for (const bad of ['[1, 2]', '[1, 2, 3, 4]', '5', '[1, over-there, 3]', 'true']) {
+        const yml = `id: o\nname: O\nmesh: m.stl\nmeshOffset: ${bad}\n`
+        expect(partFromYaml(yml).meshOffset, bad).toBeUndefined()
+      }
+    })
+
+    it('is NOT confused with com_xyz — both are mm vec3s on the same part', () => {
+      const p = normalisePart({
+        id: 'o',
+        name: 'O',
+        headers: [],
+        mesh: 'm.stl',
+        meshOffset: [1, 2, 3],
+        com_xyz: [4, 5, 6]
+      })
+      const after = normalisePart(partFromYaml(partToYaml(p)))
+      expect(after.meshOffset).toEqual([1, 2, 3])
+      expect(after.com_xyz).toEqual([4, 5, 6])
+    })
+
+    it('a part authored before the field existed still loads (no migration)', () => {
+      const old = partFromYaml('id: o\nname: O\nmesh: m.stl\nmeshRotation: [0, 0, 90]\n')
+      expect(old.mesh).toBe('m.stl')
+      expect(old.meshOffset).toBeUndefined()
+    })
+  })
+
   it('never serialises the inlined helpText; keeps the help filename', () => {
     const withHelp = { ...RICH, help: 'help.md', helpText: '# Rich\n\nUsage notes.' }
     const yaml = partToYaml(withHelp)
