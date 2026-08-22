@@ -23,6 +23,8 @@ import { INSTRUMENTS } from './instruments-registry'
 import { inScope, type DialectScope } from '../../../shared/dialect-api'
 import type { Dialect } from '../../../shared/dialect'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
+import { ALL_RULES } from '../../../shared/refactor/rules'
+import type { RefactorCategory } from '../../../shared/refactor/types'
 
 export type HelpKind = 'shelf' | 'collection' | 'section' | 'article'
 
@@ -56,6 +58,50 @@ const A = {
   instruments: '#2f7c70',
   page: '#8a7f62',
   project: '#2f7c70'
+}
+
+/**
+ * The "Refactoring" book (epic #634 §2.4), built FROM the rule catalogue rather
+ * than listed by hand.
+ *
+ * Every rule declares its own `helpArticle` id and the preview modal's "Why?"
+ * button opens exactly that page, so generating the tree from `ALL_RULES` is
+ * what guarantees the two can never drift: add a rule, and its page appears in
+ * the contents automatically. (A rule whose `./help/<id>.md` is missing still
+ * shows the panel's "not written yet" placeholder, which is the visible nudge.)
+ *
+ * These pages are the teaching payload of the whole epic — the difference
+ * between a linter that says *what* and a tutor that says *why*.
+ */
+const REFACTOR_BOOKS: { category: RefactorCategory; id: string; title: string }[] = [
+  { category: 'control-flow', id: 'refactor-control-flow', title: 'Nesting & control flow' },
+  { category: 'conditionals', id: 'refactor-conditionals', title: 'Conditionals & constants' },
+  { category: 'loops', id: 'refactor-loops', title: 'Loops & data' },
+  { category: 'extraction', id: 'refactor-extraction', title: 'Extracting & naming' },
+  { category: 'functions', id: 'refactor-functions', title: 'Functions, classes & resources' },
+  { category: 'micropython', id: 'refactor-micropython', title: 'MicroPython-specific' },
+  { category: 'board', id: 'refactor-board', title: 'Board-specific optimisation' }
+]
+
+/** One section per rule family, ordered by catalogue number within each. */
+function refactorSections(): HelpNode[] {
+  const out: HelpNode[] = []
+  for (const book of REFACTOR_BOOKS) {
+    const rules = ALL_RULES.filter((r) => r.category === book.category).sort(
+      (a, b) => a.catalogue - b.catalogue
+    )
+    if (rules.length === 0) continue
+    // Two rules can legitimately share an article; show it once.
+    const seen = new Set<string>()
+    const children: HelpNode[] = []
+    for (const rule of rules) {
+      if (seen.has(rule.helpArticle)) continue
+      seen.add(rule.helpArticle)
+      children.push({ id: rule.helpArticle, kind: 'article', title: rule.title, accent: A.page })
+    }
+    out.push({ id: book.id, kind: 'section', title: book.title, accent: A.page, children })
+  }
+  return out
 }
 
 /** The evergreen contents (everything except the runtime "In This Project"). */
@@ -211,6 +257,16 @@ export const HELP_SECTIONS: HelpNode[] = [
         children: [{ id: 'ref-pinout', kind: 'article', title: 'Board pinouts', accent: A.page }]
       }
     ]
+  },
+  {
+    // Epic #634. Right-clicking a smell opens the matching page here, but the
+    // book stands on its own too — it is a short course in why MicroPython code
+    // goes wrong, which is worth reading before you hit the problem.
+    id: 'refactoring',
+    kind: 'collection',
+    title: 'Refactoring',
+    accent: A.reference,
+    children: refactorSections()
   }
 ]
 
