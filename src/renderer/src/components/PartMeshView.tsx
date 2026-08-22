@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { loadMeshObject, neutralMaterial } from './robot-mesh-load'
+import { loadMeshObject, meshUpAxisFix, neutralMaterial } from './robot-mesh-load'
+import { meshRotationRadians, type MeshRotation } from '../../../shared/mesh-rotation'
 import './PartMeshView.css'
 
 /**
@@ -16,12 +17,12 @@ import './PartMeshView.css'
  * Because the model is framed from its own bounding box, the part's `meshUnits` /
  * `meshScale` are irrelevant HERE — they exist to place a mesh correctly in the
  * URDF world (metres), and a preview that fills its frame either way doesn't need
- * them. Orientation is the part that does matter: STLs are authored Z-up (as is
- * URDF), three is Y-up, so an STL is laid down the same way the Robot View lays
- * one down. A DAE declares its own `up_axis`, which ColladaLoader has already
- * applied, so it is left alone (#741 — a mesh needing a further rotation the
- * schema can't yet express will still look wrong here, and that is the same
- * wrongness the Robot View shows).
+ * them. Orientation is the part that does matter: `meshUpAxisFix` puts the loaded
+ * object into the part's Z-up frame, the part's stored `meshRotation` (#741) is
+ * applied in THAT frame, and the whole stage is then laid down −90° for three's
+ * Y-up world — the same three steps, in the same order, as the Part Editor's 3-D
+ * view and as the URDF a placed part gets. A part squared up in the editor
+ * therefore looks square here too.
  *
  * Imported lazily by the details view, so three.js and the STL/DAE parsers stay
  * out of the main renderer chunk.
@@ -33,6 +34,8 @@ export interface PartMeshViewProps {
   path: string
   /** What the model is OF, for the accessible name. */
   label: string
+  /** The part's stored orientation correction (#741), degrees. Absent ⇒ none. */
+  rotation?: MeshRotation | null
 }
 
 type Phase = 'loading' | 'ready' | 'error'
@@ -42,9 +45,13 @@ const CAMERA_DISTANCE = 2.6
 /** Idle turntable speed (radians/second). Stops for good on first interaction. */
 const SPIN_RATE = 0.35
 
-export function PartMeshView({ path, label }: PartMeshViewProps): JSX.Element {
+export function PartMeshView({ path, label, rotation }: PartMeshViewProps): JSX.Element {
   const mountRef = useRef<HTMLDivElement | null>(null)
   const [phase, setPhase] = useState<Phase>('loading')
+  // Converted OUT HERE, so the effect depends on three plain numbers rather than
+  // on the array's identity: a parent re-render handing back an equal
+  // `[90, 0, 0]` must not tear the scene down and reload the STL.
+  const [rx, ry, rz] = meshRotationRadians(rotation)
 
   useEffect(() => {
     const mount = mountRef.current
@@ -124,12 +131,23 @@ export function PartMeshView({ path, label }: PartMeshViewProps): JSX.Element {
           setPhase('error')
           return
         }
-        // STL/CAD are Z-up like URDF; three is Y-up. Lay it down the same way the
-        // Robot View does so a part stands the way it does everywhere else.
-        if (/\.stl(?:$|[?#])/i.test(path)) obj.rotation.x = -Math.PI / 2
+        // Three frames, one nesting — the same order the URDF uses (#741):
+        //   1. the loaded object → the part's Z-up frame (`meshUpAxisFix`);
+        //   2. the part's stored orientation correction, applied in THAT frame;
+        //   3. the whole stage laid down −90° for three's Y-up world.
+        obj.rotation.x = meshUpAxisFix(path)
+        const oriented = new THREE.Group()
+        // 'ZYX' is three's spelling of URDF's rpy product, Rz·Ry·Rx.
+        oriented.rotation.set(rx, ry, rz, 'ZYX')
+        oriented.add(obj)
+        const stage = new THREE.Group()
+        stage.rotation.x = -Math.PI / 2
+        stage.add(oriented)
+
         // Normalise to a unit box centred on the origin, so framing is the same
-        // whether the file is authored in millimetres or metres.
-        const box = new THREE.Box3().setFromObject(obj)
+        // whether the file is authored in millimetres or metres — and measured
+        // AFTER the rotation, so a corrected part frames on what you now see.
+        const box = new THREE.Box3().setFromObject(stage)
         const size = new THREE.Vector3()
         const centre = new THREE.Vector3()
         box.getSize(size)
@@ -138,10 +156,10 @@ export function PartMeshView({ path, label }: PartMeshViewProps): JSX.Element {
         const holder = new THREE.Group()
         if (Number.isFinite(span) && span > 0) {
           const s = 1 / span
-          obj.position.sub(centre)
+          stage.position.sub(centre)
           holder.scale.setScalar(s)
         }
-        holder.add(obj)
+        holder.add(stage)
         scene.add(holder)
         model = holder
         setPhase('ready')
@@ -170,7 +188,7 @@ export function PartMeshView({ path, label }: PartMeshViewProps): JSX.Element {
       renderer.dispose()
       renderer.domElement.remove()
     }
-  }, [path])
+  }, [path, rx, ry, rz])
 
   return (
     <div className="pmv">

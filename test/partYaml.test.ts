@@ -68,6 +68,7 @@ const RICH: PartDefinition = normalisePart({
   imageLayer: { x: 0.1, y: 0.1, w: 0.8, h: 0.8, opacity: 0.9 },
   mesh: 'model.stl',
   meshUnits: 'mm',
+  meshRotation: [90, 0, -90],
   electrical: { model: 'consumer', currentDrawA: 0.02, maxCurrentA: 0.05, supplyRange: [2.8, 5] },
   schematic: { aspect: 1, pins: [{ pin: 'SDA', side: 'left', order: 0 }] }
 })
@@ -123,6 +124,72 @@ describe('partToYaml / partFromYaml round-trip', () => {
     expect(back.meshUnits).toBeUndefined()
     // An unknown meshUnits value is dropped (tolerant parse).
     expect(normalisePart(partFromYaml('id: m\nname: M\nmesh: x.stl\nmeshUnits: furlongs\n')).meshUnits).toBeUndefined()
+  })
+
+  /**
+   * THE ROUND-TRIP THAT MATTERS (#741).
+   *
+   * A part's fields pass through three rebuild-from-scratch sinks — `normalisePart`,
+   * `partToYaml`, `partFromYaml` — and a field missing from ANY of them is dropped
+   * with no error, no type failure and no test failure. That has happened to
+   * `suggests`, to the electrical block and to `rear.imageData`, and each time a
+   * person noticed rather than the build. `meshRotation` is a correction the user
+   * dialled in by hand: losing it silently is the same class of bug, and the whole
+   * feature is worthless without this holding.
+   */
+  describe('the mesh orientation (#741)', () => {
+    const rotated = (r: unknown): PartDefinition =>
+      normalisePart({
+        id: 'rot',
+        name: 'Rot',
+        headers: [],
+        mesh: 'model.stl',
+        meshRotation: r as [number, number, number]
+      })
+
+    it('survives normalise → serialise → parse → normalise unchanged', () => {
+      for (const r of [[90, 0, 0], [0, -90, 0], [0, 0, 180], [90, 0, -90], [22.5, -33.75, 175]]) {
+        const before = rotated(r)
+        expect(before.meshRotation, `normalisePart dropped ${r}`).toEqual(r)
+        const yaml = partToYaml(before)
+        expect(yaml, `partToYaml dropped ${r}`).toContain('meshRotation')
+        const after = normalisePart(partFromYaml(yaml))
+        expect(after.meshRotation, `the round-trip changed ${r}`).toEqual(r)
+        // And the WHOLE part, not just the field — a rebuild that keeps the
+        // rotation but loses its neighbour is no better.
+        expect(after).toEqual(before)
+      }
+    })
+
+    it('survives a SECOND round-trip — a save, a reload and a save again', () => {
+      const once = normalisePart(partFromYaml(partToYaml(rotated([90, 0, -90]))))
+      const twice = normalisePart(partFromYaml(partToYaml(once)))
+      expect(twice).toEqual(once)
+    })
+
+    it('writes nothing at all for the identity (absent IS the identity)', () => {
+      expect(rotated([0, 0, 0]).meshRotation).toBeUndefined()
+      expect(partToYaml(rotated([0, 0, 0]))).not.toContain('meshRotation')
+      expect(partToYaml(rotated([360, -360, 720]))).not.toContain('meshRotation')
+    })
+
+    it('normalises what a hand-edited file says', () => {
+      const back = partFromYaml('id: r\nname: R\nmesh: m.stl\nmeshRotation: [270, 0, 450]\n')
+      expect(back.meshRotation).toEqual([-90, 0, 90])
+    })
+
+    it('ignores a malformed rotation rather than poisoning the maths downstream', () => {
+      for (const bad of ['[90, 0]', '[90, 0, 0, 0]', '90', '[90, sideways, 0]', 'true']) {
+        const yml = `id: r\nname: R\nmesh: m.stl\nmeshRotation: ${bad}\n`
+        expect(partFromYaml(yml).meshRotation, bad).toBeUndefined()
+      }
+    })
+
+    it('a part authored before the field existed still loads (no migration)', () => {
+      const old = partFromYaml('id: r\nname: R\nmesh: m.stl\nmeshUnits: mm\n')
+      expect(old.mesh).toBe('m.stl')
+      expect(old.meshRotation).toBeUndefined()
+    })
   })
 
   it('never serialises the inlined helpText; keeps the help filename', () => {

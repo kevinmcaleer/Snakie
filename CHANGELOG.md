@@ -35,6 +35,37 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   framebuf's constants so higher bit depths can arrive without a format break.
   The local-file layer gains binary writes (`fs.writeFileBytes`) and filtered
   save dialogs to carry the new formats.
+- **The Part Editor has a 3-D view: link an STL to a part, and turn it the right
+  way up.** (#741) Attaching a model used to mean copying the file into the part
+  folder by hand and editing two lines of `parts.yml` — and a model that arrived
+  lying on its side couldn't be corrected in Snakie at all. There's now a **3-D**
+  tab beside Breadboard and Schematic.
+
+  **Link a model** picks an `.stl` (or `.dae`) and **copies it into the part's own
+  folder**, because a part folder is the thing that gets zipped, committed and
+  published — a link pointing at `~/Downloads` travels nowhere. If a file of that
+  name is already there, the copy takes the next free name (`model-2.stl`) rather
+  than overwriting it; the one exception is the model the part *currently*
+  references, which **Replace** may overwrite because the part authored it. Link
+  the same file twice and Snakie recognises the identical bytes, re-uses what is
+  already there and copies nothing. **Unlink** removes the reference and leaves
+  the file where it is: Snakie does not delete a file it did not write.
+
+  **The model is shown at its real size**, in millimetres, standing on a 10 mm
+  grid inside a ghost outline of the part's declared dimensions, with an axis
+  triad naming which way is up. A mesh authored in metres is then obvious the
+  moment it loads rather than the first time the part is placed, and the panel
+  says so in words when the two sizes disagree.
+
+  **Orientation is stored, not baked.** A new `meshRotation` on the part records
+  `[x, y, z]` degrees in URDF's own roll-pitch-yaw convention; your STL is never
+  rewritten. ±90° buttons and numeric fields turn the model about the part's
+  axes — composed properly, so the fourth press of a button really does bring you
+  back to square. The stored rotation is honoured everywhere the model is used:
+  this view, the catalog's turntable, and the `<visual>` origin of the URDF link a
+  placed part gets in Build (on the visual, not the placement joint, so re-jointing
+  the part in Build doesn't fight it). A part authored before this field existed
+  keeps working unchanged — absent means no correction.
 - **A folder that isn't a repository yet can become one from the Source Control
   pane.** (#783) It used to say "not a Git repository" and offer you nothing but
   a different folder — so starting version control meant leaving Snakie for a

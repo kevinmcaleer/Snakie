@@ -266,6 +266,14 @@
   line-height: 1.4;
 }
 
+/* A hint that is telling you something is WRONG — the 3-D view's units mismatch
+   (#741). `--accent-ink` is the token that stays readable on BOTH the dark
+   chrome and the parchment; plain `--accent` gold is not. */
+.pe__meshwarn {
+  color: var(--accent-ink, var(--accent));
+  font-weight: 600;
+}
+
 .pe__hint code {
   font-family: var(--font-mono);
   background: var(--bg-sunken);

@@ -55,6 +55,12 @@ export function createWebPartsApi(): Record<string, unknown> {
     // No filesystem in the browser, so there is no folder to name or reveal.
     partsFolder: async () => '',
     bundledStatus: async () => [],
-    resetToBundled: async () => ({ ok: false, error: 'Parts are read-only on the web.' })
+    resetToBundled: async () => ({ ok: false, error: 'Parts are read-only on the web.' }),
+    // #741: linking a model copies a file into the part's folder, and there is
+    // no folder here. The 3-D view still SHOWS a bundled part's model.
+    importMesh: async () => ({
+      ok: false,
+      error: 'Linking a 3-D model needs the desktop app — parts are read-only on the web.'
+    })
   }
 }

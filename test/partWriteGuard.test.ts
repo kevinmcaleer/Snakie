@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
 /**
@@ -32,7 +32,9 @@ vi.mock('electron', () => ({
   }
 }))
 
-const { mirrorPartFolder, readLibraries, writePart } = await import('../src/main/parts/library')
+const { importPartMesh, mirrorPartFolder, readLibraries, writePart } = await import(
+  '../src/main/parts/library'
+)
 
 const LIB = 'snakie-standard'
 const PART = 'guard-widget'
@@ -41,7 +43,14 @@ const partDir = join(partsRoot, LIB, PART)
 const ymlPath = join(partDir, 'parts.yml')
 
 /** A Modulino-shaped part: the fields #750 kept reverting are all present. */
-function yamlFor(opts: { address: number; height: number; help?: boolean }): string {
+function yamlFor(opts: {
+  address: number
+  height: number
+  help?: boolean
+  /** A linked 3-D model + its orientation correction (#741). */
+  mesh?: string
+  meshRotation?: string
+}): string {
   return [
     `id: ${PART}`,
     'name: Guard Widget',
@@ -52,6 +61,8 @@ function yamlFor(opts: { address: number; height: number; help?: boolean }): str
     'i2cAddresses:',
     `  - ${opts.address}`,
     ...(opts.help ? ['help: help.md'] : []),
+    ...(opts.mesh ? [`mesh: ${opts.mesh}`] : []),
+    ...(opts.meshRotation ? [`meshRotation: ${opts.meshRotation}`] : []),
     'headers:',
     '  - edge: bottom',
     '    pins:',
@@ -182,6 +193,152 @@ describe('writePart — sibling files a part did not author (#750)', () => {
     expect(res.ok).toBe(true)
     expect(existsSync(join(partDir, 'help.md'))).toBe(false)
     expect(readFileSync(ymlPath, 'utf-8')).not.toContain('help:')
+  })
+})
+
+/**
+ * THE LINKED 3-D MODEL (#741), through the REAL writer on a REAL folder.
+ *
+ * The Part Editor's 3-D view copies an STL into the part folder and records its
+ * filename — which puts the whole feature at the mercy of what a save does to a
+ * part folder's other files. #750 deliberately narrowed that pruning to the
+ * assets the PREVIOUS `parts.yml` named (image / rear / help) and nothing else;
+ * a mesh is deliberately NOT on that list. This asserts the narrowing holds
+ * rather than trusting the comment that describes it — `modulino.stl` was
+ * deleted from disk once already.
+ */
+describe('a linked mesh + its orientation, through a real save (#741)', () => {
+  const STL = 'solid widget\nfacet normal 0 0 1\nendsolid widget\n'
+
+  beforeEach(() => {
+    seedPart(yamlFor({ address: 0x3e, height: 25.36, mesh: 'widget.stl', meshRotation: '[90, 0, -90]' }))
+    writeFileSync(join(partDir, 'widget.stl'), STL, 'utf-8')
+  })
+
+  it('reads the link and the orientation back off disk', async () => {
+    const part = await loadPart()
+    expect(part.mesh).toBe('widget.stl')
+    expect(part.meshRotation).toEqual([90, 0, -90])
+  })
+
+  it('leaves the mesh FILE alone across an ordinary save', async () => {
+    const part = await loadPart()
+    const res = await writePart(LIB, { ...part, name: 'Guard Widget III' })
+    expect(res.ok).toBe(true)
+    expect(existsSync(join(partDir, 'widget.stl'))).toBe(true)
+    expect(readFileSync(join(partDir, 'widget.stl'), 'utf-8')).toBe(STL)
+  })
+
+  it('round-trips the link and the orientation through the writer', async () => {
+    const part = await loadPart()
+    const res = await writePart(LIB, { ...part, name: 'Guard Widget III' })
+    expect(res.ok).toBe(true)
+    const yaml = readFileSync(ymlPath, 'utf-8')
+    expect(yaml).toContain('mesh: widget.stl')
+    expect(yaml).toContain('meshRotation')
+    // And back in through the reader, which is what the editor would reopen.
+    const again = await loadPart()
+    expect(again.mesh).toBe('widget.stl')
+    expect(again.meshRotation).toEqual([90, 0, -90])
+  })
+
+  it('keeps the file even when the LINK is removed — unlink is not delete', async () => {
+    // Deliberately unlike `help.md`, which a save DOES clean up when cleared:
+    // Snakie wrote the help file, so it may remove it. The mesh was handed to us
+    // by the user, so it is theirs. Unlinking says "this part has no model", not
+    // "throw the model away".
+    const part = await loadPart()
+    const res = await writePart(LIB, { ...part, mesh: undefined, meshRotation: undefined })
+    expect(res.ok).toBe(true)
+    expect(readFileSync(ymlPath, 'utf-8')).not.toContain('mesh:')
+    expect(existsSync(join(partDir, 'widget.stl'))).toBe(true)
+  })
+
+  it('survives a save that REPLACES the mesh with a differently-named one', async () => {
+    const part = await loadPart()
+    writeFileSync(join(partDir, 'widget-2.stl'), 'solid two\nendsolid two\n', 'utf-8')
+    const res = await writePart(LIB, { ...part, mesh: 'widget-2.stl' })
+    expect(res.ok).toBe(true)
+    // The one it stopped pointing at is still there. A save may not delete it.
+    expect(existsSync(join(partDir, 'widget.stl'))).toBe(true)
+    expect(existsSync(join(partDir, 'widget-2.stl'))).toBe(true)
+  })
+})
+
+describe('importPartMesh — copying a chosen model into the part folder (#741)', () => {
+  const source = join(USER_DATA, 'downloads', 'Battery 9V.stl')
+  const other = join(USER_DATA, 'downloads', 'battery-9v.stl')
+
+  beforeEach(() => {
+    mkdirSync(join(USER_DATA, 'downloads'), { recursive: true })
+    writeFileSync(source, 'solid battery\nendsolid battery\n', 'utf-8')
+    writeFileSync(other, 'solid OTHER\nendsolid OTHER\n', 'utf-8')
+  })
+
+  it('copies the file in under a safe name, and the part folder now holds it', async () => {
+    const res = await importPartMesh(LIB, PART, source)
+    expect(res.ok).toBe(true)
+    // The copy IS the feature: hand-copying is what this replaces.
+    expect(res.filename).toBe('battery-9v.stl')
+    expect(readFileSync(join(partDir, 'battery-9v.stl'), 'utf-8')).toBe(
+      readFileSync(source, 'utf-8')
+    )
+  })
+
+  it('re-linking the SAME file copies nothing and litters nothing', async () => {
+    const first = await importPartMesh(LIB, PART, source)
+    const again = await importPartMesh(LIB, PART, source)
+    expect(again.filename).toBe(first.filename)
+    expect(again.reused).toBe(true)
+    expect(readdirSync(partDir).filter((n) => n.endsWith('.stl'))).toEqual(['battery-9v.stl'])
+  })
+
+  it('never overwrites a file it did not author — a clash takes the next name', async () => {
+    const before = 'solid HAND PLACED\nendsolid HAND PLACED\n'
+    writeFileSync(join(partDir, 'battery-9v.stl'), before, 'utf-8')
+    const res = await importPartMesh(LIB, PART, source)
+    expect(res.ok).toBe(true)
+    expect(res.filename).toBe('battery-9v-2.stl')
+    // The pre-existing file is untouched — this is the #750 rule, on the way IN.
+    expect(readFileSync(join(partDir, 'battery-9v.stl'), 'utf-8')).toBe(before)
+  })
+
+  it('DOES overwrite the model this part already references (that is Replace)', async () => {
+    writeFileSync(join(partDir, 'battery-9v.stl'), 'solid OLD\nendsolid OLD\n', 'utf-8')
+    const res = await importPartMesh(LIB, PART, other, 'battery-9v.stl')
+    expect(res.ok).toBe(true)
+    expect(res.filename).toBe('battery-9v.stl')
+    expect(readFileSync(join(partDir, 'battery-9v.stl'), 'utf-8')).toBe(readFileSync(other, 'utf-8'))
+  })
+
+  it('refuses a file it could never render', async () => {
+    const notMesh = join(USER_DATA, 'downloads', 'notes.txt')
+    writeFileSync(notMesh, 'hello', 'utf-8')
+    const res = await importPartMesh(LIB, PART, notMesh)
+    expect(res.ok).toBe(false)
+    expect(res.error).toMatch(/\.stl/i)
+  })
+
+  it('refuses a part with no id rather than writing into a nameless folder', async () => {
+    const res = await importPartMesh(LIB, '', source)
+    expect(res.ok).toBe(false)
+    expect(res.error).toMatch(/id/i)
+  })
+
+  it('lands inside the part folder and nowhere else, whatever the source is called', async () => {
+    const nasty = join(USER_DATA, 'downloads', 'evil.stl')
+    writeFileSync(nasty, 'solid evil\nendsolid evil\n', 'utf-8')
+    const res = await importPartMesh(LIB, PART, nasty)
+    expect(res.ok).toBe(true)
+    expect(res.filename).not.toMatch(/[/\\]/)
+    expect(existsSync(join(partDir, res.filename!))).toBe(true)
+  })
+
+  it('creates the part folder for a part that has not been saved yet', async () => {
+    const fresh = 'never-saved'
+    const res = await importPartMesh(LIB, fresh, source)
+    expect(res.ok).toBe(true)
+    expect(existsSync(join(partsRoot, LIB, fresh, res.filename!))).toBe(true)
   })
 })
 

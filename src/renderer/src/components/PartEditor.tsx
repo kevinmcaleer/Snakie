@@ -1,7 +1,25 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type JSX } from 'react'
+import {
+  Suspense,
+  lazy,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type JSX
+} from 'react'
 import { createPortal } from 'react-dom'
 import { useHistory } from './use-history'
 import { PartSchematicView } from './PartSchematicView'
+import { partMeshRef } from './part-details'
+import { meshImportScale } from './robot-assembly'
+import {
+  formatMeshRotation,
+  rotateMesh,
+  setMeshRotationAxis,
+  type MeshAxis,
+  type MeshRotation
+} from '../../../shared/mesh-rotation'
 import { SwatchPicker } from './SwatchPicker'
 import { FootprintField } from './FootprintField'
 import { collectFootprints, type FootprintInfo } from '../../../shared/footprints'
@@ -146,6 +164,11 @@ import type { PartsWriteResult } from '../../../preload/index.d'
 import { Markdown } from './Markdown'
 import { LockIcon, UnlockIcon, TrashIcon } from './ui-icons'
 import './PartEditor.css'
+
+/** The 3-D view (#741) — lazy, so three.js and the STL/DAE parsers only load for
+ *  the people who open the tab. */
+const PartMeshStage = lazy(() => import('./PartMeshStage').then((m) => ({ default: m.PartMeshStage })))
+type MeshMeasurement = import('./PartMeshStage').MeshMeasurement
 
 /** Per-capability bus/channel + signal controls shown when the capability is
  *  ticked: i2c/spi/uart carry a bus number + a signal, adc a channel number, pwm
@@ -611,7 +634,7 @@ export function PartEditor({
   const [propRows, setPropRows] = useState<[string, string][]>(() =>
     Object.entries(initial?.properties ?? {})
   )
-  const [view, setView] = useState<'breadboard' | 'schematic'>('breadboard')
+  const [view, setView] = useState<'breadboard' | 'schematic' | 'model'>('breadboard')
   const [locked, setLocked] = useState<LayerLocks>(DEFAULT_LOCKS)
   const [showGrid, setShowGrid] = useState(false)
   const [lockImageAspect, setLockImageAspect] = useState(true)
@@ -1341,6 +1364,17 @@ export function PartEditor({
           >
             Schematic
           </button>
+          {/* #741: the 3-D model's home. Always offered — a part with no mesh
+              yet is exactly who needs it, since this is where one is linked. */}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === 'model'}
+            className={`pe__tab${view === 'model' ? ' is-active' : ''}`}
+            onClick={() => setView('model')}
+          >
+            3-D
+          </button>
         </div>
         {/* #633: the Standard library is a DEVELOPER save target — writing to it
             edits the seeder-managed copy and strands the part on an old schema
@@ -1567,7 +1601,7 @@ export function PartEditor({
               />
             </div>
           </>
-        ) : (
+        ) : view === 'schematic' ? (
           <>
             <div className="pe__panels">
               <SchematicPanels part={part} patch={patch} />
@@ -1581,6 +1615,14 @@ export function PartEditor({
               </div>
             </div>
           </>
+        ) : (
+          <ModelView
+            part={part}
+            patch={patch}
+            libraryId={openedLibId || libId}
+            partsFolder={partsFolder}
+            onNotify={setStatus}
+          />
         )}
       </div>
     </div>
@@ -5082,6 +5124,339 @@ function SchematicPanels({
           </div>
         ))}
       </section>
+    </>
+  )
+}
+
+// --- The 3-D view (#741) -----------------------------------------------------
+
+/** The three axes, in the order the orientation controls list them. */
+const MESH_AXES: { axis: MeshAxis; label: string; hint: string }[] = [
+  { axis: 'x', label: 'X', hint: 'Tip forward / back — the usual fix for a model standing on its face' },
+  { axis: 'y', label: 'Y', hint: 'Roll left / right — the usual fix for one lying on its side' },
+  { axis: 'z', label: 'Z', hint: 'Spin about the up axis — turn the board to face the right way' }
+]
+
+/** Which slot of `meshRotation` an axis occupies. */
+const AXIS_INDEX: Record<MeshAxis, 0 | 1 | 2> = { x: 0, y: 1, z: 2 }
+
+/** `41.2` — one decimal, no trailing `.0`, for the size readouts. */
+function mm(n: number): string {
+  return (Math.round(n * 10) / 10).toString()
+}
+
+/**
+ * THE PART'S 3-D MODEL — link it, size it, stand it up (#741).
+ *
+ * Until now attaching an STL meant copying the file into the part folder by hand
+ * and editing two lines of `parts.yml`, and a model that arrived lying on its
+ * side could not be corrected in Snakie at all. Both live here:
+ *
+ *  - **Link** copies the chosen file INTO this part's own folder, because a part
+ *    folder is the unit that gets zipped, committed and published — a `mesh:`
+ *    pointing at `~/Downloads` travels nowhere.
+ *  - **Orientation is stored, never baked.** The user's file is left exactly as
+ *    supplied; the correction rides on the part as `meshRotation` and every
+ *    consumer honours it (this stage, the catalog turntable, and the URDF
+ *    `<visual>` origin a placed part gets).
+ *
+ * Laid out like the Schematic view — controls left, live stage right — so the
+ * tab feels like the two beside it rather than a new place.
+ */
+function ModelView({
+  part,
+  patch,
+  libraryId,
+  partsFolder,
+  onNotify
+}: {
+  part: PartDefinition
+  patch: (p: Partial<PartDefinition>) => void
+  /** The library the part lives in ON DISK — where the model is copied to. */
+  libraryId: string
+  partsFolder: string
+  onNotify: (s: Status) => void
+}): JSX.Element {
+  const [measured, setMeasured] = useState<MeshMeasurement | null>(null)
+  const [fitSignal, setFitSignal] = useState(0)
+  const [busy, setBusy] = useState(false)
+  const mesh = useMemo(
+    () => partMeshRef(part, { partsFolder, libraryId }),
+    [part, partsFolder, libraryId]
+  )
+  // A different file needs a fresh measurement, not the last one's.
+  const meshPath = mesh?.path
+  useEffect(() => setMeasured(null), [meshPath])
+
+  // Millimetres per mesh unit: the SAME rule the placement path uses
+  // (`meshImportScale`, which answers in metres) scaled up — including its
+  // bounding-box fallback for a mesh that declares no units. So the size shown
+  // here is the size the part will actually be in Build.
+  const scaleMm = meshImportScale(part, measured?.rawSpan) * 1000
+  const rotation: MeshRotation | undefined = part.meshRotation
+
+  const link = async (replace: boolean): Promise<void> => {
+    if (!window.api.parts.importMesh) {
+      onNotify({ kind: 'error', text: 'Linking a model needs the desktop app.' })
+      return
+    }
+    if (!part.id?.trim()) {
+      onNotify({ kind: 'error', text: 'Give the part an id first — the model is copied into its folder.' })
+      return
+    }
+    setBusy(true)
+    try {
+      const res = await window.api.parts.importMesh(libraryId, part.id, {
+        // The ONE file this import may overwrite is the model the part already
+        // references (#750: never clobber a file this part did not author).
+        replaces: replace ? part.mesh : undefined
+      })
+      if (res.cancelled) return
+      if (!res.ok || !res.filename) {
+        onNotify({ kind: 'error', text: res.error ?? 'Could not link that model.' })
+        return
+      }
+      patch({ mesh: res.filename })
+      onNotify({
+        kind: 'ok',
+        text: res.reused
+          ? `Linked ${res.filename} — that exact file was already in the part folder.`
+          : `Copied ${res.filename} into the part folder. Save the part to keep the link.`
+      })
+    } catch (e) {
+      onNotify({
+        kind: 'error',
+        text: `Could not link that model: ${(e as Error)?.message ?? 'unknown error'}`
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const unlink = (): void => {
+    const was = part.mesh
+    patch({ mesh: undefined, meshRotation: undefined })
+    onNotify({
+      kind: 'info',
+      text: was
+        ? `Unlinked ${was}. The file stays in the part folder — Snakie never deletes one it did not write.`
+        : 'No model was linked.'
+    })
+  }
+
+  const nudge = (axis: MeshAxis, deg: number): void =>
+    patch({ meshRotation: rotateMesh(rotation, axis, deg) })
+
+  const declared = part.dimensions
+  const size = measured?.sizeMm
+  // A model whose footprint is wildly unlike the part's declared one is the
+  // wrong-units (or wrong-file) case this view exists to make obvious.
+  const mismatch =
+    !!size &&
+    size[0] > 0 &&
+    size[1] > 0 &&
+    !!declared &&
+    declared.width > 0 &&
+    declared.height > 0 &&
+    (Math.max(size[0] / declared.width, declared.width / size[0]) > 1.5 ||
+      Math.max(size[1] / declared.height, declared.height / size[1]) > 1.5)
+
+  return (
+    <>
+      <div className="pe__panels">
+        <section className="pe__section">
+          <h3 className="pe__h">3-D model</h3>
+          {part.mesh ? (
+            <>
+              <div className="pe__row pe__subitem">
+                <span className="pe__grow pe__padname">{part.mesh}</span>
+              </div>
+              <div className="pe__row">
+                <button type="button" className="pe__btn" disabled={busy} onClick={() => void link(true)}>
+                  Replace…
+                </button>
+                <button type="button" className="pe__btn" disabled={busy} onClick={unlink}>
+                  Unlink
+                </button>
+              </div>
+              {!mesh && (
+                <p className="pe__hint">
+                  {partsFolder
+                    ? `“${part.mesh}” is not a readable model in this part’s folder — link it again, or check that an .stl or .dae of that name sits beside parts.yml.`
+                    : 'A linked model can only be shown in the desktop app.'}
+                </p>
+              )}
+            </>
+          ) : (
+            <>
+              <p className="pe__hint">
+                No model linked. Picking one <strong>copies it into this part’s own folder</strong>, so the
+                model travels with the part when it is zipped, committed or published.
+              </p>
+              <div className="pe__row">
+                <button
+                  type="button"
+                  className="pe__btn pe__btn--primary"
+                  disabled={busy}
+                  onClick={() => void link(false)}
+                >
+                  Link a model…
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+
+        <section className="pe__section">
+          <h3 className="pe__h">Size</h3>
+          <div className="pe__row">
+            <label className="pe__num pe__grow">
+              <span>units</span>
+              <select
+                value={part.meshScale !== undefined ? 'custom' : (part.meshUnits ?? 'auto')}
+                onChange={(e) => {
+                  const v = e.target.value
+                  if (v === 'custom') patch({ meshScale: part.meshScale ?? 0.001, meshUnits: undefined })
+                  else if (v === 'mm' || v === 'm') patch({ meshUnits: v, meshScale: undefined })
+                  else patch({ meshUnits: undefined, meshScale: undefined })
+                }}
+              >
+                <option value="auto">auto (guess from size)</option>
+                <option value="mm">millimetres</option>
+                <option value="m">metres</option>
+                <option value="custom">custom scale</option>
+              </select>
+            </label>
+          </div>
+          {part.meshScale !== undefined && (
+            <div className="pe__row">
+              <label className="pe__num pe__grow">
+                <span>metres per unit</span>
+                <input
+                  type="number"
+                  step="0.0001"
+                  min="0"
+                  value={part.meshScale}
+                  onChange={(e) => {
+                    const n = Number(e.target.value)
+                    patch({ meshScale: Number.isFinite(n) && n > 0 ? n : undefined })
+                  }}
+                />
+              </label>
+            </div>
+          )}
+          <p className="pe__hint">
+            Model{' '}
+            {size ? (
+              <strong>
+                {mm(size[0])} × {mm(size[1])} × {mm(size[2])} mm
+              </strong>
+            ) : (
+              '—'
+            )}
+            {declared && declared.width > 0 && declared.height > 0 && (
+              <>
+                {' '}
+                · part {mm(declared.width)} × {mm(declared.height)} mm
+              </>
+            )}
+          </p>
+          {mismatch && (
+            <p className="pe__hint pe__meshwarn">
+              The model is a very different size from the part’s dimensions — check the units above.
+            </p>
+          )}
+        </section>
+
+        <section className="pe__section">
+          <h3 className="pe__h">Orientation</h3>
+          <p className="pe__hint">
+            Snakie’s convention is <strong>Z up</strong>, board flat in X/Y, underside resting on the grid.
+            Turn the model until it sits that way. Your file is never rewritten — the rotation is stored on
+            the part and applied everywhere the model is used.
+          </p>
+          {MESH_AXES.map(({ axis, label, hint }) => (
+            <div className="pe__row pe__subitem" key={axis} title={hint}>
+              <span className="pe__padname">{label}</span>
+              <button
+                type="button"
+                className="pe__btn"
+                onClick={() => nudge(axis, -90)}
+                aria-label={`Rotate the model 90 degrees anticlockwise about ${label}`}
+              >
+                −90°
+              </button>
+              <button
+                type="button"
+                className="pe__btn"
+                onClick={() => nudge(axis, 90)}
+                aria-label={`Rotate the model 90 degrees clockwise about ${label}`}
+              >
+                +90°
+              </button>
+              <label className="pe__num">
+                <span>deg</span>
+                <input
+                  type="number"
+                  step="1"
+                  value={rotation?.[AXIS_INDEX[axis]] ?? 0}
+                  onChange={(e) => {
+                    const n = Number(e.target.value)
+                    patch({
+                      meshRotation: setMeshRotationAxis(rotation, axis, Number.isFinite(n) ? n : 0)
+                    })
+                  }}
+                />
+              </label>
+            </div>
+          ))}
+          <div className="pe__row">
+            <span className="pe__grow pe__hint">Rotation: {formatMeshRotation(rotation)}</span>
+            <button
+              type="button"
+              className="pe__btn"
+              disabled={!rotation}
+              onClick={() => patch({ meshRotation: undefined })}
+            >
+              Reset
+            </button>
+          </div>
+        </section>
+      </div>
+
+      <div className="pe__preview">
+        <div className="pe__preview-head">
+          <span className="pe__preview-title">3-D model</span>
+          <button
+            type="button"
+            className="pe__btn"
+            onClick={() => setFitSignal((n) => n + 1)}
+            title="Re-frame the camera on the model"
+          >
+            Fit
+          </button>
+        </div>
+        <div className="pe__preview-stage">
+          {mesh ? (
+            <Suspense fallback={<div className="pe__hint">Loading the 3-D view…</div>}>
+              <PartMeshStage
+                path={mesh.path}
+                rotation={rotation}
+                scaleMm={scaleMm}
+                dimensions={declared}
+                label={part.name || part.id}
+                onMeasured={setMeasured}
+                fitSignal={fitSignal}
+              />
+            </Suspense>
+          ) : (
+            <p className="pe__hint">
+              Link an STL (or DAE) on the left to see it here, at its real size against the part’s
+              footprint.
+            </p>
+          )}
+        </div>
+      </div>
     </>
   )
 }

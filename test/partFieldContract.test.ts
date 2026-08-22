@@ -169,6 +169,9 @@ const EVERY_FIELD: Required<PartDefinition> = {
   mesh: 'model.stl',
   meshUnits: 'mm',
   meshScale: 0.001,
+  // Deliberately NOT the identity: `[0, 0, 0]` means "no correction" and is
+  // dropped by design, which would make this field look like a broken one.
+  meshRotation: [90, 0, -90],
 
   // --- Mass / centre of mass / contacts ------------------------------------
   mass_g: 9,
