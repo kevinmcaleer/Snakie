@@ -83,7 +83,14 @@ export interface DiagnosticFix {
   }
 }
 
-/** A single diagnostic (problem marker / squiggle). Coordinates are 1-based. */
+/**
+ * A single diagnostic (problem marker / squiggle). Coordinates are 1-based.
+ *
+ * One shape for every producer (epic #634 §5): the Python host's linters, the
+ * JSON/YAML format validator, the board pin checker, and the refactoring
+ * engine's whole-file hint pass all normalise to this, and `source` is what the
+ * Problems panel filters on — `ruff`, `refactor`, `board`, `yaml`.
+ */
 export interface Diagnostic {
   line: number
   column?: number
@@ -93,6 +100,17 @@ export interface Diagnostic {
   message: string
   source: string
   fixes?: DiagnosticFix[]
+  /**
+   * The rule that produced this, when the producer has stable rule ids (the
+   * refactoring catalogue does). Lets the panel offer the rewrite and dedupe
+   * against a linter reporting the same smell.
+   */
+  ruleId?: string
+  /**
+   * A "Why?" help article id (#221 help system). The refactoring engine sets
+   * this on every hint — it is the teaching payload of epic #634.
+   */
+  helpArticle?: string
 }
 
 /** A single diagnostic action (problem marker) returned from a command. */

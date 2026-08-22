@@ -41,6 +41,8 @@ import {
   registerBoardPinCodeActions
 } from './board-pin-diagnostics'
 import { clearRefactorCache, registerRefactorCodeActions, tidyFile } from './refactor-code-actions'
+import { refactorHints } from './refactor-hints'
+import { getCachedCapabilities } from '../lib/board-capabilities'
 import { boardPartFor } from './part-editor.util'
 import { DEFAULT_BOARD_ID } from './board-defs'
 import { PARTS_CHANGED_EVENT } from './PartsPanel'
@@ -87,6 +89,13 @@ const PLUGIN_MARKER_OWNER = 'snakie-plugins'
  * distinct owner lets format squiggles coexist with the plugin lint squiggles
  * without either clobbering the other's markers. */
 const FORMAT_MARKER_OWNER = 'snakie-format'
+
+/**
+ * Monaco marker owner for the refactoring engine's whole-file hints (#634).
+ * Its own owner so the hints coexist with ruff's squiggles and the format
+ * validator's without either clobbering the other.
+ */
+const REFACTOR_MARKER_OWNER = 'snakie-refactor'
 
 /** Debounce window (ms) before re-linting after the active file changes. */
 const LINT_DEBOUNCE_MS = 400
@@ -238,13 +247,22 @@ function editorMetricsFor(
 export function MonacoEditor(): JSX.Element {
   const { openFiles, activeId, revealRequest, updateContent, saveFile, currentFolder } =
     useWorkspace()
-  const { setDiagnostics, setLinterTool, clear: clearDiagnostics } = useDiagnostics()
+  const {
+    setDiagnostics,
+    setRefactorHints,
+    setLinterTool,
+    clear: clearDiagnostics
+  } = useDiagnostics()
   // Notebook line spacing (issues #80/#81) — drives Monaco's line height to match
   // the ruled-paper CSS period.
   const { lineSpacing, editorTheme, minimap } = useEditorSettings()
   // Linting on/off (issue #65), persisted. When off the lint effect no-ops and
   // clears markers + the shared diagnostics store.
   const [lintingEnabled] = useLocalStorage<boolean>('snakie.lintingEnabled', true)
+  // Refactoring hints (#634 §9): the MicroPython rules are bugs waiting to
+  // happen so they are always on, but the style rules are opinions — a file full
+  // of blue hints would demoralise a learner, so those are opt-in.
+  const [styleHints] = useLocalStorage<boolean>('snakie.refactor.styleHints', false)
   // Which Python the suggestions should describe (#763). Follows the connected
   // board (or the Help panel's override), and the completion provider reads it
   // through a module-level setter so it switches LIVE — the provider is
@@ -273,12 +291,16 @@ export function MonacoEditor(): JSX.Element {
   const saveFileRef = useRef(saveFile)
   const activeIdRef = useRef(activeId)
   const setDiagnosticsRef = useRef(setDiagnostics)
+  const setRefactorHintsRef = useRef(setRefactorHints)
   const setLinterToolRef = useRef(setLinterTool)
+  const styleHintsRef = useRef(styleHints)
   updateContentRef.current = updateContent
   saveFileRef.current = saveFile
   activeIdRef.current = activeId
   setDiagnosticsRef.current = setDiagnostics
+  setRefactorHintsRef.current = setRefactorHints
   setLinterToolRef.current = setLinterTool
+  styleHintsRef.current = styleHints
   // Read inside the context-help action, which is registered once with the editor.
   const helpDialectRef = useRef(helpDialect)
   helpDialectRef.current = helpDialect
@@ -706,6 +728,47 @@ export function MonacoEditor(): JSX.Element {
 
     return () => clearTimeout(timer)
   }, [activeFile, activeFile?.id, activeFile?.content, activeFile?.name])
+
+  // Refactoring hints (#634 R7): run the whole catalogue over the active Python
+  // file and publish the results as `hint`-severity diagnostics.
+  //
+  // Deliberately independent of the plugin lint effect above: the engine is pure
+  // TypeScript, so this works with NO Python installed and in the web build,
+  // which is exactly the audience the epic wanted refactorings to reach. It is
+  // also why the hints live in their own store slot and their own marker owner —
+  // the two passes finish on different schedules and must not wipe each other.
+  useEffect(() => {
+    if (!activeFile) return undefined
+    const model = models.current.get(activeFile.id)
+    if (!model || model.isDisposed()) return undefined
+
+    if (!lintingEnabled || !/\.py$/i.test(activeFile.name)) {
+      monaco.editor.setModelMarkers(model, REFACTOR_MARKER_OWNER, [])
+      setRefactorHintsRef.current([])
+      return undefined
+    }
+
+    const file = activeFile
+    const timer = setTimeout(() => {
+      const m = models.current.get(file.id)
+      if (!m || m.isDisposed()) return
+      // A file that doesn't parse yields no hints at all, so half-typed lines
+      // never light the panel up.
+      const hints = refactorHints(file.content, {
+        includeStyleHints: styleHintsRef.current,
+        capabilities: getCachedCapabilities(),
+        fileName: file.name
+      })
+      monaco.editor.setModelMarkers(
+        m,
+        REFACTOR_MARKER_OWNER,
+        hints.map((h) => diagnosticToMarker(m, h))
+      )
+      setRefactorHintsRef.current(hints)
+    }, LINT_DEBOUNCE_MS)
+
+    return () => clearTimeout(timer)
+  }, [activeFile, activeFile?.id, activeFile?.content, activeFile?.name, lintingEnabled, styleHints])
 
   // With no active file open there is nothing to lint, so the Problems panel
   // should be empty (e.g. after closing the last tab).

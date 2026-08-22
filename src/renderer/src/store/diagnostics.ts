@@ -37,12 +37,22 @@ export interface DiagnosticsStore {
   /** The active file's latest diagnostics (empty when clean or not linted). */
   diagnostics: Diagnostic[]
   /**
+   * Refactoring hints from the whole-file pass (epic #634 §2.4). Kept in their
+   * own slot rather than merged into `diagnostics` because they are produced by
+   * a different, Python-free path (the shared engine) on its own schedule — one
+   * shared array would mean whichever finished last wiped the other. The
+   * Problems panel merges the two for display and filters them by `source`.
+   */
+  refactorHints: Diagnostic[]
+  /**
    * The linter tool the host detected: `'ruff'`, `'pyflakes'`, `'none'`, or
    * `null` when not yet probed. `'none'` drives the "install ruff" hint.
    */
   linterTool: string | null
   /** Replace the published diagnostics (editor calls this after each lint). */
   setDiagnostics: (diagnostics: Diagnostic[]) => void
+  /** Replace the published refactoring hints (#634). */
+  setRefactorHints: (hints: Diagnostic[]) => void
   /** Record which linter tool was detected. */
   setLinterTool: (tool: string | null) => void
   /** Clear diagnostics (e.g. when linting is turned off or no file is open). */
@@ -54,10 +64,15 @@ const DiagnosticsContext = createContext<DiagnosticsStore | null>(null)
 /** Provides the diagnostics store. Wrap the app once near the root. */
 export function DiagnosticsProvider({ children }: { children: ReactNode }): JSX.Element {
   const [diagnostics, setDiagnosticsState] = useState<Diagnostic[]>([])
+  const [refactorHints, setRefactorHintsState] = useState<Diagnostic[]>([])
   const [linterTool, setLinterToolState] = useState<string | null>(null)
 
   const setDiagnostics = useCallback((next: Diagnostic[]): void => {
     setDiagnosticsState(next)
+  }, [])
+
+  const setRefactorHints = useCallback((next: Diagnostic[]): void => {
+    setRefactorHintsState(next)
   }, [])
 
   const setLinterTool = useCallback((tool: string | null): void => {
@@ -66,11 +81,20 @@ export function DiagnosticsProvider({ children }: { children: ReactNode }): JSX.
 
   const clear = useCallback((): void => {
     setDiagnosticsState([])
+    setRefactorHintsState([])
   }, [])
 
   const store = useMemo<DiagnosticsStore>(
-    () => ({ diagnostics, linterTool, setDiagnostics, setLinterTool, clear }),
-    [diagnostics, linterTool, setDiagnostics, setLinterTool, clear]
+    () => ({
+      diagnostics,
+      refactorHints,
+      linterTool,
+      setDiagnostics,
+      setRefactorHints,
+      setLinterTool,
+      clear
+    }),
+    [diagnostics, refactorHints, linterTool, setDiagnostics, setRefactorHints, setLinterTool, clear]
   )
 
   return createElement(DiagnosticsContext.Provider, { value: store }, children)
