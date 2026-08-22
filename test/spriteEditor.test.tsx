@@ -43,6 +43,12 @@ describe('Sprite editor overlay', () => {
     expect(OPEN_SPRITE_EDITOR_EVENT).toBe('snakie:open-sprite-editor')
   })
 
+  it('says nothing about "used in" until the sprite IS a file (#792)', () => {
+    // The draft has no path for any code to name, so there is no question to
+    // answer — and an empty strip would read as "still looking".
+    expect(html()).not.toContain('spred__used')
+  })
+
   it('accepts a file to open (#790) without disturbing the draft-backed render', () => {
     // Clicking an inline sprite thumbnail opens the overlay ON a `.spr`; the
     // load itself is an effect, so the first paint is still the ordinary editor.

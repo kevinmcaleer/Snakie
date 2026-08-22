@@ -7,7 +7,7 @@ import {
   type PointerEvent as ReactPointerEvent
 } from 'react'
 import { useHistory } from './use-history'
-import { useInstrumentWorkspace } from '../store/workspace'
+import { FILE_SAVED_EVENT, useInstrumentWorkspace, useWorkspaceOptional } from '../store/workspace'
 import {
   MAX_FPS,
   MAX_SIZE,
@@ -54,6 +54,16 @@ import {
 } from './sprite-image-io'
 import { seedSprite } from './sprite-seed'
 import { invalidateSpriteThumb } from './sprite-thumb-cache'
+import {
+  EMPTY_SCAN,
+  bufferSources,
+  findSpriteUses,
+  mergeUsageSources,
+  scanProjectFiles,
+  usageReport,
+  type ProjectScan,
+  type SpriteUse
+} from './sprite-usage'
 import './SpriteEditor.css'
 
 /**
@@ -75,6 +85,12 @@ import './SpriteEditor.css'
  *    GIFs import with per-frame timings, and integer-upscaled pixel art is
  *    folded back to its true grid.
  *  - `.py` — a ready-to-import MicroPython module, opened as an editor buffer.
+ *
+ * When the document is a FILE (opened from an inline thumbnail, or once it has
+ * been saved) a "used in" line says which Python files reference it, each a
+ * click away — and says plainly when none do, because that is the answer that
+ * tells you the sprite is safe to delete (#792). The scan itself is
+ * `sprite-usage.ts`; this file only runs it and renders the sentence.
  */
 
 /** Where the working sprite is parked so closing the overlay can't lose it. */
@@ -98,6 +114,18 @@ type ExportFormat = (typeof EXPORT_FORMATS)[number]['id']
 
 /** Integer pixel scales offered for the image exports. */
 const EXPORT_SCALES = [1, 4, 8, 16] as const
+
+/** How many "used in" chips are shown before the rest collapse into a count. */
+const MAX_SHOWN_USES = 12
+
+/** What the "used in" line counts — spelled out for anyone surprised by a miss. */
+const USED_IN_HINT =
+  'Counts names written as plain ".spr" strings in this project\'s Python files, ' +
+  'including files that are open with unsaved edits. A name built at runtime ' +
+  'cannot be found this way.'
+
+/** Debounce after a save beneath the overlay before the project is read again. */
+const RESCAN_DEBOUNCE_MS = 400
 
 /** Read the parked draft, falling back to the bundled blinking-eyes starter. */
 function loadDraft(): SpriteDoc {
@@ -144,7 +172,11 @@ export interface SpriteEditorProps {
 }
 
 export function SpriteEditor({ onClose, openPath = null }: SpriteEditorProps): JSX.Element {
-  const { openBuffer } = useInstrumentWorkspace()
+  const { openBuffer, openFiles } = useInstrumentWorkspace()
+  // The full store, for the "used in" jump (open a file, reveal a line). Null in
+  // a bare renderer with no WorkspaceProvider, which is why it is the OPTIONAL
+  // hook — a missing provider must not blank the overlay.
+  const ws = useWorkspaceOptional()
   // The parked draft is read ONCE (lazy useState) — useHistory takes a value.
   const [initialDoc] = useState<SpriteDoc>(loadDraft)
   const { state: doc, set: setDoc, undo, redo, reset, canUndo, canRedo } = useHistory<SpriteDoc>(
@@ -214,6 +246,106 @@ export function SpriteEditor({ onClose, openPath = null }: SpriteEditorProps): J
       alive = false
     }
   }, [openPath, reset, flash])
+
+  // ── "Used in" — the back-link (#792) ──────────────────────────────────────
+  // Which files reference the sprite on screen, so it can't quietly become an
+  // orphan. The scan covers EVERY `.py` under the project folder plus every open
+  // local Python buffer, with the buffer's text winning where both exist — a
+  // reference you just typed counts, and one you just deleted stops counting.
+  // It runs when the overlay opens on a file and when a file is saved beneath
+  // it; there is no keystroke path here to keep it off (drawing pixels cannot
+  // change what the code says), and it never blocks the UI.
+  const projectRoot = ws?.currentFolder ?? null
+  const [scan, setScan] = useState<ProjectScan>(EMPTY_SCAN)
+  const [searching, setSearching] = useState(false)
+  const [rescan, setRescan] = useState(0)
+
+  useEffect(() => {
+    if (!filePath) {
+      setScan(EMPTY_SCAN)
+      setSearching(false)
+      return undefined
+    }
+    let alive = true
+    setSearching(true)
+    void (async () => {
+      const found = projectRoot
+        ? await scanProjectFiles(projectRoot, window.api.fs).catch(() => EMPTY_SCAN)
+        : EMPTY_SCAN
+      if (!alive) return
+      setScan(found)
+      setSearching(false)
+    })()
+    return () => {
+      alive = false
+    }
+  }, [filePath, projectRoot, rescan])
+
+  // A file saved while the overlay is open changes the answer. An open buffer
+  // updates it for free (buffers are read live, below); this covers the rest —
+  // a file saved by a plugin, a new file, a file saved from the pop-out window.
+  useEffect(() => {
+    if (!filePath) return undefined
+    let timer: number | undefined
+    const onSaved = (): void => {
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => setRescan((n) => n + 1), RESCAN_DEBOUNCE_MS)
+    }
+    window.addEventListener(FILE_SAVED_EVENT, onSaved)
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener(FILE_SAVED_EVENT, onSaved)
+    }
+  }, [filePath])
+
+  const sources = useMemo(
+    () => mergeUsageSources(scan.sources, bufferSources(openFiles)),
+    [scan.sources, openFiles]
+  )
+  const uses = useMemo(
+    () =>
+      findSpriteUses(filePath ?? '', sources, {
+        projectRoot,
+        spritesOnDisk: scan.sprites
+      }),
+    [filePath, sources, projectRoot, scan.sprites]
+  )
+  const report = usageReport({
+    spritePath: filePath,
+    searching,
+    scanned: sources.length,
+    projectRoot,
+    truncated: scan.truncated,
+    uses
+  })
+
+  /** Open the referencing file and put the cursor on the line. */
+  const onJump = useCallback(
+    async (use: SpriteUse): Promise<void> => {
+      if (!ws) return
+      // The overlay covers the editor, so jumping means leaving — and a
+      // file-backed sprite is not parked anywhere, so say so before its edits go.
+      if (
+        canUndo &&
+        !window.confirm(`Go to ${use.name}? Unsaved changes to this sprite will be lost.`)
+      ) {
+        return
+      }
+      try {
+        if (use.path) await ws.openFile('local', use.path)
+        else if (use.id) ws.setActive(use.id)
+        else return
+      } catch (err) {
+        flash(err instanceof Error ? err.message : `Couldn't open ${use.name}.`)
+        return
+      }
+      // Both land in one React batch, so the editor swaps model and reveals the
+      // line in a single commit.
+      ws.revealLine(use.line)
+      onClose()
+    },
+    [ws, canUndo, flash, onClose]
+  )
 
   // ── Playback ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -561,6 +693,11 @@ export function SpriteEditor({ onClose, openPath = null }: SpriteEditorProps): J
       if (path) await window.api.fs.writeFileBytes(path, encodeSpr(doc))
       else path = await writeOut(`${stem}.spr`, 'Snakie sprite', ['spr'], encodeSpr(doc))
       if (!path) return
+      // The file just chosen IS this document's file from here on: the next Save
+      // writes back over it without asking, and the "used in" line (#792) has a
+      // path to answer about — a sprite you just saved is exactly the one you
+      // want to know is referenced by nothing yet.
+      setFilePath(path)
       // Drop the cached thumbnail so the inline decorations in open code repaint
       // with the new artwork instead of waiting out the cache's TTL.
       invalidateSpriteThumb(path)
@@ -705,6 +842,47 @@ export function SpriteEditor({ onClose, openPath = null }: SpriteEditorProps): J
           ✕
         </button>
       </div>
+
+      {/* ── "Used in" strip (#792) ────────────────────────────────────────── */}
+      {/* Only for a sprite that IS a file: a draft has no path for code to name,
+          and a line answering a question about a file that doesn't exist yet is
+          worse than no line. The message is always a SENTENCE — an empty area
+          reads as "still loading" however long it sits there. */}
+      {filePath && (
+        <div className="spred__used" aria-live="polite">
+          <span className="spred__used-msg" title={USED_IN_HINT}>
+            {report.message}
+          </span>
+          {uses.slice(0, MAX_SHOWN_USES).map((use) => (
+            <button
+              key={`${use.path || use.id}:${use.line}`}
+              type="button"
+              className={`spred__use${use.dirty ? ' spred__use--dirty' : ''}`}
+              onClick={() => void onJump(use)}
+              title={
+                `${use.path || use.name} · line ${use.line} — "${use.text}"` +
+                (use.dirty ? '\nUnsaved edits: this is what the open buffer says.' : '')
+              }
+            >
+              {use.name}
+              <span className="spred__use-line">:{use.line}</span>
+            </button>
+          ))}
+          {uses.length > MAX_SHOWN_USES && (
+            <span className="spred__used-more">+{uses.length - MAX_SHOWN_USES} more</span>
+          )}
+          <button
+            type="button"
+            className="spred__used-again"
+            onClick={() => setRescan((n) => n + 1)}
+            disabled={searching}
+            title="Search the project again"
+            aria-label="Search the project again"
+          >
+            ↻
+          </button>
+        </div>
+      )}
 
       {/* ── Status strip ──────────────────────────────────────────────────── */}
       {note && (

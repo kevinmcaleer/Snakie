@@ -154,6 +154,84 @@
   border-bottom: var(--border-w, 1px) solid var(--border);
 }
 
+/* --- "Used in" strip (#792) ---
+   One line under the toolbar: a sentence, then a chip per reference. Sized like
+   the status strip so it reads as information ABOUT the document rather than a
+   second toolbar, and wraps rather than scrolls — the answer is short or it is
+   a count. Tokens only, so it holds up in both skins. */
+.spred__used {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0.3rem 0.8rem;
+  background: var(--bg-sunken);
+  border-bottom: var(--border-w, 1px) solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.spred__used-msg {
+  cursor: help;
+}
+
+/* One referencing file:line — clicking leaves the overlay for that line. */
+.spred__use {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--accent);
+  background: var(--card, var(--bg-elevated));
+  border: var(--border-w, 1px) solid var(--border);
+  border-radius: 4px;
+  padding: 0.05rem 0.35rem;
+  cursor: pointer;
+}
+
+.spred__use:hover,
+.spred__use:focus-visible {
+  border-color: var(--accent);
+  background: var(--bg-elevated);
+}
+
+.spred__use-line {
+  color: var(--text-muted);
+}
+
+/* The reference is in a buffer with unsaved edits — true of the code, not yet
+   of the file on disk. Dashed, the same "provisional" cue the broken inline
+   thumbnail uses. */
+.spred__use--dirty {
+  border-style: dashed;
+}
+
+.spred__used-more {
+  opacity: 0.8;
+}
+
+.spred__used-again {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1;
+  color: var(--text-muted);
+  background: transparent;
+  border: var(--border-w, 1px) solid transparent;
+  border-radius: 4px;
+  padding: 0.1rem 0.3rem;
+  cursor: pointer;
+}
+
+.spred__used-again:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--border);
+}
+
+.spred__used-again:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 /* --- Body: tools rail + stage --- */
 .spred__body {
   display: flex;
