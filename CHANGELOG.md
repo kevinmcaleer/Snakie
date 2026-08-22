@@ -7,6 +7,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Stage a whole group in the Source Control panel, in one click.** Staging
+  twenty new files one **＋** at a time was twenty clicks. Each group header now
+  carries its own button — **Stage 12 untracked** on the *Untracked* list,
+  **Stage 3 changes** on the *Changes* list.
+
+  The button sits **inside the group it acts on**, and the count is **in the
+  label**. Both are deliberate. A single "add changes" button sitting above two
+  lists reads as "stage everything I can see", which is a much larger promise
+  than the one being made; putting it in the header means its scope is never in
+  doubt. And the count is the brake — *Stage 3 untracked* invites a click,
+  *Stage 412 untracked* makes you look at the list first. That is why there is
+  no confirmation dialog: unlike **Initialise Repository** (#783) this writes
+  nothing to your disk, it only moves files into git's index, and the per-file
+  **−** beside each one puts them back.
+
+  Files ignored by `.gitignore` are never staged — not because Snakie filters
+  them, but because the paths come from `git status`, which has already applied
+  every ignore rule. **Conflicted files are held back** from a bulk stage: `git
+  add` on a conflicted file is how you tell git "I resolved this", and doing
+  that in bulk would mark a merge resolved with the `<<<<<<<` markers still in
+  the file. Those keep their own per-file button, and the tooltip says so when
+  the header count and the button count differ because of it. Failures — no
+  `git` installed, an unreadable working tree — arrive as a sentence in the
+  panel, and the lists refresh in place. (#794)
 - **Position a linked 3-D model: nudge it, or snap a corner to the origin.** #741
   let you turn a model the right way up; this is the other half. An STL's origin
   is wherever the exporter left it — often a corner of the build plate — and

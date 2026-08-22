@@ -256,11 +256,55 @@
 }
 
 .git__group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 0.45rem 0.7rem;
   color: var(--text-muted);
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.git__group-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Bulk "stage this group" button (#794). Quiet by default — it sits in a
+   header, not in the primary action slot — and only picks up the accent on
+   hover/focus, so a button that stages many files at once never looks like the
+   thing you were reaching for. Colours come from theme tokens, so it reads
+   correctly in both the dark and skeuomorph skins. */
+.git__stage-all {
+  flex: 0 0 auto;
+  padding: 0.15rem 0.5rem;
+  background: var(--bg-sunken);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.git__stage-all:hover:not(:disabled),
+.git__stage-all:focus-visible {
+  background: var(--bg-elevated);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.git__stage-all:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .git__list {

@@ -1,7 +1,15 @@
 import { ipcMain } from 'electron'
 import type { IpcResult } from '../device/types'
 import { GitService } from './GitService'
-import type { GitBranchList, GitDiff, GitInitResult, GitRemoteResult, GitStatus } from './types'
+import type {
+  GitBranchList,
+  GitDiff,
+  GitInitResult,
+  GitRemoteResult,
+  GitStageResult,
+  GitStageScope,
+  GitStatus
+} from './types'
 
 /**
  * IPC for the built-in version-control (Git) layer (issue #15).
@@ -55,6 +63,13 @@ export function registerGitIpc(): void {
 
   ipcMain.handle('git:stage', (_e, file: string) =>
     wrap<void>(() => service.stage(file))
+  )
+
+  // Stage a whole group at once (issue #794). Like `git:init` this DOES reject
+  // on failure: the user asked for a bulk change to the index and a button that
+  // appears to do nothing is worse than an error message.
+  ipcMain.handle('git:stageAll', (_e, scope?: GitStageScope) =>
+    wrap<GitStageResult>(() => service.stageAll(scope ?? 'untracked'))
   )
   ipcMain.handle('git:unstage', (_e, file: string) =>
     wrap<void>(() => service.unstage(file))

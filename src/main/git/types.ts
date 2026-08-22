@@ -78,6 +78,31 @@ export interface GitInitResult {
   summary: string
 }
 
+/**
+ * Which group of files a bulk stage covers (#794). Defined in `shared/` because
+ * the renderer needs the same vocabulary to label the button it clicks with.
+ */
+export type { GitStageScope } from '../../shared/git-stage'
+
+/**
+ * What a bulk stage actually staged (#794).
+ *
+ * Staging many files at once is easy to regret, so the panel reports it rather
+ * than silently redrawing: the count and the paths are the receipt. `staged`
+ * can legitimately be 0 (nothing in that group was stageable) — that is a
+ * result, not an error, and `summary` says so in words.
+ */
+export interface GitStageResult {
+  /** The group that was staged. */
+  scope: import('../../shared/git-stage').GitStageScope
+  /** How many files were added to the index. */
+  staged: number
+  /** The repo-relative paths staged, in the order the panel lists them. */
+  paths: string[]
+  /** One-line human-readable report of what happened. */
+  summary: string
+}
+
 /** Result of listing branches. */
 export interface GitBranchList {
   /** Currently checked-out branch (undefined when detached). */

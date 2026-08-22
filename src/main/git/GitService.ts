@@ -2,6 +2,12 @@ import { constants as fsConstants } from 'fs'
 import { access, realpath, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { simpleGit, type SimpleGit, type StatusResult } from 'simple-git'
+import {
+  chunkPaths,
+  pathsToStage,
+  stageSummary,
+  type GitStageScope
+} from '../../shared/git-stage'
 import { SNAKIE_GITIGNORE, gitFailureText, initSummary } from './init-support'
 import type {
   GitBranchList,
@@ -9,6 +15,7 @@ import type {
   GitFileStatus,
   GitInitResult,
   GitRemoteResult,
+  GitStageResult,
   GitStatus
 } from './types'
 
@@ -287,6 +294,67 @@ export class GitService {
   /** Stage a single file (git add). */
   async stage(file: string): Promise<void> {
     await this.require().add([file])
+  }
+
+  /**
+   * Stage a whole group of files in one go (issue #794).
+   *
+   * The paths come from {@link status} — the very list the panel is showing —
+   * never from a directory walk of our own. Three things fall out of that, all
+   * of them wanted:
+   *
+   *  - **`.gitignore` needs no code here.** `git status` has already applied
+   *    every ignore rule (repo, global, and `.git/info/exclude`), so an ignored
+   *    file cannot reach `git add`. That is also why this can pass explicit
+   *    paths safely: `git add` REFUSES an explicitly-named ignored path and
+   *    aborts the whole batch, which would have turned one stray `.DS_Store`
+   *    into a button that always fails.
+   *  - **What the label promised is what gets staged**, because the renderer
+   *    sized that label with the same {@link pathsToStage}.
+   *  - **Conflicted files are held back**, so a bulk click can never mark a
+   *    merge resolved on the user's behalf.
+   *
+   * Note `-A` is deliberately NOT used: it would also stage deletions and
+   * anything outside the requested group, which is precisely the "I clicked one
+   * button and it staged everything" outcome this is shaped to avoid.
+   */
+  async stageAll(scope: GitStageScope = 'untracked'): Promise<GitStageResult> {
+    const git = this.require()
+
+    const current = await this.status()
+    if (!current.isRepo) {
+      throw new Error('This folder is not a Git repository, so there is nothing to stage.')
+    }
+    if (current.warning) {
+      // status() could not be read fully; staging off a partial list would
+      // stage a partial set without saying so.
+      throw new Error(`Could not read the working tree, so nothing was staged — ${current.warning}`)
+    }
+
+    const paths = pathsToStage(current, scope)
+    if (paths.length === 0) {
+      return { scope, staged: 0, paths: [], summary: stageSummary(scope, 0) }
+    }
+
+    // Batched so a large folder cannot overflow the command line (see
+    // chunkPaths). A failure mid-way leaves earlier batches staged, so the
+    // message says how far it got rather than implying nothing happened.
+    let done = 0
+    for (const batch of chunkPaths(paths)) {
+      try {
+        await git.add([...batch])
+        done += batch.length
+      } catch (err) {
+        const detail = gitFailureText(err)
+        throw new Error(
+          done === 0
+            ? `Nothing was staged — ${detail}`
+            : `Staged ${done} of ${paths.length} files, then stopped — ${detail}`
+        )
+      }
+    }
+
+    return { scope, staged: done, paths, summary: stageSummary(scope, done) }
   }
 
   /** Unstage a single file (git reset HEAD -- file), tolerating no-HEAD repos. */

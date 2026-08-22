@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import './GitPanel.css'
 import { useWorkspace } from '../store/workspace'
+import {
+  pathsToStage,
+  stageActionLabel,
+  stageActionTitle,
+  type GitStageScope
+} from '../../../shared/git-stage'
 import type {
   GitBranchList,
   GitDiff,
@@ -197,6 +203,37 @@ export function GitPanel(): JSX.Element {
     }
   }, [repoPath, refresh])
 
+  /**
+   * Stage a whole group at once (#794).
+   *
+   * No confirmation prompt, unlike #783's Initialise button: that one writes a
+   * `.git` folder to the user's disk, whereas this only moves files into git's
+   * index — reversible from the per-file unstage button right next to it. The
+   * brake is the label instead, which carries the count, so "Stage 412
+   * untracked" gives pause before the click rather than after it.
+   *
+   * The result is reported verbatim, and any failure (no git, an unreadable
+   * working tree, a mid-batch abort) is shown as a sentence rather than
+   * swallowed into a silently-unchanged panel.
+   */
+  const stageGroup = useCallback(
+    async (scope: GitStageScope): Promise<void> => {
+      setBusy(true)
+      setError(null)
+      setNotice(null)
+      try {
+        const result = await window.api.git.stageAll(scope)
+        setNotice(result.summary)
+        await refresh()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+      } finally {
+        setBusy(false)
+      }
+    },
+    [refresh]
+  )
+
   const commit = useCallback(async (): Promise<void> => {
     const msg = message.trim()
     if (!msg) {
@@ -343,6 +380,32 @@ export function GitPanel(): JSX.Element {
   const untracked = status?.untracked ?? []
   const hasChanges = staged.length + changed.length + untracked.length > 0
 
+  // How many files each group's bulk-stage button would actually stage. Same
+  // helper the main process uses to build the `git add` list (#794), so the
+  // number on the button is the number that gets staged — including the fact
+  // that conflicted files are held back, which is why this can differ from the
+  // group's own count in the header.
+  const groups = { changed, untracked }
+  const conflictedCount = changed.filter((f) => f.kind === 'conflicted').length
+  const stageableChanged = pathsToStage(groups, 'changed').length
+  const stageableUntracked = pathsToStage(groups, 'untracked').length
+
+  /** The bulk-stage button for a group header, or nothing when it would be a no-op. */
+  const stageAllButton = (scope: GitStageScope, count: number): JSX.Element | null => {
+    if (count <= 0) return null
+    return (
+      <button
+        type="button"
+        className="git__stage-all"
+        disabled={busy}
+        title={stageActionTitle(scope, count, scope === 'changed' ? conflictedCount : 0)}
+        onClick={() => void stageGroup(scope)}
+      >
+        {stageActionLabel(scope, count)}
+      </button>
+    )
+  }
+
   return (
     <div className="git">
       {/* Toolbar: branch indicator + repo actions */}
@@ -470,19 +533,31 @@ export function GitPanel(): JSX.Element {
       <div className="git__lists">
         {staged.length > 0 && (
           <section className="git__group">
-            <div className="git__group-head">Staged Changes ({staged.length})</div>
+            <div className="git__group-head">
+              <span className="git__group-title">Staged Changes ({staged.length})</span>
+            </div>
             <ul className="git__list">{staged.map((f) => fileRow(f, 'staged'))}</ul>
           </section>
         )}
         {changed.length > 0 && (
           <section className="git__group">
-            <div className="git__group-head">Changes ({changed.length})</div>
+            {/* The bulk-stage button sits INSIDE the group it acts on, so its
+                scope is never in doubt — a single panel-level "add changes"
+                button next to both lists would read as "stage everything I can
+                see", which is a different and much larger promise (#794). */}
+            <div className="git__group-head">
+              <span className="git__group-title">Changes ({changed.length})</span>
+              {stageAllButton('changed', stageableChanged)}
+            </div>
             <ul className="git__list">{changed.map((f) => fileRow(f, 'changed'))}</ul>
           </section>
         )}
         {untracked.length > 0 && (
           <section className="git__group">
-            <div className="git__group-head">Untracked ({untracked.length})</div>
+            <div className="git__group-head">
+              <span className="git__group-title">Untracked ({untracked.length})</span>
+              {stageAllButton('untracked', stageableUntracked)}
+            </div>
             <ul className="git__list">{untracked.map((f) => fileRow(f, 'untracked'))}</ul>
           </section>
         )}
