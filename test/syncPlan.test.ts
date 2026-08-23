@@ -115,7 +115,9 @@ describe('computeSyncPlan', () => {
       urdfWithSg90(),
       libs
     )
-    expect(plan.filter((i) => i.partId === 'board' || i.kind === 'missing-body')).toEqual([])
+    expect(
+      plan.filter((i) => ('partId' in i && i.partId === 'board') || i.kind === 'missing-body')
+    ).toEqual([])
   })
 
   it('a box body whose part now ships a mesh is placeholder-upgradable', () => {

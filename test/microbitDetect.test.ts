@@ -121,7 +121,7 @@ describe('drive detection over a volume list', () => {
 
   it('finds a BOOTSEL drive by label and by marker file alone', async () => {
     const found = await detectRp2040Drive(await listVolumes([root]))
-    const names = found.map((c) => c.mountPath.split(/[/\\]/).pop())
+    const names = found.map((c) => c.mountPath?.split(/[/\\]/).pop())
     expect(names).toContain('RPI-RP2')
     expect(names).toContain('E') // no label, found by INFO_UF2.TXT
     expect(names).not.toContain('Untitled')
@@ -131,7 +131,7 @@ describe('drive detection over a volume list', () => {
 
   it('finds a vendor-named UF2 bootloader and names it from its OWN info file', async () => {
     const found = await detectRp2040Drive(await listVolumes([root]))
-    const feather = found.find((c) => c.mountPath.endsWith('FEATHERBOOT'))
+    const feather = found.find((c) => c.mountPath?.endsWith('FEATHERBOOT'))
     // Found at all — there is no RPI-RP2 label on it (#756).
     expect(feather).toBeDefined()
     // Named honestly, not as an RP2040.
@@ -139,20 +139,20 @@ describe('drive detection over a volume list', () => {
     expect(feather?.label).toContain('FEATHERBOOT')
     expect(feather?.label).not.toContain('RP2040')
     // …while an actual RP2040 keeps its familiar wording.
-    const pico = found.find((c) => c.mountPath.endsWith('RPI-RP2'))
+    const pico = found.find((c) => c.mountPath?.endsWith('RPI-RP2'))
     expect(pico?.label).toContain('RP2040 (RPI-RP2)')
   })
 
   it('finds a micro:bit and reads its generation from DETAILS.TXT', async () => {
     const found = await detectMicrobitDrive(await listVolumes([root]))
-    const normal = found.find((c) => c.mountPath.endsWith('MICROBIT'))
+    const normal = found.find((c) => c.mountPath?.endsWith('MICROBIT'))
     expect(normal?.microbitVersion).toBe('v2')
     expect(normal?.maintenance).toBe(false)
   })
 
   it('flags maintenance mode, which cannot be flashed', async () => {
     const found = await detectMicrobitDrive(await listVolumes([root]))
-    const maint = found.find((c) => c.mountPath.endsWith('MAINTENANCE'))
+    const maint = found.find((c) => c.mountPath?.endsWith('MAINTENANCE'))
     expect(maint?.maintenance).toBe(true)
     expect(maint?.label).toContain('reconnect to flash')
   })

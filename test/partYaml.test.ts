@@ -1258,6 +1258,7 @@ describe('suggested modules round-trip (#638)', () => {
     const part: PartDefinition = {
       id: 'base',
       name: 'Carrier',
+      headers: [],
       suggests: [
         { module: 'ssd1306', unlocks: 'the 0.96" OLED' },
         { module: 'pcf8563' }

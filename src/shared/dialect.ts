@@ -224,10 +224,26 @@ export function parseBootOutUid(text: string): string | undefined {
  */
 export function runtimeGreeting(info: RuntimeInfo | null): string {
   if (!info || !info.version) return ''
-  const name = info.dialect === 'circuitpython' ? 'Adafruit CircuitPython' : 'MicroPython'
-  const version = info.dialect === 'circuitpython' ? info.version : `v${info.version}`
   const date = info.buildDate ? ` on ${info.buildDate}` : ''
   const machine = info.machine ? `; ${info.machine}` : ''
+  // Three-way, NOT `circuitpython ? … : MicroPython` (#770). That binary made
+  // every unidentified board claim to be MicroPython — a probe line that never
+  // arrived, or an `implementation.name` that is neither runtime, and the very
+  // first thing the user reads is a confident lie about what their board runs.
+  // It reintroduced, at the last step, exactly the "assume MicroPython
+  // everywhere" default this module exists to remove.
+  //
+  // An unknown runtime therefore claims NO runtime name and drops the `v`
+  // prefix (which is MicroPython's own convention, and was the second half of
+  // the wrong wording). It still prints the version, date and machine, because
+  // those came off the board and are true. It also matches what the status bar
+  // shows for the same `RuntimeInfo`, so the two can no longer disagree.
+  if (info.dialect === 'unknown') {
+    return `${DIALECT_LABEL.unknown} ${info.version}${date}${machine}`
+  }
+  const name = info.dialect === 'circuitpython' ? 'Adafruit CircuitPython' : 'MicroPython'
+  // MicroPython prints `v1.28.0`; CircuitPython prints the version bare.
+  const version = info.dialect === 'circuitpython' ? info.version : `v${info.version}`
   return `${name} ${version}${date}${machine}`
 }
 
