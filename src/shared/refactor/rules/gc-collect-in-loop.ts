@@ -27,12 +27,20 @@
  * robot is stationary. Not in the loop whose timing you care about.
  *
  * **When this rule stays quiet.** If the loop body genuinely allocates on every
- * pass — it builds a list or a dict, formats an f-string, appends to something —
- * then the collect may well be deliberate, holding a fragmenting heap together
- * while the real fix waits. That author knows something the file does not say
- * out loud, so the rule leaves them alone entirely and does not even raise the
- * hint. (Rules 57, 58, 85 and 36 are the ones that go after the allocation
- * itself, which is the better fix in every case.)
+ * pass — it builds a container (a display *or* a comprehension), builds a string
+ * (an f-string, `%`, `.format()`, `+` on a literal), or grows a collection
+ * (`append`, `extend`, `insert`, `add`, `update`) — then the collect may well be
+ * deliberate, holding a fragmenting heap together while the real fix waits. That
+ * author knows something the file does not say out loud, so the rule leaves them
+ * alone entirely and does not even raise the hint. (Rules 57, 58, 85 and 36 are
+ * the ones that go after the allocation itself, which is the better fix in every
+ * case.)
+ *
+ * It also stays quiet unless the file actually imports `gc`. `gc.collect()` with
+ * no `import gc` above it is either dead on arrival or — the case that matters —
+ * somebody's own object called `gc` with a `collect()` method that does real
+ * work, and deleting that while calling it garbage collection is exactly the
+ * kind of confident wrong answer this catalogue is not allowed to give.
  *
  * Gated on a board being connected at all: it is advice about the collector on
  * the chip in front of you, and Snakie says nothing about a board it cannot see.
@@ -54,9 +62,18 @@ interface CollectMatch {
   loopKind: 'for' | 'while'
 }
 
-/** Is `name` bound to the `gc` module by an import in this file? */
+/**
+ * Is `name` bound to the `gc` module by an import in this file?
+ *
+ * Even the spelling `gc.collect()` has to be able to point at an `import gc`.
+ * Without one the name is not the collector: either the file never imported it,
+ * in which case the line is a `NameError` and deleting it fixes nothing, or —
+ * the case that matters — `gc` is the author's own object with a `collect()`
+ * method of its own, and this rule would be quietly deleting a call that does
+ * real work while telling them it was the garbage collector. Claiming the wrong
+ * chip's advice is bad; claiming the wrong module's is the same mistake.
+ */
 function isGcAlias(ctx: RefactorContext, name: string): boolean {
-  if (name === 'gc') return true
   let found = false
   walk(ctx.module as AnyNode, (node) => {
     if (node.type !== 'Import') return undefined
@@ -101,21 +118,43 @@ function isGcCollect(ctx: RefactorContext, stmt: Stmt, bareIsCollect: boolean): 
   return parts[1] === 'collect' && isGcAlias(ctx, parts[0])
 }
 
+/** Methods that grow a collection or build a string, i.e. allocate every pass. */
+const GROWING_METHODS = new Set(['append', 'extend', 'insert', 'add', 'update', 'format', 'join'])
+
+/** Builtins that hand back a brand-new container. */
+const CONTAINER_FACTORIES = new Set(['list', 'dict', 'set', 'tuple', 'bytes', 'bytearray', 'array'])
+
 /**
  * Does this loop body allocate on every pass in a way that suggests the collect
  * was put there on purpose?
  *
- * A list or dict display, an f-string and an `.append()` are the three shapes
- * that fill a heap fast enough for someone to have reached for `gc.collect()`
- * deliberately. When one of them is present the rule stands down completely —
- * that author probably knows exactly what they are doing, and second-guessing
- * them is how a linter gets switched off.
+ * Building a container, building a string and growing a collection are the
+ * shapes that fill a heap fast enough for someone to have reached for
+ * `gc.collect()` deliberately. When one of them is present the rule stands down
+ * completely — that author probably knows exactly what they are doing, and
+ * second-guessing them is how a linter gets switched off.
+ *
+ * "Building a container" has to mean the comprehension as well as the display:
+ * `[f(x) for x in batch]` is how people actually build a list, and a rule that
+ * promises to leave allocating loops alone and then fires on the commonest way
+ * of writing one has not kept its promise. Same for the string half — `%`,
+ * `.format()` and `+` on a literal all allocate exactly as an f-string does.
  */
 function allocatesEveryPass(loop: Loop): boolean {
   let found = false
+  const stringy = (n: AnyNode): boolean => n.type === 'Constant' && n.kind === 'string'
   for (const stmt of loop.body) {
     walk(stmt as AnyNode, (n) => {
-      if (n.type === 'List' || n.type === 'Dict') {
+      // A display or a comprehension — both hand back a brand-new container.
+      if (
+        n.type === 'List' ||
+        n.type === 'Dict' ||
+        n.type === 'Set' ||
+        n.type === 'ListComp' ||
+        n.type === 'DictComp' ||
+        n.type === 'SetComp' ||
+        n.type === 'GeneratorExp'
+      ) {
         found = true
         return false
       }
@@ -123,9 +162,25 @@ function allocatesEveryPass(loop: Loop): boolean {
         found = true
         return false
       }
+      // `"%d" % v` and `"a" + b` build a new string every pass, same as an
+      // f-string; the literal on one side is what makes it a string at all.
+      if (n.type === 'BinOp' && (n.op === '%' || n.op === '+')) {
+        if (stringy(unwrap(n.left) as AnyNode) || stringy(unwrap(n.right) as AnyNode)) {
+          found = true
+          return false
+        }
+      }
       if (n.type === 'Call') {
-        const method = dottedName(n.func)?.split('.').pop()
-        if (method === 'append') {
+        // Read the attribute directly rather than through `dottedName`, which
+        // gives up on a non-name receiver — and `"{}".format(v)` has a string
+        // literal for a receiver, which is precisely the case worth catching.
+        const f = unwrap(n.func)
+        const method = f.type === 'Attribute' ? f.attr : null
+        if (method && GROWING_METHODS.has(method)) {
+          found = true
+          return false
+        }
+        if (f.type === 'Name' && CONTAINER_FACTORIES.has(f.id)) {
           found = true
           return false
         }

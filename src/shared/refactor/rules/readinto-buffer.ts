@@ -34,6 +34,13 @@
  * pass of the loop, and when the loop is not already inspecting it for a short
  * read.
  *
+ * It refuses one more, quieter case for the same reason: code *after* the loop
+ * that still reads the buffer. `read()` binds that name inside the loop, so zero
+ * iterations means `UnboundLocalError` — a loud, first-run failure. Allocating
+ * the buffer above the loop binds it either way, and the same code then carries
+ * on with a bufferful of zeros. Trading a crash for silently plausible data is
+ * the worst thing a refactoring can do, so it does not.
+ *
  * Gated on a board being connected at all. This is on-device advice about the
  * heap on the chip in front of you, and Snakie says nothing about a board it
  * cannot see.
@@ -41,7 +48,7 @@
 import type { AnyNode, Assign, Call, Expr, ForStmt, Name, WhileStmt } from '../ast'
 import { enclosingLoop, unwrap, walk } from '../ast'
 import { dottedName, literalNumber, textOf } from '../expr'
-import { bindingScopeFor, bodyOf, nameUses, scopeOf } from '../scope'
+import { bindingScopeFor, bodyOf, isReadAfter, nameUses, scopeOf } from '../scope'
 import { indentAt, lineEnd, lineStart } from '../text'
 import type { TextEdit } from '../text'
 import { defineRule } from '../types'
@@ -265,6 +272,35 @@ function inspectedForShortRead(loop: Loop, name: string): boolean {
 }
 
 /**
+ * Is the buffer still being read once the loop body has finished with it — in a
+ * `for … else`, or anywhere later in the scope?
+ *
+ * This is the case the "does it escape?" check above cannot see, because it only
+ * looks inside the loop, and it is the one that turns a crash into silently wrong
+ * data. `read()` binds the name **inside** the loop, so a loop that runs zero
+ * times leaves it unbound and the code after it raises `UnboundLocalError` —
+ * loudly, on the first run, pointing straight at the bug. Hoisting
+ * `buf = bytearray(n)` above the loop binds the name whether the loop runs or
+ * not, so the same code sails on with twelve zero bytes and reports a reading of
+ * nothing as a reading of zero. A robot that stops is debuggable; a robot that
+ * confidently drives on bad data is not.
+ *
+ * The type changes underneath it too: the trailing use now sees a `bytearray`
+ * rather than the `bytes` `read()` returned, so anything that hashed it — a dict
+ * key, a set member — starts raising `TypeError` instead.
+ *
+ * Both are invisible at the call site, so the rule simply refuses. Reusing a
+ * buffer is only safe while the buffer never outlives the pass that filled it.
+ */
+function readAfterTheLoop(loop: Loop, name: string): boolean {
+  const body = loop.body
+  // Past the last statement of the body: that covers the `else` clause of a
+  // `for`/`while` as well as every statement after the loop.
+  const after = body.length > 0 ? body[body.length - 1].end : loop.end
+  return isReadAfter(scopeOf(loop), name, after)
+}
+
+/**
  * Is this statement the *only* thing that binds the buffer name in its scope?
  *
  * The rewrite reuses the name the loop already uses — that is the whole point,
@@ -329,6 +365,7 @@ export const readIntoBufferRule = defineRule<ReadIntoMatch>({
 
       if (!isReadIntoStream(node, receiver.id)) return undefined
       if (keepsAReference(loop, target.id, node)) return undefined
+      if (readAfterTheLoop(loop, target.id)) return undefined
       if (inspectedForShortRead(loop, target.id)) return undefined
       if (!nameIsOursAlone(node, target.id)) return undefined
       if (!ownsItsLine(ctx, node)) return undefined

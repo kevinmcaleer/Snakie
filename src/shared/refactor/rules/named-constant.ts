@@ -402,6 +402,24 @@ function deriveBase(
 }
 
 /**
+ * The first offset a definition may occupy. A `#!` line has to stay line 1 and
+ * a PEP 263 coding cookie has to stay inside the first two, so the walk up over
+ * a comment block must never climb past either of them — a constant wedged
+ * above the shebang stops the file being executable at all.
+ */
+function headerFloor(src: string): number {
+  let at = 0
+  for (let line = 0; line < 2; line++) {
+    const end = lineEnd(src, at)
+    const text = src.slice(at, end)
+    const shebang = line === 0 && text.startsWith('#!')
+    if (!shebang && !/^#.*coding[:=]\s*[-\w.]+/.test(text)) break
+    at = end
+  }
+  return at
+}
+
+/**
  * Where the definitions go: after the file's opening docstring and its head
  * import block, which is at or before every statement that could use them, so a
  * constant is always bound before the line that reads it runs.
@@ -431,7 +449,7 @@ function anchorFor(ctx: RefactorContext): number {
     if (!ctx.src.slice(prev, start).trim().startsWith('#')) break
     start = prev
   }
-  return start
+  return Math.max(start, headerFloor(ctx.src))
 }
 
 /** Is this statement a bare string — a module or function docstring? */

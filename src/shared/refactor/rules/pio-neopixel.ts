@@ -49,6 +49,7 @@
 import type { AnyNode, Call, ForStmt, WhileStmt } from '../ast'
 import { enclosingFunction, unwrap, walk } from '../ast'
 import { callName, literalNumber } from '../expr'
+import { lineStart } from '../text'
 import type { TextEdit } from '../text'
 import { defineRule } from '../types'
 import type { RefactorContext, RefactorMatch } from '../types'
@@ -91,11 +92,34 @@ function isMicrosecondSleep(node: AnyNode): node is Call {
   return node.type === 'Call' && callName(node.func) === 'sleep_us'
 }
 
-/** Does this loop (or the function around it) name an addressable LED strip? */
+/** Start of the run of comment lines sitting directly above `offset`'s line. */
+function commentBlockStart(ctx: RefactorContext, offset: number): number {
+  let start = lineStart(ctx.src, offset)
+  while (start > 0) {
+    const previous = lineStart(ctx.src, start - 1)
+    if (!ctx.src.slice(previous, start).trim().startsWith('#')) break
+    start = previous
+  }
+  return start
+}
+
+/**
+ * Does this loop say, in its own text, that it drives an addressable LED strip?
+ *
+ * The evidence has to be *at the loop*: its own body (which is where the pin it
+ * writes and the `T0H`/`T1H` constants it sleeps for live), the comment block
+ * directly above it, or the name of the function it belongs to. Reading the
+ * whole enclosing function instead finds the word "neopixel" in code that has
+ * nothing to do with this loop — a function that updates a `neopixel` bar (the
+ * very module this rule recommends) and then chirps a buzzer in a `sleep_us`
+ * loop would be told its buzzer is a hand-rolled WS2812 driver, which is exactly
+ * the wrong hint this rule's narrowness exists to avoid.
+ */
 function mentionsAddressableLed(ctx: RefactorContext, loop: Loop): boolean {
-  if (ADDRESSABLE_LED.test(ctx.src.slice(loop.start, loop.end))) return true
+  const from = commentBlockStart(ctx, loop.start)
+  if (ADDRESSABLE_LED.test(ctx.src.slice(from, loop.end))) return true
   const fn = enclosingFunction(loop)
-  return fn != null && ADDRESSABLE_LED.test(ctx.src.slice(fn.start, fn.end))
+  return fn != null && fn.type === 'FunctionDef' && ADDRESSABLE_LED.test(fn.name)
 }
 
 /**

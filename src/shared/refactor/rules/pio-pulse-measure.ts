@@ -116,12 +116,24 @@ function isTightSpin(body: readonly Stmt[]): boolean {
   return tight
 }
 
-/** Is the pulse being timed with `ticks_us()` in the same function? */
+/**
+ * Is the pulse being timed with `ticks_us()` in the loop's own scope?
+ *
+ * Only that scope counts. Descending into nested `def`s — and, for a
+ * module-level loop, into every function in the file — reads a `ticks_us()` out
+ * of code that has nothing to do with this loop: a bare `while
+ * button.value(): pass` at the bottom of a file is not an echo measurement just
+ * because some unrelated helper happens to read the clock, and telling its
+ * author to reach for PIO would be a hint about code that does not exist.
+ */
 function timedWithTicksUs(ctx: RefactorContext, node: AnyNode): boolean {
   const fn = enclosingFunction(node)
   const root: AnyNode = fn ? (fn as AnyNode) : (ctx.module as AnyNode)
   let found = false
   walk(root, (n) => {
+    if (n !== root && (n.type === 'FunctionDef' || n.type === 'Lambda' || n.type === 'ClassDef')) {
+      return false
+    }
     if (n.type === 'Call' && callName(n.func) === 'ticks_us') found = true
     return undefined
   })

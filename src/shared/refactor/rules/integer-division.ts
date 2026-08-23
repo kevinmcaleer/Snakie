@@ -200,7 +200,14 @@ export const integerDivisionRule = defineRule<IntegerDivisionMatch>({
   detect(ctx: RefactorContext): RefactorMatch<IntegerDivisionMatch>[] {
     if (rebindsInt(ctx)) return []
 
-    const floatNames = floatLiteralNames(ctx)
+    // Built on first use: a file with no `int(a / b)` in it should not pay for
+    // a second walk on every keystroke.
+    let floatNames: Set<string> | null = null
+    const floats = (): ReadonlySet<string> => {
+      if (!floatNames) floatNames = floatLiteralNames(ctx)
+      return floatNames
+    }
+
     const out: RefactorMatch<IntegerDivisionMatch>[] = []
     walk(ctx.module as AnyNode, (node) => {
       if (node.type !== 'Call') return
@@ -211,7 +218,7 @@ export const integerDivisionRule = defineRule<IntegerDivisionMatch>({
       if (ctx.lines.positionAt(node.start).line !== ctx.lines.positionAt(node.end).line) return
       // A visible float means `//` would hand back a float where `int()` handed
       // back an int — a changed type, not a changed rounding. Decline (§2.6.5).
-      if (looksFloat(division.left, floatNames) || looksFloat(division.right, floatNames)) return
+      if (looksFloat(division.left, floats()) || looksFloat(division.right, floats())) return
 
       out.push({
         ruleId: 'integer-division',

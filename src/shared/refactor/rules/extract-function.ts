@@ -116,7 +116,6 @@ import {
   isScope,
   nameUses,
   namesWritten,
-  readBeforeWritten,
   scopeOf
 } from '../scope'
 import type { Scope } from '../scope'
@@ -437,6 +436,63 @@ function precedingIn(list: readonly Stmt[], child: AnyNode): Stmt[] {
 }
 
 /**
+ * What one step up the tree adds: everything `parent` is certain to have bound
+ * by the time it reaches `child`. Walking this from a statement to the function
+ * gives the names that are definitely bound where that statement runs.
+ */
+function boundOnTheWayTo(parent: AnyNode, child: AnyNode): Set<string> {
+  const out = new Set<string>()
+  const add = (list: readonly Stmt[]): void => {
+    for (const name of definitelyBound(precedingIn(list, child))) out.add(name)
+  }
+  switch (parent.type) {
+    case 'Module':
+    case 'FunctionDef':
+      add(parent.body)
+      break
+    case 'If':
+    case 'While':
+      add((parent.body as readonly AnyNode[]).includes(child) ? parent.body : parent.orelse)
+      break
+    case 'For':
+      if ((parent.body as readonly AnyNode[]).includes(child)) {
+        // The body only runs with the target bound.
+        targetNames(parent.target, out)
+        add(parent.body)
+      } else {
+        // The `else` runs even when the loop never did, so neither the target
+        // nor anything the body bound is certain.
+        add(parent.orelse)
+      }
+      break
+    case 'With':
+      for (const item of parent.items) targetNames(item.optionalVars, out)
+      add(parent.body)
+      break
+    case 'ExceptHandler':
+      if (parent.name) out.add(parent.name)
+      add(parent.body)
+      break
+    case 'Try':
+      if ((parent.orelse as readonly AnyNode[]).includes(child)) {
+        // The `else` runs only after the body finished.
+        for (const name of definitelyBound(parent.body)) out.add(name)
+        add(parent.orelse)
+      } else if ((parent.finalbody as readonly AnyNode[]).includes(child)) {
+        // A `finally` also runs when the body stopped half way through, and a
+        // handler on the path takes nothing from the body either.
+        add(parent.finalbody)
+      } else {
+        add(parent.body)
+      }
+      break
+    default:
+      break
+  }
+  return out
+}
+
+/**
  * The names that are **certain** to be bound by the time the block starts:
  * the enclosing function's parameters, the targets of the loops, `with`s and
  * `except`s the block sits inside, and whatever the statements before it on
@@ -449,67 +505,51 @@ function precedingIn(list: readonly Stmt[], child: AnyNode): Stmt[] {
 function boundBeforeBlock(fn: FunctionDef, first: Stmt): Set<string> {
   const out = new Set<string>()
   for (const p of fn.params) out.add(p.name)
-  const add = (names: Iterable<string>): void => {
-    for (const name of names) out.add(name)
-  }
-
   let child: AnyNode = first
   for (const parent of ancestors(first)) {
-    switch (parent.type) {
-      case 'FunctionDef':
-        add(definitelyBound(precedingIn(parent.body, child)))
-        break
-      case 'If':
-      case 'While':
-        add(
-          definitelyBound(
-            precedingIn(
-              (parent.body as readonly AnyNode[]).includes(child) ? parent.body : parent.orelse,
-              child
-            )
-          )
-        )
-        break
-      case 'For':
-        if ((parent.body as readonly AnyNode[]).includes(child)) {
-          // The body only runs with the target bound.
-          targetNames(parent.target, out)
-          add(definitelyBound(precedingIn(parent.body, child)))
-        } else {
-          // The `else` runs even when the loop never did, so neither the target
-          // nor anything the body bound is certain.
-          add(definitelyBound(precedingIn(parent.orelse, child)))
-        }
-        break
-      case 'With':
-        for (const item of parent.items) targetNames(item.optionalVars, out)
-        add(definitelyBound(precedingIn(parent.body, child)))
-        break
-      case 'ExceptHandler':
-        if (parent.name) out.add(parent.name)
-        add(definitelyBound(precedingIn(parent.body, child)))
-        break
-      case 'Try':
-        if ((parent.body as readonly AnyNode[]).includes(child)) {
-          add(definitelyBound(precedingIn(parent.body, child)))
-        } else if ((parent.orelse as readonly AnyNode[]).includes(child)) {
-          // The `else` runs only after the body finished.
-          add(definitelyBound(parent.body))
-          add(definitelyBound(precedingIn(parent.orelse, child)))
-        } else if ((parent.finalbody as readonly AnyNode[]).includes(child)) {
-          // A `finally` also runs when the body stopped half way through.
-          add(definitelyBound(precedingIn(parent.finalbody, child)))
-        }
-        // A handler on the path takes nothing from the body: the exception may
-        // have landed before any of it ran.
-        break
-      default:
-        break
-    }
+    for (const name of boundOnTheWayTo(parent, child)) out.add(name)
     if (parent === (fn as AnyNode)) break
     child = parent
   }
   return out
+}
+
+/**
+ * The names the **block itself** is certain to have bound by the time `target`
+ * runs. The walk stops at the block's own statements, so nothing the enclosing
+ * function did before the selection counts — that is the whole question: a name
+ * only the caller bound has to travel in as a parameter.
+ */
+function boundBeforeInBlock(stmts: readonly Stmt[], target: Stmt): Set<string> {
+  const out = new Set<string>()
+  let child: AnyNode = target
+  for (;;) {
+    const i = (stmts as readonly AnyNode[]).indexOf(child)
+    if (i >= 0) {
+      for (const name of definitelyBound(stmts.slice(0, i))) out.add(name)
+      return out
+    }
+    const parent = child.parent
+    if (!parent) return out
+    for (const name of boundOnTheWayTo(parent, child)) out.add(name)
+    child = parent
+  }
+}
+
+/** The innermost statement of the block containing `offset`. */
+function statementAt(stmts: readonly Stmt[], offset: number): Stmt | null {
+  let found: Stmt | null = null
+  const descend = (list: readonly Stmt[]): void => {
+    for (const s of list) {
+      if (s.start <= offset && offset < s.end) {
+        found = s
+        for (const block of blocksOf(s as AnyNode)) descend(block)
+        return
+      }
+    }
+  }
+  descend(stmts)
+  return found
 }
 
 // ---------------------------------------------------------------------------
@@ -700,6 +740,43 @@ function namesReadByLiveClosures(fn: FunctionDef, run: Run, first: Stmt): Set<st
 }
 
 /**
+ * Does a closure the block *creates* capture a variable the enclosing function
+ * writes again later?
+ *
+ * The other half of the closure problem. A `def` inside the block closes over
+ * whichever frame it was created in, so after the move it captures the new
+ * function's local — and the enclosing function's later `state = "driving"`
+ * never reaches it again. The closure need only be stored or returned for that
+ * to show up as the wrong value much later, which is the hardest kind of bug to
+ * connect back to a refactoring, so decline.
+ *
+ * A write *before* the block is harmless: the closure runs afterwards either
+ * way, and both frames start from the value the block was handed. Unless a loop
+ * brings that write round again after a closure has escaped.
+ */
+function capturesAReassignedName(fn: FunctionDef, stmts: readonly Stmt[], run: Run, first: Stmt): boolean {
+  const captured = new Set<string>()
+  for (const use of nameUses(stmts)) {
+    if (use.kind !== 'read') continue
+    if (!liveScopeAround(use.node, fn)) continue
+    if (bindingScopeFor(first, use.name) === fn) captured.add(use.name)
+  }
+  for (const read of fieldReads(stmts)) {
+    if (!liveScopeAround(read.node, fn)) continue
+    if (bindingScopeFor(first, read.name) === fn) captured.add(read.name)
+  }
+  if (captured.size === 0) return false
+
+  const looped = loopAround(first, fn) != null
+  for (const use of nameUses(bodyOf(fn))) {
+    if (use.kind !== 'write' || !captured.has(use.name)) continue
+    if (use.node.start >= run.regionStart && use.node.start < run.regionEnd) continue
+    if (looped || use.node.start >= run.regionEnd) return true
+  }
+  return false
+}
+
+/**
  * Names a nested scope rebinds with `nonlocal`. Such a name is written from
  * somewhere the new function cannot be told about, so a parameter holding a
  * copy of it — or a return value replacing it — loses those writes.
@@ -816,24 +893,28 @@ function analyse(ctx: RefactorContext): ExtractMatch | null {
   const written = [...namesWritten(stmts)]
   if (written.some((name) => declared.has(name))) return null
 
-  // Parameters: what the block reads before it writes, minus everything that is
-  // still in scope from outside the function — globals, imports, builtins.
-  const params = readBeforeWritten(stmts).filter((name) => bindingScopeFor(first, name) === fn)
-  // The lexer keeps `f"{reading}"` whole, so `readBeforeWritten` never saw the
-  // names inside it. Add them, or the new function references a name nobody
-  // passed it.
-  const writtenAt = new Map<string, number>()
+  // Parameters: every name the block reads at a point where the block itself
+  // has not certainly bound it yet, minus everything still in scope from
+  // outside the function — globals, imports, builtins.
+  //
+  // "Not read before it writes" is not enough. `if ready: reading = …` followed
+  // by `log(reading)` writes first in source order but not on the `False` path,
+  // where the read still reaches the caller's variable, so it has to be passed.
+  const params: string[] = []
+  const considerRead = (name: string, at: number): void => {
+    if (params.includes(name)) return
+    if (bindingScopeFor(first, name) !== fn) return
+    const owner = statementAt(stmts, at)
+    if (owner && boundBeforeInBlock(stmts, owner).has(name)) return
+    params.push(name)
+  }
   for (const use of nameUses(stmts)) {
-    if (use.kind === 'write' && !writtenAt.has(use.name)) writtenAt.set(use.name, use.node.start)
+    if (use.kind === 'read') considerRead(use.name, use.node.start)
   }
-  for (const read of fieldReads(stmts)) {
-    if (params.includes(read.name)) continue
-    // A name the block itself binds first needs no parameter.
-    const bound = writtenAt.get(read.name)
-    if (bound != null && bound < read.at) continue
-    if (bindingScopeFor(first, read.name) !== fn) continue
-    params.push(read.name)
-  }
+  // The lexer keeps `f"{reading}"` whole, so `nameUses` never saw the names
+  // inside it. Without these the new function references a name nobody passed.
+  for (const read of fieldReads(stmts)) considerRead(read.name, read.at)
+
   // Returns: what the block binds and something outside it still reads. The set
   // is built in source order of first write, so the tuple never wobbles.
   const returns = written.filter((name) => escapesBlock(fn, name, run))
@@ -843,13 +924,19 @@ function analyse(ctx: RefactorContext): ExtractMatch | null {
   // anything after it) can see the difference.
   if (returns.length > 0 && insideTry(first, fn)) return null
 
-  // An argument is evaluated before the block's first side effect, and a
-  // returned name is read after its last, so both have to be bound on every
-  // path — otherwise the rewrite raises where the original ran happily.
+  // A value the block binds down only one branch still has to come back with
+  // the caller's own value down the other, so it travels in as well as out —
+  // which is exactly what the original code did with the caller's variable.
+  const bound = definitelyBound(stmts)
+  for (const name of returns) {
+    if (!bound.has(name) && !params.includes(name)) params.push(name)
+  }
+
+  // An argument is evaluated before the block's first side effect, so a name
+  // the caller may not have bound yet cannot be passed at all: the rewrite
+  // would raise where the original ran happily.
   const boundBefore = boundBeforeBlock(fn, first)
   if (params.some((name) => !boundBefore.has(name))) return null
-  const bound = definitelyBound(stmts)
-  if (returns.some((name) => !bound.has(name) && !params.includes(name))) return null
 
   // Parameters and return values are copies. A closure that can run while the
   // block does, or a `nonlocal` in a nested scope, writes the original.
@@ -858,6 +945,7 @@ function analyse(ctx: RefactorContext): ExtractMatch | null {
   if (returns.some((name) => rebindable.has(name))) return null
   const liveClosureReads = namesReadByLiveClosures(fn, run, first)
   if (written.some((name) => liveClosureReads.has(name))) return null
+  if (capturesAReassignedName(fn, stmts, run, first)) return null
 
   const name = freshFunctionName(baseName(stmts, returns), takenNames(ctx, fn))
   if (!name) return null
