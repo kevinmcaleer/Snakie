@@ -203,6 +203,46 @@ describe('runtimeGreeting', () => {
     expect(runtimeGreeting({ dialect: 'circuitpython' })).toBe('')
     expect(runtimeGreeting(null)).toBe('')
   })
+
+  // #770 — the greeting used to be `circuitpython ? … : MicroPython`, so ANY
+  // board it could not positively identify was announced as MicroPython. The
+  // reported case was a real CircuitPython 10.2.1 board greeted as
+  // "MicroPython v10.2.1": the version was right and the runtime was a lie, in
+  // the first line the user reads.
+  it('never claims MicroPython for a runtime it could not identify (#770)', () => {
+    const greeting = runtimeGreeting({ dialect: 'unknown', version: '10.2.1' })
+    expect(greeting).not.toMatch(/MicroPython/i)
+    expect(greeting).toContain('10.2.1')
+  })
+
+  it('drops the `v` prefix for an unknown runtime — that is MicroPython’s own convention', () => {
+    expect(runtimeGreeting({ dialect: 'unknown', version: '10.2.1' })).not.toContain('v10.2.1')
+  })
+
+  it('still reports what the board DID say — version, date and machine', () => {
+    expect(
+      runtimeGreeting({
+        dialect: 'unknown',
+        version: '10.2.1',
+        buildDate: '2026-08-18',
+        machine: 'Adafruit Feather RP2040 with rp2040'
+      })
+    ).toBe('Unknown runtime 10.2.1 on 2026-08-18; Adafruit Feather RP2040 with rp2040')
+  })
+
+  it('agrees with the status bar, which reads the same RuntimeInfo', () => {
+    // The issue asked whether the two could disagree. They cannot now: both
+    // route an unidentified runtime through DIALECT_LABEL.unknown.
+    const info = { dialect: 'unknown' as const, version: '10.2.1' }
+    expect(runtimeGreeting(info).startsWith(runtimeLabel(info).split(' ')[0])).toBe(true)
+  })
+
+  it('still words each KNOWN runtime exactly as its own banner does', () => {
+    expect(runtimeGreeting({ dialect: 'micropython', version: '1.28.0' })).toBe('MicroPython v1.28.0')
+    expect(runtimeGreeting({ dialect: 'circuitpython', version: '10.2.1' })).toBe(
+      'Adafruit CircuitPython 10.2.1'
+    )
+  })
 })
 
 describe('runtimeLabel', () => {
