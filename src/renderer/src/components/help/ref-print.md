@@ -11,16 +11,19 @@ print("loading", end="...")    # no newline
 
 ## The REPL
 
-The terminal is a live MicroPython prompt — type Python and press Enter to run it now:
+The terminal is a live prompt on the board — type Python and press Enter to run it now:
 
 ```python
->>> from machine import Pin
->>> Pin(15, Pin.OUT).on()
+>>> 2 + 2
+4
+>>> import time
+>>> time.sleep(0.5)
 ```
 
 ## REPL shortcuts
 
 - <kbd>Ctrl</kbd>+<kbd>C</kbd> — interrupt a running program / infinite loop
-- <kbd>Ctrl</kbd>+<kbd>D</kbd> — soft reboot (re-runs `main.py`)
+- <kbd>Ctrl</kbd>+<kbd>D</kbd> — soft reboot (re-runs `main.py`, or `code.py` on
+  CircuitPython)
 - `help('modules')` — list every module on the board
 - A bare expression echoes its value: `>>> 2 + 2` → `4`

@@ -1,13 +1,22 @@
 /**
- * Curated, static MicroPython symbol dataset that powers the editor's
- * autocomplete (see `micropython-completions.ts`).
+ * Curated, static MicroPython + plain-Python symbol dataset that powers the
+ * editor's autocomplete (see `micropython-completions.ts`). The CircuitPython
+ * half of the catalogue lives in `circuitpython-symbols.ts`; `dialect-symbols.ts`
+ * picks between them.
  *
  * This is intentionally hand-maintained rather than introspected from a live
  * device: it gives fast, offline, deterministic suggestions for the modules and
  * members MicroPython developers reach for most often. It is NOT exhaustive —
  * it favours the common surface area (machine, time, network, …) over full
  * coverage, and Monaco's built-in word-based completions still fill the gaps.
+ *
+ * Every module declares a {@link DialectScope}, and it is REQUIRED rather than
+ * defaulted (#763): a module that quietly inherited `'both'` would be offered to
+ * a CircuitPython user as if it existed on their board, which is the exact
+ * failure epic #209 is about. Members inherit their module's scope unless they
+ * say otherwise — `time` exists on both runtimes but `time.sleep_ms` does not.
  */
+import type { DialectScope } from '../../../shared/dialect-api'
 
 /** A member exposed by a module (a class, function, constant, …). */
 export interface SymbolMember {
@@ -19,12 +28,16 @@ export interface SymbolMember {
   detail?: string
   /** Optional longer hover documentation. */
   doc?: string
+  /** Which runtimes have this member. Defaults to the owning module's scope. */
+  scope?: DialectScope
 }
 
-/** A MicroPython module suggestable after `import`/`from`. */
+/** A module suggestable after `import`/`from`, on one or both runtimes. */
 export interface ModuleSymbol {
   /** Importable module name, e.g. `machine`. */
   name: string
+  /** Which runtimes ship this module. Required — see the module note above. */
+  scope: DialectScope
   /** Short `detail` describing the module. */
   detail: string
   /** Optional longer hover documentation. */
@@ -36,7 +49,8 @@ export interface ModuleSymbol {
 /**
  * Members of selected classes, keyed by the bare class name (e.g. `Pin`).
  * Drives completions like `Pin.OUT`, `Pin.IN`, `Pin.PULL_UP` regardless of
- * which module the class was imported from.
+ * which module the class was imported from. MicroPython's classes; the
+ * CircuitPython ones are in `circuitpython-symbols.ts`.
  */
 export const CLASS_MEMBERS: Record<string, SymbolMember[]> = {
   Pin: [
@@ -115,10 +129,16 @@ export const CLASS_MEMBERS: Record<string, SymbolMember[]> = {
   ]
 }
 
-/** The curated MicroPython module catalogue, suggested after `import`/`from`. */
+/**
+ * The curated MicroPython + plain-Python module catalogue, suggested after
+ * `import`/`from`. Filter it with `modulesFor(dialect)` (dialect-symbols.ts)
+ * rather than using it raw — offering `machine` to a CircuitPython session is
+ * the bug this scoping exists to stop.
+ */
 export const MODULES: ModuleSymbol[] = [
   {
     name: 'machine',
+    scope: 'micropython',
     detail: 'Hardware control (pins, buses, timers)',
     doc: 'Functions related to the hardware: pins, ADC, PWM, I2C, SPI, timers, resets.',
     members: [
@@ -173,26 +193,47 @@ export const MODULES: ModuleSymbol[] = [
   },
   {
     name: 'time',
+    scope: 'both',
     detail: 'Time and delays',
-    doc: 'Time-related functions, including millisecond/microsecond delays and tick counters.',
+    doc: 'Time-related functions. Both runtimes have `sleep()`; the millisecond delays and tick counters are MicroPython-only, and `monotonic()` is CircuitPython\'s answer to them.',
+    // `time` is the sharpest member-level split in the catalogue: it exists on
+    // both runtimes, so the module survives the dialect filter, but half of what
+    // MicroPython programs reach for (`sleep_ms`, `ticks_ms`, `ticks_diff`) is
+    // simply absent on CircuitPython — an `AttributeError` at the first delay.
     members: [
-      { name: 'sleep', kind: 'function', detail: 'time.sleep(seconds)', doc: 'Sleep for the given number of seconds.' },
-      { name: 'sleep_ms', kind: 'function', detail: 'time.sleep_ms(ms)', doc: 'Sleep for the given milliseconds.' },
-      { name: 'sleep_us', kind: 'function', detail: 'time.sleep_us(us)', doc: 'Sleep for the given microseconds.' },
-      { name: 'ticks_ms', kind: 'function', detail: 'time.ticks_ms()', doc: 'Millisecond tick counter (wraps).' },
-      { name: 'ticks_us', kind: 'function', detail: 'time.ticks_us()', doc: 'Microsecond tick counter (wraps).' },
-      { name: 'ticks_cpu', kind: 'function', detail: 'time.ticks_cpu()', doc: 'Finest-resolution tick counter.' },
+      { name: 'sleep', kind: 'function', detail: 'time.sleep(seconds)', doc: 'Sleep for the given number of seconds (a float — 0.5 is half a second).' },
+      { name: 'sleep_ms', kind: 'function', scope: 'micropython', detail: 'time.sleep_ms(ms)', doc: 'Sleep for the given milliseconds.' },
+      { name: 'sleep_us', kind: 'function', scope: 'micropython', detail: 'time.sleep_us(us)', doc: 'Sleep for the given microseconds.' },
+      { name: 'ticks_ms', kind: 'function', scope: 'micropython', detail: 'time.ticks_ms()', doc: 'Millisecond tick counter (wraps).' },
+      { name: 'ticks_us', kind: 'function', scope: 'micropython', detail: 'time.ticks_us()', doc: 'Microsecond tick counter (wraps).' },
+      { name: 'ticks_cpu', kind: 'function', scope: 'micropython', detail: 'time.ticks_cpu()', doc: 'Finest-resolution tick counter.' },
       {
         name: 'ticks_diff',
         kind: 'function',
+        scope: 'micropython',
         detail: 'time.ticks_diff(a, b)',
         doc: 'Signed difference between two tick values.'
       },
       {
         name: 'ticks_add',
         kind: 'function',
+        scope: 'micropython',
         detail: 'time.ticks_add(t, delta)',
         doc: 'Offset a tick value by delta.'
+      },
+      {
+        name: 'monotonic',
+        kind: 'function',
+        scope: 'circuitpython',
+        detail: 'time.monotonic()',
+        doc: 'Seconds since boot as a float — CircuitPython\'s stopwatch, in place of ticks_ms().'
+      },
+      {
+        name: 'monotonic_ns',
+        kind: 'function',
+        scope: 'circuitpython',
+        detail: 'time.monotonic_ns()',
+        doc: 'Nanoseconds since boot as an integer — no float rounding on long uptimes.'
       },
       { name: 'time', kind: 'function', detail: 'time.time()', doc: 'Seconds since the epoch.' },
       { name: 'localtime', kind: 'function', detail: 'time.localtime([secs])', doc: 'Convert seconds to a time tuple.' },
@@ -201,6 +242,7 @@ export const MODULES: ModuleSymbol[] = [
   },
   {
     name: 'network',
+    scope: 'micropython',
     detail: 'Networking (Wi-Fi, Ethernet)',
     doc: 'Network configuration: Wi-Fi station/access-point interfaces and connectivity.',
     members: [
@@ -217,6 +259,7 @@ export const MODULES: ModuleSymbol[] = [
   },
   {
     name: 'os',
+    scope: 'both',
     detail: 'Filesystem and OS services',
     doc: 'Basic operating-system services: filesystem access, directory listing, uname.',
     members: [
@@ -232,6 +275,7 @@ export const MODULES: ModuleSymbol[] = [
   },
   {
     name: 'sys',
+    scope: 'both',
     detail: 'Interpreter and runtime info',
     doc: 'System-specific parameters and functions.',
     members: [
@@ -246,6 +290,7 @@ export const MODULES: ModuleSymbol[] = [
   },
   {
     name: 'gc',
+    scope: 'both',
     detail: 'Garbage collection control',
     doc: 'Control the garbage collector and inspect memory usage.',
     members: [
@@ -258,6 +303,7 @@ export const MODULES: ModuleSymbol[] = [
   },
   {
     name: 'math',
+    scope: 'both',
     detail: 'Mathematical functions',
     doc: 'Floating-point mathematics: trigonometry, logarithms, constants.',
     members: [
@@ -276,14 +322,21 @@ export const MODULES: ModuleSymbol[] = [
   },
   {
     name: 'neopixel',
+    scope: 'both',
     detail: 'Addressable RGB LEDs (WS2812)',
-    doc: 'Driver for NeoPixel (WS2812 / SK6812) addressable LED strips.',
+    doc: 'Driver for NeoPixel (WS2812 / SK6812) addressable LED strips. Built into MicroPython; on CircuitPython it is `neopixel.mpy` from the Adafruit bundle, and the pin comes from `board`.',
     members: [
-      { name: 'NeoPixel', kind: 'class', detail: 'neopixel.NeoPixel(pin, n)', doc: 'A strip of n NeoPixels on a pin.' }
+      {
+        name: 'NeoPixel',
+        kind: 'class',
+        detail: 'neopixel.NeoPixel(pin, n)',
+        doc: 'A strip of n NeoPixels on a pin — `Pin(0)` on MicroPython, `board.D0` on CircuitPython.'
+      }
     ]
   },
   {
     name: 'micropython',
+    scope: 'micropython',
     detail: 'MicroPython internals',
     doc: 'Access and control MicroPython internals (emit modes, scheduling, memory info).',
     members: [
@@ -295,12 +348,14 @@ export const MODULES: ModuleSymbol[] = [
   },
   {
     name: 'bluetooth',
+    scope: 'micropython',
     detail: 'Bluetooth Low Energy',
     doc: 'Low-level Bluetooth Low Energy (BLE) radio access.',
     members: [{ name: 'BLE', kind: 'class', detail: 'bluetooth.BLE', doc: 'The BLE radio interface.' }]
   },
   {
     name: 'framebuf',
+    scope: 'micropython',
     detail: 'Frame buffer for displays',
     doc: 'Manipulate a frame buffer for monochrome or colour pixel displays.',
     members: [
@@ -311,6 +366,7 @@ export const MODULES: ModuleSymbol[] = [
   },
   {
     name: 'uasyncio',
+    scope: 'micropython',
     detail: 'Asynchronous I/O (asyncio)',
     doc: 'MicroPython asyncio scheduler for cooperative multitasking.',
     members: [
@@ -323,6 +379,7 @@ export const MODULES: ModuleSymbol[] = [
   },
   {
     name: 'json',
+    scope: 'both',
     detail: 'JSON encoding/decoding',
     doc: 'Serialise and deserialise objects to and from JSON.',
     members: [
@@ -334,6 +391,7 @@ export const MODULES: ModuleSymbol[] = [
   },
   {
     name: 'random',
+    scope: 'both',
     detail: 'Pseudo-random numbers',
     doc: 'Generate pseudo-random numbers.',
     members: [
@@ -348,6 +406,7 @@ export const MODULES: ModuleSymbol[] = [
   },
   {
     name: 'struct',
+    scope: 'both',
     detail: 'Pack/unpack binary data',
     doc: 'Convert between Python values and C structs represented as bytes.',
     members: [
@@ -358,6 +417,7 @@ export const MODULES: ModuleSymbol[] = [
   },
   {
     name: 'socket',
+    scope: 'micropython',
     detail: 'TCP/UDP sockets',
     doc: 'Low-level network socket access.',
     members: [
@@ -370,6 +430,7 @@ export const MODULES: ModuleSymbol[] = [
   },
   {
     name: 'esp',
+    scope: 'micropython',
     detail: 'ESP8266/ESP32 low-level',
     doc: 'Functions related to the ESP8266 and ESP32 (flash access, sleep type).',
     members: [
@@ -379,6 +440,7 @@ export const MODULES: ModuleSymbol[] = [
   },
   {
     name: 'esp32',
+    scope: 'micropython',
     detail: 'ESP32-specific features',
     doc: 'ESP32-specific functionality: partitions, hall sensor, NVS, raw temperature.',
     members: [
@@ -389,6 +451,7 @@ export const MODULES: ModuleSymbol[] = [
   },
   {
     name: 'rp2',
+    scope: 'micropython',
     detail: 'Raspberry Pi RP2040 (PIO)',
     doc: 'Functionality specific to the RP2040, notably programmable I/O (PIO).',
     members: [
@@ -397,25 +460,27 @@ export const MODULES: ModuleSymbol[] = [
       { name: 'asm_pio', kind: 'function', detail: '@rp2.asm_pio(...)', doc: 'Decorator defining a PIO program.' }
     ]
   },
+  // `board` and `digitalio` used to sit here as empty "(CircuitPython)" stubs —
+  // a module name with nothing behind it. They now live in
+  // `circuitpython-symbols.ts` with real members, and are offered only to a
+  // CircuitPython (or unestablished) session.
   {
-    name: 'board',
-    detail: 'Board pin definitions (CircuitPython)',
-    doc: 'Board-specific pin name definitions.',
-    members: []
-  },
-  {
-    name: 'digitalio',
-    detail: 'Digital I/O (CircuitPython)',
-    doc: 'Digital input/output pin control (CircuitPython API).',
+    name: 'mip',
+    scope: 'micropython',
+    detail: 'Install packages onto the board',
+    doc: "MicroPython's package installer. CircuitPython has no equivalent — its libraries are files copied from the Adafruit bundle.",
     members: [
-      { name: 'DigitalInOut', kind: 'class', detail: 'digitalio.DigitalInOut(pin)', doc: 'A configurable digital pin.' },
-      { name: 'Direction', kind: 'class', detail: 'digitalio.Direction', doc: 'Pin direction enumeration.' },
-      { name: 'Pull', kind: 'class', detail: 'digitalio.Pull', doc: 'Pull-resistor configuration.' }
+      {
+        name: 'install',
+        kind: 'function',
+        detail: "mip.install('name')",
+        doc: 'Download a package into /lib on the board.'
+      }
     ]
   }
 ]
 
-/** Fast lookup of a module by name. */
-export const MODULES_BY_NAME: Record<string, ModuleSymbol> = Object.fromEntries(
-  MODULES.map((m) => [m.name, m])
-)
+// There is deliberately no unfiltered `MODULES_BY_NAME` here any more. It was
+// the lookup the completion provider used, and reaching for it is how `machine`
+// ends up suggested to a CircuitPython session — use `modulesByNameFor(dialect)`
+// from `dialect-symbols.ts`, which answers per runtime.

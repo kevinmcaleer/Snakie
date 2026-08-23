@@ -24,17 +24,31 @@
  * `gamepad`, …) — they are restated here as a string union rather than imported,
  * to keep this module renderer-free.
  *
- * A module's `source` is EITHER:
+ * A module's `source` is ONE of:
  *   - `{ kind: 'bundled', file }` — a tiny, MIT-licensed driver stub SHIPPED with
  *     the app under `micropython/modules/<file>`. The main process reads it and
  *     writes it to the board over the raw REPL (the #108 instrument-library
  *     install path, generalised). Preferred for small drivers we can ship.
  *   - `{ kind: 'mip', spec }` — an official `mip` / `github:` spec (e.g.
- *     `'github:stlehmann/micropython-ssd1306/ssd1306.py'`). The main process
- *     builds a `mip.install(spec)` snippet (the #20 package-install path) for the
- *     renderer to run on the device. Used for drivers too large / not ours to
+ *     `'github:stlehmann/micropython-ssd1306/ssd1306.py'`), resolved on the HOST
+ *     and written as files (#776). Used for drivers too large / not ours to
  *     vendor, so we reference the upstream source instead of copying it.
+ *   - `{ kind: 'bundle', module }` — a library from the Adafruit CircuitPython
+ *     Library Bundle (#758), which is what CircuitPython has instead of `mip`.
+ *     Resolved by `circuitpy-bundle.ts` and written as `.mpy` BYTES.
+ *
+ * ## The source kind decides the DIALECT
+ *
+ * A driver is not portable between the two runtimes and pretending otherwise
+ * would put an INSTALL button in front of a user that could only ever fail. The
+ * shipped stubs and the `mip` specs are MicroPython code — they `import machine`
+ * and are installed by a MicroPython mechanism; the bundle is CircuitPython
+ * bytecode built against `board`/`digitalio`. So {@link moduleDialect} derives
+ * the runtime from the source kind rather than asking each entry to restate it,
+ * and the Modules manager shows a board only the half it can actually use.
  */
+
+import type { Dialect } from './dialect'
 
 /**
  * The dock instrument a module powers. A STRING-UNION mirror of the renderer's
@@ -58,6 +72,14 @@ export type ModuleSource =
       kind: 'bundled'
       /** The bundled file's basename, e.g. `ssd1306.py`. */
       file: string
+      /**
+       * The `__version__` the shipped file declares (#707) — what a board copy is
+       * compared against to offer an UPDATE for a stale driver. Declared here so
+       * the renderer (desktop AND web) can compare without reading the file; a
+       * unit test asserts it matches the `.py`, so editing a driver without
+       * bumping both fails CI.
+       */
+      version: string
     }
   | {
       /** An upstream driver installed on-device via MicroPython's `mip`. */
@@ -67,6 +89,20 @@ export type ModuleSource =
        * e.g. `'github:stlehmann/micropython-ssd1306/ssd1306.py'`.
        */
       spec: string
+    }
+  | {
+      /**
+       * A library from the Adafruit CircuitPython Library Bundle (#758) — the
+       * `circup` source, and the only one CircuitPython has. Resolved on the
+       * host by `circuitpy-bundle.ts` and written as `.mpy` bytes.
+       */
+      kind: 'bundle'
+      /**
+       * The bundle's own library name — the index key AND the import name, e.g.
+       * `'adafruit_hcsr04'`. Its dependencies come from the index, so they are
+       * never restated here.
+       */
+      module: string
     }
 
 /** One installable module — a driver behind a dock instrument. */
@@ -136,7 +172,7 @@ export const MODULES: ModuleDef[] = [
     instrument: 'range',
     importName: 'hcsr04',
     // Small enough + MIT — bundled as a stub.
-    source: { kind: 'bundled', file: 'hcsr04.py' },
+    source: { kind: 'bundled', file: 'hcsr04.py', version: '1.0.0' },
     license: 'MIT'
   },
   {
@@ -148,7 +184,7 @@ export const MODULES: ModuleDef[] = [
     importName: 'grove_ultrasonic',
     // Not interchangeable with `hcsr04`: that driver holds trigger and echo as
     // separate fixed-direction pins, which a one-wire sensor cannot satisfy.
-    source: { kind: 'bundled', file: 'grove_ultrasonic.py' },
+    source: { kind: 'bundled', file: 'grove_ultrasonic.py', version: '1.0.0' },
     license: 'MIT'
   },
   {
@@ -175,7 +211,7 @@ export const MODULES: ModuleDef[] = [
     description: '6-axis accelerometer + gyro over I²C (the common MPU-6050).',
     instrument: 'imu',
     importName: 'mpu6050',
-    source: { kind: 'bundled', file: 'mpu6050.py' },
+    source: { kind: 'bundled', file: 'mpu6050.py', version: '1.0.0' },
     license: 'MIT'
   },
   {
@@ -195,7 +231,7 @@ export const MODULES: ModuleDef[] = [
     importName: 'lsm6ds3',
     // A DIFFERENT part from the LSM6DSOX below, not a spelling of it: an LSM6DS3
     // answers WHO_AM_I 0x69, which that driver rejects.
-    source: { kind: 'bundled', file: 'lsm6ds3.py' },
+    source: { kind: 'bundled', file: 'lsm6ds3.py', version: '1.0.0' },
     license: 'MIT'
   },
   {
@@ -219,7 +255,7 @@ export const MODULES: ModuleDef[] = [
     importName: 'neopixel_ws2812',
     // `neopixel` is a FROZEN built-in on most ports; this stub is a tiny
     // bit-banged fallback for ports that lack it. (See the file's comment.)
-    source: { kind: 'bundled', file: 'neopixel_ws2812.py' },
+    source: { kind: 'bundled', file: 'neopixel_ws2812.py', version: '1.0.0' },
     license: 'MIT'
   },
   {
@@ -240,7 +276,7 @@ export const MODULES: ModuleDef[] = [
     description: 'Helper for a quadrature rotary encoder (counts steps + direction).',
     instrument: 'encoder',
     importName: 'rotary',
-    source: { kind: 'bundled', file: 'rotary.py' },
+    source: { kind: 'bundled', file: 'rotary.py', version: '1.0.0' },
     license: 'MIT'
   },
 
@@ -251,7 +287,7 @@ export const MODULES: ModuleDef[] = [
     description: 'Play tones and RTTTL melodies on a piezo buzzer via PWM.',
     instrument: 'buzzer',
     importName: 'buzzer',
-    source: { kind: 'bundled', file: 'buzzer.py' },
+    source: { kind: 'bundled', file: 'buzzer.py', version: '1.0.0' },
     license: 'MIT'
   },
 
@@ -262,7 +298,7 @@ export const MODULES: ModuleDef[] = [
     description: 'Apply Gamepad/teleop axes from the IDE control channel to motors.',
     instrument: 'gamepad',
     importName: 'teleop',
-    source: { kind: 'bundled', file: 'teleop.py' },
+    source: { kind: 'bundled', file: 'teleop.py', version: '1.0.0' },
     license: 'MIT'
   },
   // --- Panel-less drivers --------------------------------------------------
@@ -272,8 +308,23 @@ export const MODULES: ModuleDef[] = [
     name: 'PCF8563 RTC',
     description: 'I²C real-time clock — the RTC on the XIAO Expansion Base (0x51).',
     importName: 'pcf8563',
-    source: { kind: 'bundled', file: 'pcf8563.py' },
+    source: { kind: 'bundled', file: 'pcf8563.py', version: '1.0.0' },
     license: 'MIT'
+  },
+  {
+    id: 'modulino',
+    name: 'Arduino Modulino',
+    description: 'Every Modulino module — buttons, knob, pixels, distance, IMU… — in one package.',
+    // No single instrument: the range spans IMU, light, distance, LED and more,
+    // so it groups under "Other drivers" rather than claiming one panel (#721).
+    importName: 'modulino',
+    // ONE catalog entry for the whole range (#722): all thirteen parts declare
+    // `module:modulino`, so the Driver Install banner — which probes by import —
+    // collapses them into a single install offer instead of thirteen identical
+    // ones. Its package.json declares `deps` (lsm6dsox, ltr-381rgb-01, HS3003)
+    // and mip installs those transitively, which is what makes Movement, Light
+    // and Thermo work at all.
+    source: { kind: 'mip', spec: 'github:arduino/arduino-modulino-mpy' }
   },
   {
     id: 'sdcard',
@@ -289,8 +340,78 @@ export const MODULES: ModuleDef[] = [
     description: 'Two DC motor channels over I²C — drives the Motor panel and teleop.',
     instrument: 'motor',
     importName: 'tb6612',
-    source: { kind: 'bundled', file: 'tb6612.py' },
+    source: { kind: 'bundled', file: 'tb6612.py', version: '1.0.0' },
     license: 'MIT'
+  },
+
+  // === CircuitPython — the Adafruit bundle (#758, epic #209) ================
+  // Every entry above is MicroPython. These are the same sensors again, as
+  // CircuitPython knows them: Adafruit's own drivers, taken from the Library
+  // Bundle at the version it pins. They are NOT alternatives a MicroPython user
+  // could pick — `moduleDialect` files them under CircuitPython and the Modules
+  // manager hides them from a MicroPython board, because the `.mpy` would not
+  // import there.
+  //
+  // Bundle DEPENDENCIES are deliberately absent from this list:
+  // `adafruit_mpu6050` needs `adafruit_bus_device` and `adafruit_register`, and
+  // the resolver installs them from the index. Restating them here would give
+  // the manager rows for libraries nobody chose, and a second place to be wrong
+  // when Adafruit changes one.
+  {
+    id: 'cp-hcsr04',
+    name: 'HC-SR04 ultrasonic (CircuitPython)',
+    description: "Adafruit's driver for the HC-SR04 ultrasonic range finder.",
+    instrument: 'range',
+    importName: 'adafruit_hcsr04',
+    source: { kind: 'bundle', module: 'adafruit_hcsr04' }
+  },
+  {
+    id: 'cp-vl53l0x',
+    name: 'VL53L0X ToF (CircuitPython)',
+    description: 'I²C driver for the VL53L0X time-of-flight distance sensor.',
+    instrument: 'range',
+    importName: 'adafruit_vl53l0x',
+    source: { kind: 'bundle', module: 'adafruit_vl53l0x' }
+  },
+  {
+    id: 'cp-ssd1306',
+    name: 'SSD1306 OLED (CircuitPython)',
+    description: 'I²C / SPI driver for the SSD1306 128×64 monochrome OLED display.',
+    instrument: 'i2c-display',
+    importName: 'adafruit_ssd1306',
+    source: { kind: 'bundle', module: 'adafruit_ssd1306' }
+  },
+  {
+    id: 'cp-mpu6050',
+    name: 'MPU-6050 IMU (CircuitPython)',
+    description: '6-axis accelerometer + gyro over I²C (the common MPU-6050).',
+    instrument: 'imu',
+    importName: 'adafruit_mpu6050',
+    source: { kind: 'bundle', module: 'adafruit_mpu6050' }
+  },
+  {
+    id: 'cp-lsm6ds',
+    name: 'LSM6DS IMU (CircuitPython)',
+    description: '6-axis accelerometer + gyro (LSM6DSOX / LSM6DS33) over I²C.',
+    instrument: 'imu',
+    importName: 'adafruit_lsm6ds',
+    source: { kind: 'bundle', module: 'adafruit_lsm6ds' }
+  },
+  {
+    id: 'cp-neopixel',
+    name: 'NeoPixel (CircuitPython)',
+    description: 'WS2812 / NeoPixel addressable RGB LED strip driver.',
+    instrument: 'led',
+    importName: 'neopixel',
+    source: { kind: 'bundle', module: 'neopixel' }
+  },
+  {
+    id: 'cp-motor',
+    name: 'Motor / servo (CircuitPython)',
+    description: 'DC motors, stepper motors and servos over PWM — Adafruit’s motor library.',
+    instrument: 'motor',
+    importName: 'adafruit_motor',
+    source: { kind: 'bundle', module: 'adafruit_motor' }
   }
 ]
 
@@ -305,6 +426,36 @@ export function moduleById(id: string): ModuleDef | undefined {
 /** Every module powering a given instrument, in catalog order. Pure. */
 export function modulesForInstrument(instrument: InstrumentId): ModuleDef[] {
   return MODULES.filter((m) => m.instrument === instrument)
+}
+
+/**
+ * Which runtime a module's code is FOR, derived from where it comes from (#758).
+ *
+ * Not a field on the entry, because it is not an independent fact: a shipped
+ * stub and a `mip` spec are MicroPython source installed by a MicroPython
+ * mechanism, and an Adafruit bundle library is CircuitPython bytecode. Deriving
+ * it means the two can never disagree — adding a bundle module cannot forget to
+ * say it is CircuitPython. Pure.
+ */
+export function moduleDialect(def: ModuleDef): Dialect {
+  return def.source.kind === 'bundle' ? 'circuitpython' : 'micropython'
+}
+
+/**
+ * The modules a board of this dialect can actually install.
+ *
+ * `'unknown'` — and no dialect at all, which is what a disconnected board
+ * looks like — returns EVERYTHING, on purpose: with nothing connected there is
+ * no wrong answer to hide, and browsing the full catalog is how a user decides
+ * what to buy. Once a board says what it is, the other runtime's drivers go
+ * away rather than sit there offering an install that could only fail. Pure.
+ */
+export function modulesForDialect(
+  dialect: Dialect | undefined | null,
+  defs: ModuleDef[] = MODULES
+): ModuleDef[] {
+  if (!dialect || dialect === 'unknown') return [...defs]
+  return defs.filter((m) => moduleDialect(m) === dialect)
 }
 
 /** One instrument's modules, grouped together for the Modules manager. */
@@ -389,33 +540,56 @@ export function importProbeSnippet(importName: string): string {
 }
 
 /**
- * The Modules manager's per-module install status. `installed` ⇒ importable on
- * the board; `available` ⇒ in the catalog but not (yet) on the board; `unknown`
- * ⇒ not probed (no connection / probe not run).
+ * Extract the `__version__ = "X.Y.Z"` literal from Python driver source — a
+ * whole file, or the single line `readFileLine` returns — or `null` if absent
+ * (a legacy copy predating versioning). Anchored to the start of a LINE
+ * (allowing indentation) so a `__version__` example inside a doc comment is
+ * never matched (its line starts with `#`, which `^\s*` can't cross). The same
+ * rule `instrumentsLib.parseLibVersion` applies to the instrument library,
+ * hosted here so drivers and library share ONE parse. Pure.
  */
-export type ModuleStatus = 'installed' | 'available' | 'unknown'
+export function parseModuleVersion(source: string | null | undefined): string | null {
+  if (!source) return null
+  const m = source.match(/^\s*__version__\s*=\s*['"]([^'"]+)['"]/m)
+  return m ? m[1] : null
+}
+
+/**
+ * The Modules manager's per-module install status. `installed` ⇒ importable on
+ * the board (and, for a bundled module, its `/lib` copy matches the shipped
+ * version where that was checked); `outdated` ⇒ importable but the `/lib` copy
+ * is STALE against the version the catalog declares (#707 — offer an update,
+ * not a lie); `available` ⇒ in the catalog but not (yet) on the board;
+ * `unknown` ⇒ not probed (no connection / probe not run).
+ */
+export type ModuleStatus = 'installed' | 'outdated' | 'available' | 'unknown'
 
 /**
  * Diff the catalog against the set of import-names found present on the board.
  *
  * `installedImportNames` is the set the renderer collected by running
  * {@link importProbeSnippet} for each module (or a bulk probe) and seeing the
- * {@link MODULE_PRESENT} sentinel. When `connected` is false we don't know, so
- * every module is `'unknown'`. Pure; returns a fresh id→status map covering
- * exactly the catalog ids — the Modules manager reads it to render the
- * INSTALLED vs AVAILABLE split.
+ * {@link MODULE_PRESENT} sentinel. `outdatedImportNames` is the (possibly
+ * empty) subset whose `/lib` copy read back STALE (#707) — only ever names that
+ * also probed importable, and only bundled modules can appear in it. When
+ * `connected` is false we don't know, so every module is `'unknown'`. Pure;
+ * returns a fresh id→status map covering exactly the catalog ids — the Modules
+ * manager reads it to render the INSTALLED vs AVAILABLE split.
  */
 export function diffInstalled(
   installedImportNames: ReadonlySet<string>,
   connected: boolean,
-  defs: ModuleDef[] = MODULES
+  defs: ModuleDef[] = MODULES,
+  outdatedImportNames: ReadonlySet<string> = new Set()
 ): Record<string, ModuleStatus> {
   const out: Record<string, ModuleStatus> = {}
   for (const m of defs) {
     if (!connected) {
       out[m.id] = 'unknown'
+    } else if (!installedImportNames.has(m.importName)) {
+      out[m.id] = 'available'
     } else {
-      out[m.id] = installedImportNames.has(m.importName) ? 'installed' : 'available'
+      out[m.id] = outdatedImportNames.has(m.importName) ? 'outdated' : 'installed'
     }
   }
   return out

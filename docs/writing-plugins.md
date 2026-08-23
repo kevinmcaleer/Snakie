@@ -136,6 +136,57 @@ one linter are isolated (logged to stderr) and never abort the others.
 Snakie ships a real Python linter built on this API (ruff / pyflakes) plus a
 **Problems** panel — see [`docs/linting.md`](./linting.md).
 
+## Refactorings (right-click → Refactor…)
+
+Where a linter says *this is a problem*, a **refactoring provider** says *here
+is the change, and here is why*. Register one with `@plugin.refactor(name)`:
+
+```python
+from snakie import plugin, refactoring, fix
+
+@plugin.refactor("house-style")
+def house_style(ctx):
+    sel = ctx.selection
+    if not sel or not sel.text.startswith("print("):
+        return []
+    return refactoring(
+        "Use the school logger",
+        "House style routes output through log() so it can be silenced",
+        fixes=[fix("Use log()", "log(" + sel.text[6:],
+                   line=sel.start_line, column=sel.start_column,
+                   end_line=sel.end_line, end_column=sel.end_column)],
+        help_article="school-logging",
+        safe=False,
+    )
+```
+
+- The handler runs when the user opens **Refactor…**, and gets the same
+  `Context` a command does — `ctx.selection` is what they highlighted, so you
+  can offer something for *that* code rather than the whole file.
+- Build each offer with **`refactoring(title, message, *, fixes, line=...,
+  column=..., end_line=..., end_column=..., help_article=..., safe=False)`**.
+  `fixes` are ranged edits built with the same `fix()` a linter uses, so both
+  paths land in one editor experience.
+- **Nothing is applied silently.** Snakie previews your edits as a diff, with a
+  **Why?** link to `help_article`, exactly as it does for its own rules. Set
+  `help_article` — an offer that explains itself teaches; one that does not is
+  just a surprise.
+- Leave `safe=False` unless the rewrite is provably behaviour-preserving.
+  Snakie shows a caution for anything that is not, and only `safe` offers are
+  eligible for bulk **Tidy this file**.
+- Return a single offer, a list, or `None`. A provider that raises is reported
+  to stderr and skipped — a broken plugin cannot take the whole menu down.
+
+A worked example lives in
+[`examples/plugins/refactor_demo/`](../examples/plugins/refactor_demo/): a
+classroom house style that routes `print()` through a logger and names bare pin
+numbers.
+
+This is **desktop-only** by nature — it runs in the Python host, which the web
+build has no equivalent of. Snakie's own catalogue of ~50 refactorings is pure
+TypeScript and works everywhere, with or without Python; plugin rules are
+additive on top of it.
+
 ## Run a command
 
 1. Open the **Plugins** view from the activity bar (the puzzle-piece icon).

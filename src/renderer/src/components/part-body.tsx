@@ -11,7 +11,14 @@ import {
 } from './part-editor.util'
 import { isPowerLed, powerLedState } from '../../../shared/power-led'
 import type { PowerLedState } from '../../../shared/power-led'
-import { itemSide, mirrorRotationX, mirrorX, padPassesThrough } from '../../../shared/part'
+import {
+  coerceJstFamily,
+  cornerRadiusFraction,
+  itemSide,
+  mirrorRotationX,
+  mirrorX,
+  padPassesThrough
+} from '../../../shared/part'
 import type {
   OnboardLed,
   PartConnector,
@@ -285,6 +292,7 @@ export function capabilityBadges(cx: number, cy: number, caps: PartPinCapability
 
 export type { Box } from './part-editor.util'
 import { connectorContacts, connectorDims, housedGroupConnectors, pinLabelHidden } from './part-editor.util'
+import { pinLabelScales } from './pin-label-scale'
 
 /** Pad fill by electrical role (kept close to the Board View's palette). */
 export const PAD_FILL: Record<PartPinType, string> = {
@@ -540,20 +548,32 @@ export function boxedPinLabel(
   label: string,
   variable: string | undefined,
   color: string,
-  /** The body is rotated 180°, so the glyphs would read upside down. Flip each
-   *  text about its own anchor AND swap its anchor end↔start, which lands the
-   *  glyphs upright in the same span rather than throwing them across the board
-   *  (a plain counter-rotation moves the text to the other side of its anchor).
-   *  Only meaningful for left/right pins — a top/bottom pin's label ends up at
-   *  90°/270°, which reads fine on its side and is left alone. */
-  upright = false
+  /**
+   * The rotation the CALLER applied to the body, in degrees. Each text is
+   * counter-rotated by it about its own anchor, so the glyphs read upright on
+   * screen however the part is turned — the annotation itself stays laid out in
+   * the part's frame, which is what keeps it on the outward side of its pin.
+   *
+   * This used to be a boolean that fired only at exactly 180°, and only for
+   * left/right pins — so a part turned a quarter turn had its numbers and
+   * labels turn with it, and a top/bottom pin at 180° was left upside down.
+   *
+   * A HALF turn is the one case that also needs the anchor swapped: rotating a
+   * text 180° about its anchor throws the glyphs across it, so start↔end puts
+   * them back in the same span. A quarter turn doesn't mirror, so it doesn't.
+   */
+  bodyRotate = 0
 ): JSX.Element {
+  const counter = (((-bodyRotate % 360) + 360) % 360) || 0
+  const halfTurn = counter === 180
   const B = 14
   const G = 3
   const labelW = label.length * 6.2
   const shownNum = padPinNumber(num)
-  const flipAt = (x: number, y: number): string | undefined => (upright ? `rotate(180 ${x} ${y})` : undefined)
-  const anchor = (a: 'start' | 'end'): 'start' | 'end' => (upright ? (a === 'start' ? 'end' : 'start') : a)
+  const flipAt = (x: number, y: number): string | undefined =>
+    counter ? `rotate(${counter} ${x} ${y})` : undefined
+  const anchor = (a: 'start' | 'end'): 'start' | 'end' =>
+    halfTurn ? (a === 'start' ? 'end' : 'start') : a
   const numBox = (bx: number, by: number): JSX.Element => (
     <>
       {/* No number and no GPIO ⇒ no chip. An empty grey box is noise, and every
@@ -899,28 +919,56 @@ export function onboardLedGlyph(
     )
   }
   const color = led.color || '#39d353'
+  const r = onboardLedRadius(led, pxPerMm)
+  const k = r / SINGLE_LED_R
   // A power indicator that the solver says has no supply: the unlit package —
   // the LED's own colour dimmed almost out, no glow, no specular highlight. It
   // reads as "this part isn't powered" at a glance, which is the point (#698).
   if (state === 'dark') {
     return (
       <g style={{ pointerEvents: 'none' }}>
-        <circle cx={cx} cy={cy} r={5} fill={color} opacity={0.22} stroke="#0006" strokeWidth={0.8} />
+        <circle cx={cx} cy={cy} r={r} fill={color} opacity={0.22} stroke="#0006" strokeWidth={0.8} />
         {ring}
       </g>
     )
   }
   // Supplied: the same LED with a wider, stronger halo, so lit reads as brighter
   // than an ordinary indicator rather than merely different.
+  //
+  // The glow is a constant RING around the package, not a constant multiple of it:
+  // a 5 mm LED on a 20 mm module is a quarter of the board, and a proportional halo
+  // would then be half of it — a translucent disc spilling over the whole part. A
+  // fixed ring keeps a default-sized indicator looking exactly as it always has.
   const halo = state === 'lit' ? { r: 12, o: 0.45 } : { r: 9, o: 0.3 }
   return (
     <g style={{ pointerEvents: 'none' }}>
-      <circle cx={cx} cy={cy} r={halo.r} fill={color} opacity={halo.o} />
-      <circle cx={cx} cy={cy} r={5} fill={color} stroke="#0006" strokeWidth={0.8} />
-      <circle cx={cx - 1.6} cy={cy - 1.6} r={1.5} fill="#fff" opacity={0.85} />
+      <circle cx={cx} cy={cy} r={r + (halo.r - SINGLE_LED_R)} fill={color} opacity={halo.o} />
+      <circle cx={cx} cy={cy} r={r} fill={color} stroke="#0006" strokeWidth={0.8} />
+      <circle cx={cx - 1.6 * k} cy={cy - 1.6 * k} r={1.5 * k} fill="#fff" opacity={0.85} />
       {ring}
     </g>
   )
+}
+
+/** The drawn radius, in px, of a `single` LED's package. */
+const SINGLE_LED_R = 5
+
+/**
+ * How big to draw an onboard LED's package, in px.
+ *
+ * A board with real dimensions and an LED that declares its physical
+ * {@link OnboardLed.sizeMm} is drawn LIFE-SIZE, so a 5 mm through-hole LED on a
+ * 20 mm Grove module reads as the quarter of the board it actually is instead of
+ * the same small dot every indicator gets. Without either, the legacy fixed size —
+ * which is what every board that doesn't declare a footprint still wants.
+ *
+ * Exported because the silk label has to clear the package: with a scaled LED the
+ * old fixed drop put "LED" inside the lens.
+ */
+export function onboardLedRadius(led: OnboardLed, pxPerMm = 0): number {
+  if (led.kind === 'rgb') return 9
+  if (led.sizeMm && led.sizeMm > 0 && pxPerMm > 0) return (led.sizeMm * pxPerMm) / 2
+  return led.kind === 'neopixel' ? 7 : SINGLE_LED_R
 }
 
 /** The silk label for an onboard LED: its name + GPIO(s) — e.g. `LED · GP25`,
@@ -960,12 +1008,20 @@ export function onboardLedLabel(led: OnboardLed): string {
  * plug INTO** (QWIIC/JST/Grove — a shell with recessed contacts), because the two
  * are drawn differently and only the socket gets a shell lip.
  */
-function connectorStyle(kind: PartConnector['kind']): {
+export function connectorStyle(
+  kind: PartConnector['kind'],
+  variant?: string
+): {
   shell: string
   edge: string
   contact: string
   male: boolean
 } {
+  // JST SH board header — "PA (Heat resistance), natural (ivory)" straight off
+  // JST's datasheet. A QWIIC port really is that pale; it drew near-black here,
+  // which is the DuPont colour. The lead that plugs into it is a shade lighter
+  // still (white PBT) — see `cablePlugStyle`.
+  const shIvory = { shell: '#efe9d8', edge: '#b3ab95', contact: '#e6c34a', male: false }
   switch (kind) {
     case 'grove':
       // Grove's instantly-recognisable off-white keyed shell.
@@ -976,9 +1032,43 @@ function connectorStyle(kind: PartConnector['kind']): {
       // The colour these blocks are known by. Screws are steel, not gold — the
       // one visual cue that says "screw terminal" rather than "pin header".
       return { shell: '#1f7a3a', edge: '#0d3d1d', contact: '#c9ccd1', male: false }
+    case 'jst':
+      // A JST declared as the SH family IS a QWIIC port — same moulding, so the
+      // two spellings must not look different (their SIZES were unified for the
+      // same reason). Other families keep the dark shell: their colours aren't
+      // datasheet-checked, so this doesn't guess for them.
+      return coerceJstFamily(variant) === 'sh'
+        ? shIvory
+        : { shell: '#1c1f24', edge: '#0b0d10', contact: '#e6c34a', male: false }
     default:
-      // QWIIC / STEMMA QT and plain JST — dark JST-SH / JST-PH housings.
-      return { shell: '#1c1f24', edge: '#0b0d10', contact: '#e6c34a', male: false }
+      return shIvory // qwiic / STEMMA QT
+  }
+}
+
+/**
+ * The palette for the housing on the END OF A LEAD — the plug drawn over the
+ * wires where a cable seats into a socket.
+ *
+ * Separate from {@link connectorStyle} because a plug and the socket it seats
+ * into are genuinely different mouldings: a QWIIC/JST-SH **lead** is white PBT
+ * (JST's SH datasheet: *"PBT, natural (white)"*) while the board header beside
+ * it is a darker moulding, and a DuPont lead is black nylon over a black header.
+ * Grove is off-white at both ends. Sizes still come from the one
+ * {@link connectorSize}, so the two can't disagree about the shape — only the
+ * colour differs, which is what the real parts do.
+ *
+ * `edge` is always darker than `shell` so a white plug still reads against the
+ * light (skeuomorph) breadboard as well as the dark one.
+ */
+export function cablePlugStyle(kind: PartConnector['kind']): { shell: string; edge: string } {
+  switch (kind) {
+    case 'grove':
+      return { shell: '#e8e5da', edge: '#9a968a' }
+    case 'qwiic':
+      // The white JST-SH housing every QWIIC / STEMMA QT lead ships with.
+      return { shell: '#f5f3ee', edge: '#8e8a80' }
+    default:
+      return { shell: '#22262c', edge: '#0b0d10' }
   }
 }
 
@@ -996,6 +1086,30 @@ export function connectorSize(conn: PartConnector, pxPerMm = 0): { n: number; w:
     return { n, w: Math.max(16, wMm * pxPerMm), h: Math.max(8, depthMm * pxPerMm) }
   }
   return { n, w: Math.max(18, n * 5 + 6), h: 11 }
+}
+
+/**
+ * The same socket, measured in the coordinates of a canvas that draws the BODY at
+ * `bodyScale` (#772).
+ *
+ * The order matters. A part body is laid out in its own reference frame and then
+ * uniformly scaled, so the socket glyph is sized with the BODY's px/mm and shrinks
+ * with everything else. Anything drawing over that socket — a seated plug — has to
+ * do the same two steps in the same order: calling {@link connectorSize} straight
+ * with the CANVAS px/mm looks equivalent but isn't, because the minimum sizes that
+ * keep a socket visible are absolute pixels. They bite at the smaller scale and not
+ * the larger one, so the plug came out bigger than the socket it plugs into — and
+ * only on some boards, which is what made it look like an offset rather than a
+ * units mix-up.
+ */
+export function seatedConnectorSize(
+  conn: PartConnector,
+  bodyPxPerMm: number,
+  bodyScale: number
+): { w: number; h: number } {
+  const { w, h } = connectorSize(conn, bodyPxPerMm)
+  const k = bodyScale > 0 ? bodyScale : 1
+  return { w: w * k, h: h * k }
 }
 
 /** A connector glyph at (cx, cy): a dark JST-SH housing with gold contacts (a
@@ -1027,7 +1141,7 @@ export function connectorGlyph(
   bodyOnly = false
 ): JSX.Element {
   const { n, w, h } = connectorSize(conn, pxPerMm)
-  const { shell, edge, contact, male } = connectorStyle(conn.kind)
+  const { shell, edge, contact, male } = connectorStyle(conn.kind, conn.variant)
   const x0 = cx - w / 2
   const y0 = cy - h / 2
   // Contacts scale with the housing. A socket gets thin recessed blades; a male
@@ -1301,9 +1415,9 @@ export function PartBody({
   const physicalPad = connPxPerMm > 0 ? Math.max(5, Math.min(16, 1.9 * connPxPerMm)) : 12
   // Some boards pack pins FAR tighter than the nominal pitch (e.g. the Servo 2040's
   // 3-pin servo clusters render barely one pad-width apart), so a physical 1.9mm pad
-  // and the fixed 14px number box collide. Measure the tightest ACTUAL centre-to-
-  // centre pin gap and shrink the pads + number boxes + labels together to fit it —
-  // a no-op on comfortably-pitched boards, where `pinScale` stays 1.
+  // would touch its neighbour. Measure the tightest ACTUAL centre-to-centre gap
+  // between ANY two pins — a pad collides with whatever is nearest it, whichever
+  // edge that pin faces — and cap the pad to fit.
   let minPinGapPx = Infinity
   for (let i = 0; i < pins.length; i++) {
     for (let j = i + 1; j < pins.length; j++) {
@@ -1315,14 +1429,29 @@ export function PartBody({
   const padSize = Number.isFinite(minPinGapPx)
     ? Math.max(3, Math.min(physicalPad, minPinGapPx * 0.82))
     : physicalPad
-  // Scale the annotations (number box + label + chips) down about the pin so a
-  // dense row stays legible. The divisor sets the target box/gap ratio: the fixed
-  // 14px number box fills ~0.78 of an 18px gap — as large as fits while still
-  // breathing. The floor is low (0.25) because very dense boards (Servo 2040 packed
-  // on a small board-body box) need an aggressive shrink to stop the number boxes
-  // overlapping; they stay readable via the view's zoom. Comfortable boards keep
-  // pinScale = 1.
-  const pinScale = Number.isFinite(minPinGapPx) ? Math.max(0.25, Math.min(1, minPinGapPx / 18)) : 1
+  // How big each edge's pin annotations (number box + label + variable + chips) are
+  // drawn (#778). Unlike a pad, an annotation is anchored to the board EDGE its pin
+  // faces, so it can only collide with the other annotations on that same edge —
+  // and only along that edge's line. `pinLabelScales` sizes each edge from the room
+  // its own labels have, physically (see that module): identical hardware drawn at
+  // the same canvas scale gets identical type, whatever outline it sits on.
+  //
+  // Only pins that actually DRAW an annotation count — a hidden label (a servo
+  // header's V+/GND rows) collides with nothing. `boxedPins` is deliberately NOT
+  // consulted: the mini board boxes only the pins the code uses, and the type must
+  // not resize as that code is edited.
+  const labelScales = pinLabelScales({
+    pins: pins.flatMap((rp) => {
+      if (pinLabelHidden(part, rp.pin)) return []
+      const f = padOnFace(rp.pin, rp.x)
+      if (!f.show) return []
+      const rot = f.x === rp.x ? rp.pin.rotation : mirrorRotationX(rp.pin.rotation)
+      const edge = pinOutwardDir(rot, f.x, rp.y)
+      return [{ edge, along: edge === 'left' || edge === 'right' ? py(rp.y) : px(f.x) }]
+    }),
+    nominalPitchPx: spacing * connPxPerMm,
+    bodyScale
+  })
   const holeR = (diameter: number): number =>
     part.dimensions && part.dimensions.width > 0
       ? Math.max(3, (diameter / part.dimensions.width) * box.w)
@@ -1334,7 +1463,10 @@ export function PartBody({
   }
 
   const usePolygon = part.shape?.kind === 'polygon' && (part.polygon?.length ?? 0) >= 3
-  const cornerR = part.shape?.cornerRadius != null ? part.shape.cornerRadius * Math.min(box.w, box.h) : 8
+  // Honour an explicit 0 (square corners); only fall back when truly unset.
+  // mm wins over the fraction when the part knows its size (#739).
+  const cornerFrac = cornerRadiusFraction(part.shape, part.dimensions)
+  const cornerR = cornerFrac != null ? cornerFrac * Math.min(box.w, box.h) : 8
   const polyPoints = (part.polygon ?? []).map((p) => `${px(p.x)},${py(p.y)}`).join(' ')
 
   const shapeEl = (props: Record<string, unknown>): JSX.Element =>
@@ -1523,21 +1655,28 @@ export function PartBody({
           // 90° on the top/bottom edges so dense rows don't collide.
           const ll = pinLabelLayout(cx, cy, rp.pin.rotation, rp.x, rp.y, size, box)
           const bdir = pinOutwardDir(rp.pin.rotation, rp.x, rp.y)
-          // Counter-scale the boxed annotation, pivoted at the board EDGE, so the
-          // number box + label stay edge-anchored at a constant on-screen size on a
-          // scaled placed part (matching the main board). No-op at scale 1.
+          // Counter-scale the annotation, pivoted at the board EDGE, so the number
+          // box + label stay edge-anchored at a constant on-screen size on a scaled
+          // placed part (matching the main board). No-op at scale 1.
+          //
+          // This used to apply to the BOXED annotation only, so a placed part's silk
+          // label kept its body's scale — the same 2.54mm header set in 2.7× the type
+          // on a 51mm part as on a 19mm one, which is half of #778. The capability
+          // chips already counter-scale themselves (see `capabilityChips`), so they
+          // are left to do it and are not wrapped here.
           const epx = bdir === 'left' ? box.x : bdir === 'right' ? box.x + box.w : cx
           const epy = bdir === 'top' ? box.y : bdir === 'bottom' ? box.y + box.h : cy
-          const boxedCounter =
-            boxThis && bodyScale !== 1
+          const counterTf =
+            bodyScale !== 1
               ? `translate(${epx} ${epy}) scale(${1 / bodyScale}) translate(${-epx} ${-epy})`
               : undefined
           // Shrink the annotation (number box + label + chips) about the board edge
-          // on a tight-pitch board so a dense row stays legible (no-op at scale 1),
-          // matching the pad cap above.
+          // when THIS edge's labels are tight, so a dense row stays legible (no-op at
+          // scale 1).
+          const labelScale = labelScales[bdir]
           const densityTf =
-            pinScale !== 1
-              ? `translate(${epx} ${epy}) scale(${pinScale}) translate(${-epx} ${-epy})`
+            labelScale !== 1
+              ? `translate(${epx} ${epy}) scale(${labelScale}) translate(${-epx} ${-epy})`
               : undefined
           // Manual label placement (#…): shift the whole annotation by the pin's
           // saved labelOffset (a fraction of the board box).
@@ -1566,7 +1705,7 @@ export function PartBody({
               {!bodyOnly && !pinLabelHidden(part, rp.pin) && (
               <g transform={labelGroupTf}>
               {boxThis ? (
-                <g transform={boxedCounter}>
+                <g transform={counterTf}>
                   {boxedPinLabel(
                     box,
                     cx,
@@ -1576,20 +1715,22 @@ export function PartBody({
                     rp.pin.label || rp.pin.name,
                     pinVar,
                     pinVariables?.get(i)?.color ?? '#cfd6dd',
-                    textRot === 180 && (bdir === 'left' || bdir === 'right')
+                    textRot
                   )}
                 </g>
               ) : boxedActive ? null : (
                 text && (
-                  <text
-                    x={ll.lx}
-                    y={ll.ly}
-                    className="pcv__pin-label"
-                    textAnchor={ll.anchor}
-                    transform={pinLabelTransform(ll.lx, ll.ly, ll.rotate)}
-                  >
-                    {text}
-                  </text>
+                  <g transform={counterTf}>
+                    <text
+                      x={ll.lx}
+                      y={ll.ly}
+                      className="pcv__pin-label"
+                      textAnchor={ll.anchor}
+                      transform={pinLabelTransform(ll.lx, ll.ly, ll.rotate)}
+                    >
+                      {text}
+                    </text>
+                  </g>
                 )
               )}
               {/* Capability chips (breadboard hover) — box-relative like the labels
@@ -1753,7 +1894,9 @@ export function PartBody({
           if (!faces(led)) return null
           const cx = px(led.x)
           const cy = py(led.y)
-          const labelY = cy + 18
+          // Clear the package: a life-size 5 mm LED is far wider than the fixed
+          // drop, which would print its name across the lens.
+          const labelY = cy + Math.max(18, onboardLedRadius(led, connPxPerMm) + 11)
           const sel = isSel({ type: 'led', index: i })
           return (
             <g key={`led${i}`}>

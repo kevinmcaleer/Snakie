@@ -102,3 +102,32 @@
   font-family: var(--font-mono), 'JetBrains Mono', monospace;
   background: #15171a;
 }
+
+/* --- A web pop-out with no editor window left (#781) ---------------------- */
+/* Not the instrument's dark faceplate: this is a message, so it wears the app's
+ * own chrome and reads in BOTH skins. */
+.instr-offline {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  height: 100vh;
+  padding: 20px 22px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+}
+.instr-offline__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--accent-ink);
+}
+.instr-offline__body {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}

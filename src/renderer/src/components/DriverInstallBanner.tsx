@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { driverInstallMethod, driverModuleId, type PartDriverNeed } from './part-editor.util'
-import { moduleById } from '../../../shared/modules-catalog'
+import { moduleById, type ModuleDef } from '../../../shared/modules-catalog'
+import { probeOutdatedModules } from '../lib/moduleFreshness'
 import { installPartDriver } from './driver-install'
 import { Notice } from './Notice'
 import type { DriverFile } from '../../../preload/index.d'
@@ -15,9 +16,11 @@ import './DriverInstallBanner.css'
  * the parts (deduped) and offers a single "Install drivers" action — nothing is
  * copied to the device without the user clicking it.
  *
- * Per driver, the install mechanism is chosen by {@link driverInstallMethod}:
+ * Per driver, the install mechanism is chosen by {@link driverInstallMethod}.
+ * All three end in files written to the board — since #776 nothing is fetched
+ * BY the board, which has no internet connection of its own:
  *  - `mip`  → `window.api.packages.install(source, { target })` (a github:/pypi:
- *             spec or a bare micropython-lib package name);
+ *             spec or a bare micropython-lib package name), downloaded in main;
  *  - `copy` → read the file's source (a bundled file in the part folder, or an
  *             http(s) URL — both via `parts.readDriverSource` in main, past the
  *             renderer CSP) then `device.mkdir` each ancestor folder + write it to
@@ -28,10 +31,14 @@ import './DriverInstallBanner.css'
  *             part folder that needs it.
  *
  * The banner is BOARD-AWARE: it stats each `copy` driver's target, and probes each
- * `module` driver BY IMPORT (a mip-backed module lands wherever mip decides, so a
- * guessed path would never match and the banner would nag for ever), showing only
- * the drivers that are actually MISSING — so it clears once
- * they're installed (its own install, or another window's, via the shared
+ * `module` driver BY IMPORT (an upstream package lands wherever its own
+ * `package.json` puts it, so a guessed path would never match and the banner
+ * would nag for ever), showing the
+ * drivers that are MISSING — plus, for bundled catalog modules, the ones whose
+ * `/lib` copy is OUTDATED against the shipped version (#707: presence alone let a
+ * stale driver read as installed for ever, so a bug-fixed driver could never
+ * reach a board that already had the old one). Rows clear once installed /
+ * updated (its own install, or another window's, via the shared
  * `modules.onChanged` signal), instead of lingering forever. Installing touches the
  * device, so the action is disabled until a board is connected.
  */
@@ -65,9 +72,12 @@ export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.El
   const [running, setRunning] = useState(false)
   // Per-driver status; absent ⇒ not started. Cleared when the part set changes.
   const [statuses, setStatuses] = useState<Record<string, DriverStatus>>({})
-  // Driver rows already present on the board (keyed by driverKey). Probed on
-  // connect, after an install, and when another window signals a change.
+  // Driver rows already present AND current on the board (keyed by driverKey).
+  // Probed on connect, after an install, and when another window signals a change.
   const [present, setPresent] = useState<Set<string>>(new Set())
+  // Rows whose /lib copy read back STALE against the shipped version (#707) —
+  // still shown, worded as an update rather than an install.
+  const [outdated, setOutdated] = useState<Set<string>>(new Set())
   const [probeNonce, setProbeNonce] = useState(0)
 
   // Track connection so Install is gated on a present board (it writes to it).
@@ -102,21 +112,23 @@ export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.El
   useEffect(() => {
     if (!connected) {
       setPresent(new Set())
+      setOutdated(new Set())
       return
     }
     let alive = true
     void (async (): Promise<void> => {
       const found = new Set<string>()
+      const stale = new Set<string>()
       // Catalog-module drivers are probed by IMPORT, not by path: a `mip`-backed
       // module (e.g. my9221) lands wherever mip decides, so stat-ing a guessed
       // target would never find it and the banner would nag for ever.
-      const modNeeds: { key: string; name: string }[] = []
+      const modNeeds: { key: string; def: ModuleDef }[] = []
       for (const need of needs) {
         for (const d of need.drivers) {
           const method = driverInstallMethod(d.source)
           if (method === 'module') {
             const def = moduleById(driverModuleId(d.source))
-            if (def) modNeeds.push({ key: driverKey(need, d), name: def.importName })
+            if (def) modNeeds.push({ key: driverKey(need, d), def })
             continue
           }
           if (method !== 'copy') continue
@@ -131,11 +143,34 @@ export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.El
       }
       if (modNeeds.length) {
         const importable = new Set(
-          await window.api.modules.probeInstalled(modNeeds.map((m) => m.name)).catch(() => [])
+          await window.api.modules
+            .probeInstalled(modNeeds.map((m) => m.def.importName))
+            .catch(() => [])
         )
-        for (const m of modNeeds) if (importable.has(m.name)) found.add(m.key)
+        // Importable is not the same as CURRENT (#707): check each importable
+        // bundled module's /lib copy against the catalog-declared version, so a
+        // stale driver is offered as an update instead of reading as done.
+        // (Deduped by import-name — two parts needing one module probe it once.)
+        const importableDefs = [
+          ...new Map(
+            modNeeds
+              .filter((m) => importable.has(m.def.importName))
+              .map((m) => [m.def.importName, m.def])
+          ).values()
+        ]
+        const outdatedNames = await probeOutdatedModules(importableDefs).catch(
+          () => new Set<string>()
+        )
+        for (const m of modNeeds) {
+          if (!importable.has(m.def.importName)) continue
+          if (outdatedNames.has(m.def.importName)) stale.add(m.key)
+          else found.add(m.key)
+        }
       }
-      if (alive) setPresent(found)
+      if (alive) {
+        setPresent(found)
+        setOutdated(stale)
+      }
     })()
     return () => {
       alive = false
@@ -193,14 +228,22 @@ export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.El
   const done = rows.filter(({ id }) => statuses[id]?.state === 'ok').length
   const errored = rows.some(({ id }) => statuses[id]?.state === 'error')
   const allOk = total > 0 && done === total
+  // Every visible row is an update (#707) ⇒ word the banner as one — "needs a
+  // driver" on a board that HAS the driver reads as a false alarm.
+  const allStale = total > 0 && rows.every(({ id }) => outdated.has(id))
 
   // The summary must carry WHY Install is disabled, or a greyed-out button reads
   // as broken rather than blocked.
+  const one = visibleNeeds.length === 1
   const summary = allOk
     ? 'Drivers installed'
-    : `${visibleNeeds.length} part${visibleNeeds.length === 1 ? '' : 's'} need${
-        visibleNeeds.length === 1 ? 's' : ''
-      } a driver${connected ? '' : ' — connect a board'}`
+    : allStale
+      ? `${visibleNeeds.length} part${one ? '' : 's'} ha${one ? 's' : 've'} a driver update${
+          connected ? '' : ' — connect a board'
+        }`
+      : `${visibleNeeds.length} part${one ? '' : 's'} need${one ? 's' : ''} a driver${
+          connected ? '' : ' — connect a board'
+        }`
 
   return (
     <Notice
@@ -218,10 +261,16 @@ export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.El
                 ? `Installing… ${done}/${total}`
                 : errored
                   ? 'Retry install'
-                  : 'Install drivers',
+                  : allStale
+                    ? 'Update drivers'
+                    : 'Install drivers',
               onClick: () => void installAll(),
               disabled: running || !connected,
-              title: connected ? 'Install the drivers onto the board' : 'Connect a board first'
+              title: connected
+                ? allStale
+                  ? 'Update the drivers on the board'
+                  : 'Install the drivers onto the board'
+                : 'Connect a board first'
             }
       }
       onDismiss={() => setDismissed(true)}
@@ -237,6 +286,14 @@ export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.El
                 <span className="drvbanner__row-target" title={`Installs to ${d.target}`}>
                   → {d.target}
                 </span>
+                {outdated.has(id) && (
+                  <span
+                    className="drvbanner__row-stale"
+                    title="An older copy of this driver is on the board — installing updates it"
+                  >
+                    update
+                  </span>
+                )}
                 {st === 'error' && statuses[id]?.message && (
                   <span className="drvbanner__row-error">{statuses[id]?.message}</span>
                 )}

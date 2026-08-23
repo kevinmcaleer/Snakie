@@ -4,9 +4,9 @@ import { PartEditor } from './PartEditor'
 import { OPEN_PART_EDITOR_EVENT, PARTS_CHANGED_EVENT, type OpenPartEditorDetail } from './PartsPanel'
 import { preloadPartImages } from './part-image-preload'
 import { blankRobot, type RobotDefinition } from '../../../shared/robot'
-import { readRobotModel } from '../../../shared/krf'
-import { jointNames, jointDisplayLimits } from './robot-assembly'
-import { attachPartMesh } from './robot-part-mesh'
+import { addPartsToProject, offerLibraryInstall } from './project-parts'
+import { SyncControl } from './SyncControl'
+import { movableJointNames, jointDisplayLimits } from './robot-assembly'
 import { useWorkspace } from '../store/workspace'
 import { useWorkspaceLayout } from '../store/layout'
 import { useEditorSettings } from '../store/settings'
@@ -98,6 +98,9 @@ export function BoardPane(): JSX.Element {
   const saveSeqRef = useRef(0)
   const [robotNonce, setRobotNonce] = useState(0)
   useEffect(() => window.api.robot.onChanged(() => setRobotNonce((n) => n + 1)), [])
+  // A placement bridge rewrote the .urdf (#716) — re-read so the servo "drives
+  // joint" picker sees links/joints added from another window too.
+  useEffect(() => window.api.robot.onUrdfChanged(() => setRobotNonce((n) => n + 1)), [])
   useEffect(() => {
     let live = true
     const startSeq = saveSeqRef.current
@@ -145,7 +148,7 @@ export function BoardPane(): JSX.Element {
       .readFile(`${folder}/${urdfPath}`)
       .then((content) => {
         if (!live) return
-        setJoints(jointNames(content))
+        setJoints(movableJointNames(content))
         setJointLimits(jointDisplayLimits(content))
       })
       .catch(() => {
@@ -167,80 +170,30 @@ export function BoardPane(): JSX.Element {
     },
     [folder]
   )
-
-  // Append a library part to the project — same rules as the floating window
-  // (unique instance id; drag-drop position; mip offer only for driver-less
-  // parts, the Driver Install banner owns bundled drivers).
+  // Append library part(s) to the project — the shared sequence (#716) both board
+  // hosts use: unique ids, robot.yml saved synchronously, every part given its
+  // Build body (mesh or footprint box). The urdfLink record-back happens in MAIN
+  // (robot:patchPartLinks) against the file's current state, so this host holds
+  // no late-firing whole-document save.
   const addToProject = useCallback(
     (libraryId: string, part: PartDefinition, pos?: { x: number; y: number }): void => {
-      const ids = new Set(['board', ...robot.parts.map((p) => p.id)])
-      let id = part.id
-      let n = 2
-      while (ids.has(id)) id = `${part.id}${n++}`
-      const placed = pos ? { x: Math.round(pos.x), y: Math.round(pos.y) } : {}
-      const withPart: RobotDefinition = {
-        ...robot,
-        parts: [...robot.parts, { id, lib: libraryId, part: part.id, label: part.name, ...placed }]
-      }
-      if (part.mesh && folder) {
-        // #406: a mesh-linked part ALSO drops its STL into the project URDF (creating +
-        // linking one if absent). Save the part + link SYNCHRONOUSLY (so a rapid second
-        // drop / cross-window reload can't clobber it), THEN write the mesh into the
-        // .urdf. It shows in the Robot View the next time that URDF is loaded (e.g. on
-        // switching to Robot mode); an already-open Robot View won't refresh live.
-        const existingUrdf = readRobotModel(robot)?.urdf
-        const urdfName = existingUrdf || 'robot.urdf'
-        saveRobot(
-          existingUrdf
-            ? withPart
-            : { ...withPart, robot: { ...(withPart.robot ?? {}), version: 1, urdf: urdfName } }
-        )
-        void attachPartMesh(folder, urdfName, libraryId, part).catch(() => undefined)
-      } else {
-        saveRobot(withPart)
-      }
-      const lib = part.library
-      if (lib?.url && !(part.drivers && part.drivers.length > 0)) {
-        const mod = lib.module || part.name
-        if (
-          window.confirm(
-            `Install the "${mod}" MicroPython library for "${part.name}" onto the connected board?`
-          )
-        ) {
-          void window.api.packages
-            .install(lib.url)
-            .then((r) => {
-              if (!r.ok)
-                window.alert(
-                  `Couldn't install ${mod}.\n${r.log || 'Open the Packages panel for details.'}`
-                )
-              else window.api.modules.notifyChanged()
-            })
-            .catch(() => window.alert(`Couldn't install ${mod} — is a board connected?`))
-        }
-      }
+      addPartsToProject({ robot, folder, libraries, saveRobot }, [{ libraryId, part, pos }])
+      offerLibraryInstall(part)
     },
-    [robot, saveRobot, folder]
+    [robot, saveRobot, folder, libraries]
   )
 
   // Add MANY parts at once (the full-screen catalog's "Add to project", #613) in a
   // SINGLE robot update — calling addToProject in a loop would re-read the stale
-  // `robot` each time and only keep the last. Unique instance ids are assigned
-  // across the whole batch.
+  // `robot` each time and only keep the last.
   const addManyToProject = useCallback(
     (items: { libraryId: string; part: PartDefinition }[]): void => {
-      if (items.length === 0) return
-      const ids = new Set(['board', ...robot.parts.map((p) => p.id)])
-      const placed = items.map(({ libraryId, part }) => {
-        let id = part.id
-        let n = 2
-        while (ids.has(id)) id = `${part.id}${n++}`
-        ids.add(id)
-        return { id, lib: libraryId, part: part.id, label: part.name }
-      })
-      saveRobot({ ...robot, parts: [...robot.parts, ...placed] })
+      addPartsToProject(
+        { robot, folder, libraries, saveRobot },
+        items.map(({ libraryId, part }) => ({ libraryId, part }))
+      )
     },
-    [robot, saveRobot]
+    [robot, saveRobot, folder, libraries]
   )
 
   // The Part Editor overlay (opened from the pane's library dock, exactly like
@@ -282,13 +235,18 @@ export function BoardPane(): JSX.Element {
 
   // Author a NEW board (a starter Microcontroller-family part in `my-parts`).
   return (
-    <section className="board-pane" aria-label="Board View" style={{ height: '100%', minWidth: 0 }}>
+    <section
+      className="board-pane"
+      aria-label="Board View"
+      style={{ height: '100%', minWidth: 0, position: 'relative' }}
+    >
       <BoardGraph
         source={source}
         fileName={fileName}
         isPython={isPython}
         robot={robot}
         onChangeRobot={saveRobot}
+        folder={folder}
         libraries={libraries}
         joints={joints}
         jointLimits={jointLimits}
@@ -297,6 +255,11 @@ export function BoardPane(): JSX.Element {
         pendingSwapBoard={robotLoaded ? pendingBoardSwap : null}
         onSwapConsumed={clearBoardSwap}
       />
+      {/* Electronics ⇄ Build reconcile (#717) — same control as the Build
+          workspace and the pop-out window, self-contained on the folder. */}
+      <div className="esync__float">
+        <SyncControl folder={folder} />
+      </div>
       {editing && (
         <PartEditor
           libraryId={editing.libraryId}

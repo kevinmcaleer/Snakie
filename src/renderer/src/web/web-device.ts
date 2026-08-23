@@ -15,8 +15,10 @@
  * Still tracked on #464: synthetic `SNK` telemetry so the instruments animate.
  */
 import { WorkerMicroPythonRuntime } from './worker-runtime'
+import { scratchBlock } from '../../../shared/device-scratch'
 import { VIRTUAL_PORT_PATH, VIRTUAL_PORT_LABEL } from '../../../shared/virtual-device'
 import { isProbeCode, simulateProbeResponse, simulatedTelemetryFrame } from '../../../shared/simulation'
+import type { RuntimeInfo } from '../../../shared/dialect'
 
 /** How often the simulated board "prints" a telemetry frame (matches the desktop sim). */
 const TELEMETRY_INTERVAL_MS = 120
@@ -26,7 +28,18 @@ interface DeviceStatus {
   state: ConnState
   path: string
   baudRate: number
+  /** Which Python this backend runs (#752). */
+  runtime?: RuntimeInfo
 }
+
+/**
+ * What the web simulator reports as its runtime (#752). Stated, not probed: the
+ * interpreter behind it IS MicroPython (the official WASM port), so this is a
+ * fact about the simulator rather than a guess about a board — and it matches
+ * the desktop `SimulatedDevice`, which is the same thing in the other shell.
+ * Whether a simulator should ever offer CircuitPython is #764.
+ */
+const SIM_RUNTIME: RuntimeInfo = { dialect: 'micropython' }
 
 const enc = new TextEncoder()
 
@@ -39,16 +52,20 @@ const mkParents = (path: string): string => {
   const slash = path.lastIndexOf('/')
   const dir = slash > 0 ? path.slice(0, slash) : ''
   if (!dir || dir === '/') return ''
-  return [
-    'import os',
-    '_cur=""',
-    `for _s in ${pyStr(dir)}.strip("/").split("/"):`,
-    '    _cur+="/"+_s',
-    '    try:',
-    '        os.mkdir(_cur)',
-    '    except OSError:',
-    '        pass'
-  ].join('\n')
+  return scratchBlock(
+    [
+      'import os',
+      '_snk_cur=""',
+      `for _snk_seg in ${pyStr(dir)}.strip("/").split("/"):`,
+      '    _snk_cur+="/"+_snk_seg',
+      '    try:',
+      '        os.mkdir(_snk_cur)',
+      '    except OSError:',
+      '        pass'
+    ],
+    '_snk_cur',
+    '_snk_seg'
+  )
 }
 
 const SYSTEM_DIRS = new Set(['dev', 'proc', 'tmp', 'home'])
@@ -81,7 +98,11 @@ export function createWebDeviceApi(): Record<string, unknown> {
       telemetry = null
     }
   }
-  const status = (): DeviceStatus => ({ state, path: VIRTUAL_PORT_PATH, baudRate: 115200 })
+  const status = (): DeviceStatus => {
+    const st: DeviceStatus = { state, path: VIRTUAL_PORT_PATH, baudRate: 115200 }
+    if (state === 'connected') st.runtime = SIM_RUNTIME
+    return st
+  }
   const setState = (s: ConnState): void => {
     state = s
     const st = status()
@@ -153,22 +174,25 @@ export function createWebDeviceApi(): Record<string, unknown> {
 
     // ── In-memory filesystem (MicroPython VFS) — same snippets as the desktop sim ──
     listDir: async (path = '/') => {
-      const code = [
-        'import os, json',
-        'def _ls(p):',
-        '    out=[]',
-        '    try: it=os.ilistdir(p)',
-        '    except AttributeError: it=[(n,0,0) for n in os.listdir(p)]',
-        '    for e in it:',
-        '        name=e[0]; typ=e[1] if len(e)>1 else 0',
-        '        full=(p.rstrip("/")+"/"+name) if p else name',
-        '        isdir=(typ & 0x4000)!=0',
-        '        try: size=0 if isdir else os.stat(full)[6]',
-        '        except OSError: size=0',
-        '        out.append([name,isdir,size])',
-        '    return out',
-        `print(json.dumps(_ls(${pyStr(path)})))`
-      ].join('\n')
+      const code = scratchBlock(
+        [
+          'import os, json',
+          'def _snk_ls(p):',
+          '    out=[]',
+          '    try: it=os.ilistdir(p)',
+          '    except AttributeError: it=[(n,0,0) for n in os.listdir(p)]',
+          '    for e in it:',
+          '        name=e[0]; typ=e[1] if len(e)>1 else 0',
+          '        full=(p.rstrip("/")+"/"+name) if p else name',
+          '        isdir=(typ & 0x4000)!=0',
+          '        try: size=0 if isdir else os.stat(full)[6]',
+          '        except OSError: size=0',
+          '        out.append([name,isdir,size])',
+          '    return out',
+          `print(json.dumps(_snk_ls(${pyStr(path)})))`
+        ],
+        '_snk_ls'
+      )
       const raw = (await capture(code)).trim()
       const parsed = (raw ? JSON.parse(raw) : []) as [string, boolean, number][]
       const isRoot = path === '' || path === '/'
@@ -180,24 +204,38 @@ export function createWebDeviceApi(): Record<string, unknown> {
     df: async () => null,
 
     readFile: async (path: string) =>
-      capture(`import sys\nwith open(${pyStr(path)}) as f:\n    sys.stdout.write(f.read())`),
+      capture(
+        scratchBlock(
+          [
+            'import sys',
+            `with open(${pyStr(path)}) as _snk_f:`,
+            '    sys.stdout.write(_snk_f.read())'
+          ],
+          '_snk_f'
+        )
+      ),
 
     // The board finds the line, so one line crosses the wire, not the file (#700).
     readFileLine: async (path: string, prefix: string) =>
       (
         await capture(
-          [
-            `_l = ''`,
-            `try:`,
-            `    with open(${pyStr(path)}) as _f:`,
-            `        for _x in _f:`,
-            `            if _x.startswith(${pyStr(prefix)}):`,
-            `                _l = _x`,
-            `                break`,
-            `except OSError:`,
-            `    pass`,
-            `print(_l)`
-          ].join('\n')
+          scratchBlock(
+            [
+              `_snk_l = ''`,
+              `try:`,
+              `    with open(${pyStr(path)}) as _snk_f:`,
+              `        for _snk_x in _snk_f:`,
+              `            if _snk_x.startswith(${pyStr(prefix)}):`,
+              `                _snk_l = _snk_x`,
+              `                break`,
+              `except OSError:`,
+              `    pass`,
+              `print(_snk_l)`
+            ],
+            '_snk_l',
+            '_snk_f',
+            '_snk_x'
+          )
         )
       ).trim(),
 
@@ -205,33 +243,40 @@ export function createWebDeviceApi(): Record<string, unknown> {
       const hex = Array.from(enc.encode(contents))
         .map((b) => b.toString(16).padStart(2, '0'))
         .join('')
-      const code = [
-        mkParents(path),
-        `_d=bytes.fromhex(${pyStr(hex)})`,
-        `with open(${pyStr(path)},'wb') as f:`,
-        '    f.write(_d)'
-      ]
-        .filter(Boolean)
-        .join('\n')
+      const code = scratchBlock(
+        [
+          mkParents(path),
+          `_snk_d=bytes.fromhex(${pyStr(hex)})`,
+          `with open(${pyStr(path)},'wb') as _snk_f:`,
+          '    _snk_f.write(_snk_d)'
+        ].filter(Boolean),
+        '_snk_d',
+        '_snk_f'
+      )
       await capture(code)
     },
 
     remove: async (path: string) => {
       await capture(
-        [
-          'import os',
-          `_s = [${pyStr(path)}]`,
-          'while _s:',
-          '    _p = _s[-1]',
-          '    if (os.stat(_p)[0] & 0x4000) != 0:',
-          '        _c = os.listdir(_p)',
-          '        if _c:',
-          "            _s.extend([_p + '/' + _x for _x in _c])",
-          '        else:',
-          '            os.rmdir(_p); _s.pop()',
-          '    else:',
-          '        os.remove(_p); _s.pop()'
-        ].join('\n')
+        scratchBlock(
+          [
+            'import os',
+            `_snk_s = [${pyStr(path)}]`,
+            'while _snk_s:',
+            '    _snk_p = _snk_s[-1]',
+            '    if (os.stat(_snk_p)[0] & 0x4000) != 0:',
+            '        _snk_c = os.listdir(_snk_p)',
+            '        if _snk_c:',
+            "            _snk_s.extend([_snk_p + '/' + _snk_x for _snk_x in _snk_c])",
+            '        else:',
+            '            os.rmdir(_snk_p); _snk_s.pop()',
+            '    else:',
+            '        os.remove(_snk_p); _snk_s.pop()'
+          ],
+          '_snk_s',
+          '_snk_p',
+          '_snk_c'
+        )
       )
     },
 
@@ -244,12 +289,16 @@ export function createWebDeviceApi(): Record<string, unknown> {
     },
 
     stat: async (path: string) => {
-      const code = [
-        'import os, json',
-        `st=os.stat(${pyStr(path)})`,
-        'isdir=(st[0] & 0x4000)!=0',
-        'print(json.dumps([isdir, st[6], st[8] if len(st)>8 else None]))'
-      ].join('\n')
+      const code = scratchBlock(
+        [
+          'import os, json',
+          `_snk_st=os.stat(${pyStr(path)})`,
+          '_snk_isdir=(_snk_st[0] & 0x4000)!=0',
+          'print(json.dumps([_snk_isdir, _snk_st[6], _snk_st[8] if len(_snk_st)>8 else None]))'
+        ],
+        '_snk_st',
+        '_snk_isdir'
+      )
       const [isDir, size, mtime] = JSON.parse((await capture(code)).trim()) as [
         boolean,
         number,

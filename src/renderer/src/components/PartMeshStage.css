@@ -1,0 +1,107 @@
+/* The Part Editor's 3-D workbench (#741) — unique `pms__` BEM prefix.
+
+   The stage is the app's DARK board mat in BOTH skins, exactly as the details
+   view's stage (`pdt__stage`) and the board canvas are: a part is always shown
+   against the mat, so the one surface that isn't theme-switched is this one, and
+   the ink over it is chosen to read on it. Everything AROUND the stage — the
+   controls panel — is ordinary themed chrome and uses the tokens. */
+
+.pms {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  background: var(--bc-mat, #0c0f12);
+}
+
+.pms__stage {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  cursor: grab;
+}
+.pms__stage:active {
+  cursor: grabbing;
+}
+
+.pms__stage canvas {
+  display: block;
+}
+
+/* Loading / failure note, centred over the stage. */
+.pms__note {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  text-align: center;
+  font-size: 13px;
+  color: #aeb4bd;
+  pointer-events: none;
+}
+.pms__note--error {
+  color: #e0a19b;
+}
+
+/* Which coloured line is which — the convention the view is trying to teach.
+   The swatch colours match three's AxesHelper defaults (X red, Y green, Z blue)
+   because their whole job is to name what is already on screen. */
+.pms__legend {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.pms__axis {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: #cfd6dd;
+}
+
+.pms__axis::before {
+  content: '';
+  width: 12px;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+.pms__axis--x::before {
+  background: #ff5a5a;
+}
+.pms__axis--y::before {
+  background: #4ade7c;
+}
+.pms__axis--z::before {
+  background: #6aa8ff;
+}
+
+/* How to drive it — quiet, and only once there is something to drive. */
+.pms__hint {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  padding: 3px 10px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: #cfd6dd;
+  background: rgba(8, 11, 13, 0.62);
+  border-radius: 999px;
+  pointer-events: none;
+  white-space: nowrap;
+}

@@ -1,0 +1,84 @@
+id: grove-red-led
+name: Grove Red LED
+description: 5 mm red LED in a swappable holder on a Grove digital module, with an on-board trimmer for brightness.
+manufacturer: Seeed Studio
+family: Output
+tags:
+  - grove
+  - seeed
+  - led
+  - indicator
+  - digital
+  - pwm
+package: THT
+pinSpacing: 2
+voltage: 3.3-5V
+partNumber: "104030005"
+properties:
+  interface: digital (HIGH lights it) — or PWM for brightness
+  led: 5 mm red, plugged into a holder rather than soldered
+  brightness: on-board trimmer (R2) sets the series resistance
+version: 0.1.3
+pcbColor: "#1e4a72"
+aspect: 1
+dimensions:
+  width: 24
+  height: 20
+shape:
+  kind: rect
+  cornerRadiusMm: 1.5
+mountingHoles:
+  - x: 0.07938733418782551
+    y: 0.501978515625
+    diameter: 1
+  - x: 0.9184126790364583
+    y: 0.501978515625
+    diameter: 1
+labels:
+  - text: +
+    x: 0.05
+    y: 0.94
+    z: 3
+    fontSize: 7
+    color: "#cfe0f0"
+onboardLeds:
+  - kind: single
+    x: 0.23857162475585936
+    y: 0.7822380371093751
+    z: 3000001
+    color: "#d53f3f"
+    sizeMm: 5
+connectors:
+  - kind: grove
+    variant: digital
+    label: J1
+    x: 0.505
+    y: 0.163
+    pins:
+      - name: SIG
+        type: io
+        capabilities:
+          - digital
+          - pwm
+      - name: NC
+        type: other
+      - name: VCC
+        type: pwr
+      - name: GND
+        type: gnd
+ledLabel: LED
+image: image.png
+imageLayer:
+  x: -0.00028734842936198324
+  y: -0.0007436523437499565
+  w: 1
+  h: 1
+rear:
+  image: rear.png
+help: help.md
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true

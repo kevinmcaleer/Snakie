@@ -1,0 +1,248 @@
+/*
+ * The refactoring preview modal (RefactorPreview.tsx, epic #634 §2.4).
+ *
+ * Every colour comes from the shared Soft Shell tokens, which are redefined per
+ * skin in index.css — so this reads correctly on the parchment (skeuomorph) and
+ * the dark theme without a single theme-specific rule here. The diff's add and
+ * remove tints are the one place we mix a hue in, and they are colour-mixed with
+ * the current --card so they stay legible on both grounds.
+ */
+
+.refactor-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 1rem;
+}
+
+.refactor-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: min(52rem, 100%);
+  max-height: min(44rem, 92vh);
+  padding: 1rem 1.1rem;
+  background: var(--panel);
+  color: var(--text);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--pixel-shadow);
+}
+
+.refactor-modal__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.refactor-modal__title {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+/* The "Why?" link is the teaching payload's front door — make it look like one. */
+.refactor-modal__why {
+  flex: none;
+  padding: 0.15rem 0.5rem;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  color: var(--accent-ink);
+  background: transparent;
+  border: var(--border-w) solid var(--accent);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.refactor-modal__why:hover {
+  background: var(--card);
+}
+
+.refactor-modal__why:focus-visible {
+  outline: var(--border-w) solid var(--accent);
+  outline-offset: 2px;
+}
+
+.refactor-modal__message {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
+  opacity: 0.85;
+}
+
+.refactor-modal__caution {
+  margin: 0;
+  padding: 0.4rem 0.55rem;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  color: var(--text);
+  background: color-mix(in srgb, var(--warn) 16%, var(--card));
+  border-left: 3px solid var(--warn);
+  border-radius: var(--radius);
+}
+
+.refactor-modal__stats {
+  display: flex;
+  gap: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
+.refactor-modal__stat--add {
+  color: var(--accent-2);
+}
+
+.refactor-modal__stat--remove {
+  color: var(--danger);
+}
+
+.refactor-diff {
+  flex: 1 1 auto;
+  min-height: 6rem;
+  overflow: auto;
+  background: var(--editor);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+}
+
+.refactor-diff__empty {
+  margin: 0;
+  padding: 1rem;
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  opacity: 0.7;
+}
+
+/* A gap between hunks reads as "…and elsewhere in the file". */
+.refactor-diff__hunk + .refactor-diff__hunk {
+  border-top: var(--border-w) dashed var(--border);
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
+}
+
+.refactor-diff__line {
+  display: grid;
+  grid-template-columns: 1.1rem 3rem 1fr;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.refactor-diff__line--add {
+  background: color-mix(in srgb, var(--accent-2) 18%, transparent);
+}
+
+.refactor-diff__line--remove {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+}
+
+.refactor-diff__gutter {
+  color: var(--text);
+  opacity: 0.75;
+  text-align: center;
+}
+
+.refactor-diff__num {
+  color: var(--text);
+  opacity: 0.4;
+  text-align: right;
+  font-size: 0.7rem;
+}
+
+.refactor-diff__text {
+  white-space: pre;
+  font-family: inherit;
+  font-size: inherit;
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+
+.refactor-bench {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.5rem 0.6rem;
+  background: var(--card);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+}
+
+.refactor-bench__row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.refactor-bench__pick {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+}
+
+.refactor-bench__warning {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  opacity: 0.75;
+}
+
+.refactor-bench__error {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  color: var(--danger);
+}
+
+.refactor-bench__result {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.refactor-bench__verdict {
+  opacity: 0.8;
+}
+
+.refactor-bench__verdict--good {
+  color: var(--accent-2);
+  opacity: 1;
+}
+
+.refactor-bench__verdict--bad {
+  color: var(--danger);
+  opacity: 1;
+}
+
+.refactor-modal__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.refactor-modal__skip {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  opacity: 0.85;
+}
+
+.refactor-modal__buttons {
+  display: flex;
+  gap: 0.5rem;
+}

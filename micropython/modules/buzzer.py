@@ -15,6 +15,12 @@ The note-name → frequency mapping (`note_to_freq`) and the RTTTL header/note
 parser (`parse_rtttl`) are pure and unit-testable under CPython without PWM.
 """
 
+# Driver version. Bump this on ANY change to this file — the IDE compares it
+# against the copy installed on the board and offers an update when they differ
+# (#707; a legacy copy with no `__version__` reads as out-of-date). Keep the
+# `__version__ = "X.Y.Z"` literal form so the IDE can parse it without importing.
+__version__ = "1.0.0"
+
 # Equal-tempered semitone offsets from C within an octave.
 _SEMITONE = {"c": 0, "d": 2, "e": 4, "f": 5, "g": 7, "a": 9, "b": 11}
 

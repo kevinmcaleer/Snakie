@@ -6,6 +6,916 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Publish a project to GitHub without leaving Snakie.** (#795) A repository
+  you created locally had nowhere to go: the Source Control panel offered
+  **Push** and **Pull**, both of which need a remote, and setting one up meant
+  a terminal, `gh repo create` or the GitHub website plus a `git remote add`
+  typed by hand. Those two buttons were dead controls in exactly the state
+  where a useful one belongs — so on a repository with no remote they are now
+  replaced by **Publish to GitHub**.
+
+  It opens a dialog: the repository name (pre-filled from your folder, and
+  sanitised — "Line Follower (v2)" becomes `Line-Follower-v2`, because GitHub
+  will not take the first), an optional description, and who can see it.
+  Publishing creates the repository, adds it as `origin` and pushes your
+  current branch in one step, then the panel says what it did — the full
+  `owner/name`, the visibility, and the branch it pushed.
+
+  **It defaults to private, and that is a safety decision rather than a
+  preference.** The MicroPython convention for Wi-Fi credentials is a plain
+  `secrets.py` sitting next to `main.py`, and a public repository is scraped,
+  forked and cached within minutes — "delete the repo" does not un-publish a
+  password. Choosing public costs one extra click; getting it wrong by default
+  would cost some people their network. For the same reason, choosing public
+  when the repository actually *tracks* a credentials-shaped file — `secrets.py`,
+  `.env`, a `.pem` — names those files before you commit to it. It warns rather
+  than blocks (your `.pem` may well be a public certificate), and it only counts
+  files git is already tracking, because an untracked or ignored one is never
+  pushed and warning about it would just teach you to click through.
+
+  **Snakie never holds a GitHub credential.** Publishing runs through the
+  GitHub CLI, which already keeps your token in the OS keychain and already
+  handles two-factor — the alternative was a personal access token typed into
+  a Snakie field and stored by Snakie, which is a thing that can leak. So the
+  dialog checks up front, before showing you a form: no `gh` installed, not
+  signed in, no commits yet, or a remote already configured each appear as a
+  sentence with the next step in it, rather than as an error after you have
+  typed a description and pressed the button. Sign-in itself stays in your
+  terminal (`gh auth login`) on purpose, so your credentials only ever go to
+  GitHub.
+
+  The repository name is validated as you type against the same rule the main
+  process guards with, so the dialog cannot accept something GitHub will
+  reject — and every value reaches `gh` as its own argument rather than as part
+  of a command line, which is what makes a repository named `foo; rm -rf ~`
+  merely an invalid name. Desktop only: the web app has no local git and no
+  `gh` to run.
+- **Right-click your code and Snakie offers to tidy it — and explains why.**
+  Select some Python, right-click **Refactor…** (or <kbd>Ctrl/Cmd</kbd>+<kbd>⇧</kbd>+<kbd>R</kbd>),
+  and you get concrete, safe rewrites: *Convert to guard clause*, *Merge nested
+  conditions*, *Iterate over the items directly*, *Wrap the constant in
+  `const()`*. Every one shows you a **diff before it touches your file**, comes
+  back with a single <kbd>Cmd</kbd>+<kbd>Z</kbd>, and carries a **Why?** link
+  into a help page that teaches the principle behind it.
+
+  The catalogue is deliberately not just "Python tidying". Snakie's users are
+  learners writing robot code on a microcontroller, which makes a whole class of
+  smell worth flagging that desktop tooling has no reason to care about — and
+  these are the ones that actually make a robot work better:
+
+  - **A raw `ticks_ms()` subtraction is a bug, not a style nit.** Tick counters
+    *wrap*; `ticks_us()` roughly every 17 minutes. Subtract two of them with a
+    plain `-` and, at the wrap, the result goes hugely negative and your timer
+    either fires on every pass forever or never fires again. It cannot show up
+    on the bench, because the bench session is shorter than the wrap.
+  - **An `.irq()` handler with no
+    `micropython.alloc_emergency_exception_buf()`** gives you no traceback at
+    all when it fails — just silence, at 3am, with the robot halfway down a
+    corridor. One line fixes it, and almost nobody writes it.
+  - **Allocating inside an interrupt handler**, re-creating a `Pin()` every loop
+    iteration, `s += "…"` in a loop, a blocking `time.sleep()` inside an `async
+    def` — each flagged with what it costs you on a board with 264 KB.
+
+  Nothing is guessed. A file that does not parse offers *nothing*, rewrites are
+  ranged text edits so your comments and formatting outside them survive
+  byte-for-byte, Snakie matches your file's own indentation rather than imposing
+  four spaces, and where a rule cannot *prove* your code still means the same
+  thing it declines instead of trying. A learner who accepts a bad "fix" and
+  breaks their robot will not trust the feature again.
+
+  The whole engine is dependency-free TypeScript, so it works with **no Python
+  installed** and in **Snakie for Web** — which is exactly the classroom that
+  needs it most. Board-specific advice is the opposite: it appears *only* when a
+  board is plugged in and Snakie has asked that firmware what it actually
+  supports, and speed hints can be **benchmarked on the real device** before you
+  accept them, so when `@micropython.native` buys you 4% you see 4% and skip it.
+
+  Plugins can contribute rules too, via `@plugin.refactor` — a school can ship
+  its own house style. **90 rules**, each with worked examples and a page
+  explaining the principle behind it. Issues #799–#808, #451; epic #634.
+- **Stage a whole group in the Source Control panel, in one click.** Staging
+  twenty new files one **＋** at a time was twenty clicks. Each group header now
+  carries its own button — **Stage 12 untracked** on the *Untracked* list,
+  **Stage 3 changes** on the *Changes* list.
+
+  The button sits **inside the group it acts on**, and the count is **in the
+  label**. Both are deliberate. A single "add changes" button sitting above two
+  lists reads as "stage everything I can see", which is a much larger promise
+  than the one being made; putting it in the header means its scope is never in
+  doubt. And the count is the brake — *Stage 3 untracked* invites a click,
+  *Stage 412 untracked* makes you look at the list first. That is why there is
+  no confirmation dialog: unlike **Initialise Repository** (#783) this writes
+  nothing to your disk, it only moves files into git's index, and the per-file
+  **−** beside each one puts them back.
+
+  Files ignored by `.gitignore` are never staged — not because Snakie filters
+  them, but because the paths come from `git status`, which has already applied
+  every ignore rule. **Conflicted files are held back** from a bulk stage: `git
+  add` on a conflicted file is how you tell git "I resolved this", and doing
+  that in bulk would mark a merge resolved with the `<<<<<<<` markers still in
+  the file. Those keep their own per-file button, and the tooltip says so when
+  the header count and the button count differ because of it. Failures — no
+  `git` installed, an unreadable working tree — arrive as a sentence in the
+  panel, and the lists refresh in place. (#794)
+- **Position a linked 3-D model: nudge it, or snap a corner to the origin.** #741
+  let you turn a model the right way up; this is the other half. An STL's origin
+  is wherever the exporter left it — often a corner of the build plate — and
+  until now the only fix was to re-export from CAD. The Part Editor's **3-D** tab
+  grows a **Position** panel:
+
+  - **Nudge** along X, Y or Z by a step you choose — **0.1, 1 or 10 mm**. Fixed
+    millimetres, not a fraction of the model: the same button moves a 5 mm sensor
+    and a 100 mm battery the same distance, the number that lands in `parts.yml`
+    is one you picked, and 10 mm is exactly one square of the stage's grid.
+  - **Snap** a feature you name onto the origin. Pick `min` / `centre` / `max`
+    for each axis and the three picks between them name any **corner**, **edge
+    midpoint**, **face centre** or the **centre** — 27 in all, one rule. Snakie
+    does the arithmetic and nothing else: following the Join tool's lesson,
+    there is no auto-fit and no inferring which feature you probably meant.
+
+  New `PartDefinition.meshOffset`: `[x, y, z]` **millimetres** in the part's
+  frame, applied **after** `meshRotation`. That order is URDF's own
+  (`<visual><origin xyz rpy>` is rotate-then-translate), so the offset is written
+  out as the stored millimetres ÷ 1000 with no compensation term — and it is what
+  makes a nudge travel along the axis you pressed however the model is turned.
+  The same order holds in the editor stage, in `PartMeshView`, and in the URDF
+  that `addMeshLink` and `swapLinkVisualToMesh` write. Absent means no
+  translation, so parts authored before this need no migration. (#788)
+- **Type a quote and the project's sprites are right there.** (#791, part of
+  epic #789) Inside a string literal, autocomplete offers every `.spr` in the
+  project — the file's **own folder first**, then the rest of the project — each
+  with its size and frame count on the line (`eyes.spr`, `12×8 · 3 frames`), so
+  the choice is informed rather than a bare filename. A typo in a sprite name
+  used to fail **at runtime, on the board**, which is the worst possible place to
+  learn about it; and the second benefit is the bigger one — you now find out
+  which sprites exist by typing, instead of by opening a file browser.
+
+  It offers inside a string and **nowhere else**: never in code, never in a `#`
+  comment, never in a docstring, and never inside a template or a glob
+  (`f"{stem}.spr"`, `"%s.spr"`, `"frames/*.spr"`) that no completion could
+  correct. It uses the reference rule #790 settled rather than a second copy of
+  it, and every name it offers is checked back through that rule — where two
+  folders hold the same filename, the nearer one wins the short name and the
+  other is offered by full path instead of quietly naming its rival. A project
+  with no sprites offers nothing at all rather than an empty popup. The one
+  visible trade: inside a string you no longer get the module catalogue
+  (`machine`, `time`…) suggested, which was never a useful thing to write there.
+
+  The file list is a snapshot, never built on a keystroke — refreshed when the
+  file or project folder changes, marked stale the moment a file is saved or a
+  `.spr` is written from the Sprite editor, and re-walked in the background at
+  most every few seconds. Sizes come from the cache #790 already fills, so
+  nothing is read from disk while you type.
+- **The Sprite editor tells you where a sprite is used — or that nothing uses
+  it.** (#792, part of epic #789) Open a `.spr` for editing and a line under the
+  toolbar names the files that reference it, each one a click away from the exact
+  line: `eyes.spr is used in 2 files:` `play_spr.py:12` `demo.py:3`. When nothing
+  references it, it says so in as many words — `Nothing references eyes.spr —
+  searched 14 Python files.` — because that is the answer that tells you the
+  sprite is safe to delete, and an empty area would only read as "still loading".
+
+  The search covers **every `.py` under the open project folder**, not just the
+  files you happen to have open: a sprite goes stale in the file you closed three
+  weeks ago, which is exactly the file an open-files-only answer would miss.
+  Dependency and cache trees (`node_modules`, `__pycache__`, dot-folders) are
+  skipped, and it stops at 500 files, breadth-first, so a project folder that
+  happens to sit above something enormous still gets an answer. **Open buffers
+  beat disk**, so a reference you just typed and have not saved counts (its chip
+  is dashed, to say the file on disk does not agree yet) and one you just deleted
+  stops counting. It re-reads the project when a file is saved beneath the
+  overlay, and on the ↻ button; it never runs on a keystroke — the sprite editor
+  has no code in it to type. Saving a new drawing now adopts the file it was
+  saved to, so **Save .spr** stops asking twice and the new sprite gets its
+  own "used in" answer immediately.
+
+  Uses the reference rule #790 exported (`sprite-refs.ts`), so what counts as a
+  use is exactly what draws a thumbnail — including that a relative name means
+  the sprite beside the file before the one in the project root, and that a name
+  built at runtime is invisible to both.
+- **A sprite in your code draws itself, right there in the line.** (#790, part of
+  epic #789) Name a `.spr` in a Python file and the sprite appears beside the
+  string — at about line height, **always visible, not on hover**. Hover only
+  helps someone who already suspects there is something worth hovering; the thing
+  MakeCode gets for free is that the artwork is simply *there*. Click the sprite
+  and it opens in the Sprite editor on that file, where **Save .spr** writes
+  straight back over it and the code repaints with the new artwork.
+
+  The reference rule is settled once and exported (`sprite-refs.ts`), because
+  #791's autocomplete and #792's back-link inherit it: a **string literal whose
+  text names a `.spr` file**, looked for beside the file first and then in the
+  project folder. Templates (`f"{stem}.spr"`, `"%s.spr"`), globs, variables,
+  comments and docstrings are deliberately ignored rather than guessed at — a
+  thumbnail beside the wrong sprite is worse than none. An animation shows its
+  first inked frame and holds still (a cycling image competes with the code for
+  attention; the hover says how many frames there are), a reference to a file
+  that is not there is drawn as a broken marker instead of quietly vanishing, and
+  a reference with nowhere to resolve against draws nothing, because "I cannot
+  tell" is not "it is broken". Sprites are read and rendered once per file per
+  mtime and cached, so the decorations never touch the disk on a keystroke.
+- **A Sprite editor for LED matrices and OLED displays.** The Display
+  instrument grows a **✎ Sprites** key that opens a full-screen pixel editor:
+  set the sprite size (presets from the 12×8 Arduino Modulino / UNO R4 LED
+  matrix up to a full 128×64 SSD1306), draw with pencil / eraser / flood-fill,
+  nudge, flip, invert and clear a frame, and build animations on a **filmstrip**
+  of frames — add, duplicate, reorder, delete — with onion skinning, live
+  playback at the chosen frame rate, and undo/redo throughout. The editor opens
+  with a pair of blinking eyes drawn for the Modulino LED Matrix
+  (`examples/sprites/` has the same animation as a `.spr`, a PBM frame, an
+  exported MicroPython module, and players for the Modulino matrix and an
+  SSD1306 OLED).
+
+  Animations save as **`.spr`** — a new Snakie container built for
+  microcontrollers after a survey of the prior art (PicoGraphics'
+  raw `.rgb332` spritesheets, Thumby's headerless `.bin` sprites, Badgeware's
+  PNG/GIF loaders): a 16-byte self-describing header (magic `SNKS`, size, pixel
+  format, frame count, frame duration) followed by frames whose bytes are
+  exactly `framebuf.MONO_HLSB`, so MicroPython plays one straight from flash
+  through a single reusable frame buffer in ~20 lines with no decoder
+  (`examples/sprites/play_spr.py`). Single frames import/export as **PBM**
+  (P1 + P4 — a P4 raster is byte-identical to MONO_HLSB, so it too loads with
+  one `readinto`), and the editor also exports a ready-to-import **MicroPython
+  module** and round-trips **PNG, JPEG and animated GIF** (GIF timings are kept,
+  bright-on-black art is auto-repolarised, and integer-upscaled pixel art is
+  folded back to its true grid). 1-bit today; the `.spr` format byte mirrors
+  framebuf's constants so higher bit depths can arrive without a format break.
+  The local-file layer gains binary writes (`fs.writeFileBytes`) and filtered
+  save dialogs to carry the new formats.
+- **The Part Editor has a 3-D view: link an STL to a part, and turn it the right
+  way up.** (#741) Attaching a model used to mean copying the file into the part
+  folder by hand and editing two lines of `parts.yml` — and a model that arrived
+  lying on its side couldn't be corrected in Snakie at all. There's now a **3-D**
+  tab beside Breadboard and Schematic.
+
+  **Link a model** picks an `.stl` (or `.dae`) and **copies it into the part's own
+  folder**, because a part folder is the thing that gets zipped, committed and
+  published — a link pointing at `~/Downloads` travels nowhere. If a file of that
+  name is already there, the copy takes the next free name (`model-2.stl`) rather
+  than overwriting it; the one exception is the model the part *currently*
+  references, which **Replace** may overwrite because the part authored it. Link
+  the same file twice and Snakie recognises the identical bytes, re-uses what is
+  already there and copies nothing. **Unlink** removes the reference and leaves
+  the file where it is: Snakie does not delete a file it did not write.
+
+  **The model is shown at its real size**, in millimetres, standing on a 10 mm
+  grid inside a ghost outline of the part's declared dimensions, with an axis
+  triad naming which way is up. A mesh authored in metres is then obvious the
+  moment it loads rather than the first time the part is placed, and the panel
+  says so in words when the two sizes disagree.
+
+  **Orientation is stored, not baked.** A new `meshRotation` on the part records
+  `[x, y, z]` degrees in URDF's own roll-pitch-yaw convention; your STL is never
+  rewritten. ±90° buttons and numeric fields turn the model about the part's
+  axes — composed properly, so the fourth press of a button really does bring you
+  back to square. The stored rotation is honoured everywhere the model is used:
+  this view, the catalog's turntable, and the `<visual>` origin of the URDF link a
+  placed part gets in Build (on the visual, not the placement joint, so re-jointing
+  the part in Build doesn't fight it). A part authored before this field existed
+  keeps working unchanged — absent means no correction.
+- **A folder that isn't a repository yet can become one from the Source Control
+  pane.** (#783) It used to say "not a Git repository" and offer you nothing but
+  a different folder — so starting version control meant leaving Snakie for a
+  terminal. There's now an **Initialise Repository** button in that empty state.
+  It confirms first, because it writes to your disk, then creates the repository
+  and reports back in words: which branch git started you on, whether it added a
+  `.gitignore`, and how many files are now waiting.
+
+  It does **not** commit anything. An initial commit made on your behalf would
+  sweep every file in the folder — including whatever you haven't looked at — into
+  permanent history from a single click, so instead your files appear under
+  **Untracked** and you choose what goes into the first commit with the commit box
+  like any other commit. Until you make it, the branch chip reads **no commits
+  yet**, because the branch really is only a name so far.
+
+  A starter `.gitignore` is written **only** when the folder doesn't already have
+  one — an existing one is never touched. It's a short list of things this
+  computer generates and can regenerate (`__pycache__/`, `*.pyc`, `.DS_Store`,
+  Snakie's own `robot.yml.bak` rescue copies, editor scratch files) and nothing
+  else. Your `.py` sources, `robot.yml`, `.urdf` models, the `meshes/` those
+  models are useless without, and any vendored `.py`/`.mpy` drivers all stay
+  tracked: a first commit that quietly omits a robot's meshes is a much worse
+  outcome than one that includes a stray `.pyc`.
+
+  Failures say so. Git not installed reads as "Git is not installed on this
+  computer" with where to get it, rather than the bare `spawn git ENOENT` Node
+  hands you; a folder that already sits inside another repository is refused by
+  name, rather than nesting a second one inside it; and a `.gitignore` that
+  can't be written is reported as a warning next to a repository that was still
+  created, rather than as a failure that wasn't. Source Control is desktop-only,
+  so none of this appears in the browser build, which has no filesystem and no
+  local git to run.
+
+- **A CircuitPython board is told when a newer CircuitPython is out — and never
+  told about MicroPython.** (#757, epic #209) Snakie already offered MicroPython
+  updates once per connection; the same prompt now covers CircuitPython, and it
+  names the runtime it's offering, so nobody is told about a release for a Python
+  their board isn't running. It's matched on the **Board ID** from `boot_out.txt`
+  rather than the chip family, because CircuitPython ships a separate build per
+  board — so what you're offered is your board's own newest build, not the newest
+  build for something with the same chip in it. Where that id can't be
+  established, or the board isn't in the catalog, you're told nothing rather than
+  offered a guess. Pre-releases are never offered: CircuitPython publishes its
+  alphas and betas in the same list as its stable builds, and `10.3.0-alpha.1`
+  really is "newer" than `10.2.1` — it's just not an update.
+
+- **You can now choose which Python you're flashing.** (#756, epic #209) The
+  flash dialog was MicroPython all the way down and offered no way to say
+  otherwise — there was no runtime selector at all. There is one now, at the top,
+  and it drives everything below it: which catalog is fetched (micropython.org's
+  or circuitpython.org's), what every label says, and which board's build is
+  offered. If a board is already connected the dialog opens on whatever that
+  board says it is running, rather than assuming. CircuitPython builds are per
+  **board**, not per chip — `raspberry_pi_pico` and `raspberry_pi_pico_w` are
+  different files — so Snakie matches your board to its own build using the
+  **Board ID** from `boot_out.txt` on the CIRCUITPY drive, and pre-selects it.
+  When that id can't be established it pre-selects **nothing** and says so:
+  another board's `.uf2` flashes without a single error message and comes up with
+  the wrong pins. Boards that CircuitPython publishes twice — the same ESP32-S3
+  as a `.uf2` for its bootloader drive AND as a `.bin` for esptool — now read as
+  two clearly named choices instead of one list with every version in it twice,
+  and the flash mechanism is taken from the file you actually picked rather than
+  from its chip family, so a UF2 container can never be handed to esptool. Board
+  detection also stopped calling every UF2 bootloader an RP2040: a Feather, QT Py
+  or Metro names its own volume (`FEATHERBOOT`, `QTPY_BOOT`, `ARDUINO`…), and
+  Snakie now reads the board's name out of the `INFO_UF2.TXT` the UF2 spec
+  defines and shows that instead.
+- **CircuitPython libraries install from the Adafruit bundle — the way
+  CircuitPython users expect.** (#758, epic #209) CircuitPython has no `mip` and
+  no package manager on the board at all; its libraries come from the Adafruit
+  CircuitPython Library Bundle, copied in from the computer — which is exactly
+  what `circup` does, and exactly the shape Snakie's installs already have.
+  Connect a CircuitPython board and the Modules panel now offers Adafruit's own
+  drivers: HC-SR04, VL53L0X, SSD1306, MPU-6050, LSM6DS, NeoPixel and the motor
+  library. Installing one downloads it on your computer and writes the `.mpy`
+  into `/lib`, dependencies and all — asking for the MPU-6050 quietly brings
+  `adafruit_bus_device` and `adafruit_register` with it, because without them the
+  driver imports and then fails. The archive is matched to the board's own
+  CircuitPython **major version**, read from the bundle's daily release rather
+  than assumed: `.mpy` bytecode is version-locked, so a 10.x file on a 9.x board
+  simply doesn't import. If the bundle no longer ships a version for your board,
+  the install says so and names both sides — which version the bundle offers and
+  which one the board runs — instead of failing later with an `ImportError` that
+  mentions neither.
+- **The Modules and Packages panels know which Python your board runs.** (#758,
+  epic #209) The module catalog now holds both runtimes' drivers, and a
+  connected board only ever sees its own: a MicroPython board is not offered an
+  Adafruit `.mpy` it cannot import, and a CircuitPython board is not offered a
+  `machine`-based stub it cannot run. A short line says which runtime is being
+  shown and why, so the shorter list reads as an explanation rather than a
+  missing feature. With nothing connected the whole catalog is still browsable.
+  The Packages tab — which searches micropython-lib and PyPI — now says plainly
+  on a CircuitPython board that those are MicroPython packages, and points at the
+  Modules panel instead.
+
+### Fixed
+- **The Inspect panel scrolls.** A file with more than a dozen top-level symbols
+  ran off the bottom of the Outline pane with no way to reach the rest, and the
+  Variables list below it did the same. There *was* an `overflow: auto` on each
+  pane — it simply never applied: `react-resizable-panels` writes
+  `overflow: hidden` as an inline style on every panel it renders, and an inline
+  style outranks any stylesheet rule. The scrolling now belongs to the list
+  inside each pane, the way the Files view has always done it, with the count and
+  **Refresh** staying put at the top while the rows move under them. (#796)
+- **The Inspect panel lists your variables, not Snakie's.** Everything Snakie
+  asks a board to do — list a folder, gauge the flash, upload a file — runs as a
+  snippet in the board's `__main__`, the same namespace your program uses. Every
+  temporary those snippets bound stayed bound, so a program with no variables of
+  its own was reported as **"3 variables"**: a spent file handle, an
+  `os.statvfs()` tuple from the flash gauge, and a chunk of the last file
+  uploaded, still holding its bytes.
+
+  Snippets now clean up after themselves, which also gives a Pico back the
+  memory they were pinning — a chunk left over from an upload holds the whole
+  file. The cleanup runs even when a snippet *fails*, which is exactly when
+  someone opens the inspector to find out what happened. The few names that must
+  outlive a single snippet, such as the file handle a chunked upload writes
+  through, carry a `_snk_` prefix and are filtered from the panel by that one
+  rule — not by a list of single letters, which could never tell Snakie's `_s`
+  from yours. (#798)
+- **A linked 3-D model no longer gets left behind when a part changes library,
+  and a missing one now says so.** Linking an STL in the Part Editor's 3-D tab
+  copies it into the part's folder — but saving the part into a *different*
+  library moved only `parts.yml`. The image and help ride in memory and made the
+  trip; the mesh exists only on disk and did not, so the 9V battery ended up with
+  `mesh: battery-9v.stl` in `snakie-standard/` and the actual model still sitting
+  in `my-parts/`. A save now brings the model with the part, and reports the
+  filename when it cannot find one at all rather than writing a dangling
+  reference and calling it a success.
+
+  **`meshUnits` is recorded when the model is linked.** An `.stl` states no
+  units, so the link step is the last moment anything can measure the geometry
+  and write a conclusion down; without it a 48 mm part read as metres arrives
+  1000× too big. The guess is stored as the ordinary, editable `meshUnits` field
+  and named in the confirmation message, so a wrong one is a visible click to
+  correct.
+
+  **A broken mesh no longer looks like a rendering bug.** "This part has no
+  model" and "this part's model is missing" used to render identically — a plain
+  footprint block, with nothing said. A part that declares a `mesh:` and doesn't
+  get one still gets a block (a part with no body is worse), but now reports it
+  in the status bar, naming the part and the file. The same silent-failure shape
+  is fixed on the placeholder→mesh upgrade in Sync, and in both stubbed bridges
+  that used to answer with a bare `{}`. (#787)
+- **A package's dependencies now provably land where the board can import them,
+  and the install says which ones came along.** (#785) A dependency has to be
+  installed at the install ROOT — `/lib/lsm6dsox.py`, on the board's `sys.path`
+  — because it is imported by name. Written under the package that asked for it,
+  it is a downloaded, present, completely unreachable file, and the install
+  still reports success. Snakie's resolver was doing the right thing, but
+  nothing said so: the tests proved the files were *fetched*, which is a
+  different claim from *put in the right place*, and a resolution's files
+  carried no record of **whose** they were, so the placement rule could not even
+  be stated. Every resolved file now names the package that declared it, the
+  device path is computed in exactly one place that can only ever see the
+  install target — so "relative to the package that pulled this in" is not
+  expressible — and the rule is pinned per-dependency and as a property.
+
+  Two real faults came out of the same look. An install folder given as `lib`
+  (the placeholder a part author is shown) produced **relative** device paths,
+  while the directories for those same paths were created **absolute** — they
+  only ever agreed because a board's working directory happens to be `/`; a
+  target is now anchored before anything is joined to it. And an install was
+  silent about what it brought: installing the Arduino Modulino package quietly
+  installs three more packages, and the only way to check was to list `/lib` on
+  the board. The install note now names them, on the desktop and the web, for
+  driver and package installs alike. The Part Editor also warns an author whose
+  `mip` install folder points *inside* another package — that folder is the root
+  its dependencies land in too.
+- **The Build workspace could overwrite the file you had open with a 3-D robot
+  model. It can't any more.** (#782) Building in the Build workspace edits the
+  project's robot model — but it saved that model through *whatever tab the
+  editor happened to have focused*. If that was your program, your program was
+  replaced by the robot model, on screen and on disk. The only check was "is
+  this a saved file", which a `.py` passes.
+
+  A robot model now goes to a `.urdf` or it goes nowhere. Where a model is
+  written is decided from the document itself — the file it came from, or the
+  `.urdf` open in the editor — never from what has focus, and a target that
+  isn't a `.urdf` is **refused, and says so**, rather than falling back to
+  something plausible. The same rule applies wherever a model is written: the
+  part-placement bridge, the Sync reconcile, and the robot.yml `urdf:` link
+  itself, which can no longer be pointed at a non-`.urdf` file.
+- **Sync no longer adds a second, third and fourth copy of your microcontroller
+  to the 3-D view.** (#782) A part that lost track of which 3-D body was its own
+  could still recognise it by name; the microcontroller couldn't — its only
+  identity was a note in `robot.yml`, so if that note went missing (which an
+  ordinary save could do), Sync reported the board as having no body and
+  reconciling made another one, identical to the one already there. The board is
+  now identified exactly the way a part is, so a lost note costs nothing, and
+  running Sync twice leaves the model exactly as it was.
+- **A deleted part can no longer leave a connection behind that breaks the whole
+  robot.** (#782) A `<joint>` referring to a link that isn't in the model is
+  invalid — the file fails to load in any 3-D viewer, so one stray connection
+  costs you the entire robot rather than one part. Snakie now refuses to write
+  one: a joint is never created for a body that isn't there, and any that is
+  found is dropped as the file is saved.
+- **A board whose firmware version isn't a version is no longer told to update.**
+  (#757) A vendor MicroPython build was reporting its *branch name* where the
+  version goes. The comparison turned anything non-numeric into `0`, so that
+  board read as `0.0.0` and every build in the catalog looked like an upgrade
+  from it. An unrecognisable version now compares as "no update" — we don't know
+  what it's running, and that isn't evidence that it's behind.
+- **Build no longer opens the help panel every time you switch to it.** Switching
+  to the Build workspace kept reopening the lesson/help sidebar, however many
+  times you closed it. The cause was a "sticky lesson" rule that carried the
+  sidebar across on EVERY workspace switch whenever the workspace you were
+  leaving happened to have Learn or Help selected with its sidebar open — which,
+  in Code, is simply where you're left after reading one help article. Worse, it
+  wrote that open panel into Build's own remembered layout, so collapsing it
+  there could never stick.
+
+  Now every workspace keeps its own panel state: Build (and Electronics) opens
+  the way you last left it — collapsed by default — and a panel you open there
+  yourself stays open, across switches and restarts. A panel still appears when
+  something deliberately asks for one: a tutorial step that sends you to the
+  workspace it's about brings its instructions with it, and an instrument's or
+  part's `?` still opens the Help article beside the board. Sessions that already
+  had the stale open panel stored for Electronics/Build get it collapsed once on
+  upgrade.
+- **Instruments pop out into their own window in the browser too.** (#781) On
+  app.snakie.org, undocking an instrument did nothing you could see: the
+  instrument left the dock, no window opened, and there was no way to get it
+  back except toggling its kind off and on. The pop-out control called
+  `instruments.openWindow`, which outside Electron landed on a stub that
+  returned and did nothing at all.
+
+  It now opens a real, resizable browser window — and, importantly, a LIVE one.
+  A pop-up is its own JavaScript world, so a window that built its own backend
+  would be watching a second, separate simulator (and a USB board can only be
+  open in one place at a time, so it could not join in at all). Instead the
+  editor tab lends the pop-out its own device: same telemetry, same
+  `sendControl`, one board. Close the window and the instrument re-docks, exactly
+  as it does on the desktop. If the browser blocks the pop-up, the instrument
+  comes straight back to the dock and says why; if the editor tab it belongs to
+  is gone, the window says that too instead of showing a dead dial.
+
+  Two smaller things came out of the same fix: the offline service worker was
+  answering *any* navigation with the app shell, so the instrument window would
+  have opened the whole editor inside itself; and a detached instrument now
+  uses the Soft Shell fonts the rest of the app does.
+- A unit test no longer depends on what is plugged into the machine running it.
+  (#773) The CircuitPython file-routing tests exercise one case — a drive that
+  ejected — that made the device re-resolve its mount, and re-resolution is the
+  one step that leaves the test's temp directory and scans the developer's real
+  volumes (and, if it finds a board, their real serial ports). That is unbounded
+  I/O: it is why that single case timed out repeatedly under a loaded suite
+  while passing every time on its own. The scan is now stubbed — the logic under
+  test is untouched, and two cases now assert something they could not before:
+  that the device really does look again when the marker file is gone, and that
+  a drive still present does **not** cost a rescan on every file operation.
+- **Pin labels are the same size on every board with the same hardware.** (#778)
+  A Tiny 2350's pin names didn't match a Modulino LED Matrix's, even though both
+  carry an ordinary 2.54 mm header. Label size wasn't a setting: it was derived
+  from the tightest gap between *any* two pins, measured in pixels of the part's
+  own fit-to-footprint box — an accident of the outline, not of the hardware. So
+  the same header was typeset one size on a 18 mm board and another on a 41 mm
+  one, and a placed part's silk labels carried its body scale on top of that,
+  setting identical pins in nearly twice the type on a big part as on a small one.
+
+  Labels are now sized the way everything else on a part already is: physically.
+  A label is as big as the room its pin really has — its neighbour's distance in
+  millimetres at the canvas' pixels-per-millimetre — so identical hardware drawn
+  at the same scale reads at the same size, whatever board it sits on.
+
+  The density shrink is still there, because it is the only thing keeping a Servo
+  2040's eighteen servo headers legible, but it now applies **per board edge**. A
+  label is anchored to the edge its pin faces and can only collide with the other
+  labels on that edge, so the Tiny 2350's QWIIC contacts — 1.2 mm apart, and
+  labelling off the bottom — no longer shrink the castellations down both sides.
+  Pins that draw no label at all (a servo header's V+/GND rows) no longer shrink
+  their neighbours either.
+- **A running Snakie can no longer undo an edit you made to a part outside it.**
+  (#750) The parts library is a folder of plain text files, so a script, an
+  editor and `git checkout` are all perfectly good ways to change a part — but
+  the app assumed it was the only author. It held each part in memory from the
+  moment the library loaded and, on the next save, wrote that copy back over
+  whatever was on disk. Corrected I²C addresses reverted to their 8-bit values,
+  QWIIC socket rotations flipped so GND sat on the wrong contact of a power
+  connector, and a module lost its whole template — four times in one session,
+  silently each time, because a save reported success.
+
+  A part now carries a stamp of the exact file it was read from, and a save that
+  presents a stamp the file no longer matches is **refused**, with a message
+  asking you to reopen the part. Nothing is written, so nothing is lost.
+
+  The same save also used to prune the part's folder to match its own idea of
+  the part's contents: every `image.*` and any `help.md`, whether the part
+  referenced them or not. That is how a hand-written `help.md` and a `.stl` mesh
+  were deleted from disk. A save now only removes an asset the part's own
+  previous `parts.yml` named, and only when it is being replaced or cleared —
+  anything else beside `parts.yml` is left alone. The dev "Update Standard"
+  mirror and the bundled-library refresh follow the same rule: they copy over
+  the top rather than emptying the folder first, and the mirror refuses outright
+  when the copy it would overwrite carries a newer version than the one being
+  promoted.
+- **Snakie downloads packages, instead of asking the board to.** (#776,
+  supersedes #769) Installing a driver or a package used to run `mip.install()`
+  **on the board** — which quietly required the *board* to have its own internet
+  connection. Most don't: a Pico, a Tiny 2350, any board without a radio could
+  never install anything this way. Even a Wi-Fi board needed `mip`, an optional
+  micropython-lib package that CircuitPython and many vendor builds leave out,
+  so the failure usually arrived as a bare
+  `ImportError("no module named 'mip'")`.
+
+  Now the machine with the internet connection does the downloading. Snakie
+  resolves the package on your computer and writes its files to the board, which
+  only has to do the thing every board can do: accept files. That reaches a
+  CIRCUITPY drive or the serial REPL through the same path every other file
+  write uses, so one route covers MicroPython and CircuitPython, wired and
+  wireless boards, and the simulator — which could never install anything
+  before. Whole packages come across, not just single files: the Modulino driver
+  installs all 25 of its files, including its three transitive dependencies.
+  It applies to the Packages panel too, not just drivers.
+
+  When an install can't proceed, the message now says which half failed —
+  downloading the package, or writing it to the board — and what to do about it,
+  instead of handing back the board's `ImportError`.
+- **An onboard LED's real size survived saving and vanished on loading.** The
+  YAML writer passes an LED through whole but the reader rebuilt it field by
+  field, so `sizeMm` (and a hand-placed silk label) were dropped on the next
+  load — the bundled LED Bar has authored 2.5 mm segments that never reached the
+  renderer. The reader now names them, and `single` LEDs are drawn life-size like
+  NeoPixels already were, so a 5 mm LED on a 20 mm module reads as the quarter of
+  the board it is. Its glow is a fixed ring around the package rather than a
+  multiple of it, so an ordinary indicator looks exactly as it did.
+
+### Changed
+- **The flash dialog's Runtime choice now has a picture on it.** MicroPython and
+  CircuitPython were two identical text buttons, told apart only by reading them
+  — on the one control in Snakie where picking the wrong option writes the wrong
+  firmware to your board. Each now carries a glyph: a **chip** for MicroPython (a
+  microcontroller — the *micro* half of the name) and a **routed PCB trace** for
+  CircuitPython (the *circuit* half). Neither is the project's own logo — those
+  are trademarks — they're simple original drawings in Snakie's line style, one a
+  compact block and the other an open diagonal, so they stay apart at icon size.
+  The names stay next to them: an icon-only control here would be asking you to
+  guess. The selected runtime is now marked by a tick, a heavier ring and bolder
+  text as well as the accent colour, so it reads without relying on colour at
+  all, and the Source toggle below it uses the same accent instead of the old
+  hardcoded blue.
+- Installing a driver can now write **binary** files to a board, not only source
+  text (#758). Both device write paths already carried bytes — the CIRCUITPY
+  drive writes them directly and the raw REPL hex-encodes its chunks precisely so
+  arbitrary bytes survive — but the boundary between them only carried strings,
+  which would have silently corrupted every `.mpy` in the UTF-8 round-trip.
+- **The help and the autocomplete now teach whichever Python your board is
+  actually running.** (#763, epic #209) Snakie's reference pages and editor
+  completions were MicroPython throughout: `machine.Pin`, `time.sleep_ms`,
+  "Install packages (mip)" — and the only CircuitPython entries in the
+  completion list were two empty stubs. Plug in a CircuitPython board now and
+  the Help panel swaps its hardware section for **board · digitalio · analogio ·
+  pwmio · busio**, plus the three things that actually catch people out —
+  `code.py` and auto-reload, the read-only filesystem, and installing libraries
+  from the Adafruit bundle — while `machine.Pin`, `sleep_ms` and mip disappear
+  entirely. The completions follow the same catalogue, so `time.` on
+  CircuitPython offers `monotonic()` and not `sleep_ms()`, and typing `from
+  mach…` there gets a suggestion that says it doesn't exist on this runtime and
+  shows what to write instead. Right-click → *Help for symbol* on a `machine`
+  pasted out of a MicroPython tutorial opens the page that replaces it rather
+  than nothing. Plain Python — control flow, classes, types, built-ins — stays a
+  single set of pages shared by both, and the section that used to be called
+  "MicroPython Language" is now "Python Language" with the runtime-specific
+  pages split out beneath it. **With no board connected nothing is guessed:**
+  both runtimes are shown side by side, each entry labelled with the Python it
+  belongs to, and three pills at the top of the Help panel (Auto · MicroPython ·
+  CircuitPython) pin it to one if you're reading before you plug anything in.
+  There's also a new "Coming from MicroPython" page: the whole translation
+  table, `Pin(15)` → `board.D15`, on one screen.
+- **Electronics and Build now show the SAME component hierarchy.** (#718, epic
+  #720) There used to be two trees describing one robot and disagreeing about
+  it: the board browser listed the microcontroller and your placed parts nested
+  by what they're plugged into; the Build dock listed URDF links and joints
+  nested by how they're jointed together. Same idea, different rows, different
+  behaviours. Now there is one tree, in one component, in both workspaces — a
+  part and its 3-D body are a single row, carrier nesting is preserved (a XIAO
+  still sits inside its expansion base), and rows that only exist in Build
+  (structural blocks) appear in Electronics too, dimmed and inert, rather than
+  being hidden — so the shape of the tree reads identically wherever you are.
+  Only PARTS are rows: a part that's jointed to another carries a joint icon
+  shaped by the joint's type, rather than the joint taking a row of its own and
+  doubling the length of the list. Click the icon to edit that joint (right-click
+  the row to rename it); a part with nothing above it — the base, a stray import
+  — simply hasn't got one. It also *looks* the same in both places now: the
+  hierarchy carries its own card — surface, hairline, ink and spacing — instead
+  of borrowing whatever chrome the dock around it happened to have, so the Build
+  tree reads as the board browser's tree rather than as bare rows floating on the
+  3-D scene. Every colour in it is a theme token, so it stays readable on the
+  dark skin and on parchment. Clicking a row selects it and zooms to fit it in
+  whichever workspace you're in, and the selection now survives switching
+  workspace (it even carries into the popped-out Board View window).
+- **Honest mass: the robot tells you how much of it has actually been weighed.**
+  (#719, epic #720) The centre of mass has always been computed from the parts
+  whose mass is known, silently leaving the rest out — so a balance verdict from
+  4 of 12 parts looked exactly like one from all 12. Every row in the hierarchy
+  now carries its weight in its tooltip, stated as unknown when there isn't one;
+  a line under the tree states the coverage ("mass known for 4 of 12 parts") and turns
+  amber below full; the Build panel's total is marked as the lower bound it is;
+  and the centre-of-mass overlay's readout says "4/12 weighed" while the picture
+  is partial. Nothing is ever invented to fill a gap — no family estimates, no
+  default masses, and a 0 g body reads as *unknown*, not weightless.
+- **A Sync button keeps Electronics and Build honest with each other.** (#717,
+  epic #720) The same control in both workspaces (and the pop-out board window)
+  shows a badge when the two disagree, and opens a reconcile dialog where YOU
+  decide each difference: a part with no 3-D body can be added, a stand-in box
+  whose part now ships a real mesh can be upgraded in place, a library weight
+  can be applied to a body that lacks one (never over a mass you measured), and
+  — per the long-standing #626 design — deleting a part flags its 3-D body
+  instead of destroying it, with a three-way choice: keep it in Build, remove
+  it, or re-add the part to Electronics. Nothing destructive ever happens
+  without a click.
+- **Every part you place now appears in the Build workspace.** (#716, epic #720)
+  Previously only a part shipping a 3-D mesh reached the Robot View — a handful
+  of the standard library — and batch-added parts never did. Now
+  a part without a mesh gets a **footprint box**: its real dimensions extruded
+  to a family-tuned height in a desaturated take on its PCB colour, so the 3-D
+  scene resembles your robot and centre-of-mass geometry stays meaningful. New
+  parts land at their breadboard position (mirrored onto the ground plane), a
+  part that declares its weight arrives with real mass in the model, and an open
+  Build view picks all this up live instead of waiting for a remount. Behind the
+  scenes each placed part now remembers which 3-D link is its (`urdfLink`) — the
+  spine the coming sync and unified-hierarchy work builds on.
+- **Packages install in the browser too.** (#776) Snakie for Web had no
+  `packages` backend at all: the Packages tab could list nothing, search
+  nothing, and its Install button quietly did nothing. #776 is what made a web
+  version possible — an install is no longer `mip` running on the board but
+  "resolve the package on the host, write the files to the board", and in a
+  browser the host is the page. So the curated list, PyPI search, `github:`
+  specs and bare micropython-lib names (dependencies and all) now work on
+  app.snakie.org exactly as they do on the desktop, over Web Serial or into the
+  simulator.
+
+  What a web page **can't** do is fetch from just anywhere — it is fenced in by
+  its content-security policy and by whether the far end allows cross-origin
+  reads at all. A `gitlab:` spec, a custom package index, or any other host is
+  therefore refused **up front, by name**, with a line saying so and pointing at
+  the desktop app — rather than the bare "Failed to fetch" the browser would
+  otherwise give.
+- **A bitmap font editor, so a display project can have its own typeface.**
+  (#250, epic #247) Small displays ship with one tiny built-in font; this
+  instrument lets you draw your own the way hand-made display fonts are made —
+  a per-glyph pixel grid you click and drag on, a navigator across the whole
+  charset, an adjustable cell (5×7, 8×8, whatever), and a preview line that
+  renders your text at **1×** so you see the real thing before you flash it.
+  It opens on a bundled 5×8 printable-ASCII starter font rather than a blank
+  grid, so the first move is "fix the letters you don't like", and your drawing
+  is parked as you go. Fonts can be fixed-pitch or proportional: **Auto-fit**
+  shrinks every glyph to its own ink plus a pixel of spacing, growing the cell
+  first so the widest letters still get their gap. Export writes a
+  **`font-to-py`-compatible module** into the editor, so existing `Writer` code
+  works unchanged — or a simpler packed `bytearray` + metrics module if you'd
+  rather blit into a `framebuf` yourself. Importing an existing font module,
+  uploading straight to the board and previewing on real hardware are follow-ups.
+- **Grove Red LED, as a Standard library part.** Seeed's 5 mm red LED module
+  (SKU 104030005) on a Grove digital port, drawn from the product photo: the LED
+  in its white holder, the brightness trimmer, the switching transistor and the
+  chip resistors, with `SIG`/`NC`/`VCC`/`GND` on the socket and a `help.md`
+  covering the on/off and PWM-fade snippets. `SIG` is `digital` + `pwm`, so a
+  design can fade it as well as blink it. No driver — `machine.Pin` is enough.
+- **Run, Stop and Reset say what they actually do on a CircuitPython board, and
+  the file tree shows which file boots.** (#755, epic #209) Run stays a raw-REPL
+  execution on both runtimes — it will not overwrite your `code.py` — but it now
+  says what that costs: your `code.py` stops, and the board waits at the REPL
+  rather than going back to it. Reset is where the runtimes really differ, and it
+  says so: on CircuitPython a soft reboot runs `code.py` again from the start,
+  rather than just clearing the board. The device file tree marks the file the
+  board runs at boot — and marks one it will **ignore**, because CircuitPython
+  tries `code.py` before `main.py`, so a board carrying both runs only the first
+  and edits to the other appear to do nothing.
+- **Files, drivers and libraries can be written to a CircuitPython board.**
+  (#754, epic #209) CircuitPython's filesystem is read-only *to the board* while
+  its CIRCUITPY drive is mounted, so every file operation Snakie has — the Files
+  panel, driver installs, the instrument library, the Modules manager — used to
+  fail with a bare `OSError: 30`. Those operations now go to the drive instead.
+  Reads go there too, so listing a folder no longer has to interrupt a running
+  `code.py` to do it, and a file copy replaces the hex-over-serial transfer.
+  Writes are flushed before returning, so CircuitPython's auto-reload can't catch
+  a half-written file. A board that has taken its filesystem back with
+  `storage.remount` still works exactly as before, over the REPL — and if a write
+  does hit the read-only filesystem, the error now explains it instead of naming
+  an errno. The flash gauge measures the drive, which is the number that answers
+  "will this fit".
+- **Snakie finds a CircuitPython board's drive, and says what the board is before
+  you connect.** (#753, epic #209) A board running CircuitPython mounts a
+  **CIRCUITPY** volume, and its `boot_out.txt` names the version and the
+  per-board build id — so the port picker can read "CircuitPython 10.2.1"
+  against a board nothing has connected to yet. A drive is tied to its port by
+  the board's own id, matched against the port's USB serial number, so two
+  boards on one desk can't swap identities; where that can't be established it
+  says nothing rather than guessing, because the next phase writes files to
+  whichever drive this picks. Renamed drives are still found — the marker file
+  decides, not the label.
+- **Snakie can tell which Python your board is running.** (#752, epic #209) The
+  connect probe now reads `sys.implementation`, so the session knows whether a
+  board runs **MicroPython or CircuitPython** instead of assuming — the
+  foundation the rest of the CircuitPython work is built on. The status bar names
+  the runtime and version beside the port, with the board string on hover, and
+  the connect greeting is rebuilt in that runtime's own wording rather than
+  MicroPython's. A board that won't answer stays unidentified rather than being
+  guessed at, and the previous board's runtime can't linger after you unplug it.
+- **A display part can declare its size in pixels.** (#780) A part with a panel
+  now carries a `display` block in `parts.yml` — `width`, `height` and a `colour`
+  depth — so its resolution is a fact the part states rather than something each
+  sketch or instrument re-guesses. This is deliberately **not** `dimensions`,
+  which is the board's physical size in millimetres: a display part has both, and
+  they are unrelated numbers. `colour` is named after bits per pixel (`mono`,
+  `gray2`, `gray4`, `gray8`, `rgb332`, `rgb565`, `rgb888`) to match MicroPython's
+  `framebuf` formats, so "gray4" can't be misread as four grey levels. Populated
+  for the **Modulino LED Matrix** (12 × 8) and the **XIAO Expansion Base**'s
+  onboard 0.96" SSD1306 (128 × 64). Reading it back on the board is a follow-up.
+- The per-platform mount-point scanning behind board detection is now in one
+  place (`fs/volumes.ts`) instead of being hand-rolled once per board type, and
+  it no longer reads every folder in your home directory looking for a board.
+- **The sprite reference rules are back down to one copy each** (#797, epic
+  #789). The inline thumbnail (#790), the filename autocomplete (#791) and the
+  "used in" back-link (#792) shipped as three phases, and the later two each grew
+  their own copy of a rule the first already had: a Python tokeniser, a
+  `dirname`, "which candidate does this reference mean", and "a file opened off
+  the board isn't on this filesystem". All four now live once, in
+  `sprite-refs.ts`, with both scanners built on the one tokeniser. Nothing
+  changes on screen — except that a Python file sitting at a filesystem root
+  (`/main.py`) now looks for its sprites beside itself, which the editor's own
+  copy of `dirname` had been skipping.
+
+## [0.44.0] - 2026-08-16
+
+### Added
+- **Arduino's Modulino range, as Standard library parts.** (#721, #722) The
+  Modulinos are one board with different hardware on top, so the shared half —
+  the 41 × 25.36 mm outline, both QWIIC sockets wired in parallel onto one bus,
+  the generated 3-D mesh and the driver wiring — is authored once and each module
+  fills in the rest. **Buttons, Buzzer, Distance, LED Matrix, Light, Motors** and
+  **Movement** ship in this release, each with its own `help.md`, I²C address and
+  mass. All thirteen declare the same catalog module, so a design using several
+  is offered **one** driver install rather than one per board. A conformance test
+  runs over every `modulino-*` part, so the modules still to come can't drift
+  into subtly different boards.
+- **The full-screen catalog, and a part's details, grow out of the control that
+  opened them.** Pressing the expand button or a card's disclosure scales the new
+  view out of that button rather than replacing the screen, and closing either
+  one runs it backwards, shrinking back into the control it came from — so both
+  read as a detour you can back out of, with your place still visible behind.
+  Honours `prefers-reduced-motion`.
+- **Rotate a part 90° in the Part Editor.** (#749) Two buttons on the canvas
+  toolbar turn the whole board — pads, holes, connectors, components, labels,
+  outline and both photos — so a board photographed portrait can be re-authored
+  landscape and stay that way. It's a real edit, not a view transform, and it
+  round-trips exactly: four turns restore the part unchanged.
+- **Filter the parts catalog by type, manufacturer and tag.** (#740, #747) Type
+  and manufacturer are facets — every part has exactly one, always shown, always
+  counted against the *other* active filters, so a value that would return
+  nothing reads as the dead end it is. Tags are a ranked layer beneath them, with
+  the ones that merely restate a facet dropped and the long tail behind a
+  disclosure. The facets live in a left-hand sidebar in the full-screen catalog;
+  filtering collapses the category shelves into one flat grid, with each card
+  carrying the type its shelf heading used to supply.
+- **A board's corner radius can be given in millimetres.** (#739) How a PCB is
+  actually specified, and the number on a mechanical drawing — rather than a
+  fraction of the board's smaller side.
+- **Cabled leads route around boards instead of across them.** (#745) A QWIIC
+  lead used to run diagonally over the face of the board it left, hiding the silk
+  and reading nothing like a cable. A lead now leaves along its socket's axis and
+  drapes its slack outside the bodies it would otherwise cross, following the way
+  its plugs point.
+- **A full-sized part details view in the parts catalog.** (#748) A catalog card
+  has room for a picture, a name and one truncated line; everything else a part
+  knows was either buried in the narrow docked panel or not surfaced anywhere.
+  Hovering a card now reveals a **disclosure** on its picture, and clicking it
+  opens the part full-screen: the board drawn large with its pinout labels (and
+  the flip, for a two-sided part), its schematic, and — for a part that ships an
+  STL — a **3-D model** you can orbit. Beside it: manufacturer, part number,
+  package, voltage, real dimensions in millimetres, mass, I²C addresses and the
+  author's own spec rows; what driver it installs and from where; the modules it
+  works with; its links; and its bundled `help.md`, rendered. The disclosure has
+  its own hit area, so opening the details never ticks the card, and closing
+  (✕ or Esc) lands you back in the grid with the selection and filters exactly
+  as you left them — a part can also be ticked into the selection from the
+  details view itself. A panel with nothing to say isn't drawn at all, and the
+  3-D tab appears only when the model can actually be loaded, rather than
+  offering an empty frame.
+- **Author a part's drivers in the Part Editor.** (#655) A part that needs a
+  MicroPython file on the board — what makes the Driver Install prompt fire when
+  it's placed — could until now only say so via hand-edited `parts.yml`, so a
+  community part couldn't ship a driver. A new **Drivers** section adds, edits,
+  reorders and removes them, and makes the tricky rule visible: the install
+  method (catalog module / mip / copy) is detected as you type, and the target
+  field is relabelled to match — an install *folder* for mip, a full *path* for
+  copy — because typing a path where mip wants a folder installs to the wrong
+  place. Catalog modules are picked from a list so a bad id can't be authored,
+  files that ship beside the part are offered as sources, and a bundled filename
+  that isn't actually there is flagged at authoring time instead of on hardware.
+
+### Changed
+- **One mesh load path.** (#742) STL loading, measurement and placeholder
+  geometry were duplicated across the robot and part views; they now share one
+  module, which is also what the new 3-D part view is built on.
+
+### Fixed
+- **QWIIC connectors are drawn life-size, and the right colour.** The socket was
+  smaller than the real part; it's now the JST-SH datasheet's 6.0 × 4.25 mm, with
+  the board socket ivory and the cable plug white, as the real housings are.
+- **Modulino I²C addresses are the ones a bus scan actually reports.** The
+  MicroPython library declares each module's address in its **8-bit** form and
+  shifts it before touching the bus — but only for modules with an onboard MCU.
+  Three parts and most of the known-devices table carried the unshifted number,
+  so I²C-detect could never name an MCU module: Buttons is `0x3E`, not `0x7C`.
+- **Pin numbers and labels read upright on a rotated part.** (#746) Boxed labels
+  on a part turned 180° were upside-down; they now counter-rotate to stay
+  readable whatever the body's angle.
+- **A part's title clears its top-edge pin labels** instead of overlapping them.
+- **The part detail view flips the board, not the mat it sits on.**
+- **Catalog cards read as a grid again.** Titles sit above the picture and always
+  reserve two lines, so every image lines up; long names wrap rather than
+  truncate; the FRONT/BACK badge and the SKU are gone; category headings hug
+  their text; and the shelves fill their width, so they show as many columns as
+  the filtered grid does.
+- **The catalog's facet sidebar is legible in the dark theme** — it was styling
+  itself from the theme tokens while sitting on a deliberately light panel, which
+  put near-white ink on a near-white background.
+- **`npm run dev` no longer trips macOS malware protection.** (#708) Apple
+  revoked the stock ad-hoc Electron signature; the dev binary is re-signed on
+  postinstall.
+- **Mini board hover labels no longer crop at the old frame when zoomed out.**
+  Hovering the mini board reveals the full pinout without re-framing (so the
+  board doesn't resize under the pointer), which lets labels run past the frame
+  — and the SVG was hard-cropping them at that original boundary even when
+  zooming out had opened up empty space all around the board. The labels now
+  paint into whatever room the panel actually has, clipped only at the panel
+  edge.
+- **A stale driver no longer reads as installed.** (#707) The Driver Install
+  banner and the Modules manager only checked that a driver was *present*, so a
+  board carrying an old copy of a bundled driver was never offered the newer one
+  Snakie ships — a sketch using a new driver feature failed while the app
+  insisted the driver was installed, and the only way out was deleting the file
+  by hand. Every bundled driver now declares a `__version__`; on connect the
+  `/lib` copy's version line is read back (one line over the wire, the #700
+  mechanism) and compared against the shipped version. A stale copy shows as an
+  **update** — the banner words the row and button as one, and the Modules
+  manager swaps the INSTALLED stamp for an UPDATE key. A copy that imports from
+  somewhere Snakie doesn't manage (a hand-placed root file, frozen firmware) is
+  left alone, and a unit test keeps each driver's `__version__` and the
+  catalog's declared version in lockstep so a driver edit can't ship without
+  the bump that lets boards hear about it.
+
 ## [0.43.0] - 2026-08-02
 
 ### Added
@@ -3930,7 +4840,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.43.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.44.0...HEAD
+[0.44.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.41.0...v0.42.0
 [0.41.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.40.0...v0.41.0

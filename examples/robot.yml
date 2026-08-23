@@ -1,57 +1,11 @@
 name: Bugerbot
 description: Its a burger shaped bot!
-board: pico2w
+board: seeed-studio-xiao-esp32-s3
 boardX: -386.8373116524391
 boardY: 122.9421398727101
-parts:
-  - id: sg90
-    lib: snakie-standard
-    part: sg90
-    label: SG90 Micro Servo
-    x: -109.30044118049273
-    y: 88.31669732059257
-  - id: sg902
-    lib: snakie-standard
-    part: sg90
-    label: SG90 Micro Servo
-    x: -106.60627317349343
-    y: -109.19009477198553
-  - id: sg903
-    lib: snakie-standard
-    part: sg90
-    label: SG90 Micro Servo
-    x: -109.13368264045161
-    y: 488.1112436221548
-  - id: sg904
-    lib: snakie-standard
-    part: sg90
-    label: SG90 Micro Servo
-    x: -112.39519240868486
-    y: 309.0252828819799
-connections:
-  - id: sg90.Signal#0__board.S10#9
-    from: sg90.Signal#0
-    to: board.S10#9
-    net: signal
-    color: "#4ea1ff"
-  - id: sg902.Signal#0__board.S11#10
-    from: sg902.Signal#0
-    to: board.S11#10
-    net: signal
-    color: "#46e06a"
-  - id: sg903.Signal#0__board.S12#11
-    from: sg903.Signal#0
-    to: board.S12#11
-    net: signal
-    color: "#d6a531"
-  - id: sg904.Signal#0__board.S13#12
-    from: sg904.Signal#0
-    to: board.S13#12
-    net: signal
-    color: "#b06af0"
 robot:
-  version: 1
   urdf: robot.urdf
+  version: 1
   baseLink: base
   jointRoll:
     buddy_jr_2_shoulder_3_joint: 0
@@ -153,3 +107,49 @@ robot:
           - t: 0.9781337192820161
             value: -6.000000000000001
     fps: 20
+parts:
+  - id: sg90
+    lib: snakie-standard
+    part: sg90
+    label: SG90 Micro Servo
+    x: -109.30044118049273
+    y: 88.31669732059257
+  - id: sg902
+    lib: snakie-standard
+    part: sg90
+    label: SG90 Micro Servo
+    x: -106.60627317349343
+    y: -109.19009477198553
+  - id: sg903
+    lib: snakie-standard
+    part: sg90
+    label: SG90 Micro Servo
+    x: -109.13368264045161
+    y: 488.1112436221548
+  - id: sg904
+    lib: snakie-standard
+    part: sg90
+    label: SG90 Micro Servo
+    x: -112.39519240868486
+    y: 309.0252828819799
+connections:
+  - id: sg90.Signal#0__board.D8#14
+    from: sg90.Signal#0
+    to: board.D8#14
+    net: signal
+    color: "#4ea1ff"
+  - id: sg902.Signal#0__board.D9#13
+    from: sg902.Signal#0
+    to: board.D9#13
+    net: signal
+    color: "#46e06a"
+  - id: sg903.Signal#0__board.D10#12
+    from: sg903.Signal#0
+    to: board.D10#12
+    net: signal
+    color: "#d6a531"
+  - id: sg904.Signal#0__board.GND#10
+    from: sg904.Signal#0
+    to: board.GND#10
+    net: signal
+    color: "#b06af0"

@@ -23,7 +23,9 @@ import {
   readAllJoints,
   removeJoint,
   readVisualOrigin,
-  setVisualOrigin
+  setVisualOrigin,
+  meshVisualOrigin,
+  swapLinkVisualToMesh
 } from '../src/renderer/src/components/robot-assembly'
 
 const URDF = `<?xml version="1.0"?>
@@ -99,6 +101,155 @@ describe('addMeshLink (#354 — attach to base, staggered)', () => {
     expect(link).toBe('x')
     expect(urdf).toContain('<link name="x">')
     expect(urdf).not.toContain('<joint')
+  })
+})
+
+/**
+ * The part's stored mesh orientation reaching the URDF (#741).
+ *
+ * "Store, don't bake" only works if every consumer honours the stored rotation —
+ * a `meshRotation` nothing applies is worse than none at all, because the part
+ * then LOOKS corrected in the editor and lands wrong in Build. This is the
+ * boundary where the correction leaves Snakie's own code.
+ */
+describe('the mesh orientation reaches the URDF (#741)', () => {
+  it('writes the rotation as the VISUAL origin rpy, in radians', () => {
+    const { urdf, link } = addMeshLink(URDF, {
+      meshRel: 'meshes/w.stl',
+      linkBase: 'w',
+      rotation: [90, 0, 0]
+    })
+    const origin = readVisualOrigin(urdf, link)!
+    expect(origin.rpy[0]).toBeCloseTo(Math.PI / 2, 6)
+    expect(origin.rpy[1]).toBeCloseTo(0, 9)
+    expect(origin.rpy[2]).toBeCloseTo(0, 9)
+    expect(origin.xyz).toEqual([0, 0, 0])
+  })
+
+  // The rotation describes the MESH, so it must not ride on the placement joint:
+  // re-jointing the part in Build would then fight it, and rebuilding the joint
+  // would lose it.
+  it('leaves the placement JOINT square — the correction belongs to the mesh', () => {
+    const { urdf } = addMeshLink(URDF, {
+      meshRel: 'meshes/w.stl',
+      linkBase: 'w',
+      rotation: [90, 0, -90],
+      at: [0.1, -0.2, 0]
+    })
+    expect(urdf).toContain('xyz="0.1 -0.2 0" rpy="0 0 0"')
+  })
+
+  it('emits nothing at all without one, so existing URDFs are byte-identical', () => {
+    const plain = addMeshLink(URDF, { meshRel: 'meshes/w.stl', linkBase: 'w' })
+    for (const rotation of [undefined, null, [0, 0, 0] as [number, number, number]]) {
+      expect(addMeshLink(URDF, { meshRel: 'meshes/w.stl', linkBase: 'w', rotation }).urdf).toBe(
+        plain.urdf
+      )
+    }
+  })
+
+  it('a placeholder upgraded to the real mesh brings the correction with it', () => {
+    // The footprint box it replaces never needed an orientation, so the swap is
+    // the first moment the part's own rotation can be applied (#717 + #741).
+    const boxed = `<?xml version="1.0"?>
+<robot name="r">
+  <link name="base_link"><visual><geometry><box size="0.04 0.02 0.01"/></geometry></visual></link>
+</robot>`
+    const swapped = swapLinkVisualToMesh(boxed, 'base_link', 'meshes/real.stl', 0.001, [0, -90, 0])
+    expect(swapped).toContain('<mesh filename="meshes/real.stl"')
+    expect(readVisualOrigin(swapped, 'base_link')!.rpy[1]).toBeCloseTo(-Math.PI / 2, 6)
+    // …and still nothing when the part declares no correction.
+    const square = swapLinkVisualToMesh(boxed, 'base_link', 'meshes/real.stl', 0.001)
+    expect(square).not.toContain('<origin')
+  })
+
+  it('meshVisualOrigin is the single place the line is formed', () => {
+    expect(meshVisualOrigin(undefined)).toBe('')
+    expect(meshVisualOrigin([0, 0, 0])).toBe('')
+    expect(meshVisualOrigin([0, 0, 180]).trim()).toBe('<origin xyz="0 0 0" rpy="0 0 3.141593"/>')
+  })
+})
+
+/**
+ * The part's stored mesh POSITION reaching the URDF (#788).
+ *
+ * Same bargain as the rotation: a `meshOffset` that only the editor honours is
+ * worse than none, because the part then looks right where it was tuned and
+ * lands wrong in Build.
+ *
+ * The thing worth pinning is the ORDER. URDF defines `<origin xyz rpy>` as
+ * rotate-then-translate in the link frame, which is the order `mesh-offset.ts`
+ * specifies and both three.js views apply. Writing the stored millimetres out
+ * ÷1000 with no compensation term is only correct BECAUSE of that agreement —
+ * so it is asserted here, at the boundary, rather than assumed.
+ */
+describe('the mesh position reaches the URDF (#788)', () => {
+  it('writes the offset as the VISUAL origin xyz, in metres', () => {
+    const { urdf, link } = addMeshLink(URDF, {
+      meshRel: 'meshes/w.stl',
+      linkBase: 'w',
+      offset: [-13.25, -24.25, 0]
+    })
+    const origin = readVisualOrigin(urdf, link)!
+    expect(origin.xyz[0]).toBeCloseTo(-0.01325, 9)
+    expect(origin.xyz[1]).toBeCloseTo(-0.02425, 9)
+    expect(origin.xyz[2]).toBeCloseTo(0, 9)
+    expect(origin.rpy).toEqual([0, 0, 0])
+  })
+
+  it('carries BOTH corrections on one origin, uncompensated', () => {
+    // The offset is emitted as-is (÷1000), NOT as `R · t`. That is only valid
+    // because URDF applies rpy first and xyz second — the same order the editor
+    // stage and the catalog turntable use. A rotated part whose xyz came out
+    // pre-multiplied here would sit right in the editor and wrong in Build.
+    const { urdf, link } = addMeshLink(URDF, {
+      meshRel: 'meshes/w.stl',
+      linkBase: 'w',
+      rotation: [0, 0, 90],
+      offset: [10, 0, 0]
+    })
+    const origin = readVisualOrigin(urdf, link)!
+    expect(origin.rpy[2]).toBeCloseTo(Math.PI / 2, 6)
+    expect(origin.xyz[0]).toBeCloseTo(0.01, 9)
+    expect(origin.xyz[1]).toBeCloseTo(0, 9)
+  })
+
+  it('leaves the placement JOINT square — the correction belongs to the mesh', () => {
+    const { urdf } = addMeshLink(URDF, {
+      meshRel: 'meshes/w.stl',
+      linkBase: 'w',
+      offset: [10, -5, 2],
+      at: [0.1, -0.2, 0]
+    })
+    expect(urdf).toContain('xyz="0.1 -0.2 0" rpy="0 0 0"')
+  })
+
+  it('emits nothing at all without one, so existing URDFs are byte-identical', () => {
+    const plain = addMeshLink(URDF, { meshRel: 'meshes/w.stl', linkBase: 'w' })
+    for (const offset of [undefined, null, [0, 0, 0] as [number, number, number]]) {
+      expect(addMeshLink(URDF, { meshRel: 'meshes/w.stl', linkBase: 'w', offset }).urdf).toBe(
+        plain.urdf
+      )
+    }
+  })
+
+  it('a placeholder upgraded to the real mesh brings the position with it', () => {
+    const boxed = `<?xml version="1.0"?>
+<robot name="r">
+  <link name="base_link"><visual><geometry><box size="0.04 0.02 0.01"/></geometry></visual></link>
+</robot>`
+    const swapped = swapLinkVisualToMesh(boxed, 'base_link', 'meshes/real.stl', 0.001, [0, -90, 0], [0, 0, 8.5])
+    const origin = readVisualOrigin(swapped, 'base_link')!
+    expect(origin.rpy[1]).toBeCloseTo(-Math.PI / 2, 6)
+    expect(origin.xyz[2]).toBeCloseTo(0.0085, 9)
+  })
+
+  it('meshVisualOrigin forms the line for an offset alone', () => {
+    expect(meshVisualOrigin(undefined, '      ', undefined)).toBe('')
+    expect(meshVisualOrigin(undefined, '      ', [0, 0, 0])).toBe('')
+    expect(meshVisualOrigin(undefined, '      ', [0, 0, 8.5]).trim()).toBe(
+      '<origin xyz="0 0 0.0085" rpy="0 0 0"/>'
+    )
   })
 })
 

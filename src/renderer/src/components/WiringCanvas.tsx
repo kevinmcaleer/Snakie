@@ -24,12 +24,24 @@ import { isServoPart, servoBoardGpio, boundJoint, bindServoJoint } from './servo
 import type { BoardDefinition } from '../../../shared/board'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
 import type { PartConnector, PartPinBuses, PartPinCapability, PartPinSignals } from '../../../shared/part'
-import { cableRole, conductorColour, connectorFit, housingPlugAngle } from './cable'
+import { cablePlugGeometry, cableRole, conductorColour, connectorFit, housingPlugAngle } from './cable'
 import { partSupplyVoltage } from '../../../shared/power-led'
 import type { SmokeSite } from '../../../shared/erc'
-import { BOARD_KEY, browserTree, countNodes, type BrowserNode } from './browser-tree'
+import { BOARD_KEY, type HierarchyNode, type MassCoverage } from './hierarchy-tree'
+import { HierarchyPanel } from './HierarchyPanel'
+import { useHierarchy } from './use-hierarchy'
+import { useHierarchySelection } from './hierarchy-selection'
+import { linkBaseName } from './sync-plan'
 import { boardBox, layoutPads, mcuSymbolLayout, padKey, padLabelPlacement, type PadPoint } from './board-layout'
-import { partBodyBox, PartBody, pinOutwardDir, connectorSize } from './part-body'
+import {
+  partBodyBox,
+  PartBody,
+  pinOutwardDir,
+  connectorSize,
+  seatedConnectorSize,
+  cablePlugStyle
+} from './part-body'
+import { cableRoute } from './cable-route'
 import { serializeLiveSvg, exportSvgString, downloadBlob, type ExportFmt } from './svg-export'
 import { bomMarkdown, pinoutMarkdown } from '../../../shared/robot-docs'
 import {
@@ -338,7 +350,7 @@ const PART_BODY_W = 140
 // (mm → px) relative to the board, so e.g. an HC-SR04 reads larger than a small
 // sensor. The board anchors the scale (it keeps BOARD_BODY_W and defines px/mm);
 // when its real width is unknown we fall back to a Pico-ish default (~51mm → 190px).
-const PX_PER_MM_DEFAULT = 3.7
+export const PX_PER_MM_DEFAULT = 3.7
 // Parts are rendered at a NATIVE reference size then uniformly scaled, so pads,
 // silk text and strokes shrink together (not just positions) — fixing labels that
 // looked huge on a small body. Clamp the final size so an odd dimension can't make
@@ -351,12 +363,16 @@ const PART_MAX_H = 380
 // The largest single body (board OR any placed part) is scaled to fit this px cap;
 // one px/mm is then derived from it so EVERY body — the board included — draws at
 // its real mm size, in the right relative proportion (#637).
-const BODY_CAP_PX = 380
+export const BODY_CAP_PX = 380
 // Pointer travel (screen px) below which a press counts as a click, not a drag.
 const DRAG_DEADZONE_PX = 3
 // Minimum clearance a Bézier wire leaves a pin along its outward normal (#182), so
 // noodles curve cleanly out of a pad even when the other end is on the far side.
 const WIRE_CLEARANCE = 40
+/** How far above the body a part's title sits when top-edge pin labels occupy
+ *  the space immediately above it — clear of the label band rather than through
+ *  it. (No top pins ⇒ the title stays snug at 7px.) */
+const TITLE_GAP_OVER_LABELS = 30
 
 /** Snap any angle to the nearest of 0/90/180/270 (#176). */
 /**
@@ -464,6 +480,32 @@ interface Subject {
   missing?: boolean
   /** Draggable hit region in CANVAS coords (generous; dots are tested first). */
   hit: { x: number; y: number; w: number; h: number }
+}
+
+/**
+ * A point in a part's OWN body frame (normalised 0..1 of its `box`) → canvas
+ * coords (#772).
+ *
+ * This is the one transform a life-like body's contents go through: scale to the
+ * drawn size, then turn about the body centre, then offset by the subject's
+ * placement — the same three steps {@link partLifelikePins}' anchors take. Any
+ * overlay that wants to sit on something `PartBody` drew (a connector housing, a
+ * mount point) has to go through it too, or it lands somewhere else.
+ */
+function bodyPoint(s: Subject, nx: number, ny: number): { x: number; y: number } | null {
+  const box = s.box
+  // No life-like body to place against — the SCHEMATIC view, where a symbol's
+  // terminals bear no relation to where anything sits on the real part.
+  if (!box) return null
+  const k = s.scale ?? 1
+  const r = rotatePoint(
+    (box.x + nx * box.w) * k,
+    (box.y + ny * box.h) * k,
+    (box.w * k) / 2,
+    (box.h * k) / 2,
+    normRot(s.rotation)
+  )
+  return { x: s.x + r.x, y: s.y + r.y }
 }
 
 function boardPinNet(type: string | undefined): RobotNet {
@@ -615,6 +657,15 @@ function partSchematicPins(def: PartDefinition): { w: number; h: number; placed:
 export interface WiringCanvasProps {
   robot: RobotDefinition
   onChange: (next: RobotDefinition) => void
+  /**
+   * The project folder — needed to read the Build model for the shared
+   * hierarchy (#718). **Deliberately NOT optional**: both board hosts must
+   * supply it, or the popped-out window would quietly show a tree with no
+   * Build rows while the in-window pane showed the full one (the divergence
+   * that caused #453). `null`/`undefined` is a real answer ("no project yet"),
+   * but it has to be given.
+   */
+  folder: string | null | undefined
   /** The linked URDF's joint names — lets a servo's inspector bind to a joint (#). */
   joints?: string[]
   /** Each joint's real travel (deg / mm), to seed a new binding's joint range from
@@ -735,7 +786,7 @@ interface Drag {
   pinchWY?: number
 }
 
-export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, usedByCode, smoking, onDropPart, onShowHelp, focusedChrome = false, voltage, live, highlight, nets, onHighlightNet }: WiringCanvasProps): JSX.Element {
+export function WiringCanvas({ robot, onChange, folder, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, usedByCode, smoking, onDropPart, onShowHelp, focusedChrome = false, voltage, live, highlight, nets, onHighlightNet }: WiringCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
   // The focusable canvas root — focused when a part is selected so the Delete /
   // Backspace shortcut is scoped to THIS canvas (a selected part can't be nuked by
@@ -786,12 +837,52 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     setBrowserPinnedState(v)
     savePin(window.localStorage, PIN_KEYS.browser, v)
   }
+  // Whether the browser's Components branch is expanded.
+  const [compOpen, setCompOpen] = useState(true)
+  // The SHARED hierarchy (#718) — the exact tree the Build workspace shows. The
+  // live robot.yml + libraries come from props (they're fresher than disk while
+  // a part is being dragged); the Build model is read off the project folder by
+  // the hook, so both board hosts get it without either having to remember to
+  // pass it through.
+  const { nodes: hierarchy, coverage: massCoverageInfo } = useHierarchy({
+    folder,
+    robot,
+    libraries,
+    boardLabel: boardDef?.name
+  })
   const [, force] = useState(0) // re-render during a wire/pan/box drag (ref-driven)
+  /**
+   * The last REFUSED cable drop — the reason, and the socket it was dropped on
+   * (#771).
+   *
+   * A refused pairing was silent: the reason lived only in the hover badge, which
+   * goes with the drag, so releasing looked identical to a drag that failed to
+   * land. A refusal a user cannot see is indistinguishable from a bug. This holds
+   * the reason where the lead was dropped until it is read (or another drag
+   * starts).
+   */
+  const [refusal, setRefusal] = useState<{
+    reason: string
+    cx: number
+    cy: number
+    r: number
+    seq: number
+  } | null>(null)
+  useEffect(() => {
+    if (!refusal) return
+    const t = window.setTimeout(() => setRefusal(null), 6000)
+    return () => window.clearTimeout(t)
+  }, [refusal])
   // What the pointer is over (breadboard view): a part (`pin: null`) reveals all
   // its pins' capability chips; a specific pin emphasises its own.
   const [hover, setHover] = useState<{ key: string; pin: number | null } | null>(null)
   // The selected placed part (#176) — shows a mini-toolbar (rotate/rename/delete).
-  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  // Held in the SHARED hierarchy selection (#718), not local state: the key is a
+  // unified-hierarchy key, so selecting a part here and switching to Build lands
+  // on the same component (and vice versa). A Build-only key (`link:…`) simply
+  // matches no canvas subject, which is exactly right — there's nothing here to
+  // ring.
+  const [selectedKey, setSelectedKey] = useHierarchySelection()
   // The selected WIRE (connection id), mutually exclusive with a selected part —
   // click a wire to select it (highlighted), Delete removes it (#…).
   const [selectedWire, setSelectedWire] = useState<string | null>(null)
@@ -1562,16 +1653,31 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         for (const a of p.anchors) pts.push({ x: s.x + a.x, y: s.y + a.y })
       }
       if (pts.length < 2 || endpoints.length !== conn.pins.length) return
-      const cx = pts.reduce((n, p) => n + p.x, 0) / pts.length
-      const cy = pts.reduce((n, p) => n + p.y, 0) / pts.length
+      // The HOUSING's centre — `conn.x/conn.y` put through the body's own
+      // transform, which is exactly where `PartBody` draws the socket glyph, for
+      // a `connectors[]` entry and a housed group alike (#772). This used to be
+      // the mean of the CONTACT anchors, and those sit at the housing's front
+      // edge, not at its middle: every plug (and every drop-target ring) on a
+      // `connectors[]` socket was half a housing-depth adrift of the socket.
+      //
+      // The SCHEMATIC view has no body to place against, so it keeps the mean of
+      // the terminals — there the "socket" is a group of stubs on a symbol, and
+      // a board position would mean nothing.
+      const centre = bodyPoint(s, conn.x, conn.y) ?? {
+        x: pts.reduce((n, p) => n + p.x, 0) / pts.length,
+        y: pts.reduce((n, p) => n + p.y, 0) / pts.length
+      }
+      const cx = centre.x
+      const cy = centre.y
       // Pad the contact span so the target covers the housing, not just the pins.
       const r = Math.max(...pts.map((p) => Math.hypot(p.x - cx, p.y - cy))) * 1.6
       // The housing's real size, from the SAME function that draws the socket, so
-      // a plug can't disagree with the thing it seats on. `box` is the body's
-      // local frame and `scale` takes it to canvas px.
+      // a plug can't disagree with the thing it seats on — measured in the BODY's
+      // frame and then scaled with the body, in that order (see
+      // `seatedConnectorSize`).
       const mmW = def.dimensions?.width ?? 0
-      const pxPerMm = s.box && mmW > 0 ? (s.box.w / mmW) * (s.scale ?? 1) : 0
-      const size = connectorSize(conn, pxPerMm)
+      const pxPerMm = s.box && mmW > 0 ? s.box.w / mmW : 0
+      const size = seatedConnectorSize(conn, pxPerMm, s.scale ?? 1)
       connectorTargets.push({
         key: s.key,
         connIndex: ci,
@@ -1676,9 +1782,28 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     // below is a no-op for it — but the CONNECTIONS filter is not, and would strip
     // every wire attached to the board. The MCU is changed with the picker.
     if (key === BOARD_KEY) return
-    setSelectedKey((k) => (k === key ? null : k)) // drop a stale selection
+    if (selectedKey === key) setSelectedKey(null) // drop a stale selection
+    // The part's Build body is NOT deleted with it (#626: it may be jointed into
+    // the robot by now — flag, don't auto-delete). Record the stranded link here,
+    // at the only moment anything still remembers it (the reference lives on the
+    // part being removed); the #717 sync reconcile offers keep / remove / re-add.
+    // A LEGACY row (pre-#716, no urdfLink) records the name the link mint would
+    // have used instead — the plan tolerates `_N` suffixes and drops entries
+    // that match nothing, so a guess is safe and forgetting is not.
+    const doomed = robot.parts.find((p) => p.id === key)
+    const orphan =
+      doomed &&
+      (doomed.urdfLink ||
+        linkBaseName(resolvePart(doomed.lib, doomed.part)?.name || doomed.part))
+    const model = orphan
+      ? {
+          ...(robot.robot ?? {}),
+          orphanedLinks: [...new Set([...(robot.robot?.orphanedLinks ?? []), orphan])]
+        }
+      : robot.robot
     persist({
       ...robot,
+      ...(model ? { robot: model } : {}),
       parts: robot.parts.filter((p) => p.id !== key),
       connections: robot.connections.filter(
         (c) => parseEndpoint(c.from).key !== key && parseEndpoint(c.to).key !== key
@@ -1712,6 +1837,11 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     // Use the source's on-screen position (a never-moved part has no x/y of its own).
     const s = subjByKey.get(key)
     const copy: RobotPart = { ...src, id, x: (src.x ?? s?.x ?? 60) + 30, y: (src.y ?? s?.y ?? 90) + 30 }
+    // The clone must NOT inherit the source's Build-body link (#716) — urdfLink
+    // is a 1:1 part↔link identity, and an aliased copy would make a deletion (or
+    // the #717 sync) target the ORIGINAL's 3-D body. The clone starts link-less;
+    // the sync offers it a body of its own.
+    delete copy.urdfLink
     persist({ ...robot, parts: [...robot.parts, copy] })
     setSelectedKey(id)
   }
@@ -1745,6 +1875,8 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
 
   const onPointerDown = (e: ReactPointerEvent<SVGSVGElement>): void => {
     ;(e.target as Element).setPointerCapture?.(e.pointerId)
+    // Any new gesture supersedes the last refusal notice (#771).
+    if (refusal) setRefusal(null)
     // A net highlight (ERC "Show me") is dismissed by any click on the board — the
     // first click just clears it and does nothing else.
     if (highlight) {
@@ -1939,9 +2071,24 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
           (ca ? connectorAt(w.x, w.y) : null)
         const differentConnector = ca && cb && !(ca.key === cb.key && ca.connIndex === cb.connIndex)
         if (differentConnector) {
-          // Refused pairings never reach here as a wire — the drag simply doesn't
-          // land, having already said why in the hover badge.
-          makeCable(ca, cb)
+          // A refused pairing lands as a MESSAGE rather than as nothing (#771).
+          // The hover badge goes with the drag, so a release that quietly did
+          // nothing read as a broken drag — the same thing a real bug looks like.
+          const fit = connectorFit(ca.conn, cb.conn)
+          if (fit.ok) {
+            makeCable(ca, cb)
+          } else if (fit.reason) {
+            const at = connectorTargets.find(
+              (x) => x.key === cb.key && x.connIndex === cb.connIndex
+            )
+            setRefusal({
+              reason: fit.reason,
+              cx: at?.cx ?? w.x,
+              cy: at?.cy ?? w.y,
+              r: at?.r ?? 24,
+              seq: Date.now()
+            })
+          }
         } else if (target && target.endpoint !== d.from) {
           addConnection(d.from, target.endpoint)
         }
@@ -2046,10 +2193,13 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   }
 
   /**
-   * Clicking a row in the project browser: zoom to it AND select it, so the row
+   * Clicking a row in the shared hierarchy: zoom to it AND select it, so the row
    * highlights, the canvas draws its selection ring, and a part gets its
    * mini-toolbar — exactly as clicking the thing on the canvas does. Zooming
    * without selecting left the browser unable to show what it had just navigated to.
+   *
+   * The Build workspace does the mirror image of this with `focusLink` (#718):
+   * one row, one behaviour, zoom-fitting in whichever workspace you're in.
    *
    * Focus is deliberately NOT moved to the canvas here (a canvas click does move
    * it, to scope the Delete key). In focused Board mode an unpinned browser hides
@@ -2058,8 +2208,10 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   const selectFromBrowser = (key: string): void => {
     const s = subjects.find((sub) => sub.key === key)
     const selectable = s?.kind === 'part' || s?.kind === 'board'
+    // The selection is shared, so it's recorded even for a row this canvas has
+    // no subject for — switching to Build then lands on the right component.
+    setSelectedKey(key)
     if (renderMode === 'lifelike' && selectable) {
-      setSelectedKey(key)
       setSelectedWire(null)
       setRenameText(null)
     }
@@ -2274,6 +2426,19 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     if (e.box !== 0 && e.box * dx > 0) {
       c2x = e.bx + e.box * WIRE_CLEARANCE
       c2y -= Math.sign(dy || 1) * vbow
+    }
+    // A CABLED lead routes around the bodies rather than across them (#745):
+    // its slack falls outside the boards, the way a real lead's does. Ordinary
+    // pin-to-pin noodles keep the plain bezier — they're short hops between pads
+    // on one board, where a detour would be noise.
+    if (c.cable && !pull) {
+      const obstacles = subjects.map((s) => ({ x: s.x, y: s.y, w: s.w, h: s.h }))
+      const routed = cableRoute(
+        { x: e.ax, y: e.ay, ox: e.aox, oy: e.aoy },
+        { x: e.bx, y: e.by, ox: e.box, oy: e.boy },
+        obstacles
+      )
+      return routed
     }
     const mx = (e.ax + e.bx) / 2
     const my = (e.ay + e.by) / 2
@@ -2806,20 +2971,21 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
             {/* Seated plug shells, drawn over the wires so the lead's four
                 conductors disappear into the housing the way they really do. */}
             {cablePlugs.map(({ t, kind, angle }, i) => {
-              // The housing's real footprint (#697). It used to be sized off the
-              // contact-span radius, which drew a 3-way servo plug ~4 mm deep
-              // against a real 2.54 mm — so on a PCA9685, whose servo headers sit
-              // one 2.54 mm pitch apart, neighbouring plugs overlapped.
-              const w = t.w
-              const h = t.h
-              // Grove and its lead are both off-white; QWIIC/JST/DuPont are dark.
-              const shell = kind === 'grove' ? '#e8e5da' : '#22262c'
-              const edge = kind === 'grove' ? '#9a968a' : '#0b0d10'
+              // The housing's real footprint (#697), turned into the two shapes a
+              // plug is drawn from by ONE pure rule (#772). The frame is the
+              // socket's own — origin at the housing centre, +x the way the lead
+              // leaves — so the group just has to translate and turn, and the
+              // plug can no longer be centred on anything but its socket.
+              const { shell: body, boot } = cablePlugGeometry(t.w, t.h)
+              // The lead's own housing colour (shared, so a plug can't drift
+              // from the palette the way its SIZE once did) — a QWIIC lead is
+              // white, Grove off-white, DuPont black.
+              const { shell, edge } = cablePlugStyle(kind)
               return (
-                <g key={`plug${i}`} transform={`rotate(${angle} ${t.cx} ${t.cy})`} style={{ pointerEvents: 'none' }} className="wc__cable-plug">
-                  <rect x={t.cx - w / 2} y={t.cy - h / 2} width={w} height={h} rx={h * 0.18} fill={shell} stroke={edge} strokeWidth={1} />
+                <g key={`plug${i}`} transform={`translate(${t.cx} ${t.cy}) rotate(${angle})`} style={{ pointerEvents: 'none' }} className="wc__cable-plug">
+                  <rect x={body.x} y={body.y} width={body.w} height={body.h} rx={body.rx} fill={shell} stroke={edge} strokeWidth={1} />
                   {/* Strain-relief boot on the side the lead leaves from. */}
-                  <rect x={t.cx + w / 2 - h * 0.1} y={t.cy - h * 0.3} width={h * 0.42} height={h * 0.6} rx={h * 0.14} fill={edge} opacity={0.85} />
+                  <rect x={boot.x} y={boot.y} width={boot.w} height={boot.h} rx={boot.rx} fill={edge} opacity={0.85} />
                 </g>
               )
             })}
@@ -2868,6 +3034,32 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                     </text>
                   </g>
                 )}
+              </g>
+            )}
+
+            {/* A refused DROP, said again where the lead was let go (#771). The
+                hover badge above vanishes with the drag, so without this a
+                refusal and a drag that failed to land looked identical — and the
+                user reasonably read the refusal as a broken drag. */}
+            {refusal && !cableDrag && (
+              <g key={refusal.seq} className="wc__refused" pointerEvents="none">
+                <circle
+                  cx={refusal.cx}
+                  cy={refusal.cy}
+                  r={refusal.r}
+                  className="wc__refused-ring"
+                  fill="none"
+                  strokeDasharray="4 3"
+                />
+                <text
+                  x={refusal.cx}
+                  y={refusal.cy - refusal.r - 10}
+                  textAnchor="middle"
+                  className="wc__refused-why"
+                  style={{ paintOrder: 'stroke' }}
+                >
+                  {refusal.reason}
+                </text>
               </g>
             )}
             {drag?.kind === 'wire' && drag.from && (() => {
@@ -3239,14 +3431,15 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         </div>
 
         {/* Fusion-360-style floating browser: project name + description + the
-            component hierarchy (MCU + parts), collapsible, over the canvas. */}
+            SHARED component hierarchy (#718), collapsible, over the canvas. */}
         <BoardBrowser
           name={robot.name ?? ''}
           description={robot.description ?? ''}
           onCommit={commitRobotMeta}
-          board={boardDef?.name}
-          boardMountedOn={robot.boardMountedOn}
-          parts={robot.parts}
+          hierarchy={hierarchy}
+          coverage={massCoverageInfo}
+          compOpen={compOpen}
+          onCompOpenChange={setCompOpen}
           selectedKey={selectedKey}
           onRemovePart={removePart}
           open={browserOpen}
@@ -3307,9 +3500,10 @@ function BoardBrowser({
   name,
   description,
   onCommit,
-  board,
-  boardMountedOn,
-  parts,
+  hierarchy,
+  coverage,
+  compOpen,
+  onCompOpenChange,
   selectedKey,
   onRemovePart,
   open,
@@ -3321,29 +3515,26 @@ function BoardBrowser({
   name: string
   description: string
   onCommit: (patch: { name?: string; description?: string }) => void
-  board?: string
-  /** The part the MCU is docked into, so it nests under it (#649). */
-  boardMountedOn?: string
-  parts: RobotPart[]
-  /** The canvas's selected subject key, mirrored as a highlighted row (#648). */
+  /** The SHARED hierarchy (#718) — the same rows the Build workspace renders. */
+  hierarchy: HierarchyNode[]
+  /** How much of the robot is actually weighed (#719). */
+  coverage: MassCoverage
+  compOpen: boolean
+  onCompOpenChange: (open: boolean) => void
+  /** The shared selection key, mirrored as a highlighted row (#648/#718). */
   selectedKey?: string | null
   onRemovePart: (id: string) => void
   /** Open state (lifted to WiringCanvas so the fit can inset for the browser). */
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** Zoom the canvas to fit a subject: `'board'` or a placed part's instance id. */
+  /** Select + zoom the canvas to fit a row (`'board'` or a part instance id). */
   onFocus: (key: string) => void
   /** Pin model (focused Board mode only) — matches the Build hierarchy: an
    *  unpinned panel auto-hides on blur; `undefined` disables pinning entirely. */
   pinned?: boolean
   onPin?: (v: boolean) => void
 }): JSX.Element {
-  const [compOpen, setCompOpen] = useState(true)
   const asideRef = useRef<HTMLElement | null>(null)
-  // Docked parts nest under their carrier (#649); the count still covers every
-  // depth, so collapsing a carrier doesn't appear to lose components.
-  const tree = useMemo(() => browserTree({ board, boardMountedOn, parts }), [board, boardMountedOn, parts])
-  const count = countNodes(tree)
   const pinnable = onPin !== undefined
 
   if (!open) {
@@ -3411,107 +3602,23 @@ function BoardBrowser({
 
       <RobotHeader name={name} description={description} onCommit={onCommit} />
 
+      {/* The ONE hierarchy (#718) — the same component, the same rows, the same
+          behaviours the Build workspace's dock shows. Build-only rows (joints,
+          structural links) render here too, dimmed and inert. */}
       <div className="wc__tree">
-        <button
-          type="button"
-          className="wc__tree-group"
-          onClick={() => setCompOpen((o) => !o)}
-          aria-expanded={compOpen}
-        >
-          <span className="wc__tree-caret" aria-hidden="true">
-            {compOpen ? '▾' : '▸'}
-          </span>
-          <span className="wc__tree-label">Components</span>
-          <span className="wc__tree-count">{count}</span>
-        </button>
-        {compOpen &&
-          (count === 0 ? (
-            <p className="wc__muted wc__tree-empty">No components yet — pick a board + add parts.</p>
-          ) : (
-            <BrowserRows
-              nodes={tree}
-              depth={0}
-              selectedKey={selectedKey}
-              onFocus={onFocus}
-              onRemovePart={onRemovePart}
-            />
-          ))}
+        <HierarchyPanel
+          nodes={hierarchy}
+          workspace="electronics"
+          selectedKey={selectedKey ?? null}
+          onSelect={(node) => onFocus(node.key)}
+          open={compOpen}
+          onToggleOpen={() => onCompOpenChange(!compOpen)}
+          onRemove={(node) => onRemovePart(node.key)}
+          coverage={coverage}
+          emptyHint="No components yet — pick a board + add parts."
+        />
       </div>
     </aside>
-  )
-}
-
-/**
- * One level of the browser's component tree (#649) — recursive, so a part docked
- * into a carrier renders indented beneath it. The selected row is highlighted so
- * the browser mirrors the canvas selection (#648).
- */
-function BrowserRows({
-  nodes,
-  depth,
-  selectedKey,
-  onFocus,
-  onRemovePart
-}: {
-  nodes: BrowserNode[]
-  depth: number
-  selectedKey?: string | null
-  onFocus: (key: string) => void
-  onRemovePart: (id: string) => void
-}): JSX.Element {
-  return (
-    <ul className={`wc__tree-list${depth > 0 ? ' wc__tree-list--nested' : ''}`}>
-      {nodes.map((n) => (
-        <li key={n.key}>
-          <div
-            className={`wc__tree-item${n.isBoard ? ' wc__tree-item--board' : ''}${
-              selectedKey === n.key ? ' is-selected' : ''
-            }`}
-            aria-current={selectedKey === n.key ? 'true' : undefined}
-          >
-            <button
-              type="button"
-              className="wc__tree-name wc__tree-focus"
-              onClick={() => onFocus(n.key)}
-              title={`Select and zoom to ${n.label}`}
-            >
-              {n.label}
-            </button>
-            {n.isBoard ? (
-              <span className="wc__parts-tag">MCU</span>
-            ) : (
-              <button
-                type="button"
-                className="wc__parts-del"
-                onClick={() => onRemovePart(n.key)}
-                title={`Remove ${n.label}`}
-                aria-label={`Remove ${n.label}`}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path
-                    d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7m4 4v6m4-6v6"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-            )}
-          </div>
-          {n.children.length > 0 && (
-            <BrowserRows
-              nodes={n.children}
-              depth={depth + 1}
-              selectedKey={selectedKey}
-              onFocus={onFocus}
-              onRemovePart={onRemovePart}
-            />
-          )}
-        </li>
-      ))}
-    </ul>
   )
 }
 
@@ -3876,11 +3983,26 @@ function SubjectBody({
           ) : s.kind === 'board' && s.boardDef && s.box && s.pads ? (
             <Board def={s.boardDef} box={s.box} pads={s.pads} usedPadKeys={s.usedPadKeys ?? new Set()} ledLit={!!s.ledLit} rotation={0} />
           ) : null}
-          {showTitle && (
-            <text x={dx + s.w / 2} y={dy - 7} textAnchor="middle" className="wc__body-title">
-              {s.title}
-            </text>
-          )}
+          {showTitle &&
+            (() => {
+              // The title sat a flat 7px above the body, which is exactly where a
+              // TOP-edge pin's label goes — so on a part with pins along its top
+              // the two overlapped. Lift it clear of that band when there are
+              // any, leaving it snug against the body when there aren't.
+              const hasTopPins = s.pins.some(
+                (p) => (p.anchors[0]?.y ?? Infinity) < Math.max(10, s.h * 0.12)
+              )
+              return (
+                <text
+                  x={dx + s.w / 2}
+                  y={dy - (hasTopPins ? TITLE_GAP_OVER_LABELS : 7)}
+                  textAnchor="middle"
+                  className="wc__body-title"
+                >
+                  {s.title}
+                </text>
+              )
+            })()}
         </>
       )}
 

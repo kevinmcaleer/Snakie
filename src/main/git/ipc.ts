@@ -1,7 +1,18 @@
 import { ipcMain } from 'electron'
 import type { IpcResult } from '../device/types'
 import { GitService } from './GitService'
-import type { GitBranchList, GitDiff, GitRemoteResult, GitStatus } from './types'
+import type {
+  GitBranchList,
+  GitDiff,
+  GitInitResult,
+  GitPublishOptions,
+  GitPublishPreflight,
+  GitPublishResult,
+  GitRemoteResult,
+  GitStageResult,
+  GitStageScope,
+  GitStatus
+} from './types'
 
 /**
  * IPC for the built-in version-control (Git) layer (issue #15).
@@ -47,8 +58,21 @@ export function registerGitIpc(): void {
   // Working-tree status (branch, ahead/behind, staged/changed/untracked).
   ipcMain.handle('git:status', () => wrap<GitStatus>(() => service.status()))
 
+  // Create a repository in the open folder (issue #783). Unlike `git:status`,
+  // this one DOES reject on failure — the user asked for a write to their disk,
+  // so "git isn't installed" or "this folder is already inside a repo" has to
+  // reach them as words, not as a button that appears to do nothing.
+  ipcMain.handle('git:init', () => wrap<GitInitResult>(() => service.init()))
+
   ipcMain.handle('git:stage', (_e, file: string) =>
     wrap<void>(() => service.stage(file))
+  )
+
+  // Stage a whole group at once (issue #794). Like `git:init` this DOES reject
+  // on failure: the user asked for a bulk change to the index and a button that
+  // appears to do nothing is worse than an error message.
+  ipcMain.handle('git:stageAll', (_e, scope?: GitStageScope) =>
+    wrap<GitStageResult>(() => service.stageAll(scope ?? 'untracked'))
   )
   ipcMain.handle('git:unstage', (_e, file: string) =>
     wrap<void>(() => service.unstage(file))
@@ -77,4 +101,20 @@ export function registerGitIpc(): void {
 
   ipcMain.handle('git:push', () => wrap<GitRemoteResult>(() => service.push()))
   ipcMain.handle('git:pull', () => wrap<GitRemoteResult>(() => service.pull()))
+
+  // Everything the publish dialog needs before it opens (#795). Like
+  // `git:status` this does NOT reject for the states it exists to report — a
+  // missing `gh`, a signed-out CLI and a repo with no commits all come back as
+  // `blockers`, because they are things the dialog renders rather than errors.
+  ipcMain.handle('git:publishPreflight', () =>
+    wrap<GitPublishPreflight>(() => service.publishPreflight())
+  )
+
+  // Create the GitHub repository and push to it (#795). This one DOES reject:
+  // it creates a repository on the user's GitHub account, and a button that
+  // appears to do nothing after that is the worst possible outcome — the user
+  // would click it again and hit "name already exists" on their second try.
+  ipcMain.handle('git:publish', (_e, options: GitPublishOptions) =>
+    wrap<GitPublishResult>(() => service.publish(options))
+  )
 }

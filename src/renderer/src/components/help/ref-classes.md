@@ -6,34 +6,36 @@ Classes — bundle state + behaviour into your own types (every driver is one).
 class Blinker:
     """An LED that remembers its own pin and count."""
 
-    def __init__(self, pin_no):
-        self.pin = Pin(pin_no, Pin.OUT)   # per-instance state
-        self.count = 0
+    def __init__(self, led):
+        self.led = led          # per-instance state: whatever your
+        self.count = 0          # runtime's Pins page gave you
+        self.on = False
 
     def blink(self):
-        self.pin.toggle()
+        self.on = not self.on
         self.count += 1
 
-b = Blinker(25)     # __init__ runs here
+b = Blinker(my_led)   # __init__ runs here
 b.blink()
 print(b.count)      # 1
 ```
 
 `self` is the instance — every method takes it first, and per-object data
-lives on it (`self.pin`).
+lives on it (`self.led`).
 
 ## Properties — computed attributes
 
 ```python
 class Thermometer:
-    def __init__(self, adc):
-        self._adc = adc
+    def __init__(self, read_raw):
+        self._read_raw = read_raw       # a function returning 0-65535
 
     @property
     def celsius(self):
-        return 27 - ((self._adc.read_u16() * 3.3 / 65535) - 0.706) / 0.001721
+        volts = self._read_raw() * 3.3 / 65535
+        return 27 - (volts - 0.706) / 0.001721
 
-t = Thermometer(ADC(4))
+t = Thermometer(sensor_reading)
 print(t.celsius)          # no parentheses — reads like a value
 ```
 
@@ -47,5 +49,5 @@ class QuietBlinker(Blinker):
         super().blink()     # reuse the parent, then extend
 ```
 
-Duck typing matters more than hierarchies in MicroPython: Snakie's
+Duck typing matters more than hierarchies on a microcontroller: Snakie's
 `inst.watch()` recognises objects purely by the methods they expose.

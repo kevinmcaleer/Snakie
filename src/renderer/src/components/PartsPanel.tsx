@@ -6,6 +6,7 @@ import { partHasRear } from '../../../shared/part'
 import type { PartSide } from '../../../shared/part'
 import { PartSchematicView } from './PartSchematicView'
 import { groupByCategory } from './part-categories'
+import { applyFilters, emptySelection } from './part-facets'
 import { PartCatalog } from './PartCatalog'
 import { encodePartDrag } from './part-drag'
 import { availableToInstall } from '../../../shared/part-registry'
@@ -147,6 +148,29 @@ export interface PartsPanelProps {
 
 export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelProps = {}): JSX.Element {
   const [catalogOpen, setCatalogOpen] = useState(false)
+  // Viewport centre of the button that opened the catalog, so the panel can grow
+  // out of it the way a part's details grow out of their disclosure (#748).
+  const [catalogOrigin, setCatalogOrigin] = useState<{ x: number; y: number } | null>(null)
+  // Closing runs the grow backwards, so the catalog has to outlive the click
+  // that dismissed it.
+  const [catalogClosing, setCatalogClosing] = useState(false)
+  const dropCatalog = useCallback((): void => {
+    setCatalogClosing(false)
+    setCatalogOpen(false)
+  }, [])
+  const closeCatalog = useCallback((): void => {
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (!catalogOrigin || still) dropCatalog()
+    else setCatalogClosing(true)
+  }, [catalogOrigin, dropCatalog])
+  // Insurance: the unmount hangs off an event, and a closing panel takes pointer
+  // events off. If that event never arrives the catalog would be stuck on screen
+  // AND unclickable, so time it out regardless.
+  useEffect(() => {
+    if (!catalogClosing) return
+    const t = setTimeout(dropCatalog, 450)
+    return () => clearTimeout(t)
+  }, [catalogClosing, dropCatalog])
   const [libraries, setLibraries] = useState<PartLibraryWithParts[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
@@ -266,7 +290,15 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
       if (res.ok) {
         const verb = libraryId === STANDARD_LIBRARY_ID ? 'Synced' : 'Promoted'
         const where = libraryId === STANDARD_LIBRARY_ID ? '' : ' to the Standard library'
-        setNote(`${verb} "${part.name}"${where}${res.shipped ? ' → bundled repo copy (commit it to ship)' : ''}.`)
+        // The runtime copy succeeded; the repo mirror is a separate outcome and
+        // can be REFUSED (a newer repo copy would be reverted, #750). Say so —
+        // silently reporting a plain success is how those reverts went unnoticed.
+        const mirror = res.shipped
+          ? ' → bundled repo copy (commit it to ship).'
+          : res.error
+            ? `. The bundled repo copy was NOT written: ${res.error}`
+            : '.'
+        setNote(`${verb} "${part.name}"${where}${mirror}`)
         await refresh()
       } else {
         setNote(res.error ?? 'Promote failed.')
@@ -317,22 +349,12 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
   )
 
   const q = query.trim().toLowerCase()
-  const matches = useMemo(() => {
-    if (!q) return allParts
-    return allParts.filter(({ part }) => {
-      const hay = [
-        part.name,
-        part.description,
-        part.manufacturer,
-        part.family,
-        ...(part.tags ?? [])
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-      return hay.includes(q)
-    })
-  }, [allParts, q])
+  // Facet filters (#740) — type / manufacturer / tag, ANDed with the text
+  // search. Derived from the loaded libraries each render rather than indexed:
+  // there is nothing to invalidate, so the counts can't go stale.
+  // Facets live in the FULL-SCREEN catalog (#740), which has the room for them;
+  // this docked strip filters by the search box alone.
+  const matches = useMemo(() => applyFilters(allParts, emptySelection(), q), [allParts, q])
 
   const selectedPart: { libraryId: string; part: PartDefinition } | null = useMemo(() => {
     if (!selected) return null
@@ -426,13 +448,17 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
       id = `${baseId}-copy-${n}`
       name = `${baseName} copy ${n}`
     }
-    const copy: PartDefinition = { ...part, id, name }
+    // `sourceHash` stamps the file the ORIGINAL was read from (#750); the copy is
+    // a different file, so it must not carry it — and the editor we then open on
+    // the copy needs the stamp of the file the save actually wrote.
+    const copy: PartDefinition = { ...part, id, name, sourceHash: undefined }
     const res = await window.api.parts.savePart(libraryId, copy)
     if (res.ok) {
       setNote(`Duplicated "${part.name}" → "${name}".`)
       await refresh()
       setSelected({ libraryId, partId: id })
-      openEditor(libraryId, copy) // jump straight into renaming/tweaking the copy
+      // jump straight into renaming/tweaking the copy
+      openEditor(libraryId, { ...copy, sourceHash: res.sourceHash })
     } else {
       setNote(res.error ?? 'Duplicate failed.')
     }
@@ -498,7 +524,11 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
           <button
             type="button"
             className="pl__btn pl__btn--icon"
-            onClick={() => setCatalogOpen(true)}
+            onClick={(e) => {
+              const b = e.currentTarget.getBoundingClientRect()
+              setCatalogOrigin({ x: b.left + b.width / 2, y: b.top + b.height / 2 })
+              setCatalogOpen(true)
+            }}
             title="Open the full-screen parts catalog"
             aria-label="Open the full-screen parts catalog"
           >
@@ -510,7 +540,10 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
       {catalogOpen && onAddManyToProject && (
         <PartCatalog
           libraries={libraries}
-          onClose={() => setCatalogOpen(false)}
+          origin={catalogOrigin}
+          closing={catalogClosing}
+          onClosed={dropCatalog}
+          onClose={closeCatalog}
           onAddMany={onAddManyToProject}
         />
       )}
@@ -525,6 +558,7 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
           aria-label="Search parts"
         />
       </div>
+
 
       {/* Panel status line (reset/promote/install/registry). It persists until the
           next action replaces it, so it needs a way out — otherwise a one-off
@@ -1078,12 +1112,18 @@ function PartDetail({
           Schematic
         </button>
       </div>
-      <div className={`pl__detail-fp${previewFlipping ? ' is-flipping' : ''}`}>
-        {previewMode === 'board' ? (
-          <PartCanvas part={part} readOnly side={previewSide} />
-        ) : (
-          <PartSchematicView part={part} />
-        )}
+      {/* The mat is the STAGE and stays put; only the board turns on it (#…).
+          Flipping the outer box rotated its background and border too, which
+          read as the whole viewer tipping over rather than a part being turned
+          over in your hands. */}
+      <div className="pl__detail-fp">
+        <div className={`pl__detail-flip${previewFlipping ? ' is-flipping' : ''}`}>
+          {previewMode === 'board' ? (
+            <PartCanvas part={part} readOnly side={previewSide} />
+          ) : (
+            <PartSchematicView part={part} />
+          )}
+        </div>
       </div>
       {/* Only offered when there IS a back — a single-sided part shouldn't invite
           you to turn it over and find nothing (#636). */}

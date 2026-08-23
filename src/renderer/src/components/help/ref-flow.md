@@ -1,5 +1,5 @@
-Control flow — deciding and repeating. MicroPython uses standard Python syntax:
-indentation (4 spaces) marks the block.
+Control flow — deciding and repeating. This is standard Python, identical on
+MicroPython and CircuitPython: indentation (4 spaces) marks the block.
 
 ## if / elif / else
 
@@ -19,14 +19,17 @@ identity uses `is` (mostly for `None`: `if reading is None:`).
 ## while — repeat until told to stop
 
 ```python
-from machine import Pin
 import time
 
-led = Pin("LED", Pin.OUT)
+ticks = 0
 while True:          # the classic firmware main loop
-    led.toggle()
+    ticks += 1
+    print("tick", ticks)
     time.sleep(0.5)
 ```
+
+`time.sleep()` takes **seconds** on both runtimes, so this loop is portable —
+see the Pins page for your runtime to put an LED in it.
 
 ## for — repeat over a sequence
 
@@ -55,5 +58,5 @@ def todo():
 ## Tips
 
 - A bare `while True:` with a small `time.sleep()` is the normal shape of a
-  MicroPython program — see the Timing article for non-blocking loops.
+  microcontroller program — see the Timing article for non-blocking loops.
 - Truthiness: `0`, `""`, `[]`, `{}` and `None` all read as `False`.

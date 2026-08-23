@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import './VariablesPanel.css'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
+import { delScratch, isScratchName } from '../../../shared/device-scratch'
 
 /**
  * VARIABLES TAB (issue #16)
@@ -10,6 +11,15 @@ import { useDeviceStatus } from '../hooks/useDeviceStatus'
  * a small snippet over `window.api.device.exec` that prints one line per global
  * (name, type, repr) in a delimited format, then parse it defensively. When no
  * board is connected we show a hint instead.
+ *
+ * THE USER'S variables, not ours (#798). A raw-REPL snippet runs in the board's
+ * `__main__`, so anything Snakie binds while listing files, gauging flash or
+ * uploading is a global on the same board — and the panel used to show them, and
+ * count them, as if the user had written them. Snippets now clean up after
+ * themselves; what has to outlive one snippet (a chunked upload's file handle)
+ * carries the `_snk_` prefix and is filtered here by {@link isScratchName}. The
+ * rule lives in `shared/device-scratch`, next to the names it describes, so it
+ * can't drift from them.
  *
  * Hardware can't be exercised in CI, so the snippet is conservative and the
  * parser tolerates partial/garbled output (skips lines it can't read).
@@ -32,32 +42,40 @@ const END = '<<SNAKIE_VARS_END>>'
  * Python run on the board. Walks `globals()`, skips dunders and modules, and
  * prints `name FS type FS repr` per entry between sentinel markers. Reprs are
  * truncated so a huge object can't flood the serial link.
+ *
+ * Its own temporaries are `_snk_`-prefixed and unbound at the end — the panel
+ * that reports leaked globals cannot be the thing leaking them (#798).
  */
 const SNIPPET = `
 print('${START}')
 try:
-    for __k in list(globals().keys()):
-        if __k.startswith('__'):
+    for _snk_k in list(globals().keys()):
+        if _snk_k.startswith('__'):
             continue
-        if __k in ('__k', '__v', '__t', '__r'):
-            continue
-        __v = globals()[__k]
-        __t = type(__v).__name__
-        if __t in ('module', 'function', 'builtin_function_or_method'):
+        _snk_v = globals()[_snk_k]
+        _snk_t = type(_snk_v).__name__
+        if _snk_t in ('module', 'function', 'builtin_function_or_method'):
             continue
         try:
-            __r = repr(__v)
+            _snk_r = repr(_snk_v)
         except Exception:
-            __r = '<unreprable>'
-        if len(__r) > 200:
-            __r = __r[:200] + '...'
-        print(__k + '${FS}' + __t + '${FS}' + __r)
-except Exception as __e:
-    print('ERR' + '${FS}' + 'error' + '${FS}' + repr(__e))
+            _snk_r = '<unreprable>'
+        if len(_snk_r) > 200:
+            _snk_r = _snk_r[:200] + '...'
+        print(_snk_k + '${FS}' + _snk_t + '${FS}' + _snk_r)
+except Exception as _snk_e:
+    print('ERR' + '${FS}' + 'error' + '${FS}' + repr(_snk_e))
 print('${END}')
+${delScratch('_snk_k', '_snk_v', '_snk_t', '_snk_r')}
 `.trim()
 
-/** Parse the snippet's stdout into variable records (defensive). */
+/**
+ * Parse the snippet's stdout into variable records (defensive).
+ *
+ * Snakie's own scratch globals are dropped here rather than in the view, so the
+ * "N variables" count is a claim about the USER's program and nothing else
+ * (#798).
+ */
 export function parseVariables(stdout: string): DeviceVariable[] {
   const vars: DeviceVariable[] = []
   if (!stdout) return vars
@@ -78,6 +96,7 @@ export function parseVariables(stdout: string): DeviceVariable[] {
     const type = line.slice(first + 1, second)
     const value = line.slice(second + 1)
     if (name.length === 0) continue
+    if (isScratchName(name)) continue
     vars.push({ name, type, value })
   }
   return vars

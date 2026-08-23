@@ -147,11 +147,18 @@ const EVERY_FIELD: Required<PartDefinition> = {
   help: 'help.md',
   helpText: '# Contract Part\n', // runtime-only — see RUNTIME_ONLY
 
+  // --- Concurrency stamp ---------------------------------------------------
+  sourceHash: 'e3b0c44298fc1c149afbf4c8996fb924', // runtime-only — see RUNTIME_ONLY
+
   // --- Schematic -----------------------------------------------------------
   schematic: { aspect: 1, pins: [{ pin: 'SDA', side: 'left', order: 0 }] },
 
   // --- I²C identity --------------------------------------------------------
   i2cAddresses: [0x29],
+
+  // --- Display panel (#780) ------------------------------------------------
+  // Deliberately unlike `dimensions` above: these are PIXELS, those are mm.
+  display: { width: 12, height: 8, colour: 'gray4' },
 
   // --- Code library / drivers ----------------------------------------------
   library: { module: 'contract', url: 'github:snakie/contract', docs: 'https://example.com' },
@@ -162,6 +169,12 @@ const EVERY_FIELD: Required<PartDefinition> = {
   mesh: 'model.stl',
   meshUnits: 'mm',
   meshScale: 0.001,
+  // Deliberately NOT the identity: `[0, 0, 0]` means "no correction" and is
+  // dropped by design, which would make this field look like a broken one.
+  meshRotation: [90, 0, -90],
+  // Same rule for the position correction (#788), and deliberately unlike
+  // `com_xyz` below so a writer that confused the two would be caught.
+  meshOffset: [-13.25, 24.5, 0],
 
   // --- Mass / centre of mass / contacts ------------------------------------
   mass_g: 9,
@@ -185,7 +198,9 @@ const EVERY_FIELD: Required<PartDefinition> = {
 const RUNTIME_ONLY: Partial<Record<keyof PartDefinition, string>> = {
   imageData:
     'inlined by the main process on read; parts.yml keeps the relative `image` filename',
-  helpText: 'inlined by the main process on read; parts.yml keeps the relative `help` filename'
+  helpText: 'inlined by the main process on read; parts.yml keeps the relative `help` filename',
+  sourceHash:
+    'a hash of the parts.yml text the part was READ from (#750) — file identity, not part content. Writing it would change the very bytes it stamps.'
 }
 
 const ALL_FIELDS = Object.keys(EVERY_FIELD) as (keyof PartDefinition)[]

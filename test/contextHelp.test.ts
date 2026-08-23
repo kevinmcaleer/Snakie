@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { resolveHelpTarget, LANGUAGE_HELP } from '../src/renderer/src/components/context-help'
+import {
+  languageHelpFor,
+  resolveHelpTarget,
+  LANGUAGE_HELP
+} from '../src/renderer/src/components/context-help'
+import { helpTreeFor } from '../src/renderer/src/components/help-content'
+import type { Dialect } from '../src/shared/dialect'
 import type { PartDefinition } from '../src/shared/part'
 
 const bme: PartDefinition = {
@@ -66,7 +72,89 @@ describe('context help resolver (#221)', () => {
     expect(resolveHelpTarget('', libs)).toBeNull()
     expect(resolveHelpTarget(null, libs)).toBeNull()
   })
-  it('every language topic points at a real ref-article id', () => {
-    for (const id of Object.values(LANGUAGE_HELP)) expect(id).toMatch(/^ref-[a-z0-9]+$/)
+  it('every language topic points at a real article id', () => {
+    for (const id of Object.values(LANGUAGE_HELP)) expect(id).toMatch(/^(ref|gs|cp)-[a-z0-9-]+$/)
+  })
+})
+
+/**
+ * Right-click → "Help for symbol" per runtime (#763, epic #209).
+ *
+ * The same word is a different page on each Python, and the case that matters
+ * most is the word from the WRONG runtime — somebody pasting a MicroPython
+ * tutorial into a CircuitPython project.
+ */
+describe('context help is dialect-aware', () => {
+  const DIALECTS: Dialect[] = ['micropython', 'circuitpython', 'unknown']
+
+  it('sends the same word to each runtime’s own page', () => {
+    expect(resolveHelpTarget('I2C', [], 'micropython')?.articleId).toBe('ref-i2c')
+    expect(resolveHelpTarget('I2C', [], 'circuitpython')?.articleId).toBe('cp-busio')
+    expect(resolveHelpTarget('sleep', [], 'micropython')?.articleId).toBe('ref-timing')
+    expect(resolveHelpTarget('sleep', [], 'circuitpython')?.articleId).toBe('cp-timing')
+  })
+
+  it('resolves the CircuitPython vocabulary that used to resolve to nothing', () => {
+    for (const [word, article] of [
+      ['digitalio', 'cp-digitalio'],
+      ['DigitalInOut', 'cp-digitalio'],
+      ['board', 'cp-board'],
+      ['AnalogIn', 'cp-analogio'],
+      ['PWMOut', 'cp-pwmio'],
+      ['try_lock', 'cp-busio'],
+      ['monotonic', 'cp-timing'],
+      ['remount', 'cp-readonly'],
+      ['supervisor', 'cp-code-py']
+    ] as const) {
+      expect(resolveHelpTarget(word, [], 'circuitpython')?.articleId, word).toBe(article)
+    }
+  })
+
+  it('redirects a symbol from the other runtime to the page that replaces it', () => {
+    // The reason this exists: `machine` on a CircuitPython board is not an
+    // unknown word, it is a wrong one, and the reader needs somewhere to go.
+    expect(resolveHelpTarget('machine', [], 'circuitpython')?.articleId).toBe('cp-digitalio')
+    expect(resolveHelpTarget('sleep_ms', [], 'circuitpython')?.articleId).toBe('cp-timing')
+    expect(resolveHelpTarget('duty_u16', [], 'circuitpython')?.articleId).toBe('cp-pwmio')
+    expect(resolveHelpTarget('mip', [], 'circuitpython')?.articleId).toBe('cp-libraries')
+    // …and the same courtesy in the other direction.
+    expect(resolveHelpTarget('digitalio', [], 'micropython')?.articleId).toBe('ref-pins')
+    expect(resolveHelpTarget('busio', [], 'micropython')?.articleId).toBe('ref-i2c')
+  })
+
+  it('keeps plain Python identical on every runtime', () => {
+    for (const word of ['while', 'def', 'class', 'try', 'dict', 'len', 'print']) {
+      const ids = DIALECTS.map((d) => resolveHelpTarget(word, [], d)?.articleId)
+      expect(new Set(ids).size, `${word} differs per dialect`).toBe(1)
+    }
+  })
+
+  it('every topic in every runtime’s table is a page that runtime can open', () => {
+    // A mapping to an article that the dialect's own tree has pruned would send
+    // the reader to a page they cannot get back to from the contents.
+    for (const d of DIALECTS) {
+      const reachable = new Set(
+        (function ids(nodes): string[] {
+          return nodes.flatMap((n) => (n.children ? ids(n.children) : [n.id]))
+        })(helpTreeFor(d))
+      )
+      for (const [word, id] of Object.entries(languageHelpFor(d))) {
+        expect(reachable.has(id), `${d}: ${word} → ${id} is not in that tree`).toBe(true)
+      }
+    }
+  })
+
+  it('parts still win over the language table, on every runtime', () => {
+    const boardPart: PartDefinition = {
+      id: 'pico-board',
+      name: 'A part called board',
+      headers: [],
+      library: { module: 'board' }
+    }
+    for (const d of DIALECTS) {
+      expect(resolveHelpTarget('board', [{ id: 'x', parts: [boardPart] }], d)?.articleId).toBe(
+        'part-pico-board'
+      )
+    }
   })
 })

@@ -104,35 +104,9 @@
   line-height: 1;
 }
 
-/* Per-row base marker: ☆ makes this the base, ★ marks the current base. */
-/* A fixed-width slot on the left of every row: the ANCHOR on the base link, empty
-   otherwise (keeps the names aligned). */
-.robotbuild__rowbase {
-  flex: 0 0 auto;
-  width: 0.95rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  color: var(--text-muted, #8b919b);
-}
-.robotbuild__rowbase.is-base {
-  color: var(--accent-ink);
-}
-/* Type glyph between the elbow and the pencil: a mesh triangle vs a primitive cube,
-   so meshes and blocks read apart at a glance. */
-.robotbuild__typeicon {
-  flex: 0 0 auto;
-  width: 0.95rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted, #8b919b);
-  opacity: 0.8;
-}
-.robotbuild__typeicon svg {
-  display: block;
-}
+/* The chain rows' own styles (base marker, type glyph, elbows, joint rows, the
+   loose flag) left with the rows themselves in #718 — the tree is
+   `HierarchyPanel` now, and both workspaces share its CSS. */
 .robotbuild__hint {
   margin: 0;
   /* Cap + wrap so a full-sentence hint doesn't drag the max-content dock out to its
@@ -218,28 +192,6 @@
   background: rgba(200, 162, 74, 0.18);
   outline: 1px solid rgba(200, 162, 74, 0.5);
 }
-.robotbuild__part-row {
-  display: flex;
-  align-items: center;
-  gap: 0.2rem;
-}
-.robotbuild__part-name {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.3rem;
-  font-family: inherit;
-  /* Match the breadboard library "Browser" list text (a touch larger). */
-  font-size: 0.72rem;
-  color: var(--text, #cdd2d9);
-  background: transparent;
-  border: none;
-  padding: 0.2rem 0.3rem;
-  cursor: pointer;
-  text-align: left;
-}
 .robotbuild__part-label {
   flex: 1 1 auto;
   min-width: 0;
@@ -256,85 +208,6 @@
 }
 .robotbuild__part-geo.is-mesh {
   color: var(--accent-ink);
-}
-/* Chain tree (#354): indent connector, the clickable joint-type chip, and the
-   "loose / not connected" markers. Colours come from theme tokens (both skins). */
-.robotbuild__chain-elbow {
-  flex: 0 0 auto;
-  color: var(--text-muted, #8b919b);
-  opacity: 0.55;
-  margin-right: 0.05rem;
-  font-size: 0.7rem;
-  line-height: 1;
-}
-.robotbuild__loose-tag {
-  flex: 0 0 auto;
-  white-space: nowrap;
-  margin-left: 0.25rem;
-  font-size: 0.56rem;
-  color: var(--accent);
-}
-
-/* JOINT rows (#): the connector between a parent and its child link. Lighter than
-   the boxed part rows (no slab) so they read as the "edge" between parts — a type
-   icon, the editable joint name, and its type badge. */
-.robotbuild__joint-row {
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: 0.2rem;
-  padding: 0.02rem 0.2rem;
-  color: var(--text-muted, #8b919b);
-}
-.robotbuild__joint-elbow {
-  flex: 0 0 auto;
-  opacity: 0.5;
-  font-size: 0.7rem;
-  line-height: 1;
-}
-.robotbuild__joint-icon {
-  flex: 0 0 auto;
-  width: 0.95rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted, #8b919b);
-}
-.robotbuild__joint-icon svg {
-  display: block;
-}
-.robotbuild__joint-name {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-align: left;
-  font-family: inherit;
-  font-size: 0.62rem;
-  color: var(--text, #cdd2d9);
-  background: none;
-  border: none;
-  padding: 0.05rem 0.2rem;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.robotbuild__joint-name:hover {
-  background: rgba(128, 128, 128, 0.14);
-}
-.robotbuild__joint-name.is-on {
-  color: var(--accent-ink);
-  background: rgba(200, 162, 74, 0.16);
-}
-.robotbuild__joint-badge {
-  flex: 0 0 auto;
-  white-space: nowrap;
-  padding: 0.02rem 0.32rem;
-  font-size: 0.52rem;
-  color: var(--text-muted, #8b919b);
-  background: var(--bg-sunken, rgba(0, 0, 0, 0.22));
-  border: 1px solid var(--border, #3a3d44);
-  border-radius: 999px;
 }
 
 /* Breadboard-servo row (#): part name · GPIO · joint picker. */
@@ -384,33 +257,6 @@
   border-radius: 4px;
   padding: 0.05rem 0.2rem;
   cursor: pointer;
-}
-.robotbuild__chain--loose .robotbuild__part-label {
-  font-style: italic;
-  opacity: 0.85;
-}
-.robotbuild__loose-head {
-  list-style: none;
-  padding: 0.25rem 0.4rem 0.1rem;
-  font-size: 0.56rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted, #8b919b);
-}
-.robotbuild__edit {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  color: var(--text-muted, #8b919b);
-  background: transparent;
-  border: none;
-  border-radius: 4px;
-  padding: 0.12rem 0.15rem;
-  cursor: pointer;
-}
-.robotbuild__edit:hover,
-.robotbuild__edit.is-on {
-  color: var(--accent-ink);
 }
 .robotbuild__editrow {
   display: flex;
@@ -608,6 +454,11 @@
   color: var(--accent, #34ad4f);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+/* Partial coverage (#719): the total is a LOWER BOUND (the "+"), so it reads
+   amber — a half-weighed robot must not look like a finished measurement. */
+.robotbuild__masstotal-bar.is-partial .robotbuild__masstotal-g {
+  color: var(--warn);
 }
 
 /* "Remove duplicate 3-D copy" on a servo that's already a joint (#) — a subtle

@@ -21,6 +21,12 @@ Usage on a board::
 `arcade_mix` (and `clamp`) are pure and unit-testable under CPython with no PWM.
 """
 
+# Driver version. Bump this on ANY change to this file — the IDE compares it
+# against the copy installed on the board and offers an update when they differ
+# (#707; a legacy copy with no `__version__` reads as out-of-date). Keep the
+# `__version__ = "X.Y.Z"` literal form so the IDE can parse it without importing.
+__version__ = "1.0.0"
+
 
 def clamp(value, lo=-1.0, hi=1.0):
     """Clamp `value` to the inclusive [`lo`, `hi`] range. Pure."""

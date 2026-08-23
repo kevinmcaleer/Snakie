@@ -14,6 +14,7 @@ import { registerUpdater, checkForUpdatesManual } from './updater'
 import { registerBoardIpc, openBoardView, disposeBoard } from './board'
 import { registerFindIpc, disposeFind } from './find'
 import { registerInstrumentWindowsIpc, disposeInstrumentWindows } from './instrumentWindows'
+import { registerWorkspaceIpc, disposeWorkspace } from './workspace'
 import { registerConsoleWindowIpc, disposeConsoleWindow } from './consoleWindow'
 import { registerPartsIpc } from './parts/ipc'
 import { registerRobotIpc } from './robot/ipc'
@@ -282,6 +283,11 @@ app.whenReady().then(() => {
   // project's parts + pin-to-pin wiring) for the Board Viewer's Wiring mode.
   registerRobotIpc()
 
+  // Register the workspace relay (#775): any window — docked or detached — can
+  // ask the MAIN window to show a workspace, and can read the session's open
+  // project folder without a Board View window having to exist to carry it.
+  registerWorkspaceIpc(() => mainWindow)
+
   createWindow()
 
   app.on('activate', () => {
@@ -307,4 +313,5 @@ app.on('before-quit', () => {
   disposeFind()
   disposeInstrumentWindows()
   disposeConsoleWindow()
+  disposeWorkspace()
 })

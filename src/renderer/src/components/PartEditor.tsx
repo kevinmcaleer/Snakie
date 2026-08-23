@@ -1,7 +1,39 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type JSX } from 'react'
+import {
+  Suspense,
+  lazy,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type JSX
+} from 'react'
 import { createPortal } from 'react-dom'
 import { useHistory } from './use-history'
 import { PartSchematicView } from './PartSchematicView'
+import { partMeshRef } from './part-details'
+import { meshImportScale } from './robot-assembly'
+import { inferMeshUnits } from '../../../shared/part-mesh-file'
+import {
+  CENTRE_ANCHOR,
+  MESH_NUDGE_STEPS_MM,
+  OFFSET_AXIS_INDEX,
+  describeAnchor,
+  formatMeshOffset,
+  nudgeMeshOffset,
+  setMeshOffsetAxis,
+  snapOffsetFor,
+  type MeshAnchor,
+  type MeshAnchorAxis,
+  type MeshOffset
+} from '../../../shared/mesh-offset'
+import {
+  formatMeshRotation,
+  rotateMesh,
+  setMeshRotationAxis,
+  type MeshAxis,
+  type MeshRotation
+} from '../../../shared/mesh-rotation'
 import { SwatchPicker } from './SwatchPicker'
 import { FootprintField } from './FootprintField'
 import { collectFootprints, type FootprintInfo } from '../../../shared/footprints'
@@ -30,6 +62,8 @@ import {
   partsClaimingAddress
 } from './i2c-known-devices'
 import { floodFillTransparent, removeBackgroundFromEdges } from './image-bg-remove'
+import { rotateImage90 } from './image-rotate'
+import { opposite, rotateBreaksMesh, rotatePart, type RotateDir } from './part-rotate'
 import { bumpPatch } from '../../../shared/part-registry'
 import {
   CAPABILITIES,
@@ -86,8 +120,17 @@ import {
   renameRail,
   removeRail,
   toggleRailPin,
-  railHolding
+  railHolding,
+  driverInstallMethod,
+  driverModuleId,
+  driverRowWarnings,
+  driverTargetSpec,
+  moduleDriverRow,
+  moveDriver,
+  removeDriver,
+  updateDriver
 } from './part-editor.util'
+import { MODULES, moduleById } from '../../../shared/modules-catalog'
 import {
   GROVE_VARIANTS,
   JST_FAMILIES,
@@ -103,6 +146,7 @@ import type {
   JstFamily,
   ComponentShape,
   ComponentShapeKind,
+  DriverFile,
   ElectricalModel,
   GroveVariant,
   ImageLayer,
@@ -124,6 +168,7 @@ import type {
   PartPinBuses,
   PartPinCapability,
   PartPinShape,
+  PartShape,
   PartPinSignals,
   PartPinType,
   TextAlign,
@@ -133,6 +178,11 @@ import type { PartsWriteResult } from '../../../preload/index.d'
 import { Markdown } from './Markdown'
 import { LockIcon, UnlockIcon, TrashIcon } from './ui-icons'
 import './PartEditor.css'
+
+/** The 3-D view (#741) — lazy, so three.js and the STL/DAE parsers only load for
+ *  the people who open the tab. */
+const PartMeshStage = lazy(() => import('./PartMeshStage').then((m) => ({ default: m.PartMeshStage })))
+type MeshMeasurement = import('./PartMeshStage').MeshMeasurement
 
 /** Per-capability bus/channel + signal controls shown when the capability is
  *  ticked: i2c/spi/uart carry a bus number + a signal, adc a channel number, pwm
@@ -171,6 +221,42 @@ const JST_PINS: PartPin[] = [
  *  Grove standard and never varies — signal 1 · signal 2 · VCC · GND, which is
  *  the yellow · white · red · black of every Grove cable. Getting the order right
  *  here is what lets a cable be seated the correct way round later. */
+/**
+ * Standard LED package sizes, in millimetres (#130).
+ *
+ * An LED is a real component with a handful of real sizes, so this is a pick
+ * list rather than a number box. Through-hole first — 5 mm is THE indicator LED
+ * and the default for a new one — then the surface-mount packages, named by the
+ * imperial code that is actually printed in a BOM ("0603"), because that is what
+ * you are reading off when you author a board from a photo.
+ *
+ * Without a size an LED falls back to a legacy fixed on-screen size, which on a
+ * 20 mm Grove module drew a 5 mm LED far too small.
+ */
+const LED_SIZES: { mm: number; label: string }[] = [
+  { mm: 1.0, label: '0402 — 1.0 mm' },
+  { mm: 1.6, label: '0603 — 1.6 mm' },
+  { mm: 2.0, label: '0805 — 2.0 mm' },
+  { mm: 3.0, label: '3 mm' },
+  { mm: 3.2, label: '1206 — 3.2 mm' },
+  // One entry, not two: a 5050 NeoPixel really is 5.0 mm square, the same as a
+  // 5 mm through-hole LED. Splitting them needed a fake 5.05 to keep the option
+  // values distinct, which would have written a dimension no part actually has.
+  { mm: 5.0, label: '5 mm — T1¾ / 5050' },
+  { mm: 8.0, label: '8 mm' },
+  { mm: 10.0, label: '10 mm' }
+]
+
+/** The size a NEW LED of each kind gets. A plain indicator is the classic 5 mm
+ *  through-hole part; a NeoPixel is a 5050; a power light is nearly always a
+ *  little surface-mount 0603. */
+const DEFAULT_LED_MM: Record<OnboardLed['kind'], number> = {
+  single: 5,
+  rgb: 5,
+  neopixel: 5,
+  power: 1.6
+}
+
 const GROVE_PINS: Record<GroveVariant, PartPin[]> = {
   i2c: [
     { name: 'SCL', type: 'io', capabilities: ['i2c'], signals: { i2c: 'SCL' } },
@@ -317,6 +403,22 @@ const ICON: Record<string, JSX.Element> = {
       <g fill="none" stroke="currentColor" strokeWidth="1.4">
         <path d="M8 1.5v13M1.5 8h13" />
         <path d="M8 1.5l-2 2M8 1.5l2 2M8 14.5l-2-2M8 14.5l2-2M1.5 8l2-2M1.5 8l2 2M14.5 8l-2-2M14.5 8l-2 2" />
+      </g>
+    </svg>
+  ),
+  rotateRight: (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <g fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+        <path d="M13 6A5.5 5.5 0 1 0 13 10" />
+        <path d="M13 2v4h-4" strokeLinejoin="round" />
+      </g>
+    </svg>
+  ),
+  rotateLeft: (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <g fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+        <path d="M3 6A5.5 5.5 0 1 1 3 10" />
+        <path d="M3 2v4h4" strokeLinejoin="round" />
       </g>
     </svg>
   ),
@@ -546,7 +648,7 @@ export function PartEditor({
   const [propRows, setPropRows] = useState<[string, string][]>(() =>
     Object.entries(initial?.properties ?? {})
   )
-  const [view, setView] = useState<'breadboard' | 'schematic'>('breadboard')
+  const [view, setView] = useState<'breadboard' | 'schematic' | 'model'>('breadboard')
   const [locked, setLocked] = useState<LayerLocks>(DEFAULT_LOCKS)
   const [showGrid, setShowGrid] = useState(false)
   const [lockImageAspect, setLockImageAspect] = useState(true)
@@ -625,6 +727,13 @@ export function PartEditor({
     content: partContentKey(initialSeedRef.current as PartDefinition),
     version: (initialSeedRef.current as PartDefinition).version
   })
+  // The stamp of the `parts.yml` this part was read from (#750) — the main
+  // process refuses a save whose stamp no longer matches the file on disk, so an
+  // edit made outside the app can't be silently reverted by the editor. Held in
+  // a ref (not in `part`) because it is file identity, not part content: it must
+  // survive every edit and undo, and MUST be refreshed from each save's result
+  // or the next save would look stale to itself. `undefined` for a new part.
+  const sourceHashRef = useRef<string | undefined>(initial?.sourceHash)
 
   const fileId = useMemo(() => sanitisePartId(part.id), [part.id])
   const names = useMemo(() => pinNames(part), [part])
@@ -671,6 +780,34 @@ export function PartEditor({
         : 0.6
 
   const patch = (p: Partial<PartDefinition>): void => setPart((d) => ({ ...d, ...p }))
+  /**
+   * Turn the whole board a quarter turn (#749) — pads, holes, connectors,
+   * components, labels, outline and both photos. The pixels are turned first so
+   * the geometry and the picture land in the SAME undo step; doing it the other
+   * way round left an undo that put the board back but not the photo.
+   */
+  const rotateBoard = async (dir: RotateDir): Promise<void> => {
+    const frontSrc = part.imageData
+    // The rear photo is stored in the rear view's own space, so it turns the
+    // other way — exactly as its image layer does.
+    const rearSrc = part.rear?.imageData
+    const [front, rear] = await Promise.all([
+      frontSrc ? rotateImage90(frontSrc, dir) : Promise.resolve(null),
+      rearSrc ? rotateImage90(rearSrc, opposite(dir)) : Promise.resolve(null)
+    ])
+    setPart((d) => {
+      const next = rotatePart(d, dir)
+      if (front) next.imageData = front
+      if (rear) next.rear = { ...(next.rear ?? {}), imageData: rear }
+      return next
+    })
+    setStatus({
+      kind: 'info',
+      text: rotateBreaksMesh(part)
+        ? `Rotated ${dir === 'cw' ? 'right' : 'left'}. The 3-D model can't be turned with it, so the mesh no longer matches the outline.`
+        : `Rotated ${dir === 'cw' ? 'right' : 'left'}.`
+    })
+  }
 
   // Layer visibility is PERSISTED on the part, so the Parts Library preview and
   // the Board View respect what the author hid (e.g. a traced PCB image stays
@@ -1130,6 +1267,8 @@ export function PartEditor({
     setSelection(null)
     // Reset the version baseline so the fresh part's first save keeps its version (#172).
     lastSavedRef.current = { content: partContentKey(seed), version: seed.version }
+    // A blank part came from no file, so it has no stamp to present (#750).
+    sourceHashRef.current = undefined
     setStatus({ kind: 'info', text: 'Started a new blank part.' })
   }
 
@@ -1172,7 +1311,16 @@ export function PartEditor({
       contentChanged && versionUntouched && openedId !== null ? bumpPatch(clean.version) : clean.version
     // `helpText`/`imageData` are runtime-only (normalisePart strips them); re-add
     // them so the main process can write help.md / the image asset out on save.
-    const payload: PartDefinition = { ...clean, version: nextVersion, imageData: part.imageData, helpText: part.helpText }
+    // `sourceHash` is runtime-only for the same reason and comes from the REF,
+    // not from `part` — the editor's copy of it is whatever the file said when
+    // this part was opened, and it must be the freshest one we know of (#750).
+    const payload: PartDefinition = {
+      ...clean,
+      version: nextVersion,
+      imageData: part.imageData,
+      helpText: part.helpText,
+      sourceHash: sourceHashRef.current
+    }
     // The REAR photo is runtime-only too, and `normalisePart` strips it for the
     // same reason it strips the front's — so re-attach it, or the back face saves
     // without its picture (#636 follow-up).
@@ -1180,14 +1328,41 @@ export function PartEditor({
       payload.rear = { ...(clean.rear ?? {}), imageData: part.rear.imageData }
     }
     try {
-      const res: PartsWriteResult = await window.api.parts.savePart(libId, payload)
+      const res: PartsWriteResult = await window.api.parts.savePart(libId, payload, {
+        // The folder this part was OPENED from. When the save lands in a
+        // different one — another library, or a renamed id — the main process
+        // brings the linked model with it (#787). The image and help ride in
+        // memory and move for free; the mesh only exists on disk, so it used to
+        // be left behind.
+        assetsFrom: { libraryId: openedLibId, partId: openedId ?? undefined }
+      })
       if (res?.ok) {
         setOpenedId(clean.id)
         setOpenedLibId(res.libraryId ?? libId)
         lastSavedRef.current = { content: partContentKey(payload), version: nextVersion }
+        // Adopt the stamp of what we just wrote, or the NEXT save would present
+        // the pre-save one and be refused as stale (#750).
+        sourceHashRef.current = res.sourceHash
         if (nextVersion !== part.version) patch({ version: nextVersion }) // reflect the bump in the field
-        setStatus({ kind: 'ok', text: `Saved "${clean.name}" to ${res.libraryId ?? libId} (v${nextVersion}).` })
+        // A part whose `mesh:` names a file that isn't beside it is broken, and
+        // nothing downstream can tell that from "no model" (#787). The save DID
+        // work, so this is a warning on a success — not an error.
+        setStatus(
+          res.missingMesh
+            ? {
+                kind: 'error',
+                text: `Saved "${clean.name}" to ${res.libraryId ?? libId} (v${nextVersion}) — but its 3-D model "${res.missingMesh}" is not in the part folder. Re-link it in the 3-D tab, or it will show as a plain block in Build.`
+              }
+            : { kind: 'ok', text: `Saved "${clean.name}" to ${res.libraryId ?? libId} (v${nextVersion}).` }
+        )
         onSaved(res.libraryId ?? libId, res.id ?? clean.id)
+      } else if (res?.conflict) {
+        // Not a broken save — a refused one. The file moved under us, so the
+        // only safe next step is to look at what is actually on disk (#750).
+        setStatus({
+          kind: 'error',
+          text: res.error ?? `"${clean.id}" changed on disk since you opened it — close the editor and reopen the part.`
+        })
       } else {
         setStatus({ kind: 'error', text: res?.error ?? 'Save failed.' })
       }
@@ -1219,6 +1394,17 @@ export function PartEditor({
             onClick={() => setView('schematic')}
           >
             Schematic
+          </button>
+          {/* #741: the 3-D model's home. Always offered — a part with no mesh
+              yet is exactly who needs it, since this is where one is linked. */}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === 'model'}
+            className={`pe__tab${view === 'model' ? ' is-active' : ''}`}
+            onClick={() => setView('model')}
+          >
+            3-D
           </button>
         </div>
         {/* #633: the Standard library is a DEVELOPER save target — writing to it
@@ -1282,6 +1468,13 @@ export function PartEditor({
                 </button>
                 <button type="button" className="pe__iconbtn" onClick={() => setFitSignal((n) => n + 1)} title="Fit / reset the view" aria-label="Fit">
                   {ICON.fit}
+                </button>
+                <span className="pe__divider" />
+                <button type="button" className="pe__iconbtn" onClick={() => void rotateBoard('ccw')} title="Rotate the board 90° left" aria-label="Rotate left">
+                  {ICON.rotateLeft}
+                </button>
+                <button type="button" className="pe__iconbtn" onClick={() => void rotateBoard('cw')} title="Rotate the board 90° right" aria-label="Rotate right">
+                  {ICON.rotateRight}
                 </button>
                 <span className="pe__divider" />
                 <button type="button" className="pe__iconbtn" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
@@ -1410,6 +1603,7 @@ export function PartEditor({
                 onSelect={setSelection}
                 footprintOps={footprintOps}
                 existingParts={existingParts}
+                libraryId={openedLibId}
               />
               {/* Board structure (mounting holes + PCB + image) sits BELOW the
                   selected-item details, so pin editing stays near the top. */}
@@ -1438,7 +1632,7 @@ export function PartEditor({
               />
             </div>
           </>
-        ) : (
+        ) : view === 'schematic' ? (
           <>
             <div className="pe__panels">
               <SchematicPanels part={part} patch={patch} />
@@ -1452,6 +1646,14 @@ export function PartEditor({
               </div>
             </div>
           </>
+        ) : (
+          <ModelView
+            part={part}
+            patch={patch}
+            libraryId={openedLibId || libId}
+            partsFolder={partsFolder}
+            onNotify={setStatus}
+          />
         )}
       </div>
     </div>
@@ -1580,7 +1782,10 @@ function LayersPanel({
   const shapes = part.shapes ?? []
   const labels = part.labels ?? []
   const addLed = (kind: OnboardLed['kind'] = 'single'): void => {
-    const next = [...onboardLeds, { kind, x: 0.5, y: 0.5, z: nextItemZ(part) } as (typeof onboardLeds)[number]]
+    const next = [
+      ...onboardLeds,
+      { kind, x: 0.5, y: 0.5, sizeMm: DEFAULT_LED_MM[kind], z: nextItemZ(part) } as (typeof onboardLeds)[number]
+    ]
     patch({ onboardLeds: next })
     setSelection({ type: 'led', index: next.length - 1 })
   }
@@ -2571,6 +2776,8 @@ interface InspectorProps {
   footprintOps: FootprintOps
   /** Other parts in the same library — for the I²C address-clash warning. */
   existingParts: PartDefinition[]
+  /** The library the part is being edited in — for listing its shipped files (#655). */
+  libraryId: string
 }
 
 /** "Add footprint…" dropdown (#166): a scrollable, fixed-positioned menu of
@@ -2735,16 +2942,7 @@ function Inspector(props: InspectorProps): JSX.Element {
             />
           </label>
         </div>
-        {part.shape?.kind !== 'polygon' && (
-          <SliderField
-            label="Corner radius"
-            value={part.shape?.cornerRadius ?? 0.04}
-            min={0}
-            max={0.5}
-            step={0.01}
-            onChange={(v) => patch({ shape: { kind: 'rect', cornerRadius: v } })}
-          />
-        )}
+        {part.shape?.kind !== 'polygon' && <CornerRadiusFields part={part} patch={patch} />}
         <label className="pe__field">
           <span>Onboard LED pin</span>
           <select value={part.ledLabel ?? ''} onChange={(e) => patch({ ledLabel: e.target.value || undefined })}>
@@ -2775,6 +2973,9 @@ function Inspector(props: InspectorProps): JSX.Element {
 
       {/* I²C addresses — what the I²C-detect instrument matches a scan against (#653) */}
       <I2cSection part={part} patch={patch} existingParts={props.existingParts} />
+
+      {/* Drivers — what the Driver Install banner offers when the part is placed (#655) */}
+      <DriversSection part={part} patch={patch} libraryId={props.libraryId} />
     </>
   )
 }
@@ -2909,6 +3110,306 @@ function I2cSection({
           ? 'The I²C-detect instrument offers this part when a scan finds one of these addresses.'
           : 'This part has no I²C pin or QWIIC/Grove port yet — addresses are still saved.'}
       </p>
+    </section>
+  )
+}
+
+/**
+ * The board outline's corner radius, in EITHER unit (#739).
+ *
+ * A PCB is specified in millimetres — that's the number on the drawing and on
+ * the fabricator's order — so a part that knows its physical size should be
+ * able to say "2 mm" rather than a fraction someone reverse-engineered from it.
+ * The normalised slider stays for parts with no declared dimensions (and for
+ * eyeballing), and the hint always says which of the two is actually drawing,
+ * because two fields for one visual property is otherwise a guessing game.
+ */
+function CornerRadiusFields({
+  part,
+  patch
+}: {
+  part: PartDefinition
+  patch: (p: Partial<PartDefinition>) => void
+}): JSX.Element {
+  const dims = part.dimensions
+  const minSideMm = dims ? Math.min(dims.width, dims.height) : 0
+  const mm = part.shape?.cornerRadiusMm
+  const mmSet = typeof mm === 'number' && Number.isFinite(mm)
+  const mmApplies = mmSet && minSideMm > 0
+
+  // `patch` REPLACES `shape` wholesale, so carry the other field through or
+  // editing one silently wipes the other.
+  const patchShape = (p: Partial<PartShape>): void => {
+    const next: PartShape = { ...(part.shape ?? { kind: 'rect' }), kind: 'rect', ...p }
+    // Drop rather than carry an `undefined`, so the cleared field doesn't
+    // round-trip through robot.yml/parts.yml as a null.
+    if (next.cornerRadiusMm === undefined) delete next.cornerRadiusMm
+    patch({ shape: next })
+  }
+
+  return (
+    <>
+      <SliderField
+        label="Corner radius"
+        value={part.shape?.cornerRadius ?? 0.04}
+        min={0}
+        max={0.5}
+        step={0.01}
+        onChange={(v) => patchShape({ cornerRadius: v })}
+      />
+      <label className="pe__field">
+        <span>Corner radius (mm)</span>
+        <input
+          type="number"
+          min={0}
+          step="0.1"
+          value={mmSet ? mm : ''}
+          placeholder={dims ? 'e.g. 2' : 'needs board dimensions'}
+          onChange={(e) =>
+            patchShape({
+              cornerRadiusMm:
+                e.target.value === '' ? undefined : Math.max(0, Number(e.target.value) || 0)
+            })
+          }
+        />
+      </label>
+      <p className="pe__hint pe__hint--muted">
+        {mmApplies ? (
+          <>
+            Drawing at <strong>{mm} mm</strong> — the slider above is ignored while this is
+            set. Clear it to go back to the fraction.
+          </>
+        ) : mmSet ? (
+          <span className="pe__addr-warn">
+            Set the board&rsquo;s dimensions for millimetres to apply — drawing at the slider
+            value meanwhile.
+          </span>
+        ) : (
+          <>A PCB is specified in millimetres; set that and it wins over the slider.</>
+        )}
+      </p>
+    </>
+  )
+}
+
+/** Explains each install method where the chip is hovered (#655). */
+const DRIVER_METHOD_TITLES: Record<ReturnType<typeof driverInstallMethod>, string> = {
+  module: 'A driver Snakie already ships — installed via the modules catalog',
+  mip: 'Installed on the board by mip (the MicroPython package manager)',
+  copy: 'A file copied onto the board — shipped beside this part, or fetched from a URL'
+}
+
+/**
+ * The **Drivers** inspector section (#655, epic #654) — the MicroPython file(s)
+ * a part needs on the board, i.e. what makes the Driver Install banner (#184)
+ * fire when the part is placed. Until now `drivers` could only be hand-written
+ * into `parts.yml`, so a community part could not ship one.
+ *
+ * `target` means a DIFFERENT thing per source kind — an install folder for
+ * `mip`, a full destination path for `copy`, catalog-derived for `module:` —
+ * and that rule lived only in {@link driverInstallMethod}. Here it is made
+ * visible: the detected method is shown beside the source as the author types,
+ * and the target field is relabelled to match ({@link driverTargetSpec}).
+ * `module:` sources are PICKED from the catalog so a bad id cannot be authored,
+ * and a bundled filename that doesn't ship with the part is flagged — that part
+ * installs nothing, and today the only way to find out is on hardware.
+ */
+function DriversSection({
+  part,
+  patch,
+  libraryId
+}: {
+  part: PartDefinition
+  patch: (p: Partial<PartDefinition>) => void
+  libraryId: string
+}): JSX.Element {
+  const drivers = part.drivers ?? []
+  // The .py/.mpy files that actually sit beside the part in its library folder —
+  // offered as copy sources and checked against. `null` ⇒ could not list (no api);
+  // that produces NO missing-file warnings, because warning from ignorance would
+  // cry wolf on every healthy part.
+  const [partFiles, setPartFiles] = useState<string[] | null>(null)
+  useEffect(() => {
+    let alive = true
+    window.api.parts
+      .listPartFiles(libraryId, part.id)
+      .then((files) => {
+        if (alive) setPartFiles(files)
+      })
+      .catch(() => {
+        if (alive) setPartFiles(null)
+      })
+    return () => {
+      alive = false
+    }
+  }, [libraryId, part.id])
+
+  const set = (next: DriverFile[]): void => patch({ drivers: next.length ? next : undefined })
+
+  return (
+    <section className="pe__section">
+      <h3 className="pe__h">Drivers</h3>
+      <p className="pe__hint">
+        Files this part NEEDS on the board. Placing the part offers to install them —
+        nothing is copied without consent.
+      </p>
+
+      {drivers.length > 0 && (
+        <ul className="pe__drvs">
+          {drivers.map((d, i) => {
+            const method = driverInstallMethod(d.source)
+            const spec = driverTargetSpec(method)
+            const warns = driverRowWarnings(d, partFiles)
+            const modId = driverModuleId(d.source)
+            return (
+              <li key={i} className="pe__drv">
+                <div className="pe__drv-grid">
+                  {method === 'module' ? (
+                    <label className="pe__field pe__drv-source">
+                      <span>Module</span>
+                      <select
+                        value={modId}
+                        onChange={(e) => {
+                          const row = moduleDriverRow(e.target.value)
+                          if (row) {
+                            set(
+                              updateDriver(drivers, i, {
+                                source: row.source,
+                                target: row.target,
+                                label: d.label || row.label
+                              })
+                            )
+                          }
+                        }}
+                      >
+                        {/* A hand-edited yaml can carry an id the catalog doesn't
+                            know — keep it selectable so the row isn't silently
+                            rewritten, and let the warning below say why it's dead. */}
+                        {!moduleById(modId) && <option value={modId}>{modId || '(none)'} — unknown</option>}
+                        {MODULES.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name} (import {m.importName})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : (
+                    <label className="pe__field pe__drv-source">
+                      <span>Source</span>
+                      <input
+                        type="text"
+                        value={d.source}
+                        list="pe-drv-files"
+                        placeholder="driver.py · github:user/repo/file.py · https://…"
+                        spellCheck={false}
+                        onChange={(e) => set(updateDriver(drivers, i, { source: e.target.value }))}
+                      />
+                    </label>
+                  )}
+                  <span
+                    className={`pe__drv-method pe__drv-method--${method}`}
+                    title={DRIVER_METHOD_TITLES[method]}
+                  >
+                    {method}
+                  </span>
+                  <label className="pe__field pe__drv-target" title={spec.hint}>
+                    <span>{spec.label}</span>
+                    {spec.editable ? (
+                      <input
+                        type="text"
+                        value={d.target}
+                        placeholder={spec.placeholder}
+                        spellCheck={false}
+                        onChange={(e) => set(updateDriver(drivers, i, { target: e.target.value }))}
+                      />
+                    ) : (
+                      <span className="pe__drv-target-ro">{d.target || '(catalog decides)'}</span>
+                    )}
+                  </label>
+                  <label className="pe__field pe__drv-label">
+                    <span>Label</span>
+                    <input
+                      type="text"
+                      value={d.label ?? ''}
+                      placeholder="Shown in the install prompt"
+                      onChange={(e) =>
+                        set(updateDriver(drivers, i, { label: e.target.value || undefined }))
+                      }
+                    />
+                  </label>
+                  <div className="pe__drv-ops">
+                    <button
+                      type="button"
+                      className="pe__chip"
+                      disabled={i === 0}
+                      aria-label="Move this driver up"
+                      onClick={() => set(moveDriver(drivers, i, -1))}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      className="pe__chip"
+                      disabled={i === drivers.length - 1}
+                      aria-label="Move this driver down"
+                      onClick={() => set(moveDriver(drivers, i, 1))}
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      className="pe__chip pe__chip--del"
+                      aria-label="Remove this driver"
+                      onClick={() => set(removeDriver(drivers, i))}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+                {warns.map((w) => (
+                  <p key={w} className="pe__drv-warn">
+                    {w}
+                  </p>
+                ))}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
+      {partFiles && partFiles.length > 0 && (
+        <datalist id="pe-drv-files">
+          {partFiles.map((f) => (
+            <option key={f} value={f} />
+          ))}
+        </datalist>
+      )}
+
+      <div className="pe__row">
+        <select
+          className="pe__drv-addmod"
+          value=""
+          aria-label="Add a driver from the modules catalog"
+          onChange={(e) => {
+            const row = moduleDriverRow(e.target.value)
+            if (row) set([...drivers, row])
+          }}
+        >
+          <option value="">+ From modules catalog…</option>
+          {MODULES.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name} (import {m.importName})
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="pe__add pe__add--inline"
+          onClick={() => set([...drivers, { source: '', target: '' }])}
+        >
+          + Custom driver
+        </button>
+      </div>
     </section>
   )
 }
@@ -3804,6 +4305,22 @@ function SelectionInspector({
               </select>
             </label>
             <label className="pe__field">
+              <span>Size</span>
+              {/* Drawn life-size against the board's real dimensions, so this is
+                  what makes a 5 mm LED read as the quarter of a 20 mm module it
+                  actually is. */}
+              <select
+                value={String(led.sizeMm ?? DEFAULT_LED_MM[led.kind])}
+                onChange={(e) => upd({ sizeMm: Number(e.target.value) })}
+              >
+                {LED_SIZES.map((sz) => (
+                  <option key={sz.mm} value={String(sz.mm)}>
+                    {sz.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="pe__field">
               <span>Label</span>
               <input
                 type="text"
@@ -4638,6 +5155,517 @@ function SchematicPanels({
           </div>
         ))}
       </section>
+    </>
+  )
+}
+
+// --- The 3-D view (#741) -----------------------------------------------------
+
+/** The three axes, in the order the orientation controls list them. */
+const MESH_AXES: { axis: MeshAxis; label: string; hint: string }[] = [
+  { axis: 'x', label: 'X', hint: 'Tip forward / back — the usual fix for a model standing on its face' },
+  { axis: 'y', label: 'Y', hint: 'Roll left / right — the usual fix for one lying on its side' },
+  { axis: 'z', label: 'Z', hint: 'Spin about the up axis — turn the board to face the right way' }
+]
+
+/** Which slot of `meshRotation` an axis occupies. */
+const AXIS_INDEX: Record<MeshAxis, 0 | 1 | 2> = { x: 0, y: 1, z: 2 }
+
+/** The nudge axes, with what moving along each one is FOR (#788). */
+const MESH_MOVE_AXES: { axis: MeshAxis; label: string; hint: string }[] = [
+  { axis: 'x', label: 'X', hint: 'Slide left / right across the board' },
+  { axis: 'y', label: 'Y', hint: 'Slide forward / back across the board' },
+  { axis: 'z', label: 'Z', hint: 'Raise / lower — Z = 0 is the surface the part rests on' }
+]
+
+/** The per-axis snap picks, in the order the buttons sit (#788). Labelled by
+ *  what the user is looking at, not by the field name. */
+const ANCHOR_PICKS: { value: MeshAnchorAxis; label: string }[] = [
+  { value: 'min', label: 'min' },
+  { value: 'centre', label: 'centre' },
+  { value: 'max', label: 'max' }
+]
+
+/** `41.2` — one decimal, no trailing `.0`, for the size readouts. */
+function mm(n: number): string {
+  return (Math.round(n * 10) / 10).toString()
+}
+
+/**
+ * THE PART'S 3-D MODEL — link it, size it, stand it up (#741).
+ *
+ * Until now attaching an STL meant copying the file into the part folder by hand
+ * and editing two lines of `parts.yml`, and a model that arrived lying on its
+ * side could not be corrected in Snakie at all. Both live here:
+ *
+ *  - **Link** copies the chosen file INTO this part's own folder, because a part
+ *    folder is the unit that gets zipped, committed and published — a `mesh:`
+ *    pointing at `~/Downloads` travels nowhere.
+ *  - **Orientation and position are stored, never baked.** The user's file is
+ *    left exactly as supplied; the corrections ride on the part as
+ *    `meshRotation` (#741) and `meshOffset` (#788) and every consumer honours
+ *    them (this stage, the catalog turntable, and the URDF `<visual>` origin a
+ *    placed part gets).
+ *
+ * Position (#788) is the other half of orientation, and it works the way the
+ * Robot View's Join tool does: **the user names the feature, the tool does the
+ * arithmetic.** There is no auto-fit and no inference of what they probably
+ * meant — #785's lesson is that guessing was wrong often enough to be worse than
+ * useless. So there are exactly two mechanisms: nudge along an axis by a step
+ * they chose, and snap a feature they picked (a corner, an edge midpoint, a face
+ * centre, or the centre) onto the origin.
+ *
+ * Laid out like the Schematic view — controls left, live stage right — so the
+ * tab feels like the two beside it rather than a new place.
+ */
+function ModelView({
+  part,
+  patch,
+  libraryId,
+  partsFolder,
+  onNotify
+}: {
+  part: PartDefinition
+  patch: (p: Partial<PartDefinition>) => void
+  /** The library the part lives in ON DISK — where the model is copied to. */
+  libraryId: string
+  partsFolder: string
+  onNotify: (s: Status) => void
+}): JSX.Element {
+  const [measured, setMeasured] = useState<MeshMeasurement | null>(null)
+  const [fitSignal, setFitSignal] = useState(0)
+  const [busy, setBusy] = useState(false)
+  // The nudge step in millimetres, and the feature the user has picked to snap
+  // (#788). Both are UI state, not part data: what is persisted is only where
+  // the model ended up, never how it got there.
+  const [stepMm, setStepMm] = useState<number>(1)
+  const [anchor, setAnchor] = useState<MeshAnchor>(CENTRE_ANCHOR)
+  const mesh = useMemo(
+    () => partMeshRef(part, { partsFolder, libraryId }),
+    [part, partsFolder, libraryId]
+  )
+  // A different file needs a fresh measurement, not the last one's.
+  const meshPath = mesh?.path
+  useEffect(() => setMeasured(null), [meshPath])
+
+  // Millimetres per mesh unit: the SAME rule the placement path uses
+  // (`meshImportScale`, which answers in metres) scaled up — including its
+  // bounding-box fallback for a mesh that declares no units. So the size shown
+  // here is the size the part will actually be in Build.
+  const scaleMm = meshImportScale(part, measured?.rawSpan) * 1000
+  const rotation: MeshRotation | undefined = part.meshRotation
+  const offset: MeshOffset | undefined = part.meshOffset
+
+  const link = async (replace: boolean): Promise<void> => {
+    if (!window.api.parts.importMesh) {
+      onNotify({ kind: 'error', text: 'Linking a model needs the desktop app.' })
+      return
+    }
+    if (!part.id?.trim()) {
+      onNotify({ kind: 'error', text: 'Give the part an id first — the model is copied into its folder.' })
+      return
+    }
+    setBusy(true)
+    try {
+      const res = await window.api.parts.importMesh(libraryId, part.id, {
+        // The ONE file this import may overwrite is the model the part already
+        // references (#750: never clobber a file this part did not author).
+        replaces: replace ? part.mesh : undefined
+      })
+      if (res.cancelled) return
+      if (!res.ok || !res.filename) {
+        onNotify({ kind: 'error', text: res.error ?? 'Could not link that model.' })
+        return
+      }
+      // Record the units NOW (#787 fault 2). An `.stl` states none, so this is
+      // the only moment the geometry can be looked at and a conclusion written
+      // down — without it a 48 mm part read as metres arrives 1000× too big.
+      // An EXPLICIT choice the part already carries is never overwritten: the
+      // guess fills a blank, it does not overrule the author.
+      const units =
+        part.meshUnits === undefined && part.meshScale === undefined
+          ? inferMeshUnits(res.maxDim)
+          : undefined
+      patch(units ? { mesh: res.filename, meshUnits: units } : { mesh: res.filename })
+      const sized = units ? ` It measures ${units === 'mm' ? 'millimetres' : 'metres'} — change that under Units if it looks wrong.` : ''
+      onNotify({
+        kind: 'ok',
+        text: res.reused
+          ? `Linked ${res.filename} — that exact file was already in the part folder.${sized}`
+          : `Copied ${res.filename} into the part folder. Save the part to keep the link.${sized}`
+      })
+    } catch (e) {
+      onNotify({
+        kind: 'error',
+        text: `Could not link that model: ${(e as Error)?.message ?? 'unknown error'}`
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const unlink = (): void => {
+    const was = part.mesh
+    patch({ mesh: undefined, meshRotation: undefined, meshOffset: undefined })
+    onNotify({
+      kind: 'info',
+      text: was
+        ? `Unlinked ${was}. The file stays in the part folder — Snakie never deletes one it did not write.`
+        : 'No model was linked.'
+    })
+  }
+
+  const nudge = (axis: MeshAxis, deg: number): void =>
+    patch({ meshRotation: rotateMesh(rotation, axis, deg) })
+
+  const move = (axis: MeshAxis, mm: number): void =>
+    patch({ meshOffset: nudgeMeshOffset(offset, axis, mm) })
+
+  /** Put the picked feature of the model's bounding box on the origin (#788).
+   *  Needs a measurement, because the box is what the arithmetic is about. */
+  const snap = (): void => {
+    const bounds = measured?.boundsMm
+    if (!bounds) {
+      onNotify({ kind: 'error', text: 'Snapping needs the model measured — wait for the 3-D view to load it.' })
+      return
+    }
+    patch({ meshOffset: snapOffsetFor(bounds, anchor) })
+    onNotify({ kind: 'ok', text: `Snapped the model’s ${describeAnchor(anchor)} to the origin.` })
+  }
+
+  const declared = part.dimensions
+  const size = measured?.sizeMm
+  // A model whose footprint is wildly unlike the part's declared one is the
+  // wrong-units (or wrong-file) case this view exists to make obvious.
+  const mismatch =
+    !!size &&
+    size[0] > 0 &&
+    size[1] > 0 &&
+    !!declared &&
+    declared.width > 0 &&
+    declared.height > 0 &&
+    (Math.max(size[0] / declared.width, declared.width / size[0]) > 1.5 ||
+      Math.max(size[1] / declared.height, declared.height / size[1]) > 1.5)
+
+  return (
+    <>
+      <div className="pe__panels">
+        <section className="pe__section">
+          <h3 className="pe__h">3-D model</h3>
+          {part.mesh ? (
+            <>
+              <div className="pe__row pe__subitem">
+                <span className="pe__grow pe__padname">{part.mesh}</span>
+              </div>
+              <div className="pe__row">
+                <button type="button" className="pe__btn" disabled={busy} onClick={() => void link(true)}>
+                  Replace…
+                </button>
+                <button type="button" className="pe__btn" disabled={busy} onClick={unlink}>
+                  Unlink
+                </button>
+              </div>
+              {!mesh && (
+                <p className="pe__hint">
+                  {partsFolder
+                    ? `“${part.mesh}” is not a readable model in this part’s folder — link it again, or check that an .stl or .dae of that name sits beside parts.yml.`
+                    : 'A linked model can only be shown in the desktop app.'}
+                </p>
+              )}
+            </>
+          ) : (
+            <>
+              <p className="pe__hint">
+                No model linked. Picking one <strong>copies it into this part’s own folder</strong>, so the
+                model travels with the part when it is zipped, committed or published.
+              </p>
+              <div className="pe__row">
+                <button
+                  type="button"
+                  className="pe__btn pe__btn--primary"
+                  disabled={busy}
+                  onClick={() => void link(false)}
+                >
+                  Link a model…
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+
+        <section className="pe__section">
+          <h3 className="pe__h">Size</h3>
+          <div className="pe__row">
+            <label className="pe__num pe__grow">
+              <span>units</span>
+              <select
+                value={part.meshScale !== undefined ? 'custom' : (part.meshUnits ?? 'auto')}
+                onChange={(e) => {
+                  const v = e.target.value
+                  if (v === 'custom') patch({ meshScale: part.meshScale ?? 0.001, meshUnits: undefined })
+                  else if (v === 'mm' || v === 'm') patch({ meshUnits: v, meshScale: undefined })
+                  else patch({ meshUnits: undefined, meshScale: undefined })
+                }}
+              >
+                <option value="auto">auto (guess from size)</option>
+                <option value="mm">millimetres</option>
+                <option value="m">metres</option>
+                <option value="custom">custom scale</option>
+              </select>
+            </label>
+          </div>
+          {part.meshScale !== undefined && (
+            <div className="pe__row">
+              <label className="pe__num pe__grow">
+                <span>metres per unit</span>
+                <input
+                  type="number"
+                  step="0.0001"
+                  min="0"
+                  value={part.meshScale}
+                  onChange={(e) => {
+                    const n = Number(e.target.value)
+                    patch({ meshScale: Number.isFinite(n) && n > 0 ? n : undefined })
+                  }}
+                />
+              </label>
+            </div>
+          )}
+          <p className="pe__hint">
+            Model{' '}
+            {size ? (
+              <strong>
+                {mm(size[0])} × {mm(size[1])} × {mm(size[2])} mm
+              </strong>
+            ) : (
+              '—'
+            )}
+            {declared && declared.width > 0 && declared.height > 0 && (
+              <>
+                {' '}
+                · part {mm(declared.width)} × {mm(declared.height)} mm
+              </>
+            )}
+          </p>
+          {mismatch && (
+            <p className="pe__hint pe__meshwarn">
+              The model is a very different size from the part’s dimensions — check the units above.
+            </p>
+          )}
+        </section>
+
+        <section className="pe__section">
+          <h3 className="pe__h">Orientation</h3>
+          <p className="pe__hint">
+            Snakie’s convention is <strong>Z up</strong>, board flat in X/Y, underside resting on the grid.
+            Turn the model until it sits that way. Your file is never rewritten — the rotation is stored on
+            the part and applied everywhere the model is used.
+          </p>
+          {MESH_AXES.map(({ axis, label, hint }) => (
+            <div className="pe__row pe__subitem" key={axis} title={hint}>
+              <span className="pe__padname">{label}</span>
+              <button
+                type="button"
+                className="pe__btn"
+                onClick={() => nudge(axis, -90)}
+                aria-label={`Rotate the model 90 degrees anticlockwise about ${label}`}
+              >
+                −90°
+              </button>
+              <button
+                type="button"
+                className="pe__btn"
+                onClick={() => nudge(axis, 90)}
+                aria-label={`Rotate the model 90 degrees clockwise about ${label}`}
+              >
+                +90°
+              </button>
+              <label className="pe__num">
+                <span>deg</span>
+                <input
+                  type="number"
+                  step="1"
+                  value={rotation?.[AXIS_INDEX[axis]] ?? 0}
+                  onChange={(e) => {
+                    const n = Number(e.target.value)
+                    patch({
+                      meshRotation: setMeshRotationAxis(rotation, axis, Number.isFinite(n) ? n : 0)
+                    })
+                  }}
+                />
+              </label>
+            </div>
+          ))}
+          <div className="pe__row">
+            <span className="pe__grow pe__hint">Rotation: {formatMeshRotation(rotation)}</span>
+            <button
+              type="button"
+              className="pe__btn"
+              disabled={!rotation}
+              onClick={() => patch({ meshRotation: undefined })}
+            >
+              Reset
+            </button>
+          </div>
+        </section>
+
+        <section className="pe__section">
+          <h3 className="pe__h">Position</h3>
+          <p className="pe__hint">
+            An STL’s origin is wherever the exporter left it — often a corner of the build plate. Move the
+            model until it sits where the part needs it. The offset is applied <strong>after</strong> the
+            rotation, so a nudge always travels along the axis you press.
+          </p>
+
+          <div className="pe__row pe__subitem">
+            <span className="pe__padname">Step</span>
+            <div className="pe__meshsteps" role="group" aria-label="Nudge step">
+              {MESH_NUDGE_STEPS_MM.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  className={`pe__btn${stepMm === s ? ' pe__btn--primary' : ''}`}
+                  aria-pressed={stepMm === s}
+                  onClick={() => setStepMm(s)}
+                >
+                  {s} mm
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {MESH_MOVE_AXES.map(({ axis, label, hint }) => (
+            <div className="pe__row pe__subitem" key={axis} title={hint}>
+              <span className="pe__padname">{label}</span>
+              <button
+                type="button"
+                className="pe__btn"
+                onClick={() => move(axis, -stepMm)}
+                aria-label={`Move the model ${stepMm} millimetres in the negative ${label} direction`}
+              >
+                −{stepMm}
+              </button>
+              <button
+                type="button"
+                className="pe__btn"
+                onClick={() => move(axis, stepMm)}
+                aria-label={`Move the model ${stepMm} millimetres in the positive ${label} direction`}
+              >
+                +{stepMm}
+              </button>
+              <label className="pe__num">
+                <span>mm</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={offset?.[OFFSET_AXIS_INDEX[axis]] ?? 0}
+                  onChange={(e) => {
+                    const n = Number(e.target.value)
+                    patch({
+                      meshOffset: setMeshOffsetAxis(offset, axis, Number.isFinite(n) ? n : 0)
+                    })
+                  }}
+                />
+              </label>
+            </div>
+          ))}
+
+          <p className="pe__hint">
+            Or pick the feature that belongs at the origin — one end of each axis, or its middle. Three
+            picks name any <strong>corner</strong>, <strong>edge</strong>, <strong>face</strong> or the{' '}
+            <strong>centre</strong>. Snakie does the arithmetic; it never guesses which one you meant.
+          </p>
+          {MESH_MOVE_AXES.map(({ axis, label }) => (
+            <div className="pe__row pe__subitem" key={`anchor-${axis}`}>
+              <span className="pe__padname">{label}</span>
+              <div className="pe__meshsteps" role="group" aria-label={`Which end of ${label} snaps`}>
+                {ANCHOR_PICKS.map(({ value, label: pick }) => {
+                  const on = anchor[OFFSET_AXIS_INDEX[axis]] === value
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      className={`pe__btn${on ? ' pe__btn--primary' : ''}`}
+                      aria-pressed={on}
+                      onClick={() =>
+                        setAnchor((a) => {
+                          const next: MeshAnchor = [a[0], a[1], a[2]]
+                          next[OFFSET_AXIS_INDEX[axis]] = value as MeshAnchorAxis
+                          return next
+                        })
+                      }
+                    >
+                      {pick}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+          <div className="pe__row">
+            <button
+              type="button"
+              className="pe__btn pe__btn--primary pe__grow"
+              disabled={!measured?.boundsMm}
+              onClick={snap}
+              title={
+                measured?.boundsMm
+                  ? `Move the model so its ${describeAnchor(anchor)} sits at (0, 0, 0)`
+                  : 'Waiting for the 3-D view to measure the model'
+              }
+            >
+              Snap {describeAnchor(anchor)} to origin
+            </button>
+          </div>
+
+          <div className="pe__row">
+            <span className="pe__grow pe__hint">Offset: {formatMeshOffset(offset)}</span>
+            <button
+              type="button"
+              className="pe__btn"
+              disabled={!offset}
+              onClick={() => patch({ meshOffset: undefined })}
+            >
+              Reset
+            </button>
+          </div>
+        </section>
+      </div>
+
+      <div className="pe__preview">
+        <div className="pe__preview-head">
+          <span className="pe__preview-title">3-D model</span>
+          <button
+            type="button"
+            className="pe__btn"
+            onClick={() => setFitSignal((n) => n + 1)}
+            title="Re-frame the camera on the model"
+          >
+            Fit
+          </button>
+        </div>
+        <div className="pe__preview-stage">
+          {mesh ? (
+            <Suspense fallback={<div className="pe__hint">Loading the 3-D view…</div>}>
+              <PartMeshStage
+                path={mesh.path}
+                rotation={rotation}
+                offset={offset}
+                scaleMm={scaleMm}
+                dimensions={declared}
+                label={part.name || part.id}
+                onMeasured={setMeasured}
+                fitSignal={fitSignal}
+              />
+            </Suspense>
+          ) : (
+            <p className="pe__hint">
+              Link an STL (or DAE) on the left to see it here, at its real size against the part’s
+              footprint.
+            </p>
+          )}
+        </div>
+      </div>
     </>
   )
 }

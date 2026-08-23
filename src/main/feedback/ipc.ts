@@ -8,7 +8,7 @@ import { app, ipcMain } from 'electron'
  * widget — as a multipart/form-data submission, tagging the message with
  * `_SNAKIE_` so Snakie bugs are filterable from site feedback. Network access
  * lives in the MAIN process because the renderer's CSP forbids outbound requests
- * (mirrors packages/search.ts + parts/registry.ts): main-process `fetch`,
+ * (mirrors shared/packages/search.ts + parts/registry.ts): main-process `fetch`,
  * `AbortSignal.timeout`, and we NEVER throw — always return `{ ok, error? }`.
  *
  * AUTH: the website widget posts with a logged-in cookie, which a desktop app

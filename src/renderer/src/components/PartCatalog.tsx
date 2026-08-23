@@ -1,6 +1,15 @@
-import { useMemo, useState, useEffect, type JSX, type PointerEvent as ReactPointerEvent } from 'react'
+import { useRef, useLayoutEffect, useCallback, useMemo, useState, useEffect, type JSX, type PointerEvent as ReactPointerEvent } from 'react'
 import { groupByCategory } from './part-categories'
+import { PartFacetPanel } from './PartFacetPanel'
+import {
+  activeChips,
+  applyFilters,
+  buildFacets,
+  emptySelection,
+  toggleFacet
+} from './part-facets'
 import { useCoinFlip } from '../hooks/useCoinFlip'
+import { PartDetailsView } from './PartDetailsView'
 import { partHasRearImage } from '../../../shared/part'
 import type { PartDefinition, PartSide } from '../../../shared/part'
 import type { PartLibraryWithParts } from '../../../preload/index.d'
@@ -26,17 +35,75 @@ export interface CatalogItem {
 export interface PartCatalogProps {
   libraries: PartLibraryWithParts[]
   onClose: () => void
+  /** Viewport centre of the control that opened the catalog, so it can grow out
+   *  of it. Absent means no animation rather than one from an arbitrary corner. */
+  origin?: { x: number; y: number } | null
+  /** Play the closing animation. The caller keeps this mounted until it hears
+   *  {@link onClosed} — unmounting on the click leaves nothing to animate. */
+  closing?: boolean
+  /** The shrink has finished; safe to unmount. */
+  onClosed?: () => void
   /** Add every selected part to the project in one batch. */
   onAddMany: (items: CatalogItem[]) => void
 }
 
 const keyOf = (i: CatalogItem): string => `${i.libraryId}::${i.part.id}`
 
-export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps): JSX.Element {
+export function PartCatalog({ libraries, onClose, onAddMany, origin, closing, onClosed }: PartCatalogProps): JSX.Element {
+  // The panel is inset from the viewport, so the button's viewport position has
+  // to be re-expressed in the PANEL's own box before it can be a transform-origin.
+  // Measured rather than assumed: the inset is a CSS margin, and reading it back
+  // off the element keeps the two from drifting apart.
+  const panelRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const el = panelRef.current
+    if (!el || !origin) return
+    const r = el.getBoundingClientRect()
+    el.style.setProperty('--pcat-ox', `${origin.x - r.left}px`)
+    el.style.setProperty('--pcat-oy', `${origin.y - r.top}px`)
+  }, [origin])
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [query, setQuery] = useState('')
   // Which library to show — 'all' (de-duped) or a single library id.
   const [libraryId, setLibraryId] = useState<string>('all')
+  // The part whose full details are open (#748), or null for the grid. A DETOUR:
+  // the details render OVER the grid, which stays mounted, so closing them
+  // restores the selection, the filters and the scroll position by never having
+  // torn them down.
+  const [details, setDetails] = useState<CatalogItem | null>(null)
+  // Where the details should look like they grew from — the disclosure's centre,
+  // relative to the panel. Kept beside `details` rather than inside it so the
+  // existing reads stay put; it is presentation, not identity.
+  const [detailsOrigin, setDetailsOrigin] = useState<{ x: number; y: number } | null>(null)
+  // Closing runs the grow backwards, so the view has to OUTLIVE the click that
+  // dismissed it — unmount on click and there is nothing left to animate.
+  const [closingDetails, setClosingDetails] = useState(false)
+  const openDetails = (item: CatalogItem, from: { x: number; y: number } | null): void => {
+    setClosingDetails(false)
+    setDetailsOrigin(from)
+    setDetails(item)
+  }
+  const dropDetails = useCallback((): void => {
+    setClosingDetails(false)
+    setDetails(null)
+  }, [])
+  // Insurance. The unmount hangs off `animationend`, and if that never arrives —
+  // the element hidden mid-flight, a browser quirk — the details would be stuck
+  // on screen AND unclickable (the closing state takes pointer events off). A
+  // dismissal must never be able to strand the user, so time it out regardless.
+  useEffect(() => {
+    if (!closingDetails) return
+    const t = setTimeout(dropDetails, 450)
+    return () => clearTimeout(t)
+  }, [closingDetails, dropDetails])
+
+  const closeDetails = useCallback((): void => {
+    // Nothing to shrink back INTO without an origin, and a stated preference for
+    // less motion means go straight there.
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (!detailsOrigin || still) dropDetails()
+    else setClosingDetails(true)
+  }, [detailsOrigin, dropDetails])
 
   // De-dupe the libraries by id, and list LOCAL (user) libraries first so their
   // part wins a duplicate-id tie in the "All libraries" view.
@@ -46,14 +113,18 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
     return [...byId.values()].sort((a, b) => (a.source === 'local' ? 0 : 1) - (b.source === 'local' ? 0 : 1))
   }, [libraries])
 
-  // Esc closes the catalog.
+  // Esc backs out one step: out of a part's details first, then the catalog. Esc
+  // from the details view has to land you back in the grid you were browsing —
+  // closing both would throw away the selection you opened the details to make.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose()
+      if (e.key !== 'Escape') return
+      if (details) closeDetails()
+      else onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [onClose, details, closeDetails])
 
   // Every part across every library, flattened, carrying its library id + the
   // family/name the category grouping reads.
@@ -74,19 +145,24 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
   }, [allItems, libraryId])
 
   const q = query.trim().toLowerCase()
-  const filtered = useMemo(() => {
-    if (!q) return visibleItems
-    return visibleItems.filter(({ part }) => {
-      const hay = [part.name, part.description, part.family, part.partNumber, ...(part.tags ?? [])]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-      return hay.includes(q)
-    })
-  }, [visibleItems, q])
+  // Facets (#740) — type / manufacturer / tag, ANDed with the search box. This
+  // is the full-screen view, which has the room for them; the docked panel
+  // deliberately does not show them.
+  const [facetSel, setFacetSel] = useState(emptySelection)
+  const [showAllTags, setShowAllTags] = useState(false)
+  const facets = useMemo(() => buildFacets(visibleItems, facetSel, q), [visibleItems, facetSel, q])
+  const filtered = useMemo(
+    () => applyFilters(visibleItems, facetSel, q),
+    [visibleItems, facetSel, q]
+  )
 
   // Group the filtered parts into shelves by category (same order as the panel).
   const shelves = useMemo(() => groupByCategory(filtered), [filtered])
+  // Shelves are for BROWSING. Once a filter is on — a facet or the search box —
+  // the result set is the answer, and re-sectioning it fights the sidebar that
+  // already breaks the same parts down by type: filtering to one tag could leave
+  // five parts across four headings, three of them holding a single card (#747).
+  const filtering = q.length > 0 || activeChips(facetSel).length > 0
 
   const toggle = (i: CatalogItem): void =>
     setSelected((prev) => {
@@ -108,7 +184,15 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
   return (
     <div className="pcat" role="dialog" aria-modal="true" aria-label="Parts catalog">
       <div className="pcat__backdrop" onClick={onClose} aria-hidden />
-      <div className="pcat__panel">
+      <div
+        className={`pcat__panel${closing ? ' is-closing' : origin ? ' is-growing' : ''}`}
+        ref={panelRef}
+        // Only the panel's OWN animation ends the close: the details view and
+        // the card flips animate inside it and bubble their events up here.
+        onAnimationEnd={(e) => {
+          if (closing && e.target === e.currentTarget) onClosed?.()
+        }}
+      >
         <header className="pcat__head">
           <span className="pcat__title">Parts Catalog</span>
           {libs.length > 1 && (
@@ -147,27 +231,81 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
           </button>
         </header>
 
-        <div className="pcat__shelves">
-          {shelves.length === 0 && <div className="pcat__empty">No parts match “{query}”.</div>}
-          {shelves.map((shelf) => (
-            <section className="pcat__shelf" key={shelf.category}>
-              <h3 className="pcat__shelf-name">
-                {shelf.category}
-                <span className="pcat__shelf-count">{shelf.items.length}</span>
-              </h3>
+        {/* Sidebar + results, Printables-style: the filters stand in their own
+            column so the grid keeps its full width and the facet list can be as
+            long as it likes without pushing the parts down the page. */}
+        <div className="pcat__body">
+          <aside className="pcat__sidebar">
+            <PartFacetPanel
+              facets={facets}
+              chips={activeChips(facetSel)}
+              showAllTags={showAllTags}
+              onToggleShowAll={() => setShowAllTags((v) => !v)}
+              onToggle={(axis, value) => setFacetSel((sel) => toggleFacet(sel, axis, value))}
+              onClear={() => setFacetSel(emptySelection())}
+              total={filtered.length}
+            />
+          </aside>
+
+          <div className="pcat__shelves">
+            {filtered.length === 0 && (
+              <div className="pcat__empty">
+                {query ? `No parts match “${query}”.` : 'No parts match these filters.'}
+              </div>
+            )}
+            {/* Filtered ⇒ ONE grid. The card carries the type the shelf heading
+                used to supply, so collapsing loses nothing. */}
+            {filtering && filtered.length > 0 && (
               <div className="pcat__grid">
-                {shelf.items.map((item) => (
+                {filtered.map((item) => (
                   <CatalogCard
                     key={keyOf(item)}
                     item={item}
                     checked={selected.has(keyOf(item))}
                     onToggle={() => toggle(item)}
+                    onOpen={(from) => openDetails(item, from)}
+                    showType
                   />
                 ))}
               </div>
-            </section>
-          ))}
+            )}
+            {!filtering &&
+              shelves.map((shelf) => (
+              <section className="pcat__shelf" key={shelf.category}>
+                <h3 className="pcat__shelf-name">
+                  {shelf.category}
+                  <span className="pcat__shelf-count">{shelf.items.length}</span>
+                </h3>
+                <div className="pcat__grid">
+                  {shelf.items.map((item) => (
+                    <CatalogCard
+                      key={keyOf(item)}
+                      item={item}
+                      checked={selected.has(keyOf(item))}
+                      onToggle={() => toggle(item)}
+                      onOpen={(from) => openDetails(item, from)}
+                    />
+                  ))}
+                </div>
+                </section>
+              ))}
+          </div>
         </div>
+
+        {/* A part's full details, over the grid rather than instead of it (#748). */}
+        {details && (
+          <PartDetailsView
+            key={keyOf(details)}
+            libraryId={details.libraryId}
+            part={details.part}
+            selected={selected.has(keyOf(details))}
+            onToggleSelected={() => toggle(details)}
+            origin={detailsOrigin}
+            closing={closingDetails}
+            onClosed={dropDetails}
+            onClose={closeDetails}
+          />
+        )}
       </div>
     </div>
   )
@@ -177,14 +315,20 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
 function CatalogCard({
   item,
   checked,
-  onToggle
+  onToggle,
+  onOpen,
+  showType = false
 }: {
   item: CatalogItem
   checked: boolean
   onToggle: () => void
+  /** Open this part's full details (#748) — the hover disclosure. */
+  onOpen: (from: { x: number; y: number } | null) => void
+  /** Show the part's type on the card. Set in the FLAT (filtered) grid, where
+   *  there is no shelf heading saying it (#747). */
+  showType?: boolean
 }): JSX.Element {
   const { part } = item
-  const sku = part.partNumber || part.id
   // Hover turns the board over — but only when there is a back to SEE. A part
   // with rear pins and no rear photo would spin to a blank face, which reads as
   // the image failing to load.
@@ -209,6 +353,9 @@ function CatalogCard({
           <path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </span>
+      <div className="pcat__card-top">
+        <span className="pcat__card-name">{part.name}</span>
+      </div>
       <div className={`pcat__card-img${flipping ? ' is-flipping' : ''}`}>
         {shown ? (
           <img src={shown} alt="" draggable={false} />
@@ -217,19 +364,39 @@ function CatalogCard({
             {(part.name || '?').slice(0, 2).toUpperCase()}
           </span>
         )}
+        {/* The disclosure (#748): revealed on hover, its OWN hit area. A click here
+            must open the details and NOT tick the card — it is nested in the label
+            that IS the checkbox, so it stops the event dead rather than trusting
+            the browser's "interactive descendant" rule to do it. */}
+        <button
+          type="button"
+          className="pcat__more"
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            // Measure the button against the PANEL, not the viewport: the details
+            // are absolutely positioned inside the panel, so that is the box its
+            // transform-origin is expressed in.
+            const b = e.currentTarget.getBoundingClientRect()
+            const panel = e.currentTarget.closest('.pcat__panel')?.getBoundingClientRect()
+            onOpen(
+              panel
+                ? { x: b.left + b.width / 2 - panel.left, y: b.top + b.height / 2 - panel.top }
+                : null
+            )
+          }}
+          title={`More about ${part.name}`}
+          aria-label={`More about ${part.name}`}
+        >
+          <svg viewBox="0 0 24 24" className="pcat__more-i" aria-hidden="true" focusable="false">
+            <path d="M6 9l6 7 6-7z" fill="currentColor" />
+          </svg>
+        </button>
       </div>
       <div className="pcat__card-body">
-        <div className="pcat__card-top">
-          <span className="pcat__card-name">{part.name}</span>
-          <span className="pcat__card-sku">{sku}</span>
-        </div>
+        {showType && part.family && <div className="pcat__card-type">{part.family}</div>}
         {part.description && <div className="pcat__card-desc">{part.description}</div>}
       </div>
-      {rearImage && (
-        <span className="pcat__card-face" aria-hidden="true">
-          {face === 'rear' ? 'BACK' : 'FRONT'}
-        </span>
-      )}
     </label>
   )
 }

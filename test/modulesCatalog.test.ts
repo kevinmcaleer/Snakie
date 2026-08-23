@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   MODULES,
   MODULE_PRESENT,
@@ -8,7 +10,9 @@ import {
   installPathFor,
   moduleById,
   modulesForInstrument,
-  type InstrumentId
+  parseModuleVersion,
+  type InstrumentId,
+  type ModuleDef
 } from '../src/shared/modules-catalog'
 
 /**
@@ -42,11 +46,16 @@ describe('MODULES catalog shape', () => {
     }
   })
 
-  it('bundled modules ship a .py file + a licence; mip modules carry a spec', () => {
+  it('every source kind carries what its installer needs to resolve it', () => {
     for (const m of MODULES) {
       if (m.source.kind === 'bundled') {
         expect(m.source.file.endsWith('.py')).toBe(true)
         expect(m.license).toBeTruthy()
+      } else if (m.source.kind === 'bundle') {
+        // An Adafruit bundle library is named ONCE: the bundle's index key is
+        // also the import name, and the install probes by import (#758).
+        expect(m.source.module.length).toBeGreaterThan(0)
+        expect(m.importName).toBe(m.source.module)
       } else {
         expect(m.source.spec.length).toBeGreaterThan(0)
       }
@@ -107,7 +116,9 @@ describe('groupByInstrument', () => {
 
   it('keeps per-instrument catalog order within a group', () => {
     const display = groupByInstrument().find((g) => g.instrument === 'i2c-display')
-    expect(display?.modules.map((m) => m.id)).toEqual(['ssd1306', 'sh1106'])
+    // The MicroPython drivers first, then the CircuitPython one (#758) — the
+    // group holds both runtimes' drivers, and the manager filters by dialect.
+    expect(display?.modules.map((m) => m.id)).toEqual(['ssd1306', 'sh1106', 'cp-ssd1306'])
   })
 })
 
@@ -204,5 +215,72 @@ describe('panel-less drivers (#638)', () => {
     for (const i of ['imu', 'range', 'led', 'motor'] as InstrumentId[]) {
       for (const m of modulesForInstrument(i)) expect(m.instrument).toBe(i)
     }
+  })
+})
+
+describe('bundled driver versioning (#707)', () => {
+  const bundled = MODULES.filter(
+    (m): m is ModuleDef & { source: { kind: 'bundled'; file: string; version: string } } =>
+      m.source.kind === 'bundled'
+  )
+
+  it('every bundled module declares a version', () => {
+    expect(bundled.length).toBeGreaterThan(0)
+    for (const m of bundled) expect(m.source.version).toMatch(/^\d+\.\d+\.\d+$/)
+  })
+
+  it("every shipped .py carries a __version__ that MATCHES the catalog's", () => {
+    // THE guard: the catalog-declared version is what board copies are compared
+    // against, and the .py is what boards receive — if they drift, every board
+    // reads as permanently outdated (or a real update is never offered). This
+    // also forces the bump discipline: editing a driver without bumping BOTH
+    // fails here.
+    for (const m of bundled) {
+      const src = readFileSync(
+        join(__dirname, '..', 'micropython', 'modules', m.source.file),
+        'utf-8'
+      )
+      expect(parseModuleVersion(src), `${m.source.file} __version__`).toBe(m.source.version)
+    }
+  })
+})
+
+describe('parseModuleVersion (#707)', () => {
+  it('reads the literal from full source or a single readFileLine line', () => {
+    expect(parseModuleVersion('__version__ = "1.2.3"')).toBe('1.2.3')
+    expect(parseModuleVersion("__version__ = '1.2.3'")).toBe('1.2.3')
+    expect(parseModuleVersion('import x\n__version__ = "0.4.0"\nY = 1')).toBe('0.4.0')
+  })
+
+  it('never matches a __version__ example inside a comment', () => {
+    expect(parseModuleVersion('# keep the `__version__ = "X.Y.Z"` form\n__version__ = "2.0.0"')).toBe(
+      '2.0.0'
+    )
+  })
+
+  it('is null for empty / absent input (a legacy copy predating versioning)', () => {
+    expect(parseModuleVersion('')).toBeNull()
+    expect(parseModuleVersion(null)).toBeNull()
+    expect(parseModuleVersion('X = 1')).toBeNull()
+  })
+})
+
+describe('diffInstalled with outdated copies (#707)', () => {
+  it('an importable name in the outdated set reads outdated, not installed', () => {
+    const out = diffInstalled(new Set(['lsm6ds3', 'hcsr04']), true, MODULES, new Set(['lsm6ds3']))
+    expect(out['lsm6ds3']).toBe('outdated')
+    expect(out['hcsr04']).toBe('installed')
+  })
+
+  it('outdated never applies to a name that did not probe importable', () => {
+    // The freshness probe only runs against importable modules, but the diff
+    // must not trust that: a stray name in the outdated set is not on the board.
+    const out = diffInstalled(new Set(), true, MODULES, new Set(['lsm6ds3']))
+    expect(out['lsm6ds3']).toBe('available')
+  })
+
+  it('disconnected still reads unknown regardless of the outdated set', () => {
+    const out = diffInstalled(new Set(['lsm6ds3']), false, MODULES, new Set(['lsm6ds3']))
+    expect(out['lsm6ds3']).toBe('unknown')
   })
 })

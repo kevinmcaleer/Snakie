@@ -2,10 +2,15 @@
  * SHARED PART-DRIVER INSTALLER — the one sequence that puts a part's declared
  * {@link DriverFile} onto the connected board, used by BOTH the Board View's
  * Driver Install banner (#184) and the main editor's missing-library banner
- * (#166): a `mip` spec installs via the package manager; anything else (a
- * bundled filename or an http(s) URL) is read via `parts.readDriverSource` in
- * main (past the renderer CSP) and copied to its target path, creating each
- * ancestor folder first (MicroPython has no recursive mkdir).
+ * (#166).
+ *
+ * Every route ends in the same place — files written to the board — because the
+ * board has no internet connection of its own (#776). A `mip` spec is
+ * downloaded by the package installer; a catalog `module:` id goes through the
+ * module installer; anything else (a bundled filename or an http(s) URL) is
+ * read via `parts.readDriverSource` in main (past the renderer CSP) and copied
+ * to its target path, creating each ancestor folder first (MicroPython has no
+ * recursive mkdir).
  */
 import { driverDeviceDirs, driverInstallMethod, driverModuleId } from './part-editor.util'
 import { moduleById } from '../../../shared/modules-catalog'
@@ -43,7 +48,11 @@ export async function installPartDriver(
       const res = await window.api.packages.install(d.source, target ? { target } : undefined)
       return res.ok
         ? { ok: true }
-        : { ok: false, message: res.log.split('\n').filter(Boolean).pop() || 'mip failed' }
+        : {
+            ok: false,
+            message:
+              res.log.split('\n').filter(Boolean).pop() || `Could not install ${d.source}.`
+          }
     }
     // copy: read the file (bundled file or URL, via main) then write to target.
     const read = await window.api.parts.readDriverSource(libraryId, partId, d.source)

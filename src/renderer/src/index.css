@@ -187,6 +187,11 @@
   --blueprint: #16324a;
   --bpline: rgba(220, 235, 245, 0.07);
   --bptext: #cfe4f0;
+  /* Blueprint chrome's card, alongside its ink. Deliberately the SAME in both
+     skins: this surface reads over the blue board mat, not over the app's
+     background, so it is theme-neutral like the mini board (#181). */
+  --bpsurface: rgba(12, 20, 28, 0.82);
+  --bpedge: rgba(220, 235, 245, 0.16);
   --pin-power: #d4553f;
   --pin-gpio: #d9a441;
   --pin-gnd: #e8ecef;
@@ -236,6 +241,11 @@
   --blueprint: #1f4e6b;
   --bpline: rgba(220, 235, 245, 0.09);
   --bptext: #cfe4f0;
+  /* Blueprint chrome's card, alongside its ink. Deliberately the SAME in both
+     skins: this surface reads over the blue board mat, not over the app's
+     background, so it is theme-neutral like the mini board (#181). */
+  --bpsurface: rgba(12, 20, 28, 0.82);
+  --bpedge: rgba(220, 235, 245, 0.16);
   --pin-power: #d4553f;
   --pin-gpio: #d9a441;
   --pin-gnd: #e8ecef;
@@ -2709,11 +2719,23 @@ body {
   min-height: 0;
 }
 
+/* Each split pane. `overflow: hidden` is not a choice — react-resizable-panels
+   writes `overflow: hidden` as an INLINE style on every Panel ("without this,
+   Panel sizes may be unintentionally overridden by their content"), and an
+   inline style outranks a class rule, so the `overflow: auto` that used to be
+   here never applied and both lists were simply CLIPPED at the pane edge (#796).
+   Stated explicitly so nobody re-adds `auto` and assumes it works.
+
+   The scroll therefore lives INSIDE each pane — `.outline__list` /
+   `.vars__list` — exactly as the Files view does it (`.filepanel__pane` over
+   `.localtree__tree`). Each panel's root is a flex column at `height: 100%`, its
+   header/toolbar is `flex: 0 0 auto`, and its list is `flex: 1 1 auto` with
+   `min-height: 0` so it is ALLOWED to shrink below its content and scroll. */
 .inspectpanel__section {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
 }
 
 /* --------------------------------------------------------------------------

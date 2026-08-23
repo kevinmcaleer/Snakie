@@ -3,6 +3,7 @@ import './PackagesPanel.css'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
 import { parsePyImports } from './part-imports'
+import { delScratch } from '../../../shared/device-scratch'
 import { isNewerVersion } from '../../../shared/version-compare'
 import {
   libEntryToPackage,
@@ -23,10 +24,15 @@ import type { InstallProgress, PackageInfo } from '../../../preload/index.d'
  * libraries, expose advanced options (overwrite / custom index URL / .mpy), and
  * NEVER kick the user out to another app.
  *
- * Network access (PyPI search + discovery) is brokered by the main process
- * (`window.api.packages`) because the renderer CSP forbids outbound requests.
- * Installs run MicroPython's `mip` on the connected board, so the install
- * controls are gated on an active connection with a clear hint otherwise.
+ * Network access (PyPI search + discovery) goes through `window.api.packages`,
+ * which on the desktop is brokered by the main process because the renderer CSP
+ * forbids outbound requests. Installing downloads the package there too and
+ * writes its files to the board (#776) — the board has no internet connection
+ * of its own, so it never fetches anything. In the web build the same API is
+ * served by `web/web-packages.ts`, where the page itself is the host and can
+ * only reach the origins its CSP allows (see `web/web-hosts.ts`). The install
+ * controls are still gated on an active connection (there has to be somewhere
+ * to write) with a clear hint otherwise.
  *
  * Hardware + network can't be exercised in CI, so every async path degrades
  * gracefully: search falls back to the curated set offline, and install surfaces
@@ -209,10 +215,15 @@ function PackagesTab(): JSX.Element {
     let active = true
     // os.statvfs -> (f_bsize, f_frsize, f_blocks, f_bfree, f_bavail, ...).
     // total = f_frsize * f_blocks; used = total - (f_frsize * free blocks).
-    const snippet =
-      "import os\n" +
-      "s=os.statvfs('/')\n" +
-      "print(s[1]*s[2], s[1]*(s[2]-(s[4] if s[4] else s[3])))"
+    // `_snk_s` rather than a bare `s`: this polls, so a plain name would sit in
+    // the board's globals between runs and show up in Inspect as the user's own
+    // variable (#798). `delScratch` unbinds it once the figures are printed.
+    const snippet = [
+      'import os',
+      "_snk_s=os.statvfs('/')",
+      'print(_snk_s[1]*_snk_s[2], _snk_s[1]*(_snk_s[2]-(_snk_s[4] if _snk_s[4] else _snk_s[3])))',
+      delScratch('_snk_s')
+    ].join('\n')
     window.api.device
       .eval(snippet)
       .then((out) => {
@@ -505,6 +516,18 @@ function PackagesTab(): JSX.Element {
         </p>
       )}
 
+      {/* This tab searches micropython-lib and PyPI — MicroPython's library
+          world. CircuitPython's is the Adafruit bundle, and its libraries are
+          not here and would not import if they were. Rather than hide the tab,
+          say where a CircuitPython user should actually be looking (#758). */}
+      {connected && status.runtime?.dialect === 'circuitpython' && (
+        <p className="pkgs__hint pkgs__hint--dialect" role="status">
+          This board runs <strong>CircuitPython</strong>. These are MicroPython packages — most
+          won&rsquo;t import on it. CircuitPython libraries come from the Adafruit bundle: install
+          them from the <strong>Modules</strong> panel.
+        </p>
+      )}
+
       <details
         className="pkgs__advanced"
         open={showAdvanced}
@@ -575,7 +598,7 @@ function PackagesTab(): JSX.Element {
                     className="pkgs__chip"
                     disabled={installs[name]?.status === 'installing'}
                     onClick={() => void install(name)}
-                    title={`Install ${name} with mip`}
+                    title={`Download ${name} and copy it to the board`}
                   >
                     {installs[name]?.status === 'installing' ? `${name}…` : `+ ${name}`}
                   </button>

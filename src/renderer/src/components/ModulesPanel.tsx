@@ -4,15 +4,18 @@ import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import {
   groupByInstrument,
   MODULES,
+  modulesForDialect,
   type InstrumentId,
   type ModuleDef
 } from '../../../shared/modules-catalog'
+import { DIALECT_LABEL } from '../../../shared/dialect'
 import {
   buildRowStatuses,
   countStatuses,
   rowAction,
   type ModuleInstallUiState
 } from '../lib/modulesManager'
+import { probeOutdatedModules } from '../lib/moduleFreshness'
 import type { ModuleInstallProgress } from '../../../preload/index.d'
 
 /**
@@ -26,10 +29,11 @@ import type { ModuleInstallProgress } from '../../../preload/index.d'
  * progress + inline errors.
  *
  * Mechanism (all via `window.api.modules`, mirroring the Packages tab): the main
- * process resolves a per-module install plan (a bundled `.py`'s contents, or a
- * `mip` snippet) and the install runs over the existing serialized device
- * channel. Already-installed detection is a cheap `import <name>` probe on the
- * board (`probeInstalled`) — re-run on connect + after each install.
+ * process resolves a per-module install plan — a bundled `.py`'s contents, or an
+ * upstream package downloaded there (#776) — and the files are written over the
+ * existing serialized device channel. Already-installed detection is a cheap
+ * `import <name>` probe on the board (`probeInstalled`) — re-run on connect +
+ * after each install.
  *
  * Hardware can't be exercised in CI, so every async path degrades gracefully:
  * the probe falls back to "available" when disconnected, and installs surface
@@ -52,13 +56,29 @@ const INSTRUMENT_TITLES: Record<InstrumentId, string> = {
   motor: 'Motor Driver'
 }
 
+/** What the source badge on a row says, per source kind (#758). */
+function sourceLabel(def: ModuleDef): string {
+  if (def.source.kind === 'bundled') return `bundled · ${def.license ?? 'stub'}`
+  if (def.source.kind === 'bundle') return 'Adafruit bundle'
+  return 'mip'
+}
+
 export function ModulesPanel(): JSX.Element {
   const status = useDeviceStatus()
   const connected = status.state === 'connected'
+  // Which runtime the board is running (#752). It decides which HALF of the
+  // catalog is shown: a MicroPython board can't import an Adafruit `.mpy`, and a
+  // CircuitPython board can't run a `machine`-based stub, so offering either the
+  // other's drivers would be an INSTALL button that could only ever fail (#758).
+  const dialect = connected ? status.runtime?.dialect : undefined
+  const catalog = useMemo(() => modulesForDialect(dialect, MODULES), [dialect])
 
   // The set of import-names found present on the board (the probe result). Empty
   // until/unless a probe runs; reset on disconnect.
   const [installedNames, setInstalledNames] = useState<ReadonlySet<string>>(new Set())
+  // The subset of those whose /lib copy read back STALE against the shipped
+  // version (#707) — their rows offer UPDATE instead of the INSTALLED stamp.
+  const [outdatedNames, setOutdatedNames] = useState<ReadonlySet<string>>(new Set())
   const [probing, setProbing] = useState(false)
 
   // Per-module in-flight install transitions, keyed by catalog id.
@@ -67,30 +87,42 @@ export function ModulesPanel(): JSX.Element {
   const installDone = Object.values(installs).filter((s) => s.status === 'done').length
 
   // Probe the board for already-installed modules: on connect, and after each
-  // successful install. Tolerant of any device error (clears to empty set).
+  // successful install. A bundled module found importable is then checked for
+  // FRESHNESS against the shipped version (#707) — presence alone let a stale
+  // driver read as installed for ever. Tolerant of any device error (clears to
+  // empty sets).
   useEffect(() => {
     if (!connected) {
       setInstalledNames(new Set())
+      setOutdatedNames(new Set())
       return
     }
     let active = true
     setProbing(true)
-    const names = MODULES.map((m) => m.importName)
-    window.api.modules
-      .probeInstalled(names)
-      .then((found) => {
-        if (active) setInstalledNames(new Set(found))
-      })
-      .catch(() => {
-        if (active) setInstalledNames(new Set())
-      })
-      .finally(() => {
+    const names = catalog.map((m) => m.importName)
+    void (async (): Promise<void> => {
+      try {
+        const found = new Set(await window.api.modules.probeInstalled(names))
+        const stale = await probeOutdatedModules(
+          catalog.filter((m) => found.has(m.importName))
+        ).catch(() => new Set<string>())
+        if (active) {
+          setInstalledNames(found)
+          setOutdatedNames(stale)
+        }
+      } catch {
+        if (active) {
+          setInstalledNames(new Set())
+          setOutdatedNames(new Set())
+        }
+      } finally {
         if (active) setProbing(false)
-      })
+      }
+    })()
     return () => {
       active = false
     }
-  }, [connected, installDone])
+  }, [catalog, connected, installDone])
 
   const install = useCallback(async (def: ModuleDef): Promise<void> => {
     setInstalls((prev) => ({
@@ -123,12 +155,12 @@ export function ModulesPanel(): JSX.Element {
     }
   }, [])
 
-  const groups = useMemo(() => groupByInstrument(), [])
+  const groups = useMemo(() => groupByInstrument(catalog), [catalog])
   const statuses = useMemo(
-    () => buildRowStatuses(MODULES, installedNames, connected, installs),
-    [installedNames, connected, installs]
+    () => buildRowStatuses(catalog, installedNames, connected, installs, outdatedNames),
+    [catalog, installedNames, connected, installs, outdatedNames]
   )
-  const counts = useMemo(() => countStatuses(MODULES, statuses), [statuses])
+  const counts = useMemo(() => countStatuses(catalog, statuses), [catalog, statuses])
 
   const renderTag = (def: ModuleDef): JSX.Element => {
     const st = statuses[def.id] ?? 'available'
@@ -142,7 +174,13 @@ export function ModulesPanel(): JSX.Element {
           type="button"
           className="mods__key"
           disabled={!connected || st === 'installing'}
-          title={connected ? `Install ${def.name}` : 'Connect a board first'}
+          title={
+            connected
+              ? st === 'outdated'
+                ? `An older copy of ${def.name} is on the board — update it`
+                : `Install ${def.name}`
+              : 'Connect a board first'
+          }
           onClick={() => void install(def)}
         >
           {actionable && !connected ? 'INSTALL' : label}
@@ -173,9 +211,7 @@ export function ModulesPanel(): JSX.Element {
             </div>
           )}
           <div className="mods__tag-foot">
-            <span className="mods__src">
-              {def.source.kind === 'bundled' ? `bundled · ${def.license ?? 'stub'}` : 'mip'}
-            </span>
+            <span className="mods__src">{sourceLabel(def)}</span>
             {action}
           </div>
         </div>
@@ -200,7 +236,20 @@ export function ModulesPanel(): JSX.Element {
       {!connected && (
         <p className="mods__hint" role="status">
           Connect a board to install modules and detect what&rsquo;s already on it.
-          You can still browse the catalog below.
+          You can still browse the catalog below — for both MicroPython and CircuitPython.
+        </p>
+      )}
+
+      {/* Say WHY the list got shorter. Silently hiding half the catalog when a
+          board connects would read as a bug; naming the runtime and where its
+          libraries come from turns it into an explanation (#758). */}
+      {connected && dialect && dialect !== 'unknown' && (
+        <p className="mods__hint mods__hint--dialect" role="status">
+          Showing <strong>{DIALECT_LABEL[dialect]}</strong> drivers, because that is what this
+          board runs.{' '}
+          {dialect === 'circuitpython'
+            ? 'They come from the Adafruit CircuitPython Library Bundle, matched to the board’s CircuitPython version.'
+            : 'CircuitPython’s Adafruit-bundle libraries won’t import here, so they are hidden.'}
         </p>
       )}
 

@@ -5,13 +5,12 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { AnaglyphEffect } from 'three/examples/jsm/effects/AnaglyphEffect.js'
 import { StereoEffect } from 'three/examples/jsm/effects/StereoEffect.js'
 import { useLocalStorage } from '../hooks/useLocalStorage'
-import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
-import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js'
 import URDFLoader from 'urdf-loader'
 import type { URDFRobot } from 'urdf-loader'
 import { useWorkspace } from '../store/workspace'
 import { useWorkspaceLayout } from '../store/layout'
-import { baseName, dirname, meshKind } from './robot-mesh'
+import { baseName, dirname } from './robot-mesh'
+import { loadMeshObject, measureMeshFile, placeholderMesh } from './robot-mesh-load'
 import {
   type JointMeta,
   type NamedPoseLike,
@@ -37,6 +36,7 @@ import {
   jointNames,
   jointDisplayLimits,
   looseLinks,
+  effectiveBaseLink as computeBaseLink,
   parseAssembly,
   readAllJoints,
   readJoint,
@@ -61,9 +61,12 @@ import {
   type JointDef,
   type JointSpec,
   type JointType,
-  type PrimitiveGeom
+  type PrimitiveGeom,
+  meshImportScale
 } from './robot-assembly'
 import { canReRoot, reRoot } from './robot-reroot'
+import { resolveUrdfWriteTarget } from './urdf-target'
+import { writeUrdfDocument } from './robot-part-mesh'
 import { createBoneMode, duplicateNames, type BoneModeHandle } from './robot-bone-mode'
 import { createComOverlay, poseBalance, type ComOverlayHandle, type ComStatus } from './robot-com-overlay'
 import { readLinkMasses } from './robot-com'
@@ -166,12 +169,13 @@ import {
   kgToGrams,
   mmToM,
   mToMm,
-  summariseMass,
   DEFAULT_MATERIAL,
   DEFAULT_INFILL,
-  type MassEstimate,
-  type MassBreakdown
+  type MassEstimate
 } from './robot-mass'
+import { useHierarchy } from './use-hierarchy'
+import { useHierarchySelection } from './hierarchy-selection'
+import { findHierarchyNode, flattenHierarchy } from './hierarchy-tree'
 import type { MassEditorProps, ContactsEditorProps } from './RobotPropertiesDialog'
 import type { MeshTriangles } from './robot-mass-geometry'
 import { addContact, removeContact, setContact } from './robot-contacts'
@@ -210,6 +214,15 @@ export interface RobotViewProps {
   /** URDF text to render. When omitted, the active editor file is used (opening
    *  a `.urdf`). Provided directly by the docked Robot-mode panel (#320). */
   urdfContent?: string
+  /**
+   * The FILE `urdfContent` was read from — where an edit to it must be written
+   * (#782). A view handed its text is editing the PROJECT's robot, not the
+   * focused editor tab, and writing the model back through `activeFile` is what
+   * replaced a user's `.py` with generated URDF. Absent/null with a
+   * `urdfContent` (e.g. the bundled demo arm) means "no file" and every builder
+   * edit is refused rather than redirected somewhere plausible.
+   */
+  urdfPath?: string | null
   /** The URDF's folder — the base for resolving relative / `package://` mesh
    *  refs. When omitted it's derived from the active local file's path. */
   basePath?: string
@@ -222,16 +235,7 @@ export interface RobotViewProps {
 }
 
 /** A neutral material for a mesh (e.g. STL) that carries no URDF `<material>`. */
-function neutralMaterial(): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({ color: 0x9aa0a6, metalness: 0.1, roughness: 0.85 })
-}
 
-/** A small wireframe cube standing in for a mesh that failed to load (#319). */
-function placeholderMesh(material: THREE.Material | null): THREE.Mesh {
-  const mat =
-    material ?? new THREE.MeshStandardMaterial({ color: 0xb4544e, wireframe: true })
-  return new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.04), mat)
-}
 
 /** The `urdfName` of the URDFLink an object belongs to, or null (#555). */
 function ownerLink(obj: THREE.Object3D | null): string | null {
@@ -331,6 +335,7 @@ const STEREO_DEPTH_DEFAULT = 0.064
 
 export function RobotView({
   urdfContent,
+  urdfPath,
   basePath,
   compact = false,
   homeOnMount = false
@@ -341,11 +346,32 @@ export function RobotView({
   const { openFiles, activeId, currentFolder, updateContent, saveFile, openBuffer, openFile } =
     useWorkspace()
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
-  const content = urdfContent ?? activeFile?.content ?? ''
+  // Optimistic text for a FILE-target edit (#782): the disk write comes back to
+  // us through a fresh `urdfContent` a moment later, so hold our own version in
+  // the meantime or the next edit would build on the pre-edit document. Any new
+  // `urdfContent` — ours returning, or another window's write — retires it.
+  const [localUrdf, setLocalUrdf] = useState<string | null>(null)
+  useEffect(() => setLocalUrdf(null), [urdfContent])
+  const content = localUrdf ?? urdfContent ?? activeFile?.content ?? ''
+  /**
+   * WHERE AN EDIT TO THIS DOCUMENT IS WRITTEN (#782) — decided from data, not
+   * from whatever tab is focused. `urdfContent` means the document came from a
+   * file of its own (`urdfPath`); otherwise the document IS the active buffer.
+   * Either way the target must be a `.urdf`, or the edit is refused: this is a
+   * whole-document write, and landing it on the wrong file destroys that file.
+   */
+  const writeTarget = resolveUrdfWriteTarget(
+    urdfContent !== undefined ? (urdfPath ?? null) : null,
+    activeFile
+  )
+  /** The document's OWN file, or null when it has none (an unsaved buffer, the
+   *  bundled demo arm). Everything that treats a path as "this robot's path" —
+   *  mesh import, tidy export, external-mesh copies — uses this, never
+   *  `activeFile.path`, which in a handed-in document is some other file. */
+  const docPath = writeTarget.kind === 'refuse' ? null : writeTarget.path
   // Where to resolve mesh files from: an explicit base (docked panel) else the
-  // open local file's folder (opening a `.urdf` from a project).
-  const effectiveBase =
-    basePath ?? (activeFile && activeFile.source === 'local' ? dirname(activeFile.path) : '')
+  // document's own folder (opening a `.urdf` from a project).
+  const effectiveBase = basePath ?? (docPath ? dirname(docPath) : '')
 
   const mountRef = useRef<HTMLDivElement>(null)
   const cubeMountRef = useRef<HTMLDivElement>(null)
@@ -687,7 +713,7 @@ export function RobotView({
   // it, but a hand-edited file can break it; surface a friendly error.
   const dupJointNames = useMemo(() => duplicateNames(jointNames(content)), [content])
   // Import is only possible for a saved local `.urdf` (a file we can edit).
-  const canImport = poseUI && activeFile?.source === 'local' && !!activeFile.path
+  const canImport = poseUI && !!docPath
   const [importing, setImporting] = useState(false)
   // Meshes this URDF points at that live OUTSIDE the project folder (#407) — they
   // load now but go missing if the project is moved/shared. Offer to copy them in.
@@ -782,8 +808,9 @@ export function RobotView({
   buildOpenRef.current = buildOpen && poseUI
   selectedLinkRef.current = selectedLink
   editLinkRef.current = editLink
-  // Editing needs a real saved file (so the URDF text can be written next to it).
-  const canEdit = poseUI && activeFile?.source === 'local' && !!activeFile.path
+  // Editing needs somewhere legitimate to write the model — a `.urdf` of its own
+  // (#782), not merely "some saved file is focused".
+  const canEdit = poseUI && writeTarget.kind !== 'refuse'
   const canEditRef = useRef(false)
   canEditRef.current = canEdit
   const [buildTool, setBuildTool] = useState<BuildTool>('select')
@@ -845,17 +872,39 @@ export function RobotView({
       .map((i) => i.link)
       .filter((l) => !banned.has(l))
   }, [content, editLink])
-  // The effective base for the hierarchy's ★ marker: the user's chosen base if it's
-  // still a root, else the sole root of a single-tree robot, else null — meaning
-  // several loose parts and no base picked yet (the panel then prompts to pick one).
-  const effectiveBaseLink = useMemo(() => {
-    const roots = looseLinks(content) // every childless link
-    if (chosenBase && roots.includes(chosenBase)) return chosenBase
-    if (roots.length === 1) return roots[0] // a single-tree robot: its sole root
-    // Several roots + no explicit choice: honour the conventional `base_link` (the
-    // new-robot starter's base) if present, else prompt the user to pick one.
-    return roots.includes('base_link') ? 'base_link' : null
-  }, [content, chosenBase])
+  // The effective base for the hierarchy's anchor marker. The rule moved into
+  // `robot-assembly` with #718 so the Electronics hierarchy resolves the SAME
+  // base — two trees that disagreed about the root would not be one hierarchy.
+  const effectiveBaseLink = useMemo(() => computeBaseLink(content, chosenBase), [content, chosenBase])
+
+  // ── The shared hierarchy (#718) ──────────────────────────────────────────
+  // The identical rows the Electronics workspace renders. The URDF is this
+  // view's LIVE buffer (unsaved edits must show up immediately); robot.yml and
+  // the libraries are loaded by the hook, off the same buses the board hosts use.
+  const { nodes: hierarchy, coverage: massCoverageInfo } = useHierarchy({
+    folder: currentFolder || undefined,
+    urdf: content,
+    baseLink: chosenBase
+  })
+  const [hierarchyKey, setHierarchyKey] = useHierarchySelection()
+  // Shared key → this view's selected link. A row with no 3-D body (a part that
+  // hasn't been added to Build yet, a joint) leaves the 3-D selection alone —
+  // the row still highlights, there is simply nothing to ring in the scene.
+  useEffect(() => {
+    const node = findHierarchyNode(hierarchy, hierarchyKey)
+    if (node?.link && node.link !== selectedLinkRef.current) setSelectedLink(node.link)
+  }, [hierarchyKey, hierarchy])
+  // …and back: a 3-D click / an edit that moves the selection publishes it. Only
+  // on an actual CHANGE — re-deriving it every render would drag the shared key
+  // back onto a stale link whenever the other workspace selected a bodyless row.
+  const publishedLinkRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (publishedLinkRef.current === selectedLink) return
+    publishedLinkRef.current = selectedLink
+    if (!selectedLink) return
+    const node = flattenHierarchy(hierarchy).find((n) => n.link === selectedLink)
+    if (node) setHierarchyKey(node.key)
+  }, [selectedLink, hierarchy, setHierarchyKey])
 
   const setBuildPinnedPersist = (p: boolean): void => {
     setBuildPinned(p)
@@ -881,16 +930,38 @@ export function RobotView({
       histRef.current = historyPush(histRef.current, contentRef.current, 50)
     }
   }
-  // Low-level: patch the buffer + schedule the deferred save. NO checkpoint.
+  // Low-level: persist the edited document to its OWN file. NO checkpoint.
+  //
+  // The target is `writeTarget`, never `activeFile` (#782): a buffer target is
+  // the open `.urdf` this view is editing (patch it + schedule the deferred
+  // save), a file target is the project `.urdf` behind a handed-in document
+  // (write it through the bridge's serialisation chain, which announces the
+  // change so this and every other view re-reads it). A refusal writes NOTHING
+  // and says so — there is no third file that would have been a good guess.
   const applyUrdf = (next: string): void => {
-    if (!activeFile || activeFile.source !== 'local' || !activeFile.path) return
-    updateContent(activeFile.id, next)
-    pendingSaveRef.current = activeFile.id
+    if (writeTarget.kind === 'buffer') {
+      updateContent(writeTarget.id, next)
+      pendingSaveRef.current = writeTarget.id
+      return
+    }
+    if (writeTarget.kind === 'file') {
+      setLocalUrdf(next) // hold it until the write returns through `urdfContent`
+      void writeUrdfDocument(writeTarget.path, next).catch((err) =>
+        setSavingLabel(`save failed: ${err instanceof Error ? err.message : String(err)}`)
+      )
+      return
+    }
+    console.error(`[snakie] ${writeTarget.reason} (#782)`)
+    setSavingLabel(writeTarget.reason)
   }
   // Commit a builder edit (the one choke point → one undo step per action).
   const commitUrdf = (next: string): void => {
     if (next === contentRef.current) return
-    if (!activeFile || activeFile.source !== 'local' || !activeFile.path) return
+    if (writeTarget.kind === 'refuse') {
+      console.error(`[snakie] ${writeTarget.reason} (#782)`)
+      setSavingLabel(writeTarget.reason)
+      return
+    }
     syncPresent()
     histRef.current = historyPush(histRef.current, next, 50)
     applyUrdf(next)
@@ -1102,24 +1173,11 @@ export function RobotView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editLink, dialogCtx, content, editMassEstimate, massMaterial, massInfill])
 
-  // The whole-robot mass breakdown (#555 part 2): each link's stored <inertial>
-  // mass + its provenance, totalled and sorted for the Build panel's table. Reads
-  // the authoritative persisted value (not a live estimate), so it's pure over
-  // `content`; the source label comes from robot.yml provenance.
-  const massSummary = useMemo<MassBreakdown | null>(() => {
-    const linkNames = parseAssembly(content).map((i) => i.link)
-    if (linkNames.length === 0) return null
-    const lm = defRef.current?.robot?.linkMass
-    const rows = linkNames.map((link) => {
-      const inertial = readInertial(content, link)
-      const grams = inertial ? kgToGrams(inertial.mass) : 0
-      const source = inertial ? lm?.[link]?.source ?? 'measured' : 'none'
-      return { link, grams, source }
-    })
-    // Sort order is irrelevant now only the total is shown (#567), but the
-    // breakdown is kept for a future stats surface; default (by mass) is fine.
-    return summariseMass(rows)
-  }, [content])
+  // The whole-robot mass total is now the hierarchy's mass COVERAGE (#719):
+  // counted over the robot's bodies (the board, placed parts and structural
+  // links) rather than raw URDF links, so the footer total and the tree's
+  // per-row badges can't disagree — and so a part with no 3-D body still counts
+  // as unweighed instead of quietly vanishing from the denominator.
 
   // Per-link masses for the CoM overlay (#558) — recomputed only on edit, held in
   // a ref so the render loop reads them without re-parsing the URDF every frame.
@@ -2482,11 +2540,11 @@ export function RobotView({
 
   // Export a clean, tidy copy of the current URDF into the project's `urdf/`
   // folder (#315). Re-loads unchanged in the viewer; just consistently formatted.
-  const canExport = !!activeFile && activeFile.source === 'local' && !!activeFile.path && !!content.trim()
+  const canExport = !!docPath && !!content.trim()
   const handleExportUrdf = async (): Promise<void> => {
-    if (!activeFile || activeFile.source !== 'local' || !activeFile.path) return
+    if (!docPath) return
     const name = robotNameOf(content)
-    const path = urdfExportPath(dirname(activeFile.path), name)
+    const path = urdfExportPath(dirname(docPath), name)
     const dir = path.slice(0, path.lastIndexOf('/'))
     try {
       await window.api.fs.mkdir(dir)
@@ -2502,10 +2560,10 @@ export function RobotView({
   }
 
   const handleImportStl = async (): Promise<void> => {
-    if (!activeFile || activeFile.source !== 'local' || !activeFile.path) return
+    if (!docPath) return
     setImporting(true)
     try {
-      const res = await window.api.robot.importMesh(activeFile.path)
+      const res = await window.api.robot.importMesh(docPath)
       if (res.cancelled || !res.rel) {
         if (res.error) setSavingLabel(`import failed: ${res.error}`)
         return
@@ -2513,19 +2571,10 @@ export function RobotView({
       // Normalise scale: the URDF world is metres, but STLs are commonly authored
       // in millimetres (they'd load 1000× too big). Measure the mesh and, if its
       // largest dimension is implausibly large for a metre-scale part, scale mm→m.
-      let scale = 1
-      if (/\.stl$/i.test(res.rel)) {
-        try {
-          const bytes = await window.api.fs.readFileBytes(`${dirname(activeFile.path)}/${res.rel}`)
-          const geo = new STLLoader().parse(bytes.buffer as ArrayBuffer)
-          geo.computeBoundingBox()
-          const size = new THREE.Vector3()
-          geo.boundingBox?.getSize(size)
-          if (Math.max(size.x, size.y, size.z) > 3) scale = 0.001
-        } catch {
-          /* leave scale 1 if the mesh can't be measured */
-        }
-      }
+      // ONE measurement (#742) and ONE threshold: `meshImportScale` owns the
+      // mm→m rule the part-drop bridge already uses, so an imported mesh and a
+      // dropped library part can't disagree about the same file.
+      const scale = meshImportScale({}, await measureMeshFile(`${dirname(docPath)}/${res.rel}`))
       // Add the mesh attached to the base with a movable joint, staggered so it lands
       // beside the base (not on top of it). Select it + reframe so the user can see it.
       const linkBase = res.name?.replace(/\.(stl|dae)$/i, '') ?? 'part'
@@ -2558,7 +2607,7 @@ export function RobotView({
   // each `<mesh filename>` to the copied path (#407), so the robot is self-contained.
   // One commitUrdf (⇒ one undo step + one save); the banner clears as refs re-resolve.
   const handleCopyExternalMeshes = async (): Promise<void> => {
-    if (!activeFile?.path || externalMeshRefs.length === 0 || copyingMeshes) return
+    if (!docPath || externalMeshRefs.length === 0 || copyingMeshes) return
     setCopyingMeshes(true)
     try {
       const rewrites: { ref: string; rel: string }[] = []
@@ -2566,7 +2615,7 @@ export function RobotView({
       const total = externalMeshRefs.length
       for (const { ref, abs } of externalMeshRefs) {
         setSavingLabel(`copying meshes… ${rewrites.length + failed + 1}/${total}`)
-        const res = await window.api.robot.importMesh(activeFile.path, abs)
+        const res = await window.api.robot.importMesh(docPath, abs)
         if (res.error || !res.rel) {
           failed += 1
           continue
@@ -3515,7 +3564,6 @@ export function RobotView({
     loader.loadMeshCb = (path, manager, material, done): void => {
       const mat = (material as THREE.Material | null) ?? null
       pending += 1
-      const kind = meshKind(path)
       const ok = (obj: THREE.Object3D): void => {
         if (disposed) return
         done(obj)
@@ -3527,28 +3575,15 @@ export function RobotView({
         done(placeholderMesh(mat))
         settle()
       }
-      if (kind === 'stl') {
-        window.api.fs
-          .readFileBytes(path)
-          .then((bytes) => {
-            if (disposed) return
-            const geo = new STLLoader(manager).parse(bytes.buffer as ArrayBuffer)
-            ok(new THREE.Mesh(geo, mat ?? neutralMaterial()))
-          })
-          .catch(fail)
-      } else if (kind === 'dae') {
-        window.api.fs
-          .readFile(path)
-          .then((text) => {
-            if (disposed) return
-            const dae = new ColladaLoader(manager).parse(text, dirname(path) + '/')
-            if (dae?.scene) ok(dae.scene)
-            else fail()
-          })
-          .catch(fail)
-      } else {
-        fail() // unsupported (.obj/.glb/…) — placeholder + note
-      }
+      // One loader for every kind (#742); `null` covers unsupported, unreadable
+      // and unparseable alike, and the placeholder + note stay this view's job.
+      void loadMeshObject(path, { manager, material: mat })
+        .then((obj) => {
+          if (disposed) return
+          if (obj) ok(obj)
+          else fail()
+        })
+        .catch(fail)
     }
 
     try {
@@ -5427,6 +5462,8 @@ export function RobotView({
             onSetOpen={setBuildOpen}
             onSetPinned={setBuildPinnedPersist}
             assembly={assembly}
+            hierarchy={hierarchy}
+            coverage={massCoverageInfo}
             joints={joints}
             servos={bindings}
             bindableServos={servoList}
@@ -5434,10 +5471,15 @@ export function RobotView({
             onBindServo={handleBindServo}
             onRemoveMesh={handleDeleteLink}
             poses={poses}
-            selected={selectedLink}
-            onSelect={(link) => {
-              setSelectedLink(link)
-              if (link) zoomApiRef.current?.focusLink(link) // hierarchy click zooms to fit
+            selectedKey={hierarchyKey}
+            onSelectNode={(node) => {
+              // Same behaviour as Electronics' row click, in THIS workspace:
+              // share the selection, then zoom-fit the thing that was clicked.
+              setHierarchyKey(node.key)
+              if (node.link) {
+                setSelectedLink(node.link)
+                zoomApiRef.current?.focusLink(node.link)
+              }
             }}
             active={dialogCtx}
             onEdit={handleOpenProps}
@@ -5458,7 +5500,6 @@ export function RobotView({
             importing={importing}
             canEdit={canEdit}
             onOpenRobot={() => void handleOpenRobotFile()}
-            massSummary={massSummary}
           />
         )}
         {showPanel && dialogCtx && (
@@ -5554,6 +5595,18 @@ export function RobotView({
                   {comStatus.state === 'none'
                     ? `${Math.round(comStatus.massKg * 1000)} g · tag feet for stability`
                     : `${Math.round(comStatus.massKg * 1000)} g · ${comStatus.state} · ${comStatus.marginMm} mm`}
+                  {/* PARTIAL COVERAGE (#719): the CoM and its balance verdict are
+                      computed from the weighed parts ONLY. Say so on the readout —
+                      a "stable" from 4 of 12 parts must not read as authoritative. */}
+                  {!massCoverageInfo.complete && (
+                    <span
+                      className="robotview__hud-partial"
+                      title={`Only ${massCoverageInfo.known} of ${massCoverageInfo.total} parts have a known mass. The rest are LEFT OUT of this balance point — not estimated. Weigh them for a verdict you can trust.`}
+                    >
+                      {' '}
+                      · {massCoverageInfo.known}/{massCoverageInfo.total} weighed
+                    </span>
+                  )}
                 </span>
               )}
               {savingLabel && <span className="robotview__hud-pill">{savingLabel}</span>}

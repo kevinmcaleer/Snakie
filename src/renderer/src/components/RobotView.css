@@ -516,6 +516,17 @@
   color: #ffc2bb;
   border-color: #b23b2e;
 }
+/* PARTIAL MASS COVERAGE (#719) — appended to the CoM pill when the balance
+   point comes from only some of the parts. Amber via `--warn` (readable on the
+   pill's dark AND parchment backgrounds), never a hardcoded gold; it must stay
+   legible against whatever stability colour the pill is currently wearing, so
+   it sets its own colour rather than inheriting. */
+.robotview__hud-partial {
+  color: var(--warn);
+  font-weight: 600;
+  cursor: help;
+  pointer-events: auto;
+}
 
 /* 3-D glasses settings panel (#624 mode + #625 depth) — top-right under the nav
    zone, shown only while 3-D is on. */

@@ -5,7 +5,7 @@ import type { Api } from './index'
 // renderer can import them from this single UI-facing module.
 export type { BoardSourcePayload, InstrumentOpenPayload, InstrumentConn } from './index'
 export type { FindCommandPayload, FindStatusPayload } from './index'
-export type { PartsWriteResult, DriverSourceResult } from './index'
+export type { PartsWriteResult, DriverSourceResult, PartMeshImportResult } from './index'
 
 // Re-export the Parts Library + Part Editor types (#129 / #130) so the parts
 // panel + editor can import them from this single UI-facing module.
@@ -50,6 +50,9 @@ export type {
   ConnectOptions,
   ConnectionState,
   DeviceStatus,
+  RuntimeInfo,
+  CircuitPyDrive,
+  PortCircuitPy,
   ExecResult,
   DirEntry,
   StatResult,
@@ -88,7 +91,7 @@ export type {
   InstallOptions,
   InstallProgress,
   InstallResult
-} from '../main/packages/types'
+} from '../shared/packages/types'
 
 // Re-export the per-module installer types (issue #120) so the Modules manager
 // can import them from this single UI-facing module. The progress/result types
@@ -123,7 +126,13 @@ export type {
   GitStatus,
   GitBranchList,
   GitDiff,
-  GitRemoteResult
+  GitInitResult,
+  GitRemoteResult,
+  GitStageResult,
+  GitStageScope,
+  GitPublishOptions,
+  GitPublishPreflight,
+  GitPublishResult
 } from '../main/git/types'
 
 // Re-export the Python plugin-system types (issue #61) so the Plugins panel can

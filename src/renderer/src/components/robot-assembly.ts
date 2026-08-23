@@ -6,6 +6,8 @@
  */
 import type { PrimitiveKind, Vec3 } from './robot-build'
 import { isExternalMeshRef, resolveMeshPath } from './robot-mesh'
+import { isIdentityRotation, meshRotationRpy, type MeshRotation } from '../../../shared/mesh-rotation'
+import { isZeroOffset, meshOffsetXyz, type MeshOffset } from '../../../shared/mesh-offset'
 
 /**
  * A minimal, VALID starter URDF: one `base_link` with a small box so the pose
@@ -144,9 +146,55 @@ export function meshImportScale(
   return 1
 }
 
+/**
+ * The `<origin>` line a mesh visual needs to carry the part's stored corrections
+ * — its orientation (#741) and its position (#788) — or `''` when there is
+ * nothing to correct.
+ *
+ * It goes on the **visual**, not on the placement joint (Kevin's call on #741):
+ * the corrections describe the MESH — "this STL was authored lying on its side,
+ * with its origin on a build-plate corner" — so they must stay attached to the
+ * mesh. On the joint they would fight the user the moment they re-joint the part
+ * in Build, and would be silently lost if the joint were ever rebuilt. Emitting
+ * nothing when BOTH are identity keeps every URDF this has ever written
+ * byte-identical.
+ *
+ * ONE ORDER, EVERYWHERE. URDF defines `<origin xyz rpy>` as rotate-by-rpy then
+ * translate-by-xyz, both in the link frame — which is exactly the order
+ * `mesh-offset.ts` specifies and the two three.js views apply (a `THREE.Group`
+ * composes `T · R · S`, so its `position` is applied after its `rotation`). That
+ * is why the offset is written out with no compensation term: it is the stored
+ * millimetres ÷ 1000 and nothing else. Introduce a compensation here and the
+ * editor stage, the catalog turntable and Build would each need the same one.
+ */
+export function meshVisualOrigin(
+  rotation?: MeshRotation | null,
+  indent = '      ',
+  offset?: MeshOffset | null
+): string {
+  if (isIdentityRotation(rotation) && isZeroOffset(offset)) return ''
+  return `${indent}<origin xyz="${meshOffsetXyz(offset)}" rpy="${meshRotationRpy(rotation)}"/>\n`
+}
+
 export function addMeshLink(
   urdf: string,
-  opts: { meshRel: string; linkBase: string; scale?: number; parent?: string }
+  opts: {
+    meshRel: string
+    linkBase: string
+    scale?: number
+    parent?: string
+    /** Joint origin in metres (#716: the mirrored board position). Absent ⇒ the
+     *  legacy X-stagger, so imports still land beside the base, not on it. */
+    at?: [number, number, number]
+    /** The part's stored mesh orientation in degrees (#741) — written as the
+     *  VISUAL's origin rpy, so a mesh that was authored on its side stands up.
+     *  Absent/identity ⇒ no `<origin>` at all. */
+    rotation?: MeshRotation | null
+    /** The part's stored mesh position in millimetres (#788) — written as the
+     *  VISUAL's origin xyz (÷1000), applied AFTER the rotation, so a mesh whose
+     *  origin was a build-plate corner lands where the part says. */
+    offset?: MeshOffset | null
+  }
 ): { urdf: string; link: string } {
   // Attach under the UI's chosen base if given (it can differ from the doc-first
   // root in a transitional multi-root URDF); else the sole/first root.
@@ -156,18 +204,70 @@ export function addMeshLink(
   const s = opts.scale && opts.scale !== 1 ? ` scale="${fmtNum(opts.scale)} ${fmtNum(opts.scale)} ${fmtNum(opts.scale)}"` : ''
   // Stagger each new part along X (by the current link count) so imports land beside
   // the base rather than co-located at (0,0,0) where they'd look fused.
-  const stagger = fmtNum(0.08 * parseAssembly(urdf).length)
+  const origin = opts.at ?? [0.08 * parseAssembly(urdf).length, 0, 0]
   const joint = parent
     ? `  <joint name="${name}_joint" type="fixed">\n` +
       `    <parent link="${parent}"/>\n` +
       `    <child link="${name}"/>\n` +
-      `    <origin xyz="${stagger} 0 0" rpy="0 0 0"/>\n` +
+      `    <origin xyz="${fmtVec(origin)}" rpy="0 0 0"/>\n` +
       `  </joint>\n`
     : '' // first link of an empty URDF is the root — no joint
   const block =
     `  <link name="${name}">\n` +
     `    <visual>\n` +
+    meshVisualOrigin(opts.rotation, '      ', opts.offset) +
     `      <geometry><mesh filename="${opts.meshRel}"${s}/></geometry>\n` +
+    `    </visual>\n` +
+    `  </link>\n` +
+    joint
+  const idx = urdf.lastIndexOf('</robot>')
+  const next = idx < 0 ? `${urdf.trimEnd()}\n${block}` : urdf.slice(0, idx) + block + urdf.slice(idx)
+  return { urdf: next, link: name }
+}
+
+/**
+ * Append a FOOTPRINT-BOX link (#716, epic #720): the Build-workspace stand-in for
+ * a part with no mesh — still most of the standard library (#715). A `<box>`
+ * primitive sized from the part's real 2-D dimensions keeps CoM and
+ * support-polygon geometry meaningful; the per-visual `<material>` colour keeps
+ * the scene recognisable (a desaturated take on the part's PCB colour, so it
+ * reads as a stand-in next to a real mesh). The box visual is raised by half its
+ * height so the LINK origin sits at the part's base — a link placed at z=0 rests
+ * ON the ground plane instead of being buried waist-deep in it.
+ *
+ * Same joint rules as {@link addMeshLink}: every non-first link gets a fixed
+ * joint (rootless links fuse in urdf-loader), `at` places it, else the stagger.
+ */
+export function addBoxLink(
+  urdf: string,
+  opts: {
+    linkBase: string
+    /** Box size in METRES: [x (width), y (depth), z (height)]. */
+    size: [number, number, number]
+    /** Visual colour, 0..1 rgb. Absent ⇒ a neutral grey. */
+    rgb?: [number, number, number]
+    parent?: string
+    /** Joint origin in metres; absent ⇒ the legacy X-stagger. */
+    at?: [number, number, number]
+  }
+): { urdf: string; link: string } {
+  const parent = opts.parent ?? rootLink(urdf)
+  const name = uniqueLinkName(urdf, opts.linkBase)
+  const [r, g, b] = opts.rgb ?? [0.55, 0.55, 0.55]
+  const origin = opts.at ?? [0.08 * parseAssembly(urdf).length, 0, 0]
+  const joint = parent
+    ? `  <joint name="${name}_joint" type="fixed">\n` +
+      `    <parent link="${parent}"/>\n` +
+      `    <child link="${name}"/>\n` +
+      `    <origin xyz="${fmtVec(origin)}" rpy="0 0 0"/>\n` +
+      `  </joint>\n`
+    : ''
+  const block =
+    `  <link name="${name}">\n` +
+    `    <visual>\n` +
+    `      <origin xyz="0 0 ${fmtNum(opts.size[2] / 2)}" rpy="0 0 0"/>\n` +
+    `      <geometry><box size="${fmtVec(opts.size)}"/></geometry>\n` +
+    `      <material name="${name}_placeholder"><color rgba="${fmtNum(r)} ${fmtNum(g)} ${fmtNum(b)} 1"/></material>\n` +
     `    </visual>\n` +
     `  </link>\n` +
     joint
@@ -188,6 +288,26 @@ export function looseLinks(urdf: string, base?: string | null): string[] {
   let m: RegExpExecArray | null
   while ((m = re.exec(urdf))) children.add(m[1])
   return links.filter((l) => !children.has(l) && l !== base)
+}
+
+/**
+ * The link the hierarchy treats as the BASE — the anchor everything hangs off,
+ * marked with the anchor glyph and used as {@link buildChainTree}'s root.
+ *
+ * The user's `chosen` base wins while it is still a root; a single-tree robot
+ * uses its sole root; several roots with no choice honour the conventional
+ * `base_link` (the new-robot starter's base), else null — meaning "several loose
+ * parts, no base picked yet", which the Build panel prompts about.
+ *
+ * Lives here beside {@link looseLinks} because BOTH workspaces need it now
+ * (#718): the Build view had this rule inline, and the Electronics hierarchy has
+ * to agree with it exactly or the two trees would disagree about the base.
+ */
+export function effectiveBaseLink(urdf: string, chosen?: string | null): string | null {
+  const roots = looseLinks(urdf)
+  if (chosen && roots.includes(chosen)) return chosen
+  if (roots.length === 1) return roots[0]
+  return roots.includes('base_link') ? 'base_link' : null
 }
 
 /**
@@ -754,6 +874,78 @@ export function jointNames(urdf: string): string[] {
   return out
 }
 
+/**
+ * Swap a link's FIRST `<visual>` for a mesh visual IN PLACE (#717): the
+ * placeholder-box → real-mesh upgrade. Everything else about the link — its
+ * name, its joint (parent, origin, type), its children, its `<inertial>` — is
+ * untouched, which is the whole point: the first cut removed-and-re-added the
+ * link and thereby deleted the user's subtree, re-parented to root and dropped
+ * the inertial. Returns the unchanged text when the link/visual isn't found.
+ * Pure.
+ */
+export function swapLinkVisualToMesh(
+  urdf: string,
+  link: string,
+  meshRel: string,
+  scale?: number,
+  /** The part's stored mesh orientation (#741) — the placeholder had none, so an
+   *  upgrade to the real mesh must bring the correction with it. */
+  rotation?: MeshRotation | null,
+  /** The part's stored mesh position (#788) — same reasoning: the box it
+   *  replaces never needed one, so this is the first chance to apply it. */
+  offset?: MeshOffset | null
+): string {
+  const span = linkSpan(urdf, link)
+  if (!span) return urdf
+  const body = urdf.slice(span.bodyStart, span.bodyEnd)
+  const vis = /<visual\b[^>]*>[\s\S]*?<\/visual>/i.exec(body)
+  if (!vis) return urdf
+  const s =
+    scale && scale !== 1 ? ` scale="${fmtNum(scale)} ${fmtNum(scale)} ${fmtNum(scale)}"` : ''
+  const replacement =
+    `<visual>\n` +
+    meshVisualOrigin(rotation, '      ', offset) +
+    `      <geometry><mesh filename="${meshRel}"${s}/></geometry>\n` +
+    `    </visual>`
+  const nextBody = body.slice(0, vis.index) + replacement + body.slice(vis.index + vis[0].length)
+  return urdf.slice(0, span.bodyStart) + nextBody + urdf.slice(span.bodyEnd)
+}
+
+/**
+ * What a link's FIRST visual geometry is (#717): `box` / `mesh` / `other`, or
+ * `null` for a link with no visual (or no such link). The sync reconcile uses
+ * it to spot a footprint-box stand-in whose part now ships a real mesh. Pure.
+ */
+export function linkGeometryKind(urdf: string, link: string): 'box' | 'mesh' | 'other' | null {
+  const span = linkSpan(urdf, link)
+  if (!span) return null
+  const body = urdf.slice(span.bodyStart, span.bodyEnd)
+  const vis = /<visual\b[\s\S]*?<geometry>([\s\S]*?)<\/geometry>/i.exec(body)
+  if (!vis) return null
+  if (/<box\b/i.test(vis[1])) return 'box'
+  if (/<mesh\b/i.test(vis[1])) return 'mesh'
+  return 'other'
+}
+
+/**
+ * Joint names EXCLUDING `fixed` joints — the ones a servo can actually drive.
+ * Since #716 every placed part carries a fixed placement joint
+ * (`<Part>_joint`), so feeding {@link jointNames} to the servo "drives joint"
+ * picker floods it with unmovable entries — and binding one silently does
+ * nothing at runtime, because a fixed joint has no value to set. Pure.
+ */
+export function movableJointNames(urdf: string): string[] {
+  const re = /<joint\b([^>]*)>/gi
+  const out: string[] = []
+  let m: RegExpExecArray | null
+  while ((m = re.exec(urdf))) {
+    const nm = /\bname\s*=\s*"([^"]+)"/.exec(m[1])?.[1]
+    const type = /\btype\s*=\s*"([^"]+)"/.exec(m[1])?.[1]
+    if (nm && type?.toLowerCase() !== 'fixed') out.push(nm)
+  }
+  return out
+}
+
 /** A sensible native limit when a joint first becomes movable. */
 export function defaultJointLimit(type: JointType): { lower: number; upper: number } {
   return type === 'prismatic'
@@ -896,11 +1088,50 @@ function renderJointBlock(j: JointFull): string {
 }
 
 /**
+ * Every `<joint>` whose `<parent>` or `<child>` names a link the document does
+ * not define (#782). A joint with a missing child is invalid URDF: no consumer
+ * can build the tree, so the whole model fails to load — one stranded joint
+ * costs the user the entire robot, not one part.
+ */
+export function danglingJoints(urdf: string): JointFull[] {
+  const links = new Set(parseAssembly(urdf).map((i) => i.link))
+  return readAllJoints(urdf).filter((j) => !links.has(j.child) || !links.has(j.parent))
+}
+
+/**
+ * Drop every joint that references a link the document doesn't define (#782).
+ *
+ * The rule this enforces at the write choke point: **prefer emitting neither
+ * over a dangling reference**. A joint exists to attach a link; without that
+ * link it carries no information a consumer can use, and keeping it costs the
+ * whole document. Returns the text unchanged when there is nothing to prune, so
+ * it is safe to run on every write (an unchanged document hashes the same).
+ */
+export function pruneDanglingJoints(urdf: string): string {
+  const links = new Set(parseAssembly(urdf).map((i) => i.link))
+  return urdf.replace(/\s*<joint\b[^>]*>[\s\S]*?<\/joint>/gi, (block) => {
+    const ref = (attr: 'parent' | 'child'): string | undefined =>
+      new RegExp(`<${attr}\\b[^>]*\\blink\\s*=\\s*"([^"]+)"`, 'i').exec(block)?.[1]
+    const parent = ref('parent')
+    const child = ref('child')
+    // An unparseable joint is left alone — this prunes DANGLING refs, it isn't a
+    // general-purpose validator, and silently eating a joint we didn't understand
+    // would be its own kind of data loss.
+    if (!parent || !child) return block
+    return links.has(parent) && links.has(child) ? block : '\n'
+  })
+}
+
+/**
  * The Join tool (#354): connect `child` (Component 2) under `parent` (Component 1)
  * at joint origin `xyz`. If the child already has a parent joint it is re-parented
  * (parent + origin rewritten, type/axis/limits preserved); otherwise a new fixed
  * joint is created. Refuses a no-op or a re-parent that would form a cycle
  * (parent within the child's own subtree) — returns the URDF unchanged.
+ *
+ * It also refuses when either end is not a link this document defines (#782):
+ * minting `<joint><child link="X"/></joint>` for an X that doesn't exist writes
+ * an unloadable model, and there is nothing useful to write instead.
  */
 export function connectJoint(
   urdf: string,
@@ -909,6 +1140,8 @@ export function connectJoint(
   const { parent, child } = opts
   const xyz: Vec3 = [...(opts.xyz ?? [0, 0, 0])] as Vec3
   if (!parent || !child || parent === child) return urdf
+  const links = new Set(parseAssembly(urdf).map((i) => i.link))
+  if (!links.has(parent) || !links.has(child)) return urdf
   // A URDF is a tree: attaching `child` under one of its own descendants (or
   // itself) would create a loop the loader can't build.
   if (subtreeOf(urdf, child).has(parent)) return urdf

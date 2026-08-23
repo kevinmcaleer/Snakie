@@ -4,14 +4,15 @@ Imports — bring modules (built-in, or files on the board) into your program.
 
 ```python
 import time                     # use as time.sleep(...)
-from machine import Pin, PWM    # pull names in directly
+from math import pi, sqrt       # pull names in directly
 import instruments as inst      # rename for brevity
 ```
 
 ## Where modules come from
 
 `import servo` searches, in order:
-1. built-ins compiled into the firmware (`machine`, `time`, `os`, …)
+1. built-ins compiled into the firmware (`time`, `os`, and your runtime's
+   hardware modules — see the Pins page for the ones your board has)
 2. the board's filesystem: `/` then `/lib`
 
 So installing a driver = copying `servo.py` to `/lib/servo.py` — exactly what

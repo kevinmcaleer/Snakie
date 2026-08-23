@@ -106,6 +106,18 @@
   border-color: #aeb4bd;
 }
 
+/* The board viewport and the controls that float over it, as ONE box (#774).
+   The zoom bar is positioned against THIS rather than against the whole section,
+   which is what guarantees it renders inside the element it belongs to however
+   the panel is sized — a control that can render outside its own box is a
+   control whose hit area depends on the layout. */
+.mini-board__stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 /* The board viewport: fills the width at 1× zoom and scrolls (both axes) when the
    user zooms in past the visible area. The 190px here is the DEFAULT height (and
    the size every launch opens at); the resize handle below sets it live via an
@@ -154,13 +166,35 @@
 .mini-board__svg {
   display: block;
   margin: 0 auto;
+  /* A hover-revealed pinout draws labels OUTSIDE the frame (hover deliberately
+     never re-frames — see MiniBoardView.tsx). The SVG's default overflow:hidden
+     cropped them at the frame edge even when zooming out left free space all
+     around the board; paint past the box instead and let the scroll wrap's own
+     overflow be the only clip, so labels use whatever room the panel has. */
+  overflow: visible;
+  /* …and because it now paints outside its own box, it must never be the thing a
+     click lands on. The board render is decoration — nothing in it is
+     interactive — so hit-testing falls through to the scroll wrap, which is what
+     tracks the pinout hover. A label layer painting past the frame could
+     otherwise swallow a click meant for whatever it happens to cover (#774). */
+  pointer-events: none;
 }
 
-/* Zoom controls — revealed only on hover so the board stays clean. */
+/* Zoom controls — FADED until the panel is hovered so the board stays clean.
+   Visibility and hit-testing are deliberately SEPARATE (#774): `pointer-events`
+   used to be toggled by the same hover, which made the buttons' hit area depend
+   on hovering something else. Any moment the reveal was off — the pointer
+   arriving on a button before the panel registered the hover, anything overlapping
+   the bar — the click passed straight through, and the control re-hid. A control
+   that is always clickable cannot fail that way; `:hover` on the bar ITSELF then
+   guarantees it is never invisible under the pointer. */
 .mini-board__zoom {
   position: absolute;
   right: 0.6rem;
   bottom: 0.6rem;
+  /* Above the board layer, so neither its overflow nor a scrollbar can cover the
+     buttons — the alternative diagnosis for the same symptom. */
+  z-index: 2;
   display: flex;
   gap: 2px;
   padding: 2px;
@@ -168,14 +202,14 @@
   border: 1px solid #2a2d33;
   border-radius: 6px;
   opacity: 0;
-  pointer-events: none;
   transition: opacity 0.12s ease;
 }
 
 .mini-board:hover .mini-board__zoom,
-.mini-board:focus-within .mini-board__zoom {
+.mini-board:focus-within .mini-board__zoom,
+.mini-board__zoom:hover,
+.mini-board__zoom:focus-within {
   opacity: 1;
-  pointer-events: auto;
 }
 
 .mini-board__zoom-btn {

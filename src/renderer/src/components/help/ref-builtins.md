@@ -34,7 +34,7 @@ chr(65), ord("A")  # 'A', 65
 ## In the REPL
 
 ```python
-help(machine)      # what a module offers
+help(time)         # what a module offers
 dir(i2c)           # every attribute/method on an object
 ```
 

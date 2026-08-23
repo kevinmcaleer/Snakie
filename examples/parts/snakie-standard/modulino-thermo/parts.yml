@@ -1,0 +1,170 @@
+id: modulino-thermo
+name: Modulino Thermo
+description: HS3003 temperature and relative-humidity sensor on an I²C Modulino, daisy-chainable over QWIIC.
+manufacturer: Arduino
+family: Sensor
+tags:
+  - modulino
+  - arduino
+  - i2c
+  - qwiic
+  - temperature
+  - humidity
+  - env
+  - hs3003
+  - sensor
+package: SMD
+voltage: 3.3V
+partNumber: ABX00103
+properties:
+  interface: I²C (0x44, fixed in silicon — no onboard MCU)
+  sensor: Renesas HS3003 temperature + relative humidity
+  measures: −40 °C to +125 °C, 0–100 % RH, 14-bit each
+  accuracy: ±0.25 °C, ±2.8 % RH
+  chain: QWIIC socket at each end, same bus in parallel
+version: 0.1.2
+pcbColor: "#00979d"
+aspect: 1.617
+dimensions:
+  width: 41
+  height: 25.36
+shape:
+  kind: rect
+  cornerRadiusMm: 4.6
+headers:
+  - edge: left
+    pins:
+      - name: SCL
+        type: io
+        number: 1
+        gpio: 0
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+        shape: header
+        x: 0.4083082834879558
+        y: 0.951690015983381
+      - name: SDA
+        type: io
+        number: 2
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+        shape: header
+        x: 0.4702770657009549
+        y: 0.951690015983381
+      - name: 3v3
+        type: pwr
+        number: 3
+        shape: header
+        x: 0.532245847913954
+        y: 0.951690015983381
+      - name: GND
+        type: gnd
+        shape: header
+        x: 0.5941137186686198
+        y: 0.951690015983381
+mountingHoles:
+  - x: 0.10976
+    y: 0.18454
+    diameter: 1.5
+  - x: 0.89024
+    y: 0.18454
+    diameter: 1.5
+  - x: 0.89024
+    y: 0.81546
+    diameter: 1.5
+  - x: 0.10976
+    y: 0.81546
+    diameter: 1.5
+rails:
+  - name: GND
+    pins:
+      - GND
+      - GND-B
+  - name: 3V3
+    pins:
+      - 3V3
+      - 3V3-B
+  - name: SDA
+    pins:
+      - SDA
+      - SDA-B
+  - name: SCL
+    pins:
+      - SCL
+      - SCL-B
+connectors:
+  - z: 0
+    kind: qwiic
+    x: 0.05183
+    y: 0.5
+    rotation: 270
+    pins:
+      - name: GND
+        type: gnd
+      - name: 3V3
+        type: pwr
+      - name: SDA
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+      - name: SCL
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+  - z: 0
+    kind: qwiic
+    x: 0.94817
+    y: 0.5
+    rotation: 90
+    pins:
+      - name: GND-B
+        type: gnd
+      - name: 3V3-B
+        type: pwr
+      - name: SDA-B
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+      - name: SCL-B
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+image: image.jpg
+imageLayer:
+  x: 0.0002330525716145726
+  y: 0
+  w: 1
+  h: 1
+rear:
+  image: rear.jpg
+help: help.md
+mesh: modulino.stl
+meshUnits: mm
+mass_g: 3.6
+i2cAddresses:
+  - 68
+library:
+  module: modulino
+  docs: https://docs.arduino.cc/hardware/modulino-thermo/
+drivers:
+  - source: module:modulino
+    target: lib/modulino
+    label: Arduino Modulino library
+layerVisibility:
+  pcb: true
+  image: true
+  holes: true
+  pins: true
+  components: true

@@ -1,0 +1,400 @@
+/*
+ * Sprite Editor — a full-screen overlay for drawing 1-bit sprite animations
+ * (launched from the Display instrument's SPRITES key).
+ *
+ * Soft Shell skin like the Part Editor: warm shell chrome around a dark LED
+ * "stage" where the pixels read like a real panel. Unique BEM prefix `spred__`
+ * (see the project's CSS-prefix note — the global CSS is unscoped).
+ */
+
+.spred {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--shell, var(--bg-elevated));
+  color: var(--text);
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+/* --- Title bar --- */
+.spred__bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  padding: 0.5rem 0.7rem;
+  background: linear-gradient(180deg, var(--bg-elevated), var(--bg-sunken));
+  border-bottom: var(--border-w, 1px) solid var(--border);
+  user-select: none;
+}
+
+.spred__title {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  color: var(--head, var(--text));
+  margin-right: 0.3rem;
+}
+
+/* The file this document was opened from (#790) — Save writes back over it, so
+   the name is shown rather than left to be guessed from the NAME field. */
+.spred__file {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--accent);
+  border: var(--border-w, 1px) solid var(--border);
+  border-radius: 4px;
+  padding: 0.1rem 0.35rem;
+  margin-right: 0.3rem;
+  max-width: 16ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spred__spacer {
+  flex: 1;
+}
+
+/* --- Labelled fields (NAME / W / H / SIZE / FPS / EXPORT) --- */
+.spred__field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.spred__field input,
+.spred__field select {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: var(--border-w, 1px) solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.24rem 0.4rem;
+}
+
+.spred__field input[type='number'] {
+  width: 3.4rem;
+}
+
+.spred__field--name input {
+  width: 9rem;
+}
+
+.spred__field--preset select {
+  max-width: 15rem;
+}
+
+/* --- Keys --- */
+.spred__btn {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--bg-elevated);
+  border: var(--border-w, 1px) solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.28rem 0.6rem;
+  cursor: pointer;
+}
+
+.spred__btn:hover:not(:disabled) {
+  background: var(--bg-sunken);
+}
+
+.spred__btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.spred__btn--primary {
+  color: var(--greentext, var(--text));
+  background: var(--greenpill, var(--bg-elevated));
+  border-color: var(--green, var(--border));
+}
+
+.spred__btn--danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+/* Pinned to the right of the bar, and set apart. It was simply the last of ~15
+   similar buttons in a wrapping toolbar, so on the web -- where there is no
+   window chrome to close from -- people could not find the way out at all.
+   The full-screen catalog and the part details view both isolate their ✕ on the
+   right; this matches them. `margin-left: auto` survives the wrap, so it stays
+   at the far end of whatever row it lands on. */
+.spred__btn--close {
+  padding-inline: 0.45rem;
+  margin-left: auto;
+  border-left: var(--border-w, 1px) solid var(--border);
+  padding-left: 0.6rem;
+}
+
+.spred__btn--close:hover:not(:disabled) {
+  color: var(--danger, #c2483a);
+}
+
+.spred__btn--play {
+  min-width: 2.2rem;
+  font-size: 0.86rem;
+}
+
+.spred__btn--on {
+  color: var(--goldink, var(--text));
+  background: var(--goldbg, var(--bg-sunken));
+  border-color: var(--gold, var(--border));
+}
+
+/* --- Status strip --- */
+.spred__status {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  padding: 0.3rem 0.8rem;
+  background: var(--bg-sunken);
+  border-bottom: var(--border-w, 1px) solid var(--border);
+}
+
+/* --- "Used in" strip (#792) ---
+   One line under the toolbar: a sentence, then a chip per reference. Sized like
+   the status strip so it reads as information ABOUT the document rather than a
+   second toolbar, and wraps rather than scrolls — the answer is short or it is
+   a count. Tokens only, so it holds up in both skins. */
+.spred__used {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0.3rem 0.8rem;
+  background: var(--bg-sunken);
+  border-bottom: var(--border-w, 1px) solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.spred__used-msg {
+  cursor: help;
+}
+
+/* One referencing file:line — clicking leaves the overlay for that line. */
+.spred__use {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--accent);
+  background: var(--card, var(--bg-elevated));
+  border: var(--border-w, 1px) solid var(--border);
+  border-radius: 4px;
+  padding: 0.05rem 0.35rem;
+  cursor: pointer;
+}
+
+.spred__use:hover,
+.spred__use:focus-visible {
+  border-color: var(--accent);
+  background: var(--bg-elevated);
+}
+
+.spred__use-line {
+  color: var(--text-muted);
+}
+
+/* The reference is in a buffer with unsaved edits — true of the code, not yet
+   of the file on disk. Dashed, the same "provisional" cue the broken inline
+   thumbnail uses. */
+.spred__use--dirty {
+  border-style: dashed;
+}
+
+.spred__used-more {
+  opacity: 0.8;
+}
+
+.spred__used-again {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1;
+  color: var(--text-muted);
+  background: transparent;
+  border: var(--border-w, 1px) solid transparent;
+  border-radius: 4px;
+  padding: 0.1rem 0.3rem;
+  cursor: pointer;
+}
+
+.spred__used-again:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--border);
+}
+
+.spred__used-again:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* --- Body: tools rail + stage --- */
+.spred__body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.spred__tools {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.6rem 0.45rem;
+  border-right: var(--border-w, 1px) solid var(--border);
+  background: var(--panel, var(--bg-elevated));
+  overflow-y: auto;
+}
+
+.spred__tools-gap {
+  height: 0.55rem;
+}
+
+.spred__tool {
+  width: 2.1rem;
+  height: 2.1rem;
+  display: grid;
+  place-items: center;
+  font-size: 0.95rem;
+  color: var(--text);
+  background: var(--bg-elevated);
+  border: var(--border-w, 1px) solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.spred__tool:hover {
+  background: var(--bg-sunken);
+}
+
+.spred__tool--on {
+  color: var(--goldink, var(--text));
+  background: var(--goldbg, var(--bg-sunken));
+  border-color: var(--gold, var(--accent));
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.spred__stage {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  overflow: auto;
+  background:
+    radial-gradient(ellipse at center, rgba(0, 0, 0, 0.14), transparent 70%),
+    var(--desk, var(--bg-sunken));
+}
+
+.spred__canvas {
+  border: 3px solid #23262c;
+  border-radius: 6px;
+  box-shadow:
+    inset 0 0 12px rgba(0, 0, 0, 0.7),
+    0 4px 14px rgba(0, 0, 0, 0.35);
+  background: #101216;
+  touch-action: none;
+  cursor: crosshair;
+  image-rendering: pixelated;
+}
+
+.spred__stage-meta {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+/* --- Filmstrip row --- */
+.spred__strip-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.7rem;
+  border-top: var(--border-w, 1px) solid var(--border);
+  background: var(--panel, var(--bg-elevated));
+}
+
+.spred__strip {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 0.2rem 0;
+}
+
+.spred__thumb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 0.25rem;
+  background: var(--bg-sunken);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  flex: none;
+}
+
+.spred__thumb--on {
+  border-color: var(--gold, var(--accent));
+  box-shadow: 0 0 0 1px var(--gold, var(--accent));
+}
+
+.spred__thumb--add {
+  min-width: 2.6rem;
+  min-height: 2.6rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.spred__thumb--add:hover {
+  color: var(--text);
+}
+
+.spred__thumb-px {
+  display: block;
+  image-rendering: pixelated;
+}
+
+.spred__thumb-n {
+  position: absolute;
+  right: 2px;
+  bottom: 1px;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  color: var(--text-muted);
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 3px;
+  padding: 0 3px;
+  pointer-events: none;
+}
+
+.spred__frame-ops {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: none;
+}

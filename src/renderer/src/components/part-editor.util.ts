@@ -17,8 +17,9 @@
  */
 
 import type { BoardDefinition, BoardPad, BoardPadType, BoardHeader } from '../../../shared/board'
+import { installPathFor, moduleById } from '../../../shared/modules-catalog'
 import { BUILTIN_BOARDS } from './board-defs'
-import {
+import { connectablePinCount,
   STANDARD_PIN_SPACING_MM,
   coerceConnectorKind,
   coerceConnectorVariant,
@@ -63,7 +64,9 @@ import {
   type PolygonPoint
 } from '../../../shared/part'
 import type { RobotPart } from '../../../shared/robot'
-import { coerceElectrical } from '../../../shared/part-yaml'
+import { coerceDisplay, coerceElectrical } from '../../../shared/part-yaml'
+import { coerceMeshRotation } from '../../../shared/mesh-rotation'
+import { coerceMeshOffset } from '../../../shared/mesh-offset'
 import { flattenPartPins } from '../../../shared/netlist'
 
 /** The pin types the editor offers, in UI order. */
@@ -805,9 +808,26 @@ export function resizeContacts(pins: PartPin[], n: number, prefix = 'P'): PartPi
   return kept
 }
 
-/** Real housing dimensions per JST family (mm): pitch, end margin, body depth. */
+/**
+ * Real housing dimensions per JST family (mm): pitch, end margin, body depth.
+ *
+ * `sideMargin` is HALF the difference between the housing's overall width and
+ * its contact span — so a socket's drawn width is `(n-1)·pitch + 2·sideMargin`,
+ * which is how the datasheets themselves tabulate it.
+ *
+ * **SH is measured, from JST's own drawing** (SH series, side-entry SMT header
+ * `SM04B-SRSS-TB` — the QWIIC/STEMMA-QT connector). Its header table gives
+ * `B = A + 3.0` for EVERY circuit count, where `A` is the contact span — hence
+ * 1.5 mm per end, and 6.0 mm overall for the 4-way. The body is **4.25 mm** deep
+ * on the board; 2.9 mm is its HEIGHT, which is what the earlier value had picked
+ * up by mistake — it drew the socket a third too narrow and too shallow (#697).
+ *
+ * The other families are NOT datasheet-verified — they follow the old
+ * ~0.75×pitch approximation. Correct them the same way when someone needs them
+ * to be right.
+ */
 export const JST_DIMS: Record<JstFamily, { pitch: number; sideMargin: number; depthMm: number }> = {
-  sh: { pitch: 1.0, sideMargin: 0.75, depthMm: 2.9 },
+  sh: { pitch: 1.0, sideMargin: 1.5, depthMm: 4.25 },
   gh: { pitch: 1.25, sideMargin: 0.9, depthMm: 3.4 },
   zh: { pitch: 1.5, sideMargin: 1.0, depthMm: 3.6 },
   ph: { pitch: 2.0, sideMargin: 1.4, depthMm: 4.5 },
@@ -834,7 +854,10 @@ export function connectorDims(conn: PartConnector): { pitch: number; sideMargin:
       // plug seating on top.
       return { pitch: 5.08, sideMargin: 2.54, depthMm: 8.5 }
     default:
-      return { pitch: 1.0, sideMargin: 0.75, depthMm: 2.9 }
+      // QWIIC / STEMMA QT IS a JST SH 4-way side-entry header — so it takes the
+      // SH figures rather than its own copy of them, which had already drifted
+      // out of step with the family table above.
+      return JST_DIMS.sh
   }
 }
 
@@ -1980,6 +2003,16 @@ export function normalisePart(part: PartDefinition): PartDefinition {
     if (typeof part.shape.cornerRadius === 'number' && Number.isFinite(part.shape.cornerRadius)) {
       out.shape.cornerRadius = clamp(part.shape.cornerRadius, 0, 0.5)
     }
+    // #739: the mm form is kept as authored — it's a physical dimension, so it
+    // is NOT clamped to the fraction's 0..0.5; `cornerRadiusFraction` clamps at
+    // the point of use, once there's a board size to clamp against.
+    if (
+      typeof part.shape.cornerRadiusMm === 'number' &&
+      Number.isFinite(part.shape.cornerRadiusMm) &&
+      part.shape.cornerRadiusMm >= 0
+    ) {
+      out.shape.cornerRadiusMm = part.shape.cornerRadiusMm
+    }
   }
   if (Array.isArray(part.mountingHoles) && part.mountingHoles.length) {
     out.mountingHoles = part.mountingHoles.map((h) => {
@@ -2181,6 +2214,16 @@ export function normalisePart(part: PartDefinition): PartDefinition {
   set('mesh', text(part.mesh))
   if (part.meshUnits === 'mm' || part.meshUnits === 'm') out.meshUnits = part.meshUnits
   if (typeof part.meshScale === 'number' && part.meshScale > 0) out.meshScale = part.meshScale
+  // The orientation correction (#741) — the SAME coercer the YAML round-trip
+  // uses, so the editor and the on-disk form can't disagree about what a valid
+  // rotation is (and an identity one is dropped in both).
+  const meshRotation = coerceMeshRotation(part.meshRotation)
+  if (meshRotation) out.meshRotation = meshRotation
+  // The position correction (#788) — same coercer as the YAML round-trip, so the
+  // editor and the on-disk form can't disagree about what a valid offset is (and
+  // a zero one is dropped in both).
+  const meshOffset = coerceMeshOffset(part.meshOffset)
+  if (meshOffset) out.meshOffset = meshOffset
   // Mass (grams) + optional CoM (mm) (#554). A non-positive mass is dropped, so
   // "unset" and "zero" both mean fall back to a volume estimate downstream.
   if (typeof part.mass_g === 'number' && Number.isFinite(part.mass_g) && part.mass_g > 0) {
@@ -2205,6 +2248,10 @@ export function normalisePart(part: PartDefinition): PartDefinition {
   // whitelist keeps the SAME fields the YAML round-trip does (no silent drop).
   const electrical = coerceElectrical(part.electrical)
   if (electrical) out.electrical = electrical
+  // The pixel panel (#780) — same deal: the shared coercer, so the editor and the
+  // on-disk form agree on what a valid display block is.
+  const display = coerceDisplay(part.display)
+  if (display) out.display = display
   if (
     part.imageLayer &&
     [part.imageLayer.x, part.imageLayer.y, part.imageLayer.w, part.imageLayer.h].every(
@@ -2297,14 +2344,11 @@ export function normalisePart(part: PartDefinition): PartDefinition {
  */
 export function validatePart(part: PartDefinition): string | null {
   if (!sanitisePartId(part.id)) return 'Give the part a name (it becomes the saved id).'
-  const named = (ps: PartPin[] | undefined): number =>
-    (ps ?? []).filter((p) => String(p.name ?? '').trim() !== '').length
   // Connector contacts count as pins. A Grove or QWIIC module's ONLY electrical
   // interface is its socket — it has no broken-out header at all — so requiring a
-  // header pin would reject an entire (and growing) class of real parts.
-  const pins =
-    (part.headers ?? []).reduce((n, h) => n + named(h.pins), 0) +
-    (part.connectors ?? []).reduce((n, c) => n + named(c.pins), 0)
+  // header pin would reject an entire (and growing) class of real parts. Shared
+  // with the main process's save guard, which used to disagree with this.
+  const pins = connectablePinCount(part)
   if (pins === 0) return 'Add at least one pin — on a header or a connector.'
   if (part.version && !/^\d+\.\d+(\.\d+)?(-[\w.]+)?$/.test(part.version.trim())) {
     return 'Version must look like 1.2.3.'
@@ -2556,6 +2600,158 @@ export function driverDeviceDirs(target: string): string[] {
     dirs.push(acc)
   }
   return dirs
+}
+
+/**
+ * What one install method's `target` MEANS — the label, placeholder and help the
+ * Drivers section puts on the field (#655). The meaning genuinely differs per
+ * method (an install FOLDER for `mip`, a full destination PATH for `copy`,
+ * catalog-derived for `module:`), and until the editor said so the rule lived
+ * only in {@link driverInstallMethod} and a doc comment — an author who typed a
+ * mip spec with a full path got a driver installed to the wrong place. Pure.
+ */
+export interface DriverTargetSpec {
+  label: string
+  placeholder: string
+  hint: string
+  /** false ⇒ the value is derived from the modules catalog and read-only. */
+  editable: boolean
+}
+
+export function driverTargetSpec(method: DriverInstallMethod): DriverTargetSpec {
+  switch (method) {
+    case 'module':
+      return {
+        label: 'Installs to',
+        placeholder: '',
+        hint: 'Derived from the modules catalog — the ordinary module install decides the path.',
+        editable: false
+      }
+    case 'mip':
+      return {
+        label: 'Install folder',
+        placeholder: 'lib',
+        hint: 'mip installs INTO this folder on the board — a folder, not a file path.',
+        editable: true
+      }
+    case 'copy':
+      return {
+        label: 'Path on device',
+        placeholder: 'lib/driver.py',
+        hint: 'The full destination path the file is copied to on the board.',
+        editable: true
+      }
+  }
+}
+
+/**
+ * A ready {@link DriverFile} row for a MODULES-catalog id, or `null` for an
+ * unknown id (so a bad id cannot be authored, #655). The target mirrors the
+ * house convention in the bundled parts — `lib/<file>` — so the Driver Install
+ * banner's "→ target" stays truthful for module rows too.
+ */
+export function moduleDriverRow(id: string): DriverFile | null {
+  const def = moduleById(String(id ?? '').trim())
+  if (!def) return null
+  const path = installPathFor(def)
+  const target = path ? path.replace(/^\//, '') : `lib/${def.importName}.py`
+  return { source: `module:${def.id}`, target, label: `${def.name} driver` }
+}
+
+/** Replace fields of the driver row at `i` (immutable; the Rails-helpers pattern). */
+export function updateDriver(
+  list: DriverFile[],
+  i: number,
+  patchRow: Partial<DriverFile>
+): DriverFile[] {
+  return list.map((d, idx) => (idx === i ? { ...d, ...patchRow } : d))
+}
+
+/** Remove the driver row at `i` (immutable). */
+export function removeDriver(list: DriverFile[], i: number): DriverFile[] {
+  return list.filter((_, idx) => idx !== i)
+}
+
+/** Move the driver row at `i` up (`-1`) or down (`+1`); out-of-range is a no-op. */
+export function moveDriver(list: DriverFile[], i: number, delta: -1 | 1): DriverFile[] {
+  const j = i + delta
+  if (i < 0 || i >= list.length || j < 0 || j >= list.length) return list
+  const next = [...list]
+  ;[next[i], next[j]] = [next[j], next[i]]
+  return next
+}
+
+/**
+ * Author-time problems with one driver row (#655), as short human sentences.
+ *
+ * `partFiles` is the list of `.py`/`.mpy` files that actually sit beside the
+ * part in its library folder, or `null` when that could not be determined (no
+ * folder yet, no api) — a `null` list produces NO missing-file warning, because
+ * warning from ignorance would cry wolf on every healthy part.
+ *
+ * The empty-source/empty-target warnings state the REAL consequence: those rows
+ * are dropped by `normalisePart` on save, which is otherwise invisible. Pure.
+ */
+/**
+ * Is `target` a folder the board actually imports FROM — i.e. does it end in
+ * `lib`? `lib`, `/lib` and a mounted `/sd/lib` all qualify; `lib/modulino` does
+ * not. Used only to warn an author, never to rewrite what they typed. Pure.
+ */
+function isImportRootFolder(target: string): boolean {
+  const segments = String(target ?? '')
+    .trim()
+    .replace(/\\/g, '/')
+    .split('/')
+    .filter((s) => s !== '' && s !== '.')
+  return segments.length === 0 || segments[segments.length - 1] === 'lib'
+}
+
+export function driverRowWarnings(d: DriverFile, partFiles: string[] | null): string[] {
+  const warns: string[] = []
+  const src = String(d.source ?? '').trim()
+  const target = String(d.target ?? '').trim()
+  if (!src) {
+    warns.push('No source — this row is dropped on save.')
+    return warns
+  }
+  const method = driverInstallMethod(src)
+  if (!target) {
+    warns.push(
+      method === 'mip'
+        ? 'No install folder — this row is dropped on save (use lib).'
+        : 'No target path — this row is dropped on save.'
+    )
+  }
+  if (method === 'module') {
+    const id = driverModuleId(src)
+    if (!moduleById(id)) {
+      warns.push(`"${id}" is not in the modules catalog — nothing can install.`)
+    }
+  } else if (method === 'mip') {
+    if (/\.(py|mpy)$/i.test(target)) {
+      warns.push('mip treats the target as an install FOLDER — a file path here lands in the wrong place.')
+    } else if (target && !isImportRootFolder(target)) {
+      // The install folder is also the root every TRANSITIVE DEPENDENCY lands
+      // in, and a dependency is imported by name off `sys.path` — which holds
+      // `lib`, not a folder inside a package. `lib/modulino` would put the
+      // Modulino package's vl53l4cd / lsm6dsox / ltr381rgb drivers somewhere no
+      // import can reach, and the install would still report success (#785).
+      warns.push(
+        'mip installs this package AND its dependencies into this folder, so it must be one ' +
+          'the board imports from (lib) — inside another package they cannot be imported.'
+      )
+    }
+  } else {
+    // copy — a URL or a file shipped beside the part.
+    if (target && !/\.(py|mpy)$/i.test(target)) {
+      warns.push('Copy needs the full destination file path (ending .py), not a folder.')
+    }
+    const isUrl = /^https?:\/\//i.test(src)
+    if (!isUrl && partFiles !== null && !partFiles.includes(src)) {
+      warns.push(`"${src}" does not ship with this part — it would install nothing.`)
+    }
+  }
+  return warns
 }
 
 /** Every pin name declared on the part (for ledLabel / schematic pickers). */

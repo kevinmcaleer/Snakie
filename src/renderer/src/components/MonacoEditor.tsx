@@ -26,6 +26,8 @@ import {
 import { registerInlineCompletions } from './inline-completions'
 import { setActiveEditor, dispatchOpenFind, dispatchOpenHelp } from './editorBridge'
 import { resolveHelpTarget } from './context-help'
+import { setCompletionDialect } from './micropython-completions'
+import { useHelpDialect } from '../hooks/useHelpDialect'
 import { validateFormat, formatKindForName } from './format-validate'
 import {
   clearFormatDiagnostics,
@@ -38,9 +40,23 @@ import {
   clearBoardPinDiagnostics,
   registerBoardPinCodeActions
 } from './board-pin-diagnostics'
+import { clearRefactorCache, registerRefactorCodeActions, tidyFile } from './refactor-code-actions'
+import { refactorHints, rulesCoveredByLinter } from './refactor-hints'
+import { getCachedCapabilities } from '../lib/board-capabilities'
 import { boardPartFor } from './part-editor.util'
 import { DEFAULT_BOARD_ID } from './board-defs'
 import { PARTS_CHANGED_EVENT } from './PartsPanel'
+import {
+  attachSpriteThumbnails,
+  type SpriteThumbScope,
+  type SpriteThumbnailController
+} from './sprite-decorations'
+import {
+  attachSpriteCompletions,
+  type SpriteCompletionsController
+} from './sprite-completion-source'
+import { openSpriteEditor } from './sprite-editor-bus'
+import { dirname, isLocalSource } from './sprite-refs'
 
 // Register the plugin quick-fix (lightbulb) provider exactly once at module
 // load, mirroring the completion provider. The function is idempotent and
@@ -61,6 +77,11 @@ registerInlineCompletions(monaco)
 // load. Idempotent + HMR-guarded; offers "change the bus id" on a mismatch.
 registerBoardPinCodeActions(monaco)
 
+// Register the refactoring provider (#634) once at module load. Idempotent +
+// HMR-guarded; turns the shared engine's offers into `refactor.*` code actions
+// whose command opens the diff preview rather than rewriting the file outright.
+registerRefactorCodeActions(monaco)
+
 /** Monaco marker owner used for plugin-sourced diagnostics. */
 const PLUGIN_MARKER_OWNER = 'snakie-plugins'
 
@@ -68,6 +89,13 @@ const PLUGIN_MARKER_OWNER = 'snakie-plugins'
  * distinct owner lets format squiggles coexist with the plugin lint squiggles
  * without either clobbering the other's markers. */
 const FORMAT_MARKER_OWNER = 'snakie-format'
+
+/**
+ * Monaco marker owner for the refactoring engine's whole-file hints (#634).
+ * Its own owner so the hints coexist with ruff's squiggles and the format
+ * validator's without either clobbering the other.
+ */
+const REFACTOR_MARKER_OWNER = 'snakie-refactor'
 
 /** Debounce window (ms) before re-linting after the active file changes. */
 const LINT_DEBOUNCE_MS = 400
@@ -217,14 +245,29 @@ function editorMetricsFor(
  *  - the editor auto-lays-out, so it tracks panel resizes
  */
 export function MonacoEditor(): JSX.Element {
-  const { openFiles, activeId, revealRequest, updateContent, saveFile } = useWorkspace()
-  const { setDiagnostics, setLinterTool, clear: clearDiagnostics } = useDiagnostics()
+  const { openFiles, activeId, revealRequest, updateContent, saveFile, currentFolder } =
+    useWorkspace()
+  const {
+    setDiagnostics,
+    setRefactorHints,
+    setLinterTool,
+    clear: clearDiagnostics
+  } = useDiagnostics()
   // Notebook line spacing (issues #80/#81) — drives Monaco's line height to match
   // the ruled-paper CSS period.
   const { lineSpacing, editorTheme, minimap } = useEditorSettings()
   // Linting on/off (issue #65), persisted. When off the lint effect no-ops and
   // clears markers + the shared diagnostics store.
   const [lintingEnabled] = useLocalStorage<boolean>('snakie.lintingEnabled', true)
+  // Refactoring hints (#634 §9): the MicroPython rules are bugs waiting to
+  // happen so they are always on, but the style rules are opinions — a file full
+  // of blue hints would demoralise a learner, so those are opt-in.
+  const [styleHints] = useLocalStorage<boolean>('snakie.refactor.styleHints', false)
+  // Which Python the suggestions should describe (#763). Follows the connected
+  // board (or the Help panel's override), and the completion provider reads it
+  // through a module-level setter so it switches LIVE — the provider is
+  // registered once for the page but the right answer changes on connect.
+  const { dialect: helpDialect } = useHelpDialect()
 
   const containerRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
@@ -248,12 +291,39 @@ export function MonacoEditor(): JSX.Element {
   const saveFileRef = useRef(saveFile)
   const activeIdRef = useRef(activeId)
   const setDiagnosticsRef = useRef(setDiagnostics)
+  const setRefactorHintsRef = useRef(setRefactorHints)
   const setLinterToolRef = useRef(setLinterTool)
+  const styleHintsRef = useRef(styleHints)
+  // The latest ruff diagnostics, read by the refactoring hint pass so it can
+  // stay quiet about anything ruff has already flagged (#634 §5). A ref, not
+  // a dependency: the two passes finish on different schedules and neither
+  // should re-trigger the other.
+  const lintDiagnosticsRef = useRef<Diagnostic[]>([])
   updateContentRef.current = updateContent
   saveFileRef.current = saveFile
   activeIdRef.current = activeId
   setDiagnosticsRef.current = setDiagnostics
+  setRefactorHintsRef.current = setRefactorHints
   setLinterToolRef.current = setLinterTool
+  styleHintsRef.current = styleHints
+  // Read inside the context-help action, which is registered once with the editor.
+  const helpDialectRef = useRef(helpDialect)
+  helpDialectRef.current = helpDialect
+
+  // Inline sprite thumbnails (#790). The controller is created with the editor
+  // and reads its resolution scope through a ref, so a file/folder change costs a
+  // `refresh()` rather than a re-attach.
+  const spriteThumbsRef = useRef<SpriteThumbnailController | null>(null)
+  const spriteScopeRef = useRef<SpriteThumbScope>({ fileDir: null, projectRoot: null })
+  // Sprite name completions (#791) read the SAME scope — one folder rule for the
+  // thumbnail beside a name and for the list a name is picked from.
+  const spriteCompletionsRef = useRef<SpriteCompletionsController | null>(null)
+
+  // Point the completion provider at the runtime in use. Cheap, idempotent, and
+  // the next keystroke completes against the new catalogue.
+  useEffect(() => {
+    setCompletionDialect(helpDialect)
+  }, [helpDialect])
 
   // Create the editor once.
   useEffect(() => {
@@ -330,20 +400,69 @@ export function MonacoEditor(): JSX.Element {
         const word = pos ? ed.getModel()?.getWordAtPosition(pos)?.word : undefined
         if (!word) return
         const libs = await window.api.parts.listLibraries().catch(() => [])
-        const target = resolveHelpTarget(word, libs)
+        // Dialect-aware (#763): `I2C` means different pages on the two runtimes,
+        // and a MicroPython name on a CircuitPython board resolves to the page
+        // that says what to write instead.
+        const target = resolveHelpTarget(word, libs, helpDialectRef.current)
         if (target) dispatchOpenHelp(target.articleId)
       }
     })
+
+    // Right-click Refactor… (#634): opens Monaco's code-action picker filtered
+    // to `refactor.*`, listing what the shared engine offers for the selection.
+    // Every entry previews its diff before it touches the file, and a file that
+    // doesn't parse offers nothing at all.
+    editor.addAction({
+      id: 'snakie.refactor',
+      label: 'Refactor… (Snakie)',
+      contextMenuGroupId: 'navigation',
+      contextMenuOrder: 1.2,
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyR],
+      precondition: 'editorLangId == python',
+      run: (ed) => {
+        void ed.getAction('editor.action.refactor')?.run()
+      }
+    })
+
+    // Tidy this file (#634 R7): apply every provably-safe refactoring at once,
+    // as one preview and one undo step. Kept off the speed/RAM trade-off rules.
+    editor.addAction({
+      id: 'snakie.refactor.tidyFile',
+      label: 'Tidy this file (Snakie)',
+      contextMenuGroupId: 'navigation',
+      contextMenuOrder: 1.3,
+      precondition: 'editorLangId == python',
+      run: () => tidyFile(monaco)
+    })
+
+    // Inline sprite thumbnails (#790): a `.spr` named in a string literal draws
+    // itself beside the code, and clicking it opens that file in the Sprite
+    // editor. Attached here (rather than in its own effect) so it is disposed
+    // BEFORE the editor is, and torn down with it.
+    spriteThumbsRef.current = attachSpriteThumbnails(monaco, editor, {
+      getScope: () => spriteScopeRef.current,
+      onOpen: (path) => openSpriteEditor(path)
+    })
+
+    // Sprite name completions (#791): typing a quote offers the project's `.spr`
+    // files. This installs the SOURCE the one registered `python` completion
+    // provider reads — it does not register a provider of its own.
+    spriteCompletionsRef.current = attachSpriteCompletions(() => spriteScopeRef.current)
 
     const modelStore = models.current
     return () => {
       changeDisposable.dispose()
       setActiveEditor(null)
+      spriteThumbsRef.current?.dispose()
+      spriteThumbsRef.current = null
+      spriteCompletionsRef.current?.dispose()
+      spriteCompletionsRef.current = null
       editor.dispose()
       editorRef.current = null
       modelStore.forEach((m) => {
         clearModelDiagnostics(m.uri.toString())
         clearFormatDiagnostics(m.uri.toString())
+        clearRefactorCache(m.uri.toString())
         m.dispose()
       })
       modelStore.clear()
@@ -414,6 +533,30 @@ export function MonacoEditor(): JSX.Element {
     }
   }, [activeFile, activeFile?.id, activeFile?.content, activeFile?.name])
 
+  // Keep the sprite-thumbnail resolver pointed at the right folders (#790): a
+  // `.spr` named in code is looked for beside the file first, then in the open
+  // project folder. A DEVICE buffer's own folder is on the board (the local fs
+  // can't read it), and an untitled buffer has none — both fall back to the
+  // project folder, and a reference with nowhere to resolve draws nothing.
+  useEffect(() => {
+    // Both halves come from `sprite-refs.ts` (#797): `isLocalSource` is the same
+    // judgement the "used in" scan makes about a board buffer, and `dirname` the
+    // same folder rule the scan resolves its own sources against — including a
+    // file sitting AT a root, which the copy that used to live here dropped.
+    const local = isLocalSource(activeFile?.source)
+    const path = local ? (activeFile?.path ?? '') : ''
+    spriteScopeRef.current = {
+      fileDir: dirname(path),
+      projectRoot: currentFolder,
+      local
+    }
+    spriteThumbsRef.current?.refresh()
+    // Same folders, same moment: re-index the project's `.spr` files (#791) so
+    // the completion list is warm before the first quote is typed, rather than
+    // being built on the keystroke that needs it.
+    spriteCompletionsRef.current?.refresh()
+  }, [activeFile, activeFile?.id, activeFile?.path, activeFile?.source, currentFolder])
+
   // Reactive linting: when the active file's content changes (or the active
   // file switches), debounce then run all plugin linters and paint the results
   // as Monaco markers (squiggles). Stale requests are dropped via a per-run
@@ -467,6 +610,7 @@ export function MonacoEditor(): JSX.Element {
           applyDiagnostics(m, diagnostics)
           // Publish to the shared store so the Problems panel mirrors the
           // squiggles painted above.
+          lintDiagnosticsRef.current = diagnostics
           setDiagnosticsRef.current(diagnostics)
           // Probe which linter tool the host found (drives the "install ruff"
           // hint). Only meaningful for Python files; ignore failures.
@@ -590,6 +734,50 @@ export function MonacoEditor(): JSX.Element {
 
     return () => clearTimeout(timer)
   }, [activeFile, activeFile?.id, activeFile?.content, activeFile?.name])
+
+  // Refactoring hints (#634 R7): run the whole catalogue over the active Python
+  // file and publish the results as `hint`-severity diagnostics.
+  //
+  // Deliberately independent of the plugin lint effect above: the engine is pure
+  // TypeScript, so this works with NO Python installed and in the web build,
+  // which is exactly the audience the epic wanted refactorings to reach. It is
+  // also why the hints live in their own store slot and their own marker owner —
+  // the two passes finish on different schedules and must not wipe each other.
+  useEffect(() => {
+    if (!activeFile) return undefined
+    const model = models.current.get(activeFile.id)
+    if (!model || model.isDisposed()) return undefined
+
+    if (!lintingEnabled || !/\.py$/i.test(activeFile.name)) {
+      monaco.editor.setModelMarkers(model, REFACTOR_MARKER_OWNER, [])
+      setRefactorHintsRef.current([])
+      return undefined
+    }
+
+    const file = activeFile
+    const timer = setTimeout(() => {
+      const m = models.current.get(file.id)
+      if (!m || m.isDisposed()) return
+      // A file that doesn't parse yields no hints at all, so half-typed lines
+      // never light the panel up.
+      const hints = refactorHints(file.content, {
+        includeStyleHints: styleHintsRef.current,
+        capabilities: getCachedCapabilities(),
+        fileName: file.name,
+        // Don't say what ruff has already said (#634 §5). Ruff's row keeps its
+        // autofix; our explanation stays a click away on the right-click menu.
+        alreadyReported: rulesCoveredByLinter(lintDiagnosticsRef.current)
+      })
+      monaco.editor.setModelMarkers(
+        m,
+        REFACTOR_MARKER_OWNER,
+        hints.map((h) => diagnosticToMarker(m, h))
+      )
+      setRefactorHintsRef.current(hints)
+    }, LINT_DEBOUNCE_MS)
+
+    return () => clearTimeout(timer)
+  }, [activeFile, activeFile?.id, activeFile?.content, activeFile?.name, lintingEnabled, styleHints])
 
   // With no active file open there is nothing to lint, so the Problems panel
   // should be empty (e.g. after closing the last tab).

@@ -19,8 +19,25 @@
  * All exported IO is best-effort + defensive: a malformed `parts.yml` is skipped
  * (the rest of the library still loads), and writers return a serialisable
  * `{ ok, error }` rather than throwing across IPC.
+ *
+ * TWO RULES GOVERN EVERY WRITER HERE (#750). The library is a folder of plain
+ * text files, so a script, an editor and `git` are all first-class authors of it
+ * — and this module used to assume it was the only one:
+ *
+ *   1. **Never overwrite a file you have not read.** `readPart` stamps each part
+ *      with `sourceHash`, the hash of the exact `parts.yml` text it parsed;
+ *      `writePart` refuses when the file no longer hashes to the stamp it was
+ *      handed. A save that would revert someone else's edit fails loudly.
+ *   2. **Never delete a file you did not author.** A part owns the assets its own
+ *      `parts.yml` names, and nothing else. No `rm -rf` of a part folder to make
+ *      it match a copy in memory, no blanket sweep of `image.*` / `help.md`.
+ *
+ * Both were learned the hard way: a running app reverted corrected I²C addresses,
+ * connector rotations and board dimensions four times in one session, and deleted
+ * a part's help document and mesh from disk while doing it.
  */
 
+import { connectablePinCount } from '../../shared/part'
 import { app } from 'electron'
 import { basename, join, resolve, sep } from 'path'
 import { createHash } from 'crypto'
@@ -39,8 +56,10 @@ import {
   type BundledPartStatus,
   type SeedManifest
 } from '../../shared/bundled-seed'
-import { bumpPatch } from '../../shared/part-registry'
-import { reporter } from '../report-error'
+import { bumpPatch, compareVersions } from '../../shared/part-registry'
+import { MESH_EXTENSIONS, meshAssetName, resolveMeshTarget } from '../../shared/part-mesh-file'
+import { stlMaxDim } from '../robot/stl-measure'
+import { reportError, reporter } from '../report-error'
 import type { PartDefinition, PartLibrary, PartLibraryWithParts } from '../../shared/part'
 
 /** Absolute path to the user's parts folder (`<userData>/parts`). */
@@ -197,9 +216,15 @@ async function syncBundledLibrary(src: string, dest: string): Promise<void> {
       hashes[folder] = hashText(bundleYml)
       dirty = true
     } else if (action === 'refresh') {
-      // Untouched since seeded → adopt the newer bundle wholesale.
-      await fsp.rm(destPart, { recursive: true, force: true }).catch(reporter('parts: seed refresh rm'))
-      await fsp.cp(srcPart, destPart, { recursive: true }).catch(reporter('parts: seed refresh cp'))
+      // Untouched since seeded → adopt the newer bundle wholesale. "Untouched"
+      // is judged on `parts.yml` ALONE, so this used to `rm -rf` a folder that
+      // could well hold files of the user's own — a mesh, a datasheet, a photo.
+      // Copy over the top instead: the bundle wins every file it ships, and
+      // nothing else is destroyed (#750). A file the bundle dropped is left
+      // behind but inert, since the refreshed parts.yml no longer names it.
+      await fsp
+        .cp(srcPart, destPart, { recursive: true, force: true })
+        .catch(reporter('parts: seed refresh cp'))
       hashes[folder] = hashText(bundleYml)
       dirty = true
     } else if (action === 'backfill' && localYml !== null) {
@@ -394,15 +419,30 @@ export function sanitiseId(id: string): string {
     .replace(/^-+|-+$/g, '')
 }
 
+/**
+ * The image formats a part may ship. The single source of truth for what the app
+ * will read: {@link MIME_BY_EXT} is typed against it, so the compiler refuses a
+ * format that is listed here but unmapped (or mapped but unlisted), and
+ * `test/packagingContract.test.ts` holds the installer's copy globs to the same
+ * list — a format the app accepts but the installer never copies ships a part
+ * with no photo, and that has happened.
+ */
 const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'svg', 'gif', 'webp'] as const
 
-const MIME_BY_EXT: Record<string, string> = {
+type ImageExt = (typeof IMAGE_EXTS)[number]
+
+const MIME_BY_EXT: Record<ImageExt, string> = {
   png: 'image/png',
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
   svg: 'image/svg+xml',
   gif: 'image/gif',
   webp: 'image/webp'
+}
+
+/** The MIME type for a file extension, or undefined for one we don't ship. */
+function mimeForExt(ext: string): string | undefined {
+  return (MIME_BY_EXT as Record<string, string | undefined>)[ext]
 }
 
 /** Decode a `data:<mime>;base64,<data>` (or `data:image/svg+xml,<text>`) URL. */
@@ -440,7 +480,7 @@ async function inlineImage(partDir: string, filename: string): Promise<string | 
     return undefined
   }
   const ext = filename.split('.').pop()?.toLowerCase() ?? ''
-  const mime = MIME_BY_EXT[ext]
+  const mime = mimeForExt(ext)
   if (!mime) return undefined
   try {
     const buf = await fsp.readFile(join(partDir, filename))
@@ -467,13 +507,6 @@ async function inlineHelp(partDir: string, filename: string): Promise<string | u
   }
 }
 
-/** Delete every `image.<ext>` asset in a part folder (clean slate before write). */
-async function removeImageAssets(partDir: string, base = 'image'): Promise<void> {
-  await Promise.all(
-    IMAGE_EXTS.map((ext) => fsp.unlink(join(partDir, `${base}.${ext}`)).catch(() => undefined))
-  )
-}
-
 /** Read + parse one part folder. Returns null if it has no valid `parts.yml`. */
 async function readPart(libDir: string, partId: string): Promise<PartDefinition | null> {
   const partDir = join(libDir, partId)
@@ -490,6 +523,10 @@ async function readPart(libDir: string, partId: string): Promise<PartDefinition 
     console.warn(`[parts] skipping ${partId}/parts.yml: ${(err as Error).message}`)
     return null
   }
+  // Stamp the part with the exact bytes it came from (#750). `writePart` refuses
+  // to overwrite a `parts.yml` that no longer hashes to this, so an edit made
+  // outside the app can't be silently undone by a save of a stale in-memory copy.
+  part.sourceHash = hashText(raw)
   if (!part.id) part.id = partId
   if (!Array.isArray(part.headers)) part.headers = []
   if (part.image) {
@@ -579,6 +616,52 @@ export interface WriteResult {
   id?: string
   /** The library the part was written to. */
   libraryId?: string
+  /**
+   * The write was REFUSED because `parts.yml` changed on disk since the caller
+   * read it (#750) — not a failure to write, a refusal to destroy. The UI shows
+   * a reload rather than an ordinary error.
+   */
+  conflict?: boolean
+  /**
+   * The part was written, but the model its `mesh:` names is NOT in the folder
+   * it was written to (#787) — the filename, so the caller can say which.
+   *
+   * Not an error: the `parts.yml` is on disk and correct. It is the one thing a
+   * successful save cannot make true on its own, and staying quiet about it is
+   * how the 9V battery shipped a reference to a file that was never there.
+   */
+  missingMesh?: string
+  /** The stamp of the file as just written — the caller's new baseline, so the
+   *  next save in the same session isn't mistaken for a stale one (#750). */
+  sourceHash?: string
+}
+
+/** Options for {@link writePart}. */
+export interface WritePartOptions {
+  /**
+   * Skip the changed-on-disk check. ONLY for paths whose whole purpose is to
+   * replace the destination with something read fresh moments earlier (the dev
+   * `promoteToStandard`). Never for an editor save.
+   */
+  force?: boolean
+  /**
+   * The folder this part was OPENED from, when the save is landing somewhere
+   * else — so a mesh left behind there can follow it (#787).
+   *
+   * This is the whole of the #787 bug. A part's image and help ride in memory as
+   * a data URL and a string, so "save it somewhere else" carries them for free;
+   * the mesh exists only on disk, so it did not move. Linking wrote
+   * `battery-9v.stl` into `my-parts/9v-battery/`, the save then wrote the
+   * `parts.yml` — reference, rotation and all — into
+   * `snakie-standard/9v-battery/`, and the two halves of the part ended up in
+   * different folders with nothing said.
+   *
+   * BOTH halves of the folder name matter, because either can change under a
+   * part: picking a different library in the save dropdown (what happened to the
+   * 9V battery), or editing the part's id, which sends the save to a new folder
+   * just the same.
+   */
+  assetsFrom?: { libraryId?: string; partId?: string }
 }
 
 /**
@@ -618,42 +701,87 @@ async function unlinkQuietly(path: string, label: string): Promise<void> {
  * Write a part to `<parts>/<libraryId>/<partId>/parts.yml` (+ image asset).
  * Auto-creates the library folder. The part's `imageData` (a data URL) is
  * written out to `image.<ext>` and `parts.yml`'s `image` set to the filename;
- * if `imageData` is absent any existing image asset is removed.
+ * if `imageData` is absent the image asset THIS PART referenced is removed.
+ *
+ * Two rules make a save non-destructive (#750):
+ *
+ * 1. **Stamp and check.** `readPart` hands out `sourceHash` — a hash of the exact
+ *    `parts.yml` text it parsed. A write must present that stamp and it must
+ *    still match the file on disk. If it doesn't, something outside the app
+ *    changed the part while it was open, and we refuse (`conflict: true`) rather
+ *    than serialise a stale in-memory copy over corrected data. A part folder
+ *    with no `parts.yml` yet is a new part and needs no stamp.
+ * 2. **Prune only what this part authored.** The old writer swept away every
+ *    `image.<ext>` / `rear.<ext>` and any `help.md` regardless of whether the
+ *    part referenced them, which deleted hand-placed files (a `help.md`, a mesh)
+ *    on an unrelated save. Now only the assets the PREVIOUS `parts.yml` pointed
+ *    at are removed, and only when they're being replaced or cleared.
  */
-export async function writePart(libraryId: string, part: PartDefinition): Promise<WriteResult> {
+export async function writePart(
+  libraryId: string,
+  part: PartDefinition,
+  opts: WritePartOptions = {}
+): Promise<WriteResult> {
   try {
     const libId = sanitiseId(libraryId) || LOCAL_LIBRARY_ID
     const partId = sanitiseId(part.id)
     if (!partId) return { ok: false, error: 'Part id is empty after sanitising.' }
-    if (!Array.isArray(part.headers) || part.headers.length === 0) {
-      return { ok: false, error: 'A part needs at least one header with pins.' }
+    // A part needs SOMEWHERE to connect — but that need not be a header. A Grove
+    // or QWIIC module's only electrical interface is its socket, and it has no
+    // broken-out header at all. This guard used to ask only that `headers` be
+    // non-empty, so such a part passed the editor's own check and was then
+    // rejected here, naming a thing it correctly does not have. Both callers now
+    // share one rule (#130).
+    if (connectablePinCount(part) === 0) {
+      return { ok: false, error: 'A part needs at least one pin — on a header or a connector.' }
     }
 
     const partDir = join(partsDir(), libId, partId)
+    const ymlPath = join(partDir, 'parts.yml')
+
+    // --- 1) Stamp and check (#750) -----------------------------------------
+    // Read the file we're about to replace BEFORE creating anything, so a
+    // refusal leaves the folder exactly as it was.
+    const onDisk = await readTextOrNull(ymlPath)
+    if (onDisk !== null && !opts.force) {
+      const stamp = typeof part.sourceHash === 'string' ? part.sourceHash : undefined
+      if (stamp === undefined) {
+        return {
+          ok: false,
+          conflict: true,
+          id: partId,
+          libraryId: libId,
+          error: `"${partId}" already exists on disk and this copy of it carries no read stamp, so saving it could destroy data Snakie never read. Reopen the part from the Parts panel and try again.`
+        }
+      }
+      if (stamp !== hashText(onDisk)) {
+        return {
+          ok: false,
+          conflict: true,
+          id: partId,
+          libraryId: libId,
+          error: `"${partId}" changed on disk since Snakie read it — refusing to overwrite it. Reload the parts library (or reopen the part), then re-apply your edit.`
+        }
+      }
+    }
+
     await fsp.mkdir(partDir, { recursive: true })
+
+    // What the file currently points at — the ONLY assets this save may remove.
+    let prev: PartDefinition | null = null
+    if (onDisk !== null) {
+      try {
+        prev = partFromYaml(onDisk)
+      } catch {
+        // Unreadable → we know of no assets, so we delete none.
+      }
+    }
 
     // Persist the image asset from the runtime data URL, if any.
     const toWrite: PartDefinition = { ...part, id: partId }
     delete toWrite.imageData
     delete toWrite.helpText
-    // Remove the previously-referenced assets too (community/hand-authored parts
-    // may name them e.g. `board.jpg`, which removeImageAssets wouldn't catch).
-    try {
-      const prev = partFromYaml(await fsp.readFile(join(partDir, 'parts.yml'), 'utf-8'))
-      if (prev.image && isContainedFile(partDir, prev.image)) {
-        await unlinkQuietly(join(partDir, prev.image), 'parts: remove old image')
-      }
-      if (prev.rear?.image && isContainedFile(partDir, prev.rear.image)) {
-        await unlinkQuietly(join(partDir, prev.rear.image), 'parts: remove old rear image')
-      }
-      if (prev.help && isContainedFile(partDir, prev.help)) {
-        await unlinkQuietly(join(partDir, prev.help), 'parts: remove old help')
-      }
-    } catch {
-      // No existing part / unreadable → nothing to clean up.
-    }
-    await removeImageAssets(partDir)
-    await removeImageAssets(partDir, 'rear')
+    delete toWrite.sourceHash
     if (part.imageData) {
       const decoded = decodeDataUrl(part.imageData)
       if (decoded) {
@@ -691,20 +819,90 @@ export async function writePart(libraryId: string, part: PartDefinition): Promis
     }
 
     // Persist the bundled help markdown, if any (empty ⇒ drop the reference).
+    // NB: no blanket `help.md` unlink. A `help.md` the part never referenced is
+    // not ours to delete — that is how modulino-led-matrix/help.md vanished
+    // (#750). The previously-referenced one is cleaned up below.
     const helpText = typeof part.helpText === 'string' ? part.helpText : undefined
     if (helpText && helpText.trim()) {
       await fsp.writeFile(join(partDir, 'help.md'), helpText, 'utf-8')
       toWrite.help = 'help.md'
     } else {
-      await unlinkQuietly(join(partDir, 'help.md'), 'parts: remove help')
       delete toWrite.help
     }
 
-    await fsp.writeFile(join(partDir, 'parts.yml'), partToYaml(toWrite), 'utf-8')
-    return { ok: true, id: partId, libraryId: libId }
+    // --- 2) Prune ONLY the assets the previous parts.yml pointed at, and only
+    // when they are being replaced or cleared. Anything else beside `parts.yml`
+    // (a mesh, a datasheet, a hand-written help, a second photo) is not this
+    // save's to delete (#750). Done AFTER the new assets are written, so a
+    // same-name replacement never leaves the folder empty mid-write.
+    const dropAsset = async (was: string | undefined, now: string | undefined, label: string): Promise<void> => {
+      if (!was || was === now) return
+      if (!isContainedFile(partDir, was)) return
+      await unlinkQuietly(join(partDir, was), label)
+    }
+    await dropAsset(prev?.image, toWrite.image, 'parts: remove old image')
+    await dropAsset(prev?.rear?.image, toWrite.rear?.image, 'parts: remove old rear image')
+    await dropAsset(prev?.help, toWrite.help, 'parts: remove old help')
+
+    const text = partToYaml(toWrite)
+    await fsp.writeFile(ymlPath, text, 'utf-8')
+
+    // --- 3) The mesh must be in the folder the part was just written to (#787).
+    const missingMesh = await settleMesh(partDir, toWrite.mesh, opts.assetsFrom, libId, partId)
+
+    // Hand back the new baseline so the caller's NEXT save isn't taken for stale.
+    return { ok: true, id: partId, libraryId: libId, sourceHash: hashText(text), missingMesh }
   } catch (err) {
     return { ok: false, error: (err as Error).message }
   }
+}
+
+/**
+ * Make the part's `mesh:` reference true where the part now lives, or say it
+ * isn't (#787). Returns the filename that is still missing, or `undefined`.
+ *
+ * A `parts.yml` naming a model that is not beside it is a broken part, and until
+ * this the app never checked. Two things happen here, in order:
+ *
+ *  1. **Carry.** If the model is absent from the destination but present in the
+ *     folder the part was opened from, copy it across. That is a part MOVING
+ *     library — the `parts.yml` moves, so its assets must move with it.
+ *  2. **Report.** If it still isn't there, the save succeeded but the reference
+ *     is dangling; hand the name back so the editor can say so.
+ *
+ * Never destructive: this only ever ADDS a file to the destination, and never
+ * overwrites one already there (a same-named model already in the destination is
+ * that folder's own, and #750's rule says it is not this save's to replace).
+ */
+async function settleMesh(
+  partDir: string,
+  mesh: string | undefined,
+  assetsFrom: WritePartOptions['assetsFrom'],
+  libId: string,
+  partId: string
+): Promise<string | undefined> {
+  const name = typeof mesh === 'string' ? mesh.trim() : ''
+  if (!name) return undefined
+  // A reference that escapes the part folder was never resolvable; the readers
+  // reject it too, so report it rather than trying to satisfy it.
+  if (!isContainedFile(partDir, name)) return name
+  const dest = join(partDir, name)
+  if (existsSync(dest)) return undefined
+
+  // Where the part came FROM: either half may have changed — a different library
+  // (the 9V battery) or a renamed id — and both send the save to a new folder.
+  const fromLib = sanitiseId(assetsFrom?.libraryId ?? '') || libId
+  const fromPart = sanitiseId(assetsFrom?.partId ?? '') || partId
+  const fromDir = join(partsDir(), fromLib, fromPart)
+  if (fromDir !== partDir && isContainedFile(fromDir, name) && existsSync(join(fromDir, name))) {
+    try {
+      await fsp.copyFile(join(fromDir, name), dest)
+      return undefined
+    } catch (err) {
+      reportError('parts: carry the linked mesh to the new part folder', err)
+    }
+  }
+  return existsSync(dest) ? undefined : name
 }
 
 /** Result of reading a part driver file's source (never throws across IPC). */
@@ -751,6 +949,29 @@ export async function readDriverSource(
 }
 
 /**
+ * The driver-candidate files shipped inside a part's folder (#655): the `.py` /
+ * `.mpy` basenames beside `parts.yml`, sorted. Lets the Part Editor OFFER what
+ * actually ships instead of a free-typed filename, and warn when a bundled
+ * driver names a file that isn't there (which installs nothing, discoverable
+ * today only on hardware). Returns `[]` for an unknown part or a folder that
+ * doesn't exist yet — never throws across IPC.
+ */
+export async function listPartDriverFiles(libraryId: string, partId: string): Promise<string[]> {
+  const libId = sanitiseId(libraryId)
+  const pId = sanitiseId(partId)
+  if (!libId || !pId) return []
+  try {
+    const entries = await fsp.readdir(join(partsDir(), libId, pId), { withFileTypes: true })
+    return entries
+      .filter((e) => e.isFile() && /\.(py|mpy)$/i.test(e.name))
+      .map((e) => e.name)
+      .sort()
+  } catch {
+    return []
+  }
+}
+
+/**
  * Resolve the absolute path to a bundled file inside a part folder
  * (`<parts>/<lib>/<part>/<filename>`), path-traversal guarded like the driver/image
  * readers. Returns null for an unsafe or unknown ref. Used to copy a part's linked
@@ -764,6 +985,133 @@ export function resolvePartAsset(libraryId: string, partId: string, filename: st
   const partDir = join(partsDir(), libId, pId)
   if (!isContainedFile(partDir, file)) return null
   return join(partDir, file)
+}
+
+/** Result of linking a 3-D mesh into a part folder (#741). Never throws across IPC. */
+export interface MeshImportResult {
+  ok: boolean
+  /** The bare filename to record in `parts.yml`'s `mesh:`, when `ok`. */
+  filename?: string
+  /** True when a byte-identical file was already there and nothing was copied. */
+  reused?: boolean
+  /**
+   * The linked STL's largest bounding-box span in its OWN units (#787), so the
+   * caller can record `meshUnits` at link time. An `.stl` states no units, so
+   * this is the only moment the app can look at the geometry and write a
+   * conclusion down. Undefined for a `.dae` or an unparsable file — the caller
+   * then records nothing rather than inventing a value.
+   */
+  maxDim?: number
+  error?: string
+}
+
+/**
+ * Copy a chosen STL/DAE into a part's own folder and hand back the filename to
+ * record as `mesh:` (#741).
+ *
+ * THE COPY IS THE POINT. A part folder is the unit that gets zipped, committed
+ * and published, so a mesh living in `~/Downloads` is a link that travels
+ * nowhere; before this the only way to attach one was to copy the file by hand
+ * and edit two lines of `parts.yml`.
+ *
+ * Collisions obey #750's second rule — never delete (or overwrite) a file this
+ * part did not author:
+ *
+ *  - the mesh the part CURRENTLY references (`replaces`) may be overwritten;
+ *    that is what a Replace button means, and it keeps the filename stable;
+ *  - a byte-identical file already in the folder is re-used, copying nothing —
+ *    re-linking the same STL twice must not litter the folder;
+ *  - any other collision takes the next free `name-2.stl`.
+ *
+ * The destination is always `<userData>/parts/...`, never the bundled repo copy.
+ * A symlinked SOURCE is fine (the user picked it in a native dialog and
+ * `copyFile` dereferences it); it is the destination side that is guarded.
+ */
+export async function importPartMesh(
+  libraryId: string,
+  partId: string,
+  source: string,
+  replaces?: string
+): Promise<MeshImportResult> {
+  try {
+    const libId = sanitiseId(libraryId) || LOCAL_LIBRARY_ID
+    const pId = sanitiseId(partId)
+    if (!pId) return { ok: false, error: 'This part has no id yet — name it before linking a model.' }
+    const desired = meshAssetName(source)
+    if (!desired) {
+      return { ok: false, error: `Snakie can open ${MESH_EXTENSIONS.map((e) => `.${e}`).join(' and ')} models; that file is neither.` }
+    }
+    const bytes = await fsp.readFile(source)
+
+    const partDir = join(partsDir(), libId, pId)
+    await fsp.mkdir(partDir, { recursive: true })
+    const taken = (await fsp.readdir(partDir, { withFileTypes: true }))
+      .filter((e) => e.isFile())
+      .map((e) => e.name)
+
+    // Which of the candidate names already hold EXACTLY these bytes. Only the
+    // handful of names the resolver could pick are hashed, not the whole folder.
+    const stem = desired.slice(0, desired.lastIndexOf('.'))
+    const ext = desired.slice(desired.lastIndexOf('.'))
+    const sourceHash = createHash('sha256').update(bytes).digest('hex')
+    const identical: string[] = []
+    for (const name of taken) {
+      if (name !== desired && !name.startsWith(`${stem}-`)) continue
+      if (!name.endsWith(ext)) continue
+      try {
+        const buf = await fsp.readFile(join(partDir, name))
+        if (createHash('sha256').update(buf).digest('hex') === sourceHash) identical.push(name)
+      } catch {
+        // Unreadable → treat as "not identical"; the resolver skips past it.
+      }
+    }
+
+    const target = resolveMeshTarget({ desired, taken, identical, replaces })
+    if (!isContainedFile(partDir, target.name)) {
+      return { ok: false, error: `Unsafe mesh filename: ${target.name}` }
+    }
+    if (target.write) await fsp.writeFile(join(partDir, target.name), bytes)
+    // Measure the model NOW so the caller can record `meshUnits` (#787 fault 2).
+    // An STL carries no units; after this moment there is nothing left to read
+    // them off, and a part with `mesh:` but no `meshUnits:` leaves every
+    // consumer re-guessing — which is how a 48 mm battery becomes 48 metres.
+    const maxDim = /\.stl$/i.test(target.name) ? stlMaxDim(bytes) : undefined
+    return { ok: true, filename: target.name, reused: !target.write, maxDim }
+  } catch (err) {
+    return { ok: false, error: (err as Error).message }
+  }
+}
+
+/**
+ * Copy one part folder over another — the dev `<userData>` → repo mirror (#750).
+ *
+ * This used to be `rm -rf dest` followed by a recursive copy, which made the
+ * destination an exact replica of the source. That deleted files the source had
+ * never heard of: `modulino-led-matrix/help.md` and `modulino.stl` were removed
+ * from the repo by a promote, not by anyone asking. So:
+ *
+ * - **Nothing is deleted.** Files present in `src` overwrite their namesakes in
+ *   `dest`; anything else in `dest` is left where it is.
+ * - **A newer destination is refused.** If `dest/parts.yml` differs from the
+ *   source's and carries a HIGHER `version`, the repo copy is ahead of the
+ *   runtime one and this promote would be a revert — exactly the four reverts
+ *   #750 records. Throws with what it would have clobbered.
+ */
+export async function mirrorPartFolder(src: string, dest: string): Promise<void> {
+  const srcYml = await readTextOrNull(join(src, 'parts.yml'))
+  if (srcYml === null) throw new Error(`Nothing to mirror: ${src} has no parts.yml.`)
+  const destYml = await readTextOrNull(join(dest, 'parts.yml'))
+  if (destYml !== null && destYml !== srcYml) {
+    const from = partMeta(srcYml).version
+    const to = partMeta(destYml).version
+    if (from && to && compareVersions(to, from) > 0) {
+      throw new Error(
+        `The copy in ${dest} is v${to}, newer than the v${from} you are promoting — refusing to revert it. Reset the part to bundled (or reopen it) first.`
+      )
+    }
+  }
+  // `force` overwrites same-named files; without `rm -rf` nothing else is lost.
+  await fsp.cp(src, dest, { recursive: true, force: true })
 }
 
 /**
@@ -782,11 +1130,14 @@ export async function promoteToStandard(
   const srcLib = sanitiseId(sourceLibraryId) || LOCAL_LIBRARY_ID
   const part = await readPart(join(partsDir(), srcLib), sanitiseId(partId))
   if (!part) return { ok: false, error: 'Source part not found.' }
-  // 1) Runtime copy (shows in the board selector immediately).
-  const res = await writePart(STANDARD_LIBRARY_ID, part)
+  // 1) Runtime copy (shows in the board selector immediately). `force`, because
+  //    replacing the Standard copy IS the point here and `part` was read off disk
+  //    a line ago — it cannot be the stale copy the guard exists to stop (#750).
+  const res = await writePart(STANDARD_LIBRARY_ID, part, { force: true })
   if (!res.ok) return res
   // 2) Dev only: mirror into the bundled repo library so it's committed + shipped.
   let shipped = false
+  let shipError: string | undefined
   if (!app.isPackaged) {
     try {
       const repoDir = bundledStandardLibraryDir()
@@ -797,15 +1148,16 @@ export async function promoteToStandard(
         const runtimeManifest = join(partsDir(), STANDARD_LIBRARY_ID, 'library.yml')
         if (existsSync(runtimeManifest)) await fsp.copyFile(runtimeManifest, manifest)
       }
-      const repoPartDir = join(repoDir, id)
-      await fsp.rm(repoPartDir, { recursive: true, force: true })
-      await fsp.cp(join(partsDir(), STANDARD_LIBRARY_ID, id), repoPartDir, { recursive: true })
+      await mirrorPartFolder(join(partsDir(), STANDARD_LIBRARY_ID, id), join(repoDir, id))
       shipped = true
-    } catch {
-      // Repo not writable → the runtime promote still succeeded.
+    } catch (err) {
+      // Repo not writable, or the repo copy is NEWER than what we'd ship — the
+      // runtime promote still succeeded, but say so rather than swallowing it.
+      shipError = (err as Error).message
+      reportError('parts: promote mirror', err)
     }
   }
-  return { ...res, shipped }
+  return { ...res, shipped, error: shipError }
 }
 
 /**

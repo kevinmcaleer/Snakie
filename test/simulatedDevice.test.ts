@@ -7,7 +7,6 @@ import {
   VIRTUAL_PORT_PATH,
   VIRTUAL_PORT_LABEL
 } from '../src/shared/virtual-device'
-import { buildInstallSnippet, INSTALL_OK, INSTALL_ERR } from '../src/main/packages/install'
 
 /**
  * A lightweight {@link ReplRuntime} so the device tests stay fast and
@@ -61,6 +60,25 @@ describe('SimulatedDevice lifecycle', () => {
     expect(status.state).toBe('disconnected')
     expect(status.path).toBe(VIRTUAL_PORT_PATH)
     expect(dev.isConnected()).toBe(false)
+  })
+
+  it('reports its runtime only while connected — the simulator IS MicroPython (#752)', async () => {
+    const dev = new SimulatedDevice(new FakeRuntime())
+    // Disconnected: nothing to report. A stale runtime here would let the status
+    // bar name a Python for a board that isn't there.
+    expect(dev.getStatus().runtime).toBeUndefined()
+
+    const pushed: (string | undefined)[] = []
+    dev.on('status', (st) => pushed.push(st.runtime?.dialect))
+    await dev.connect()
+
+    expect(dev.getStatus().runtime).toEqual({ dialect: 'micropython' })
+    // The pushed event and the snapshot agree, for every state.
+    expect(pushed).toEqual([undefined, 'micropython'])
+
+    await dev.disconnect()
+    expect(dev.getStatus().runtime).toBeUndefined()
+    await dev.dispose()
   })
 
   it('emits connecting → connected status and boots the REPL on connect', async () => {
@@ -153,19 +171,10 @@ describe('SimulatedDevice lifecycle', () => {
     await dev.dispose()
   })
 
-  it('answers a mip install with an honest "offline" message (not a silent stub)', async () => {
-    const dev = new SimulatedDevice(new FakeRuntime())
-    await dev.connect()
-    // mip can't run on the WASM device; the install snippet must come back as a
-    // FAILED install with a clear reason, so the UI explains it instead of
-    // showing a cryptic "mip failed" (what an empty response parses to).
-    const { stdout } = await dev.exec(buildInstallSnippet('github:kevinmcaleer/sam'))
-    expect(stdout).toContain(INSTALL_ERR)
-    expect(stdout).not.toContain(INSTALL_OK)
-    expect(stdout.toLowerCase()).toContain('simulated device')
-
-    await dev.dispose()
-  })
+  // (There used to be a test here for the simulator's canned "mip can't run
+  // offline" answer. #776 removed the on-device install route entirely —
+  // packages resolve on the host and arrive as file writes — so there is no
+  // install snippet left for the simulator to intercept.)
 
   it('records control commands (latest-wins per target)', async () => {
     const dev = new SimulatedDevice(new FakeRuntime())

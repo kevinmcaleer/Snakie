@@ -23,6 +23,12 @@ The raw register decode (`raw_to_g`, `raw_to_dps`) and the accel→euler estimat
 an I²C bus.
 """
 
+# Driver version. Bump this on ANY change to this file — the IDE compares it
+# against the copy installed on the board and offers an update when they differ
+# (#707; a legacy copy with no `__version__` reads as out-of-date). Keep the
+# `__version__ = "X.Y.Z"` literal form so the IDE can parse it without importing.
+__version__ = "1.0.0"
+
 import math
 
 # Register map (subset needed for accel + gyro).

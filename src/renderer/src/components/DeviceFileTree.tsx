@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DirEntry } from '../../../preload/index.d'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
+import { bootFileNote } from './run-controls'
 import { useWorkspace } from '../store/workspace'
 import { useSync } from '../store/sync'
 import { usageLabel, usedPct, type DiskUsage } from './disk-usage'
@@ -149,7 +150,8 @@ function DeviceRow({
   onDragStartRow,
   onDropInto,
   onDragOverRow,
-  onDragLeaveRow
+  onDragLeaveRow,
+  bootNote
 }: {
   row: FlatRow
   expanded: boolean
@@ -164,6 +166,8 @@ function DeviceRow({
   onDropInto: (e: React.DragEvent, dir: string) => void
   onDragOverRow: (e: React.DragEvent, row: FlatRow) => void
   onDragLeaveRow: () => void
+  /** Why this file does (or doesn't) run at boot — null for ordinary files (#755). */
+  bootNote: string | null
 }): JSX.Element {
   const { path, entry, depth } = row
   return (
@@ -195,6 +199,18 @@ function DeviceRow({
         {entry.isDir ? (expanded ? '▼' : '▶') : '▤'}
       </span>
       <span className="tree-row__name">{entry.name}</span>
+      {/* Which file the board runs at boot (#755). CircuitPython tries code.py
+          before main.py, so a board carrying both runs only the first — and
+          editing the other looks like it does nothing. The marker says which
+          is which; the tooltip says why. */}
+      {bootNote && (
+        <span
+          className={`tree-row__boot${bootNote.includes('instead') ? ' tree-row__boot--shadowed' : ''}`}
+          title={bootNote}
+        >
+          {bootNote.includes('instead') ? 'ignored' : 'runs at boot'}
+        </span>
+      )}
       {/* Hover delete (#219): removes this row — or the whole selection when the
           row is part of a multi-selection. */}
       <button
@@ -259,6 +275,9 @@ export function DeviceFileTree(): JSX.Element {
   const selectedPath = primary?.path ?? null
   const selectedIsDir = primary?.isDir ?? false
   const rows = useMemo(() => flattenTree(dirs, expanded), [dirs, expanded])
+  // The ROOT listing decides which file boots (#755) — `code.py` beats `main.py`
+  // only when both sit at the top level.
+  const rootNames = useMemo(() => (dirs.get(ROOT) ?? []).map((e) => e.name), [dirs])
 
   /** Re-list one directory into the flat map (drop it if listing fails). */
   const listInto = useCallback(async (dir: string): Promise<void> => {
@@ -773,6 +792,13 @@ export function DeviceFileTree(): JSX.Element {
           <DeviceRow
             key={row.path}
             row={row}
+            bootNote={
+              // Boot files only count in the ROOT — a `/lib/code.py` is just a
+              // module. `depth === 0` is that test.
+              row.depth === 0 && !row.entry.isDir
+                ? bootFileNote(row.entry.name, rootNames, status.runtime?.dialect)
+                : null
+            }
             expanded={expanded.has(row.path)}
             selected={selection.has(row.path) || selectedPath === row.path}
             dropTarget={dropDir === row.path}

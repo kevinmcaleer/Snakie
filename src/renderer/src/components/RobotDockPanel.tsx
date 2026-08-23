@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { RobotView } from './RobotView'
+import { SyncControl } from './SyncControl'
 import { dirname } from './robot-mesh'
 import { blankUrdf } from './robot-assembly'
+import { isUrdfPath } from './urdf-target'
 import { useWorkspace, announceSaved } from '../store/workspace'
 import { useWorkspaceLayout } from '../store/layout'
 import { readRobotModel } from '../../../shared/krf'
@@ -42,6 +44,8 @@ export function RobotDockPanel({
   const [urdfPath, setUrdfPath] = useState<string | null>(null)
   // Bumped after we create/link a robot, to re-resolve the project URDF.
   const [reloadNonce, setReloadNonce] = useState(0)
+  // Bumped when another window rewrites the .urdf on disk (#716).
+  const [urdfNonce, setUrdfNonce] = useState(0)
 
   // Show a transient message in the status bar so linking/creating a robot — which
   // is otherwise invisible — is clear to the user. Auto-clears after a few seconds
@@ -90,7 +94,12 @@ export function RobotDockPanel({
     return () => {
       live = false
     }
-  }, [currentFolder, reloadNonce])
+  }, [currentFolder, reloadNonce, urdfNonce])
+
+  // Re-read the URDF when ANY window's placement bridge rewrites it on disk
+  // (#716) — without this, a part added in Electronics reached an open Build
+  // view only after a remount / workspace switch.
+  useEffect(() => window.api.robot.onUrdfChanged(() => setUrdfNonce((n) => n + 1)), [])
 
   // Pop the robot out full-screen (the Pose tool + assembly): a saved project
   // URDF opens as its file; the bundled demo arm opens as a buffer. Stay in Robot
@@ -117,7 +126,13 @@ export function RobotDockPanel({
 
   // Link a URDF (path RELATIVE to the project folder) as THE project robot in
   // robot.yml — preserving any existing wiring/poses — then refresh the tree + dock.
+  //
+  // Only a `.urdf` may be linked (#782). Everything downstream treats this value
+  // as "the robot document": the placement bridge appends part bodies to it, the
+  // sync reconcile rewrites it. Linking a `.py` here would aim all of that at the
+  // user's program, so it is refused at the source as well as at each write.
   const linkRobot = async (dir: string, rel: string): Promise<void> => {
+    if (!isUrdfPath(rel)) throw new Error(`"${nameOf(rel)}" isn't a .urdf — it can't be the robot`)
     const def = await window.api.robot.load(dir)
     def.robot = { ...(def.robot ?? {}), version: 1, urdf: rel }
     await window.api.robot.save(dir, def)
@@ -170,8 +185,10 @@ export function RobotDockPanel({
         try {
           await linkRobot(dir, rel)
           notify(`Linked "${name}" — now this project's robot`)
-        } catch {
-          notify(`Opened "${name}" — couldn't link it to the project`)
+        } catch (err) {
+          // Say WHY — a silent "couldn't link it" is how a wrong link survives
+          // long enough to be written to (#782).
+          notify(`Opened "${name}" — ${err instanceof Error ? err.message : "couldn't link it"}`)
         }
       } else {
         notify(`Opened "${name}" (not linked)`)
@@ -249,7 +266,24 @@ export function RobotDockPanel({
       {urdf === null ? (
         <div className="robotdock__loading">Loading 3D…</div>
       ) : (
-        <RobotView urdfContent={urdf} basePath={base} compact={!full} homeOnMount={full} />
+        /* `urdfPath` is where an edit to this document is written (#782). It is
+           null for the bundled demo-arm fallback — which has no file — and the
+           builder then refuses edits rather than writing the model into whatever
+           the editor happens to have open. */
+        <RobotView
+          urdfContent={urdf}
+          urdfPath={urdfPath}
+          basePath={base}
+          compact={!full}
+          homeOnMount={full}
+        />
+      )}
+      {/* Electronics ⇄ Build reconcile (#717) — Build-workspace mount. Bottom
+          right: the hierarchy panel docks left, the pop-out button sits top. */}
+      {full && (
+        <div className="esync__float esync__float--right">
+          <SyncControl folder={currentFolder} />
+        </div>
       )}
       {/* Embedded in the MiniViewer (#595) 3-D mode: a single pop-out button that
           switches to the Build workspace (mirrors the mini-board → Electronics). */}

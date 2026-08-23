@@ -7,7 +7,7 @@ package: SMD
 pinSpacing: 2.54
 voltage: 3.3V
 partNumber: PIM721
-version: 0.1.5
+version: 0.1.12
 mcu: RP2350
 pcbColor: "#15171a"
 aspect: 0.786
@@ -35,7 +35,7 @@ headers:
         shape: castellated
         rotation: 180
         x: 0.1440379948086209
-        y: 0.303
+        y: 0.3027142857142857
       - name: 3V3
         type: pwr
         number: 3
@@ -43,7 +43,7 @@ headers:
         shape: castellated
         rotation: 180
         x: 0.1440379948086209
-        y: 0.398
+        y: 0.39842857142857147
       - name: A3
         type: io
         number: 4
@@ -55,11 +55,21 @@ headers:
           - spi
           - i2c
           - uart
+        signals:
+          i2c: SCL
+          spi: CSn
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 0
+          spi: 1
+          uart: 0
+          adc: 3
         castellated: true
         shape: castellated
         rotation: 180
         x: 0.1440379948086209
-        y: 0.494
+        y: 0.4941428571428571
       - name: A2
         type: io
         number: 5
@@ -71,11 +81,21 @@ headers:
           - spi
           - i2c
           - uart
+        signals:
+          i2c: SDA
+          spi: RX
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 1
+          uart: 0
+          adc: 2
         castellated: true
         shape: castellated
         rotation: 180
         x: 0.1440379948086209
-        y: 0.59
+        y: 0.5898571428571429
       - name: A1
         type: io
         number: 6
@@ -87,11 +107,21 @@ headers:
           - spi
           - i2c
           - uart
+        signals:
+          i2c: SCL
+          spi: TX
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 1
+          uart: 1
+          adc: 1
         castellated: true
         shape: castellated
         rotation: 180
         x: 0.1440379948086209
-        y: 0.686
+        y: 0.6855714285714286
       - name: A0
         type: io
         number: 7
@@ -103,11 +133,21 @@ headers:
           - spi
           - i2c
           - uart
+        signals:
+          i2c: SDA
+          spi: SCK
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 1
+          uart: 1
+          adc: 0
         castellated: true
         shape: castellated
         rotation: 180
         x: 0.1440379948086209
-        y: 0.781
+        y: 0.7812857142857143
       - name: GND
         type: gnd
         number: 8
@@ -128,6 +168,15 @@ headers:
           - spi
           - i2c
           - uart
+        signals:
+          i2c: SDA
+          spi: RX
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 0
         castellated: true
         shape: castellated
         rotation: 0
@@ -143,6 +192,15 @@ headers:
           - spi
           - i2c
           - uart
+        signals:
+          i2c: SCL
+          spi: CSn
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 0
         castellated: true
         shape: castellated
         rotation: 0
@@ -158,6 +216,15 @@ headers:
           - spi
           - i2c
           - uart
+        signals:
+          i2c: SDA
+          spi: SCK
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 0
+          uart: 0
         castellated: true
         shape: castellated
         rotation: 0
@@ -173,6 +240,15 @@ headers:
           - spi
           - i2c
           - uart
+        signals:
+          i2c: SCL
+          spi: TX
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 0
+          uart: 0
         castellated: true
         shape: castellated
         rotation: 0
@@ -188,6 +264,15 @@ headers:
           - spi
           - i2c
           - uart
+        signals:
+          i2c: SDA
+          spi: RX
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 1
         castellated: true
         shape: castellated
         rotation: 0
@@ -203,6 +288,15 @@ headers:
           - spi
           - i2c
           - uart
+        signals:
+          i2c: SCL
+          spi: CSn
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 1
         castellated: true
         shape: castellated
         rotation: 0
@@ -218,6 +312,15 @@ headers:
           - spi
           - i2c
           - uart
+        signals:
+          i2c: SDA
+          spi: SCK
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 0
+          uart: 1
         castellated: true
         shape: castellated
         rotation: 0
@@ -233,33 +336,82 @@ headers:
           - spi
           - i2c
           - uart
+        signals:
+          i2c: SCL
+          spi: TX
+          uart: TX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 0
+          uart: 0
         castellated: true
         shape: castellated
         rotation: 0
         x: 0.8715978315764783
         y: 0.877
-connectors:
-  - z: 0
-    kind: qwiic
-    x: 0.5109181435279596
-    y: 0.8554505740894991
-    pins:
       - name: GND
         type: gnd
+        group: conn-1
+        number: 20
+        x: 0.411502461900898
+        y: 0.8552174736471737
       - name: 3V3
         type: pwr
+        group: conn-1
+        number: 19
+        x: 0.47816912856756466
+        y: 0.8552174736471737
       - name: SDA
         type: io
+        group: conn-1
+        number: 18
+        gpio: 12
         capabilities:
+          - pwm
+          - spi
           - i2c
+          - uart
         signals:
           i2c: SDA
+          spi: RX
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 0
+        x: 0.5448357952342313
+        y: 0.8552174736471737
       - name: SCL
         type: io
+        group: conn-1
+        number: 17
+        gpio: 13
         capabilities:
+          - digital
+          - pwm
+          - spi
           - i2c
+          - uart
         signals:
           i2c: SCL
+          spi: CSn
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 0
+          spi: 1
+          uart: 0
+        x: 0.611502461900898
+        y: 0.8552174736471737
+groups:
+  - id: conn-1
+    name: QWIIC
+    housing:
+      kind: qwiic
+      x: 0.5109181435279596
+      y: 0.8554505740894991
 image: image.png
 imageLayer:
   x: 0

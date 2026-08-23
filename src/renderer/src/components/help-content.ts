@@ -4,9 +4,28 @@
  * Static contents (Getting Started · Reference · Instruments) plus a runtime
  * "In This Project" section built by {@link detectProjectParts} from the active
  * file's hardware usage. Article bodies live in {@link ./help-articles}.
+ *
+ * ## Dialect (#763, epic #209)
+ *
+ * Pages carry a {@link DialectScope}, and {@link helpTreeFor} prunes the tree to
+ * the runtime in use — so a CircuitPython session is never offered "Pins & GPIO"
+ * teaching `machine.Pin`, and a MicroPython one isn't shown `digitalio`. Pages
+ * with no scope are plain Python (control flow, types, the panels themselves)
+ * and appear on both.
+ *
+ * An UNESTABLISHED dialect shows everything, because somebody reading before
+ * they plug a board in should not be shown one runtime's answer as if it were
+ * the only one — see `inScope` in `shared/dialect-api.ts`.
+ *
+ * To add a page: drop `./help/<id>.md`, add a node here with the right `scope`.
  */
 import { INSTRUMENTS } from './instruments-registry'
+import { inScope, type DialectScope } from '../../../shared/dialect-api'
+import type { Dialect } from '../../../shared/dialect'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
+import { HELP_ARTICLES } from './help-articles'
+import { ALL_RULES } from '../../../shared/refactor/rules'
+import type { RefactorCategory } from '../../../shared/refactor/types'
 
 export type HelpKind = 'shelf' | 'collection' | 'section' | 'article'
 
@@ -23,6 +42,8 @@ export interface HelpNode {
   live?: boolean
   /** Runtime: the part whose declaration the caret is on. */
   atCursor?: boolean
+  /** Which runtimes this page is true for. Absent = plain Python, so both. */
+  scope?: DialectScope
 }
 
 /** Icon accents for the evergreen sections (from the design tokens). */
@@ -30,11 +51,125 @@ const A = {
   gettingStarted: '#37884a',
   reference: '#b58a2e',
   language: '#3f74ad',
-  buses: '#8b5fc0',
+  micropython: '#3f74ad',
+  // Purple sets the CircuitPython book apart at a glance from the blue
+  // MicroPython one, which matters most when both are on screen (`unknown`).
+  circuitpython: '#7a4fa8',
   pinouts: '#c07a2a',
   instruments: '#2f7c70',
   page: '#8a7f62',
   project: '#2f7c70'
+}
+
+/**
+ * The "Refactoring" book (epic #634 §2.4), built FROM the rule catalogue rather
+ * than listed by hand.
+ *
+ * Every rule declares its own `helpArticle` id and the preview modal's "Why?"
+ * button opens exactly that page, so generating the tree from `ALL_RULES` is
+ * what guarantees the two can never drift: add a rule, and its page appears in
+ * the contents automatically. (A rule whose `./help/<id>.md` is missing still
+ * shows the panel's "not written yet" placeholder, which is the visible nudge.)
+ *
+ * These pages are the teaching payload of the whole epic — the difference
+ * between a linter that says *what* and a tutor that says *why*.
+ */
+const REFACTOR_BOOKS: {
+  category: RefactorCategory
+  id: string
+  title: string
+  scope?: DialectScope
+}[] = [
+  { category: 'control-flow', id: 'refactor-control-flow', title: 'Nesting & control flow' },
+  { category: 'conditionals', id: 'refactor-conditionals', title: 'Conditionals & constants' },
+  { category: 'loops', id: 'refactor-loops', title: 'Loops & data' },
+  { category: 'extraction', id: 'refactor-extraction', title: 'Extracting & naming' },
+  { category: 'functions', id: 'refactor-functions', title: 'Functions, classes & resources' },
+  // These two are not "MicroPython flavoured advice" — they are advice that only
+  // exists on MicroPython. `const()` is a compiler feature CircuitPython has no
+  // equivalent of, `ticks_diff` is a MicroPython API, and viper and PIO are not
+  // CircuitPython concepts at all. Showing them to a CircuitPython reader would
+  // be teaching them about a language they are not using (#763).
+  {
+    category: 'micropython',
+    id: 'refactor-micropython',
+    title: 'MicroPython-specific',
+    scope: 'micropython'
+  },
+  {
+    category: 'board',
+    id: 'refactor-board',
+    title: 'Board-specific optimisation',
+    scope: 'micropython'
+  }
+]
+
+/** One section per rule family, ordered by catalogue number within each. */
+function refactorSections(): HelpNode[] {
+  const out: HelpNode[] = []
+  for (const book of REFACTOR_BOOKS) {
+    const rules = ALL_RULES.filter((r) => r.category === book.category).sort(
+      (a, b) => a.catalogue - b.catalogue
+    )
+    if (rules.length === 0) continue
+    // Two rules can legitimately share an article; show it once.
+    const seen = new Set<string>()
+    const children: HelpNode[] = []
+    for (const rule of rules) {
+      if (seen.has(rule.helpArticle)) continue
+      seen.add(rule.helpArticle)
+      children.push({
+        id: rule.helpArticle,
+        kind: 'article',
+        title: rule.title,
+        accent: A.page,
+        scope: book.scope
+      })
+    }
+    out.push({
+      id: book.id,
+      kind: 'section',
+      title: book.title,
+      accent: A.page,
+      scope: book.scope,
+      children
+    })
+  }
+  return out
+}
+
+/**
+ * Names that only exist on MicroPython. Kept in step with the same list in
+ * `test/helpContent.test.ts`, which is what enforces the rule that a
+ * CircuitPython-visible page containing any of them must carry a note.
+ */
+const MICROPYTHON_ONLY_CODE = [
+  /\bmachine\b/,
+  /\bPin\(/,
+  /\bPin\.[A-Z]/,
+  /\bADC\(/,
+  /\bPWM\(/,
+  /\bsleep_ms\b/,
+  /\bsleep_us\b/,
+  /\bticks_(ms|us|cpu|diff|add)\b/,
+  /\bduty_u16\b/,
+  /\bread_u16\b/,
+  /\buasyncio\b/,
+  /\bmip\.install\b/
+]
+
+/** Does this article's fenced Python contain a MicroPython-only name? */
+function articleUsesMicroPython(markdown: string): boolean {
+  const blocks = markdown.match(/```(?:python|py)?\n[\s\S]*?```/g) ?? []
+  return blocks.some((block) => MICROPYTHON_ONLY_CODE.some((re) => re.test(block)))
+}
+
+/** Article ids for rules whose family is shown on every runtime. */
+function crossDialectRefactorArticles(): string[] {
+  const scoped = new Set(
+    REFACTOR_BOOKS.filter((b) => b.scope).map((b) => b.category as RefactorCategory)
+  )
+  return ALL_RULES.filter((r) => !scoped.has(r.category)).map((r) => r.helpArticle)
 }
 
 /** The evergreen contents (everything except the runtime "In This Project"). */
@@ -46,12 +181,61 @@ export const HELP_SECTIONS: HelpNode[] = [
     accent: A.gettingStarted,
     children: [
       { id: 'gs-connect', kind: 'article', title: 'Connect your board', accent: '#3f74ad' },
-      { id: 'gs-run', kind: 'article', title: 'Write & run code', accent: '#37a04f' },
+      // "Write & run code" means something different on each runtime: MicroPython
+      // runs what Snakie sends, CircuitPython boots code.py and re-runs it on
+      // every save. Two pages rather than one hedged page.
+      {
+        id: 'gs-run',
+        kind: 'article',
+        title: 'Write & run code',
+        accent: '#37a04f',
+        scope: 'micropython'
+      },
+      {
+        id: 'cp-code-py',
+        kind: 'article',
+        title: 'Write & run code (code.py)',
+        accent: '#37a04f',
+        scope: 'circuitpython'
+      },
+      {
+        id: 'cp-readonly',
+        kind: 'article',
+        title: 'The read-only filesystem',
+        accent: '#c2483a',
+        scope: 'circuitpython'
+      },
       { id: 'gs-instruments', kind: 'article', title: 'Using instruments', accent: '#8b5fc0' },
       { id: 'gs-board-view', kind: 'article', title: 'The Board View', accent: '#2f7c70' },
       { id: 'gs-files', kind: 'article', title: 'Files & sync', accent: '#c07a2a' },
-      { id: 'gs-firmware', kind: 'article', title: 'Flash MicroPython firmware', accent: '#c2483a' },
-      { id: 'gs-packages', kind: 'article', title: 'Install packages (mip)', accent: '#3f74ad' },
+      {
+        id: 'gs-firmware',
+        kind: 'article',
+        title: 'Flash MicroPython firmware',
+        accent: '#c2483a',
+        scope: 'micropython'
+      },
+      {
+        id: 'cp-firmware',
+        kind: 'article',
+        title: 'Flash CircuitPython firmware',
+        accent: '#c2483a',
+        scope: 'circuitpython'
+      },
+      {
+        id: 'gs-packages',
+        kind: 'article',
+        title: 'Install packages (mip)',
+        accent: '#3f74ad',
+        scope: 'micropython'
+      },
+      {
+        id: 'cp-libraries',
+        kind: 'article',
+        title: 'Install libraries (the bundle)',
+        accent: '#3f74ad',
+        scope: 'circuitpython'
+      },
       { id: 'gs-validation', kind: 'article', title: 'Problems & validation', accent: '#b58a2e' },
       { id: 'gs-git', kind: 'article', title: 'Version control (Git)', accent: '#37884a' },
       { id: 'gs-chat', kind: 'article', title: 'AI chat & autocomplete', accent: '#8b5fc0' },
@@ -78,14 +262,15 @@ export const HELP_SECTIONS: HelpNode[] = [
     title: 'Reference',
     accent: A.reference,
     children: [
+      // Plain Python — identical on both runtimes, so it is NOT duplicated per
+      // dialect. Keep it that way: anything that would need a different example
+      // on CircuitPython belongs in one of the two hardware sections below.
       {
-        id: 'ref-language',
+        id: 'ref-python',
         kind: 'section',
-        title: 'MicroPython Language',
+        title: 'Python Language',
         accent: A.language,
         children: [
-          { id: 'ref-pins', kind: 'article', title: 'Pins & GPIO', accent: A.page },
-          { id: 'ref-timing', kind: 'article', title: 'Timing', accent: A.page },
           { id: 'ref-print', kind: 'article', title: 'print & the REPL', accent: A.page },
           { id: 'ref-flow', kind: 'article', title: 'Control flow', accent: A.page },
           { id: 'ref-functions', kind: 'article', title: 'Functions', accent: A.page },
@@ -97,15 +282,39 @@ export const HELP_SECTIONS: HelpNode[] = [
         ]
       },
       {
-        id: 'ref-buses',
+        id: 'ref-micropython',
         kind: 'section',
-        title: 'Buses',
-        accent: A.buses,
+        title: 'MicroPython Hardware',
+        accent: A.micropython,
+        scope: 'micropython',
         children: [
+          { id: 'ref-pins', kind: 'article', title: 'Pins & GPIO', accent: A.page },
+          { id: 'ref-timing', kind: 'article', title: 'Timing', accent: A.page },
           { id: 'ref-i2c', kind: 'article', title: 'I²C', accent: A.page },
           { id: 'ref-spi', kind: 'article', title: 'SPI', accent: A.page },
           { id: 'ref-uart', kind: 'article', title: 'UART', accent: A.page },
           { id: 'ref-pwm', kind: 'article', title: 'PWM', accent: A.page }
+        ]
+      },
+      {
+        id: 'ref-circuitpython',
+        kind: 'section',
+        title: 'CircuitPython Hardware',
+        accent: A.circuitpython,
+        scope: 'circuitpython',
+        children: [
+          { id: 'cp-board', kind: 'article', title: 'board — this board’s pins', accent: A.page },
+          { id: 'cp-digitalio', kind: 'article', title: 'Pins & GPIO (digitalio)', accent: A.page },
+          { id: 'cp-analogio', kind: 'article', title: 'Analogue (analogio)', accent: A.page },
+          { id: 'cp-pwmio', kind: 'article', title: 'PWM (pwmio)', accent: A.page },
+          { id: 'cp-busio', kind: 'article', title: 'I²C, SPI & UART (busio)', accent: A.page },
+          { id: 'cp-timing', kind: 'article', title: 'Timing', accent: A.page },
+          {
+            id: 'cp-from-micropython',
+            kind: 'article',
+            title: 'Coming from MicroPython',
+            accent: A.page
+          }
         ]
       },
       {
@@ -116,6 +325,16 @@ export const HELP_SECTIONS: HelpNode[] = [
         children: [{ id: 'ref-pinout', kind: 'article', title: 'Board pinouts', accent: A.page }]
       }
     ]
+  },
+  {
+    // Epic #634. Right-clicking a smell opens the matching page here, but the
+    // book stands on its own too — it is a short course in why MicroPython code
+    // goes wrong, which is worth reading before you hit the problem.
+    id: 'refactoring',
+    kind: 'collection',
+    title: 'Refactoring',
+    accent: A.reference,
+    children: refactorSections()
   }
 ]
 
@@ -125,8 +344,69 @@ export const DEFAULT_EXPANDED = new Set([
   'getting-started',
   'instruments',
   'reference',
-  'ref-language'
+  'ref-python',
+  'ref-micropython',
+  'ref-circuitpython'
 ])
+
+/**
+ * The contents as one runtime sees them.
+ *
+ * Prunes every node whose {@link HelpNode.scope} excludes `dialect`, depth
+ * first, and drops a branch that ends up empty — so a MicroPython session never
+ * sees an empty "CircuitPython Hardware" book. `unknown` keeps everything (see
+ * the module note): with no board attached, showing one runtime's pages as if
+ * they were the only ones is the mistake, not showing both.
+ */
+export function helpTreeFor(dialect: Dialect, nodes: HelpNode[] = HELP_SECTIONS): HelpNode[] {
+  const out: HelpNode[] = []
+  for (const node of nodes) {
+    if (!inScope(node.scope, dialect)) continue
+    if (!node.children) {
+      out.push(node)
+      continue
+    }
+    const children = helpTreeFor(dialect, node.children)
+    // A branch that has lost all its pages has nothing left to open.
+    if (children.length === 0) continue
+    out.push({ ...node, children })
+  }
+  return out
+}
+
+/**
+ * Articles that are reachable on every dialect but whose EXAMPLES are
+ * MicroPython — the instrument pages, because Snakie's on-device instrument
+ * library is built on `machine` and has not been ported yet (#760).
+ *
+ * Rather than hide the panels' documentation from a CircuitPython user, or
+ * quietly show them `machine.Pin` as if it would run, the article view prints
+ * {@link dialectNote} above the body. The unit test keeps this list honest: any
+ * CircuitPython-visible page containing MicroPython-only code must be in it.
+ */
+export const MICROPYTHON_EXAMPLE_ARTICLES = new Set([
+  ...INSTRUMENTS.map((d) => `inst-${d.id}`),
+  // The general refactoring pages (guard clauses, loops, extraction) teach
+  // principles that are true in any Python — so a CircuitPython reader should
+  // have them — but their worked examples are robot code, and robot code on
+  // this app means `machine.Pin`. Rather than water the examples down into
+  // something nobody writes, flag the ones that actually contain MicroPython
+  // so the note appears above them. Detected rather than listed, so a new page
+  // cannot quietly slip through (the truly MicroPython-only families are
+  // scoped out of the CircuitPython tree entirely — see REFACTOR_BOOKS).
+  ...crossDialectRefactorArticles().filter((id) => articleUsesMicroPython(HELP_ARTICLES[id] ?? ''))
+])
+
+/**
+ * The warning to print above an article whose code won't run on this dialect,
+ * or `null` when there is nothing to say. Pure, so the wording is pinned by a
+ * test rather than buried in JSX.
+ */
+export function dialectNote(articleId: string, dialect: Dialect): string | null {
+  if (dialect !== 'circuitpython') return null
+  if (!MICROPYTHON_EXAMPLE_ARTICLES.has(articleId)) return null
+  return "The examples on this page are MicroPython — Snakie's on-device instrument library uses `machine`, which CircuitPython doesn't have. The panel itself works the same way; the code to drive it doesn't run on this board yet."
+}
 
 /** A part surfaced in "In This Project". */
 export interface ProjectPart {

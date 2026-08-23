@@ -1,0 +1,55 @@
+id: 9v-battery
+name: 9V Battery
+description: A 9 V PP3 block, photographed and modelled in 3-D — high internal resistance, so regulator supplies only, never motors.
+manufacturer: Duracell
+family: Power
+help: help.md
+tags:
+  - battery
+  - pp3
+  - power
+package: THT
+pinSpacing: 2.54
+voltage: 9V
+mass_g: 45
+version: 0.1.2
+electrical:
+  model: source
+  supplyV: 9
+  # A PP3 is six tiny cells in series, so it sags hard under load. Modelling the
+  # internal resistance is the point — it is what makes the Electronics workspace
+  # show the brown-out instead of pretending 9 V arrives intact.
+  resistanceOhms: 1.7
+  maxCurrentA: 0.5
+  capacityMah: 550
+  terminals:
+    positive: VCC
+    negative: GND
+pcbColor: "#0f5a2e"
+aspect: 0.5
+dimensions:
+  width: 26.5
+  height: 48.5
+headers:
+  - edge: left
+    pins:
+      - name: VCC
+        type: pwr
+        x: 0.7855113565696861
+        y: 0.0455760955810547
+      - name: GND
+        type: gnd
+        x: 0.26668137070870696
+        y: 0.0455760955810547
+image: image.png
+mesh: battery-9v.stl
+meshRotation:
+  - 0
+  - 0
+  - 90
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true

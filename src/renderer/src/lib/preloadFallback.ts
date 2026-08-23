@@ -67,6 +67,11 @@ const fill = (target: Record<string, unknown>): unknown =>
     }
   })
 
+/** The web build's stand-in for the desktop's workspace relay (#775): one page,
+ *  so the "send it to the main window" hop is a local dispatch. */
+const workspaceListeners = new Set<(id: string) => void>()
+let workspaceFolder: string | undefined
+
 // Read through a widened type so TS doesn't treat the (declared non-optional)
 // globals as always-present — outside Electron they genuinely are not.
 const w = window as typeof window & {
@@ -97,6 +102,10 @@ if (!w.api) {
     versions: {},
     device: {
       listPorts: P([]),
+      // A browser cannot see mass storage, so there is never a CIRCUITPY drive
+      // to find here (#753). Stated explicitly rather than left to `deepStub`,
+      // whose truthy `[]` is the trap #513 was filed about.
+      circuitpyDrives: P([]),
       connect: P(undefined),
       disconnect: P(undefined),
       getStatus: P({ state: 'disconnected' }),
@@ -119,9 +128,12 @@ if (!w.api) {
     fs: {
       openFolderDialog: P(null),
       openFileDialog: P(null),
+      saveFileDialog: P(null),
       readDir: P([]),
       readFile: P(''),
+      readFileBytes: P(new Uint8Array()),
       writeFile: P(undefined),
+      writeFileBytes: P(undefined),
       mkdir: P(undefined),
       rename: P(undefined),
       remove: P(undefined),
@@ -149,7 +161,7 @@ if (!w.api) {
     },
     modules: {
       catalog: P([]),
-      installPlan: P({ id: '', importName: '', mechanism: 'mip', notes: [] }),
+      installPlan: P({ id: '', importName: '', files: [], notes: [] }),
       install: P({ id: '', ok: false, log: '', notes: [] }),
       probeInstalled: P([]),
       notifyChanged: noop,
@@ -167,8 +179,33 @@ if (!w.api) {
       // backend over this; see web/web-robot.ts).
       save: P({ ok: false, error: 'Saving robot.yml is not available here.' }),
       importMesh: P({ cancelled: true }),
-      importPartMesh: P({}),
-      onChanged: unsub
+      // error:false → `{}` used to mean "no mesh to attach", indistinguishable
+      // from a part that has none, so a stubbed bridge silently produced a
+      // placeholder box (#787 fault 3). Say why instead.
+      importPartMesh: P({ error: 'Copying a part’s 3-D model is not available here.' }),
+      patchModel: P({ ok: false }),
+      patchPartLinks: P({ ok: false }),
+      onChanged: unsub,
+      notifyUrdfChanged: noop,
+      onUrdfChanged: unsub
+    },
+    // Workspace relay + project folder (#775). Not inert like the rest: outside
+    // Electron this is a SINGLE-window build, so "ask the main window to switch"
+    // is just "switch", and the session folder is a value this page already
+    // knows. A local pub/sub gives the exact same behaviour the IPC relay gives
+    // the desktop, which is what keeps the web build's Add-to-project working.
+    workspace: {
+      show: (id: string): void => {
+        for (const cb of [...workspaceListeners]) cb(id)
+      },
+      onShow: (cb: (id: string) => void): (() => void) => {
+        workspaceListeners.add(cb)
+        return () => workspaceListeners.delete(cb)
+      },
+      setFolder: (folder?: string): void => {
+        workspaceFolder = folder && folder.trim() ? folder : undefined
+      },
+      folder: (): Promise<string | null> => Promise.resolve(workspaceFolder ?? null)
     },
     board: {
       open: P(undefined),
@@ -225,7 +262,12 @@ if (!w.api) {
       fetchRegistry: P({ libraries: [] }),
       installLibrary: P({ ok: false }),
       checkUpdates: P([]),
-      cachedUpdates: P([])
+      cachedUpdates: P([]),
+      listPartFiles: P([]),
+      // #741: linking a 3-D model copies a file into the parts folder, which
+      // needs main. Say so, rather than letting the deep stub resolve `[]` and
+      // the 3-D view report a mysterious failure.
+      importMesh: P({ ok: false, error: 'Linking a 3-D model needs the desktop app.' })
     },
     plugins: {
       list: P([]),
@@ -247,7 +289,8 @@ if (!w.api) {
         behind: 0,
         staged: [],
         changed: [],
-        untracked: []
+        untracked: [],
+        remotes: []
       }),
       stage: P(undefined),
       unstage: P(undefined),
@@ -258,7 +301,19 @@ if (!w.api) {
       listBranches: P({ current: '', branches: [] }),
       checkout: P(undefined),
       push: P({ summary: '' }),
-      pull: P({ summary: '' })
+      pull: P({ summary: '' }),
+      // The web build has no local git and no `gh`, so Publish is never
+      // offered there (#795). The stub still reports WHY rather than resolving
+      // an empty shape, so a stray call reads as a sentence, not as a dialog
+      // that opens on nothing.
+      publishPreflight: P({
+        ghInstalled: false,
+        authenticated: false,
+        suggestedName: '',
+        hasCommits: false,
+        riskyPaths: [],
+        blockers: ['Publishing to GitHub needs the desktop app.']
+      })
     }
   }
 

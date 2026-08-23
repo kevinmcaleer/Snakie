@@ -40,6 +40,13 @@ export function createWebPartsApi(): Record<string, unknown> {
         ? { ok: true, contents }
         : { ok: false, error: `No bundled driver "${source}" for ${partId}.` }
     },
+    // #655: the files "beside the part" on the web are whatever the build
+    // inlined into driverSources for that part id.
+    listPartFiles: async (_libraryId: string, partId: string): Promise<string[]> =>
+      Object.keys(driverSources as Record<string, string>)
+        .filter((k) => k.startsWith(`${partId}/`))
+        .map((k) => k.slice(partId.length + 1))
+        .sort(),
     // Read-only on the web: no per-user library storage, nothing to update. The
     // bundled parts ARE the install here, so none can be edited or fall behind
     // (#643) and there is nothing a reset could restore.
@@ -48,6 +55,12 @@ export function createWebPartsApi(): Record<string, unknown> {
     // No filesystem in the browser, so there is no folder to name or reveal.
     partsFolder: async () => '',
     bundledStatus: async () => [],
-    resetToBundled: async () => ({ ok: false, error: 'Parts are read-only on the web.' })
+    resetToBundled: async () => ({ ok: false, error: 'Parts are read-only on the web.' }),
+    // #741: linking a model copies a file into the part's folder, and there is
+    // no folder here. The 3-D view still SHOWS a bundled part's model.
+    importMesh: async () => ({
+      ok: false,
+      error: 'Linking a 3-D model needs the desktop app — parts are read-only on the web.'
+    })
   }
 }

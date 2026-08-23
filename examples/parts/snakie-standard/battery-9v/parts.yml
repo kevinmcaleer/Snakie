@@ -1,0 +1,51 @@
+id: battery-9v
+name: 9V Battery (PP3)
+description: A single 9 V PP3 cell — the classic snap-terminal block, for a regulator or a motor supply.
+manufacturer: Generic
+family: Power
+tags:
+  - battery
+  - power
+  - 9v
+  - pp3
+  - 6lr61
+package: THT
+voltage: 9V
+version: 0.1.0
+pcbColor: "#26292e"
+aspect: 0.546
+dimensions:
+  width: 26.5
+  height: 48.5
+shape:
+  kind: rect
+  cornerRadiusMm: 3
+mass_g: 45
+headers:
+  - edge: top
+    pins:
+      - name: V+
+        type: pwr
+        number: 1
+        shape: header
+        x: 0.36
+        y: 0.08
+      - name: GND
+        type: gnd
+        number: 2
+        shape: header
+        x: 0.64
+        y: 0.08
+electrical:
+  model: source
+  # A fresh alkaline PP3 is ~1.7 ohm and sags hard under load — that internal
+  # resistance is the whole reason this is a poor motor supply, so it is modelled
+  # rather than rounded away.
+  resistanceOhms: 1.7
+  supplyV: 9
+  maxCurrentA: 0.5
+  capacityMah: 550
+  terminals:
+    positive: V+
+    negative: GND
+help: help.md

@@ -7,7 +7,12 @@ import {
   PanelResizeHandle
 } from 'react-resizable-panels'
 import { useLocalStorage } from '../hooks/useLocalStorage'
-import { appliedHorizontal, useWorkspaceLayout, type WorkspaceId } from '../store/layout'
+import {
+  appliedHorizontal,
+  coerceWorkspaceId,
+  useWorkspaceLayout,
+  type WorkspaceId
+} from '../store/layout'
 
 // The embedded Board View pane (the Board workspace's tri-split, #259) is
 // code-split: the whole board subsystem (BoardGraph + wiring + Part Editor)
@@ -16,6 +21,11 @@ const BoardPane = lazy(() => import('./BoardPane'))
 // The mini 3-D Robot panel (Robot mode, #320) — lazy so three.js only loads
 // when you enter Robot mode.
 const RobotDockPanel = lazy(() => import('./RobotDockPanel'))
+// The Sprite editor overlay (launched from the Display instrument's SPRITES
+// key) — lazy so the canvas editor + codecs load only when opened.
+const SpriteEditor = lazy(() =>
+  import('./SpriteEditor').then((m) => ({ default: m.SpriteEditor }))
+)
 import { MiniViewer } from './MiniViewer'
 import { useTheme } from '../hooks/useTheme'
 import { Toolbar } from './Toolbar'
@@ -46,6 +56,7 @@ import { IS_WEB } from '../lib/env'
 import { StatusBar } from './StatusBar'
 import { SettingsDialog, type SettingsTab } from './SettingsDialog'
 import { OPEN_SETTINGS_EVENT } from './settingsBus'
+import { OPEN_SPRITE_EDITOR_EVENT, type OpenSpriteEditorDetail } from './sprite-editor-bus'
 import { HELP_EVENT, type HelpEventDetail } from './editorBridge'
 import { InstrumentLibBanner } from './InstrumentLibBanner'
 import { NoticeStack } from './Notice'
@@ -74,7 +85,9 @@ import {
   shouldShowBanner,
   type InstallState
 } from '../lib/instrumentsLib'
-import { useWorkspace } from '../store/workspace'
+import { announceSaved, useWorkspace } from '../store/workspace'
+import { readRobotModel } from '../../../shared/krf'
+import { isUrdfPath } from './urdf-target'
 import { useEditorSettings } from '../store/settings'
 import './AppShell.css'
 
@@ -212,7 +225,7 @@ export function AppShell(): JSX.Element {
   // us stream every edit / theme change to that window over IPC so it updates
   // live. `boardOpened` tracks whether the window has been opened this session
   // (so we only stream while it's open); it resets when the user closes it.
-  const { openFiles, activeId, currentFolder } = useWorkspace()
+  const { openFiles, activeId, currentFolder, reloadContent } = useWorkspace()
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
   const [boardOpened, setBoardOpened] = useState(false)
 
@@ -255,16 +268,26 @@ export function AppShell(): JSX.Element {
     })
   }, [boardOpened, boardSource, boardFileName, boardIsPython, theme, breadboardBg, boardFolder])
 
+  // Publish the open project folder for every OTHER window (#775). It used to be
+  // reachable only inside the board payload, which only streams while the board
+  // WINDOW is open — so anything needing to write the project's robot.yml had to
+  // open that window to find out where it was. The folder belongs to the session,
+  // so it is published whenever it changes and read on demand.
+  useEffect(() => {
+    window.api.workspace.setFolder(boardFolder)
+  }, [boardFolder])
+
   // Reset the "opened" flag when the user closes the board window.
   useEffect(() => {
     const off = window.api.board.onClosed(() => setBoardOpened(false))
     return off
   }, [])
 
-  // Mark the board opened whenever the window opens via ANY path — notably the
-  // mini board panel's open button, which calls board.open() directly. Flipping
-  // `boardOpened` true triggers the streaming effect above to relay the active
-  // file, so the full viewer isn't left blank ("Open a Python file…").
+  // Mark the board opened whenever the window opens via ANY path — the app menu's
+  // Window ▸ Board View item, or the web build's popup. (The mini board's open
+  // button used to come through here too; it asks for the Electronics workspace
+  // now, #775.) Flipping `boardOpened` true triggers the streaming effect above
+  // to relay the active file, so the full viewer isn't left blank.
   // Pop-out (modes review): if the window opens while Board MODE is active, the
   // board moved homes — hand it to the window and return the main split to Code
   // IN THE SAME HANDLER (the two state updates batch into one commit, so the
@@ -303,9 +326,10 @@ export function AppShell(): JSX.Element {
   // resurface the code panels. Only Code uses the resizable panel group.
   const soloWorkspace = robotMain || layout.active === 'board'
   // A solo workspace hides the sidebar by default. ONLY a lesson (the Learn
-  // tutorials or the Help library) shows there — carried in from another workspace
-  // or opened from the activity bar — so a stale `filesCollapsed:false` for the
-  // plain Files view can't resurface a file tree in Electronics/Build.
+  // tutorials or the Help library) shows there — opened from the activity bar, by
+  // a help deep-link, or carried in by a tutorial that asked for this workspace
+  // (#…) — so a stale `filesCollapsed:false` for the plain Files view can't
+  // resurface a file tree in Electronics/Build.
   const isLessonView = SOLO_PANEL_VIEWS.has(activityView)
   const soloLessonOpen = soloWorkspace && isLessonView && !layout.workspace.filesCollapsed
   const dockOpen = layout.workspace.dockOpen
@@ -556,6 +580,17 @@ export function AppShell(): JSX.Element {
   //  - picking the Board mode while the window is open re-docks (closes) it.
   switchWorkspaceRef.current = layout.switchWorkspace
   activeWsRef.current = layout.active
+  // Any window — including a DETACHED instrument, which has no access to the
+  // switcher — can ask for a workspace (#775). The main window owns the switch,
+  // and hears its own request too, so a docked and an undocked instrument take
+  // exactly the same path.
+  useEffect(() => {
+    const off = window.api.workspace.onShow((id) => {
+      const target = coerceWorkspaceId(id)
+      if (target) switchWorkspaceRef.current(target)
+    })
+    return off
+  }, [])
   useEffect(() => {
     const off = window.api.board.onClosed(() => {
       if (poppedFromBoardRef.current) {
@@ -748,6 +783,34 @@ export function AppShell(): JSX.Element {
   const [robotNonce, setRobotNonce] = useState(0)
   useEffect(() => window.api.robot.onChanged(() => setRobotNonce((n) => n + 1)), [])
   useEffect(() => window.api.parts.onChanged(() => setRobotNonce((n) => n + 1)), [])
+  // A placement bridge rewrote the project .urdf on disk (#716). Refresh this
+  // window's stale surfaces: a CLEAN open .urdf buffer adopts the new text (its
+  // next save would otherwise write stale content over the appended part bodies
+  // — a dirty buffer is the user's and is left alone), and the save is announced
+  // so the file tree lists a first-created robot.urdf/meshes and skeleton.json
+  // regenerates (the same refresh "New robot" fires).
+  useEffect(
+    () =>
+      window.api.robot.onUrdfChanged(() => {
+        void (async (): Promise<void> => {
+          if (!currentFolder) return
+          const robot = await window.api.robot.load(currentFolder).catch(() => null)
+          const rel = robot ? readRobotModel(robot)?.urdf : undefined
+          // robot.yml's `urdf:` is a link the user sets by picking a file, so it
+          // is not trusted to name a robot model (#782). This handler REPLACES a
+          // buffer's text with whatever is at that path — pointed at a `.py` it
+          // would be reading and re-announcing the user's program as the robot.
+          if (!rel || !isUrdfPath(rel)) return
+          const path = `${currentFolder.replace(/[/\\]$/, '')}/${rel.replace(/^[/\\]/, '')}`
+          const content = await window.api.fs.readFile(path).catch(() => null)
+          if (content == null) return
+          const open = openFiles.find((f) => f.source === 'local' && f.path === path)
+          if (open && !open.dirty && open.content !== content) reloadContent(open.id, content)
+          announceSaved('local', path, content)
+        })()
+      }),
+    [currentFolder, openFiles, reloadContent]
+  )
   useEffect(() => {
     const bump = (): void => setRobotNonce((n) => n + 1)
     window.addEventListener(PARTS_CHANGED_EVENT, bump)
@@ -1011,6 +1074,21 @@ export function AppShell(): JSX.Element {
   // The Parts Library + Part Editor live in the Board Viewer window now (it's the
   // only place that uses parts), so the main window no longer hosts them.
 
+  // The Sprite editor overlay — opened by the Display instrument's SPRITES key,
+  // or by clicking an inline sprite thumbnail in the code editor (#790), via the
+  // window-event seam (the Part Editor pattern). The event carries the `.spr` to
+  // load, or null for the parked draft; the state holds a `{ path }` box so
+  // re-opening the SAME file remounts the editor onto it.
+  const [spriteOpen, setSpriteOpen] = useState<OpenSpriteEditorDetail | null>(null)
+  useEffect(() => {
+    const handler = (e: Event): void => {
+      const detail = (e as CustomEvent<OpenSpriteEditorDetail>).detail
+      setSpriteOpen({ path: detail?.path ?? null })
+    }
+    window.addEventListener(OPEN_SPRITE_EDITOR_EVENT, handler)
+    return () => window.removeEventListener(OPEN_SPRITE_EDITOR_EVENT, handler)
+  }, [])
+
   return (
     <div className="shell">
       {/* Top-of-screen manila notification offering a one-click install of the
@@ -1223,7 +1301,8 @@ export function AppShell(): JSX.Element {
           )}
         </PanelGroup>
         {/* Electronics + Build overlay the Code panel group (which stays mounted
-            underneath). A tutorial/help lesson carried in shows in a left panel. */}
+            underneath). A lesson — opened here, deep-linked, or carried in by a
+            tutorial that asked for this workspace — shows in a left panel. */}
         {soloWorkspace && (
           <div className="shell__solo shell__solo--overlay">
             {soloLessonOpen && (
@@ -1357,6 +1436,12 @@ export function AppShell(): JSX.Element {
           setTheme={setTheme}
           onClose={() => setSettingsOpen(false)}
         />
+      )}
+
+      {spriteOpen && (
+        <Suspense fallback={null}>
+          <SpriteEditor openPath={spriteOpen.path} onClose={() => setSpriteOpen(null)} />
+        </Suspense>
       )}
 
     </div>

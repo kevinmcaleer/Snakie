@@ -1,6 +1,6 @@
 {
   "name": "snakie",
-  "version": "0.43.0",
+  "version": "0.46.0",
   "description": "A modern, cross-platform MicroPython editor.",
   "productName": "Snakie",
   "main": "./out/main/index.js",
@@ -22,7 +22,8 @@
     "test:watch": "vitest",
     "lint": "eslint . --ext .ts,.tsx,.cjs",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,html}\" \"*.{ts,cjs,json,md}\"",
-    "postinstall": "electron-builder install-app-deps",
+    "parts:modulino-meshes": "node scripts/modulino-mesh.mjs --all",
+    "postinstall": "electron-builder install-app-deps && node scripts/resign-electron.mjs",
     "pack": "electron-vite build && electron-builder --dir",
     "dist": "electron-vite build && electron-builder",
     "dist:win": "electron-vite build && electron-builder --win",

@@ -68,6 +68,7 @@ const RICH: PartDefinition = normalisePart({
   imageLayer: { x: 0.1, y: 0.1, w: 0.8, h: 0.8, opacity: 0.9 },
   mesh: 'model.stl',
   meshUnits: 'mm',
+  meshRotation: [90, 0, -90],
   electrical: { model: 'consumer', currentDrawA: 0.02, maxCurrentA: 0.05, supplyRange: [2.8, 5] },
   schematic: { aspect: 1, pins: [{ pin: 'SDA', side: 'left', order: 0 }] }
 })
@@ -123,6 +124,161 @@ describe('partToYaml / partFromYaml round-trip', () => {
     expect(back.meshUnits).toBeUndefined()
     // An unknown meshUnits value is dropped (tolerant parse).
     expect(normalisePart(partFromYaml('id: m\nname: M\nmesh: x.stl\nmeshUnits: furlongs\n')).meshUnits).toBeUndefined()
+  })
+
+  /**
+   * THE ROUND-TRIP THAT MATTERS (#741).
+   *
+   * A part's fields pass through three rebuild-from-scratch sinks — `normalisePart`,
+   * `partToYaml`, `partFromYaml` — and a field missing from ANY of them is dropped
+   * with no error, no type failure and no test failure. That has happened to
+   * `suggests`, to the electrical block and to `rear.imageData`, and each time a
+   * person noticed rather than the build. `meshRotation` is a correction the user
+   * dialled in by hand: losing it silently is the same class of bug, and the whole
+   * feature is worthless without this holding.
+   */
+  describe('the mesh orientation (#741)', () => {
+    const rotated = (r: unknown): PartDefinition =>
+      normalisePart({
+        id: 'rot',
+        name: 'Rot',
+        headers: [],
+        mesh: 'model.stl',
+        meshRotation: r as [number, number, number]
+      })
+
+    it('survives normalise → serialise → parse → normalise unchanged', () => {
+      for (const r of [[90, 0, 0], [0, -90, 0], [0, 0, 180], [90, 0, -90], [22.5, -33.75, 175]]) {
+        const before = rotated(r)
+        expect(before.meshRotation, `normalisePart dropped ${r}`).toEqual(r)
+        const yaml = partToYaml(before)
+        expect(yaml, `partToYaml dropped ${r}`).toContain('meshRotation')
+        const after = normalisePart(partFromYaml(yaml))
+        expect(after.meshRotation, `the round-trip changed ${r}`).toEqual(r)
+        // And the WHOLE part, not just the field — a rebuild that keeps the
+        // rotation but loses its neighbour is no better.
+        expect(after).toEqual(before)
+      }
+    })
+
+    it('survives a SECOND round-trip — a save, a reload and a save again', () => {
+      const once = normalisePart(partFromYaml(partToYaml(rotated([90, 0, -90]))))
+      const twice = normalisePart(partFromYaml(partToYaml(once)))
+      expect(twice).toEqual(once)
+    })
+
+    it('writes nothing at all for the identity (absent IS the identity)', () => {
+      expect(rotated([0, 0, 0]).meshRotation).toBeUndefined()
+      expect(partToYaml(rotated([0, 0, 0]))).not.toContain('meshRotation')
+      expect(partToYaml(rotated([360, -360, 720]))).not.toContain('meshRotation')
+    })
+
+    it('normalises what a hand-edited file says', () => {
+      const back = partFromYaml('id: r\nname: R\nmesh: m.stl\nmeshRotation: [270, 0, 450]\n')
+      expect(back.meshRotation).toEqual([-90, 0, 90])
+    })
+
+    it('ignores a malformed rotation rather than poisoning the maths downstream', () => {
+      for (const bad of ['[90, 0]', '[90, 0, 0, 0]', '90', '[90, sideways, 0]', 'true']) {
+        const yml = `id: r\nname: R\nmesh: m.stl\nmeshRotation: ${bad}\n`
+        expect(partFromYaml(yml).meshRotation, bad).toBeUndefined()
+      }
+    })
+
+    it('a part authored before the field existed still loads (no migration)', () => {
+      const old = partFromYaml('id: r\nname: R\nmesh: m.stl\nmeshUnits: mm\n')
+      expect(old.mesh).toBe('m.stl')
+      expect(old.meshRotation).toBeUndefined()
+    })
+  })
+
+  /**
+   * THE SAME ROUND-TRIP, FOR THE POSITION (#788).
+   *
+   * `meshOffset` joins the same three rebuild-from-scratch sinks, and the same
+   * failure mode is waiting: add the field to `PartDefinition`, forget one of
+   * them, and the user's careful snap is gone the next time they open the part —
+   * silently, and only they will notice. This has cost the repo `suggests`, the
+   * electrical block and `rear.imageData` already.
+   */
+  describe('the mesh position (#788)', () => {
+    const moved = (o: unknown): PartDefinition =>
+      normalisePart({
+        id: 'off',
+        name: 'Off',
+        headers: [],
+        mesh: 'model.stl',
+        meshOffset: o as [number, number, number]
+      })
+
+    it('survives normalise → serialise → parse → normalise unchanged', () => {
+      for (const o of [[1, 0, 0], [0, -24.25, 0], [-13.25, -24.25, 0], [0.125, -0.5, 17.375], [980, -1020, 4]]) {
+        const before = moved(o)
+        expect(before.meshOffset, `normalisePart dropped ${o}`).toEqual(o)
+        const yaml = partToYaml(before)
+        expect(yaml, `partToYaml dropped ${o}`).toContain('meshOffset')
+        const after = normalisePart(partFromYaml(yaml))
+        expect(after.meshOffset, `the round-trip changed ${o}`).toEqual(o)
+        // The WHOLE part, not just the field.
+        expect(after).toEqual(before)
+      }
+    })
+
+    it('survives a SECOND round-trip — a save, a reload and a save again', () => {
+      const once = normalisePart(partFromYaml(partToYaml(moved([-13.25, -24.25, 0]))))
+      const twice = normalisePart(partFromYaml(partToYaml(once)))
+      expect(twice).toEqual(once)
+    })
+
+    it('travels alongside a rotation without either disturbing the other', () => {
+      // The two corrections are independent fields with one composition order
+      // between them; a writer that dropped one while keeping the other would
+      // leave a part half-corrected, which is worse than uncorrected.
+      const both = normalisePart({
+        id: 'both',
+        name: 'Both',
+        headers: [],
+        mesh: 'model.stl',
+        meshRotation: [0, 0, 90],
+        meshOffset: [-13.25, -24.25, 0]
+      })
+      const after = normalisePart(partFromYaml(partToYaml(both)))
+      expect(after.meshRotation).toEqual([0, 0, 90])
+      expect(after.meshOffset).toEqual([-13.25, -24.25, 0])
+      expect(after).toEqual(both)
+    })
+
+    it('writes nothing at all for zero (absent IS "don’t move it")', () => {
+      expect(moved([0, 0, 0]).meshOffset).toBeUndefined()
+      expect(partToYaml(moved([0, 0, 0]))).not.toContain('meshOffset')
+    })
+
+    it('ignores a malformed offset rather than poisoning the placement', () => {
+      for (const bad of ['[1, 2]', '[1, 2, 3, 4]', '5', '[1, over-there, 3]', 'true']) {
+        const yml = `id: o\nname: O\nmesh: m.stl\nmeshOffset: ${bad}\n`
+        expect(partFromYaml(yml).meshOffset, bad).toBeUndefined()
+      }
+    })
+
+    it('is NOT confused with com_xyz — both are mm vec3s on the same part', () => {
+      const p = normalisePart({
+        id: 'o',
+        name: 'O',
+        headers: [],
+        mesh: 'm.stl',
+        meshOffset: [1, 2, 3],
+        com_xyz: [4, 5, 6]
+      })
+      const after = normalisePart(partFromYaml(partToYaml(p)))
+      expect(after.meshOffset).toEqual([1, 2, 3])
+      expect(after.com_xyz).toEqual([4, 5, 6])
+    })
+
+    it('a part authored before the field existed still loads (no migration)', () => {
+      const old = partFromYaml('id: o\nname: O\nmesh: m.stl\nmeshRotation: [0, 0, 90]\n')
+      expect(old.mesh).toBe('m.stl')
+      expect(old.meshOffset).toBeUndefined()
+    })
   })
 
   it('never serialises the inlined helpText; keeps the help filename', () => {
@@ -413,6 +569,30 @@ describe('onboard LEDs round-trip', () => {
       { kind: 'single', label: 'LED', gpio: 25, color: '#39d353', x: 0.5, y: 0.2 },
       { kind: 'rgb', rgb: { r: 18, g: 19, b: 20 }, x: 0.5, y: 0.6 }
     ])
+  })
+
+  it('keeps an LED\'s real mm size and hand-placed label (they were read-dropped)', () => {
+    // The writer passes an LED through whole, so a field the READER doesn't name
+    // survives the save and vanishes on the next load. `sizeMm` did exactly that:
+    // the bundled LED Bar authors ten 2.5 mm segments and got the legacy fixed
+    // on-screen size instead.
+    const yaml =
+      'id: p\nheaders:\n  - edge: left\n    pins:\n      - name: GP0\n        type: io\n        gpio: 0\n' +
+      'onboardLeds:\n  - { kind: single, label: LED, color: "#e4392f", x: 0.2, y: 0.77, sizeMm: 5, ' +
+      'labelOffset: { x: 0.02, y: -0.04 }, labelRotation: 270 }\n'
+    const led = partFromYaml(yaml).onboardLeds?.[0]
+    expect(led).toEqual({
+      kind: 'single',
+      label: 'LED',
+      color: '#e4392f',
+      x: 0.2,
+      y: 0.77,
+      sizeMm: 5,
+      labelOffset: { x: 0.02, y: -0.04 },
+      labelRotation: 270
+    })
+    // …and back out again, unchanged.
+    expect(partFromYaml(partToYaml(normalisePart(partFromYaml(yaml)))).onboardLeds?.[0]).toEqual(led)
   })
 
   it('round-trips a NeoPixel with a data + optional power GPIO', () => {

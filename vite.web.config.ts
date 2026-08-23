@@ -4,6 +4,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { standardPartsPlugin } from './vite-plugin-standard-parts'
+import { webConnectSrc } from './src/renderer/src/web/web-hosts'
 
 // The desktop app reads its version from Electron's `app.getVersion()`; the web
 // build has no Electron, so inject package.json's version at build time and serve
@@ -68,13 +69,16 @@ export default defineConfig({
     // electron build), so raise the warning limit past its size.
     chunkSizeWarningLimit: 4000,
     rollupOptions: {
-      // The main app entry plus the Board View, which pops out as a browser
-      // window (`window.open('board.html')` + a BroadcastChannel relay — see
-      // src/renderer/src/web/web-board.ts). The other Electron detached windows
-      // (find / instrument / console) remain in-page panes on the web.
+      // The main app entry plus the two windows that pop OUT of it in the
+      // browser: the Board View (`window.open('board.html')` + a BroadcastChannel
+      // relay — src/renderer/src/web/web-board.ts) and a detached instrument
+      // (`instrument.html`, which runs on the editor tab's own device — see
+      // src/renderer/src/web/web-instruments.ts, #781). The remaining Electron
+      // detached windows (find / console) stay in-page panes on the web.
       input: {
         index: resolve(__dirname, 'src/renderer/index.html'),
-        board: resolve(__dirname, 'src/renderer/board.html')
+        board: resolve(__dirname, 'src/renderer/board.html'),
+        instrument: resolve(__dirname, 'src/renderer/instrument.html')
       },
       output: {
         manualChunks(id: string) {
@@ -100,7 +104,13 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,woff,woff2,wasm}'],
         // The MicroPython WASM + Monaco chunks are large; precache them so the
         // classroom app truly works offline after the first visit.
-        maximumFileSizeToCacheInBytes: 12 * 1024 * 1024
+        maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
+        // The app is an SPA, so every navigation falls back to `index.html` —
+        // but the two pop-out windows are REAL pages, and answering their
+        // navigation with the shell opens the whole editor inside a 460px
+        // instrument window (#781). They are precached in their own right, so
+        // exclude them and let the precache (or the network) serve them.
+        navigateFallbackDenylist: [/^\/board\.html/, /^\/instrument\.html/]
       },
       manifest: {
         name: 'Snakie — MicroPython IDE',
@@ -122,14 +132,16 @@ export default defineConfig({
     {
       // Relax the renderer CSP for the WEB build ONLY (Electron keeps its strict
       // one): `'wasm-unsafe-eval'` lets the MicroPython WASM instantiate, and
-      // `font-src data:` lets Vite's inlined fonts load.
+      // `font-src data:` lets Vite's inlined fonts load. `connect-src` is built
+      // from `web-hosts.ts` — the SAME list the install path checks a URL
+      // against before fetching it, so the policy and the code cannot drift.
       name: 'snakie-web-csp',
       transformIndexHtml(html: string): string {
         return html.replace(
           /content="default-src 'self';[^"]*"/,
           `content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; ` +
             `style-src 'self' 'unsafe-inline'; img-src 'self' data:; ` +
-            `font-src 'self' data:; connect-src 'self' https://projects.kevsrobots.com https://raw.githubusercontent.com"`
+            `font-src 'self' data:; ${webConnectSrc()}"`
         )
       }
     }

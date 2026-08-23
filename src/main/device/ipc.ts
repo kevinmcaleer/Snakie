@@ -1,4 +1,5 @@
 import { ipcMain, type WebContents } from 'electron'
+import { delScratch } from '../../shared/device-scratch'
 import { isVirtualPort, VIRTUAL_PORT_PATH, VIRTUAL_PORT_LABEL } from '../../shared/virtual-device'
 import { MicroPythonDevice } from './MicroPythonDevice'
 import { SimulatedDevice } from './SimulatedDevice'
@@ -6,6 +7,7 @@ import { instrumentWindowWebContents } from '../instrumentWindows'
 import { consoleWindowWebContents } from '../consoleWindow'
 import { boardWindowWebContents } from '../board'
 import { broadcastToTargets } from './broadcast'
+import { annotatePortsWithDrives, findCircuitPyDrives } from './circuitpy'
 import type { ConnectOptions, DeviceStatus, IpcResult, PortInfo, SnakieDevice } from './types'
 
 /**
@@ -107,9 +109,17 @@ export function registerDeviceIpc(getWebContents: () => WebContents | undefined)
     wrap(async () => {
       const ports = await MicroPythonDevice.listPorts()
       const virtual: PortInfo = { path: VIRTUAL_PORT_PATH, friendlyName: VIRTUAL_PORT_LABEL }
-      return [...ports, virtual]
+      // Name the CircuitPython boards among them from their mounted CIRCUITPY
+      // drives (#753), so the picker can say what a board is before you connect
+      // to it. Enrichment only — a failure here leaves the list as it was.
+      return [...(await annotatePortsWithDrives(ports)), virtual]
     })
   )
+
+  // Every mounted CircuitPython filesystem, scanned fresh on each call (#753).
+  // Uncached on purpose: a CIRCUITPY drive ejects on soft reboot and returns a
+  // moment later, so a remembered mount path is a path that may not exist.
+  ipcMain.handle('device:circuitpyDrives', () => wrap(() => findCircuitPyDrives()))
 
   ipcMain.handle('device:connect', (_e, path: string, opts?: ConnectOptions) =>
     wrap(async () => {
@@ -155,13 +165,23 @@ export function registerDeviceIpc(getWebContents: () => WebContents | undefined)
   // can't stat (or a non-numeric reply) yields `null` so the gauge just hides.
   ipcMain.handle('device:df', () =>
     wrap<{ total: number; free: number; used: number } | null>(async () => {
+      // A CircuitPython board whose files live on a mounted drive (#754) is
+      // measured on the host instead — see `MicroPythonDevice.driveUsage`.
+      const dev = getActive()
+      if (dev === realDev) {
+        const fromDrive = await realDev.driveUsage()
+        if (fromDrive) return fromDrive
+      }
       const code = [
         'import os',
         'try:',
-        '    _s = os.statvfs("/")',
-        '    print("SNKDF", _s[0] * _s[2], _s[0] * _s[3])',
+        '    _snk_s = os.statvfs("/")',
+        '    print("SNKDF", _snk_s[0] * _snk_s[2], _snk_s[0] * _snk_s[3])',
         'except Exception:',
-        '    print("SNKDF -1 -1")'
+        '    print("SNKDF -1 -1")',
+        // The gauge polls, so this tuple was permanently resident on the board
+        // and shown in the Inspect panel as one of the user's variables (#798).
+        delScratch('_snk_s')
       ].join('\n')
       const { stdout } = await getActive().exec(code)
       const m = /SNKDF\s+(-?\d+)\s+(-?\d+)/.exec(stdout ?? '')
@@ -181,6 +201,18 @@ export function registerDeviceIpc(getWebContents: () => WebContents | undefined)
 
   ipcMain.handle('device:writeFile', (_e, path: string, contents: string) =>
     wrap(() => getActive().writeFile(path, contents))
+  )
+
+  // The same write, for a file that is NOT text (#758). Adafruit's CircuitPython
+  // bundle ships `.mpy` bytecode, and both device write paths already take bytes
+  // — the drive writes a Buffer, the raw REPL hex-encodes its chunks precisely
+  // so arbitrary bytes survive. What could not carry them was this boundary:
+  // sending a `.mpy` down the string channel would mangle it in the UTF-8
+  // round-trip and leave a file that imports as garbage. A separate channel
+  // rather than a union, so nothing can pass bytes where text is meant, or the
+  // reverse, by accident.
+  ipcMain.handle('device:writeFileBytes', (_e, path: string, contents: Uint8Array) =>
+    wrap(() => getActive().writeFile(path, Buffer.from(contents)))
   )
 
   ipcMain.handle('device:remove', (_e, path: string) => wrap(() => getActive().remove(path)))

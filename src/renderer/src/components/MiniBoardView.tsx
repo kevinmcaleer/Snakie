@@ -458,10 +458,12 @@ export function MiniBoardView({
     if (!g) return
     // Only the TOGGLE re-frames. A hover reveal keeps the current frame so the
     // board doesn't resize under the pointer every time you pass over it — the
-    // labels may run past the edge for that moment, which is the trade. Skipping
-    // rather than measuring matters because any other dependency changing
-    // mid-hover would otherwise lock in the (larger) labelled bounds and keep
-    // them after the pointer leaves; ending the hover re-runs this and corrects.
+    // labels may run past the frame for that moment, which is the trade. The SVG
+    // is overflow:visible (see the CSS) so run-past labels still SHOW wherever
+    // the panel has room (e.g. zoomed out), clipped only by the scroll wrap.
+    // Skipping rather than measuring matters because any other dependency
+    // changing mid-hover would otherwise lock in the (larger) labelled bounds and
+    // keep them after the pointer leaves; ending the hover re-runs this and corrects.
     if (pinoutHover && !pinoutPinned) return
     try {
       const b = g.getBBox()
@@ -553,12 +555,16 @@ export function MiniBoardView({
             SIMULATION
           </span>
         )}
+        {/* The full board lives in the Electronics workspace. Without an
+            `onPopOut` (the plain instrument-dock mount) this used to open the
+            deprecated pop-out window; it now asks the main window to switch, the
+            same thing the MiniViewer's own handler does (#775). */}
         <button
           type="button"
           className="mini-board__open"
-          title={onPopOut ? 'Open the Electronics workspace' : 'Open the full Board Viewer'}
-          aria-label={onPopOut ? 'Open the Electronics workspace' : 'Open the full Board Viewer'}
-          onClick={() => (onPopOut ? onPopOut() : void window.api.board.open())}
+          title="Open the Electronics workspace"
+          aria-label="Open the Electronics workspace"
+          onClick={() => (onPopOut ? onPopOut() : window.api.workspace.show('board'))}
         >
           <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path
@@ -572,6 +578,11 @@ export function MiniBoardView({
           </svg>
         </button>
       </div>
+      {/* The board viewport and the controls that sit over it, in ONE box (#774).
+          The zoom bar is positioned against THIS, not against the whole section,
+          so it can never render outside the element whose hover reveals it — the
+          failure mode that made the buttons respond only along their top edge. */}
+      <div className="mini-board__stage">
       <div
         className="mini-board__scroll"
         ref={scrollRef}
@@ -639,7 +650,10 @@ export function MiniBoardView({
         </g>
       </svg>
       </div>
-      {/* Zoom controls — hidden until the user hovers the mini board (keeps it clean). */}
+      {/* Zoom controls — FADED until the user hovers the mini board (keeps it
+          clean), but always hit-testable: gating `pointer-events` on a hover made
+          the hit area depend on the reveal, and a control you can only click
+          while something else is hovered is fragile by construction (#774). */}
       <div className="mini-board__zoom" aria-label="Zoom and pinout controls">
         {/* Keep the full pinout up. Hovering the board shows it anyway; this pins
             it so it stays while you read off which pins your I²C is on. */}
@@ -689,6 +703,7 @@ export function MiniBoardView({
         >
           +
         </button>
+      </div>
       </div>
       {usedList.length === 0 && (
         <p className="mini-board__hint">{isPython ? 'No pins used in this file yet.' : 'Open a MicroPython (.py) file to see its pins.'}</p>
