@@ -11,8 +11,10 @@ import type {
   GitBranchList,
   GitDiff,
   GitFileStatus,
+  GitPublishOptions,
   GitStatus
 } from '../../../preload/index.d'
+import { GitPublishDialog } from './GitPublishDialog'
 
 /**
  * SOURCE CONTROL TAB (issue #15)
@@ -30,6 +32,11 @@ import type {
  * async action surfaces failures inline rather than throwing. Git itself runs
  * in the main process, so this component is purely a thin view over the IPC
  * bridge.
+ *
+ * A repository with no remote gets **Publish to GitHub** (#795) where Push and
+ * Pull would otherwise sit. That swap is the point: without a remote those two
+ * buttons cannot do anything at all, so the toolbar was offering two dead
+ * controls in exactly the state where one useful one belongs.
  *
  * This panel is desktop-only — `AppShell` never mounts it in the web build,
  * which has no filesystem and no local `git` to run.
@@ -89,6 +96,7 @@ export function GitPanel(): JSX.Element {
   const [notice, setNotice] = useState<string | null>(null)
   const [openDiff, setOpenDiff] = useState<GitDiff | null>(null)
   const [loading, setLoading] = useState(false)
+  const [publishOpen, setPublishOpen] = useState(false)
 
   /** Reload status (and branches) for the open repo. */
   const refresh = useCallback(async (): Promise<void> => {
@@ -230,6 +238,29 @@ export function GitPanel(): JSX.Element {
       } finally {
         setBusy(false)
       }
+    },
+    [refresh]
+  )
+
+  /**
+   * Publish the open repository to GitHub (#795).
+   *
+   * No `window.confirm` in front of it, unlike #783's Initialise button: the
+   * dialog itself IS the confirmation — it names the repository, names the
+   * account it will land under, and makes public a deliberate second choice.
+   * A second "are you sure?" on top of that would be the kind of prompt people
+   * learn to dismiss without reading.
+   *
+   * The dialog stays open on failure so the name and description the user typed
+   * survive to the next attempt; it closes only once the repository exists.
+   */
+  const publish = useCallback(
+    async (options: GitPublishOptions): Promise<void> => {
+      const result = await window.api.git.publish(options)
+      setPublishOpen(false)
+      setError(null)
+      setNotice(result.warning ? `${result.summary} ${result.warning}` : result.summary)
+      await refresh()
     },
     [refresh]
   )
@@ -379,6 +410,9 @@ export function GitPanel(): JSX.Element {
   const changed = status?.changed ?? []
   const untracked = status?.untracked ?? []
   const hasChanges = staged.length + changed.length + untracked.length > 0
+  // No remote at all is the state Publish exists for; anything configured means
+  // the repo already lives somewhere and Push is the right button (#795).
+  const hasRemote = (status?.remotes.length ?? 0) > 0
 
   // How many files each group's bulk-stage button would actually stage. Same
   // helper the main process uses to build the `git add` list (#794), so the
@@ -443,24 +477,40 @@ export function GitPanel(): JSX.Element {
         >
           ⟳
         </button>
-        <button
-          type="button"
-          className="git__icon-btn"
-          title="Pull"
-          disabled={busy}
-          onClick={() => void run(async () => void (await window.api.git.pull()), 'Pulled.')}
-        >
-          ↓
-        </button>
-        <button
-          type="button"
-          className="git__icon-btn"
-          title="Push"
-          disabled={busy}
-          onClick={() => void run(async () => void (await window.api.git.push()), 'Pushed.')}
-        >
-          ↑
-        </button>
+        {/* With no remote, Push and Pull have nowhere to go — offer the one
+            button that fixes that instead of two that cannot work (#795). */}
+        {hasRemote ? (
+          <>
+            <button
+              type="button"
+              className="git__icon-btn"
+              title="Pull"
+              disabled={busy}
+              onClick={() => void run(async () => void (await window.api.git.pull()), 'Pulled.')}
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              className="git__icon-btn"
+              title="Push"
+              disabled={busy}
+              onClick={() => void run(async () => void (await window.api.git.push()), 'Pushed.')}
+            >
+              ↑
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="git__publish-btn"
+            title="Create a repository on GitHub from this folder and push to it"
+            disabled={busy}
+            onClick={() => setPublishOpen(true)}
+          >
+            Publish to GitHub
+          </button>
+        )}
       </div>
 
       {/* Branch switcher */}
@@ -585,6 +635,14 @@ export function GitPanel(): JSX.Element {
           </div>
           <DiffView diff={openDiff.diff} />
         </section>
+      )}
+
+      {publishOpen && (
+        <GitPublishDialog
+          repoPath={status?.root ?? repoPath}
+          onPublish={publish}
+          onCancel={() => setPublishOpen(false)}
+        />
       )}
 
       <div className="git__footer">

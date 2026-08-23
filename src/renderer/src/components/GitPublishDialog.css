@@ -1,0 +1,229 @@
+/*
+ * Styles co-located with GitPublishDialog (issue #795).
+ *
+ * A centred modal over a dimmed backdrop, matching the app chrome through the
+ * shared Soft Shell tokens so it tracks BOTH skins (skeuomorph parchment and
+ * dark) without a hardcoded colour anywhere — the palette here is entirely
+ * var(--…), which is what keeps the warning text readable on parchment.
+ *
+ * Every class carries the `gh-pub` prefix: this stylesheet is global once
+ * imported, and a generic `.warn`/`.actions` here would reach into any other
+ * panel that happened to use the same word.
+ */
+
+.gh-pub__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 1rem;
+}
+
+.gh-pub {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: min(30rem, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  padding: 1.1rem 1.2rem;
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--pixel-shadow);
+  font-size: 13px;
+}
+
+.gh-pub__title {
+  margin: 0 0 0.25rem;
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.gh-pub__note {
+  margin: 0 0 0.35rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.gh-pub__note code,
+.gh-pub__help code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  color: var(--text);
+}
+
+/* The "this is taking a while" line under a running publish. */
+.gh-pub__note--busy {
+  margin-top: 0.5rem;
+}
+
+.gh-pub__label {
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0;
+}
+
+.gh-pub__optional {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.gh-pub__input {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.45rem 0.55rem;
+}
+
+.gh-pub__input:focus-visible {
+  outline: var(--border-w) solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* An invalid name is marked by more than colour — the reason is spelled out in
+   the help line below it, which is what a screen reader reaches via
+   aria-describedby. */
+.gh-pub__input[aria-invalid='true'] {
+  border-color: var(--danger, #c0392b);
+}
+
+.gh-pub__help {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.gh-pub__invalid {
+  color: var(--danger, #c0392b);
+}
+
+/* --- Visibility ----------------------------------------------------------- */
+
+.gh-pub__visibility {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0.25rem 0 0.35rem;
+  padding: 0;
+  border: 0;
+}
+
+.gh-pub__radio {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  padding: 0.45rem 0.55rem;
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.gh-pub__radio:hover {
+  border-color: var(--accent);
+}
+
+.gh-pub__radio input {
+  margin-top: 0.15rem;
+  accent-color: var(--accent);
+}
+
+.gh-pub__radio > span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.gh-pub__radio-note {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* --- Messages -------------------------------------------------------------- */
+
+.gh-pub__blockers {
+  margin: 0 0 0.5rem;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.gh-pub__warn,
+.gh-pub__error {
+  margin: 0.25rem 0;
+  padding: 0.55rem 0.65rem;
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  line-height: 1.5;
+}
+
+/* The secrets warning uses the accent token rather than a literal gold, so it
+   stays readable on the parchment skin as well as the dark one. */
+.gh-pub__warn {
+  border-color: var(--accent);
+  background: var(--bg-sunken);
+  color: var(--text);
+}
+
+.gh-pub__error {
+  border-color: var(--danger, #c0392b);
+  background: var(--bg-sunken);
+  color: var(--danger, #c0392b);
+}
+
+/* --- Actions --------------------------------------------------------------- */
+
+.gh-pub__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.gh-pub__btn {
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  padding: 0.45rem 0.8rem;
+  color: var(--text);
+  background: var(--bg-elevated);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.gh-pub__btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.gh-pub__btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.gh-pub__btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast, #fff);
+  font-weight: 600;
+}
+
+.gh-pub__btn:focus-visible {
+  outline: var(--border-w) solid var(--accent);
+  outline-offset: 2px;
+}

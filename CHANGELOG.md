@@ -7,6 +7,50 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Publish a project to GitHub without leaving Snakie.** (#795) A repository
+  you created locally had nowhere to go: the Source Control panel offered
+  **Push** and **Pull**, both of which need a remote, and setting one up meant
+  a terminal, `gh repo create` or the GitHub website plus a `git remote add`
+  typed by hand. Those two buttons were dead controls in exactly the state
+  where a useful one belongs — so on a repository with no remote they are now
+  replaced by **Publish to GitHub**.
+
+  It opens a dialog: the repository name (pre-filled from your folder, and
+  sanitised — "Line Follower (v2)" becomes `Line-Follower-v2`, because GitHub
+  will not take the first), an optional description, and who can see it.
+  Publishing creates the repository, adds it as `origin` and pushes your
+  current branch in one step, then the panel says what it did — the full
+  `owner/name`, the visibility, and the branch it pushed.
+
+  **It defaults to private, and that is a safety decision rather than a
+  preference.** The MicroPython convention for Wi-Fi credentials is a plain
+  `secrets.py` sitting next to `main.py`, and a public repository is scraped,
+  forked and cached within minutes — "delete the repo" does not un-publish a
+  password. Choosing public costs one extra click; getting it wrong by default
+  would cost some people their network. For the same reason, choosing public
+  when the repository actually *tracks* a credentials-shaped file — `secrets.py`,
+  `.env`, a `.pem` — names those files before you commit to it. It warns rather
+  than blocks (your `.pem` may well be a public certificate), and it only counts
+  files git is already tracking, because an untracked or ignored one is never
+  pushed and warning about it would just teach you to click through.
+
+  **Snakie never holds a GitHub credential.** Publishing runs through the
+  GitHub CLI, which already keeps your token in the OS keychain and already
+  handles two-factor — the alternative was a personal access token typed into
+  a Snakie field and stored by Snakie, which is a thing that can leak. So the
+  dialog checks up front, before showing you a form: no `gh` installed, not
+  signed in, no commits yet, or a remote already configured each appear as a
+  sentence with the next step in it, rather than as an error after you have
+  typed a description and pressed the button. Sign-in itself stays in your
+  terminal (`gh auth login`) on purpose, so your credentials only ever go to
+  GitHub.
+
+  The repository name is validated as you type against the same rule the main
+  process guards with, so the dialog cannot accept something GitHub will
+  reject — and every value reaches `gh` as its own argument rather than as part
+  of a command line, which is what makes a repository named `foo; rm -rf ~`
+  merely an invalid name. Desktop only: the web app has no local git and no
+  `gh` to run.
 - **Right-click your code and Snakie offers to tidy it — and explains why.**
   Select some Python, right-click **Refactor…** (or <kbd>Ctrl/Cmd</kbd>+<kbd>⇧</kbd>+<kbd>R</kbd>),
   and you get concrete, safe rewrites: *Convert to guard clause*, *Merge nested
