@@ -26,6 +26,12 @@ const CTRL_B = '\x02'
 const CTRL_C = '\x03'
 const CTRL_D = '\x04'
 
+/** Shown when the raw-REPL handshake gets no answer — the board didn't reply to
+ *  Ctrl-A with the raw-REPL prompt. Actionable, in likelihood order, since the
+ *  low-level "device went quiet" is opaque to a user hitting Run. */
+export const RAW_REPL_NO_RESPONSE =
+  "The board didn't respond. Check that MicroPython is flashed and running, that no other app (e.g. Thonny) has the port open, then unplug and replug the board and reconnect."
+
 /** The minimal byte transport a {@link RawReplClient} drives. */
 export interface SerialTransport {
   write(data: Uint8Array): Promise<void>
@@ -226,7 +232,11 @@ export class RawReplClient {
     await this.write(CTRL_C)
     await this.write(CTRL_C)
     await this.write(CTRL_A)
-    await this.readUntil('raw REPL; CTRL-B to exit\r\n>')
+    try {
+      await this.readUntil('raw REPL; CTRL-B to exit\r\n>')
+    } catch {
+      throw new Error(RAW_REPL_NO_RESPONSE)
+    }
     this.inRawRepl = true
   }
   private async exitRawRepl(): Promise<void> {
