@@ -69,6 +69,11 @@ import { coerceMeshRotation } from '../../../shared/mesh-rotation'
 import { coerceMeshOffset } from '../../../shared/mesh-offset'
 import { flattenPartPins } from '../../../shared/netlist'
 
+
+/** Re-exported because this module's driver helpers take and return it — the
+ *  Part Editor and its tests should not have to reach past this file for it. */
+export type { DriverFile }
+
 /** The pin types the editor offers, in UI order. */
 export const PIN_TYPES: PartPinType[] = ['io', 'pwr', 'gnd', 'other']
 

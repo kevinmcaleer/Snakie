@@ -26,17 +26,19 @@ import {
   installWebInstrumentWindow,
   instrumentKeyFromHash
 } from './web-instruments'
+import { installWebConsoleMain, installWebConsoleWindow } from './web-console'
 import { VIRTUAL_PORT_PATH } from '../../../shared/virtual-device'
 
 /** Which renderer entry is installing: the main editor (`main.tsx`), the
- *  popped-out Board View window (`board-main.tsx`), or a popped-out instrument
- *  (`instrument-window-main.tsx`). */
-export type WebWindowKind = 'main' | 'board' | 'instrument'
+ *  popped-out Board View window (`board-main.tsx`), a popped-out instrument
+ *  (`instrument-window-main.tsx`) or the popped-out console
+ *  (`console-window-main.tsx`, #810). */
+export type WebWindowKind = 'main' | 'board' | 'instrument' | 'console'
 
 /**
  * Install the web backends for one renderer entry. Returns whether the entry got
- * a working backend — only an instrument popup can fail (it needs its editor
- * window), and it renders a plain "disconnected" state when it does.
+ * a working backend — only the popup entries can fail (they need their editor
+ * window), and they render a plain "disconnected" state when they do.
  */
 export function installWebApi(kind: WebWindowKind = 'main'): boolean {
   const w = window as typeof window & { api?: Record<string, unknown> }
@@ -46,6 +48,9 @@ export function installWebApi(kind: WebWindowKind = 'main'): boolean {
   // browser contexts anyway). It runs on the EDITOR window's api instead — see
   // web-instruments.ts.
   if (kind === 'instrument') return installWebInstrumentWindow(instrumentKeyFromHash(window.location.hash))
+  // Same for the console popup (#810): it reads and writes the SAME board as the
+  // editor tab, through that tab's api — see web-console.ts.
+  if (kind === 'console') return installWebConsoleWindow()
   // Report the real app version (injected from package.json by vite.web.config) so
   // the status bar shows it — the fallback returns '' (no Electron `app.getVersion`).
   const version = (import.meta.env as unknown as { VITE_SNAKIE_VERSION?: string }).VITE_SNAKIE_VERSION ?? ''
@@ -127,6 +132,8 @@ export function installWebApi(kind: WebWindowKind = 'main'): boolean {
     // window's device (#781). AFTER the board relay, which shares the same
     // `instruments` namespace.
     installWebInstrumentsMain()
+    // And the console does the same (#810) — one window, no key.
+    installWebConsoleMain()
   }
   // eslint-disable-next-line no-console
   console.info(

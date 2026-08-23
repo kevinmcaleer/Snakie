@@ -10,7 +10,6 @@ import {
   type SigPin
 } from '../src/shared/footprint-signature'
 import { partFromYaml, partToYaml } from '../src/shared/part-yaml'
-import type { PartDefinition, PartPin } from '../src/shared/part'
 
 const pins = (...ps: SigPin[]): SigPin[] => ps
 

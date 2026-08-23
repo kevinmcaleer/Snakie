@@ -24,6 +24,61 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   while still printing the version, build date and board — those came off the
   board and are true. It also now matches what the status bar shows for the same
   information, so the two can no longer disagree about what a board is running.
+- **`test/` is type-checked, so the part field guard actually guards.** (#793)
+  `test/partFieldContract.test.ts` exists to make a forgotten `PartDefinition`
+  field a *compile error* — its `Required<PartDefinition>` fixture is a
+  deliberate tripwire, because this repo has repeatedly shipped fields that were
+  then silently dropped on save. It could not do that: `tsconfig.node.json`
+  covers main/preload/shared, `tsconfig.web.json` covers the renderer, and
+  **neither included `test/`**. Vitest transforms with esbuild, which strips
+  types without checking them, so `npm test` did not catch it either. A
+  deliberate type error in a test file passed all four gates clean.
+
+  The guard had been working by convention — every recent author dutifully
+  updated the fixture — but it was trusted, not enforced, and the next person
+  who did not know the convention would have got no error at all.
+
+  A `tsconfig.test.json` now covers `test/` and runs as part of
+  `npm run typecheck`. Turning it on surfaced **48 real errors across 15 test
+  files**, every one of them a fixture that had drifted from the type it claims
+  to be — a `FakeRuntime` missing the `runStream` the interface gained in #612,
+  `PartCatalog` tests passing an `onAdd` prop that had been renamed to
+  `onAddMany`, `syncPlan` reading a `partId` off a union arm that has none,
+  `BoardDefinition` fixtures without `pcbColor`, a schematic fixture using a
+  `name` field `SchematicPin` never had, and a duplicated import line. All
+  fixed. Adding a field to `PartDefinition` now fails `npm run typecheck` at the
+  one place that makes you decide what that field does.
+- **The console pops out into a real window on the web app too.** (#810) The
+  sibling of #781, and a worse failure than it looked. On app.snakie.org the
+  pop-out control called `console.open`, which outside Electron landed on a stub
+  that did nothing — but the panel had *already* hidden the docked terminal
+  behind a "Console popped out to its own window" placeholder. So the console
+  vanished, no window appeared, **and the Redock button was dead too**: it asks
+  the window to close and then waits for the `console:closed` event to put the
+  console back, and that event could never arrive because its listener was a stub
+  as well. The console stayed gone for the rest of the session.
+
+  It now opens a real, resizable browser window — and a live one. As with an
+  instrument, a pop-up is its own JavaScript world, so a window that built its
+  own backend would be watching a second simulator (and a USB board can only be
+  open in one place at a time). Instead the editor tab lends the pop-out its own
+  device, so the detached console shows the same output *and* types back to the
+  same board. It opens seeded with the scrollback you already had rather than
+  blank, and closing it re-docks exactly as on the desktop.
+
+  Every route back to the dock now reports itself, because that event is the
+  console coming back: closing the window, clicking Redock, the browser blocking
+  the pop-up (the console re-docks and says why), and the window being closed
+  behind the editor's back. A reload is deliberately *not* treated as a close, so
+  refreshing a detached console doesn't re-dock a perfectly good one. If the
+  editor tab it belongs to is gone, the window says so instead of accepting
+  keystrokes that go nowhere.
+
+  Two smaller things came out of the same fix: `console.html` was missing from
+  the web build entirely, and the offline service worker would have answered its
+  navigation with the app shell — opening the whole editor inside a 760px window.
+  And the detached console now uses the Soft Shell fonts the rest of the app
+  does, which #781 had already corrected for instruments.
 
 ### Added
 - **Publish a project to GitHub without leaving Snakie.** (#795) A repository
