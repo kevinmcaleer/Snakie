@@ -6,6 +6,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Installing a driver no longer leaves the board using its old, broken copy.**
+  (#784) If you tried an import, it failed, you installed the driver, and tried
+  again — the natural order of events — the import kept failing. The files on
+  disk were byte-for-byte correct and exported the missing symbol, but the first
+  failed import had left a half-built module in the board's `sys.modules`, and
+  every retry got that cache back instead of re-reading the disk. The error
+  named a real symbol in a real file that really contained it, so every instinct
+  was to suspect the installer, the package or the URL. Only a board reset
+  cleared it.
+
+  A successful install now drops that module — and its submodules — from the
+  board's import cache, so the next `import` reads the files that were just
+  written.
+
+  It is a **targeted purge rather than a soft reset**, which is the difference
+  between fixing this and charging for it: a reset would throw away the whole
+  REPL session, every variable you were mid-experiment with, to solve a problem
+  you did not know you had. And it is not silent — when a cached copy really was
+  found, the install row says so, and says plainly what a purge cannot undo
+  (a name you already imported *from* the stale module keeps pointing at it
+  until the board resets). On a board that had never imported the module,
+  nothing is said, because there is nothing to report.
+
 ### Added
 - **Publish a project to GitHub without leaving Snakie.** (#795) A repository
   you created locally had nowhere to go: the Source Control panel offered

@@ -94,3 +94,21 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+
+/* The "the board was holding a stale copy, so it was cleared" note (#784).
+   Shown on a row that SUCCEEDED, so it must not read as an error: muted body
+   text with an accent rule down its left edge, rather than the error red.
+
+   Themed tokens throughout — this panel's older `--row-error` is a hardcoded
+   dark-only colour, and repeating that here would make the note unreadable on
+   the skeuomorph parchment skin. */
+.drvbanner__row-note {
+  width: 100%;
+  margin-top: 4px;
+  padding: 4px 0 4px 8px;
+  margin-left: 16px;
+  border-left: 2px solid var(--accent);
+  color: var(--text-muted);
+  font-size: 0.92em;
+  line-height: 1.45;
+}
