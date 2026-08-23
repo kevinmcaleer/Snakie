@@ -289,7 +289,8 @@ if (!w.api) {
         behind: 0,
         staged: [],
         changed: [],
-        untracked: []
+        untracked: [],
+        remotes: []
       }),
       stage: P(undefined),
       unstage: P(undefined),
@@ -300,7 +301,19 @@ if (!w.api) {
       listBranches: P({ current: '', branches: [] }),
       checkout: P(undefined),
       push: P({ summary: '' }),
-      pull: P({ summary: '' })
+      pull: P({ summary: '' }),
+      // The web build has no local git and no `gh`, so Publish is never
+      // offered there (#795). The stub still reports WHY rather than resolving
+      // an empty shape, so a stray call reads as a sentence, not as a dialog
+      // that opens on nothing.
+      publishPreflight: P({
+        ghInstalled: false,
+        authenticated: false,
+        suggestedName: '',
+        hasCommits: false,
+        riskyPaths: [],
+        blockers: ['Publishing to GitHub needs the desktop app.']
+      })
     }
   }
 

@@ -8,12 +8,24 @@ import {
   stageSummary,
   type GitStageScope
 } from '../../shared/git-stage'
+import {
+  publishArgs,
+  publishSummary,
+  secretRisks,
+  suggestRepoName,
+  validateRepoName,
+  type GitVisibility
+} from '../../shared/git-publish'
+import { ghAccount, ghVersion, publishTimeout, runGh } from './gh'
 import { SNAKIE_GITIGNORE, gitFailureText, initSummary } from './init-support'
 import type {
   GitBranchList,
   GitDiff,
   GitFileStatus,
   GitInitResult,
+  GitPublishOptions,
+  GitPublishPreflight,
+  GitPublishResult,
   GitRemoteResult,
   GitStageResult,
   GitStatus
@@ -140,7 +152,8 @@ export class GitService {
       staged: [],
       changed: [],
       untracked: [],
-      hasCommits: false
+      hasCommits: false,
+      remotes: []
     }
     if (!this.git) return empty
 
@@ -201,7 +214,26 @@ export class GitService {
       staged,
       changed,
       untracked,
-      hasCommits: await this.hasCommits()
+      hasCommits: await this.hasCommits(),
+      remotes: await this.remotes()
+    }
+  }
+
+  /**
+   * Names of the configured remotes, or `[]` when there are none.
+   *
+   * Never throws: a repo with no remotes is the normal state this feature
+   * exists for (#795), not a failure, and a status refresh that rejected
+   * because of it would break the whole panel over a missing `origin`.
+   */
+  private async remotes(): Promise<string[]> {
+    const git = this.git
+    if (!git) return []
+    try {
+      const list = await git.getRemotes(false)
+      return list.map((r) => r.name).filter(Boolean)
+    } catch {
+      return []
     }
   }
 
@@ -288,6 +320,223 @@ export class GitService {
       untrackedCount,
       warning,
       summary: initSummary({ branch, wroteGitignore, untrackedCount })
+    }
+  }
+
+  /**
+   * Everything the publish dialog needs to know before it opens (#795).
+   *
+   * Answers the four questions that decide whether a publish can happen at all
+   * — is `gh` installed, is it signed in, is there anything to push, and does
+   * this repo already have a remote — plus the two that shape what the dialog
+   * shows: a sanitised starting name, and which tracked files would be a bad
+   * thing to make public.
+   *
+   * Never throws for any of those states. They are all things the dialog
+   * RENDERS: a missing `gh` should read as a sentence with an install link, not
+   * as a red error bar under a form the user cannot use anyway.
+   */
+  async publishPreflight(): Promise<GitPublishPreflight> {
+    const blockers: string[] = []
+
+    const version = await ghVersion()
+    const ghInstalled = version !== undefined
+    if (!ghInstalled) {
+      blockers.push(
+        'The GitHub CLI (gh) is not installed on this computer, or is not on its PATH. ' +
+          'Snakie publishes through gh so it never has to hold your GitHub credentials — ' +
+          'install it from https://cli.github.com, then restart Snakie.'
+      )
+    }
+
+    // Only worth asking when there is a binary to ask.
+    let authenticated = false
+    let account: string | undefined
+    if (ghInstalled) {
+      try {
+        account = await ghAccount()
+        authenticated = true
+      } catch {
+        authenticated = false
+        blockers.push(
+          'The GitHub CLI is not signed in. Open a terminal, run `gh auth login`, then try ' +
+            'again. Snakie cannot run that sign-in for you — it is interactive on purpose, ' +
+            'so your credentials only ever go to GitHub.'
+        )
+      }
+    }
+
+    const current = await this.status()
+    if (!current.isRepo) {
+      blockers.push('This folder is not a Git repository yet. Initialise one first.')
+    }
+
+    // Publishing an unborn HEAD would create an empty repository on GitHub and
+    // push nothing — the user would be left with a repo that does not contain
+    // their project and no clue why.
+    if (current.isRepo && !current.hasCommits) {
+      blockers.push(
+        'There are no commits yet, so there would be nothing to publish. ' +
+          'Stage your files and make a first commit, then publish.'
+      )
+    }
+
+    const existingRemote = current.remotes[0]
+    if (existingRemote) {
+      blockers.push(
+        `This repository already has a remote ("${existingRemote}"), so it is already published ` +
+          'somewhere. Use Push to send your commits there.'
+      )
+    }
+
+    const root = current.root ?? this.dir ?? ''
+    const folderName = root.split(/[\\/]/).filter(Boolean).pop() ?? ''
+
+    return {
+      ghInstalled,
+      ghVersion: version,
+      authenticated,
+      account,
+      suggestedName: suggestRepoName(folderName),
+      hasCommits: current.hasCommits,
+      existingRemote,
+      riskyPaths: current.isRepo ? secretRisks(await this.trackedPaths()) : [],
+      blockers
+    }
+  }
+
+  /**
+   * The repo-relative paths git is TRACKING.
+   *
+   * Tracking is the right question, not "what is in the folder": an untracked
+   * or ignored `secrets.py` is never pushed, so warning about it would be a
+   * false alarm — and false alarms are how a warning gets clicked through.
+   */
+  private async trackedPaths(): Promise<string[]> {
+    const git = this.git
+    if (!git) return []
+    try {
+      const out = await git.raw(['ls-files'])
+      return out.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * Create a GitHub repository from the open folder and push to it (#795).
+   *
+   * The whole operation is `gh repo create --source … --push`, which creates
+   * the remote repository, adds it as a git remote and pushes the current
+   * branch in one step. Doing it as one `gh` call rather than three of our own
+   * is deliberate: any split leaves failure states that are genuinely hard for
+   * a user to unpick (a repository created on GitHub but no remote locally, or
+   * a remote pointing at a repository that was never created).
+   *
+   * Everything is re-checked here rather than trusted from the dialog's
+   * preflight. The two are separated by however long the user spent typing, and
+   * in that window they could have committed, added a remote, or opened a
+   * different folder — and unlike a stale button, a stale publish creates a
+   * real repository on a real account.
+   */
+  async publish(options: GitPublishOptions): Promise<GitPublishResult> {
+    const visibility: GitVisibility = options.visibility === 'public' ? 'public' : 'private'
+
+    const check = validateRepoName(options.name)
+    if (!check.ok) throw new Error(check.error ?? 'That repository name is not valid.')
+
+    const current = await this.status()
+    if (!current.isRepo || !current.root) {
+      throw new Error('This folder is not a Git repository, so there is nothing to publish.')
+    }
+    if (!current.hasCommits) {
+      throw new Error(
+        'There are no commits yet, so there would be nothing to publish. Make a first commit, then publish.'
+      )
+    }
+    const existing = current.remotes[0]
+    if (existing) {
+      throw new Error(
+        `This repository already has a remote ("${existing}"), so it is already published somewhere. ` +
+          'Use Push to send your commits there.'
+      )
+    }
+
+    const root = current.root
+    const branch = current.branch
+
+    await runGh(
+      publishArgs({
+        name: options.name.trim(),
+        description: options.description,
+        visibility,
+        source: root
+      }),
+      { cwd: root, timeout: publishTimeout }
+    )
+
+    // What gh actually created — asked for rather than assumed, because the
+    // owner half of `fullName` is resolved by gh (the authenticated user, when
+    // the name was typed bare) and the visibility is worth reading back from
+    // GitHub rather than echoing the flag we sent.
+    let fullName = options.name.trim()
+    let url = ''
+    let confirmedVisibility = visibility
+    let warning: string | undefined
+    try {
+      const { stdout } = await runGh([
+        'repo',
+        'view',
+        '--json',
+        'nameWithOwner,url,visibility'
+      ], { cwd: root })
+      const meta = JSON.parse(stdout) as {
+        nameWithOwner?: string
+        url?: string
+        visibility?: string
+      }
+      if (meta.nameWithOwner) fullName = meta.nameWithOwner
+      if (meta.url) url = meta.url
+      if (meta.visibility) {
+        confirmedVisibility = meta.visibility.toLowerCase() === 'public' ? 'public' : 'private'
+      }
+    } catch {
+      // The repository exists and the push succeeded — this call is only for a
+      // tidier report, so failing it must not turn a success into an error.
+      warning = 'The repository was published, but Snakie could not read back its details from GitHub.'
+    }
+
+    // gh's `--push` sets the upstream itself, but say so out loud rather than
+    // assume: without tracking, the panel's ahead/behind counts stay blank and
+    // Push would fail with "no upstream" on the very next commit.
+    const after = await this.status()
+    const remote = after.remotes[0] ?? 'origin'
+    if (!after.tracking && branch) {
+      try {
+        await this.require().raw(['branch', `--set-upstream-to=${remote}/${branch}`, branch])
+      } catch {
+        warning =
+          warning ??
+          `Published, but ${branch} is not tracking ${remote}/${branch} yet — the first Push may ask you to set an upstream.`
+      }
+    }
+
+    if (confirmedVisibility !== visibility) {
+      // Almost always an organisation policy forcing private. The user asked
+      // for one thing and got another; that is not a detail to swallow.
+      warning =
+        `You asked for a ${visibility} repository, but GitHub created a ${confirmedVisibility} one ` +
+        '(an organisation policy usually causes this).'
+    }
+
+    return {
+      fullName,
+      url: url || `https://github.com/${fullName}`,
+      visibility: confirmedVisibility,
+      branch,
+      remote,
+      warning,
+      summary: publishSummary({ fullName, visibility: confirmedVisibility, branch, remote })
     }
   }
 

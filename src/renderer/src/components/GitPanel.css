@@ -481,3 +481,34 @@
   direction: rtl;
   text-align: left;
 }
+
+/* The toolbar's "Publish to GitHub" button (#795). A text button rather than a
+   glyph, because it takes the place of Push/Pull only on a repository that has
+   never been published — a state the user has no icon vocabulary for yet, and
+   where naming the destination is the whole point. */
+.git__publish-btn {
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  padding: 0.22rem 0.5rem;
+  color: var(--accent-contrast);
+  background: var(--accent);
+  border: var(--border-w) solid var(--accent);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.git__publish-btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.git__publish-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.git__publish-btn:focus-visible {
+  outline: var(--border-w) solid var(--accent);
+  outline-offset: 2px;
+}

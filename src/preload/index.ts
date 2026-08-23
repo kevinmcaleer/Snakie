@@ -66,7 +66,10 @@ import type {
   GitRemoteResult,
   GitStageResult,
   GitStageScope,
-  GitStatus
+  GitStatus,
+  GitPublishOptions,
+  GitPublishPreflight,
+  GitPublishResult
 } from '../main/git/types'
 import type {
   LintResult,
@@ -752,7 +755,25 @@ const git = {
   /** Push the current branch to its upstream. */
   push: (): Promise<GitRemoteResult> => unwrap(ipcRenderer.invoke('git:push')),
   /** Pull from the upstream of the current branch. */
-  pull: (): Promise<GitRemoteResult> => unwrap(ipcRenderer.invoke('git:pull'))
+  pull: (): Promise<GitRemoteResult> => unwrap(ipcRenderer.invoke('git:pull')),
+
+  /**
+   * What the publish dialog needs before it opens (#795): whether `gh` is
+   * installed and signed in, a suggested name, and any tracked files that would
+   * be a bad thing to make public. Resolves even when publishing is impossible —
+   * the reasons come back in `blockers` for the dialog to render.
+   */
+  publishPreflight: (): Promise<GitPublishPreflight> =>
+    unwrap(ipcRenderer.invoke('git:publishPreflight')),
+
+  /**
+   * Create a GitHub repository from the open folder and push to it (#795). Runs
+   * `gh repo create --source … --push`, so Snakie never handles a GitHub
+   * credential itself. Rejects with a readable message when gh is missing,
+   * signed out, or GitHub refuses the name.
+   */
+  publish: (options: GitPublishOptions): Promise<GitPublishResult> =>
+    unwrap(ipcRenderer.invoke('git:publish', options))
 }
 
 /**

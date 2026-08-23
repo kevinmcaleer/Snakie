@@ -129,7 +129,10 @@ export type {
   GitInitResult,
   GitRemoteResult,
   GitStageResult,
-  GitStageScope
+  GitStageScope,
+  GitPublishOptions,
+  GitPublishPreflight,
+  GitPublishResult
 } from '../main/git/types'
 
 // Re-export the Python plugin-system types (issue #61) so the Plugins panel can

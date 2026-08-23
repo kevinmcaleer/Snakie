@@ -5,6 +5,9 @@ import type {
   GitBranchList,
   GitDiff,
   GitInitResult,
+  GitPublishOptions,
+  GitPublishPreflight,
+  GitPublishResult,
   GitRemoteResult,
   GitStageResult,
   GitStageScope,
@@ -98,4 +101,20 @@ export function registerGitIpc(): void {
 
   ipcMain.handle('git:push', () => wrap<GitRemoteResult>(() => service.push()))
   ipcMain.handle('git:pull', () => wrap<GitRemoteResult>(() => service.pull()))
+
+  // Everything the publish dialog needs before it opens (#795). Like
+  // `git:status` this does NOT reject for the states it exists to report — a
+  // missing `gh`, a signed-out CLI and a repo with no commits all come back as
+  // `blockers`, because they are things the dialog renders rather than errors.
+  ipcMain.handle('git:publishPreflight', () =>
+    wrap<GitPublishPreflight>(() => service.publishPreflight())
+  )
+
+  // Create the GitHub repository and push to it (#795). This one DOES reject:
+  // it creates a repository on the user's GitHub account, and a button that
+  // appears to do nothing after that is the worst possible outcome — the user
+  // would click it again and hit "name already exists" on their second try.
+  ipcMain.handle('git:publish', (_e, options: GitPublishOptions) =>
+    wrap<GitPublishResult>(() => service.publish(options))
+  )
 }
