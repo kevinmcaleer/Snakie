@@ -14,12 +14,47 @@
  */
 import { driverDeviceDirs, driverInstallMethod, driverModuleId } from './part-editor.util'
 import { moduleById } from '../../../shared/modules-catalog'
+import {
+  parsePurgeCount,
+  purgeModuleSnippet,
+  purgeNote,
+  topLevelModuleName
+} from '../../../shared/module-cache'
 import type { DriverFile } from '../../../preload/index.d'
 
 export interface DriverInstallResult {
   ok: boolean
   /** A short failure reason for the banner copy (undefined on success). */
   message?: string
+  /**
+   * Set when the board was still holding a stale copy of the module we just
+   * installed, and we dropped it (#784). The banner shows this so a cache the
+   * user never asked about is not cleared behind their back — and so the one
+   * case that used to cost an hour of debugging now explains itself.
+   */
+  note?: string
+}
+
+/**
+ * Drop the just-installed module from the board's `sys.modules` (#784).
+ *
+ * Runs after a SUCCESSFUL install, and is strictly best-effort: the files are
+ * already written and correct, so nothing here may turn success into failure.
+ * A board that cannot run the snippet simply gets the old behaviour, which is
+ * why every failure path returns `undefined` rather than propagating.
+ */
+async function clearStaleModule(target: string): Promise<string | undefined> {
+  const name = topLevelModuleName(target)
+  if (!name) return undefined
+  try {
+    const out = await window.api.device.exec(purgeModuleSnippet(name))
+    const text = typeof out === 'string' ? out : ((out as { output?: string })?.output ?? '')
+    return purgeNote([name], parsePurgeCount(text))
+  } catch {
+    // No board, a busy REPL, a runtime without `sys.modules` — the install
+    // still stands, and the user is no worse off than before this existed.
+    return undefined
+  }
 }
 
 /** Install ONE driver file onto the connected board. Never throws. */
@@ -39,20 +74,24 @@ export async function installPartDriver(
         return { ok: false, message: `Unknown module "${id}" — it is not in the catalog.` }
       }
       const res = await window.api.modules.install(id)
-      return res.ok
-        ? { ok: true }
-        : { ok: false, message: res.log?.split('\n').filter(Boolean).pop() || `Could not install ${id}.` }
+      if (!res.ok) {
+        return {
+          ok: false,
+          message: res.log?.split('\n').filter(Boolean).pop() || `Could not install ${id}.`
+        }
+      }
+      return { ok: true, note: await clearStaleModule(d.target || id) }
     }
     if (method === 'mip') {
       const target = d.target.trim()
       const res = await window.api.packages.install(d.source, target ? { target } : undefined)
-      return res.ok
-        ? { ok: true }
-        : {
-            ok: false,
-            message:
-              res.log.split('\n').filter(Boolean).pop() || `Could not install ${d.source}.`
-          }
+      if (!res.ok) {
+        return {
+          ok: false,
+          message: res.log.split('\n').filter(Boolean).pop() || `Could not install ${d.source}.`
+        }
+      }
+      return { ok: true, note: await clearStaleModule(target || d.source) }
     }
     // copy: read the file (bundled file or URL, via main) then write to target.
     const read = await window.api.parts.readDriverSource(libraryId, partId, d.source)
@@ -77,7 +116,7 @@ export async function installPartDriver(
       await window.api.device.mkdir(dir).catch(() => undefined)
     }
     await window.api.device.writeFile(d.target.trim(), read.contents)
-    return { ok: true }
+    return { ok: true, note: await clearStaleModule(d.target) }
   } catch (err) {
     const raw = err instanceof Error ? err.message : String(err)
     // The board's MicroPython filesystem is full — OSError 28 (ENOSPC). Small boards

@@ -48,6 +48,11 @@ type DriverState = 'pending' | 'installing' | 'ok' | 'error'
 interface DriverStatus {
   state: DriverState
   message?: string
+  /** Said on SUCCESS when the board was still holding a stale copy of this
+   *  module and Snakie dropped it (#784). Kept separate from `message`, which
+   *  is a failure reason — this row succeeded, and the note explains something
+   *  that happened along the way rather than something that went wrong. */
+  note?: string
 }
 
 export interface DriverInstallBannerProps {
@@ -200,7 +205,7 @@ export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.El
     // The mip/copy sequence lives in the shared installer (also used by the main
     // editor's missing-library banner, #166) — this wrapper just maps to status.
     const res = await installPartDriver(need.libraryId, need.partId, d)
-    setStatus(id, { state: res.ok ? 'ok' : 'error', message: res.message })
+    setStatus(id, { state: res.ok ? 'ok' : 'error', message: res.message, note: res.note })
   }
 
   const installAll = async (): Promise<void> => {
@@ -296,6 +301,14 @@ export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.El
                 )}
                 {st === 'error' && statuses[id]?.message && (
                   <span className="drvbanner__row-error">{statuses[id]?.message}</span>
+                )}
+                {/* A successful install that ALSO had to clear the board's
+                    cached copy (#784). Without this the banner reports plain
+                    success while something the user never asked about was
+                    changed on their board — and the import that sent them here
+                    would still have been failing for a reason nothing named. */}
+                {st === 'ok' && statuses[id]?.note && (
+                  <span className="drvbanner__row-note">{statuses[id]?.note}</span>
                 )}
               </li>
             )
