@@ -10,8 +10,8 @@ import {
 } from '../src/renderer/src/components/device-tree-model'
 import type { DirEntry } from '../src/preload/index.d'
 
-const d = (name: string): DirEntry => ({ name, isDir: true })
-const f = (name: string): DirEntry => ({ name, isDir: false })
+const d = (name: string): DirEntry => ({ name, isDir: true, size: 0 })
+const f = (name: string, size = 0): DirEntry => ({ name, isDir: false, size })
 
 const dirs = new Map<string, DirEntry[]>([
   ['/', [d('lib'), f('main.py'), f('boot.py')]],

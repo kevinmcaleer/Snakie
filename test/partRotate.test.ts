@@ -204,7 +204,7 @@ describe('rotatePart', () => {
   })
 
   it('leaves the schematic symbol alone', () => {
-    const schematic = { aspect: 2, pins: [{ name: 'A', side: 'left' as const }] }
+    const schematic = { aspect: 2, pins: [{ pin: 'A', side: 'left' as const, order: 0 }] }
     expect(rotatePart(base({ schematic }), 'cw').schematic).toEqual(schematic)
   })
 
@@ -267,7 +267,7 @@ describe('rotatePart', () => {
         { kind: 'rect', x: 0.2, y: 0.3, w: 0.1, h: 0.25, side: 'rear' }
       ],
       labels: [{ text: 'X', x: 0.5, y: 0.1 }],
-      onboardLeds: [{ x: 0.7, y: 0.7 }],
+      onboardLeds: [{ kind: 'single', x: 0.7, y: 0.7 }],
       polygon: [
         { x: 0, y: 0 },
         { x: 1, y: 0 },

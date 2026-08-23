@@ -47,7 +47,7 @@ describe('sampleControl — puppet pose blend (#416)', () => {
     expect(sampleControl(ctl(['center']), poses, 0.7)).toEqual({ yaw: 0, tilt: 0 })
     // an unknown pose resolves to {}, so the blend holds the known neighbour's joints
     expect(sampleControl(ctl(['ghost', 'center']), poses, 0)).toEqual({ yaw: 0, tilt: 0 })
-    expect(sampleControl({ id: 'x', name: 'x', poses: [] }, poses, 0.5)).toEqual({})
+    expect(sampleControl(ctl([]), poses, 0.5)).toEqual({})
   })
 })
 
