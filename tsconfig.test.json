@@ -1,0 +1,29 @@
+{
+  // Type-checking for `test/` — issue #793.
+  //
+  // Neither `tsconfig.node.json` (main/preload/shared) nor `tsconfig.web.json`
+  // (renderer) covered `test/`, and vitest transforms with esbuild, which strips
+  // types without checking them. So nothing in the four gates typechecked a test
+  // file, and `test/partFieldContract.test.ts` — whose whole job is to make a
+  // forgotten `PartDefinition` field a COMPILE error — could not do it.
+  //
+  // Tests reach into every layer: main-process services, shared helpers, and
+  // React components rendered to static markup. So this config is deliberately
+  // the UNION — DOM plus node types, and the renderer's JSX settings — rather
+  // than an extension of either side, which would leave half the suite unable
+  // to resolve its imports.
+  "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
+  "include": ["test/**/*"],
+  "compilerOptions": {
+    "composite": true,
+    "jsx": "react-jsx",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    // `vite/client` for the `import.meta.glob` / `import.meta.env` the renderer
+    // modules under test use; without it every such call reads as an error here.
+    "types": ["node", "vitest/globals", "vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@renderer/*": ["src/renderer/src/*"]
+    }
+  }
+}

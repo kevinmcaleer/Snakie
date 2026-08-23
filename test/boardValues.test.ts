@@ -9,7 +9,15 @@ import {
 } from '../src/renderer/src/components/board-values'
 import type { UsedPins } from '../src/renderer/src/components/parse-pins'
 
-function conn(partial: Partial<UsedPins> & Pick<UsedPins, 'type'>): UsedPins {
+// `UsedPins` has a field literally named `constructor`, so `Partial<UsedPins>`
+// declares `constructor?: string` — which every object literal already inherits
+// from `Object.prototype` as a `Function`. TypeScript reports that clash on the
+// CALLER, not here, so `conn({ type: 'output' })` failed with a baffling
+// "Types of property 'constructor' are incompatible". The default below is the
+// only `constructor` anyone wants, so exclude it from what callers may pass.
+function conn(
+  partial: Omit<Partial<UsedPins>, 'constructor'> & Pick<UsedPins, 'type'>
+): UsedPins {
   return {
     pins: ['0'],
     variable: 'x',

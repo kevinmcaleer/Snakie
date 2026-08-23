@@ -6,6 +6,33 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **`test/` is type-checked, so the part field guard actually guards.** (#793)
+  `test/partFieldContract.test.ts` exists to make a forgotten `PartDefinition`
+  field a *compile error* — its `Required<PartDefinition>` fixture is a
+  deliberate tripwire, because this repo has repeatedly shipped fields that were
+  then silently dropped on save. It could not do that: `tsconfig.node.json`
+  covers main/preload/shared, `tsconfig.web.json` covers the renderer, and
+  **neither included `test/`**. Vitest transforms with esbuild, which strips
+  types without checking them, so `npm test` did not catch it either. A
+  deliberate type error in a test file passed all four gates clean.
+
+  The guard had been working by convention — every recent author dutifully
+  updated the fixture — but it was trusted, not enforced, and the next person
+  who did not know the convention would have got no error at all.
+
+  A `tsconfig.test.json` now covers `test/` and runs as part of
+  `npm run typecheck`. Turning it on surfaced **48 real errors across 15 test
+  files**, every one of them a fixture that had drifted from the type it claims
+  to be — a `FakeRuntime` missing the `runStream` the interface gained in #612,
+  `PartCatalog` tests passing an `onAdd` prop that had been renamed to
+  `onAddMany`, `syncPlan` reading a `partId` off a union arm that has none,
+  `BoardDefinition` fixtures without `pcbColor`, a schematic fixture using a
+  `name` field `SchematicPin` never had, and a duplicated import line. All
+  fixed. Adding a field to `PartDefinition` now fails `npm run typecheck` at the
+  one place that makes you decide what that field does.
+
+
 ### Added
 - **Publish a project to GitHub without leaving Snakie.** (#795) A repository
   you created locally had nowhere to go: the Source Control panel offered

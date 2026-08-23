@@ -104,7 +104,7 @@ describe('partSpecRows', () => {
   it('spells the package code out, and passes an unknown one through untouched', () => {
     expect(partSpecRows(part({ package: 'SMD' }))[0].value).toBe('Surface-mount (SMD)')
     expect(partSpecRows(part({ package: 'THT' }))[0].value).toBe('Through-hole (THT)')
-    expect(partSpecRows(part({ package: 'QFN' } as Partial<PartDefinition>))[0].value).toBe('QFN')
+    expect(partSpecRows(part({ package: 'QFN' } as unknown as Partial<PartDefinition>))[0].value).toBe('QFN')
   })
 
   it("appends the author's own key/values as further spec rows", () => {

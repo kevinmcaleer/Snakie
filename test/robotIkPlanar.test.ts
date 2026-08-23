@@ -111,7 +111,7 @@ describe('reachable-workspace sampling', () => {
     }
     // A pinned base joint collapses the reachable spread in X.
     const pinned = sampleWorkspace({ boneLengths: [1, 1], limits: [[0, 0.001], null] }, 400)
-    const spread = (pts: [number, number][]): number =>
+    const spread = (pts: readonly (readonly [number, number])[]): number =>
       Math.max(...pts.map((p) => p[0])) - Math.min(...pts.map((p) => p[0]))
     expect(spread(pinned.points)).toBeLessThan(spread(full.points))
   })

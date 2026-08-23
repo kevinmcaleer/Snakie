@@ -31,6 +31,13 @@ class FakeRuntime implements ReplRuntime {
     this.capturedCalls.push(code)
     return this.nextCaptured
   }
+  /** Programs run with their output STREAMING to the console (#612). Recorded
+   *  rather than echoed, so a test can assert WHICH path a run took — the
+   *  interactive REPL (`feed`) or a direct program run. */
+  streamedCalls: string[] = []
+  async runStream(code: string): Promise<void> {
+    this.streamedCalls.push(code)
+  }
   interrupts = 0
   async interrupt(): Promise<void> {
     this.interrupts += 1

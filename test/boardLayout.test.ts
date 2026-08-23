@@ -454,6 +454,7 @@ describe('authoredPads', () => {
     const def: BoardDefinition = {
       id: 'authored',
       name: 'Authored',
+      pcbColor: '#0f5a2e',
       mcu: 'X',
       aspect: 1,
       headers: [
@@ -471,6 +472,7 @@ describe('authoredPads', () => {
     const def: BoardDefinition = {
       id: 'builtin',
       name: 'Builtin',
+      pcbColor: '#0f5a2e',
       mcu: 'X',
       aspect: 1,
       headers: [{ edge: 'left', pins: [{ gpio: 0, label: 'GP0' }, { gpio: 1, label: 'GP1' }] }]
@@ -482,6 +484,7 @@ describe('authoredPads', () => {
     const def: BoardDefinition = {
       id: 'mixed',
       name: 'Mixed',
+      pcbColor: '#0f5a2e',
       mcu: 'X',
       aspect: 1,
       headers: [
