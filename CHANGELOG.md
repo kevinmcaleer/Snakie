@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.46.0] - 2026-08-23
+
 ### Fixed
 - **Installing a driver no longer leaves the board using its old, broken copy.**
   (#784) If you tried an import, it failed, you installed the driver, and tried
@@ -4936,7 +4938,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.44.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.46.0...HEAD
+[0.46.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.44.0...v0.46.0
 [0.44.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.41.0...v0.42.0
