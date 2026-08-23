@@ -6,6 +6,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **A board Snakie can't identify is no longer greeted as MicroPython.** (#770)
+  A CircuitPython 10.2.1 board was welcomed in the REPL as
+  `MicroPython v10.2.1` — the version was right, so the probe had reached the
+  board; only the runtime was wrong, in the very first line the user reads.
+
+  The cause was a binary in the greeting: `circuitpython ? … : MicroPython`. Any
+  failure to *positively* identify CircuitPython — a probe line that didn't
+  arrive, an `implementation.name` that is neither runtime — silently reported
+  the board as MicroPython. That reintroduced, at the very last step, the
+  "assume MicroPython everywhere" default the dialect module exists to remove.
+  The `v` prefix was the second half of it, since that is MicroPython's own
+  convention and CircuitPython prints its version bare.
+
+  An unidentified runtime now claims **no** runtime name and drops the `v`,
+  while still printing the version, build date and board — those came off the
+  board and are true. It also now matches what the status bar shows for the same
+  information, so the two can no longer disagree about what a board is running.
+
 ### Added
 - **Publish a project to GitHub without leaving Snakie.** (#795) A repository
   you created locally had nowhere to go: the Source Control panel offered
