@@ -48,7 +48,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   accept them, so when `@micropython.native` buys you 4% you see 4% and skip it.
 
   Plugins can contribute rules too, via `@plugin.refactor` — a school can ship
-  its own house style. Issues #799–#808, #451; epic #634.
+  its own house style. **90 rules**, each with worked examples and a page
+  explaining the principle behind it. Issues #799–#808, #451; epic #634.
 - **Stage a whole group in the Source Control panel, in one click.** Staging
   twenty new files one **＋** at a time was twenty clicks. Each group header now
   carries its own button — **Stage 12 untracked** on the *Untracked* list,
