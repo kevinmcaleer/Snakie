@@ -272,8 +272,76 @@
   font-size: 0.74rem;
 }
 
+/* The row plus its optional "Why?" link sit on one line (epic #634 R7). */
 .problems__item {
   margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
+/* Filter chips, one per diagnostic source: ruff / refactor / board / yaml
+   (epic #634 §5). Hiding the blue refactoring hints must never hide ruff's
+   errors, which is why they are namespaced rather than merged. */
+.problems__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.problems__chip {
+  appearance: none;
+  cursor: pointer;
+  padding: 0.1rem 0.45rem;
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  background: transparent;
+  border: var(--border-w) solid var(--border);
+  border-radius: 999px;
+}
+
+.problems__chip--on {
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+
+.problems__chip:focus-visible {
+  outline: var(--border-w) solid var(--accent);
+  outline-offset: 2px;
+}
+
+.problems__chip-count {
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The teaching payload's front door on every refactoring hint. */
+.problems__why {
+  flex: 0 0 auto;
+  appearance: none;
+  cursor: pointer;
+  margin-right: 0.5rem;
+  padding: 0 0.35rem;
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  color: var(--accent-ink);
+  background: transparent;
+  border: var(--border-w) solid transparent;
+  border-radius: var(--radius);
+}
+
+.problems__why:hover {
+  border-color: var(--accent);
+}
+
+.problems__why:focus-visible {
+  outline: var(--border-w) solid var(--accent);
+  outline-offset: 2px;
+}
+
+.problems__hint--filtered {
+  padding: 0.6rem;
 }
 
 .problems__row {

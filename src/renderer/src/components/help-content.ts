@@ -23,6 +23,9 @@ import { INSTRUMENTS } from './instruments-registry'
 import { inScope, type DialectScope } from '../../../shared/dialect-api'
 import type { Dialect } from '../../../shared/dialect'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
+import { HELP_ARTICLES } from './help-articles'
+import { ALL_RULES } from '../../../shared/refactor/rules'
+import type { RefactorCategory } from '../../../shared/refactor/types'
 
 export type HelpKind = 'shelf' | 'collection' | 'section' | 'article'
 
@@ -56,6 +59,117 @@ const A = {
   instruments: '#2f7c70',
   page: '#8a7f62',
   project: '#2f7c70'
+}
+
+/**
+ * The "Refactoring" book (epic #634 §2.4), built FROM the rule catalogue rather
+ * than listed by hand.
+ *
+ * Every rule declares its own `helpArticle` id and the preview modal's "Why?"
+ * button opens exactly that page, so generating the tree from `ALL_RULES` is
+ * what guarantees the two can never drift: add a rule, and its page appears in
+ * the contents automatically. (A rule whose `./help/<id>.md` is missing still
+ * shows the panel's "not written yet" placeholder, which is the visible nudge.)
+ *
+ * These pages are the teaching payload of the whole epic — the difference
+ * between a linter that says *what* and a tutor that says *why*.
+ */
+const REFACTOR_BOOKS: {
+  category: RefactorCategory
+  id: string
+  title: string
+  scope?: DialectScope
+}[] = [
+  { category: 'control-flow', id: 'refactor-control-flow', title: 'Nesting & control flow' },
+  { category: 'conditionals', id: 'refactor-conditionals', title: 'Conditionals & constants' },
+  { category: 'loops', id: 'refactor-loops', title: 'Loops & data' },
+  { category: 'extraction', id: 'refactor-extraction', title: 'Extracting & naming' },
+  { category: 'functions', id: 'refactor-functions', title: 'Functions, classes & resources' },
+  // These two are not "MicroPython flavoured advice" — they are advice that only
+  // exists on MicroPython. `const()` is a compiler feature CircuitPython has no
+  // equivalent of, `ticks_diff` is a MicroPython API, and viper and PIO are not
+  // CircuitPython concepts at all. Showing them to a CircuitPython reader would
+  // be teaching them about a language they are not using (#763).
+  {
+    category: 'micropython',
+    id: 'refactor-micropython',
+    title: 'MicroPython-specific',
+    scope: 'micropython'
+  },
+  {
+    category: 'board',
+    id: 'refactor-board',
+    title: 'Board-specific optimisation',
+    scope: 'micropython'
+  }
+]
+
+/** One section per rule family, ordered by catalogue number within each. */
+function refactorSections(): HelpNode[] {
+  const out: HelpNode[] = []
+  for (const book of REFACTOR_BOOKS) {
+    const rules = ALL_RULES.filter((r) => r.category === book.category).sort(
+      (a, b) => a.catalogue - b.catalogue
+    )
+    if (rules.length === 0) continue
+    // Two rules can legitimately share an article; show it once.
+    const seen = new Set<string>()
+    const children: HelpNode[] = []
+    for (const rule of rules) {
+      if (seen.has(rule.helpArticle)) continue
+      seen.add(rule.helpArticle)
+      children.push({
+        id: rule.helpArticle,
+        kind: 'article',
+        title: rule.title,
+        accent: A.page,
+        scope: book.scope
+      })
+    }
+    out.push({
+      id: book.id,
+      kind: 'section',
+      title: book.title,
+      accent: A.page,
+      scope: book.scope,
+      children
+    })
+  }
+  return out
+}
+
+/**
+ * Names that only exist on MicroPython. Kept in step with the same list in
+ * `test/helpContent.test.ts`, which is what enforces the rule that a
+ * CircuitPython-visible page containing any of them must carry a note.
+ */
+const MICROPYTHON_ONLY_CODE = [
+  /\bmachine\b/,
+  /\bPin\(/,
+  /\bPin\.[A-Z]/,
+  /\bADC\(/,
+  /\bPWM\(/,
+  /\bsleep_ms\b/,
+  /\bsleep_us\b/,
+  /\bticks_(ms|us|cpu|diff|add)\b/,
+  /\bduty_u16\b/,
+  /\bread_u16\b/,
+  /\buasyncio\b/,
+  /\bmip\.install\b/
+]
+
+/** Does this article's fenced Python contain a MicroPython-only name? */
+function articleUsesMicroPython(markdown: string): boolean {
+  const blocks = markdown.match(/```(?:python|py)?\n[\s\S]*?```/g) ?? []
+  return blocks.some((block) => MICROPYTHON_ONLY_CODE.some((re) => re.test(block)))
+}
+
+/** Article ids for rules whose family is shown on every runtime. */
+function crossDialectRefactorArticles(): string[] {
+  const scoped = new Set(
+    REFACTOR_BOOKS.filter((b) => b.scope).map((b) => b.category as RefactorCategory)
+  )
+  return ALL_RULES.filter((r) => !scoped.has(r.category)).map((r) => r.helpArticle)
 }
 
 /** The evergreen contents (everything except the runtime "In This Project"). */
@@ -211,6 +325,16 @@ export const HELP_SECTIONS: HelpNode[] = [
         children: [{ id: 'ref-pinout', kind: 'article', title: 'Board pinouts', accent: A.page }]
       }
     ]
+  },
+  {
+    // Epic #634. Right-clicking a smell opens the matching page here, but the
+    // book stands on its own too — it is a short course in why MicroPython code
+    // goes wrong, which is worth reading before you hit the problem.
+    id: 'refactoring',
+    kind: 'collection',
+    title: 'Refactoring',
+    accent: A.reference,
+    children: refactorSections()
   }
 ]
 
@@ -260,9 +384,18 @@ export function helpTreeFor(dialect: Dialect, nodes: HelpNode[] = HELP_SECTIONS)
  * {@link dialectNote} above the body. The unit test keeps this list honest: any
  * CircuitPython-visible page containing MicroPython-only code must be in it.
  */
-export const MICROPYTHON_EXAMPLE_ARTICLES = new Set(
-  INSTRUMENTS.map((d) => `inst-${d.id}`)
-)
+export const MICROPYTHON_EXAMPLE_ARTICLES = new Set([
+  ...INSTRUMENTS.map((d) => `inst-${d.id}`),
+  // The general refactoring pages (guard clauses, loops, extraction) teach
+  // principles that are true in any Python — so a CircuitPython reader should
+  // have them — but their worked examples are robot code, and robot code on
+  // this app means `machine.Pin`. Rather than water the examples down into
+  // something nobody writes, flag the ones that actually contain MicroPython
+  // so the note appears above them. Detected rather than listed, so a new page
+  // cannot quietly slip through (the truly MicroPython-only families are
+  // scoped out of the CircuitPython tree entirely — see REFACTOR_BOOKS).
+  ...crossDialectRefactorArticles().filter((id) => articleUsesMicroPython(HELP_ARTICLES[id] ?? ''))
+])
 
 /**
  * The warning to print above an article whose code won't run on this dialect,
