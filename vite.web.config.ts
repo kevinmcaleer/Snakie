@@ -73,12 +73,14 @@ export default defineConfig({
       // browser: the Board View (`window.open('board.html')` + a BroadcastChannel
       // relay — src/renderer/src/web/web-board.ts) and a detached instrument
       // (`instrument.html`, which runs on the editor tab's own device — see
-      // src/renderer/src/web/web-instruments.ts, #781). The remaining Electron
-      // detached windows (find / console) stay in-page panes on the web.
+      // src/renderer/src/web/web-instruments.ts, #781) and the console
+      // (`console.html`, the same bridge for one window — web-console.ts, #810).
+      // Find stays an in-page pane on the web.
       input: {
         index: resolve(__dirname, 'src/renderer/index.html'),
         board: resolve(__dirname, 'src/renderer/board.html'),
-        instrument: resolve(__dirname, 'src/renderer/instrument.html')
+        instrument: resolve(__dirname, 'src/renderer/instrument.html'),
+        console: resolve(__dirname, 'src/renderer/console.html')
       },
       output: {
         manualChunks(id: string) {
@@ -106,11 +108,16 @@ export default defineConfig({
         // classroom app truly works offline after the first visit.
         maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
         // The app is an SPA, so every navigation falls back to `index.html` —
-        // but the two pop-out windows are REAL pages, and answering their
+        // but the pop-out windows are REAL pages, and answering their
         // navigation with the shell opens the whole editor inside a 460px
-        // instrument window (#781). They are precached in their own right, so
-        // exclude them and let the precache (or the network) serve them.
-        navigateFallbackDenylist: [/^\/board\.html/, /^\/instrument\.html/]
+        // instrument window (#781) or a 760px console (#810). They are precached
+        // in their own right, so exclude them and let the precache (or the
+        // network) serve them.
+        navigateFallbackDenylist: [
+          /^\/board\.html/,
+          /^\/instrument\.html/,
+          /^\/console\.html/
+        ]
       },
       manifest: {
         name: 'Snakie — MicroPython IDE',

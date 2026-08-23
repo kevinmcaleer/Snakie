@@ -31,7 +31,37 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `name` field `SchematicPin` never had, and a duplicated import line. All
   fixed. Adding a field to `PartDefinition` now fails `npm run typecheck` at the
   one place that makes you decide what that field does.
+- **The console pops out into a real window on the web app too.** (#810) The
+  sibling of #781, and a worse failure than it looked. On app.snakie.org the
+  pop-out control called `console.open`, which outside Electron landed on a stub
+  that did nothing — but the panel had *already* hidden the docked terminal
+  behind a "Console popped out to its own window" placeholder. So the console
+  vanished, no window appeared, **and the Redock button was dead too**: it asks
+  the window to close and then waits for the `console:closed` event to put the
+  console back, and that event could never arrive because its listener was a stub
+  as well. The console stayed gone for the rest of the session.
 
+  It now opens a real, resizable browser window — and a live one. As with an
+  instrument, a pop-up is its own JavaScript world, so a window that built its
+  own backend would be watching a second simulator (and a USB board can only be
+  open in one place at a time). Instead the editor tab lends the pop-out its own
+  device, so the detached console shows the same output *and* types back to the
+  same board. It opens seeded with the scrollback you already had rather than
+  blank, and closing it re-docks exactly as on the desktop.
+
+  Every route back to the dock now reports itself, because that event is the
+  console coming back: closing the window, clicking Redock, the browser blocking
+  the pop-up (the console re-docks and says why), and the window being closed
+  behind the editor's back. A reload is deliberately *not* treated as a close, so
+  refreshing a detached console doesn't re-dock a perfectly good one. If the
+  editor tab it belongs to is gone, the window says so instead of accepting
+  keystrokes that go nowhere.
+
+  Two smaller things came out of the same fix: `console.html` was missing from
+  the web build entirely, and the offline service worker would have answered its
+  navigation with the app shell — opening the whole editor inside a 760px window.
+  And the detached console now uses the Soft Shell fonts the rest of the app
+  does, which #781 had already corrected for instruments.
 
 ### Added
 - **Publish a project to GitHub without leaving Snakie.** (#795) A repository
