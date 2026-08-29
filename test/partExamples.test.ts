@@ -88,12 +88,24 @@ describe('standard parts library (snakie-standard)', () => {
     { id: 'pico', pads: 40, mcu: 'RP2040' },
     { id: 'pico2w', pads: 40, mcu: 'RP2350' }, // canonical id, matches the built-in
     { id: 'esp32-devkit', pads: 30, mcu: 'ESP32' },
-    // 16 castellated pads + the 4 contacts of its QWIIC socket. A connector's
-    // contacts are pads too — `partToBoardDefinition` folds them into the
-    // headers, which is what lets a Grove/QWIIC module be wired to this board.
+    // 16 castellated pads + 4 QWIIC contacts, all authored as HEADER pins — this
+    // part declares no `connectors`, so its 20 was never evidence either way
+    // about how connector contacts are counted.
     { id: 'tiny2350', pads: 20, mcu: 'RP2350' }, // authored via the build-part-from-image skill (#198)
-    { id: 'motor2040', pads: 20, mcu: 'RP2040' }, // Pimoroni quad motor controller
-    { id: 'servo2040', pads: 92, mcu: 'RP2040' } // 18 servo + 6 sensor S/V/G headers (octagonal) + I/O
+    // The next three each gained their QWIIC socket's 4 contacts: a connector's
+    // contacts ARE pads, which is what lets a QWIIC/Grove module be wired to the
+    // board. They are appended after the header pads, so every previously-saved
+    // `board.*#index` wire still resolves to the same physical pad.
+    { id: 'motor2040', pads: 24, mcu: 'RP2040' }, // 20 header + 4 QWIIC
+    { id: 'servo2040', pads: 96, mcu: 'RP2040' }, // 18 servo + 6 sensor S/V/G headers (octagonal) + I/O, + 4 QWIIC
+    // (The QT Py RP2040 gained its 4 QWIIC contacts too — 14 → 18 — but is not
+    // listed here because the part declares no `mcu`, so this table's mcu column
+    // would have to encode the fallback 'Microcontroller' rather than 'RP2040'.
+    // Same gap on arduino-nano-esp32, esp32-12f and pico-carrier-base.)
+    // Every pin on this one is a Grove / servo / terminal socket — it has NO
+    // headers at all, and a headers-only pad count dropped it from the MCU
+    // picker entirely (test/boardsFromConnectors.test.ts).
+    { id: 'cytron-maker-pi-rp2040', pads: 48, mcu: 'RP2040' }
   ]
 
   it('the Tiny 2350 ships a life-like background photo', () => {

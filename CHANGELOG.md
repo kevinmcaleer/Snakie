@@ -6,6 +6,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **The Cytron Maker Pi RP2040 is in the Standard parts library.** An RP2040
+  robot controller with two DC motor channels, four servo ports and seven Grove
+  ports, so a Maker Pi build can be wired up in the Electronics workspace and
+  written against in the editor. Pin assignments come from Cytron's own
+  datasheet (Rev 1.2) and their CircuitPython board definition, cross-checked
+  against the RP2040's GPIO function table — including the board's genuine
+  quirk that **Grove 5 and Grove 6 share GP26**.
+
+### Fixed
+- **A board whose pins are all connectors now appears in the MCU picker.**
+  (#818) A `family: Microcontroller` part whose I/O is entirely Grove sockets,
+  servo ports or screw terminals — with no header rails at all — was silently
+  absent from the board list in both the Code and Electronics workspaces. The
+  projection that turns a part into a board counted pads from `headers` alone,
+  found none, and discarded the board before it could be listed; the same count
+  meant the life-like view could not find the part to draw either.
+
+  Connector contacts are pads now, carrying their GPIO and the board's declared
+  I²C role through with them. Three boards that already had a QWIIC socket — the
+  QT Py RP2040, Motor 2040 and Servo 2040 — gain four wireable contacts each,
+  which were previously invisible for the same reason. Those contacts are added
+  *after* a board's existing pads, so every wire already saved against one still
+  points at the pad it always did.
+
+
 ## [0.46.0] - 2026-08-23
 
 ### Fixed
