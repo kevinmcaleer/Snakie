@@ -7,6 +7,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **The RCWL-1601 ultrasonic distance sensor is in the Standard parts library.**
+  It is pin- and software-compatible with the HC-SR04 already in the library, so
+  any wiring or code written for that one works unchanged — but it is specified
+  from **3.0 V**, which is the reason to reach for it. A classic HC-SR04 is a 5 V
+  part, and running one from a Pico means powering it off VBUS and putting a
+  voltage divider on Echo, because a 5 V echo pulse into a 3V3 GPIO can damage
+  the pin. That is a step which is easy to skip and expensive to get wrong. The
+  RCWL runs straight off 3V3 with nothing in between, which makes it a much safer
+  part to hand to a workshop or a classroom.
+
+  Slightly smaller too, at 40 × 18 mm against the HC-SR04's 45.5 × 25.5.
+
 - **The Cytron Maker Pi RP2040 is in the Standard parts library.** An RP2040
   robot controller with two DC motor channels, four servo ports and seven Grove
   ports, so a Maker Pi build can be wired up in the Electronics workspace and
