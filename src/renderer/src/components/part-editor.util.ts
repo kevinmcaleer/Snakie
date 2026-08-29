@@ -2382,6 +2382,17 @@ function pinTypeToPad(t: PartPinType): BoardPadType {
  * (the runtime data URL) so it draws without disk access. Mounting holes /
  * polygon have no Board View analogue and are drawn by the footprint preview.
  */
+/** Which edge a connector sits nearest, from its normalised position. */
+function nearestEdge(x: number, y: number): BoardHeader['edge'] {
+  const d: [BoardHeader['edge'], number][] = [
+    ['left', x],
+    ['right', 1 - x],
+    ['top', y],
+    ['bottom', 1 - y]
+  ]
+  return d.reduce((a, b) => (b[1] < a[1] ? b : a))[0]
+}
+
 export function partToBoardDefinition(part: PartDefinition): BoardDefinition {
   const headers: BoardHeader[] = (part.headers ?? []).map((h) => ({
     edge: h.edge,
@@ -2408,6 +2419,51 @@ export function partToBoardDefinition(part: PartDefinition): BoardDefinition {
       return pad
     })
   }))
+
+  // A connector's pins are board pads too (#818): on a board like the Cytron Maker
+  // Pi RP2040 every one of its 48 pins is on a Grove / servo / terminal socket
+  // and `headers` is empty, so a headers-only projection produced a board with
+  // ZERO pads — which `boardsFromLibraries` then dropped entirely, leaving the
+  // part invisible in the MCU picker. `boardPinsFromPart` (board-pin-check.ts)
+  // has always unioned the two; this is the same union, for the Board View.
+  //
+  // APPENDED after the real headers, never interleaved: `enumerateBoardPads` is
+  // the source of truth for the `board.*#index` wiring endpoint, so inserting
+  // ahead of existing pads would silently re-point every saved wire on the
+  // boards that already have both (the QT Py, Motor 2040 and Servo 2040 Qwiic
+  // sockets). Appending leaves their indices exactly as they were.
+  const connectorHeaders: BoardHeader[] = (part.connectors ?? []).map((c) => {
+    const edge = nearestEdge(c.x, c.y)
+    const along = edge === 'left' || edge === 'right' ? 'y' : 'x'
+    // Spread the contacts along the socket at the part's real pitch rather than
+    // stacking them on one point — co-located pads cannot be clicked apart in
+    // the wiring canvas. Falls back to a 2 mm Grove/JST pitch.
+    const span = along === 'x' ? (part.dimensions?.width ?? 0) : (part.dimensions?.height ?? 0)
+    const pitch = span > 0 ? (part.pinSpacing || 2) / span : 0.02
+    const pins = c.pins ?? []
+    return {
+      edge,
+      pins: pins.map((p, i): BoardPad => {
+        const off = (i - (pins.length - 1) / 2) * pitch
+        const pad: BoardPad = {
+          label: p.label || p.name,
+          name: p.name,
+          type: pinTypeToPad(p.type),
+          x: clamp(along === 'x' ? c.x + off : c.x, 0, 1),
+          y: clamp(along === 'y' ? c.y + off : c.y, 0, 1)
+        }
+        if (typeof p.number === 'number') pad.number = p.number
+        if (p.type === 'io' && typeof p.gpio === 'number') pad.gpio = p.gpio
+        const role = p.signals?.i2c
+        if (role === 'SDA' || role === 'SCL') {
+          pad.i2c = role
+          if (typeof p.buses?.i2c === 'number') pad.i2cBus = p.buses.i2c
+        }
+        return pad
+      })
+    }
+  })
+  headers.push(...connectorHeaders.filter((h) => h.pins.length > 0))
 
   const features = [
     ...(part.features ?? []),
@@ -2482,7 +2538,12 @@ export function boardPartFor(
   for (const lib of libraries ?? []) {
     for (const part of lib.parts ?? []) {
       if (!isBoardPart(part) || partToBoardDefinition(part).id !== boardId) continue
-      const pads = (part.headers ?? []).reduce((n, h) => n + (h.pins?.length ?? 0), 0)
+      // Connectors count, exactly as in partToBoardDefinition — otherwise a
+      // connector-only board resolves to no source part and the life-like view
+      // falls back to a generic rectangle.
+      const pads =
+        (part.headers ?? []).reduce((n, h) => n + (h.pins?.length ?? 0), 0) +
+        (part.connectors ?? []).reduce((n, c) => n + (c.pins?.length ?? 0), 0)
       if (pads > 0 && (!best || pads > best.pads)) best = { part, pads }
     }
   }
