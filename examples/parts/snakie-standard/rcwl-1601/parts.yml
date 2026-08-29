@@ -1,0 +1,56 @@
+id: rcwl-1601
+name: RCWL-1601 Ultrasonic
+description: >-
+  Ultrasonic distance sensor, 2-400 cm. Pin- and software-compatible with the
+  HC-SR04 but specified down to 3 V, so it works on a Pico, micro:bit or any
+  3V3 board without a level shifter.
+manufacturer: RCWL
+partNumber: RCWL-1601
+family: Sensor
+tags:
+  - ultrasonic
+  - distance
+  - hc-sr04-compatible
+package: THT
+pinSpacing: 2.54
+voltage: 3.0-5.5V
+version: 0.1.0
+mass_g: 6
+pcbColor: "#0f7a3e"
+dimensions:
+  width: 40
+  height: 18
+aspect: 2.222
+image: image.png
+imageLayer: { x: 0, y: 0, w: 1, h: 1 }
+help: help.md
+# Same order and function as the HC-SR04 — the whole point of the part. The
+# second and third pads carry alternate-mode silk (Trig/SCL/Rx, Echo/Tx/SDA);
+# the names here are the ultrasonic mode everyone actually uses.
+headers:
+  - edge: bottom
+    pins:
+      - { number: 1, name: VCC, type: pwr, x: 0.391, y: 0.83, shape: header, rotation: 90 }
+      - { number: 2, name: Trig, type: io, capabilities: [digital], x: 0.453, y: 0.83, shape: header, rotation: 90 }
+      - { number: 3, name: Echo, type: io, capabilities: [digital], x: 0.516, y: 0.83, shape: header, rotation: 90 }
+      - { number: 4, name: GND, type: gnd, x: 0.578, y: 0.83, shape: header, rotation: 90 }
+# ~2 mm holes at the four corners. `diameter` is drawn as a RADIUS.
+mountingHoles:
+  - { x: 0.034, y: 0.084, diameter: 1 }
+  - { x: 0.963, y: 0.084, diameter: 1 }
+  - { x: 0.034, y: 0.906, diameter: 1 }
+  - { x: 0.963, y: 0.906, diameter: 1 }
+electrical:
+  model: consumer
+  maxCurrentA: 0.005
+  currentDrawA: 0.0022
+  stallCurrentA: 0.0022
+  terminals:
+    positive: VCC
+    negative: GND
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: false
