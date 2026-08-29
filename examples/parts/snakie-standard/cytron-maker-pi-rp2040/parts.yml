@@ -1,0 +1,579 @@
+id: cytron-maker-pi-rp2040
+name: Cytron Maker Pi RP2040
+description: "RP2040 robot controller: 2 DC motor channels, 4 servo ports, 7 Grove ports, 2 NeoPixels, a piezo buzzer and two programmable buttons. Runs from USB, a single-cell LiPo, or 3.6-6 V on VIN."
+manufacturer: Cytron Technologies
+family: Microcontroller
+tags:
+  - rp2040
+  - robotics
+  - grove
+  - motor-driver
+package: SMD
+pinSpacing: 2
+voltage: 3.6-6V
+partNumber: MAKER-PI-RP2040
+properties:
+  Motor channels: 2 (DRV8833, 1 A continuous / 1.5 A peak each)
+  Motor pins: M1A=GP8, M1B=GP9, M2A=GP10, M2B=GP11
+  Servo pins: GP12, GP13, GP14, GP15
+  NeoPixel: 2 x WS2812B on GP18
+  Buttons: GP20, GP21
+  Buzzer: piezo on GP22 (mute switch on board)
+  Battery monitor: GP29 (ADC3, 1:2 divider)
+  USB: micro-B
+version: 0.1.2
+mcu: RP2040
+pcbColor: "#6b2d8f"
+aspect: 1.375
+dimensions:
+  width: 88
+  height: 64
+mountingHoles:
+  - x: 0.9677004446972151
+    y: 0.04090039012052364
+    diameter: 1.5
+  - x: 0.965833078884317
+    y: 0.9562591459807291
+    diameter: 1.5
+  - x: 0.03248719537695493
+    y: 0.9562591459807291
+    diameter: 1.5
+  - x: 0.03248719537695493
+    y: 0.04090039012052364
+    diameter: 1.5
+buttons:
+  - label: GP20
+    x: 0.845
+    y: 0.588
+  - label: GP21
+    x: 0.845
+    y: 0.674
+  - label: RST
+    x: 0.463
+    y: 0.639
+  - label: BOOT
+    x: 0.16
+    y: 0.706
+onboardLeds:
+  - kind: neopixel
+    x: 0.049
+    y: 0.79
+    gpio: 18
+    sizeMm: 5
+  - kind: neopixel
+    x: 0.91
+    y: 0.79
+    gpio: 18
+    sizeMm: 5
+connectors:
+  - kind: grove
+    label: GROVE 1
+    x: 0.051751408894856764
+    y: 0.6363310775756836
+    rotation: 270
+    pins:
+      - name: GP1
+        type: io
+        gpio: 1
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+          - uart
+        signals:
+          i2c: SCL
+          spi: CSn
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 0
+      - name: GP0
+        type: io
+        gpio: 0
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+          - uart
+        signals:
+          i2c: SDA
+          spi: RX
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 0
+      - name: 3V3
+        type: pwr
+      - name: GND
+        type: gnd
+  - kind: grove
+    label: GROVE 2
+    x: 0.181
+    y: 0.917
+    pins:
+      - name: GP3
+        type: io
+        gpio: 3
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SCL
+          spi: TX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 0
+      - name: GP2
+        type: io
+        gpio: 2
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SDA
+          spi: SCK
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 0
+      - name: 3V3
+        type: pwr
+      - name: GND
+        type: gnd
+  - kind: grove
+    label: GROVE 3
+    x: 0.341
+    y: 0.917
+    pins:
+      - name: GP5
+        type: io
+        gpio: 5
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+          - uart
+        signals:
+          i2c: SCL
+          spi: CSn
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 1
+      - name: GP4
+        type: io
+        gpio: 4
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+          - uart
+        signals:
+          i2c: SDA
+          spi: RX
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 1
+      - name: 3V3
+        type: pwr
+      - name: GND
+        type: gnd
+  - kind: grove
+    label: GROVE 4
+    x: 0.501
+    y: 0.917
+    pins:
+      - name: GP17
+        type: io
+        gpio: 17
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+          - uart
+        signals:
+          i2c: SCL
+          spi: CSn
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 0
+      - name: GP16
+        type: io
+        gpio: 16
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+          - uart
+        signals:
+          i2c: SDA
+          spi: RX
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 0
+      - name: 3V3
+        type: pwr
+      - name: GND
+        type: gnd
+  - kind: grove
+    label: GROVE 5
+    x: 0.661
+    y: 0.917
+    pins:
+      - name: GP26
+        type: io
+        gpio: 26
+        capabilities:
+          - digital
+          - pwm
+          - adc
+          - spi
+          - i2c
+        signals:
+          i2c: SDA
+          spi: SCK
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 1
+          adc: 0
+      - name: GP6
+        type: io
+        gpio: 6
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SDA
+          spi: SCK
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 0
+      - name: 3V3
+        type: pwr
+      - name: GND
+        type: gnd
+  - kind: grove
+    label: GROVE 6
+    x: 0.821
+    y: 0.917
+    pins:
+      - name: GP27
+        type: io
+        gpio: 27
+        capabilities:
+          - digital
+          - pwm
+          - adc
+          - spi
+          - i2c
+        signals:
+          i2c: SCL
+          spi: TX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 1
+          adc: 1
+      - name: GP26
+        type: io
+        gpio: 26
+        capabilities:
+          - digital
+          - pwm
+          - adc
+          - spi
+          - i2c
+        signals:
+          i2c: SDA
+          spi: SCK
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 1
+          adc: 0
+      - name: 3V3
+        type: pwr
+      - name: GND
+        type: gnd
+  - kind: grove
+    label: GROVE 7
+    x: 0.951
+    y: 0.636
+    rotation: 90
+    pins:
+      - name: GP28
+        type: io
+        gpio: 28
+        capabilities:
+          - digital
+          - pwm
+          - adc
+          - spi
+          - i2c
+        signals:
+          i2c: SDA
+          spi: RX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 1
+          adc: 2
+      - name: GP7
+        type: io
+        gpio: 7
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SCL
+          spi: TX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 0
+      - name: 3V3
+        type: pwr
+      - name: GND
+        type: gnd
+  - kind: dupont
+    label: SERVO GP12
+    x: 0.807
+    y: 0.116
+    pins:
+      - name: GP12
+        type: io
+        gpio: 12
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SDA
+          spi: RX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 1
+      - name: V+
+        type: pwr
+      - name: GND
+        type: gnd
+  - kind: dupont
+    label: SERVO GP13
+    x: 0.834
+    y: 0.116
+    pins:
+      - name: GP13
+        type: io
+        gpio: 13
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SCL
+          spi: CSn
+          pwm: B
+        buses:
+          i2c: 0
+          spi: 1
+      - name: V+
+        type: pwr
+      - name: GND
+        type: gnd
+  - kind: dupont
+    label: SERVO GP14
+    x: 0.863
+    y: 0.116
+    pins:
+      - name: GP14
+        type: io
+        gpio: 14
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SDA
+          spi: SCK
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 1
+      - name: V+
+        type: pwr
+      - name: GND
+        type: gnd
+  - kind: dupont
+    label: SERVO GP15
+    x: 0.891
+    y: 0.116
+    pins:
+      - name: GP15
+        type: io
+        gpio: 15
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SCL
+          spi: TX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 1
+      - name: V+
+        type: pwr
+      - name: GND
+        type: gnd
+  - kind: terminal
+    label: MOTOR 2
+    x: 0.4257382303873698
+    y: 0.08167292531331381
+    pins:
+      - name: GP11
+        type: io
+        gpio: 11
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SCL
+          spi: TX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 1
+      - name: GP10
+        type: io
+        gpio: 10
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SDA
+          spi: SCK
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 1
+  - kind: terminal
+    label: MOTOR 1
+    x: 0.5893774922688803
+    y: 0.06053389485677084
+    pins:
+      - name: GP9
+        type: io
+        gpio: 9
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SCL
+          spi: CSn
+          pwm: B
+        buses:
+          i2c: 0
+          spi: 1
+      - name: GP8
+        type: io
+        gpio: 8
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SDA
+          spi: RX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 1
+  - kind: terminal
+    label: VIN
+    x: 0.2469975280761719
+    y: 0.073
+    pins:
+      - name: VIN
+        type: pwr
+      - name: GND
+        type: gnd
+  - kind: jst
+    label: LIPO
+    x: 0.1296356144243589
+    y: 0.05348153565316492
+    pins:
+      - name: BAT+
+        type: pwr
+      - name: BAT-
+        type: gnd
+image: image.png
+imageLayer:
+  x: -0.0023601342114774153
+  y: -0.0035911474482573924
+  w: 1
+  h: 1
+help: help.md
+mesh: maker-pi-rp2040-pcba.stl
+meshUnits: mm
+meshOffset:
+  - -43.89
+  - -31.972
+  - 0
+electrical:
+  model: regulator
+  maxCurrentA: 0.3
+  inputRail: VIN
+  outputRail: 3V3
+  outputV: 3.3
+  dropoutV: 0.3
+layerVisibility:
+  pcb: true
+  image: true
+  holes: true
+  pins: true
+  components: true
