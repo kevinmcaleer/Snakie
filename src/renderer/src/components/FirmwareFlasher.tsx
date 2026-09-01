@@ -25,6 +25,7 @@ import {
   FIRMWARE_RUNTIME_LABEL,
   findBoardBuilds,
   flashTargetForDownload,
+  siblingBuildUrl,
   flashTargetForFamily,
   isVendorUf2Family,
   type FirmwareRuntime
@@ -143,6 +144,12 @@ export function FirmwareFlasher({
   /** Profiles that claim the identified chip, when more than one does — a
    *  question for the user rather than a guess we make for them. */
   const [matchedProfiles, setMatchedProfiles] = useState<BoardProfile[]>([])
+  /** A CONFIRMED URL for the recommended build, when the catalog does not carry
+   *  it but micropython.org publishes it alongside the one that is selected. */
+  const [recommendedUrl, setRecommendedUrl] = useState<string | null>(null)
+  /** Whether to flash that build instead of the catalog's. On by default when
+   *  one is found — it is recommended because it is the better fit. */
+  const [useRecommended, setUseRecommended] = useState(true)
   const [board, setBoard] = useState<BoardType>('esp32')
   /** The chosen board profile (#682) — drives the mechanics below it. */
   const [profileId, setProfileId] = useState<string>('')
@@ -618,6 +625,45 @@ export function FirmwareFlasher({
     [identity]
   )
 
+  /**
+   * Find the recommended build, if micropython.org actually publishes it (#833).
+   *
+   * The catalog cannot offer it — Thonny's `ESP32 / WROOM` entry has no variants
+   * — so the dialog used to name the build and stop there, leaving a browser, a
+   * downloads folder and a file picker between the user and a file whose address
+   * is derivable from the one already selected. Derive it, CONFIRM it resolves,
+   * and then it is just another thing Flash can fetch.
+   */
+  useEffect(() => {
+    const name = suggestedBuild?.name
+    if (!name || !selVersionUrl) {
+      setRecommendedUrl(null)
+      return undefined
+    }
+    const candidate = siblingBuildUrl(selVersionUrl, name)
+    if (!candidate || candidate === selVersionUrl) {
+      setRecommendedUrl(null)
+      return undefined
+    }
+    let alive = true
+    // Composed from a naming convention, so it is a guess until checked. A 404
+    // handed to the flasher would be worse than the manual download it replaces.
+    void window.api.firmware
+      .firmwareUrlExists(candidate)
+      .then((ok) => {
+        if (alive) setRecommendedUrl(ok ? candidate : null)
+      })
+      .catch(() => {
+        if (alive) setRecommendedUrl(null)
+      })
+    return () => {
+      alive = false
+    }
+  }, [suggestedBuild?.name, selVersionUrl])
+
+  /** The URL Flash will actually fetch. */
+  const flashUrl = recommendedUrl && useRecommended ? recommendedUrl : selVersionUrl
+
   const serialCandidates = candidates.filter((c) => c.source === 'serial')
   // Every OTHER serial port — the ones whose USB bridge we did not recognise.
   //
@@ -761,10 +807,10 @@ export function FirmwareFlasher({
         // Derive the flash target from the selected DOWNLOAD (its extension is
         // the mechanism; the family only supplies the ESP offset). The user may
         // have edited the offset, so prefer the field value over the default.
-        const target = flashTargetForDownload(selFamily, selVersionUrl)
+        const target = flashTargetForDownload(selFamily, flashUrl)
         const esp = isEspBoard(target.board)
         await window.api.firmware.downloadAndFlash({
-          url: selVersionUrl,
+          url: flashUrl,
           board: target.board,
           // ESP: serial port + offset; RP2040 / micro:bit: copy to the drive.
           port: esp ? port : undefined,
@@ -810,14 +856,18 @@ export function FirmwareFlasher({
     handleProgress,
     usingCatalog,
     selFamily,
-    selVersionUrl,
+    // Not `selVersionUrl`: the callback reads `flashUrl`, which derives from it
+    // and from the recommended-build choice, so depending on both would be
+    // redundant and depending on the wrong one would flash a stale URL.
     board,
     mountPath,
     firmwarePath,
     port,
-    // Both are read inside; without them the callback flashes with whatever they
-    // were when it was last created — so toggling Erase would not take effect.
+    // All three are read inside; without them the callback flashes with whatever
+    // they were when it was last created — so toggling Erase, or choosing the
+    // recommended build, would not take effect.
     eraseFirst,
+    flashUrl,
     profile?.chipFamily
   ])
 
@@ -1114,7 +1164,7 @@ export function FirmwareFlasher({
                           {suggestedBuild && (
                             <>
                               {' '}
-                              Use the <strong>{suggestedBuild.name}</strong> build. {suggestedBuild.why}
+                              {suggestedBuild.why}
                             </>
                           )}
                         </>
@@ -1128,6 +1178,24 @@ export function FirmwareFlasher({
                   )}
                   {/* More than one board uses this chip, so picking one would be
                       a guess about the flash offset. Ask instead. */}
+                  {/* The recommended build, once confirmed to exist. It is
+                      fetched by Flash like any other download — naming it and
+                      leaving the user to find it was the clunky part (#833). */}
+                  {recommendedUrl && (
+                    <label className="firmware-check">
+                      <input
+                        type="checkbox"
+                        checked={useRecommended}
+                        disabled={flashing}
+                        onChange={(e) => setUseRecommended(e.target.checked)}
+                      />
+                      <span>
+                        Flash the recommended <strong>{suggestedBuild?.name}</strong> build —
+                        Snakie downloads it for you. Untick to use the{' '}
+                        {selVariant || 'catalog'} build shown below instead.
+                      </span>
+                    </label>
+                  )}
                   {matchedProfiles.length > 1 && (
                     <p className="firmware-hint">
                       That chip is used by {matchedProfiles.length} boards — pick yours:{' '}

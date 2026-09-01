@@ -14,7 +14,7 @@ import type { BoardIdentity } from '../../shared/esptool-identify'
 import { detectBoards } from './detect'
 import { detectEsptool, flash, identifyBoard } from './flasher'
 import { fetchFirmwareCatalog } from './catalog'
-import { downloadAndFlash } from './download'
+import { downloadAndFlash, firmwareUrlExists } from './download'
 import type {
   BoardCandidate,
   DownloadAndFlashOptions,
@@ -34,7 +34,8 @@ export const FIRMWARE_CHANNELS = {
   flash: 'firmware:flash',
   fetchCatalog: 'firmware:fetchCatalog',
   downloadAndFlash: 'firmware:downloadAndFlash',
-  identify: 'firmware:identify'
+  identify: 'firmware:identify',
+  urlExists: 'firmware:urlExists'
 } as const
 
 /**
@@ -74,6 +75,11 @@ export function registerFirmwareIpc(getWindow: () => BrowserWindow | undefined):
   // like "has no PSRAM".
   ipcMain.handle(FIRMWARE_CHANNELS.identify, (_e, port: string) =>
     wrap<BoardIdentity>(() => identifyBoard(port))
+  )
+
+  // Confirm a DERIVED firmware URL resolves before the dialog offers it (#833).
+  ipcMain.handle(FIRMWARE_CHANNELS.urlExists, (_e, url: string) =>
+    wrap<boolean>(() => firmwareUrlExists(url))
   )
 
   ipcMain.handle(FIRMWARE_CHANNELS.pickFile, (_e, method?: FlashMethod) =>
