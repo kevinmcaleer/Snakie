@@ -379,3 +379,28 @@
   letter-spacing: 0.02em;
   color: rgba(230, 230, 230, 0.65);
 }
+
+/* The "Identify board" action beside the port picker (#829). A quiet, secondary
+   action — it only reads — so it must not compete with Flash. Themed tokens
+   throughout, so it stays readable on the skeuomorph parchment as well as dark. */
+.firmware-btn--ghost {
+  align-self: flex-start;
+  margin-top: 6px;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  padding: 0.28rem 0.6rem;
+  color: var(--text);
+  background: var(--bg-elevated);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.firmware-btn--ghost:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.firmware-btn--ghost:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

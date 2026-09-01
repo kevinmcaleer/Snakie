@@ -7,6 +7,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Changed
+- **The flasher can ask the board what it is, and flashes the way Thonny does.**
+  (#829) A new **Identify board** button runs `esptool flash-id` against the
+  selected port and reports what came back — the exact chip, the real flash size,
+  and crucially **whether the board has PSRAM**. MicroPython publishes
+  `ESP32_GENERIC` and `ESP32_GENERIC-SPIRAM` as separate builds and only the
+  second can use the PSRAM, but nothing in the firmware catalog says which one a
+  board wants; the board itself knows. When PSRAM is found, the dialog now names
+  the build to use and why. It reads only — nothing is written — and a board it
+  cannot reach is reported as unreachable rather than as a board without PSRAM.
+
+  The flash itself now matches what Thonny does, which is what people have been
+  successfully flashing these boards with: **one** `write-flash --erase-all`
+  invocation instead of a separate erase pass followed by a separate write. Two
+  invocations meant two connections, and a board that needs BOOT held while RESET
+  is tapped had to be coaxed into download mode twice — with the second attempt
+  landing after the flash had already been erased. The flash mode and size are
+  also pinned to `keep` explicitly rather than left to an esptool default that
+  its own help does not state and that has moved between versions.
+
 - **The flasher erases the whole flash by default, and then tells you whether
   the board actually started.** (#826, #827)
 

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { describeIdentity, suggestedBuildFor } from '../../../shared/esptool-identify'
+import type { BoardIdentity } from '../../../shared/esptool-identify'
 import type {
   BoardCandidate,
   BoardType,
@@ -132,6 +134,10 @@ export function FirmwareFlasher({
   /** Every serial port on the machine, so a board whose USB bridge detection did
    *  not recognise can still be selected (#821). */
   const [ports, setPorts] = useState<PortInfo[]>([])
+  /** What the connected board said about itself, once asked (esptool flash-id).
+   *  Null until the user asks; `{}` when the board could not be reached. */
+  const [identity, setIdentity] = useState<BoardIdentity | null>(null)
+  const [identifying, setIdentifying] = useState(false)
   const [board, setBoard] = useState<BoardType>('esp32')
   /** The chosen board profile (#682) — drives the mechanics below it. */
   const [profileId, setProfileId] = useState<string>('')
@@ -545,6 +551,38 @@ export function FirmwareFlasher({
     setBoard(target.board)
     setOffset(target.offset ?? DEFAULT_OFFSET[target.board])
   }, [source, selFamily, selVersionUrl])
+
+  /**
+   * Ask the board what it is, and use the answer (#829).
+   *
+   * The PSRAM bit is the point. MicroPython publishes ESP32_GENERIC and
+   * ESP32_GENERIC-SPIRAM separately and only the second can use the PSRAM, but
+   * the firmware catalog does not say which a board has — Thonny's `ESP32 /
+   * WROOM` entry carries no variants at all. The board knows, and esptool will
+   * ask it.
+   */
+  const identifyBoard = useCallback(async (): Promise<void> => {
+    if (!port) return
+    setIdentifying(true)
+    try {
+      const id = await window.api.firmware.identifyBoard(port)
+      setIdentity(id)
+      // Pre-select the family it reported, so the catalog opens on builds that
+      // fit. Never overrides an explicit board choice — same rule as detection.
+      if (id.family && !profileRef.current && families.some((f) => f.family === id.family)) {
+        setSelFamily(id.family)
+      }
+    } catch {
+      setIdentity({})
+    } finally {
+      setIdentifying(false)
+    }
+  }, [port, families])
+
+  const suggestedBuild = useMemo(
+    () => (identity ? suggestedBuildFor(identity) : null),
+    [identity]
+  )
 
   const serialCandidates = candidates.filter((c) => c.source === 'serial')
   // Every OTHER serial port — the ones whose USB bridge we did not recognise.
@@ -1007,6 +1045,37 @@ export function FirmwareFlasher({
                         <option value={port}>{port}</option>
                       )}
                   </select>
+                  {/* Ask the board rather than make the user recall its spec
+                      (#829). Read-only — it uploads esptool's stub and reads the
+                      flash id; it writes nothing. */}
+                  <button
+                    type="button"
+                    className="firmware-btn firmware-btn--ghost"
+                    disabled={!port || flashing || identifying}
+                    onClick={() => void identifyBoard()}
+                  >
+                    {identifying ? 'Asking the board…' : 'Identify board'}
+                  </button>
+                  {identity && (
+                    <p className="firmware-hint">
+                      {describeIdentity(identity) ? (
+                        <>
+                          Found <strong>{describeIdentity(identity)}</strong>
+                          {suggestedBuild && (
+                            <>
+                              {' — '}
+                              use the <strong>{suggestedBuild.name}</strong> build. {suggestedBuild.why}
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          Could not reach the board. Hold BOOT, tap RESET, release BOOT to put it in
+                          download mode, then try again.
+                        </>
+                      )}
+                    </p>
+                  )}
                 </div>
               ) : (
                 <p className="firmware-hint">

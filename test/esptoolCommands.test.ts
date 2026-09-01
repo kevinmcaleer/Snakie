@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   esptoolCommandStyle,
   eraseFlashCommand,
+  flashOptionFlag,
   writeFlashCommand
 } from '../src/main/firmware/flasher'
 
@@ -38,5 +39,25 @@ describe('esptoolCommandStyle (#680)', () => {
     expect(writeFlashCommand('esptool v5.3.0')).toBe('write-flash')
     expect(eraseFlashCommand('esptool.py v4.7.0')).toBe('erase_flash')
     expect(writeFlashCommand('esptool.py v4.7.0')).toBe('write_flash')
+  })
+})
+
+describe('the --flash-mode / --flash-size flags (#829 parity)', () => {
+  it('uses hyphens on v5, matching the subcommand spelling', () => {
+    expect(flashOptionFlag('flash-mode', 'esptool v5.3.0')).toBe('--flash-mode')
+    expect(flashOptionFlag('flash-size', 'esptool v5.3.0')).toBe('--flash-size')
+  })
+
+  it('uses underscores on v4 — there the hyphen form is not a warning but a failure', () => {
+    // An unrecognised argument aborts the flash, unlike the deprecated
+    // subcommand spelling which merely warns.
+    expect(flashOptionFlag('flash-mode', 'esptool.py v4.7.0')).toBe('--flash_mode')
+    expect(flashOptionFlag('flash-size', 'esptool.py v4.7.0')).toBe('--flash_size')
+  })
+
+  it('falls back to underscores when the version cannot be read', () => {
+    // Same rule as the subcommands: the old spelling works everywhere to date.
+    expect(flashOptionFlag('flash-mode', undefined)).toBe('--flash_mode')
+    expect(flashOptionFlag('flash-size', 'unparseable')).toBe('--flash_size')
   })
 })

@@ -11,6 +11,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 ipcRenderer.setMaxListeners(40)
 import type { FlashMethod } from '../shared/board-profiles'
 import type { FirmwareRuntime } from '../shared/firmware-runtime'
+import type { BoardIdentity } from '../shared/esptool-identify'
 import type {
   CircuitPyDrive,
   ConnectOptions,
@@ -673,6 +674,14 @@ const firmware = {
     unwrap(ipcRenderer.invoke('firmware:detect')),
   /** Probe for the external esptool prerequisite (presence + version). */
   checkEsptool: (): Promise<EsptoolInfo> => unwrap(ipcRenderer.invoke('firmware:esptool')),
+
+  /**
+   * Ask the board on `port` what it is — chip, PSRAM, flash size — before
+   * anything is written to it. Resolves with an EMPTY identity when the board
+   * cannot be reached, so "could not ask" never reads as "has no PSRAM".
+   */
+  identifyBoard: (port: string): Promise<BoardIdentity> =>
+    unwrap(ipcRenderer.invoke('firmware:identify', port)),
   /** Show the native firmware file picker, offering only the extension the given
    *  flash method can use (#686). Resolves the path, or null if cancelled. */
   pickFirmwareFile: (method?: FlashMethod): Promise<string | null> =>
