@@ -745,7 +745,14 @@ export function FirmwareFlasher({
           // ESP: serial port + offset; RP2040 / micro:bit: copy to the drive.
           port: esp ? port : undefined,
           offset: esp ? offset || target.offset : undefined,
-          mountPath: esp ? undefined : mountPath
+          mountPath: esp ? undefined : mountPath,
+          // The SAME esptool options as the local-file branch below. These were
+          // missing, so the erase checkbox did nothing whenever the firmware
+          // came from the catalog — the default source, and the path almost
+          // everyone takes. The box was ticked, the dialog said it would erase,
+          // and the board boot-looped on a partition table never cleared.
+          eraseFirst: esp ? eraseFirst : undefined,
+          chip: esp ? profile?.chipFamily : undefined
         })
       } else {
         await window.api.firmware.flash({
