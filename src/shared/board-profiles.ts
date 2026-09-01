@@ -243,7 +243,7 @@ export const BOARD_PROFILES: BoardProfile[] = [
     // named here instead — it exists upstream, it is just not offered.
     preferredBuild: {
       name: 'ESP32_GENERIC-SPIRAM',
-      why: 'This board has 2 MB of PSRAM, and only the SPIRAM build can use it. The plain ESP32_GENERIC build runs perfectly well — it simply leaves the PSRAM unavailable. The firmware catalog does not offer the SPIRAM build for this family, so download it and flash it with "Local file".',
+      why: 'This board has 2 MB of PSRAM, and only the SPIRAM build can use it. The firmware catalog does not offer that build for this family, so Snakie fetches it directly.',
       url: 'https://micropython.org/download/ESP32_GENERIC/'
     },
     notes:

@@ -666,9 +666,21 @@ export function FirmwareFlasher({
     if (!known && !drive) setAdvancedOpen(true)
   }, [refreshDetection, identifyBoard])
 
+  /**
+   * The build worth flashing for this board, from whichever source knows.
+   *
+   * The PROFILE first: `preferredBuild` is authored and checked by a human, and
+   * it is available the moment a board is selected — no interrogation needed.
+   * The board's own report is the fallback, for a board with no profile.
+   *
+   * Reading only the identity was a real gap: the Feather V2 profile has named
+   * ESP32_GENERIC-SPIRAM all along and the dialog ignored it, so unless you had
+   * pressed Detect AND identification had succeeded, the plain build was
+   * downloaded — on a board that needs the SPIRAM one.
+   */
   const suggestedBuild = useMemo(
-    () => (identity ? suggestedBuildFor(identity) : null),
-    [identity]
+    () => profile?.preferredBuild ?? (identity ? suggestedBuildFor(identity) : null),
+    [profile, identity]
   )
 
   /**
