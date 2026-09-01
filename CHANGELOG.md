@@ -6,7 +6,40 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **An Autoscroll toggle on the firmware flasher's output.** The log followed
+  the newest line and nothing else, so scrolling back to read while a flash was
+  still running was impossible — every new line yanked you to the bottom again.
+  That is exactly when you want to look: esptool prints the chip it detected,
+  the flash size it found and the settings it chose right at the *top*, and a
+  flash takes half a minute of scrolling after that. Untick **Autoscroll** and
+  the view stays put; tick it again and it jumps back to the newest line
+  straight away, rather than waiting for the next one to arrive.
+
+
+- **The RCWL-1601 ultrasonic distance sensor is in the Standard parts library.**
+  It is pin- and software-compatible with the HC-SR04 already in the library, so
+  any wiring or code written for that one works unchanged — but it is specified
+  from **3.0 V**, which is the reason to reach for it. A classic HC-SR04 is a 5 V
+  part, and running one from a Pico means powering it off VBUS and putting a
+  voltage divider on Echo, because a 5 V echo pulse into a 3V3 GPIO can damage
+  the pin. That is a step which is easy to skip and expensive to get wrong. The
+  RCWL runs straight off 3V3 with nothing in between, which makes it a much safer
+  part to hand to a workshop or a classroom.
+
+  Slightly smaller too, at 40 × 18 mm against the HC-SR04's 45.5 × 25.5.
+
+- **The Cytron Maker Pi RP2040 is in the Standard parts library.** An RP2040
+  robot controller with two DC motor channels, four servo ports and seven Grove
+  ports, so a Maker Pi build can be wired up in the Electronics workspace and
+  written against in the editor. Pin assignments come from Cytron's own
+  datasheet (Rev 1.2) and their CircuitPython board definition, cross-checked
+  against the RP2040's GPIO function table — including the board's genuine
+  quirk that **Grove 5 and Grove 6 share GP26**.
+
 ### Changed
+
 - **Identifying a board now selects it, instead of just describing it.** The
   flash dialog would run its detection, learn that the connected board was an
   ESP32-PICO-V3-02 with PSRAM and 8 MB of flash — and then leave the Board
@@ -23,34 +56,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   dead.
 
 
-### Fixed
-- **The firmware flasher's text is readable on the light theme again.** The
-  dialog is deliberately dark whichever theme you are using, but several bits of
-  it took their colour from the theme's own tokens — which on the parchment skin
-  are near-black, meant for dark text on a light page. On this dark panel that
-  came out as dark-grey-on-dark, which is what gave the body copy its odd
-  embossed, hard-to-focus look. The explanatory lines were the worst affected,
-  and they are the most useful text in the dialog: the port that was detected,
-  the chip that was identified, the build being recommended.
-
-  Those now use the dialog's own light palette, and the secondary text is
-  distinguished by colour rather than by being faded out. Measured against the
-  panel, the affected text went from **2.62:1 — below the WCAG minimum — to
-  10.13:1**. A duplicate `.firmware-hint` rule, where the second copy was
-  silently overriding the first, is collapsed into one.
-
-### Added
-- **An Autoscroll toggle on the firmware flasher's output.** The log followed
-  the newest line and nothing else, so scrolling back to read while a flash was
-  still running was impossible — every new line yanked you to the bottom again.
-  That is exactly when you want to look: esptool prints the chip it detected,
-  the flash size it found and the settings it chose right at the *top*, and a
-  flash takes half a minute of scrolling after that. Untick **Autoscroll** and
-  the view stays put; tick it again and it jumps back to the newest line
-  straight away, rather than waiting for the next one to arrive.
-
-
-### Changed
 - **The flasher can ask the board what it is, and flashes the way Thonny does.**
   (#829) A new **Identify board** button runs `esptool flash-id` against the
   selected port and reports what came back — the exact chip, the real flash size,
@@ -93,8 +98,40 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   reported as nothing, and a flash esptool completed is never recast as a
   failure.
 
-
 ### Fixed
+
+- **"Erase the whole flash first" now actually does, when the firmware comes
+  from the catalog.** The checkbox worked when you flashed a file from disk and
+  was silently ignored on **Download & Flash** — which is the default source and
+  the path almost everyone takes. The box could be ticked, the dialog said the
+  flash would be erased, and it was not.
+
+  The cost of that landed somewhere unhelpful: the flash itself succeeded and
+  reported `Hash of data verified`, and then the board sat there boot-looping on
+  a partition table left over from whatever it shipped with. Everything about
+  the flash looked right, because everything about the flash *was* right — the
+  step before it just never happened. Boards arriving with vendor firmware were
+  the ones affected, which is to say new ones out of the box.
+
+  The download path now carries every option the direct one does, and a test
+  holds the two together so they cannot drift apart again.
+
+
+- **The firmware flasher's text is readable on the light theme again.** The
+  dialog is deliberately dark whichever theme you are using, but several bits of
+  it took their colour from the theme's own tokens — which on the parchment skin
+  are near-black, meant for dark text on a light page. On this dark panel that
+  came out as dark-grey-on-dark, which is what gave the body copy its odd
+  embossed, hard-to-focus look. The explanatory lines were the worst affected,
+  and they are the most useful text in the dialog: the port that was detected,
+  the chip that was identified, the build being recommended.
+
+  Those now use the dialog's own light palette, and the secondary text is
+  distinguished by colour rather than by being faded out. Measured against the
+  panel, the affected text went from **2.62:1 — below the WCAG minimum — to
+  10.13:1**. A duplicate `.firmware-hint` rule, where the second copy was
+  silently overriding the first, is collapsed into one.
+
 - **CircuitPython on an original ESP32 or S2 is flashed to the right address.**
   (#823) The esptool write offset was chosen from the chip alone, but on those
   two chips it also depends on which runtime you are flashing: MicroPython
@@ -114,7 +151,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   which reads exactly like a failed flash even though the flash succeeded.
 
 
-### Fixed
 - **A board with an unfamiliar USB-serial chip can be flashed again.** (#821)
   An Adafruit ESP32 Feather V2 never appeared in the flasher's **Serial port**
   dropdown, so there was nothing to select and no way to go on — even though the
@@ -134,28 +170,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   board that could not be flashed at all with nothing on screen to say why.
 
 
-### Added
-- **The RCWL-1601 ultrasonic distance sensor is in the Standard parts library.**
-  It is pin- and software-compatible with the HC-SR04 already in the library, so
-  any wiring or code written for that one works unchanged — but it is specified
-  from **3.0 V**, which is the reason to reach for it. A classic HC-SR04 is a 5 V
-  part, and running one from a Pico means powering it off VBUS and putting a
-  voltage divider on Echo, because a 5 V echo pulse into a 3V3 GPIO can damage
-  the pin. That is a step which is easy to skip and expensive to get wrong. The
-  RCWL runs straight off 3V3 with nothing in between, which makes it a much safer
-  part to hand to a workshop or a classroom.
-
-  Slightly smaller too, at 40 × 18 mm against the HC-SR04's 45.5 × 25.5.
-
-- **The Cytron Maker Pi RP2040 is in the Standard parts library.** An RP2040
-  robot controller with two DC motor channels, four servo ports and seven Grove
-  ports, so a Maker Pi build can be wired up in the Electronics workspace and
-  written against in the editor. Pin assignments come from Cytron's own
-  datasheet (Rev 1.2) and their CircuitPython board definition, cross-checked
-  against the RP2040's GPIO function table — including the board's genuine
-  quirk that **Grove 5 and Grove 6 share GP26**.
-
-### Fixed
 - **A board whose pins are all connectors now appears in the MCU picker.**
   (#818) A `family: Microcontroller` part whose I/O is entirely Grove sockets,
   servo ports or screw terminals — with no header rails at all — was silently
@@ -170,7 +184,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   which were previously invisible for the same reason. Those contacts are added
   *after* a board's existing pads, so every wire already saved against one still
   points at the pad it always did.
-
 
 ## [0.46.0] - 2026-08-23
 

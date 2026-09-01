@@ -206,4 +206,23 @@ export interface DownloadAndFlashOptions {
   port?: string
   /** Flash offset for the esptool `write_flash` (ESP only; per-chip). */
   offset?: string
+  /**
+   * Erase the whole flash before writing (ESP only).
+   *
+   * Its ABSENCE here was a silent bug: the flash dialog's erase checkbox reached
+   * {@link FlashOptions} on the local-file path and was dropped on this one, so
+   * the box could be ticked, the dialog could say it would erase, and the
+   * catalog path — the default source, and the one almost everyone takes —
+   * quietly would not. A board arriving with vendor firmware then boot-looped on
+   * a partition table that had never been cleared, while the log reported
+   * `Hash of data verified.`
+   *
+   * Every option {@link FlashOptions} takes is mirrored here for that reason: a
+   * field on one path and not the other is a lie waiting to happen.
+   */
+  eraseFirst?: boolean
+  /** Recommended baud for the esptool flash (ESP only). */
+  baud?: number
+  /** Chip name for esptool's `--chip` (ESP only), when the board is known. */
+  chip?: string
 }
