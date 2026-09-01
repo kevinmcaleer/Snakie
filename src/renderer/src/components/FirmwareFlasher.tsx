@@ -136,7 +136,9 @@ export function FirmwareFlasher({
   /** The chosen board profile (#682) — drives the mechanics below it. */
   const [profileId, setProfileId] = useState<string>('')
   /** Erase the whole flash before writing (#683). */
-  const [eraseFirst, setEraseFirst] = useState<boolean>(false)
+  // Defaults ON: the dialog opens on an ESP board, and a stale flash is the more
+  // likely hazard than a wasted seven seconds (#826).
+  const [eraseFirst, setEraseFirst] = useState<boolean>(true)
   /** Brief "Copied" confirmation on the copy-log button (#685). */
   const [copied, setCopied] = useState(false)
   /**
@@ -416,7 +418,11 @@ export function FirmwareFlasher({
         p.method === 'uf2' ? 'rp2040' : p.method === 'daplink' ? 'microbit' : p.chipFamily === 'esp8266' ? 'esp8266' : 'esp32'
       setBoard(next)
       setOffset(p.offset ?? DEFAULT_OFFSET[next])
-      setEraseFirst(p.eraseByDefault === true)
+      // Erase-before-write defaults ON for esptool boards; a profile opts OUT
+      // by setting `eraseByDefault: false` (#826). Opting in was the wrong way
+      // round — the stale-flash hazard belongs to whatever was on the board
+      // before, which no profile can know.
+      setEraseFirst(p.method === 'esptool' && p.eraseByDefault !== false)
       // Pre-select the firmware family too, so the catalog opens on builds that
       // fit — a generic build is keyed on the chip, which the profile knows.
       if (families.some((f) => f.family === p.chipFamily)) setSelFamily(p.chipFamily)

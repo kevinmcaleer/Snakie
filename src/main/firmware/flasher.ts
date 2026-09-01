@@ -17,6 +17,7 @@
  * easy to reason about in isolation.
  */
 import { spawn } from 'child_process'
+import { classifyBootOutput } from '../../shared/boot-check'
 import { promises as fs, createReadStream, createWriteStream } from 'fs'
 import { basename, join } from 'path'
 import type { EsptoolInfo, FlashOptions, FlashProgress, FlashResult } from './types'
@@ -197,7 +198,90 @@ async function flashEsp(opts: FlashOptions, emit: Emit): Promise<FlashResult> {
     return { ok: false, error: msg }
   }
   emit({ kind: 'log', message: 'Flash complete.' })
+
+  // ...and then ASK THE BOARD (#827). esptool exits 0 for a flash whose result
+  // cannot boot, so `Flash complete` on its own is a claim about the tool, not
+  // about the board. We still own the port; listening costs a few seconds and
+  // turns an evening of detective work into one line.
+  await reportBootOutcome(opts.port, emit)
   return { ok: true }
+}
+
+/** How long to listen for the board's boot output before giving up on it. */
+const BOOT_LISTEN_MS = 4000
+
+/**
+ * Reset the freshly-flashed board and say what it printed.
+ *
+ * STRICTLY ADVISORY. The flash has already succeeded by the time this runs, and
+ * nothing here may change that: every failure path is swallowed, and silence is
+ * reported as silence. A board on native USB re-enumerates after flashing and
+ * will not be on this port at all — that is not an error, it is just nothing to
+ * say.
+ */
+async function reportBootOutcome(port: string, emit: Emit): Promise<void> {
+  let text = ''
+  try {
+    text = await readBootOutput(port)
+  } catch {
+    // No port, still busy, no serialport binding — nothing to report.
+    return
+  }
+  const verdict = classifyBootOutput(text)
+  // Both are `log`, never `error`: the flash genuinely succeeded, and calling a
+  // boot-loop an error would contradict the verified write the user just saw.
+  if (verdict.kind === 'running' || verdict.kind === 'bootloop') {
+    emit({ kind: 'log', message: verdict.message })
+  }
+}
+
+/**
+ * Open `port`, pulse the board's reset line, and collect what it says.
+ *
+ * The reset matters: esptool has already hard-reset the board on its way out,
+ * so by the time the port is reopened the banner has long gone. Toggling RTS
+ * (which drives EN) makes the board boot again with us listening — the same
+ * line esptool itself drives, and 115200 because that is the ESP32 ROM's fixed
+ * boot-log rate whatever the flash baud was.
+ */
+async function readBootOutput(port: string): Promise<string> {
+  const { SerialPort } = await import('serialport')
+  return new Promise<string>((resolve) => {
+    let buf = ''
+    let done = false
+    const sp = new SerialPort({ path: port, baudRate: 115200, autoOpen: false })
+    const finish = (): void => {
+      if (done) return
+      done = true
+      clearTimeout(backstop)
+      try {
+        sp.close(() => undefined)
+      } catch {
+        // Already closed.
+      }
+      resolve(buf)
+    }
+    // A backstop, in case a `set()` callback never fires on some driver.
+    const backstop = setTimeout(finish, BOOT_LISTEN_MS + 1000)
+    sp.on('error', finish)
+    sp.open((err) => {
+      if (err) {
+        finish()
+        return
+      }
+      sp.on('data', (d: Buffer) => {
+        buf += d.toString('latin1')
+      })
+      // EN low, then release: the board reboots with the port already open.
+      sp.set({ dtr: false, rts: true }, () => {
+        setTimeout(() => {
+          sp.set({ dtr: false, rts: false }, () => {
+            setTimeout(finish, BOOT_LISTEN_MS)
+          })
+        }, 150)
+      })
+    })
+  })
 }
 
 /**
