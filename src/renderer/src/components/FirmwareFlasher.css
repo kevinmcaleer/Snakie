@@ -404,3 +404,30 @@
   opacity: 0.55;
   cursor: not-allowed;
 }
+
+/* Output-log bar actions: the Autoscroll toggle sits beside Copy log. */
+.firmware-log__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+/* Deliberately NOT `.firmware-check`: that one is a full-width form row with a
+   wrapping explanation, and this is a compact inline control on a toolbar. */
+.firmware-log__check {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.firmware-log__check input {
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}

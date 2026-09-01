@@ -177,6 +177,11 @@ export function FirmwareFlasher({
   const [flashing, setFlashing] = useState(false)
   const [outcome, setOutcome] = useState<'idle' | 'success' | 'error'>('idle')
   const logRef = useRef<HTMLDivElement>(null)
+  /** Whether the output follows the newest line. Off lets you scroll back and
+   *  READ while a flash is still writing to it — esptool's output is long, and
+   *  the interesting parts (the chip banner, the detected flash size) are at the
+   *  top, where autoscroll drags you away from them. */
+  const [autoScroll, setAutoScroll] = useState(true)
   // Move focus into the dialog on open, trap Tab, and restore it on close.
   const dialogRef = useFocusTrap<HTMLDivElement>()
 
@@ -221,11 +226,16 @@ export function FirmwareFlasher({
     return unsubscribe
   }, [handleProgress])
 
-  // Auto-scroll the log to the latest line.
+  // Follow the newest line — unless the user has asked us not to.
+  //
+  // `autoScroll` is a dependency as well as a guard, so switching it back ON
+  // jumps to the bottom straight away rather than leaving the view stranded
+  // until the next line happens to arrive.
   useEffect(() => {
+    if (!autoScroll) return
     const el = logRef.current
     if (el) el.scrollTop = el.scrollHeight
-  }, [log])
+  }, [log, autoScroll])
 
   // Escape closes the dialog (consistent with the other modals), but never
   // mid-flash — interrupting a flash could leave the device half-written.
@@ -1409,15 +1419,28 @@ export function FirmwareFlasher({
           {(log.length > 0 || flashing) && (
             <div className="firmware-log__bar">
               <span className="firmware-log__title">Output</span>
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm"
-                onClick={() => void copyLog()}
-                disabled={log.length === 0}
-                title="Copy the whole log, including the parts scrolled out of view"
-              >
-                {copied ? 'Copied' : 'Copy log'}
-              </button>
+              <div className="firmware-log__actions">
+                <label
+                  className="firmware-log__check"
+                  title="Follow the newest line. Turn this off to scroll back and read while the flash is still running."
+                >
+                  <input
+                    type="checkbox"
+                    checked={autoScroll}
+                    onChange={(e) => setAutoScroll(e.target.checked)}
+                  />
+                  <span>Autoscroll</span>
+                </label>
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm"
+                  onClick={() => void copyLog()}
+                  disabled={log.length === 0}
+                  title="Copy the whole log, including the parts scrolled out of view"
+                >
+                  {copied ? 'Copied' : 'Copy log'}
+                </button>
+              </div>
             </div>
           )}
           {(log.length > 0 || flashing) && (

@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **An Autoscroll toggle on the firmware flasher's output.** The log followed
+  the newest line and nothing else, so scrolling back to read while a flash was
+  still running was impossible — every new line yanked you to the bottom again.
+  That is exactly when you want to look: esptool prints the chip it detected,
+  the flash size it found and the settings it chose right at the *top*, and a
+  flash takes half a minute of scrolling after that. Untick **Autoscroll** and
+  the view stays put; tick it again and it jumps back to the newest line
+  straight away, rather than waiting for the next one to arrive.
+
+
 ### Changed
 - **The flasher can ask the board what it is, and flashes the way Thonny does.**
   (#829) A new **Identify board** button runs `esptool flash-id` against the
