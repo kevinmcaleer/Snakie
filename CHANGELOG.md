@@ -7,6 +7,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **CircuitPython on an original ESP32 or S2 is flashed to the right address.**
+  (#823) The esptool write offset was chosen from the chip alone, but on those
+  two chips it also depends on which runtime you are flashing: MicroPython
+  expects a second-stage bootloader already at `0x1000` and is written there,
+  while CircuitPython ships a *combined* image whose own bootloader sits at `0`.
+  Picking a CircuitPython build wrote it 4 KB too high.
+
+  Nothing reported an error — the flash completed, said so, and the board simply
+  never came back, which is close to the worst way for this to go wrong. The
+  offset now follows the runtime as well as the chip. The ESP32-S3 and the
+  RISC-V parts are `0x0` for both runtimes, which is why only these two chips
+  were ever affected.
+
+- **The Adafruit ESP32 Feather V2 erases before it flashes.** It ships with
+  factory firmware, and a plain write leaves the old partition table behind — the
+  board then boot-loops on `Image hash failed` / `No bootable app partitions`,
+  which reads exactly like a failed flash even though the flash succeeded.
+
+
+### Fixed
 - **A board with an unfamiliar USB-serial chip can be flashed again.** (#821)
   An Adafruit ESP32 Feather V2 never appeared in the flasher's **Serial port**
   dropdown, so there was nothing to select and no way to go on — even though the

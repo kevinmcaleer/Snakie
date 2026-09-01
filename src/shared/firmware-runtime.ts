@@ -216,11 +216,41 @@ export function flashTargetForDownload(
     // An esptool write needs an ESP offset. A `.bin` under a non-ESP family is
     // not something we know how to place, so fall back to the family's own
     // answer rather than inventing an address.
-    return byFamily.board === 'esp32' || byFamily.board === 'esp8266'
-      ? byFamily
-      : { board: 'esp32', offset: ESP_BOOTLOADER_OFFSET[family.trim().toLowerCase()] ?? '0x0' }
+    const target =
+      byFamily.board === 'esp32' || byFamily.board === 'esp8266'
+        ? byFamily
+        : { board: 'esp32' as const, offset: ESP_BOOTLOADER_OFFSET[family.trim().toLowerCase()] ?? '0x0' }
+    // On the original ESP32 and the S2 the offset depends on the RUNTIME as well
+    // as the chip (#823). MicroPython ships the application expecting a
+    // second-stage bootloader already at 0x1000 and is written there;
+    // CircuitPython ships a COMBINED image whose own bootloader sits at 0, and
+    // Adafruit's instructions are `write_flash -z 0x0` for the original ESP32
+    // and the S2/S3 alike. Writing a CircuitPython image at 0x1000 flashes
+    // cleanly and leaves the board dead.
+    //
+    // The S3 and the RISC-V parts are 0x0 for both runtimes, which is why this
+    // only ever bit the two chips whose runtimes disagree.
+    if (target.board === 'esp32' && isCircuitPythonDownload(url)) {
+      return { board: 'esp32', offset: '0x0' }
+    }
+    return target
   }
   return byFamily
+}
+
+/**
+ * Is this download a CircuitPython build?
+ *
+ * Decided from the host, which is unambiguous — `downloads.circuitpython.org` is
+ * where every published CircuitPython binary lives, and a MicroPython catalog
+ * never yields one. Deliberately NOT a guess from the filename: a mirror or a
+ * hand-picked local file is not something we can identify, and treating an
+ * unknown as CircuitPython would move a MicroPython write to the wrong address —
+ * the very failure this exists to prevent. Unknown therefore stays MicroPython,
+ * which is both the default and the safer assumption for the catalog.
+ */
+export function isCircuitPythonDownload(url: string): boolean {
+  return boardIdFromDownloadUrl(url) !== null
 }
 
 /**

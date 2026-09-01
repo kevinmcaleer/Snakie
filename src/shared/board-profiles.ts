@@ -199,8 +199,16 @@ export const BOARD_PROFILES: BoardProfile[] = [
     // A CH9102F bridge, not native USB: the port stays put across a flash, so
     // no replug is needed the way it is on an S3.
     nativeUsb: false,
+    // This board ships with Adafruit's factory firmware on an 8 MB part, and a
+    // plain `write_flash` leaves whatever that left behind. The reported symptom
+    // was the exact one this flag exists for: the flash reports success and the
+    // board then boot-loops with
+    //   `esp_image: Image hash failed - image is corrupt`
+    //   `boot: No bootable app partitions in the partition table`
+    // which reads as a failed flash even though esptool exited 0.
+    eraseByDefault: true,
     notes:
-      'Hold BOOT, tap RESET, then release BOOT to enter download mode — this board does not auto-reset into the bootloader.'
+      'Hold BOOT, tap RESET, then release BOOT to enter download mode — this board does not auto-reset into the bootloader. It also ships with factory firmware, so Snakie erases the flash first by default; without that the board can boot-loop on a leftover partition table.'
   },
   {
     id: 'esp32-s3-generic',
