@@ -31,7 +31,7 @@ import type { EsptoolInfo, FlashOptions, FlashProgress, FlashResult } from './ty
 const ESPTOOL_COMMANDS = ['esptool', 'esptool.py'] as const
 
 /** Default ESP `write_flash` offsets per family. */
-const DEFAULT_OFFSET: Record<'esp32' | 'esp8266', string> = {
+export const DEFAULT_OFFSET: Record<'esp32' | 'esp8266', string> = {
   esp32: '0x1000',
   esp8266: '0x0'
 }
@@ -219,7 +219,11 @@ async function flashEsp(opts: FlashOptions, emit: Emit): Promise<FlashResult> {
   // image carries a SHA-256 of itself; checking it here costs milliseconds and
   // moves that discovery to before the erase rather than after it.
   const imageCheck = verifyEspImage(await fs.readFile(opts.firmwarePath), Number(offset))
-  emit({ kind: 'log', message: describeEspImageCheck(imageCheck) })
+  // Only when it PASSES: on failure the refusal below says the same thing with
+  // more of it, and three lines repeating one fact reads as three problems.
+  if (imageCheck.kind !== 'bad') {
+    emit({ kind: 'log', message: describeEspImageCheck(imageCheck) })
+  }
   if (imageCheck.kind === 'bad') {
     const msg =
       `Refusing to flash ${basename(opts.firmwarePath)}: ${imageCheck.reason}. ` +

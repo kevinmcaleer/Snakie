@@ -17,13 +17,16 @@
  * works even though the catalog URLs commonly 30x.
  */
 import { createWriteStream } from 'fs'
+import { readFile } from 'fs/promises'
+import { createHash } from 'crypto'
 import { unlink } from 'fs/promises'
 import { tmpdir } from 'os'
 import { basename, join } from 'path'
 import { Readable } from 'stream'
 import { app } from 'electron'
 import type { Emit } from './flasher'
-import { flash } from './flasher'
+import { DEFAULT_OFFSET, flash } from './flasher'
+import { describeEspImageCheck, verifyEspImage } from './esp-image'
 import { reporter } from '../report-error'
 import type { DownloadAndFlashOptions, FlashResult } from './types'
 
@@ -118,6 +121,74 @@ export async function downloadFirmware(url: string, emit: Emit): Promise<string>
   return dest
 }
 
+
+/**
+ * Download the firmware and prove it arrived intact, retrying ONCE (#840).
+ *
+ * A download that lands with the right length and the wrong bytes is not a
+ * theoretical failure — it reached a user, flashed cleanly, verified cleanly and
+ * left a dead board, twice in a row, over a network where curl and a browser
+ * both fetched the same URL perfectly. Whatever mangles it (a proxy, a
+ * TLS-inspecting middlebox, a flaky link) is not something Snakie can see or
+ * fix, and it is not something the user can be asked to diagnose either.
+ *
+ * What Snakie CAN do is notice, and try again: corruption of this kind is
+ * usually transient, so a second attempt normally succeeds. When it does not,
+ * the two attempts are the diagnosis — identical hashes mean something upstream
+ * is reliably serving bad bytes, differing hashes mean the link itself is
+ * unreliable. Both are worth far more to the user than "flash failed".
+ *
+ * Only ESP images can be checked this way, so anything unrecognised (a UF2, for
+ * one) is passed straight through exactly as before.
+ */
+async function downloadVerified(opts: DownloadAndFlashOptions, emit: Emit): Promise<string> {
+  const offset = Number(
+    opts.offset ?? DEFAULT_OFFSET[opts.board === 'esp8266' ? 'esp8266' : 'esp32']
+  )
+
+  let firstDigest = ''
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const dest = await downloadFirmware(opts.url, emit)
+    const bytes = await readFile(dest)
+    const check = verifyEspImage(bytes, offset)
+    if (check.kind !== 'bad') return dest
+
+    const digest = createHash('sha256').update(bytes).digest('hex')
+    emit({
+      kind: 'log',
+      message:
+        `${describeEspImageCheck(check)} (${bytes.length} bytes, sha256 ${digest.slice(0, 16)}…)`
+    })
+    await unlink(dest).catch(reporter('firmware: cleanup corrupt download'))
+
+    if (attempt === 1) {
+      firstDigest = digest
+      emit({
+        kind: 'log',
+        message: 'The download arrived damaged. Downloading it again before touching the board…'
+      })
+      continue
+    }
+
+    // Twice. Say which kind of broken this is, because the two point at
+    // completely different things to go and look at.
+    throw new Error(
+      'The firmware download arrived damaged twice, so nothing has been written to your ' +
+        'board. ' +
+        (digest === firstDigest
+          ? 'Both attempts were byte-for-byte identical, so the damaged copy is being served ' +
+            'to you rather than corrupted in transit — a proxy, VPN or filtering appliance on ' +
+            'your network is the usual cause. Downloading the file in a browser and flashing ' +
+            'it from Advanced mode is the reliable way round it.'
+          : 'The two attempts differed, so the file is being corrupted in transit — an ' +
+            'unreliable connection, VPN or TLS-inspecting security tool is the usual cause. ' +
+            'Retrying on a different network usually works.')
+    )
+  }
+  // Unreachable: the loop either returns a good file or throws.
+  throw new Error('Download failed.')
+}
+
 /**
  * Download a catalog firmware file (`.uf2` or `.bin`) to a temp file then flash
  * it onto the selected target, producing a single combined progress stream
@@ -133,7 +204,7 @@ export async function downloadAndFlash(
 ): Promise<FlashResult> {
   let tempPath: string
   try {
-    tempPath = await downloadFirmware(opts.url, emit)
+    tempPath = await downloadVerified(opts, emit)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     emit({ kind: 'error', message: msg })

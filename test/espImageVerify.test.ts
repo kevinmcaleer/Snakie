@@ -92,3 +92,24 @@ describe('verifyEspImage (#840)', () => {
     )
   })
 })
+
+describe('downloadVerified retries a damaged download (#840)', () => {
+  it('names the two kinds of broken differently', async () => {
+    // Identical hashes and differing hashes point at completely different
+    // things to go and look at, so the message must not merge them.
+    const src = await import('node:fs').then((fs) =>
+      fs.readFileSync('src/main/firmware/download.ts', 'utf8')
+    )
+    expect(src).toMatch(/byte-for-byte identical/)
+    expect(src).toMatch(/corrupted in transit/)
+    // And nothing may be written to the board in either case.
+    expect(src).toMatch(/nothing has been written to your/)
+  })
+
+  it('retries before giving up, and only once', async () => {
+    const src = await import('node:fs').then((fs) =>
+      fs.readFileSync('src/main/firmware/download.ts', 'utf8')
+    )
+    expect(src).toMatch(/attempt <= 2/)
+  })
+})

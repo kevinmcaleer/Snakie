@@ -18,7 +18,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   already gone. ESP images carry a SHA-256 of themselves; Snakie now runs that
   same check on the host, before the erase, and refuses a damaged file without
   touching the board. Confirmed against the real firmware: a copy with one bit
-  flipped and an unchanged length is caught.
+  flipped and an unchanged length is caught. A damaged download is retried once
+  before anything is written, since this kind of corruption is usually
+  transient; if the second copy is damaged too, the two attempts are themselves
+  the diagnosis — identical hashes mean the bad bytes are being served, and
+  differing hashes mean they are being mangled in transit.
 - **`Image hash failed` no longer sends you round the erase-and-retry loop.**
   The advice was "leftover partition table, erase and flash again" for every
   bootloader complaint. That is right for a stale slot and misleading otherwise,
