@@ -682,6 +682,11 @@ const firmware = {
    */
   identifyBoard: (port: string): Promise<BoardIdentity> =>
     unwrap(ipcRenderer.invoke('firmware:identify', port)),
+
+  /** Does a firmware URL resolve? Used to confirm a DERIVED address before the
+   *  dialog offers it — a composed URL is a guess about a naming convention. */
+  firmwareUrlExists: (url: string): Promise<boolean> =>
+    unwrap(ipcRenderer.invoke('firmware:urlExists', url)),
   /** Show the native firmware file picker, offering only the extension the given
    *  flash method can use (#686). Resolves the path, or null if cancelled. */
   pickFirmwareFile: (method?: FlashMethod): Promise<string | null> =>

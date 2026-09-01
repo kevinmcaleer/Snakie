@@ -403,3 +403,46 @@ export function newestStableVersion(
   }
   return best
 }
+
+/**
+ * The URL of a DIFFERENT build of the same firmware release — issue #833.
+ *
+ * The firmware catalog cannot offer every build. Thonny's `ESP32 / WROOM` entry
+ * carries no variants at all, so `ESP32_GENERIC-SPIRAM` — the only build that
+ * can use the PSRAM on a board that has it — is unreachable from the dropdowns
+ * even though it is published alongside the one that IS offered. Until now the
+ * dialog could only name it and leave the user to go and fetch it by hand,
+ * which is a browser, a downloads folder and a file picker for something we
+ * already know the address of.
+ *
+ * micropython.org names its builds
+ *   `<BOARD>-<YYYYMMDD>-v<version>.<ext>`
+ * in one flat directory, so the sibling build of the SAME release is the same
+ * URL with the board token swapped.
+ *
+ * Returns `null` for anything that is not that shape — a CircuitPython URL, a
+ * mirror, a hand-typed link. **The caller must still confirm the result
+ * exists**: this composes a plausible address, it does not promise a file is
+ * there, and a 404 handed to the flasher would be a worse outcome than the
+ * manual download it replaces.
+ */
+export function siblingBuildUrl(url: string, buildName: string): string | null {
+  const name = buildName.trim()
+  if (!name || !/^[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*$/.test(name)) return null
+  let parsed: URL
+  try {
+    parsed = new URL(url.trim())
+  } catch {
+    return null
+  }
+  // Only micropython.org publishes this naming; do not reshape anyone else's.
+  if (!/(^|\.)micropython\.org$/i.test(parsed.hostname)) return null
+  const file = parsed.pathname.split('/').pop() ?? ''
+  // `<BOARD>-<8 digits>-v<rest>.<ext>` — the date is what makes the board token
+  // unambiguous, since a board name may itself contain hyphens.
+  const m = /^(.+)-(\d{8}-v[^/]+)$/.exec(file)
+  if (!m) return null
+  if (m[1] === name) return url.trim()          // already the build asked for
+  parsed.pathname = parsed.pathname.replace(/[^/]+$/, `${name}-${m[2]}`)
+  return parsed.toString()
+}

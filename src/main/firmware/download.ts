@@ -156,3 +156,23 @@ export async function downloadAndFlash(
     await unlink(tempPath).catch(reporter('firmware: cleanup temp file'))
   }
 }
+
+/**
+ * Does `url` actually resolve to a file? Used before offering a build whose
+ * address was DERIVED rather than read from a catalog (#833).
+ *
+ * A composed URL is a guess about a naming convention. Handing a 404 to the
+ * flasher would be worse than the manual download it replaces, so the guess is
+ * checked before it is offered. HEAD, so nothing is transferred.
+ *
+ * Never throws: offline, blocked, or a slow server all mean "cannot offer it",
+ * which is the same as "not there" from the caller's point of view.
+ */
+export async function firmwareUrlExists(url: string): Promise<boolean> {
+  try {
+    const res = await fetch(url, { method: 'HEAD' })
+    return res.ok
+  } catch {
+    return false
+  }
+}

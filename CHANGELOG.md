@@ -8,6 +8,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Snakie fetches the recommended firmware build itself.** Identifying a board
+  could tell you it had PSRAM and that `ESP32_GENERIC-SPIRAM` was the build that
+  uses it — and then leave you to open a browser, find that file, download it,
+  and come back through a file picker. For a file whose address Snakie could
+  already work out.
+
+  When a recommended build exists, it is now offered as a tickbox (on by
+  default) and **Flash downloads it for you**, exactly as it does for a catalog
+  build. The build's address is derived from the release already selected, so it
+  is always the same version — and it is *confirmed to exist* before being
+  offered, because a composed URL is a guess about a naming convention and a 404
+  handed to the flasher would be worse than the manual download it replaces.
+
+  This matters because the firmware catalog cannot offer these builds at all:
+  its `ESP32 / WROOM` entry carries no variants, so the PSRAM build has been
+  unreachable from the dropdowns despite being published alongside the one that
+  is offered.
+
+
 - **An Autoscroll toggle on the firmware flasher's output.** The log followed
   the newest line and nothing else, so scrolling back to read while a flash was
   still running was impossible — every new line yanked you to the bottom again.
