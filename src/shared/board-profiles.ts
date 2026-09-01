@@ -65,6 +65,20 @@ export interface BoardProfile {
   /** Anything the user genuinely needs to know, shown next to the picker. */
   notes?: string
   /**
+   * The chip name(s) `esptool flash-id` prints for this board, so identifying a
+   * connected board can select its profile instead of leaving the user to find
+   * it in a list of fifteen.
+   *
+   * Matched case-insensitively against `Chip type:`. Absent means "cannot be
+   * recognised from the chip alone", which is the honest default — most ESP32
+   * boards report the same generic part and nothing distinguishes them.
+   *
+   * A chip that several profiles claim is NOT resolved by picking the first:
+   * {@link profilesForChip} returns them all and the caller offers a choice,
+   * because silently selecting the wrong board sets the wrong flash offset.
+   */
+  matchChip?: readonly string[]
+  /**
    * Erase the whole flash before writing — **on by default for every esptool
    * board**; set this to `false` only to opt a board OUT.
    *
@@ -207,6 +221,10 @@ export const BOARD_PROFILES: BoardProfile[] = [
     method: 'esptool',
     // The original ESP32 — the one chip whose offset is not 0x0.
     offset: '0x1000',
+    // What esptool prints for this board. The PICO-V3-02 packages its flash and
+    // PSRAM on-die, which is distinctive enough to name — and no other profile
+    // here claims it, so identifying the board resolves to exactly this one.
+    matchChip: ['ESP32-PICO-V3-02'],
     circuitPythonBoardId: 'adafruit_feather_esp32_v2',
     // A CH9102F bridge, not native USB: the port stays put across a flash, so
     // no replug is needed the way it is on an S3.
@@ -337,4 +355,21 @@ export function firmwareFileIssue(method: FlashMethod, path: string): string | n
 /** The flash method implied by a coarse board type, for callers without a profile. */
 export function methodForBoardType(board: 'esp32' | 'esp8266' | 'rp2040' | 'microbit'): FlashMethod {
   return board === 'rp2040' ? 'uf2' : board === 'microbit' ? 'daplink' : 'esptool'
+}
+
+/**
+ * The profiles that claim a chip, as `esptool flash-id` reported it.
+ *
+ * Returns ALL of them, never a best guess. One match is something the dialog can
+ * act on; several is a question it has to ask, because choosing wrongly between
+ * two boards on the same chip can mean the wrong flash offset — which writes
+ * cleanly and leaves the board dead. Zero is the normal case: most ESP32 boards
+ * report a generic part that says nothing about which board it is on.
+ */
+export function profilesForChip(chip: string | undefined): BoardProfile[] {
+  const c = (chip ?? '').trim().toUpperCase()
+  if (!c) return []
+  return BOARD_PROFILES.filter((p) =>
+    (p.matchChip ?? []).some((m) => m.trim().toUpperCase() === c)
+  )
 }

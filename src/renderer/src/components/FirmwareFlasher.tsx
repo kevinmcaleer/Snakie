@@ -11,6 +11,8 @@ import type {
 } from '../../../preload/index.d'
 import {
   BOARD_PROFILES,
+  profilesForChip,
+  type BoardProfile,
   boardProfile,
   firmwareFileIssue,
   firmwareMismatch,
@@ -138,6 +140,9 @@ export function FirmwareFlasher({
    *  Null until the user asks; `{}` when the board could not be reached. */
   const [identity, setIdentity] = useState<BoardIdentity | null>(null)
   const [identifying, setIdentifying] = useState(false)
+  /** Profiles that claim the identified chip, when more than one does — a
+   *  question for the user rather than a guess we make for them. */
+  const [matchedProfiles, setMatchedProfiles] = useState<BoardProfile[]>([])
   const [board, setBoard] = useState<BoardType>('esp32')
   /** The chosen board profile (#682) — drives the mechanics below it. */
   const [profileId, setProfileId] = useState<string>('')
@@ -574,20 +579,39 @@ export function FirmwareFlasher({
   const identifyBoard = useCallback(async (): Promise<void> => {
     if (!port) return
     setIdentifying(true)
+    setMatchedProfiles([])
     try {
       const id = await window.api.firmware.identifyBoard(port)
       setIdentity(id)
-      // Pre-select the family it reported, so the catalog opens on builds that
-      // fit. Never overrides an explicit board choice — same rule as detection.
-      if (id.family && !profileRef.current && families.some((f) => f.family === id.family)) {
-        setSelFamily(id.family)
+
+      // ACT on what came back, rather than reporting it and leaving the user to
+      // find the right entry in a list of fifteen.
+      //
+      // This is the gap the reporter hit: the dialog ran detection AND
+      // identification, learned the board was an ESP32-PICO-V3-02 with PSRAM,
+      // and still sat on "Other / set up manually" — so the flash offset, the
+      // erase default and the BOOT/RESET note all had to be got right by hand.
+      // Identify is an explicit "tell me what this is", so applying the answer
+      // is what was asked for.
+      const matches = profilesForChip(id.chip)
+      if (matches.length === 1) {
+        handleProfileChange(matches[0].id)
+      } else if (matches.length > 1) {
+        // Two boards on the same chip. Picking one would mean guessing at the
+        // flash offset, so offer them instead.
+        setMatchedProfiles(matches)
+      } else if (id.family && families.some((f) => f.family === id.family)) {
+        // No board recognised, but the CHIP FAMILY is still worth acting on:
+        // it opens the catalog on builds that fit. Never over an explicit
+        // choice — same rule as detection.
+        if (!profileRef.current) setSelFamily(id.family)
       }
     } catch {
       setIdentity({})
     } finally {
       setIdentifying(false)
     }
-  }, [port, families])
+  }, [port, families, handleProfileChange])
 
   const suggestedBuild = useMemo(
     () => (identity ? suggestedBuildFor(identity) : null),
@@ -1071,10 +1095,19 @@ export function FirmwareFlasher({
                       {describeIdentity(identity) ? (
                         <>
                           Found <strong>{describeIdentity(identity)}</strong>
-                          {suggestedBuild && (
+                          {/* Say that the Board picker was CHANGED. Selecting it
+                              silently would leave the user wondering why the
+                              offset and the erase box moved on their own. */}
+                          {profile && identity.chip && profilesForChip(identity.chip).length === 1 && (
                             <>
                               {' — '}
-                              use the <strong>{suggestedBuild.name}</strong> build. {suggestedBuild.why}
+                              selected <strong>{profile.label}</strong> for you.
+                            </>
+                          )}
+                          {suggestedBuild && (
+                            <>
+                              {' '}
+                              Use the <strong>{suggestedBuild.name}</strong> build. {suggestedBuild.why}
                             </>
                           )}
                         </>
@@ -1084,6 +1117,28 @@ export function FirmwareFlasher({
                           download mode, then try again.
                         </>
                       )}
+                    </p>
+                  )}
+                  {/* More than one board uses this chip, so picking one would be
+                      a guess about the flash offset. Ask instead. */}
+                  {matchedProfiles.length > 1 && (
+                    <p className="firmware-hint">
+                      That chip is used by {matchedProfiles.length} boards — pick yours:{' '}
+                      {matchedProfiles.map((m, i) => (
+                        <span key={m.id}>
+                          {i > 0 && ', '}
+                          <button
+                            type="button"
+                            className="firmware-link"
+                            onClick={() => {
+                              handleProfileChange(m.id)
+                              setMatchedProfiles([])
+                            }}
+                          >
+                            {m.label}
+                          </button>
+                        </span>
+                      ))}
                     </p>
                   )}
                 </div>

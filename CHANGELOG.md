@@ -6,6 +6,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Identifying a board now selects it, instead of just describing it.** The
+  flash dialog would run its detection, learn that the connected board was an
+  ESP32-PICO-V3-02 with PSRAM and 8 MB of flash — and then leave the Board
+  picker sitting on *"Other / set up manually…"*. Everything that follows from
+  knowing the board (the flash offset, whether to erase first, the note that
+  this one needs BOOT held while you tap RESET, which firmware build suits it)
+  was left to be worked out by hand, from a list of fifteen entries.
+
+  **Identify board** now applies what it finds: one click and the right profile
+  is selected, with the dialog saying so rather than moving the settings
+  silently underneath you. Where a chip is used by more than one board it offers
+  the choice instead of guessing — two boards on the same chip can want
+  different flash offsets, and the wrong one writes cleanly and leaves the board
+  dead.
+
+
 ### Fixed
 - **The firmware flasher's text is readable on the light theme again.** The
   dialog is deliberately dark whichever theme you are using, but several bits of
