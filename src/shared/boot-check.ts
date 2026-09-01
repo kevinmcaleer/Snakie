@@ -43,6 +43,36 @@ const BOOTLOOP_MARKERS = [
 const RESET_MARKER = /rst:0x[0-9a-f]+/gi
 
 /**
+ * What to actually DO about a given bootloader complaint.
+ *
+ * These are not interchangeable, and saying so matters: the generic "erase and
+ * try again" is right for a stale partition table and actively misleading for a
+ * hash failure, which means the bytes ON the chip do not match their own
+ * checksum. Snakie verifies the firmware file's SHA-256 before writing it (see
+ * `main/firmware/esp-image.ts`), so by the time a hash failure reaches here the
+ * FILE was known-good and the WRITE is the thing under suspicion — advice that
+ * sends the user round the erase-and-retry loop again just wastes their evening.
+ */
+function adviceFor(lowerText: string): string {
+  // Keyed off the whole output, NOT the matched marker: the marker list is
+  // ordered by generality, so a hash failure matches the broad `esp_image:`
+  // entry first and would otherwise get the generic advice.
+  if (lowerText.includes('image hash failed') || lowerText.includes('checksum failed')) {
+    return (
+      'That means the bytes on the chip do not match their own checksum. Snakie verifies the ' +
+      'firmware file against its own SHA-256 before writing it, so this is not a bad download. ' +
+      'Erase the whole flash and flash again — stale partition or OTA data can point the ' +
+      'bootloader at an app slot that was never written. If it survives an erase, the write ' +
+      'itself is suspect: try a lower baud rate, a different USB cable, and a powered port.'
+    )
+  }
+  return (
+    'This is usually a leftover partition table from whatever was on the board before: ' +
+    'erasing the whole flash and flashing again usually fixes it.'
+  )
+}
+
+/**
  * Classify what a board printed in the seconds after a flash.
  *
  * Order matters: a boot-loop can scroll a runtime banner off the top on a board
@@ -66,8 +96,7 @@ export function classifyBootOutput(raw: string): BootVerdict {
       evidence,
       message:
         'The firmware was written and verified, but the board is not booting it — it says ' +
-        `"${evidence}". This is almost always a leftover partition table from whatever ` +
-        'was on the board before: erasing the whole flash and flashing again usually fixes it.'
+        `"${evidence}". ${adviceFor(lower)}`
     }
   }
 

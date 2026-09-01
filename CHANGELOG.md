@@ -6,6 +6,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A corrupt firmware download no longer flashes and verifies cleanly, then
+  refuses to boot** (#840). esptool's `Hash of data verified` is a weaker claim
+  than it reads as: it proves the flash matches *the file it was handed*, and
+  says nothing about whether that file is the firmware the vendor built. A
+  download arriving with the right length and the wrong bytes therefore wrote
+  perfectly, verified perfectly, and left a board that answered only
+  `E (579) esp_image: Image hash failed - image is corrupt` — with the evidence
+  already gone. ESP images carry a SHA-256 of themselves; Snakie now runs that
+  same check on the host, before the erase, and refuses a damaged file without
+  touching the board. Confirmed against the real firmware: a copy with one bit
+  flipped and an unchanged length is caught. A damaged download is retried once
+  before anything is written, since this kind of corruption is usually
+  transient; if the second copy is damaged too, the two attempts are themselves
+  the diagnosis — identical hashes mean the bad bytes are being served, and
+  differing hashes mean they are being mangled in transit.
+- **`Image hash failed` no longer sends you round the erase-and-retry loop.**
+  The advice was "leftover partition table, erase and flash again" for every
+  bootloader complaint. That is right for a stale slot and misleading otherwise,
+  so the message now names both real causes and says the file was already
+  verified — the one thing worth ruling out first.
+
 ### Added
 
 - **The flasher says what it is about to do, in words.** Before the esptool

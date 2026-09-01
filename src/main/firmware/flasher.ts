@@ -21,6 +21,7 @@ const execFileAsync = promisify(execFile)
 import { execFile, spawn } from 'child_process'
 import { promisify } from 'util'
 import { classifyBootOutput } from '../../shared/boot-check'
+import { describeEspImageCheck, verifyEspImage } from './esp-image'
 import { parseEsptoolIdentity, type BoardIdentity } from '../../shared/esptool-identify'
 import { promises as fs, createReadStream, createWriteStream } from 'fs'
 import { basename, join } from 'path'
@@ -30,7 +31,7 @@ import type { EsptoolInfo, FlashOptions, FlashProgress, FlashResult } from './ty
 const ESPTOOL_COMMANDS = ['esptool', 'esptool.py'] as const
 
 /** Default ESP `write_flash` offsets per family. */
-const DEFAULT_OFFSET: Record<'esp32' | 'esp8266', string> = {
+export const DEFAULT_OFFSET: Record<'esp32' | 'esp8266', string> = {
   esp32: '0x1000',
   esp8266: '0x0'
 }
@@ -209,6 +210,29 @@ async function flashEsp(opts: FlashOptions, emit: Emit): Promise<FlashResult> {
   if (opts.eraseFirst) flashArgs.push('--erase-all')
 
   const args = [...base, ...flashArgs, offset, opts.firmwarePath]
+
+  // Check the FILE before writing it (#840). esptool's `Hash of data verified`
+  // only proves the flash matches the file it was handed, so a download that
+  // arrives with the right length and the wrong bytes flashes cleanly, verifies
+  // cleanly, and bricks the board -- the ESP32's own bootloader is the first
+  // thing to notice, hours later, and all it says is "Image hash failed". The
+  // image carries a SHA-256 of itself; checking it here costs milliseconds and
+  // moves that discovery to before the erase rather than after it.
+  const imageCheck = verifyEspImage(await fs.readFile(opts.firmwarePath), Number(offset))
+  // Only when it PASSES: on failure the refusal below says the same thing with
+  // more of it, and three lines repeating one fact reads as three problems.
+  if (imageCheck.kind !== 'bad') {
+    emit({ kind: 'log', message: describeEspImageCheck(imageCheck) })
+  }
+  if (imageCheck.kind === 'bad') {
+    const msg =
+      `Refusing to flash ${basename(opts.firmwarePath)}: ${imageCheck.reason}. ` +
+      'The file is damaged, so writing it would leave the board unable to boot. ' +
+      'This is a bad copy of the firmware, not a fault with your board — ' +
+      'download it again and retry.'
+    emit({ kind: 'error', message: msg })
+    return { ok: false, error: msg }
+  }
 
   // Say plainly what is about to happen, before the esptool line that says it
   // in argv. Three flashes in a row that "succeed" and leave a dead board all
