@@ -243,4 +243,11 @@ describe('Adafruit ESP32 Feather V2 (#821)', () => {
     expect(feather?.notes).toMatch(/BOOT/)
     expect(feather?.notes).toMatch(/RESET/i)
   })
+
+  it('erases first — it ships with factory firmware (#823 follow-up)', () => {
+    // Reported symptom without this: the flash reports success and the board
+    // boot-loops on "Image hash failed" / "No bootable app partitions", because
+    // a plain write_flash leaves the factory partition table behind.
+    expect(feather?.eraseByDefault).toBe(true)
+  })
 })
