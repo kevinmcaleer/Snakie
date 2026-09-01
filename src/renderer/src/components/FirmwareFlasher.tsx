@@ -141,6 +141,16 @@ export function FirmwareFlasher({
    *  Null until the user asks; `{}` when the board could not be reached. */
   const [identity, setIdentity] = useState<BoardIdentity | null>(null)
   const [identifying, setIdentifying] = useState(false)
+  /**
+   * Whether the advanced fields are showing (#833). Closed by default.
+   *
+   * Everything behind it is either derived from the board once it is known — the
+   * flash offset, the board type, whether to erase — or a decision nobody should
+   * have to make to put MicroPython on a board they just plugged in. It opens by
+   * ITSELF when the board could not be worked out, because that is exactly when
+   * those fields stop being noise and become the only way through.
+   */
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   /** Profiles that claim the identified chip, when more than one does — a
    *  question for the user rather than a guess we make for them. */
   const [matchedProfiles, setMatchedProfiles] = useState<BoardProfile[]>([])
@@ -202,7 +212,11 @@ export function FirmwareFlasher({
   const runtimeLabel = FIRMWARE_RUNTIME_LABEL[runtime]
 
   // --- Catalog (download-from-micropython.org / circuitpython.org) state (#64) ---
-  const [source, setSource] = useState<Source>('local')
+  // Default to the catalog rather than a local file (#833). Downloading the
+  // official build is what almost everyone wants and needs no prior knowledge;
+  // picking a file off disk assumes you have already been somewhere else and
+  // come back with the right one.
+  const [source, setSource] = useState<Source>('catalog')
   const [catalog, setCatalog] = useState<FirmwareCatalog | null>(null)
   const [catalogLoading, setCatalogLoading] = useState(false)
   const [catalogError, setCatalogError] = useState<string | null>(null)
@@ -259,7 +273,7 @@ export function FirmwareFlasher({
     return () => window.removeEventListener('keydown', onKey)
   }, [flashing, onClose])
 
-  const refreshDetection = useCallback(async (): Promise<void> => {
+  const refreshDetection = useCallback(async (): Promise<BoardCandidate[] | undefined> => {
     try {
       const [found, tool, allPorts] = await Promise.all([
         window.api.firmware.detectBoards(),
@@ -283,8 +297,10 @@ export function FirmwareFlasher({
         // port / mountPath / detectedMicrobit are derived from the selected board
         // by the effect below, so a board switch can't keep a stale target.
       }
+      return found
     } catch {
       // Detection is best-effort; leave manual selection available.
+      return undefined
     }
   }, [])
 
@@ -583,12 +599,15 @@ export function FirmwareFlasher({
    * WROOM` entry carries no variants at all. The board knows, and esptool will
    * ask it.
    */
-  const identifyBoard = useCallback(async (): Promise<void> => {
-    if (!port) return
+  const identifyBoard = useCallback(async (portOverride?: string): Promise<boolean> => {
+    // Detection has only just set state, so a caller that has a port in hand
+    // passes it rather than waiting a render for it.
+    const target = portOverride ?? port
+    if (!target) return false
     setIdentifying(true)
     setMatchedProfiles([])
     try {
-      const id = await window.api.firmware.identifyBoard(port)
+      const id = await window.api.firmware.identifyBoard(target)
       setIdentity(id)
 
       // ACT on what came back, rather than reporting it and leaving the user to
@@ -603,6 +622,7 @@ export function FirmwareFlasher({
       const matches = profilesForChip(id.chip)
       if (matches.length === 1) {
         handleProfileChange(matches[0].id)
+        return true
       } else if (matches.length > 1) {
         // Two boards on the same chip. Picking one would mean guessing at the
         // flash offset, so offer them instead.
@@ -613,16 +633,54 @@ export function FirmwareFlasher({
         // choice — same rule as detection.
         if (!profileRef.current) setSelFamily(id.family)
       }
+      // More than one claimant is still a resolved question — the user just has
+      // to answer it — so it does not count as "could not tell".
+      return matches.length > 1
     } catch {
       setIdentity({})
+      return false
     } finally {
       setIdentifying(false)
     }
   }, [port, families, handleProfileChange])
 
+  /**
+   * ONE action for "what have I plugged in" (#833).
+   *
+   * Detect scanned USB for a board; Identify asked that board what it was. Two
+   * buttons for two halves of one question, which meant knowing that both
+   * existed and that you wanted both — and the second only worked after the
+   * first had set a port. Nobody plugging in a board wants two verbs for that.
+   *
+   * When it cannot work the board out it opens the advanced fields, because at
+   * that point they stop being clutter and become the only way through. When it
+   * can, they stay shut: there is nothing left to decide.
+   */
+  const detectBoard = useCallback(async (): Promise<void> => {
+    const found = await refreshDetection()
+    const serial = (found ?? []).find((c) => c.source === 'serial')
+    const known = serial?.port ? await identifyBoard(serial.port) : false
+    // A UF2 / drive board has no esptool to interrogate, so detection alone
+    // settles it — a mount that was found counts as a success.
+    const drive = (found ?? []).some((c) => c.source !== 'serial')
+    if (!known && !drive) setAdvancedOpen(true)
+  }, [refreshDetection, identifyBoard])
+
+  /**
+   * The build worth flashing for this board, from whichever source knows.
+   *
+   * The PROFILE first: `preferredBuild` is authored and checked by a human, and
+   * it is available the moment a board is selected — no interrogation needed.
+   * The board's own report is the fallback, for a board with no profile.
+   *
+   * Reading only the identity was a real gap: the Feather V2 profile has named
+   * ESP32_GENERIC-SPIRAM all along and the dialog ignored it, so unless you had
+   * pressed Detect AND identification had succeeded, the plain build was
+   * downloaded — on a board that needs the SPIRAM one.
+   */
   const suggestedBuild = useMemo(
-    () => (identity ? suggestedBuildFor(identity) : null),
-    [identity]
+    () => profile?.preferredBuild ?? (identity ? suggestedBuildFor(identity) : null),
+    [profile, identity]
   )
 
   /**
@@ -986,6 +1044,21 @@ export function FirmwareFlasher({
               offset and the firmware family, and warns if the chosen build is for
               a different chip. Optional — "Other" leaves every field manual. */}
           <div className="firmware-field">
+            {/* The one action for "what have I plugged in" (#833). It scans, then
+                asks whatever it found what it is, and selects the matching
+                board — Detect and Identify were two buttons for two halves of
+                one question. Placed FIRST because it is the step that makes
+                every field below it unnecessary. */}
+            {isElectron() && (
+              <button
+                type="button"
+                className="firmware-detect"
+                onClick={() => void detectBoard()}
+                disabled={flashing || identifying}
+              >
+                {identifying ? 'Asking the board…' : '⟳ Detect board'}
+              </button>
+            )}
             <label className="firmware-field__label" htmlFor="firmware-profile">
               Board
             </label>
@@ -1045,7 +1118,7 @@ export function FirmwareFlasher({
                 the wrong board flashes without error and comes up with the wrong pins.
               </p>
             )}
-            {board !== 'rp2040' && board !== 'microbit' && (
+            {advancedOpen && board !== 'rp2040' && board !== 'microbit' && (
               <label className="firmware-check">
                 <input
                   type="checkbox"
@@ -1061,49 +1134,54 @@ export function FirmwareFlasher({
             )}
           </div>
 
-          <div className="firmware-field">
-            <label className="firmware-field__label" htmlFor="firmware-board">
-              Board type
-            </label>
-            <div className="firmware-field__row">
-              <select
-                id="firmware-board"
-                className="firmware-select"
-                value={board}
-                // In catalog mode the selected Family drives the board (issue
-                // #125), so the dropdown reflects it read-only.
-                disabled={flashing || usingCatalog}
-                onChange={(e) => handleBoardChange(e.target.value as BoardType)}
-              >
-                {(Object.keys(BOARD_LABELS) as BoardType[]).map((b) => (
-                  <option key={b} value={b}>
-                    {BOARD_LABELS[b]}
-                  </option>
-                ))}
-              </select>
-              {isElectron() && (
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--sm"
-                  onClick={() => void refreshDetection()}
-                  disabled={flashing}
-                  title="Re-scan for connected boards"
+          {/* One switch for everything that should not be a decision (#833).
+              It opens by itself when Detect could not work the board out. */}
+          {isElectron() && (
+            <button
+              type="button"
+              className="firmware-advanced-toggle"
+              aria-expanded={advancedOpen}
+              onClick={() => setAdvancedOpen((v) => !v)}
+            >
+              {advancedOpen ? '▾' : '▸'} Advanced options
+            </button>
+          )}
+          {/* Advanced (#833): the board type follows from the board, or from
+              the catalog family. Only worth showing when neither is known. */}
+          {advancedOpen && (
+            <div className="firmware-field">
+              <label className="firmware-field__label" htmlFor="firmware-board">
+                Board type
+              </label>
+              <div className="firmware-field__row">
+                <select
+                  id="firmware-board"
+                  className="firmware-select"
+                  value={board}
+                  // In catalog mode the selected Family drives the board (issue
+                  // #125), so the dropdown reflects it read-only.
+                  disabled={flashing || usingCatalog}
+                  onChange={(e) => handleBoardChange(e.target.value as BoardType)}
                 >
-                  ⟳ Detect
-                </button>
+                  {(Object.keys(BOARD_LABELS) as BoardType[]).map((b) => (
+                    <option key={b} value={b}>
+                      {BOARD_LABELS[b]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {usingCatalog && (
+                <p className="firmware-hint">
+                  Board type follows the catalog Family you pick below.
+                </p>
+              )}
+              {candidates.length > 0 && (
+                <p className="firmware-hint">
+                  Detected: {candidates.map((c) => c.label).join('; ')}
+                </p>
               )}
             </div>
-            {usingCatalog && (
-              <p className="firmware-hint">
-                Board type follows the catalog Family you pick below.
-              </p>
-            )}
-            {candidates.length > 0 && (
-              <p className="firmware-hint">
-                Detected: {candidates.map((c) => c.label).join('; ')}
-              </p>
-            )}
-          </div>
+          )}
 
           {isEsp ? (
             <>
@@ -1139,14 +1217,6 @@ export function FirmwareFlasher({
                   {/* Ask the board rather than make the user recall its spec
                       (#829). Read-only — it uploads esptool's stub and reads the
                       flash id; it writes nothing. */}
-                  <button
-                    type="button"
-                    className="firmware-btn firmware-btn--ghost"
-                    disabled={!port || flashing || identifying}
-                    onClick={() => void identifyBoard()}
-                  >
-                    {identifying ? 'Asking the board…' : 'Identify board'}
-                  </button>
                   {identity && (
                     <p className="firmware-hint">
                       {describeIdentity(identity) ? (
@@ -1224,20 +1294,25 @@ export function FirmwareFlasher({
                 </p>
               )}
 
-              <div className="firmware-field">
-                <label className="firmware-field__label" htmlFor="firmware-offset">
-                  Flash offset
-                </label>
-                <input
-                  id="firmware-offset"
-                  className="firmware-input"
-                  type="text"
-                  value={offset}
-                  disabled={flashing}
-                  onChange={(e) => setOffset(e.target.value)}
-                  placeholder="0x0"
-                />
-              </div>
+              {/* Advanced (#833): the offset comes from the chip, and getting
+                  it wrong writes cleanly and leaves the board dead. Not a
+                  number anyone should be typing to flash a board. */}
+              {advancedOpen && (
+                <div className="firmware-field">
+                  <label className="firmware-field__label" htmlFor="firmware-offset">
+                    Flash offset
+                  </label>
+                  <input
+                    id="firmware-offset"
+                    className="firmware-input"
+                    type="text"
+                    value={offset}
+                    disabled={flashing}
+                    onChange={(e) => setOffset(e.target.value)}
+                    placeholder="0x0"
+                  />
+                </div>
+              )}
 
               {isElectron() && esptool && !esptool.available && (
                 <p className="firmware-banner firmware-banner--warn">
@@ -1355,7 +1430,10 @@ export function FirmwareFlasher({
               `window.api.firmware.fetchCatalog`/`downloadAndFlash`, which have
               no browser implementation yet (Web W3, issue #284) — only Local
               file is offered there. */}
-          {isElectron() && (
+          {/* Advanced (#833): the catalog is the default and covers almost
+              everyone. Choosing a local file assumes you have already been
+              somewhere else and come back with the right build. */}
+          {isElectron() && advancedOpen && (
             <div className="firmware-field">
               <span className="firmware-field__label">Firmware source</span>
               <div className="firmware-source-toggle" role="radiogroup" aria-label="Firmware source">

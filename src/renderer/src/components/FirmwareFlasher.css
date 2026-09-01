@@ -458,3 +458,46 @@
 .firmware-link:hover {
   text-decoration: none;
 }
+
+/* The one "what have I plugged in" action (#833). Prominent, because pressing it
+   is what makes most of the fields below unnecessary — it is the happy path, not
+   a utility. */
+.firmware-detect {
+  align-self: flex-start;
+  margin-bottom: 0.5rem;
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.4rem 0.8rem;
+  color: #f4f6f8;
+  background: rgba(255, 255, 255, 0.12);
+  border: var(--border-w) solid var(--accent);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.firmware-detect:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.firmware-detect:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* The advanced disclosure. Quiet — it is a way out, not a destination. */
+.firmware-advanced-toggle {
+  align-self: flex-start;
+  margin: 0.2rem 0;
+  padding: 0.2rem 0;
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  color: #c7ccd4;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.firmware-advanced-toggle:hover {
+  color: #f4f6f8;
+}
