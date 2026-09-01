@@ -65,12 +65,24 @@ export interface BoardProfile {
   /** Anything the user genuinely needs to know, shown next to the picker. */
   notes?: string
   /**
-   * Erase the whole flash before writing, by default, for this board.
+   * Erase the whole flash before writing — **on by default for every esptool
+   * board**; set this to `false` only to opt a board OUT.
    *
-   * On when the board commonly arrives running something else: a leftover
-   * partition table or NVS survives a plain `write_flash`, and the board then
-   * boot-loops — enumerating for a second and dropping off — which reads exactly
-   * like a failed flash even though the flash succeeded.
+   * It used to be opt-IN, and that was the wrong way round (#826). A leftover
+   * partition table survives a plain `write_flash`, which only erases the range
+   * it writes, and the board then boot-loops on `Image hash failed` /
+   * `No bootable app partitions` — reading exactly like a failed flash even
+   * though esptool verified every byte it wrote.
+   *
+   * The hazard is not a property of the BOARD, it is a property of what was on
+   * the flash before, which no profile can know. Opt-in meant the flag was set
+   * only on boards somebody had already been bitten by — a list of who had
+   * complained, not of who was affected — and the generic `esp32-devkit` entry,
+   * which is exactly what you pick when your board is not listed and its
+   * provenance is therefore unknown, did not have it.
+   *
+   * Erasing unnecessarily costs about seven seconds and a filesystem the user is
+   * replacing anyway. Not erasing costs a board that looks bricked.
    */
   eraseByDefault?: boolean
   /**
@@ -199,14 +211,23 @@ export const BOARD_PROFILES: BoardProfile[] = [
     // A CH9102F bridge, not native USB: the port stays put across a flash, so
     // no replug is needed the way it is on an S3.
     nativeUsb: false,
-    // This board ships with Adafruit's factory firmware on an 8 MB part, and a
-    // plain `write_flash` leaves whatever that left behind. The reported symptom
-    // was the exact one this flag exists for: the flash reports success and the
-    // board then boot-loops with
-    //   `esp_image: Image hash failed - image is corrupt`
-    //   `boot: No bootable app partitions in the partition table`
-    // which reads as a failed flash even though esptool exited 0.
-    eraseByDefault: true,
+    // Erase-before-write is the default for every esptool board now (#826).
+    //
+    // NOT claimed as proven by this board: it boot-looped on `Image hash failed`
+    // with a hash-verified write of a correct image, booted once after a full
+    // erase, and then reverted to boot-looping with byte-identical flash
+    // content. An image that boots once and then does not, without the flash
+    // changing, is not a flashing problem — see #828. The erase default stands
+    // on the general argument in #826, not on this board.
+    //
+    // The catalog has no SPIRAM build for the plain ESP32 family (Thonny's
+    // `ESP32 / WROOM` entry carries no variants at all), so the PSRAM build is
+    // named here instead — it exists upstream, it is just not offered.
+    preferredBuild: {
+      name: 'ESP32_GENERIC-SPIRAM',
+      why: 'This board has 2 MB of PSRAM, and only the SPIRAM build can use it. The plain ESP32_GENERIC build runs perfectly well — it simply leaves the PSRAM unavailable. The firmware catalog does not offer the SPIRAM build for this family, so download it and flash it with "Local file".',
+      url: 'https://micropython.org/download/ESP32_GENERIC/'
+    },
     notes:
       'Hold BOOT, tap RESET, then release BOOT to enter download mode — this board does not auto-reset into the bootloader. It also ships with factory firmware, so Snakie erases the flash first by default; without that the board can boot-loop on a leftover partition table.'
   },

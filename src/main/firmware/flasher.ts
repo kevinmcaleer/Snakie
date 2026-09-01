@@ -1,3 +1,5 @@
+const execFileAsync = promisify(execFile)
+
 /**
  * Firmware-flashing engine (issue #14).
  *
@@ -16,7 +18,10 @@
  * forwards it to the renderer) so this module has no Electron dependency and is
  * easy to reason about in isolation.
  */
-import { spawn } from 'child_process'
+import { execFile, spawn } from 'child_process'
+import { promisify } from 'util'
+import { classifyBootOutput } from '../../shared/boot-check'
+import { parseEsptoolIdentity, type BoardIdentity } from '../../shared/esptool-identify'
 import { promises as fs, createReadStream, createWriteStream } from 'fs'
 import { basename, join } from 'path'
 import type { EsptoolInfo, FlashOptions, FlashProgress, FlashResult } from './types'
@@ -104,6 +109,19 @@ export function writeFlashCommand(version?: string): string {
   return esptoolCommandStyle(version) === 'hyphen' ? 'write-flash' : 'write_flash'
 }
 
+/**
+ * The `--flash-mode` / `--flash-size` FLAGS, which renamed alongside the
+ * subcommands in v5 (`--flash_mode` → `--flash-mode`).
+ *
+ * Passing the v5 spelling to a v4 esptool is not a deprecation warning, it is an
+ * unrecognised argument and a failed flash — so these follow the same version
+ * rule as the subcommand, rather than being hardcoded to whatever the machine
+ * that wrote this happened to have.
+ */
+export function flashOptionFlag(name: 'flash-mode' | 'flash-size', version?: string): string {
+  return esptoolCommandStyle(version) === 'hyphen' ? `--${name}` : `--${name.replace('-', '_')}`
+}
+
 export async function detectEsptool(): Promise<EsptoolInfo> {
   for (const command of ESPTOOL_COMMANDS) {
     const result = await new Promise<EsptoolInfo | null>((resolve) => {
@@ -165,22 +183,32 @@ async function flashEsp(opts: FlashOptions, emit: Emit): Promise<FlashResult> {
   const base = ['--port', opts.port, '--baud', baud]
   if (opts.chip) base.unshift('--chip', opts.chip)
 
-  // Erase first when asked. A board arriving from vendor/Arduino firmware keeps
-  // its old partition table and NVS through a plain `write_flash`, and plenty of
-  // ESP32 boards then boot-loop: they enumerate for a moment, panic, and drop off
-  // again. That reads exactly like a failed flash, except the flash succeeded.
-  if (opts.eraseFirst) {
-    const eraseArgs = [...base, eraseFlashCommand(tool.version)]
-    emit({ kind: 'log', message: `> ${tool.command} ${eraseArgs.join(' ')}` })
-    const erased = await runStreaming(tool.command, eraseArgs, emit)
-    if (erased.spawnError || erased.code !== 0) {
-      const msg = `Erase failed (exit ${erased.code ?? '?'}). The board may be in the wrong mode — hold BOOT while plugging it in.`
-      emit({ kind: 'error', message: msg })
-      return { ok: false, error: msg }
-    }
-  }
+  // Erase as part of the WRITE, not as a separate pass (#829 parity).
+  //
+  // Snakie used to run `erase-flash` and then `write-flash` as two invocations.
+  // Thonny — which people successfully flash these same boards with — issues
+  // ONE: `write_flash --erase-all …`. That difference is not cosmetic. Two
+  // invocations mean two connections, and a board that needs BOOT held while
+  // RESET is tapped has to be coaxed into download mode TWICE; the second
+  // connect is exactly where it fails, after the flash has already been erased,
+  // which leaves the board emptier than it started.
+  //
+  // `--erase-all` also erases the whole chip (not just the write areas), which
+  // is the behaviour the separate pass was there for in the first place.
+  const flashArgs = [
+    writeFlashCommand(tool.version),
+    // Pinned rather than left to esptool's implicit default, which its own
+    // `--help` does not state and which has moved between versions. `keep`
+    // honours the header the firmware was built with — the same thing Thonny
+    // pins — so an image's declared flash mode and size survive the write.
+    flashOptionFlag('flash-mode', tool.version),
+    'keep',
+    flashOptionFlag('flash-size', tool.version),
+    'keep'
+  ]
+  if (opts.eraseFirst) flashArgs.push('--erase-all')
 
-  const args = [...base, writeFlashCommand(tool.version), offset, opts.firmwarePath]
+  const args = [...base, ...flashArgs, offset, opts.firmwarePath]
 
   emit({ kind: 'log', message: `Using ${tool.command}${tool.version ? ` (${tool.version})` : ''}` })
   emit({ kind: 'log', message: `> ${tool.command} ${args.join(' ')}` })
@@ -197,7 +225,90 @@ async function flashEsp(opts: FlashOptions, emit: Emit): Promise<FlashResult> {
     return { ok: false, error: msg }
   }
   emit({ kind: 'log', message: 'Flash complete.' })
+
+  // ...and then ASK THE BOARD (#827). esptool exits 0 for a flash whose result
+  // cannot boot, so `Flash complete` on its own is a claim about the tool, not
+  // about the board. We still own the port; listening costs a few seconds and
+  // turns an evening of detective work into one line.
+  await reportBootOutcome(opts.port, emit)
   return { ok: true }
+}
+
+/** How long to listen for the board's boot output before giving up on it. */
+const BOOT_LISTEN_MS = 4000
+
+/**
+ * Reset the freshly-flashed board and say what it printed.
+ *
+ * STRICTLY ADVISORY. The flash has already succeeded by the time this runs, and
+ * nothing here may change that: every failure path is swallowed, and silence is
+ * reported as silence. A board on native USB re-enumerates after flashing and
+ * will not be on this port at all — that is not an error, it is just nothing to
+ * say.
+ */
+async function reportBootOutcome(port: string, emit: Emit): Promise<void> {
+  let text = ''
+  try {
+    text = await readBootOutput(port)
+  } catch {
+    // No port, still busy, no serialport binding — nothing to report.
+    return
+  }
+  const verdict = classifyBootOutput(text)
+  // Both are `log`, never `error`: the flash genuinely succeeded, and calling a
+  // boot-loop an error would contradict the verified write the user just saw.
+  if (verdict.kind === 'running' || verdict.kind === 'bootloop') {
+    emit({ kind: 'log', message: verdict.message })
+  }
+}
+
+/**
+ * Open `port`, pulse the board's reset line, and collect what it says.
+ *
+ * The reset matters: esptool has already hard-reset the board on its way out,
+ * so by the time the port is reopened the banner has long gone. Toggling RTS
+ * (which drives EN) makes the board boot again with us listening — the same
+ * line esptool itself drives, and 115200 because that is the ESP32 ROM's fixed
+ * boot-log rate whatever the flash baud was.
+ */
+async function readBootOutput(port: string): Promise<string> {
+  const { SerialPort } = await import('serialport')
+  return new Promise<string>((resolve) => {
+    let buf = ''
+    let done = false
+    const sp = new SerialPort({ path: port, baudRate: 115200, autoOpen: false })
+    const finish = (): void => {
+      if (done) return
+      done = true
+      clearTimeout(backstop)
+      try {
+        sp.close(() => undefined)
+      } catch {
+        // Already closed.
+      }
+      resolve(buf)
+    }
+    // A backstop, in case a `set()` callback never fires on some driver.
+    const backstop = setTimeout(finish, BOOT_LISTEN_MS + 1000)
+    sp.on('error', finish)
+    sp.open((err) => {
+      if (err) {
+        finish()
+        return
+      }
+      sp.on('data', (d: Buffer) => {
+        buf += d.toString('latin1')
+      })
+      // EN low, then release: the board reboots with the port already open.
+      sp.set({ dtr: false, rts: true }, () => {
+        setTimeout(() => {
+          sp.set({ dtr: false, rts: false }, () => {
+            setTimeout(finish, BOOT_LISTEN_MS)
+          })
+        }, 150)
+      })
+    })
+  })
 }
 
 /**
@@ -294,4 +405,42 @@ export async function flash(opts: FlashOptions, emit: Emit): Promise<FlashResult
     message: result.ok ? 'Done.' : (result.error ?? 'Flashing failed.')
   })
   return result
+}
+
+/**
+ * Ask a connected ESP what it is, before anything is written to it.
+ *
+ * `esptool flash-id` reports the exact part, its features — **including whether
+ * it has PSRAM** — and the real flash size. That is precisely the information
+ * the flash dialog otherwise asks the user to supply from memory, and which for
+ * PSRAM they often have no way to know: MicroPython publishes `ESP32_GENERIC`
+ * and `ESP32_GENERIC-SPIRAM` separately, and nothing in the firmware catalog
+ * says which one a given board wants.
+ *
+ * Read-only. It uploads the stub and reads the flash id; it writes nothing.
+ * Failure is not an error the caller has to handle — an unplugged board, a busy
+ * port or a board not in download mode all come back as an empty identity,
+ * because "we could not ask" and "the board has no PSRAM" must never look alike.
+ */
+export async function identifyBoard(port: string): Promise<BoardIdentity> {
+  const tool = await detectEsptool()
+  if (!tool.available || !tool.command) return {}
+  try {
+    const { stdout } = await execFileAsync(
+      tool.command,
+      ['--port', port, '--baud', '115200', flashIdCommand(tool.version)],
+      { timeout: 30_000, maxBuffer: 2 * 1024 * 1024, windowsHide: true }
+    )
+    return parseEsptoolIdentity(String(stdout))
+  } catch (err) {
+    // esptool exits non-zero when it cannot connect, and still prints the chip
+    // banner in some of those cases — so parse what it managed to say.
+    const out = err as { stdout?: string; stderr?: string }
+    return parseEsptoolIdentity(`${out.stdout ?? ''}\n${out.stderr ?? ''}`)
+  }
+}
+
+/** `flash_id` / `flash-id` for the detected esptool. */
+export function flashIdCommand(version?: string): string {
+  return esptoolCommandStyle(version) === 'hyphen' ? 'flash-id' : 'flash_id'
 }

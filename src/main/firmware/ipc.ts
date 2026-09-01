@@ -10,8 +10,9 @@ import { dialog, ipcMain, BrowserWindow, type WebContents } from 'electron'
 import type { FlashMethod } from '../../shared/board-profiles'
 import type { FirmwareRuntime } from '../../shared/firmware-runtime'
 import type { IpcResult } from '../device/types'
+import type { BoardIdentity } from '../../shared/esptool-identify'
 import { detectBoards } from './detect'
-import { detectEsptool, flash } from './flasher'
+import { detectEsptool, flash, identifyBoard } from './flasher'
 import { fetchFirmwareCatalog } from './catalog'
 import { downloadAndFlash } from './download'
 import type {
@@ -32,7 +33,8 @@ export const FIRMWARE_CHANNELS = {
   pickFile: 'firmware:pickFile',
   flash: 'firmware:flash',
   fetchCatalog: 'firmware:fetchCatalog',
-  downloadAndFlash: 'firmware:downloadAndFlash'
+  downloadAndFlash: 'firmware:downloadAndFlash',
+  identify: 'firmware:identify'
 } as const
 
 /**
@@ -65,6 +67,14 @@ export function registerFirmwareIpc(getWindow: () => BrowserWindow | undefined):
   )
 
   ipcMain.handle(FIRMWARE_CHANNELS.esptool, () => wrap<EsptoolInfo>(() => detectEsptool()))
+
+  // Ask the connected board what it is (chip, PSRAM, flash size) before writing
+  // anything. Read-only, and it resolves with an EMPTY identity rather than
+  // rejecting when the board cannot be reached — "could not ask" must not look
+  // like "has no PSRAM".
+  ipcMain.handle(FIRMWARE_CHANNELS.identify, (_e, port: string) =>
+    wrap<BoardIdentity>(() => identifyBoard(port))
+  )
 
   ipcMain.handle(FIRMWARE_CHANNELS.pickFile, (_e, method?: FlashMethod) =>
     wrap<string | null>(async () => {

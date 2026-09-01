@@ -135,6 +135,9 @@ export type {
   GitPublishResult
 } from '../main/git/types'
 
+// Board identity from `esptool flash-id`, for the flash dialog's board probe.
+export type { BoardIdentity } from '../shared/esptool-identify'
+
 // Re-export the Python plugin-system types (issue #61) so the Plugins panel can
 // import them from this single UI-facing module.
 export type {

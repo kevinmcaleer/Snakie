@@ -6,6 +6,50 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **The flasher can ask the board what it is, and flashes the way Thonny does.**
+  (#829) A new **Identify board** button runs `esptool flash-id` against the
+  selected port and reports what came back — the exact chip, the real flash size,
+  and crucially **whether the board has PSRAM**. MicroPython publishes
+  `ESP32_GENERIC` and `ESP32_GENERIC-SPIRAM` as separate builds and only the
+  second can use the PSRAM, but nothing in the firmware catalog says which one a
+  board wants; the board itself knows. When PSRAM is found, the dialog now names
+  the build to use and why. It reads only — nothing is written — and a board it
+  cannot reach is reported as unreachable rather than as a board without PSRAM.
+
+  The flash itself now matches what Thonny does, which is what people have been
+  successfully flashing these boards with: **one** `write-flash --erase-all`
+  invocation instead of a separate erase pass followed by a separate write. Two
+  invocations meant two connections, and a board that needs BOOT held while RESET
+  is tapped had to be coaxed into download mode twice — with the second attempt
+  landing after the flash had already been erased. The flash mode and size are
+  also pinned to `keep` explicitly rather than left to an esptool default that
+  its own help does not state and that has moved between versions.
+
+- **The flasher erases the whole flash by default, and then tells you whether
+  the board actually started.** (#826, #827)
+
+  Erasing first used to be opt-in per board, which was the wrong way round: the
+  hazard belongs to whatever was on the flash *before*, which no board profile
+  can know. In practice the flag ended up set only on boards somebody had
+  already been caught by — and not on the generic ESP32 entry, which is exactly
+  what you pick when your own board is not listed and its history is therefore
+  unknown. It is now on for every esptool board, and a profile can opt out.
+  Erasing needlessly costs about seven seconds and a filesystem you are
+  replacing anyway; not erasing can cost you a board that looks bricked.
+
+  And the flasher no longer signs off with `Flash complete.` regardless of what
+  happened next. esptool exits successfully for a flash whose result cannot
+  boot, so that message was a claim about the tool rather than about the board.
+  Snakie now resets the board it just wrote and listens: a MicroPython or
+  CircuitPython banner is reported as *"the board is running …"*, and a board
+  looping on `Image hash failed` or `No bootable app partitions` is said out
+  loud, with the fix that usually works. It stays advisory — a board that says
+  nothing (a native-USB board re-enumerates and is not there to hear) is
+  reported as nothing, and a flash esptool completed is never recast as a
+  failure.
+
+
 ### Fixed
 - **CircuitPython on an original ESP32 or S2 is flashed to the right address.**
   (#823) The esptool write offset was chosen from the chip alone, but on those

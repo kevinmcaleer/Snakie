@@ -244,10 +244,17 @@ describe('Adafruit ESP32 Feather V2 (#821)', () => {
     expect(feather?.notes).toMatch(/RESET/i)
   })
 
-  it('erases first — it ships with factory firmware (#823 follow-up)', () => {
-    // Reported symptom without this: the flash reports success and the board
-    // boot-loops on "Image hash failed" / "No bootable app partitions", because
-    // a plain write_flash leaves the factory partition table behind.
-    expect(feather?.eraseByDefault).toBe(true)
+  it('does NOT opt out of the erase-first default (#826)', () => {
+    // Erase-before-write is on for every esptool board now, so a profile only
+    // has to avoid setting `eraseByDefault: false`.
+    expect(feather?.eraseByDefault).not.toBe(false)
+  })
+
+  it('names the SPIRAM build, which the catalog does not offer', () => {
+    // Thonny's `ESP32 / WROOM` entry carries no variants at all, so there is no
+    // way to pick the PSRAM build from the catalog even though it exists
+    // upstream. The profile is where that gets said.
+    expect(feather?.preferredBuild?.name).toBe('ESP32_GENERIC-SPIRAM')
+    expect(feather?.preferredBuild?.why).toMatch(/PSRAM/i)
   })
 })
