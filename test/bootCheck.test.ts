@@ -96,3 +96,28 @@ describe('silence', () => {
     expect(classifyBootOutput('\x1b[0m garbled ~~~ noise').kind).toBe('unknown')
   })
 })
+
+describe('bootloader advice is specific to the complaint (#840)', () => {
+  it('does not send a hash failure round the erase-and-retry loop', () => {
+    // The advice that cost an evening: "leftover partition table, erase and try
+    // again" is right for a stale partition table and misleading for a hash
+    // failure, which means the bytes on the chip do not match their own
+    // checksum. The file is verified before writing, so the WRITE is suspect.
+    const v = classifyBootOutput('E (579) esp_image: Image hash failed - image is corrupt')
+    if (v.kind !== 'bootloop') throw new Error('expected bootloop')
+    expect(v.message).toMatch(/do not match their own checksum/i)
+    // Both real causes, not just the cheap one: a stale slot (erase fixes it)
+    // and a bad write (erase does not).
+    expect(v.message).toMatch(/eras/i)
+    expect(v.message).toMatch(/baud|cable/i)
+    // And it must not send the user hunting for a bad download -- the file was
+    // already verified before it was written.
+    expect(v.message).toMatch(/not a bad download/i)
+  })
+
+  it('still gives the erase advice for a genuinely stale partition table', () => {
+    const v = classifyBootOutput('E (61) boot: No bootable app partitions in the partition table')
+    if (v.kind !== 'bootloop') throw new Error('expected bootloop')
+    expect(v.message).toMatch(/leftover partition table/i)
+  })
+})

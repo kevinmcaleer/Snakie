@@ -75,6 +75,14 @@ export async function downloadFirmware(url: string, emit: Emit): Promise<string>
     throw new Error('Download failed: empty response body.')
   }
 
+  // `total` drives the progress bar ONLY. Comparing it to the bytes received as
+  // an integrity check looks obvious and is wrong twice over (measured, #840):
+  // a truncated response errors the stream rather than ending short, so the
+  // comparison never fires for the case it would be written for; and under
+  // `content-encoding: gzip` the header is the COMPRESSED length while the
+  // decoded stream is larger, so it fires on healthy downloads. Firmware
+  // integrity is checked where it can actually be judged — against the image's
+  // own SHA-256, in `esp-image.ts`.
   const total = Number(res.headers.get('content-length') ?? '0')
   const dest = join(tempDir(), fileNameFromUrl(url))
 
