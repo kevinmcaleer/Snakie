@@ -6,6 +6,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **A board with an unfamiliar USB-serial chip can be flashed again.** (#821)
+  An Adafruit ESP32 Feather V2 never appeared in the flasher's **Serial port**
+  dropdown, so there was nothing to select and no way to go on — even though the
+  board enumerated fine and was listed in the Console panel's device dropdown.
+
+  Detection matches a port's USB vendor/product id against a table of known
+  bridge chips, and Adafruit moved this board onto a **CH9102F** once the CP2104
+  went obsolete. The table knew the older CH340 and CH341 and nothing else from
+  that vendor, so the port was silently dropped. The CH9102F and its CH343
+  sibling are now in the table, and the **Adafruit ESP32 Feather V2** has a board
+  profile — so it appears in the Board dropdown too, with the right 0x1000 flash
+  offset and a note that it needs BOOT held while you tap RESET.
+
+  More importantly, **an unrecognised port is now offered rather than hidden**,
+  marked as such, so you can pick it and choose the board type yourself. That
+  table will always trail the market, and until now the cost of it trailing was a
+  board that could not be flashed at all with nothing on screen to say why.
+
+
 ### Added
 - **The RCWL-1601 ultrasonic distance sensor is in the Standard parts library.**
   It is pin- and software-compatible with the HC-SR04 already in the library, so

@@ -187,6 +187,22 @@ export const BOARD_PROFILES: BoardProfile[] = [
     offset: '0x1000'
   },
   {
+    id: 'adafruit-feather-esp32-v2',
+    vendor: 'Adafruit',
+    model: 'ESP32 Feather V2',
+    label: 'Adafruit ESP32 Feather V2 (8 MB flash, 2 MB PSRAM)',
+    chipFamily: 'esp32',
+    method: 'esptool',
+    // The original ESP32 — the one chip whose offset is not 0x0.
+    offset: '0x1000',
+    circuitPythonBoardId: 'adafruit_feather_esp32_v2',
+    // A CH9102F bridge, not native USB: the port stays put across a flash, so
+    // no replug is needed the way it is on an S3.
+    nativeUsb: false,
+    notes:
+      'Hold BOOT, tap RESET, then release BOOT to enter download mode — this board does not auto-reset into the bootloader.'
+  },
+  {
     id: 'esp32-s3-generic',
     vendor: 'Espressif',
     model: 'ESP32-S3 (generic)',

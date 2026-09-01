@@ -212,3 +212,35 @@ describe('firmwareFileIssue (#685)', () => {
     expect(methodForBoardType('microbit')).toBe('daplink')
   })
 })
+
+describe('Adafruit ESP32 Feather V2 (#821)', () => {
+  const feather = BOARD_PROFILES.find((p) => p.id === 'adafruit-feather-esp32-v2')
+
+  it('is offered in the board picker at all — it was absent entirely', () => {
+    expect(feather).toBeDefined()
+  })
+
+  it('flashes at 0x1000, the original ESP32 offset', () => {
+    // The one chip whose offset is not 0x0. Getting this wrong writes the
+    // firmware to the wrong address and the board does not come back.
+    expect(feather?.chipFamily).toBe('esp32')
+    expect(feather?.method).toBe('esptool')
+    expect(feather?.offset).toBe('0x1000')
+  })
+
+  it('is not native USB — it sits behind a CH9102F bridge', () => {
+    // So the port survives the flash and no replug is needed, unlike an S3.
+    expect(feather?.nativeUsb).toBe(false)
+  })
+
+  it('carries the CircuitPython board id that actually exists', () => {
+    // Verified against circuitpython.org rather than guessed: flashing another
+    // board's build leaves a board needing a re-flash before it will talk.
+    expect(feather?.circuitPythonBoardId).toBe('adafruit_feather_esp32_v2')
+  })
+
+  it('says how to enter download mode, which this board will not do by itself', () => {
+    expect(feather?.notes).toMatch(/BOOT/)
+    expect(feather?.notes).toMatch(/RESET/i)
+  })
+})
