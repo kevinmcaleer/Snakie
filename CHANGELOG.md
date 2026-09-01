@@ -8,6 +8,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The flasher says what it is about to do, in words.** Before the esptool
+  command line, the log now states which firmware file is being written, to
+  which port, at which address, and whether the whole flash is being erased
+  first. Three separate bugs in this area produced the identical symptom — a
+  flash that reports success and leaves a board that will not boot — and every
+  one of them came down to one of those facts differing from what the dialog
+  implied. All three were technically visible in the esptool arguments, and all
+  three went unnoticed, because reading an argv by eye is not a reasonable way
+  to answer "did it erase?".
+
+
 - **Snakie fetches the recommended firmware build itself.** Identifying a board
   could tell you it had PSRAM and that `ESP32_GENERIC-SPIRAM` was the build that
   uses it — and then leave you to open a browser, find that file, download it,
