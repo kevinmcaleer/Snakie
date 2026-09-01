@@ -37,14 +37,22 @@ const ESP_USB_BRIDGES: Array<{ vid: string; pid?: string; board: BoardType; chip
   // WCH CH340 / CH341 — common on cheaper ESP8266 (NodeMCU) and some ESP32.
   { vid: '1a86', pid: '7523', board: 'esp8266', chip: 'CH340' },
   { vid: '1a86', pid: '5523', board: 'esp8266', chip: 'CH341' },
+  // WCH CH9102F / CH343 — what current ESP32 boards use now that the CP2104 is
+  // obsolete (Adafruit moved the ESP32 Feather V2 onto the CH9102F, #821). These
+  // are `esp32`, NOT `esp8266` like their older CH340 siblings above: the cheap
+  // NodeMCU association does not hold for these newer parts.
+  { vid: '1a86', pid: '55d4', board: 'esp32', chip: 'CH9102F' },
+  { vid: '1a86', pid: '55d3', board: 'esp32', chip: 'CH343' },
   // FTDI FT232 — older ESP dev boards.
   { vid: '0403', pid: '6001', board: 'esp32', chip: 'FT232R' },
   // Espressif native USB CDC (ESP32-S2/S3/C3 built-in USB JTAG/serial).
   { vid: '303a', board: 'esp32', chip: 'Espressif native USB' }
 ]
 
-/** Match a serial port's VID/PID against the known ESP bridge table. */
-function matchEspBridge(
+/** Match a serial port's VID/PID against the known ESP bridge table.
+ *  Exported so the table itself is testable — a chip missing from it makes a
+ *  board silently unflashable, which is exactly how #821 happened. */
+export function matchEspBridge(
   vendorId?: string,
   productId?: string
 ): { board: BoardType; chip: string } | undefined {

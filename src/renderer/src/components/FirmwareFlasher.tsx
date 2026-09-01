@@ -4,7 +4,8 @@ import type {
   BoardType,
   EsptoolInfo,
   FirmwareCatalog,
-  FlashProgress
+  FlashProgress,
+  PortInfo
 } from '../../../preload/index.d'
 import {
   BOARD_PROFILES,
@@ -128,6 +129,9 @@ export function FirmwareFlasher({
   boardId
 }: FirmwareFlasherProps): JSX.Element {
   const [candidates, setCandidates] = useState<BoardCandidate[]>([])
+  /** Every serial port on the machine, so a board whose USB bridge detection did
+   *  not recognise can still be selected (#821). */
+  const [ports, setPorts] = useState<PortInfo[]>([])
   const [board, setBoard] = useState<BoardType>('esp32')
   /** The chosen board profile (#682) — drives the mechanics below it. */
   const [profileId, setProfileId] = useState<string>('')
@@ -227,12 +231,16 @@ export function FirmwareFlasher({
 
   const refreshDetection = useCallback(async (): Promise<void> => {
     try {
-      const [found, tool] = await Promise.all([
+      const [found, tool, allPorts] = await Promise.all([
         window.api.firmware.detectBoards(),
-        window.api.firmware.checkEsptool()
+        window.api.firmware.checkEsptool(),
+        // Best-effort and independent of detection: a port we cannot identify
+        // still needs offering (#821).
+        window.api.device.listPorts().catch(() => [] as PortInfo[])
       ])
       setCandidates(found)
       setEsptool(tool)
+      setPorts(allPorts)
       // Adopt the first detected candidate as a sensible default — but NEVER
       // over an explicitly chosen board (#684). Detection only knows the coarse
       // BoardType, whose ESP offset is the original ESP32's 0x1000; silently
@@ -533,6 +541,18 @@ export function FirmwareFlasher({
   }, [source, selFamily, selVersionUrl])
 
   const serialCandidates = candidates.filter((c) => c.source === 'serial')
+  // Every OTHER serial port — the ones whose USB bridge we did not recognise.
+  //
+  // Detection keys off a VID/PID table (`ESP_USB_BRIDGES`), and that table is
+  // always going to be behind the market: Adafruit moved the ESP32 Feather V2
+  // onto a CH9102F and the board became unflashable, because an unmatched port
+  // was simply dropped and the dropdown is built from matches alone (#821).
+  //
+  // A board we cannot identify is not the same as a board that is not there.
+  // Offering the port, plainly marked as unrecognised, turns a dead end into a
+  // choice — the user picks the board type themselves, which is exactly what the
+  // manual path below already supports.
+  const unknownPorts = ports.filter((p) => !serialCandidates.some((c) => c.port === p.path))
   // Drive candidates relevant to the selected board (RP2040 vs micro:bit drives).
   const uf2Candidates = candidates.filter((c) => c.source === 'uf2-drive' && c.board === board)
 
@@ -970,9 +990,16 @@ export function FirmwareFlasher({
                         {c.label}
                       </option>
                     ))}
-                    {port && !serialCandidates.some((c) => c.port === port) && (
-                      <option value={port}>{port}</option>
-                    )}
+                    {unknownPorts.map((p) => (
+                      <option key={p.path} value={p.path}>
+                        {p.path} — unrecognised USB device
+                      </option>
+                    ))}
+                    {port &&
+                      !serialCandidates.some((c) => c.port === port) &&
+                      !unknownPorts.some((p) => p.path === port) && (
+                        <option value={port}>{port}</option>
+                      )}
                   </select>
                 </div>
               ) : (
