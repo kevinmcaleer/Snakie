@@ -1,0 +1,451 @@
+id: adafruit-feather-esp32-v2
+name: Adafruit ESP32 Feather V2
+description: ESP32 Feather V2 (ESP32-PICO-MINI-02, 8MB Flash + 2MB PSRAM) with USB-C, LiPo charging, STEMMA QT + NeoPixel.
+manufacturer: Adafruit
+family: Microcontroller
+tags:
+  - esp32
+  - feather
+  - adafruit
+  - wifi
+  - bluetooth
+  - lipo
+  - stemma-qt
+package: THT
+pinSpacing: 2.54
+voltage: 3.3V
+partNumber: "5400"
+version: 0.1.0
+mcu: ESP32
+pcbColor: "#181818"
+aspect: 0.4508
+dimensions:
+  width: 22.9
+  height: 50.8
+headers:
+  - edge: left
+    pins:
+      - name: RST
+        type: other
+        number: 1
+        shape: header
+        rotation: 180
+        x: 0.0584
+        y: 0.1270
+      - name: 3V
+        type: pwr
+        number: 2
+        shape: header
+        rotation: 180
+        x: 0.0584
+        y: 0.1770
+      - name: NC
+        type: other
+        number: 3
+        shape: header
+        rotation: 180
+        x: 0.0584
+        y: 0.2270
+      - name: GND
+        type: gnd
+        number: 4
+        shape: header
+        rotation: 180
+        x: 0.0584
+        y: 0.2770
+      - name: A0
+        type: io
+        number: 5
+        gpio: 26
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        shape: header
+        rotation: 180
+        x: 0.0584
+        y: 0.3270
+      - name: A1
+        type: io
+        number: 6
+        gpio: 25
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        shape: header
+        rotation: 180
+        x: 0.0584
+        y: 0.3770
+      - name: A2
+        type: io
+        number: 7
+        gpio: 34
+        capabilities:
+          - digital
+          - adc
+        shape: header
+        rotation: 180
+        x: 0.0584
+        y: 0.4270
+      - name: A3
+        type: io
+        number: 8
+        gpio: 39
+        capabilities:
+          - digital
+          - adc
+        shape: header
+        rotation: 180
+        x: 0.0584
+        y: 0.4770
+      - name: A4
+        type: io
+        number: 9
+        gpio: 36
+        capabilities:
+          - digital
+          - adc
+        shape: header
+        rotation: 180
+        x: 0.0584
+        y: 0.5270
+      - name: A5
+        type: io
+        number: 10
+        gpio: 4
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        shape: header
+        rotation: 180
+        x: 0.0584
+        y: 0.5770
+      - name: SCK
+        type: io
+        number: 11
+        gpio: 5
+        capabilities:
+          - digital
+          - pwm
+          - spi
+        signals:
+          spi: SCK
+        shape: header
+        rotation: 180
+        x: 0.0584
+        y: 0.6270
+      - name: MO
+        type: io
+        number: 12
+        gpio: 19
+        capabilities:
+          - digital
+          - pwm
+          - spi
+        signals:
+          spi: TX
+        shape: header
+        rotation: 180
+        x: 0.0584
+        y: 0.6770
+      - name: MI
+        type: io
+        number: 13
+        gpio: 21
+        capabilities:
+          - digital
+          - pwm
+          - spi
+        signals:
+          spi: RX
+        shape: header
+        rotation: 180
+        x: 0.0584
+        y: 0.7270
+      - name: RX
+        type: io
+        number: 14
+        gpio: 7
+        capabilities:
+          - digital
+          - pwm
+          - uart
+        signals:
+          uart: RX
+        shape: header
+        rotation: 180
+        x: 0.0584
+        y: 0.7770
+      - name: TX
+        type: io
+        number: 15
+        gpio: 8
+        capabilities:
+          - digital
+          - pwm
+          - uart
+        signals:
+          uart: TX
+        shape: header
+        rotation: 180
+        x: 0.0584
+        y: 0.8270
+      - name: D37
+        type: io
+        number: 16
+        gpio: 37
+        capabilities:
+          - digital
+          - adc
+        shape: header
+        rotation: 180
+        x: 0.0584
+        y: 0.8770
+  - edge: right
+    pins:
+      - name: BAT
+        type: pwr
+        number: 17
+        shape: header
+        rotation: 0
+        x: 0.9416
+        y: 0.3270
+      - name: EN
+        type: other
+        number: 18
+        shape: header
+        rotation: 0
+        x: 0.9416
+        y: 0.3770
+      - name: USB
+        type: pwr
+        number: 19
+        shape: header
+        rotation: 0
+        x: 0.9416
+        y: 0.4270
+      - name: D13
+        type: io
+        number: 20
+        gpio: 13
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        shape: header
+        rotation: 0
+        x: 0.9416
+        y: 0.4770
+      - name: D12
+        type: io
+        number: 21
+        gpio: 12
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        shape: header
+        rotation: 0
+        x: 0.9416
+        y: 0.5270
+      - name: D27
+        type: io
+        number: 22
+        gpio: 27
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        shape: header
+        rotation: 0
+        x: 0.9416
+        y: 0.5770
+      - name: D33
+        type: io
+        number: 23
+        gpio: 33
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        shape: header
+        rotation: 0
+        x: 0.9416
+        y: 0.6270
+      - name: D15
+        type: io
+        number: 24
+        gpio: 15
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        shape: header
+        rotation: 0
+        x: 0.9416
+        y: 0.6770
+      - name: D32
+        type: io
+        number: 25
+        gpio: 32
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        shape: header
+        rotation: 0
+        x: 0.9416
+        y: 0.7270
+      - name: D14
+        type: io
+        number: 26
+        gpio: 14
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        shape: header
+        rotation: 0
+        x: 0.9416
+        y: 0.7770
+      - name: SCL
+        type: io
+        number: 27
+        gpio: 20
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+        signals:
+          i2c: SCL
+        buses:
+          i2c: 0
+        shape: header
+        rotation: 0
+        x: 0.9416
+        y: 0.8270
+      - name: SDA
+        type: io
+        number: 28
+        gpio: 22
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+        signals:
+          i2c: SDA
+        buses:
+          i2c: 0
+        shape: header
+        rotation: 0
+        x: 0.9416
+        y: 0.8770
+buttons:
+  - label: RESET
+    x: 0.2750
+    y: 0.2220
+  - label: SW38
+    x: 0.2700
+    y: 0.5170
+onboardLeds:
+  - kind: neopixel
+    gpio: 0
+    power: 2
+    x: 0.2700
+    y: 0.6020
+    sizeMm: 5
+  - kind: single
+    label: "#13"
+    gpio: 13
+    color: "#e0393e"
+    x: 0.7600
+    y: 0.0390
+    sizeMm: 1.6
+connectors:
+  - kind: qwiic
+    label: STEMMA QT
+    x: 0.6775
+    y: 0.5928
+    pins:
+      - name: GND-QT
+        type: gnd
+      - name: 3V3-QT
+        type: pwr
+      - name: SDA-QT
+        type: io
+        gpio: 22
+        capabilities:
+          - digital
+          - i2c
+        signals:
+          i2c: SDA
+        buses:
+          i2c: 0
+      - name: SCL-QT
+        type: io
+        gpio: 20
+        capabilities:
+          - digital
+          - i2c
+        signals:
+          i2c: SCL
+        buses:
+          i2c: 0
+  - kind: jst
+    variant: ph
+    label: LIPO
+    x: 0.8182
+    y: 0.2158
+    pins:
+      - name: BAT+
+        type: pwr
+      - name: BAT-
+        type: gnd
+rails:
+  - name: GND
+    pins:
+      - GND
+      - GND-QT
+      - BAT-
+  - name: 3V3
+    pins:
+      - 3V
+      - 3V3-QT
+  - name: SDA
+    pins:
+      - SDA
+      - SDA-QT
+  - name: SCL
+    pins:
+      - SCL
+      - SCL-QT
+  - name: BAT
+    pins:
+      - BAT
+      - BAT+
+image: image.png
+imageLayer:
+  x: 0
+  y: 0
+  w: 1
+  h: 1
+help: help.md
+electrical:
+  model: regulator
+  # 3.3 V LDO fed from USB-C (5 V) or the LiPo, via the charger/OR-ing path.
+  maxCurrentA: 0.5
+  outputV: 3.3
+  dropoutV: 0.25
+  inputRail: USB
+  outputRail: 3V
+  terminals:
+    positive: USB
+    negative: GND
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true

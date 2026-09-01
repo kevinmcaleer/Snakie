@@ -1,0 +1,1408 @@
+id: pimoroni-pico-lipo-2-xl-w
+name: Pimoroni Pico LiPo 2 XL W
+description: RP2350B board with RM2 2.4GHz wireless, 40 GPIO, LiPo charging and Qw/ST.
+manufacturer: Pimoroni
+family: Microcontroller
+tags:
+  - rp2350
+  - wifi
+  - pico
+  - lipo
+package: THT
+pinSpacing: 2.54
+voltage: 3.0–5.5V
+partNumber: PIM776
+version: 0.1.0
+mcu: RP2350
+pcbColor: "#15171a"
+aspect: 0.2749
+dimensions:
+  width: 21
+  height: 76.4
+headers:
+  - edge: left
+    pins:
+      - name: GP0
+        type: io
+        number: 1
+        gpio: 0
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SDA
+          spi: RX
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 0
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.0156
+      - name: GP1
+        type: io
+        number: 2
+        gpio: 1
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SCL
+          spi: CSn
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 0
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.0489
+      - name: GND
+        type: gnd
+        number: 3
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.0823
+      - name: GP2
+        type: io
+        number: 4
+        gpio: 2
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SDA
+          spi: SCK
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 0
+          uart: 0
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.1156
+      - name: GP3
+        type: io
+        number: 5
+        gpio: 3
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SCL
+          spi: TX
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 0
+          uart: 0
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.1490
+      - name: GP4
+        type: io
+        number: 6
+        gpio: 4
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SDA
+          spi: RX
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 1
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.1823
+      - name: GP5
+        type: io
+        number: 7
+        gpio: 5
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SCL
+          spi: CSn
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 1
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.2156
+      - name: GND
+        type: gnd
+        number: 8
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.2490
+      - name: GP6
+        type: io
+        number: 9
+        gpio: 6
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SDA
+          spi: SCK
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 0
+          uart: 1
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.2823
+      - name: GP7
+        type: io
+        number: 10
+        gpio: 7
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SCL
+          spi: TX
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 0
+          uart: 1
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.3156
+      - name: GP8
+        type: io
+        number: 11
+        gpio: 8
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SDA
+          spi: RX
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 1
+          uart: 1
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.3490
+      - name: GP9
+        type: io
+        number: 12
+        gpio: 9
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SCL
+          spi: CSn
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 0
+          spi: 1
+          uart: 1
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.3823
+      - name: GND
+        type: gnd
+        number: 13
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.4157
+      - name: GP10
+        type: io
+        number: 14
+        gpio: 10
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SDA
+          spi: SCK
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 1
+          uart: 1
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.4490
+      - name: GP11
+        type: io
+        number: 15
+        gpio: 11
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SCL
+          spi: TX
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 1
+          uart: 1
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.4823
+      - name: GP12
+        type: io
+        number: 16
+        gpio: 12
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SDA
+          spi: RX
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 1
+          uart: 0
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.5157
+      - name: GP13
+        type: io
+        number: 17
+        gpio: 13
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SCL
+          spi: CSn
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 0
+          spi: 1
+          uart: 0
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.5490
+      - name: GND
+        type: gnd
+        number: 18
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.5823
+      - name: GP14
+        type: io
+        number: 19
+        gpio: 14
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SDA
+          spi: SCK
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 1
+          uart: 0
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.6157
+      - name: GP15
+        type: io
+        number: 20
+        gpio: 15
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SCL
+          spi: TX
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 1
+          uart: 0
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.6490
+      - name: 3V3
+        type: pwr
+        number: 21
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.6824
+      - name: GP31
+        type: io
+        number: 22
+        gpio: 31
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SCL
+          spi: TX
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 1
+          uart: 0
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.7157
+      - name: GND
+        type: gnd
+        number: 23
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.7490
+      - name: GP32
+        type: io
+        number: 24
+        gpio: 32
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SDA
+          spi: RX
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 0
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.7824
+      - name: GP33
+        type: io
+        number: 25
+        gpio: 33
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SCL
+          spi: CSn
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 0
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.8157
+      - name: GP34
+        type: io
+        number: 26
+        gpio: 34
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SDA
+          spi: SCK
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 0
+          uart: 0
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.8490
+      - name: GP35
+        type: io
+        number: 27
+        gpio: 35
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SCL
+          spi: TX
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 0
+          uart: 0
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.8824
+      - name: GND
+        type: gnd
+        number: 28
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.9157
+      - name: GP36
+        type: io
+        number: 29
+        gpio: 36
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SDA
+          spi: RX
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 1
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.9491
+      - name: GP37
+        type: io
+        number: 30
+        gpio: 37
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SCL
+          spi: CSn
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 1
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.0585
+        y: 0.9824
+  - edge: right
+    pins:
+      - name: VBUS
+        type: pwr
+        number: 60
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.0156
+      - name: VSYS
+        type: pwr
+        number: 59
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.0489
+      - name: GND
+        type: gnd
+        number: 58
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.0823
+      - name: 3V3_EN
+        type: other
+        number: 57
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.1156
+      - name: 3V3
+        type: pwr
+        number: 56
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.1490
+      - name: ADC_VREF
+        type: other
+        number: 55
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.1823
+      - name: GP28
+        type: io
+        number: 54
+        gpio: 28
+        capabilities:
+          - digital
+          - pwm
+          - adc
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SDA
+          spi: RX
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 1
+          uart: 0
+          adc: 2
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.2156
+      - name: GND
+        type: gnd
+        number: 53
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.2490
+      - name: GP27
+        type: io
+        number: 52
+        gpio: 27
+        capabilities:
+          - digital
+          - pwm
+          - adc
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SCL
+          spi: TX
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 1
+          uart: 1
+          adc: 1
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.2823
+      - name: GP26
+        type: io
+        number: 51
+        gpio: 26
+        capabilities:
+          - digital
+          - pwm
+          - adc
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SDA
+          spi: SCK
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 1
+          uart: 1
+          adc: 0
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.3156
+      - name: RUN
+        type: other
+        number: 50
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.3490
+      - name: GP22
+        type: io
+        number: 49
+        gpio: 22
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SDA
+          spi: SCK
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 0
+          uart: 1
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.3823
+      - name: GND
+        type: gnd
+        number: 48
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.4157
+      - name: GP21
+        type: io
+        number: 47
+        gpio: 21
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SCL
+          spi: CSn
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 1
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.4490
+      - name: GP20
+        type: io
+        number: 46
+        gpio: 20
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SDA
+          spi: RX
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 1
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.4823
+      - name: GP19
+        type: io
+        number: 45
+        gpio: 19
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SCL
+          spi: TX
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 0
+          uart: 0
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.5157
+      - name: GP18
+        type: io
+        number: 44
+        gpio: 18
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SDA
+          spi: SCK
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 0
+          uart: 0
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.5490
+      - name: GND
+        type: gnd
+        number: 43
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.5823
+      - name: GP17
+        type: io
+        number: 42
+        gpio: 17
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SCL
+          spi: CSn
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 0
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.6157
+      - name: GP16
+        type: io
+        number: 41
+        gpio: 16
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SDA
+          spi: RX
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 0
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.6490
+      - name: BOOT
+        type: io
+        number: 40
+        gpio: 30
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SDA
+          spi: SCK
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 1
+          uart: 0
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.6824
+      - name: GP47
+        type: io
+        number: 39
+        gpio: 47
+        capabilities:
+          - digital
+          - pwm
+          - adc
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SCL
+          spi: TX
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 1
+          uart: 0
+          adc: 7
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.7157
+      - name: GND
+        type: gnd
+        number: 38
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.7490
+      - name: GP46
+        type: io
+        number: 37
+        gpio: 46
+        capabilities:
+          - digital
+          - pwm
+          - adc
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SDA
+          spi: SCK
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 1
+          uart: 0
+          adc: 6
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.7824
+      - name: GP45
+        type: io
+        number: 36
+        gpio: 45
+        capabilities:
+          - digital
+          - pwm
+          - adc
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SCL
+          spi: CSn
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 0
+          spi: 1
+          uart: 0
+          adc: 5
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.8157
+      - name: GP44
+        type: io
+        number: 35
+        gpio: 44
+        capabilities:
+          - digital
+          - pwm
+          - adc
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SDA
+          spi: RX
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 1
+          uart: 0
+          adc: 4
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.8490
+      - name: GP43
+        type: io
+        number: 34
+        gpio: 43
+        capabilities:
+          - digital
+          - pwm
+          - adc
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SCL
+          spi: TX
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 1
+          uart: 1
+          adc: 3
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.8824
+      - name: GND
+        type: gnd
+        number: 33
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.9157
+      - name: GP39
+        type: io
+        number: 32
+        gpio: 39
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SCL
+          spi: TX
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 0
+          uart: 1
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.9491
+      - name: GP38
+        type: io
+        number: 31
+        gpio: 38
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SDA
+          spi: SCK
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 0
+          uart: 1
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9415
+        y: 0.9824
+buttons:
+  - label: BOOT
+    x: 0.3580
+    y: 0.1830
+  - label: PWR
+    x: 0.6490
+    y: 0.1850
+onboardLeds:
+  - kind: single
+    label: LED
+    x: 0.3350
+    y: 0.1140
+    sizeMm: 1.6
+connectors:
+  - kind: qwiic
+    label: QW/ST
+    x: 0.3650
+    y: 0.7900
+    pins:
+      - name: GND-QW
+        type: gnd
+      - name: 3V3-QW
+        type: pwr
+      - name: SDA-QW
+        type: io
+        gpio: 4
+        capabilities:
+          - digital
+          - i2c
+        signals:
+          i2c: SDA
+        buses:
+          i2c: 0
+      - name: SCL-QW
+        type: io
+        gpio: 5
+        capabilities:
+          - digital
+          - i2c
+        signals:
+          i2c: SCL
+        buses:
+          i2c: 0
+  - kind: jst
+    variant: sh
+    label: SP/CE
+    x: 0.5140
+    y: 0.5330
+    pins:
+      - name: GND-SP
+        type: gnd
+      - name: BL-SP
+        type: io
+        gpio: 36
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SDA
+          spi: RX
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 1
+      - name: RX-SP
+        type: io
+        gpio: 32
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SDA
+          spi: RX
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 0
+      - name: TX-SP
+        type: io
+        gpio: 35
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SCL
+          spi: TX
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 0
+          uart: 0
+      - name: SCK-SP
+        type: io
+        gpio: 34
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SDA
+          spi: SCK
+          uart: TX
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 0
+          uart: 0
+      - name: CS-SP
+        type: io
+        gpio: 33
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - spi
+          - uart
+        signals:
+          i2c: SCL
+          spi: CSn
+          uart: RX
+          pwm: B
+        buses:
+          i2c: 0
+          spi: 0
+          uart: 0
+      - name: 3V3-SP
+        type: pwr
+      - name: VSYS-SP
+        type: pwr
+  - kind: jst
+    variant: sh
+    label: DBUG
+    x: 0.6520
+    y: 0.7900
+    pins:
+      - name: SWCLK
+        type: other
+      - name: GND-DBG
+        type: gnd
+      - name: SWDIO
+        type: other
+  - kind: jst
+    variant: ph
+    label: LIPO
+    x: 0.5110
+    y: 0.9470
+    pins:
+      - name: BAT+
+        type: pwr
+      - name: BAT-
+        type: gnd
+rails:
+  - name: GND
+    pins:
+      - GND
+      - GND-QW
+      - GND-DBG
+      - GND-SP
+      - BAT-
+  - name: 3V3
+    pins:
+      - 3V3
+      - 3V3-QW
+      - 3V3-SP
+  - name: VSYS
+    pins:
+      - VSYS
+      - VSYS-SP
+  - name: GP4
+    pins:
+      - GP4
+      - SDA-QW
+  - name: GP5
+    pins:
+      - GP5
+      - SCL-QW
+  - name: GP32
+    pins:
+      - GP32
+      - RX-SP
+  - name: GP33
+    pins:
+      - GP33
+      - CS-SP
+  - name: GP34
+    pins:
+      - GP34
+      - SCK-SP
+  - name: GP35
+    pins:
+      - GP35
+      - TX-SP
+  - name: GP36
+    pins:
+      - GP36
+      - BL-SP
+image: image.png
+imageLayer:
+  x: 0
+  y: 0
+  w: 1
+  h: 1
+help: help.md
+electrical:
+  model: regulator
+  maxCurrentA: 0.3
+  inputRail: VSYS
+  outputRail: 3V3
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true
