@@ -136,13 +136,19 @@ export async function downloadAndFlash(
   try {
     // `flash` validates the file, dispatches by board (UF2 copy / esptool), and
     // emits the terminal `done`.
+    // Forward EVERY option, not a subset. Listing the fields by hand here is
+    // exactly what dropped `eraseFirst`: the direct path erased, this one
+    // silently did not, and the dialog said the same thing for both.
     return await flash(
       {
         board: opts.board,
         firmwarePath: tempPath,
         mountPath: opts.mountPath,
         port: opts.port,
-        offset: opts.offset
+        offset: opts.offset,
+        eraseFirst: opts.eraseFirst,
+        baud: opts.baud,
+        chip: opts.chip
       },
       emit
     )

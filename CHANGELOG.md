@@ -7,6 +7,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **"Erase the whole flash first" now actually does, when the firmware comes
+  from the catalog.** The checkbox worked when you flashed a file from disk and
+  was silently ignored on **Download & Flash** — which is the default source and
+  the path almost everyone takes. The box could be ticked, the dialog said the
+  flash would be erased, and it was not.
+
+  The cost of that landed somewhere unhelpful: the flash itself succeeded and
+  reported `Hash of data verified`, and then the board sat there boot-looping on
+  a partition table left over from whatever it shipped with. Everything about
+  the flash looked right, because everything about the flash *was* right — the
+  step before it just never happened. Boards arriving with vendor firmware were
+  the ones affected, which is to say new ones out of the box.
+
+  The download path now carries every option the direct one does, and a test
+  holds the two together so they cannot drift apart again.
+
+
+### Fixed
 - **The firmware flasher's text is readable on the light theme again.** The
   dialog is deliberately dark whichever theme you are using, but several bits of
   it took their colour from the theme's own tokens — which on the parchment skin
