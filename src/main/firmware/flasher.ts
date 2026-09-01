@@ -210,6 +210,17 @@ async function flashEsp(opts: FlashOptions, emit: Emit): Promise<FlashResult> {
 
   const args = [...base, ...flashArgs, offset, opts.firmwarePath]
 
+  // Say plainly what is about to happen, before the esptool line that says it
+  // in argv. Three flashes in a row that "succeed" and leave a dead board all
+  // came down to one of these three facts being different from what the dialog
+  // implied — the file, the address, or whether the flash was erased first —
+  // and none of them were legible without reading an argv by eye.
+  emit({
+    kind: 'log',
+    message:
+      `Flashing ${basename(opts.firmwarePath)} to ${opts.port} at ${offset}` +
+      `, ${opts.eraseFirst ? 'ERASING the whole flash first' : 'WITHOUT erasing first'}.`
+  })
   emit({ kind: 'log', message: `Using ${tool.command}${tool.version ? ` (${tool.version})` : ''}` })
   emit({ kind: 'log', message: `> ${tool.command} ${args.join(' ')}` })
 
