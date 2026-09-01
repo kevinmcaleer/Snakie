@@ -59,6 +59,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The firmware flasher asks for a lot less.** It used to want a board type, a
+  flash offset, an erase decision and a firmware source before it would do
+  anything — every one of which either follows from knowing the board, or should
+  not be a decision at all. Those now sit behind **Advanced options**, closed by
+  default, and open on their own if the board could not be worked out, which is
+  the one time they are the way through rather than clutter.
+
+  **Detect** and **Identify board** are one button. They were two halves of the
+  same question — one scanned USB for a board, the other asked that board what
+  it was — which meant knowing both existed, knowing you wanted both, and
+  pressing them in the right order, since the second only worked once the first
+  had chosen a port. **Detect board** does the lot: finds the board, asks it what
+  it is, selects the matching profile, and sets the offset, the erase default and
+  the recommended firmware build from it.
+
+  The firmware source also defaults to downloading from micropython.org rather
+  than picking a file off disk — the second assumes you have already been
+  somewhere else and come back with the right build.
+
+
 - **Identifying a board now selects it, instead of just describing it.** The
   flash dialog would run its detection, learn that the connected board was an
   ESP32-PICO-V3-02 with PSRAM and 8 MB of flash — and then leave the Board
