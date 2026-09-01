@@ -17,6 +17,18 @@
   padding: 1rem;
 }
 
+/* ---------------------------------------------------------------------------
+ * This dialog is dark in BOTH themes, so its text must NOT come from the theme
+ * tokens. On the skeuomorph (parchment) theme `--text` is #34373d and
+ * `--text-muted` is #5c616a — near-black on a near-black panel, which is what
+ * made the body copy look like it had a white emboss: it was dark text with the
+ * theme's own subtle shading behind it, at 70% opacity on top.
+ *
+ * Everything below therefore uses the dialog's own light palette. Structural
+ * tokens (`--accent`, `--radius`, `--border-w`, fonts) stay — they are theme
+ * intent, not foreground colour.
+ * ------------------------------------------------------------------------- */
+
 .firmware-modal {
   display: flex;
   flex-direction: column;
@@ -25,7 +37,7 @@
   border-radius: 0.6rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: #1f2430;
-  color: #e6e6e6;
+  color: #f4f6f8;
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
   overflow: hidden;
 }
@@ -87,7 +99,7 @@
 .firmware-field__label {
   font-size: 0.8rem;
   font-weight: 600;
-  opacity: 0.85;
+  opacity: 1;
 }
 
 .firmware-field__row {
@@ -117,12 +129,6 @@
   opacity: 0.85;
 }
 
-.firmware-hint {
-  margin: 0;
-  font-size: 0.75rem;
-  line-height: 1.35;
-  opacity: 0.7;
-}
 
 .firmware-banner {
   margin: 0;
@@ -338,11 +344,15 @@
   margin: 0.3rem 0 0;
   font-size: 0.72rem;
   line-height: 1.4;
-  color: var(--text-muted);
+  /* Not `--text-muted`: on the skeuomorph theme that is #5c616a, i.e. dark grey
+     on this dark dialog. And not a low opacity either — the explanatory copy
+     here (the detected port, the identified chip, the recommended build) is the
+     most useful text in the dialog and was the hardest to read. */
+  color: #c7ccd4;
 }
 
 .firmware-hint--warn {
-  color: var(--warn);
+  color: #ffcf8a;
   font-weight: 600;
 }
 
@@ -354,7 +364,7 @@
   margin-top: 0.4rem;
   font-size: 0.72rem;
   line-height: 1.4;
-  color: var(--text-muted);
+  color: #c7ccd4;
   cursor: pointer;
 }
 
@@ -389,8 +399,8 @@
   font-family: var(--font-ui);
   font-size: 0.78rem;
   padding: 0.28rem 0.6rem;
-  color: var(--text);
-  background: var(--bg-elevated);
+  color: #f4f6f8;
+  background: rgba(255, 255, 255, 0.08);
   border: var(--border-w) solid var(--border);
   border-radius: var(--radius);
   cursor: pointer;
@@ -403,4 +413,31 @@
 .firmware-btn--ghost:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+/* Output-log bar actions: the Autoscroll toggle sits beside Copy log. */
+.firmware-log__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+/* Deliberately NOT `.firmware-check`: that one is a full-width form row with a
+   wrapping explanation, and this is a compact inline control on a toolbar. */
+.firmware-log__check {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  line-height: 1;
+  color: #c7ccd4;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.firmware-log__check input {
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
 }

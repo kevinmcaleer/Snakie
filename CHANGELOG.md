@@ -6,6 +6,33 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **The firmware flasher's text is readable on the light theme again.** The
+  dialog is deliberately dark whichever theme you are using, but several bits of
+  it took their colour from the theme's own tokens — which on the parchment skin
+  are near-black, meant for dark text on a light page. On this dark panel that
+  came out as dark-grey-on-dark, which is what gave the body copy its odd
+  embossed, hard-to-focus look. The explanatory lines were the worst affected,
+  and they are the most useful text in the dialog: the port that was detected,
+  the chip that was identified, the build being recommended.
+
+  Those now use the dialog's own light palette, and the secondary text is
+  distinguished by colour rather than by being faded out. Measured against the
+  panel, the affected text went from **2.62:1 — below the WCAG minimum — to
+  10.13:1**. A duplicate `.firmware-hint` rule, where the second copy was
+  silently overriding the first, is collapsed into one.
+
+### Added
+- **An Autoscroll toggle on the firmware flasher's output.** The log followed
+  the newest line and nothing else, so scrolling back to read while a flash was
+  still running was impossible — every new line yanked you to the bottom again.
+  That is exactly when you want to look: esptool prints the chip it detected,
+  the flash size it found and the settings it chose right at the *top*, and a
+  flash takes half a minute of scrolling after that. Untick **Autoscroll** and
+  the view stays put; tick it again and it jumps back to the newest line
+  straight away, rather than waiting for the next one to arrive.
+
+
 ### Changed
 - **The flasher can ask the board what it is, and flashes the way Thonny does.**
   (#829) A new **Identify board** button runs `esptool flash-id` against the
