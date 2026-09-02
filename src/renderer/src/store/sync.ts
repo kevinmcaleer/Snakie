@@ -35,6 +35,25 @@ import {
   type ReactNode
 } from 'react'
 import { baseName, FILE_SAVED_EVENT, type FileSavedDetail } from './workspace'
+import { useFileSelection } from './file-selection'
+import { planUploadOf, runFolderUpload } from '../lib/folder-transfer'
+
+/**
+ * Is this local path a directory? (#848)
+ *
+ * Asked at SYNC time rather than remembered at tag time: a path tagged as a
+ * file could have been replaced by a folder since, and the tag list is
+ * persisted across sessions where anything may have happened to the disk.
+ * Anything unreadable answers "not a directory", so it takes the plain
+ * single-file route and fails there with a real message.
+ */
+async function isDirectory(path: string): Promise<boolean> {
+  try {
+    return (await window.api.fs.stat(path)).isDir
+  } catch {
+    return false
+  }
+}
 
 /** localStorage keys for the tagged paths + the sync-on-save flag. */
 const SYNCED_KEY = 'snakie.sync.paths'
@@ -147,6 +166,14 @@ function saveSyncOnSave(on: boolean): void {
 const SyncContext = createContext<SyncStore | null>(null)
 
 export function SyncProvider({ children }: { children: ReactNode }): JSX.Element {
+  // Where a tagged FOLDER lands. Held in a ref so the push loop reads the
+  // highlight as it is when the sync runs, not as it was when the callback was
+  // created — the user picks the destination by clicking it, and a stale
+  // closure would send the folder to wherever they had clicked previously.
+  const { deviceTargetDir } = useFileSelection()
+  const deviceTargetDirRef = useRef(deviceTargetDir)
+  deviceTargetDirRef.current = deviceTargetDir
+
   const [syncedPaths, setSyncedPaths] = useState<string[]>(() => loadSyncedPaths())
   const [syncOnSave, setSyncOnSaveState] = useState<boolean>(() => loadSyncOnSave())
   const [status, setStatus] = useState<SyncStatus>('idle')
@@ -210,6 +237,20 @@ export function SyncProvider({ children }: { children: ReactNode }): JSX.Element
       emitSyncStatus(`Syncing ${label}…`)
       try {
         for (const path of paths) {
+          // A tagged FOLDER syncs itself and everything under it, into whichever
+          // device folder is highlighted right now (#848). Tagging a folder is
+          // what people actually mean — tagging its files one at a time both
+          // misses newly added ones and is tedious.
+          //
+          // Files keep their existing destination (`/<basename>`) rather than
+          // following the highlight: changing that would silently relocate
+          // every file anyone already had tagged.
+          if (await isDirectory(path)) {
+            const plan = await planUploadOf(path, deviceTargetDirRef.current)
+            const result = await runFolderUpload(plan, () => undefined)
+            if (!result.ok) throw new Error(result.error ?? `Could not sync ${baseName(path)}`)
+            continue
+          }
           const content = await window.api.fs.readFile(path)
           await window.api.device.writeFile(deviceDestForLocal(path), content)
         }

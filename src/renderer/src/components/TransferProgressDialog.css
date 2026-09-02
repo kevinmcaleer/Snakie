@@ -1,0 +1,173 @@
+/*
+ * Folder-transfer progress dialog (#848).
+ *
+ * Same overlay treatment as PromptModal, and every colour comes from a theme
+ * token so it reads correctly in BOTH the dark and skeuomorph skins — a dialog
+ * that only works in one is a bug the author never sees.
+ */
+
+.transfer__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1250;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 1rem;
+}
+
+.transfer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: min(30rem, 100%);
+  max-height: min(28rem, 90vh);
+  padding: 1rem 1.1rem;
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--pixel-shadow);
+  font-family: var(--font-ui);
+}
+
+.transfer__title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-word;
+}
+
+/* --- Progress bar ---------------------------------------------------------- */
+
+.transfer__bar {
+  height: 0.6rem;
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.transfer__bar-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 120ms linear;
+}
+
+.transfer__bar-fill--error {
+  background: var(--danger, #c0392b);
+}
+
+.transfer__count {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* --- File list ------------------------------------------------------------- */
+
+.transfer__list {
+  flex: 1 1 auto;
+  min-height: 3rem;
+  margin: 0;
+  padding: 0.35rem 0;
+  list-style: none;
+  overflow-y: auto;
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.transfer__row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.12rem 0.55rem;
+  color: var(--text-muted);
+}
+
+.transfer__row--copying {
+  color: var(--text);
+  background: var(--bg-elevated);
+}
+
+.transfer__row--done {
+  color: var(--text);
+}
+
+.transfer__row--error {
+  color: var(--danger, #c0392b);
+}
+
+.transfer__tick {
+  flex: 0 0 auto;
+  width: 1em;
+  text-align: center;
+}
+
+.transfer__row--done .transfer__tick {
+  color: var(--accent);
+}
+
+.transfer__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+/* --- Footer ---------------------------------------------------------------- */
+
+.transfer__error {
+  margin: 0;
+  padding: 0.4rem 0.5rem;
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--danger, #c0392b);
+  border-radius: var(--radius);
+  color: var(--danger, #c0392b);
+  font-size: 0.75rem;
+  word-break: break-word;
+}
+
+.transfer__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.transfer__btn {
+  padding: 0.3rem 0.8rem;
+  background: var(--bg-sunken);
+  color: var(--text);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.transfer__btn:hover {
+  background: var(--bg-elevated);
+}
+
+.transfer__btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast, #fff);
+}
+
+.transfer__btn--primary:hover {
+  filter: brightness(1.08);
+  background: var(--accent);
+}
+
+.transfer__btn:focus-visible {
+  outline: var(--border-w) solid var(--accent);
+  outline-offset: 2px;
+}

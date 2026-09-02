@@ -6,6 +6,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Copy a whole folder to the board from the Files panel** (#848). Highlight a
+  folder on the left and a folder on the device, and **Upload to device** copies
+  the one into the other — recursively, keeping its name and its nesting. A
+  progress dialog shows the file list with a tick against each one as it lands,
+  and closes itself when the copy finishes (staying put if anything failed,
+  because an error nobody saw did not happen). Developer bookkeeping — `.git`,
+  `__pycache__`, `node_modules`, `.venv`, `.DS_Store`, `*.pyc` — is left on the
+  host; a `.git` directory alone would fill a Pico. Every file goes over the
+  bytes channel, so fonts, images and `.mpy` files arrive intact rather than
+  being quietly mangled by a UTF-8 round trip.
+- **Sync works for folders** (#848). The sync checkbox now appears next to
+  folders as well as files; a tagged folder and everything under it is pushed
+  into whichever device folder is highlighted. Tagged FILES keep their existing
+  destination, so nothing anyone already had set up moves.
+
 ### Fixed
 
 - **The board capability probe no longer leaves its temporaries on the board**

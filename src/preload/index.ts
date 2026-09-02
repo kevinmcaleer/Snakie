@@ -233,6 +233,17 @@ const device = {
   /** Write contents to a file (created/overwritten), chunked. */
   writeFile: (path: string, contents: string): Promise<void> =>
     unwrap(ipcRenderer.invoke('device:writeFile', path, contents)),
+  /**
+   * Write raw BYTES to a file on the board (#848).
+   *
+   * The text `writeFile` above round-trips through UTF-8, which silently
+   * mangles anything that is not text — a `.mpy`, a font, an image in an
+   * uploaded folder. The module installer has always used this channel for
+   * exactly that reason; a folder upload needs it for the same one, so it is
+   * exposed here rather than reached for through a private path.
+   */
+  writeFileBytes: (path: string, bytes: Uint8Array): Promise<void> =>
+    unwrap(ipcRenderer.invoke('device:writeFileBytes', path, Buffer.from(bytes))),
   /** Remove a file. */
   remove: (path: string): Promise<void> => unwrap(ipcRenderer.invoke('device:remove', path)),
   /** Create a directory. */

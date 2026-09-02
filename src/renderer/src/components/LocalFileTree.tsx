@@ -3,6 +3,7 @@ import type { FsEntry } from '../../../main/fs/types'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace, FILE_SAVED_EVENT, type FileSavedDetail } from '../store/workspace'
 import { useSync } from '../store/sync'
+import { useFileSelection } from '../store/file-selection'
 import { ContextMenu, type ContextMenuItem, type ContextMenuPosition } from './ContextMenu'
 import { usePrompt } from './PromptModal'
 import './LocalFileTree.css'
@@ -159,26 +160,32 @@ function TreeNode({
           {entry.isDir ? (expanded ? '▼' : '▶') : '▤'}
         </span>
         <span className="tree-row__name">{entry.name}</span>
-        {!entry.isDir && (
-          <span className="tree-row__sync">
-            <input
-              type="checkbox"
-              className="tree-row__sync-check"
-              checked={isSynced(entry.path)}
-              onChange={() => toggleSync(entry.path)}
-              // Don't let toggling the checkbox also open the file / fire the row.
-              onClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => e.stopPropagation()}
-              title="Keep this file in sync with the device"
-              aria-label={`Keep ${entry.name} in sync with the device`}
-            />
-            {/* At rest a tagged file shows this green sync glyph in place of the
-                box; hovering/focusing the row swaps the real checkbox back in. */}
-            <span className="tree-row__sync-icon" aria-hidden>
-              ⇄
-            </span>
+        {/* Folders are taggable too (#848) — a whole folder is the unit people
+            actually keep in sync, and tagging its files one by one both misses
+            new files and is tedious. A tagged folder is pushed into whichever
+            device folder is highlighted at sync time. */}
+        <span className="tree-row__sync">
+          <input
+            type="checkbox"
+            className="tree-row__sync-check"
+            checked={isSynced(entry.path)}
+            onChange={() => toggleSync(entry.path)}
+            // Don't let toggling the checkbox also open the file / fire the row.
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            title={
+              entry.isDir
+                ? 'Keep this folder and its contents in sync with the device'
+                : 'Keep this file in sync with the device'
+            }
+            aria-label={`Keep ${entry.name} in sync with the device`}
+          />
+          {/* At rest a tagged entry shows this green sync glyph in place of the
+              box; hovering/focusing the row swaps the real checkbox back in. */}
+          <span className="tree-row__sync-icon" aria-hidden>
+            ⇄
           </span>
-        )}
+        </span>
       </div>
       {error && (
         <div className="tree-error" style={{ paddingLeft: `${depth * 14 + 22}px` }}>
@@ -219,12 +226,19 @@ export function LocalFileTree(): JSX.Element {
   const deviceStatus = useDeviceStatus()
   const connected = deviceStatus.state === 'connected'
   const { isSynced, toggleSync } = useSync()
+  // Publish what is highlighted so the transfer bridge between the two panes
+  // can see it (#848). The tree stays in charge of what selection MEANS.
+  const { setLocal: publishSelection } = useFileSelection()
   // The working folder now lives in the workspace store so the toolbar and tree
   // share one entry point; `root` is just a local alias for readability.
   const root = currentFolder
   const [entries, setEntries] = useState<FsEntry[]>([])
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
   const [selectedIsDir, setSelectedIsDir] = useState(false)
+
+  useEffect(() => {
+    publishSelection(selectedPath ? { path: selectedPath, isDir: selectedIsDir } : null)
+  }, [selectedPath, selectedIsDir, publishSelection])
   const [error, setError] = useState<string | null>(null)
   const [menu, setMenu] = useState<MenuState | null>(null)
 
