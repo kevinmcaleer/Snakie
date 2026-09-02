@@ -914,7 +914,7 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
    * sent in hex-encoded chunks so that arbitrary binary content survives the
    * text-oriented REPL transport.
    */
-  async writeFile(path: string, contents: string | Buffer, chunkSize = 256): Promise<void> {
+  async writeFile(path: string, contents: string | Buffer, chunkSize = 1024): Promise<void> {
     const mount = await this.driveMount()
     if (mount) return driveWriteFile(mount, path, contents)
     const data = Buffer.isBuffer(contents) ? contents : Buffer.from(contents, 'utf8')
@@ -922,6 +922,15 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
     // never put a multi-megabyte literal on a single line. `_snk_f` is the one
     // scratch global that must OUTLIVE its snippet — the handle is what the next
     // chunk writes to — so it carries the prefix and is unbound on close (#798).
+    //
+    // The chunk size is a LATENCY budget, not a memory one. Every chunk is a
+    // full raw-REPL round trip — send, await the OK, read back, await the
+    // prompt — so the cost of a transfer is dominated by how many of them there
+    // are, not by how many bytes each carries. At the original 256 the Arduino
+    // Modulino package (182KB across 25 files) needed 714 sequential round
+    // trips and looked to the user like a hang; at 1024 it needs 179. The line
+    // this puts on the wire is ~2KB of hex, which is comfortable on every board
+    // Snakie supports, and the decoded buffer on the board is 1KB.
     const open = [
       'import sys',
       'try:\n import ubinascii\nexcept ImportError:\n import binascii as ubinascii',

@@ -522,20 +522,48 @@ export const MODULE_PRESENT = '<<SNAKIE_MOD_PRESENT>>'
  * interpreter: delete the file and the probe still succeeds; pop the cache entry
  * and it correctly fails. Popping is safe for a running program, because objects
  * already bound to that module stay alive through their own references.
+ *
+ * **And evicted again afterwards, with a collect (#842).** The probes are
+ * concatenated and run as ONE exec over the whole catalog, so without this every
+ * driver the board owns stays resident in RAM simultaneously. That is affordable
+ * for a one-file driver and emphatically not for `modulino`, whose `__init__`
+ * eagerly imports nineteen submodules and three dependency packages. On a board
+ * with modest free RAM the import then fails for want of memory — and because
+ * `MemoryError` is an `Exception` like any other, the probe swallows it and
+ * reports the driver ABSENT when it is installed and perfectly good.
+ *
+ * The eviction is by PREFIX: dropping `modulino` alone would leave the nineteen
+ * `modulino.*` submodules cached and holding exactly the memory this is trying
+ * to release.
  */
 export function importProbeSnippet(importName: string): string {
   // importName is a catalog constant (a bare module name) so it never contains
   // quotes — but sanitise defensively all the same to a safe identifier.
   const name = importName.replace(/[^A-Za-z0-9_]/g, '')
+  // Drop `name` AND every `name.*` submodule. A bare pop of the package leaves
+  // its submodules cached, which both keeps the memory and lets a stale
+  // submodule answer for a file that is gone.
+  const purge = [
+    '_snk_k = None',
+    'for _snk_k in list(sys.modules):',
+    `    if _snk_k == '${name}' or _snk_k.startswith('${name}.'):`,
+    '        sys.modules.pop(_snk_k, None)'
+  ]
   return [
-    'import sys',
+    'import sys, gc',
     // Ask the FILESYSTEM, not the cache.
-    `sys.modules.pop('${name}', None)`,
+    ...purge,
     'try:',
     `    __import__('${name}')`,
     `    print('${MODULE_PRESENT}')`,
     'except Exception:',
-    '    pass'
+    '    pass',
+    // Release it again before the next probe in the batch runs, so peak memory
+    // is one driver rather than the whole catalog.
+    ...purge,
+    '_snk_k = None',
+    'del _snk_k',
+    'gc.collect()'
   ].join('\n')
 }
 

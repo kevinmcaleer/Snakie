@@ -157,8 +157,27 @@ describe('importProbeSnippet', () => {
     // A user deleted /lib/lsm6ds3.py, re-added the part, and was never offered
     // the install.
     const snippet = importProbeSnippet('lsm6ds3')
-    expect(snippet).toContain("sys.modules.pop('lsm6ds3', None)")
+    expect(snippet).toContain('sys.modules.pop(_snk_k, None)')
+    expect(snippet).toContain("_snk_k == 'lsm6ds3'")
     expect(snippet).toContain('import sys')
+  })
+
+  it('evicts SUBMODULES too, not just the package name (#842)', () => {
+    // `modulino` eagerly imports nineteen submodules; dropping the package name
+    // alone leaves every `modulino.*` entry cached, holding exactly the memory
+    // the eviction exists to release.
+    const snippet = importProbeSnippet('modulino')
+    expect(snippet).toContain("_snk_k.startswith('modulino.')")
+  })
+
+  it('releases the module and collects AFTER probing (#842)', () => {
+    // The probes run concatenated as one exec over the whole catalog. Without a
+    // release between them every driver stays resident at once, and a probe
+    // that fails for want of memory is indistinguishable from one that is
+    // genuinely absent — `MemoryError` is an `Exception` like any other.
+    const snippet = importProbeSnippet('modulino')
+    expect(snippet.lastIndexOf('sys.modules.pop')).toBeGreaterThan(snippet.indexOf('__import__'))
+    expect(snippet.trimEnd().endsWith('gc.collect()')).toBe(true)
   })
 
   it('pops BEFORE it imports — order is the whole point', () => {
@@ -170,7 +189,8 @@ describe('importProbeSnippet', () => {
   it('sanitises the name in the eviction too, not just the import', () => {
     // Both spots interpolate the name; missing one would reopen the injection.
     const snippet = importProbeSnippet("os'); import evil #")
-    expect(snippet).toContain("sys.modules.pop('osimportevil', None)")
+    expect(snippet).toContain("_snk_k == 'osimportevil'")
+    expect(snippet).toContain("_snk_k.startswith('osimportevil.')")
     expect(snippet).not.toContain("os');")
   })
 })

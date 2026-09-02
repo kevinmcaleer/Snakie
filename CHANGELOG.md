@@ -8,6 +8,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Installing a large driver no longer looks like a hang** (#842). Files were
+  streamed to the board in 256-byte chunks, one full raw-REPL round trip each.
+  The Arduino Modulino package is 182KB across 25 files, so that was 714
+  sequential round trips — and since progress was only reported per file, the
+  UI sat perfectly still for minutes at a time. The chunk size is a latency
+  budget rather than a memory one, so it is now 1KB: the same install needs 179
+  round trips instead of 714.
+- **A driver that is installed is no longer reported missing** (#842). The
+  install probe ran one `import` per catalog module in a single batch and kept
+  every one of them resident, so probing `modulino` — whose `__init__` eagerly
+  imports nineteen submodules and three dependency packages — could exhaust the
+  board's memory. `MemoryError` is an `Exception` like any other, so the probe's
+  `except Exception: pass` swallowed it and called the driver absent. Each probe
+  now releases what it imported, submodules included, before the next one runs.
+- **The Flash button is no longer clipped off a narrowed window** (#843). The
+  status bar's right-hand group inherited `flex-shrink: 1`, so it was squeezed
+  while its fixed-width children kept their size and overflowed it — and the
+  bar's `overflow: hidden` quietly cut off the last one. The right-hand group
+  (changed files, line count, saved state, version, coffee, Flash) is now fixed;
+  the status message on the left is what gives way.
+
+
 - **A corrupt firmware download no longer flashes and verifies cleanly, then
   refuses to boot** (#840). esptool's `Hash of data verified` is a weaker claim
   than it reads as: it proves the flash matches *the file it was handed*, and

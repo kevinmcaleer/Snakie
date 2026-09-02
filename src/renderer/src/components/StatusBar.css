@@ -30,9 +30,31 @@
 .statusbar__group--left {
   flex: 1 1 auto;
   min-width: 0;
+  /* Clip here rather than letting the message run on. Without this the left
+     group's non-shrinkable items (port, runtime) overflow their own box and
+     draw straight over the right-hand group instead of being cut off. */
+  overflow: hidden;
 }
 
 .statusbar__spacer {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The right-hand group NEVER gives way (#843).
+ *
+ * `.statusbar__group` sets no `flex`, so this inherited the initial
+ * `flex-shrink: 1` and was squeezed as the window narrowed. Its children are
+ * `flex: 0 0 auto` and so kept their width, which meant they overflowed the
+ * shrinking group and — with `overflow: hidden` on the bar — the LAST of them
+ * was silently clipped off the right edge. That is the Flash button, the one
+ * control on this bar that does something.
+ *
+ * Everything in this group is either a fact worth reading at a glance (line
+ * count, saved state, changed files, version) or a button; none of it is
+ * something to truncate. The message area on the left is what may give way,
+ * which is what the `--left` rules above arrange. */
+.statusbar__group--right {
   flex: 0 0 auto;
 }
 
@@ -263,6 +285,9 @@
 .statusbar__flash-wrap {
   position: relative;
   display: inline-flex;
+  /* Last item in the row that must stay whole — pinned explicitly so a future
+     `flex` on an ancestor cannot start shrinking it again. */
+  flex: 0 0 auto;
 }
 
 .statusbar__fw-badge {
