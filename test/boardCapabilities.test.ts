@@ -34,8 +34,10 @@ describe('board capability probe (#634 §2.5)', () => {
     expect(probe).toContain('asm_xtensa')
     expect(probe).toContain('asm_rv32')
     expect(probe).toContain('rp2.asm_pio')
-    // Compiling is the whole test — nothing probed is ever called.
-    expect(probe).toContain('exec(s)')
+    // Compiling is the whole test — nothing probed is ever called. `exec` now
+    // gets its own namespace (#846) so the compiled functions cannot escape,
+    // but it is still an exec of source, not a call.
+    expect(probe).toMatch(/exec\(s,/)
   })
 
   it('parses a Pico probe into full RP2 capabilities', () => {
@@ -198,5 +200,32 @@ describe('on-device benchmark (#634 §3.7 "measure it, don\'t guess it")', () =>
     expect(formatDuration(4.25)).toBe('4.25 µs')
     expect(formatDuration(4200)).toBe('4.20 ms')
     expect(formatDuration(42000)).toBe('42.0 ms')
+  })
+})
+
+describe('the probe leaves nothing behind on the board (#846)', () => {
+  it('binds only prefixed scratch names, and unbinds them', () => {
+    // Measured on real hardware before this was fixed: the probe left `_ok`,
+    // `_u`, `_o` AND the compiled `_n`/`_v` test functions bound in the board's
+    // `__main__`, where the Inspect panel showed them as the user's variables.
+    const probe = buildCapabilityProbe()
+    // Every name this snippet BINDS at top level must carry the scratch prefix.
+    const bound = [...probe.matchAll(/^(?:def\s+)?(_[A-Za-z0-9_]*)\s*[=([]/gm)].map(
+      (m) => m[1]
+    )
+    expect(bound.length, 'the probe should bind something').toBeGreaterThan(0)
+    for (const name of bound) {
+      expect(name.startsWith('_snk_'), `${name} escapes the scratch prefix`).toBe(true)
+    }
+    expect(probe).toContain('del _snk_')
+  })
+
+  it('gives exec its own namespace so the test functions cannot escape', () => {
+    // MicroPython's `exec` binds into GLOBALS even from inside a function, so a
+    // bare `exec(s)` published `_n`/`_v` (and `_t`/`_p` where the firmware has
+    // thumb and PIO) into the user's namespace, holding their compiled code.
+    const probe = buildCapabilityProbe()
+    expect(probe).toMatch(/exec\(s,\s*\{'micropython': micropython\}\)/)
+    expect(probe).not.toMatch(/exec\(s\)/)
   })
 })
