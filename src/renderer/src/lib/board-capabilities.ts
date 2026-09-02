@@ -28,6 +28,7 @@
  *   not at all.
  */
 import type { BoardCapabilities } from '../../../shared/refactor/types'
+import { delScratch } from '../../../shared/device-scratch'
 
 /**
  * Python that reports what the firmware supports, as one JSON line.
@@ -41,24 +42,36 @@ import type { BoardCapabilities } from '../../../shared/refactor/types'
 export function buildCapabilityProbe(): string {
   return [
     'import json, os, gc, micropython',
-    'def _ok(s):',
+    'def _snk_ok(s):',
     '    try:',
-    '        exec(s)',
+    // The probe's test functions must NOT escape into the board's `__main__`.
+    // MicroPython's `exec` binds into GLOBALS even when called inside a
+    // function, so a bare `exec(s)` left `_n` and `_v` — the compiled native
+    // and viper functions — permanently bound, plus `_t`/`_p` on a board whose
+    // firmware has thumb and PIO. Measured on real hardware. Handing `exec` its
+    // own namespace confines them to a dict that is freed with the call.
+    "        exec(s, {'micropython': micropython})",
     '        return True',
     '    except Exception:',
     '        return False',
-    '_u = os.uname()',
-    '_o = {}',
-    "_o['native'] = _ok('@micropython.native\\ndef _n(): pass')",
-    "_o['viper'] = _ok('@micropython.viper\\ndef _v(): pass')",
-    "_o['thumb'] = _ok('@micropython.asm_thumb\\ndef _t(): nop()')",
-    "_o['xtensa'] = _ok('@micropython.asm_xtensa\\ndef _x(): nop()')",
-    "_o['rv32'] = _ok('@micropython.asm_rv32\\ndef _r(): nop()')",
-    "_o['pio'] = _ok('import rp2\\n@rp2.asm_pio()\\ndef _p(): rp2.PIO.OUT_LOW')",
-    "_o['machine'] = _u.machine",
-    "_o['version'] = _u.release",
-    "_o['mem'] = gc.mem_free()",
-    'print(json.dumps(_o))'
+    '_snk_u = os.uname()',
+    '_snk_o = {}',
+    "_snk_o['native'] = _snk_ok('@micropython.native\\ndef _n(): pass')",
+    "_snk_o['viper'] = _snk_ok('@micropython.viper\\ndef _v(): pass')",
+    "_snk_o['thumb'] = _snk_ok('@micropython.asm_thumb\\ndef _t(): nop()')",
+    "_snk_o['xtensa'] = _snk_ok('@micropython.asm_xtensa\\ndef _x(): nop()')",
+    "_snk_o['rv32'] = _snk_ok('@micropython.asm_rv32\\ndef _r(): nop()')",
+    "_snk_o['pio'] = _snk_ok('import rp2\\n@rp2.asm_pio()\\ndef _p(): rp2.PIO.OUT_LOW')",
+    "_snk_o['machine'] = _snk_u.machine",
+    "_snk_o['version'] = _snk_u.release",
+    "_snk_o['mem'] = gc.mem_free()",
+    'print(json.dumps(_snk_o))',
+    // Scratch discipline (#798): this runs in the user's `__main__`, so what it
+    // bound is unbound before it ends — otherwise the Inspect panel lists our
+    // temporaries as the user's variables, and the compiled test functions
+    // hold their code buffers for the life of the session.
+    delScratch('_snk_ok', '_snk_u', '_snk_o'),
+    'gc.collect()'
   ].join('\n')
 }
 

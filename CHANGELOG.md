@@ -8,6 +8,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The board capability probe no longer leaves its temporaries on the board**
+  (#846). Like every raw-REPL snippet it runs in the board's `__main__`, but it
+  predated the scratch-name discipline and cleaned up nothing — leaving `_ok`,
+  `_u`, `_o` and, because MicroPython's `exec` binds into globals even from
+  inside a function, the compiled `_n` and `_v` test functions holding their
+  code buffers for the whole session (plus `_t` and `_p` on firmware with thumb
+  and PIO). All of them were then listed in the Inspect panel as the user's own
+  variables. Measured on hardware before and after: the board's globals are now
+  identical across a probe, and detection is unchanged.
+
+
 - **Installing a large driver no longer looks like a hang** (#842). Files were
   streamed to the board in 256-byte chunks, one full raw-REPL round trip each.
   The Arduino Modulino package is 182KB across 25 files, so that was 714
