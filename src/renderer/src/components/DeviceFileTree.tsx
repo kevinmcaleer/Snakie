@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DirEntry } from '../../../preload/index.d'
+import { useFileSelection } from '../store/file-selection'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { bootFileNote } from './run-controls'
 import { useWorkspace } from '../store/workspace'
@@ -274,6 +275,13 @@ export function DeviceFileTree(): JSX.Element {
 
   const selectedPath = primary?.path ?? null
   const selectedIsDir = primary?.isDir ?? false
+
+  // Publish the highlighted row so the transfer bridge knows where an upload
+  // should land (#848).
+  const { setDevice: publishSelection } = useFileSelection()
+  useEffect(() => {
+    publishSelection(primary)
+  }, [primary, publishSelection])
   const rows = useMemo(() => flattenTree(dirs, expanded), [dirs, expanded])
   // The ROOT listing decides which file boots (#755) — `code.py` beats `main.py`
   // only when both sit at the top level.

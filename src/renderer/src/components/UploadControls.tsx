@@ -1,8 +1,12 @@
-import { useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useWorkspace } from '../store/workspace'
 import { IS_WEB } from '../lib/env'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { usePrompt } from './PromptModal'
+import { useFileSelection } from '../store/file-selection'
+import { planUploadOf, runFolderUpload } from '../lib/folder-transfer'
+import { TransferProgressDialog, type TransferRow } from './TransferProgressDialog'
+import { hostBaseName } from '../../../shared/transfer-plan'
 import './UploadControls.css'
 
 type Feedback = { kind: 'success' | 'error' | 'info'; message: string } | null
@@ -66,13 +70,93 @@ export function UploadControls(): JSX.Element {
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState<Feedback>(null)
 
+  // Folder transfer (#848): the two panes' selections + the progress dialog.
+  const { local: localSel, deviceTargetDir } = useFileSelection()
+  const [transfer, setTransfer] = useState<{
+    title: string
+    rows: TransferRow[]
+    running: boolean
+    error: string | null
+  } | null>(null)
+  const cancelled = useRef(false)
+
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
 
-  const canUpload = connected && !!activeFile && !busy
+  // A highlighted FOLDER on the left turns the same button into "send that
+  // folder". It takes precedence over the active buffer: the user pointed at
+  // something specific, and quietly uploading a different file instead would be
+  // the wrong kind of clever.
+  const folderToUpload = localSel?.isDir ? localSel.path : null
+
+  const canUpload = connected && (!!folderToUpload || !!activeFile) && !busy
   const canDownload = !!activeFile && activeFile.source === 'device' && !busy
 
+  /** Copy the highlighted local folder into the highlighted device folder. */
+  const uploadFolder = useCallback(
+    async (localRoot: string): Promise<void> => {
+      cancelled.current = false
+      setBusy(true)
+      setFeedback(null)
+      const name = hostBaseName(localRoot)
+      const title = `Copying ${name} → ${deviceTargetDir}`
+      // Plan BEFORE the dialog claims a file count, so the list it shows is the
+      // real one rather than a guess that grows as the walk catches up.
+      setTransfer({ title, rows: [], running: true, error: null })
+      try {
+        const plan = await planUploadOf(localRoot, deviceTargetDir)
+        setTransfer({
+          title: `Copying ${name} → ${plan.root}`,
+          rows: plan.files.map((f) => ({ label: f.label, state: 'pending' as const })),
+          running: true,
+          error: null
+        })
+
+        const result = await runFolderUpload(
+          plan,
+          (event) => {
+            setTransfer((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    rows: prev.rows.map((row, i) =>
+                      i === event.index
+                        ? { ...row, state: event.state, error: event.error }
+                        : row
+                    )
+                  }
+                : prev
+            )
+          },
+          () => cancelled.current
+        )
+
+        setTransfer((prev) =>
+          prev ? { ...prev, running: false, error: result.ok ? null : (result.error ?? null) } : prev
+        )
+        setFeedback(
+          result.ok
+            ? {
+                kind: 'success',
+                message: `Copied ${result.copied} file${result.copied === 1 ? '' : 's'} to ${plan.root}.`
+              }
+            : { kind: 'error', message: `Copy stopped: ${result.error}` }
+        )
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        setTransfer((prev) => (prev ? { ...prev, running: false, error: message } : prev))
+        setFeedback({ kind: 'error', message: `Copy failed: ${message}` })
+      } finally {
+        setBusy(false)
+      }
+    },
+    [deviceTargetDir]
+  )
+
   async function handleUpload(): Promise<void> {
-    if (!activeFile || !connected) return
+    if (!connected) return
+    // A highlighted folder wins over the active buffer (#848).
+    if (folderToUpload) return uploadFolder(folderToUpload)
+    if (!activeFile) return
     const defaultPath = `/${activeFile.name}`
     const destPath = await prompt('Upload to device path:', defaultPath)
     if (destPath == null) return // cancelled
@@ -140,9 +224,11 @@ export function UploadControls(): JSX.Element {
 
   const uploadTitle = !connected
     ? 'Connect a device to upload'
-    : !activeFile
-      ? 'Open a file to upload'
-      : `Upload ${activeFile.name} to device`
+    : folderToUpload
+      ? `Copy the folder ${hostBaseName(folderToUpload)} into ${deviceTargetDir} on the device`
+      : !activeFile
+        ? 'Select a folder, or open a file, to upload'
+        : `Upload ${activeFile.name} to device`
 
   const downloadTitle = !activeFile
     ? 'Open a file to download'
@@ -177,6 +263,18 @@ export function UploadControls(): JSX.Element {
           <ArrowDownIcon />
         </button>
       </div>
+      {transfer && (
+        <TransferProgressDialog
+          title={transfer.title}
+          rows={transfer.rows}
+          running={transfer.running}
+          error={transfer.error}
+          onCancel={() => {
+            cancelled.current = true
+          }}
+          onClose={() => setTransfer(null)}
+        />
+      )}
       {feedback && (
         <p
           className={`upload-controls__feedback upload-controls__feedback--${feedback.kind}`}
