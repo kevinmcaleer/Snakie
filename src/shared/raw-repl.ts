@@ -109,6 +109,29 @@ export class RawReplClient {
   private opQueue: Promise<unknown> = Promise.resolve()
 
   /**
+   * Serializes multi-step FILESYSTEM sequences (#850) — see the desktop
+   * `MicroPythonDevice` for the full account.
+   *
+   * `opQueue` above makes each `eval` atomic, which is what the raw-REPL
+   * protocol needs and is NOT enough for a file write: that is `open`, then N
+   * chunks, then `close`, with the handle living in one global (`_snk_f`)
+   * between them. Two writes at once interleave legally at the eval level and
+   * wreck each other — the second `open` rebinds the global, the first write's
+   * chunks go elsewhere, and both files end up created and empty.
+   */
+  private fsQueue: Promise<unknown> = Promise.resolve()
+
+  /** Run `body` with exclusive use of the board's filesystem scratch state. */
+  private withFsLock<T>(body: () => Promise<T>): Promise<T> {
+    const run = this.fsQueue.then(body, body)
+    this.fsQueue = run.then(
+      () => undefined,
+      () => undefined
+    )
+    return run
+  }
+
+  /**
    * @param transport the byte transport (Web Serial in the browser).
    * @param onConsole receives user-facing REPL bytes (everything not consumed by
    *        an in-flight exec) — wire to the terminal.
@@ -413,6 +436,16 @@ export class RawReplClient {
   }
 
   async writeFile(path: string, contents: string | Uint8Array, chunkSize = 256): Promise<void> {
+    // EXCLUSIVE for the whole open→chunks→close sequence (#850).
+    return this.withFsLock(() => this.writeFileLocked(path, contents, chunkSize))
+  }
+
+  /** The body of {@link writeFile}; only ever called holding the FS lock. */
+  private async writeFileLocked(
+    path: string,
+    contents: string | Uint8Array,
+    chunkSize: number
+  ): Promise<void> {
     const bytes = typeof contents === 'string' ? enc.encode(contents) : contents
     // `_snk_f` outlives its snippet on purpose — the next chunk writes through
     // it — so it carries the prefix and is unbound on close (#798).

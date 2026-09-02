@@ -123,6 +123,39 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
    */
   private opQueue: Promise<unknown> = Promise.resolve()
 
+  /**
+   * Serializes multi-step FILESYSTEM sequences (#850).
+   *
+   * {@link opQueue} makes each `exec` atomic, which keeps the raw-REPL protocol
+   * intact but is not enough on its own: a file write is `open`, then N chunk
+   * writes, then `close`, and the handle lives in ONE global on the board
+   * (`_snk_f`) that has to survive between them. Two writes running at once
+   * therefore interleave perfectly legally at the exec level and destroy each
+   * other — the second `open` rebinds `_snk_f`, the first write's chunks go to
+   * the second file or nowhere, and both files end up created and EMPTY.
+   *
+   * That is not hypothetical: it is what a folder upload racing a sync push (or
+   * a second click on Upload) produced. Serializing costs nothing real — two
+   * transfers over one UART do not go faster for being interleaved.
+   */
+  private fsQueue: Promise<unknown> = Promise.resolve()
+
+  /**
+   * Run `body` with exclusive use of the board's filesystem scratch state.
+   *
+   * Chains rather than rejects, so a caller never fails because someone else is
+   * mid-transfer; it simply waits its turn. A body that throws does not poison
+   * the queue.
+   */
+  private withFsLock<T>(body: () => Promise<T>): Promise<T> {
+    const run = this.fsQueue.then(body, body)
+    this.fsQueue = run.then(
+      () => undefined,
+      () => undefined
+    )
+    return run
+  }
+
   /** True once we have entered raw REPL and not yet exited it. */
   private inRawRepl = false
 
@@ -917,6 +950,19 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
   async writeFile(path: string, contents: string | Buffer, chunkSize = 1024): Promise<void> {
     const mount = await this.driveMount()
     if (mount) return driveWriteFile(mount, path, contents)
+    // EXCLUSIVE for the whole open→chunks→close sequence (#850). Per-exec
+    // serialization is not enough: the handle lives in one global between the
+    // steps, so an interleaved second write rebinds it and both files land
+    // empty.
+    return this.withFsLock(() => this.writeFileLocked(path, contents, chunkSize))
+  }
+
+  /** The body of {@link writeFile}; only ever called holding the FS lock. */
+  private async writeFileLocked(
+    path: string,
+    contents: string | Buffer,
+    chunkSize: number
+  ): Promise<void> {
     const data = Buffer.isBuffer(contents) ? contents : Buffer.from(contents, 'utf8')
     // Open the file once, then stream hex chunks via repeated exec calls so we
     // never put a multi-megabyte literal on a single line. `_snk_f` is the one

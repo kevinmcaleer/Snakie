@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Two device writes at once no longer produce empty files** (#850). Each
+  individual `exec` was serialised, which keeps the raw-REPL protocol intact,
+  but a file write is `open` → chunks → `close` with the handle held in a single
+  global on the board between the steps. Two writes running together interleaved
+  legally at the exec level and destroyed each other: the second `open` rebound
+  the handle, the first write's chunks went elsewhere, and both files ended up
+  created and blank. The whole sequence now takes an exclusive lock, in the
+  desktop device layer and in the web build's client, which had the identical
+  bug. The Upload button also guards against a second click starting a transfer
+  before the first has registered — the disabled state depends on React state,
+  which lands too late to stop a quick double click.
+
+
 ### Added
 
 - **Copy a whole folder to the board from the Files panel** (#848). Highlight a
