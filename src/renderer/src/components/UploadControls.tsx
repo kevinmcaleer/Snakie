@@ -79,6 +79,16 @@ export function UploadControls(): JSX.Element {
     error: string | null
   } | null>(null)
   const cancelled = useRef(false)
+  /**
+   * Guards against a SECOND upload starting before the first has registered
+   * (#850).
+   *
+   * `busy` disables the button, but React state lands asynchronously — two
+   * quick clicks both read the old value, both pass, and two transfers write
+   * the same paths at once. A ref updates synchronously, so the second click
+   * sees the first immediately.
+   */
+  const inFlight = useRef(false)
 
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
 
@@ -154,6 +164,16 @@ export function UploadControls(): JSX.Element {
 
   async function handleUpload(): Promise<void> {
     if (!connected) return
+    if (inFlight.current) return
+    inFlight.current = true
+    try {
+      await runUpload()
+    } finally {
+      inFlight.current = false
+    }
+  }
+
+  async function runUpload(): Promise<void> {
     // A highlighted folder wins over the active buffer (#848).
     if (folderToUpload) return uploadFolder(folderToUpload)
     if (!activeFile) return
