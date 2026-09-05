@@ -249,7 +249,12 @@ export function appMenuTemplate(o: MenuTemplateOptions): MenuItemConstructorOpti
     {
       label: 'View',
       submenu: [
-        { role: 'reload' },
+        // `role: 'reload'` IS ⌘R, and #918 wants that key for Run — which in an
+        // editor for running MicroPython is worth far more than reloading the
+        // renderer. Reloading is not lost: `forceReload` is ⇧⌘R, does the
+        // stronger version of the same thing, and is the one that helps when a
+        // renderer is actually stuck. So the plain one stands down rather than
+        // being given a third accelerator nobody would guess.
         { role: 'forceReload' },
         { role: 'toggleDevTools' },
         { type: 'separator' },
@@ -261,6 +266,27 @@ export function appMenuTemplate(o: MenuTemplateOptions): MenuItemConstructorOpti
         { role: 'zoomOut' },
         { type: 'separator' },
         { role: 'togglefullscreen' }
+      ]
+    },
+    {
+      label: 'Device',
+      submenu: [
+        // Exactly one of these is ever enabled (see `menuStateFrom`), so the
+        // pair reads as a state rather than as two buttons.
+        commandItem('device.connect', 'Connect', o),
+        commandItem('device.disconnect', 'Disconnect', o),
+        { type: 'separator' },
+        // ⌘R, freed above. Run stays enabled with no board connected because it
+        // AUTO-CONNECTS — that is what makes it work for someone who has just
+        // opened the app — so what it needs is a file, not a board.
+        commandItem('device.run', 'Run', o, { accelerator: 'CmdOrCtrl+R' }),
+        // ⌘. is the platform's own "stop what you are doing", and the nearest
+        // thing to the Ctrl-C this sends. Monaco binds none of ⌘R, ⌘. or ⌘Enter,
+        // so neither of these is taken out of the editor's hands.
+        commandItem('device.stop', 'Stop', o, { accelerator: 'CmdOrCtrl+.' }),
+        commandItem('device.softReset', 'Soft Reset', o),
+        { type: 'separator' },
+        commandItem('device.syncNow', 'Sync Now', o)
       ]
     },
     // The Window menu uses the standard `windowMenu` role so the OS manages it —
@@ -281,6 +307,11 @@ export function appMenuTemplate(o: MenuTemplateOptions): MenuItemConstructorOpti
               checkForUpdatesItem,
               { type: 'separator' }
             ] as MenuItemConstructorOptions[])),
+        // Snakie has a whole help system — the Help panel, the "Why?" article
+        // behind every refactoring — reachable until now only from inside the
+        // panels that use it. On macOS the Help menu held nothing of Snakie's at
+        // all (#918).
+        commandItem('help.snakieHelp', 'Snakie Help', o),
         shortcutsItem
       ]
     }

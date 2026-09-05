@@ -70,7 +70,13 @@ describe('the recent slots are ids, not folders', () => {
 
 describe('items grey out when they cannot act', () => {
   const state = (hasActiveFile: boolean) =>
-    menuStateFrom({ workspace: 'code', hasActiveFile, recentFolders: [] })
+    menuStateFrom({
+      workspace: 'code',
+      hasActiveFile,
+      recentFolders: [],
+      connected: true,
+      hasSyncedFiles: true
+    })
 
   it('greys Save, Save As and Close Tab with nothing open', () => {
     // A menu that offers Save with nothing to save teaches people not to trust

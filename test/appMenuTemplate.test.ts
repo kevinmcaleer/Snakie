@@ -26,7 +26,9 @@ const fullRecents = (): MenuState =>
   menuStateFrom({
     workspace: 'code',
     hasActiveFile: true,
-    recentFolders: RECENT_FOLDER_SLOTS.map((i) => `/projects/folder-${i}`)
+    recentFolders: RECENT_FOLDER_SLOTS.map((i) => `/projects/folder-${i}`),
+    connected: true,
+    hasSyncedFiles: true
   })
 
 /**
@@ -135,7 +137,7 @@ describe('View ▸ Workspace (#916)', () => {
     for (const active of WORKSPACE_IDS) {
       const { template } = build({
         isMac: true,
-        state: menuStateFrom({ workspace: active, hasActiveFile: true, recentFolders: [] })
+        state: menuStateFrom({ workspace: active, hasActiveFile: true, recentFolders: [], connected: true, hasSyncedFiles: true })
       })
       const submenu = viewSubmenu(template, 'Workspace')
       const ticked = submenu.filter((m) => m.checked).map((m) => m.label)
@@ -155,7 +157,7 @@ describe('View ▸ Workspace (#916)', () => {
     // claiming one would be a tick that can never appear.
     const { template } = build({
       isMac: true,
-      state: menuStateFrom({ workspace: 'code', hasActiveFile: true, recentFolders: [] })
+      state: menuStateFrom({ workspace: 'code', hasActiveFile: true, recentFolders: [], connected: true, hasSyncedFiles: true })
     })
     for (const item of commandItems(template)) {
       if (item.type === 'radio' || item.type === 'checkbox') {
