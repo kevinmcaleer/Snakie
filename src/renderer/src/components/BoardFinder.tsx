@@ -34,6 +34,7 @@ import {
   buildLabel,
   chipSilkscreen,
   firmwareSummary,
+  peekSide,
   isFiltering,
   memoryThresholdLabel,
   noPhotoLabel,
@@ -500,8 +501,13 @@ const PEEK_FEATURE_LIMIT = 6
 const PEEK_DELAY_MS = 400
 
 /** Roughly how far the preview grows past the card. Only the flip decision reads
- *  it, and only to choose a direction, so an estimate is the right precision. */
-const PEEK_OVERHANG_PX = 180
+ *  it, and only to choose a direction, so an estimate is the right precision.
+ *
+ *  It grew with the card (#938): at twice the width the image box is twice as
+ *  tall too, which is most of what hangs below the cell. An estimate that had
+ *  not moved would flip a row too late and open the preview into the scroller's
+ *  bottom edge. */
+const PEEK_OVERHANG_PX = 320
 
 /**
  * One board in the grid, and its hover preview (#919).
@@ -539,6 +545,10 @@ function BoardCell({
   // Grow UPWARD when there is no room below inside the scroller: the bottom row
   // is otherwise a preview clipped to the two lines that were already visible.
   const [up, setUp] = useState(false)
+  // And which way the extra WIDTH goes (#938) — centred on the cell unless the
+  // cell is in the first or last column, where half a card would hang outside
+  // the panel.
+  const [side, setSide] = useState<'centre' | 'left' | 'right'>('centre')
   const cell = useRef<HTMLDivElement>(null)
   const timer = useRef<number | null>(null)
 
@@ -560,8 +570,15 @@ function BoardCell({
     const el = cell.current
     const scroller = el?.closest('.bfind__gallery')
     if (el && scroller) {
-      const room = scroller.getBoundingClientRect().bottom - el.getBoundingClientRect().bottom
-      setUp(room < PEEK_OVERHANG_PX)
+      const cellBox = el.getBoundingClientRect()
+      const view = scroller.getBoundingClientRect()
+      setUp(view.bottom - cellBox.bottom < PEEK_OVERHANG_PX)
+      // Which way the extra width goes (#938). Centred is the default and the
+      // one that looks deliberate; the columns at either end of the grid have
+      // nowhere to put half a card, so they grow inward from their own edge
+      // instead. Measured against the SCROLLER rather than the window, because
+      // that is the box the preview must not hang out of.
+      setSide(peekSide(cellBox, view))
     }
     setPeeking(true)
   }, [])
@@ -595,7 +612,7 @@ function BoardCell({
       }}
     >
       <BoardCard board={board} onOpen={openDetails} />
-      {peeking && <BoardPeek board={board} up={up} onOpen={openDetails} />}
+      {peeking && <BoardPeek board={board} up={up} side={side} onOpen={openDetails} />}
     </div>
   )
 }
@@ -609,10 +626,13 @@ function BoardCell({
 function BoardPeek({
   board,
   up,
+  side,
   onOpen
 }: {
   board: IndexedBoard
   up: boolean
+  /** Which way the extra width goes (#938) — see {@link BoardCell}. */
+  side: 'centre' | 'left' | 'right'
   onOpen: () => void
 }): JSX.Element {
   const src = thumbUrl(board.thumb)
@@ -620,7 +640,9 @@ function BoardPeek({
   const extra = board.features.length - PEEK_FEATURE_LIMIT
   return (
     <div
-      className={`bfind__peek${up ? ' is-up' : ''}`}
+      className={`bfind__peek${up ? ' is-up' : ''}${
+        side === 'centre' ? '' : side === 'left' ? ' is-wide-left' : ' is-wide-right'
+      }`}
       role="group"
       aria-label={`More about ${board.vendor} ${board.product}`}
       // The preview covers the card it grew out of, so it has to accept the

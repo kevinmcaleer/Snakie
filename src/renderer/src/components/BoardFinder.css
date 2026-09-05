@@ -636,8 +636,19 @@
   --bf-peek-proud: 10px;
   --bf-peek-off: calc(var(--bf-cell-pad) - var(--bf-peek-proud));
   position: absolute;
-  left: var(--bf-peek-off);
-  right: var(--bf-peek-off);
+  /* TWICE the card's width (#938), centred on the cell.
+     It used to span the cell (`left`/`right` at `--bf-peek-off`), which is
+     `100% - 2*pad + 2*proud`. Twice that is the width below, and half of it is
+     the margin that pulls the card back over its own cell.
+     Percentages resolve against the CELL, which is the containing block, so the
+     card stays exactly 2x whatever the grid's `1fr` columns work out to.
+     The offset is a negative MARGIN rather than a translate on purpose:
+     `transform` belongs to the open animation, and sharing it would mean
+     restating the centring inside the keyframes and in every variant below. */
+  width: calc(200% - 4 * var(--bf-cell-pad) + 4 * var(--bf-peek-proud));
+  left: 50%;
+  margin-left: calc(-100% + 2 * var(--bf-cell-pad) - 2 * var(--bf-peek-proud));
+  right: auto;
   top: var(--bf-peek-off);
   display: flex;
   flex-direction: column;
@@ -650,6 +661,19 @@
   animation: bfind-peek 0.16s ease-out both;
   cursor: pointer;
 }
+/* The first and last columns have nowhere to put half a card, so they grow
+   INWARD from their own edge rather than centring (#938). Same width; only the
+   anchor changes, so a preview never hangs outside the panel. */
+.bfind__peek.is-wide-left {
+  left: var(--bf-peek-off);
+  margin-left: 0;
+}
+.bfind__peek.is-wide-right {
+  left: auto;
+  right: var(--bf-peek-off);
+  margin-left: 0;
+}
+
 /* The bottom row grows UP instead, or it would open into the scroller's edge. */
 .bfind__peek.is-up {
   top: auto;
@@ -672,6 +696,12 @@
   }
 }
 
+/* The ratio is deliberately UNCHANGED at twice the width (#938), so the box
+   grows in both directions and the photo roughly doubles.
+   Widening it alone would have shown no more image at all: every bundled
+   thumbnail is 320px wide with a median aspect of 1.20, so in a 4/3 box most of
+   them are HEIGHT-constrained already and have width to spare. `contain` keeps
+   the photo's own ratio, whatever the box does. */
 .bfind__peek-img {
   aspect-ratio: 4 / 3;
   display: grid;

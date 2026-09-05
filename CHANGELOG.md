@@ -6,6 +6,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The hover preview is twice as wide, so the photo is worth looking at**
+  (#938). The Board Finder's preview grew a card into a slightly bigger card,
+  and the picture — the fastest way to recognise a board — stayed small. It is
+  now 2x the width, centred on the cell it grew from, and the photo roughly
+  doubles with it.
+
+  The image box keeps its 4/3 ratio rather than just getting wider, and that is
+  the part that matters: every bundled thumbnail is 320px wide with a median
+  aspect of 1.20, so in a 4/3 box most of them are already *height*-constrained
+  and have width going spare. Widening the box alone would have shown no more
+  image at all. `object-fit: contain` keeps each photo's own ratio whatever the
+  box does.
+
+  Two things had to move with it. The first and last columns have nowhere to put
+  half a card, so they anchor to their own edge and grow inward — measured
+  against the gallery's scroller, which is the box the preview must not hang out
+  of, rather than the window, which knows nothing about the panel's margin. And
+  the estimate that decides whether the bottom row grows *upward* had to grow
+  too: left where it was, a taller preview would have flipped a row too late and
+  opened into the scroller's bottom edge.
+
 ### Added
 
 - **Seven more boards MicroPython builds nothing for** (#936, epic #884). #902
