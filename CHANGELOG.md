@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The board says when it is busy, and you can get out of its way** (#889).
+  Installing a driver or copying a folder now shows a progress dialog — and that
+  dialog can be pushed aside so the app stays usable while the work runs on.
+  Closing it no longer means losing sight of the board: a sync glyph in the
+  status bar takes over, counting the steps left, and its popup lists what is
+  running with a **Stop** for the whole queue. It reappears on its own for work
+  you have not seen yet, and always for a failure, so dismissing it once cannot
+  hide the board from you for good. The Device Files panel grows a striped
+  hazard bar while files are being written, because a tree quietly changing
+  under you is worse than a slow one.
+
 ### Fixed
 
 - **The recommended firmware build is now reachable for the boards that need it**

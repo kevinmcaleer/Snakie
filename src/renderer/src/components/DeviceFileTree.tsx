@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState,
+  useSyncExternalStore
+} from 'react'
 import type { DirEntry } from '../../../preload/index.d'
 import { useFileSelection } from '../store/file-selection'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { bootRoleFor, type BootRole } from './run-controls'
 import { useWorkspace } from '../store/workspace'
 import { useSync } from '../store/sync'
+import { getDeviceQueueSnapshot, subscribeDeviceQueue } from '../lib/device-queue'
 import { usageLabel, usedPct, type DiskUsage } from './disk-usage'
 import { ContextMenu, type ContextMenuItem, type ContextMenuPosition } from './ContextMenu'
 import { iconProps, NewFileIcon, NewFolderIcon, RefreshIcon } from './file-tree-icons'
@@ -223,6 +226,13 @@ export function DeviceFileTree(): JSX.Element {
     setSyncOnSave,
     syncNow
   } = useSync()
+  // The board is being written to (#889). The modal can be pushed aside, so the
+  // tree says so itself — these are the files that are changing.
+  const queueBusy = useSyncExternalStore(
+    subscribeDeviceQueue,
+    () => getDeviceQueueSnapshot().busy,
+    () => getDeviceQueueSnapshot().busy
+  )
 
   // The loaded listings, flat (#219): path → entries, always including ROOT.
   const [dirs, setDirs] = useState<Map<string, DirEntry[]>>(new Map())
@@ -745,6 +755,13 @@ export function DeviceFileTree(): JSX.Element {
           </button>
         </div>
       </div>
+      {queueBusy && (
+        <div
+          className="devicetree__busy"
+          role="status"
+          aria-label="The board is busy — files are being written"
+        />
+      )}
 
       {/* No inline Rename/Delete bar: rename + delete live on the right-click
           context menu, and every row has a hover trashcan. */}

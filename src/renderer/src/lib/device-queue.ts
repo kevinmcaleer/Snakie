@@ -346,6 +346,35 @@ export function queueTitle(tasks: readonly DeviceTaskView[]): string {
 }
 
 /**
+ * Should the modal stay out of the way after the user pushed it aside (#889)?
+ *
+ * Dismissing used to mean "clear the finished rows", which did nothing while
+ * work was still running — the modal simply stayed up, and a five-minute folder
+ * copy held the app hostage. The user asked to be able to close it and carry on,
+ * with the status bar keeping the board's activity visible.
+ *
+ * So a dismissal is remembered as the highest task id it covered, and it lapses
+ * on its own two ways: NEW work re-opens the modal (the user pushed aside the
+ * copy they knew about, not the install they have not seen yet), and a FAILURE
+ * always re-opens it, because an error nobody saw did not happen.
+ */
+export function stayHidden(
+  snap: DeviceQueueSnapshot,
+  hiddenThroughId: number | null
+): boolean {
+  if (hiddenThroughId === null) return false
+  if (snap.error) return false
+  return !snap.tasks.some((t) => t.id > hiddenThroughId)
+}
+
+/** The highest task id currently on the queue — what a dismissal covers. */
+export function highestTaskId(tasks: readonly DeviceTaskView[]): number | null {
+  let top: number | null = null
+  for (const t of tasks) if (top === null || t.id > top) top = t.id
+  return top
+}
+
+/**
  * What the modal should do about the current snapshot, given whether it is
  * already on screen. Pure, so the timing rules are testable without a DOM.
  *

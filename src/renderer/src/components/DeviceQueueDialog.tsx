@@ -2,6 +2,8 @@ import { useEffect, useState, useSyncExternalStore } from 'react'
 import {
   cancelDeviceQueue,
   dismissDeviceQueue,
+  highestTaskId,
+  stayHidden,
   getDeviceQueueSnapshot,
   queueDialogAction,
   queueProgress,
@@ -42,6 +44,12 @@ export function DeviceQueueDialog(): JSX.Element | null {
     getDeviceQueueSnapshot
   )
   const [onScreen, setOnScreen] = useState(false)
+  /**
+   * The highest task id the user has pushed aside (#889). New work, or any
+   * failure, lapses it — see {@link stayHidden}.
+   */
+  const [hiddenThroughId, setHiddenThroughId] = useState<number | null>(null)
+  const hidden = stayHidden(snap, hiddenThroughId)
   const action = queueDialogAction(snap, onScreen)
 
   useEffect(() => {
@@ -63,7 +71,9 @@ export function DeviceQueueDialog(): JSX.Element | null {
     return () => clearTimeout(t)
   }, [action])
 
-  if (!onScreen || snap.tasks.length === 0) return null
+  // Pushed aside and nothing new since. The board is still working, and the
+  // status-bar indicator is what says so from here.
+  if (hidden || !onScreen || snap.tasks.length === 0) return null
 
   return (
     <TransferProgressDialog
@@ -73,7 +83,13 @@ export function DeviceQueueDialog(): JSX.Element | null {
       running={snap.busy}
       error={snap.error}
       onCancel={cancelDeviceQueue}
-      onClose={dismissDeviceQueue}
+      onClose={() => {
+        // Close means two different things depending on whether the board is
+        // still working: tidy away a finished run, or step out of the way of one
+        // that is still going. Both are "I am done looking at this".
+        if (snap.busy) setHiddenThroughId(highestTaskId(snap.tasks))
+        else dismissDeviceQueue()
+      }}
     />
   )
 }
