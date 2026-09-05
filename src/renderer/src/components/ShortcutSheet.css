@@ -1,0 +1,141 @@
+/*
+ * Keyboard shortcut cheatsheet (ShortcutSheet.tsx, #920).
+ *
+ * Ordinary renderer chrome, so every colour is a shared token — it must read
+ * correctly on the skeuomorph parchment AND the dark skin. (The flash dialog and
+ * the Board Finder are deliberately dark in both and document why; this is not
+ * one of those, so it takes no literals.)
+ */
+
+.shortcuts-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 1rem;
+}
+
+.shortcuts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  width: min(34rem, 100%);
+  max-height: calc(100vh - 2rem);
+  padding: 1rem 1.1rem;
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--pixel-shadow);
+  font-family: var(--font-ui);
+}
+
+.shortcuts__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.shortcuts__title {
+  margin: 0;
+  font-family: var(--font-pixel);
+  font-size: 0.9rem;
+}
+
+.shortcuts__close {
+  flex: none;
+}
+
+/* The list scrolls, not the whole card — the title and the footnote stay put as
+   #915–#918 add enough bindings to overflow. */
+.shortcuts__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  overflow-y: auto;
+  padding-right: 0.2rem;
+}
+
+.shortcuts__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.shortcuts__section-title {
+  margin: 0;
+  font-family: var(--font-pixel);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: var(--border-w) solid var(--border);
+  padding-bottom: 0.25rem;
+}
+
+.shortcuts__empty {
+  margin: 0.15rem 0 0;
+  font-size: 0.76rem;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.shortcuts__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin: 0;
+}
+
+.shortcuts__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.28rem 0.35rem;
+  border-radius: var(--radius);
+}
+
+.shortcuts__row:nth-child(odd) {
+  background: var(--bg-sunken);
+}
+
+.shortcuts__label {
+  font-size: 0.82rem;
+}
+
+.shortcuts__keys {
+  margin: 0;
+  flex: none;
+}
+
+/* A physical-key look built from tokens: sunken face, metal edge, brass ink.
+   Both skins define all three, so it reads as a keycap in either. */
+.shortcuts__kbd {
+  display: inline-block;
+  min-width: 1.6rem;
+  padding: 0.12rem 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  text-align: center;
+  white-space: nowrap;
+  color: var(--accent-ink);
+  background: var(--bg);
+  border: var(--border-w) solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+}
+
+.shortcuts__foot {
+  margin: 0;
+  padding-top: 0.5rem;
+  border-top: var(--border-w) solid var(--border);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}

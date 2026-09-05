@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import type { MenuItemConstructorOptions } from 'electron'
-import { appMenuTemplate } from '../src/main/menu-template'
+import { appMenuTemplate } from '../src/shared/menu-template'
 import type { MenuCommand } from '../src/shared/menu-commands'
 
 /**

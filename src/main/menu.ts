@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, Menu } from 'electron'
-import { appMenuTemplate } from './menu-template'
+import { appMenuTemplate } from '../shared/menu-template'
 import {
   EMPTY_MENU_STATE,
   coerceMenuState,

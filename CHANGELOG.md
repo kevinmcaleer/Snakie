@@ -32,6 +32,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   anything, and every route from it to the flash button passes a screen that says
   so. The manufacturer line also got brighter, because it is now the accessible
   half of the new tints rather than a caption.
+### Added
+
+- **A keyboard shortcut cheatsheet, generated from the bindings themselves**
+  (#920). **Help ▸ Keyboard Shortcuts**, or `⌘⇧/` / `Ctrl+Shift+/`, lists every
+  key the app binds, grouped by the menu it lives in and printed the way the
+  platform prints it — `⌘⇧B` on macOS, `Ctrl+Shift+B` elsewhere. Nothing in it
+  is typed out: it walks the same menu template `Menu.buildFromTemplate` is
+  handed, because in Electron an item's accelerator **is** the binding, and a
+  hand-written list drifts from the real keys within a release or two. A
+  shortcut list that lies is worse than none — the reader trusts it, presses the
+  key, and concludes the app is broken. Six bindings today, which the sheet is
+  honest about; the File, Tools and Device menus (#915, #917, #918) aren't built
+  yet, and their keys will appear here on their own as they land, with a menu
+  that has commands but no keys yet saying so rather than showing a bare
+  heading. Not `⌘H`, which #920 originally asked for — that is Hide Application
+  on macOS — and not `⌘/` either, the usual editor choice: Monaco already binds
+  it to Toggle Line Comment, and a menu accelerator is caught before the editor
+  ever sees the key, so taking it would have silently broken commenting in a
+  code editor.
 
 ### Fixed
 

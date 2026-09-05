@@ -4,8 +4,8 @@ import {
   workspaceMenuCommand,
   type MenuCommand,
   type MenuState
-} from '../shared/menu-commands'
-import { WORKSPACE_IDS, WORKSPACE_INFO } from '../shared/workspaces'
+} from './menu-commands'
+import { WORKSPACE_IDS, WORKSPACE_INFO } from './workspaces'
 
 /**
  * The application menu as PLAIN DATA (#914).
@@ -15,6 +15,12 @@ import { WORKSPACE_IDS, WORKSPACE_INFO } from '../shared/workspaces'
  * name, the platform and the renderer's {@link MenuState}. `menu.ts` keeps the
  * two lines that need Electron (`app.name` and `Menu.buildFromTemplate`), and
  * the decisions are testable directly, without a running app.
+ *
+ * It lives in `src/shared/` rather than `src/main/` (where #914 first put it)
+ * because the RENDERER reads it too now: the shortcut cheatsheet (#920) is
+ * generated from these `accelerator` strings, so the sheet and the menu cannot
+ * drift apart. Nothing here needs a running Electron — the one Electron import
+ * is a type.
  *
  * Every item that DOES something goes through `onCommand(id)`: one callback for
  * the whole menu, rather than a positional argument per item (which is how
@@ -121,6 +127,25 @@ export function appMenuTemplate(o: MenuTemplateOptions): MenuItemConstructorOpti
     accelerator: 'CmdOrCtrl+O'
   })
 
+  // Help ▸ Keyboard Shortcuts (#920) — the popup that lists every binding,
+  // generated from THIS template (see `shared/shortcuts.ts`). It sits in Help on
+  // every platform so it is findable by someone who doesn't know the shortcut
+  // for finding shortcuts, and being a menu accelerator makes it self-listing:
+  // the sheet shows its own key without anyone typing it anywhere.
+  //
+  // NOT ⌘H, which #920 originally asked for: on macOS that is Hide Application,
+  // a system binding, and stealing it would annoy people far more often than the
+  // sheet helps. NOT ⌘/ either, the usual editor choice — Monaco already binds
+  // `CmdOrCtrl+Slash` to `editor.action.commentLine` (Toggle Line Comment) and,
+  // while the suggest widget is open, to `toggleExplainMode`. A menu accelerator
+  // is handled natively BEFORE the web contents sees it, so taking ⌘/ would have
+  // silently killed commenting in a code editor — which is this issue's own
+  // failure mode from the other direction. ⌘⇧/ (i.e. ⌘? on a US layout) is what
+  // Slack, GitHub and Gmail use for this, and Monaco binds no Shift+Slash at all.
+  const shortcutsItem = commandItem('help.shortcuts', 'Keyboard Shortcuts', o, {
+    accelerator: 'CmdOrCtrl+Shift+/'
+  })
+
   return [
     // macOS app menu (omitted on Windows/Linux). About → Check for Updates → …
     ...(isMac
@@ -196,7 +221,14 @@ export function appMenuTemplate(o: MenuTemplateOptions): MenuItemConstructorOpti
         // On macOS "Check for Updates…" lives in the app menu, so the Help menu
         // only needs the About item on Windows/Linux (macOS already has About in
         // its app menu). Keep a Help menu everywhere for a consistent home.
-        ...(isMac ? [] : ([{ role: 'about' }, checkForUpdatesItem] as MenuItemConstructorOptions[]))
+        ...(isMac
+          ? []
+          : ([
+              { role: 'about' },
+              checkForUpdatesItem,
+              { type: 'separator' }
+            ] as MenuItemConstructorOptions[])),
+        shortcutsItem
       ]
     }
   ]

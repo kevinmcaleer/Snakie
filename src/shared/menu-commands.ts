@@ -47,14 +47,15 @@ export function workspaceMenuCommand(id: WorkspaceId): WorkspaceMenuCommand {
 }
 
 /** Commands the RENDERER performs, relayed to the main window. */
-export type RendererMenuCommand = 'file.openFolder' | WorkspaceMenuCommand
+export type RendererMenuCommand = 'file.openFolder' | 'help.shortcuts' | WorkspaceMenuCommand
 
 /** Every renderer command, in menu order. The workspace entries are DERIVED
  *  from `WORKSPACE_IDS`, so a fourth workspace gets its command, its menu item
  *  and its handler without anyone editing a list. */
 export const RENDERER_MENU_COMMANDS: readonly RendererMenuCommand[] = [
   'file.openFolder',
-  ...WORKSPACE_IDS.map(workspaceMenuCommand)
+  ...WORKSPACE_IDS.map(workspaceMenuCommand),
+  'help.shortcuts'
 ]
 
 /** Any application-menu command. */

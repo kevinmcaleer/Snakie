@@ -24,17 +24,22 @@ import { WORKSPACE_IDS, type WorkspaceId } from '../src/shared/workspaces'
 function deps(): {
   switched: WorkspaceId[]
   folders: number
+  sheets: number
   d: Parameters<typeof menuCommandHandlers>[0]
 } {
   const rec = {
     switched: [] as WorkspaceId[],
     folders: 0,
+    sheets: 0,
     d: {} as Parameters<typeof menuCommandHandlers>[0]
   }
   rec.d = {
     switchWorkspace: (id: WorkspaceId) => rec.switched.push(id),
     openFolder: () => {
       rec.folders += 1
+    },
+    showShortcuts: () => {
+      rec.sheets += 1
     }
   }
   return rec
@@ -52,7 +57,13 @@ describe('menu command union ↔ renderer dispatcher (#914)', () => {
     for (const id of WORKSPACE_IDS) {
       expect(RENDERER_MENU_COMMANDS).toContain(workspaceMenuCommand(id))
     }
-    expect(RENDERER_MENU_COMMANDS).toHaveLength(WORKSPACE_IDS.length + 1)
+    // Exactly one workspace command per workspace — no stragglers from a retired
+    // one. Counted rather than compared against a total, so adding an unrelated
+    // command (help.shortcuts, #920) doesn't need this number nudging.
+    const workspaceCommands = RENDERER_MENU_COMMANDS.filter((id) =>
+      id.startsWith('workspace.show.')
+    )
+    expect(workspaceCommands).toHaveLength(WORKSPACE_IDS.length)
   })
 
   it('main-process commands are NOT in the renderer union (they never cross)', () => {
@@ -74,6 +85,12 @@ describe('menu command union ↔ renderer dispatcher (#914)', () => {
     const rec = deps()
     menuCommandHandlers(rec.d)['file.openFolder']()
     expect(rec.folders).toBe(1)
+  })
+
+  it('help.shortcuts raises the cheatsheet (#920)', () => {
+    const rec = deps()
+    menuCommandHandlers(rec.d)['help.shortcuts']()
+    expect(rec.sheets).toBe(1)
   })
 
   it('runMenuCommand dispatches a known id and drops anything else', () => {

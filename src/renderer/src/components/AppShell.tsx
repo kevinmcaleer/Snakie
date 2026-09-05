@@ -54,6 +54,7 @@ import { ShellPanel } from './ShellPanel'
 import { RightPanel } from './RightPanel'
 import { runMenuCommand } from '../lib/menuCommands'
 import { menuStateFrom } from '../../../shared/menu-commands'
+import { ShortcutSheet } from './ShortcutSheet'
 import { IS_WEB } from '../lib/env'
 import { StatusBar } from './StatusBar'
 import { SettingsDialog, type SettingsTab } from './SettingsDialog'
@@ -1128,10 +1129,16 @@ export function AppShell(): JSX.Element {
   // View ▸ Workspace (#916) goes through the LAYOUT STORE's own switch — the very
   // call the in-app switcher makes — so Electronics/Build get their sidebar gating
   // right and Monaco stays mounted.
+  // Help ▸ Keyboard Shortcuts / ⌘⇧/ (#920). The binding is the menu item's
+  // accelerator, so Electron catches it before Monaco does; this only holds
+  // whether the sheet is showing.
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+
   useEffect(() => {
     const off = window.api.menu.onCommand((id) => {
       runMenuCommand(id, {
         switchWorkspace: (target) => switchWorkspaceRef.current(target),
+        showShortcuts: () => setShortcutsOpen(true),
         openFolder: () => {
           setActivityView('files')
           setLeftCollapsed('files', false)
@@ -1515,6 +1522,8 @@ export function AppShell(): JSX.Element {
           <SpriteEditor openPath={spriteOpen.path} onClose={() => setSpriteOpen(null)} />
         </Suspense>
       )}
+
+      {shortcutsOpen && <ShortcutSheet onClose={() => setShortcutsOpen(false)} />}
 
     </div>
   )
