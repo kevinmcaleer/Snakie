@@ -30,10 +30,12 @@
  * (issue #104). The shared `.btn.btn--icon` square-button rule lives in
  * `LocalFileTree.css`.
  */
+/* Segmented group (`.btn-seg` in index.css, #865) — it draws the seams between
+   the buttons itself, so a `gap` here would open the group's background up
+   through the middle of the control. */
 .devicetree__header-actions {
   display: flex;
   align-items: center;
-  gap: 0.2rem;
   flex: 0 0 auto;
 }
 
