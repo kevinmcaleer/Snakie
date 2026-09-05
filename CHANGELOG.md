@@ -59,6 +59,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **File sync no longer remembers files you can't see** (#881). A sync tag was an
+  absolute path with no memory of the folder it was made in, so it outlived that
+  folder: open a different project and yesterday's tags were still tagged, still
+  counted in the status bar, and still pushed to the board on every save — for
+  files nowhere in the tree on screen. Tags are now scoped to the open folder.
+  Only what is inside it syncs, whatever the stored list happens to contain, so
+  a list left by an older version or by a crash mid-change can't push an
+  invisible file either. Opening a different folder asks first, and then forgets
+  the tags the new folder can't show, saying in the status bar how many went. The
+  breadcrumb is left alone deliberately: it only ever re-roots UP to a parent,
+  which widens the tree, so nothing that was visible stops being visible and
+  peeking one level up costs you nothing.
+
 - **An interrupted install no longer leaves a broken file on the board** (#864).
   Driver and package installs wrote each file straight to its final name, so
   stopping part-way — a disconnect, a cancel, an error on any one file — left a

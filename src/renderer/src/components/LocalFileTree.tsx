@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FsEntry } from '../../../main/fs/types'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace, FILE_SAVED_EVENT, type FileSavedDetail } from '../store/workspace'
-import { useSync } from '../store/sync'
+import { forgetTagsPrompt, useSync } from '../store/sync'
 import { useFileSelection } from '../store/file-selection'
 import { ContextMenu, type ContextMenuItem, type ContextMenuPosition } from './ContextMenu'
 import { usePrompt } from './PromptModal'
@@ -24,6 +24,12 @@ import './LocalFileTree.css'
  * working folder: each segment is a button that re-roots the tree to that
  * ancestor via `openFolderPath`. When no folder is open yet, a single small
  * "open folder" icon launches the native picker.
+ *
+ * Opening a different folder asks first when files are tagged for syncing
+ * (#881): tags belong to the folder they were made in, and the ones the new
+ * folder can't show are forgotten. The breadcrumb doesn't ask — it only ever
+ * re-roots to an ANCESTOR, which widens the tree, so nothing that was visible
+ * stops being visible and no tag is lost.
  */
 
 /** The rest of the toolbar's icons are shared with the Device panel — see
@@ -186,7 +192,7 @@ export function LocalFileTree(): JSX.Element {
   const prompt = usePrompt()
   const deviceStatus = useDeviceStatus()
   const connected = deviceStatus.state === 'connected'
-  const { isSynced, toggleSync } = useSync()
+  const { isSynced, toggleSync, syncedPaths } = useSync()
   // Publish what is highlighted so the transfer bridge between the two panes
   // can see it (#848). The tree stays in charge of what selection MEANS.
   const { setLocal: publishSelection } = useFileSelection()
@@ -241,12 +247,18 @@ export function LocalFileTree(): JSX.Element {
   }, [root])
 
   const handleOpenFolder = useCallback(async (): Promise<void> => {
+    // Say what opening a folder costs before the picker takes the screen (#881):
+    // sync tags belong to the folder they were made in, and the ones the new
+    // folder can't show are dropped. `window.confirm` because `window.prompt`
+    // doesn't work in Electron's renderer — and a yes/no needs nothing more.
+    const warning = forgetTagsPrompt(syncedPaths.length)
+    if (warning && !window.confirm(warning)) return
     try {
       await openFolder()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }
-  }, [openFolder])
+  }, [openFolder, syncedPaths])
 
   // Web only (#476): a folder persisted from a previous visit that needs a click
   // to re-grant permission. `reopenFolderName` is absent on desktop, so this

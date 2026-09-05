@@ -14,6 +14,14 @@
  * existing "Upload to board" default). The set of tagged paths and the
  * sync-on-save flag persist in localStorage so they survive a reload.
  *
+ * Tags are SCOPED TO THE FOLDER THE LOCAL TREE IS SHOWING (#881). A tagged path
+ * is an absolute one, and it used to outlive the folder it was made in: open a
+ * different project and yesterday's tags were still there, invisible, still
+ * pushing files to the board. So the store reads `currentFolder` from the
+ * workspace store — which is why {@link SyncProvider} must sit inside
+ * `<WorkspaceProvider>` — and everything it exposes is filtered to that folder.
+ * Tags left outside it are dropped for good when the folder changes.
+ *
  * Auto-sync-on-save is wired through the `FILE_SAVED_EVENT` window event the
  * workspace store dispatches, so this store stays decoupled from save plumbing.
  *
@@ -34,7 +42,7 @@ import {
   useState,
   type ReactNode
 } from 'react'
-import { baseName, FILE_SAVED_EVENT, type FileSavedDetail } from './workspace'
+import { baseName, FILE_SAVED_EVENT, useWorkspace, type FileSavedDetail } from './workspace'
 import { useFileSelection } from './file-selection'
 import { planUploadOf, runFolderUpload } from '../lib/folder-transfer'
 import { deviceJoin } from '../../../shared/transfer-plan'
@@ -101,7 +109,11 @@ function emitSyncStatus(text: string, lingerMs?: number): void {
 export type SyncStatus = 'idle' | 'syncing' | 'done' | 'error'
 
 export interface SyncStore {
-  /** Local paths currently tagged to keep in sync. */
+  /**
+   * Local paths currently tagged to keep in sync — always within the folder the
+   * local tree is showing (#881). Nothing outside it is ever handed out, so a
+   * count taken from here is a count of tags the user can actually see.
+   */
   syncedPaths: string[]
   /** Whether saving a tagged file auto-uploads it. */
   syncOnSave: boolean
@@ -125,6 +137,75 @@ export interface SyncStore {
 /** Device destination for a synced local file: `/<basename>` (mirrors upload). */
 export function deviceDestForLocal(localPath: string): string {
   return `/${baseName(localPath)}`
+}
+
+// ---------------------------------------------------------------------------
+// Tag scope (#881)
+// ---------------------------------------------------------------------------
+
+/**
+ * Is `path` inside the folder the local tree is rooted at?
+ *
+ * "Inside" means REACHABLE in that tree, not literally on screen: a file in a
+ * collapsed subfolder is one click from being seen, and folding a folder away
+ * must not quietly stop its files syncing. A path that IS the root is not under
+ * it — the tree lists the root's children, so the root never has a tick box of
+ * its own.
+ *
+ * Compared segment by segment so `/a/b` doesn't swallow `/a/bb`, and so a
+ * Windows path (`C:\kev\lib`) answers the same as a POSIX one. Case is compared
+ * exactly, for the same reason `deviceDestFor` does it: both sides come from the
+ * same `fs.readDir` listing, so a difference in case means two different trees
+ * rather than two spellings of one.
+ */
+export function isUnderFolder(folder: string | null, path: string): boolean {
+  if (!folder) return false
+  const root = folder.split(/[/\\]+/).filter(Boolean)
+  const parts = path.split(/[/\\]+/).filter(Boolean)
+  if (root.length === 0 || parts.length <= root.length) return false
+  return root.every((seg, i) => seg === parts[i])
+}
+
+/**
+ * The tags that belong to `folder`, in tag order.
+ *
+ * This is the SAFETY half of #881, and it deliberately doesn't lean on the
+ * forgetting half: a list persisted by an older version, or one that survived a
+ * crash midway through a folder change, is still filtered through here before
+ * anything is pushed. A file the user cannot see never reaches their board,
+ * whatever state storage is in.
+ */
+export function pathsInFolder(paths: string[], folder: string | null): string[] {
+  return paths.filter((p) => isUnderFolder(folder, p))
+}
+
+/**
+ * What to ask before the folder picker opens (#881) — or null when there is
+ * nothing to lose by opening it.
+ *
+ * Asked BEFORE the native dialog because that is the last moment we can offer a
+ * way out: once a folder has been chosen, the tags outside it are already gone.
+ * The wording hedges on purpose. The picker may yet land on a folder that still
+ * contains the tagged files (their parent, say), and those tags are kept —
+ * promising they will all be forgotten would be a lie half the time.
+ */
+export function forgetTagsPrompt(tagged: number): string | null {
+  if (tagged <= 0) return null
+  const one = tagged === 1
+  return (
+    `${tagged} file${one ? ' is' : 's are'} tagged to keep in sync with the board.\n\n` +
+    `Opening a different folder forgets ${one ? 'that tag' : 'those tags'}, unless ` +
+    `${one ? 'the file is' : 'the files are'} inside the folder you pick.\n\n` +
+    `Open a different folder?`
+  )
+}
+
+/** The status-bar line for tags dropped by a folder change (#881). */
+export function forgotTagsMessage(dropped: number): string {
+  const one = dropped === 1
+  return `Forgot ${dropped} sync tag${one ? '' : 's'} — ${
+    one ? "that file isn't" : "those files aren't"
+  } in this folder`
 }
 
 // ---------------------------------------------------------------------------
@@ -294,6 +375,9 @@ export function SyncProvider({ children }: { children: ReactNode }): JSX.Element
   const deviceTargetDirRef = useRef(deviceTargetDir)
   deviceTargetDirRef.current = deviceTargetDir
 
+  // The folder the local tree is showing. Every tag is scoped to it (#881).
+  const { currentFolder } = useWorkspace()
+
   const [syncedPaths, setSyncedPaths] = useState<string[]>(() => loadSyncedPaths())
   const [syncOnSave, setSyncOnSaveState] = useState<boolean>(() => loadSyncOnSave())
   const [status, setStatus] = useState<SyncStatus>('idle')
@@ -305,9 +389,47 @@ export function SyncProvider({ children }: { children: ReactNode }): JSX.Element
   const connectedRef = useRef(false)
   const syncedRef = useRef(syncedPaths)
   const onSaveRef = useRef(syncOnSave)
+  const folderRef = useRef(currentFolder)
   const lingerTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   syncedRef.current = syncedPaths
   onSaveRef.current = syncOnSave
+  folderRef.current = currentFolder
+
+  /**
+   * The tags that belong to the folder on screen — the store's whole public
+   * surface is built from this rather than from the raw list (#881), so a tag
+   * the user cannot see is invisible to the tick boxes, to the status-bar popup
+   * and to every push, even in the moment before the prune below removes it.
+   */
+  const scopedPaths = useMemo(
+    () => pathsInFolder(syncedPaths, currentFolder),
+    [syncedPaths, currentFolder]
+  )
+
+  /**
+   * Changing the working folder forgets the tags that folder can't show (#881).
+   *
+   * Pruning rather than clearing outright: what makes a tag a problem is being
+   * invisible, so a tag that is still in the tree is still honest. That is what
+   * makes the breadcrumb's `..` safe to leave unguarded — it can only widen the
+   * tree, so nothing that was visible stops being visible, and nothing is lost.
+   *
+   * This also runs on the FIRST folder of the session, which is where a list
+   * persisted by an older version gets cleaned up rather than merely hidden.
+   * A null folder prunes nothing: at launch the tree is briefly rootless while
+   * the last folder is restored, and wiping the tags in that gap would mean
+   * they never survived a restart at all.
+   */
+  useEffect(() => {
+    if (!currentFolder) return
+    const kept = pathsInFolder(syncedRef.current, currentFolder)
+    const dropped = syncedRef.current.length - kept.length
+    if (dropped === 0) return
+    syncedRef.current = kept
+    saveSyncedPaths(kept)
+    setSyncedPaths(kept)
+    emitSyncStatus(forgotTagsMessage(dropped), DONE_LINGER_MS)
+  }, [currentFolder])
 
   // Track the live device connection so we only auto-push when a board is there.
   useEffect(() => {
@@ -328,10 +450,12 @@ export function SyncProvider({ children }: { children: ReactNode }): JSX.Element
   }, [])
 
   // Keep the per-path records in step with the tagged list: a newly tagged path
-  // starts `pending`, an untagged one is forgotten.
+  // starts `pending`, an untagged one is forgotten. Reconciled against the
+  // SCOPED list so the popup's rows and the store's tags stay the same set
+  // (#863 + #881) — a path out of scope has no row, so it needs no record.
   useEffect(() => {
-    setFileStates((prev) => reconcileFiles(prev, syncedPaths))
-  }, [syncedPaths])
+    setFileStates((prev) => reconcileFiles(prev, scopedPaths))
+  }, [scopedPaths])
 
   useEffect(() => {
     return () => {
@@ -411,11 +535,14 @@ export function SyncProvider({ children }: { children: ReactNode }): JSX.Element
     [settle]
   )
 
+  // "Sync now" pushes what is in the tree, not what storage happens to hold
+  // (#881) — the filter is repeated here rather than trusted from the prune
+  // effect, so a stale list can't be pushed in the render before it runs.
   const syncNow = useCallback(async (): Promise<void> => {
-    await pushPaths(syncedRef.current)
+    await pushPaths(pathsInFolder(syncedRef.current, folderRef.current))
   }, [pushPaths])
 
-  const isSynced = useCallback((path: string): boolean => syncedPaths.includes(path), [syncedPaths])
+  const isSynced = useCallback((path: string): boolean => scopedPaths.includes(path), [scopedPaths])
 
   const toggleSync = useCallback(
     (path: string): void => {
@@ -461,6 +588,9 @@ export function SyncProvider({ children }: { children: ReactNode }): JSX.Element
       if (!detail || detail.source !== 'local') return
       if (!onSaveRef.current || !connectedRef.current) return
       if (!syncedRef.current.includes(detail.path)) return
+      // A buffer can be open from anywhere — including a file left over from a
+      // folder the tree is no longer showing. Saving it must not push it (#881).
+      if (!isUnderFolder(folderRef.current, detail.path)) return
       const label = baseName(detail.path)
       void (async (): Promise<void> => {
         if (lingerTimer.current) clearTimeout(lingerTimer.current)
@@ -486,13 +616,13 @@ export function SyncProvider({ children }: { children: ReactNode }): JSX.Element
   }, [settle])
 
   const syncedFiles = useMemo(
-    () => syncedFileList(syncedPaths, fileStates, deviceTargetDir),
-    [syncedPaths, fileStates, deviceTargetDir]
+    () => syncedFileList(scopedPaths, fileStates, deviceTargetDir),
+    [scopedPaths, fileStates, deviceTargetDir]
   )
 
   const store = useMemo<SyncStore>(
     () => ({
-      syncedPaths,
+      syncedPaths: scopedPaths,
       syncOnSave,
       status,
       error,
@@ -503,7 +633,7 @@ export function SyncProvider({ children }: { children: ReactNode }): JSX.Element
       syncNow
     }),
     [
-      syncedPaths,
+      scopedPaths,
       syncOnSave,
       status,
       error,
