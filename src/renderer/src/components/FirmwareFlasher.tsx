@@ -43,6 +43,12 @@ import { hasWebUSB, isElectron } from '../lib/platform'
 import { flashEspInBrowser, requestEspPort } from '../lib/webFirmware/espFlash'
 import { flashMicrobitInBrowser, requestMicrobitDevice } from '../lib/webFirmware/microbitFlash'
 import { copyFirmwareToDrive } from '../lib/webFirmware/driveCopyFlash'
+import { BoardFinder } from './BoardFinder'
+import {
+  FLASH_BOARD_EVENT,
+  flasherSelectionFor,
+  type BoardFlashRequest
+} from './board-finder-bus'
 import './FirmwareFlasher.css'
 
 interface FirmwareFlasherProps {
@@ -251,6 +257,59 @@ export function FirmwareFlasher({
   // official build is what almost everyone wants and needs no prior knowledge;
   // picking a file off disk assumes you have already been somewhere else and
   // come back with the right one.
+  /**
+   * The Board Finder gallery (#893), opened from the button beside Detect board.
+   *
+   * It lives INSIDE the dialog rather than beside it in the status bar, because
+   * "which board is this?" is a question you have while the flasher is open —
+   * and answering it there means the pick lands in the dialog you are already
+   * looking at instead of opening a second one.
+   */
+  const [finderOpen, setFinderOpen] = useState(false)
+  const [finderOrigin, setFinderOrigin] = useState<{ x: number; y: number } | null>(null)
+  // Closing runs the grow backwards, so the gallery has to outlive the click
+  // that dismissed it — unmount on the click and there is nothing left to
+  // animate.
+  const [finderClosing, setFinderClosing] = useState(false)
+  const dropFinder = useCallback((): void => {
+    setFinderClosing(false)
+    setFinderOpen(false)
+  }, [])
+  const closeFinder = useCallback((): void => {
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (!finderOrigin || still) dropFinder()
+    else setFinderClosing(true)
+  }, [finderOrigin, dropFinder])
+  // Insurance: the unmount hangs off `animationend`, and a closing panel has
+  // pointer events off. If that event never arrives the gallery would be stuck
+  // on screen AND unclickable, so time it out regardless.
+  useEffect(() => {
+    if (!finderClosing) return
+    const t = setTimeout(dropFinder, 450)
+    return () => clearTimeout(t)
+  }, [finderClosing, dropFinder])
+
+  /**
+   * Take a board the gallery picked.
+   *
+   * Through the same window event the gallery already dispatches, rather than a
+   * callback prop: the flasher IS mounted when the gallery is open inside it, so
+   * it can simply listen, and the gallery needs no knowledge of who opened it.
+   */
+  useEffect(() => {
+    const onFlashBoard = (e: Event): void => {
+      const pick = flasherSelectionFor((e as CustomEvent<BoardFlashRequest>).detail)
+      setBoard(pick.board)
+      if (pick.offset) setOffset(pick.offset)
+      setSource('catalog')
+      setSelFamily(pick.family)
+      setSelVersionUrl(pick.url)
+      dropFinder()
+    }
+    window.addEventListener(FLASH_BOARD_EVENT, onFlashBoard)
+    return () => window.removeEventListener(FLASH_BOARD_EVENT, onFlashBoard)
+  }, [dropFinder])
+
   const [source, setSource] = useState<Source>('catalog')
   const [catalog, setCatalog] = useState<FirmwareCatalog | null>(null)
   const [catalogLoading, setCatalogLoading] = useState(false)
@@ -1047,6 +1106,7 @@ export function FirmwareFlasher({
   const retry = retryAction(outcome)
 
   return (
+    <>
     <div
       className="firmware-overlay"
       role="presentation"
@@ -1164,19 +1224,40 @@ export function FirmwareFlasher({
                 board — Detect and Identify were two buttons for two halves of
                 one question. Placed FIRST because it is the step that makes
                 every field below it unnecessary. */}
-            {isElectron() && (
+            <div className="firmware-detect-row">
+              {isElectron() && (
+                <button
+                  type="button"
+                  className="firmware-detect"
+                  onClick={() => void detectBoard()}
+                  disabled={flashing || identifying}
+                >
+                  {identifying ? 'Asking the board…' : '⟳ Detect board'}
+                </button>
+              )}
+              {/* Detect answers "what is plugged in"; this answers "what have I
+                  got" for a board that is not plugged in yet, or one detection
+                  could not name. Beside it, because they are the same question
+                  asked two ways. */}
               <button
                 type="button"
-                className="firmware-detect"
-                onClick={() => void detectBoard()}
-                disabled={flashing || identifying}
+                className="firmware-detect firmware-detect--finder"
+                onClick={(e) => {
+                  const r = e.currentTarget.getBoundingClientRect()
+                  setFinderOrigin({ x: r.left + r.width / 2, y: r.top + r.height / 2 })
+                  setFinderOpen(true)
+                }}
+                disabled={flashing}
+                title="Browse every board MicroPython builds for"
               >
-                {identifying ? 'Asking the board…' : '⟳ Detect board'}
+                ⌕ Board Finder
               </button>
-            )}
+            </div>
             {/* Detect ran into the REPL holding the port (#845). Said out loud,
                 with the way out attached — knowing a port is busy is only half
-                of it when the thing holding it is this same app. */}
+                of it when the thing holding it is this same app.
+                BELOW the button row, not inside it: it is a full-width status
+                message about what Detect just found, not a third button. */}
             {detectConflict && (
               <div
                 className="firmware-banner firmware-banner--warn firmware-conflict"
@@ -1899,5 +1980,17 @@ export function FirmwareFlasher({
         </footer>
       </div>
     </div>
+      {/* A SIBLING of the overlay, not a child: a full-screen gallery nested in
+          the modal's backdrop would be clipped by it and would inherit its
+          click-anywhere-to-dismiss. */}
+      {finderOpen && (
+        <BoardFinder
+          origin={finderOrigin}
+          closing={finderClosing}
+          onClosed={dropFinder}
+          onClose={closeFinder}
+        />
+      )}
+    </>
   )
 }
