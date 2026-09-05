@@ -46,6 +46,7 @@ import { copyFirmwareToDrive } from '../lib/webFirmware/driveCopyFlash'
 import { BoardFinder } from './BoardFinder'
 import {
   FLASH_BOARD_EVENT,
+  takePendingFlash,
   flasherSelectionFor,
   type BoardFlashRequest
 } from './board-finder-bus'
@@ -296,19 +297,38 @@ export function FirmwareFlasher({
    * callback prop: the flasher IS mounted when the gallery is open inside it, so
    * it can simply listen, and the gallery needs no knowledge of who opened it.
    */
-  useEffect(() => {
-    const onFlashBoard = (e: Event): void => {
-      const pick = flasherSelectionFor((e as CustomEvent<BoardFlashRequest>).detail)
+  const applyFlashRequest = useCallback(
+    (req: BoardFlashRequest): void => {
+      const pick = flasherSelectionFor(req)
       setBoard(pick.board)
       if (pick.offset) setOffset(pick.offset)
       setSource('catalog')
       setSelFamily(pick.family)
       setSelVersionUrl(pick.url)
       dropFinder()
+    },
+    [dropFinder]
+  )
+
+  useEffect(() => {
+    const onFlashBoard = (e: Event): void => {
+      // Clear the retained copy: this dialog was already open and has just
+      // handled the request, so the mount path below must not apply it again.
+      takePendingFlash()
+      applyFlashRequest((e as CustomEvent<BoardFlashRequest>).detail)
     }
     window.addEventListener(FLASH_BOARD_EVENT, onFlashBoard)
     return () => window.removeEventListener(FLASH_BOARD_EVENT, onFlashBoard)
-  }, [dropFinder])
+  }, [applyFlashRequest])
+
+  // Opened BY a pick from the standalone gallery (#917): the event fired before
+  // this dialog existed, so the request was waiting rather than lost.
+  useEffect(() => {
+    const held = takePendingFlash()
+    if (held) applyFlashRequest(held)
+    // Mount only — a later request arrives on the event above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const [source, setSource] = useState<Source>('catalog')
   const [catalog, setCatalog] = useState<FirmwareCatalog | null>(null)

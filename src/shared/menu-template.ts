@@ -289,6 +289,24 @@ export function appMenuTemplate(o: MenuTemplateOptions): MenuItemConstructorOpti
         commandItem('device.syncNow', 'Sync Now', o)
       ]
     },
+    {
+      label: 'Tools',
+      submenu: [
+        commandItem('tools.flasher', 'Firmware Flasher…', o),
+        // Its own item since #917, not only a button inside the flash dialog.
+        // #934 gave it pinouts, photographs and models, so it answers "which
+        // board is this?" — and making people open a firmware flasher to ask was
+        // the wrong shape. Inside the flasher it stays exactly as it was (#896).
+        commandItem('tools.boardFinder', 'Board Finder…', o),
+        { type: 'separator' },
+        // Lives in the Board Viewer window, so this opens that window first.
+        commandItem('tools.partsCatalog', 'Parts Catalog…', o),
+        commandItem('tools.spriteEditor', 'Sprite Editor…', o),
+        { type: 'separator' },
+        commandItem('tools.find', 'Find & Replace…', o, { accelerator: 'CmdOrCtrl+F' }),
+        commandItem('tools.settings', 'Settings…', o, { accelerator: 'CmdOrCtrl+,' })
+      ]
+    },
     // The Window menu uses the standard `windowMenu` role so the OS manages it —
     // on macOS that AUTO-LISTS every open window (the main editor, the Board View
     // and Find & Replace), which is what #185 wanted; this works now that those

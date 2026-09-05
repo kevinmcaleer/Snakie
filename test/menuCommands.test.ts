@@ -63,7 +63,13 @@ function deps(): {
     stop: () => rec.fired.push('stop'),
     softReset: () => rec.fired.push('softReset'),
     syncNow: () => rec.fired.push('syncNow'),
-    showHelp: () => rec.fired.push('showHelp')
+    showHelp: () => rec.fired.push('showHelp'),
+    openFlasher: () => rec.fired.push('openFlasher'),
+    openBoardFinder: () => rec.fired.push('openBoardFinder'),
+    openPartsCatalog: () => rec.fired.push('openPartsCatalog'),
+    openSpriteEditor: () => rec.fired.push('openSpriteEditor'),
+    openFind: () => rec.fired.push('openFind'),
+    openSettings: () => rec.fired.push('openSettings')
   }
   return rec
 }
@@ -165,7 +171,8 @@ describe('menu state travelling back to the menu (#914)', () => {
         'device.run': true,
         'device.stop': true,
         'device.softReset': true,
-        'device.syncNow': true
+        'device.syncNow': true,
+        'tools.find': true
       })
     }
   })

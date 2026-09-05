@@ -79,6 +79,12 @@ export type RendererMenuCommand =
   | 'device.stop'
   | 'device.softReset'
   | 'device.syncNow'
+  | 'tools.flasher'
+  | 'tools.boardFinder'
+  | 'tools.partsCatalog'
+  | 'tools.spriteEditor'
+  | 'tools.find'
+  | 'tools.settings'
   | 'help.shortcuts'
   | 'help.snakieHelp'
   | WorkspaceMenuCommand
@@ -102,6 +108,12 @@ export const RENDERER_MENU_COMMANDS: readonly RendererMenuCommand[] = [
   'device.stop',
   'device.softReset',
   'device.syncNow',
+  'tools.flasher',
+  'tools.boardFinder',
+  'tools.partsCatalog',
+  'tools.spriteEditor',
+  'tools.find',
+  'tools.settings',
   ...WORKSPACE_IDS.map(workspaceMenuCommand),
   'help.snakieHelp',
   'help.shortcuts'
@@ -195,7 +207,12 @@ export function menuStateFrom(ctx: MenuContext): MenuState {
     'device.run': ctx.hasActiveFile,
     'device.stop': ctx.connected,
     'device.softReset': ctx.connected,
-    'device.syncNow': ctx.connected && ctx.hasSyncedFiles
+    'device.syncNow': ctx.connected && ctx.hasSyncedFiles,
+    // Find acts on the editor, so it needs something to search. Every other
+    // tool opens a surface of its own and is always available — greying the
+    // Board Finder because no board is connected would be exactly backwards,
+    // since looking one up is what you do BEFORE you have one working.
+    'tools.find': ctx.hasActiveFile
   }
   return { enabled, checked, recentFolders: ctx.recentFolders.slice(0, RECENT_FOLDER_SLOTS.length) }
 }

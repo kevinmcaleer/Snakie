@@ -935,6 +935,16 @@ const board = {
   },
   /** Broadcast the chosen board id to the app's other window(s) so the full Board
    *  Viewer and the mini board view stay in sync. Fire-and-forget. */
+  /** Open the Board Viewer window and show one of its tools (#917). The window
+   *  hosts the Parts Catalog and the Part Editor, so the main window's Tools
+   *  menu has to go through it rather than mounting a second copy. */
+  openTool: (tool: string): Promise<void> => ipcRenderer.invoke('board:tool', tool),
+  /** Board-window side: a tool the main window's menu asked for. */
+  onOpenTool: (cb: (tool: string) => void): (() => void) => {
+    const listener = (_e: unknown, tool: string): void => cb(tool)
+    ipcRenderer.on('board:tool', listener)
+    return () => ipcRenderer.removeListener('board:tool', listener)
+  },
   selectBoard: (id: string): void => ipcRenderer.send('board:select', id),
   /** Subscribe to a board-selection broadcast made in another window. Returns an
    *  unsubscribe function. */

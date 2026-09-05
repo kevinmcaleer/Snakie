@@ -100,6 +100,22 @@ export interface MenuCommandDeps {
 
   /** Open the Help panel (#918). */
   showHelp: () => void
+
+  // --- Tools (#917) --------------------------------------------------------
+
+  /** The firmware flasher, which lives in the status bar. */
+  openFlasher: () => void
+  /** The board gallery, on its own rather than inside the flash dialog. */
+  openBoardFinder: () => void
+  /** The Parts Catalog — in the BOARD VIEWER window, so this opens that window
+   *  first and then asks it. */
+  openPartsCatalog: () => void
+  /** The Sprite editor, via the event it already answers to. */
+  openSpriteEditor: () => void
+  /** Find & Replace, via the event the editor already answers to. */
+  openFind: () => void
+  /** The settings dialog, via the event it already answers to. */
+  openSettings: () => void
 }
 
 /** Every renderer menu command and what it does. */
@@ -119,6 +135,12 @@ export function menuCommandHandlers(
     'device.stop': () => deps.stop(),
     'device.softReset': () => deps.softReset(),
     'device.syncNow': () => deps.syncNow(),
+    'tools.flasher': () => deps.openFlasher(),
+    'tools.boardFinder': () => deps.openBoardFinder(),
+    'tools.partsCatalog': () => deps.openPartsCatalog(),
+    'tools.spriteEditor': () => deps.openSpriteEditor(),
+    'tools.find': () => deps.openFind(),
+    'tools.settings': () => deps.openSettings(),
     'help.snakieHelp': () => deps.showHelp(),
     'help.shortcuts': () => deps.showShortcuts()
   } as Record<RendererMenuCommand, () => void>
