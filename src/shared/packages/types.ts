@@ -5,6 +5,7 @@
  * serialize cleanly across the Electron IPC boundary and can be re-used by the
  * preload typings and the renderer.
  */
+import type { InstallFileProgress } from '../install-file-progress'
 
 /** A package surfaced by search or discovery. */
 export interface PackageInfo {
@@ -51,7 +52,7 @@ export interface InstallRequest {
  * an install runs. `state` drives the UI; `message` carries human-readable
  * detail (log line, error text, or a graceful note such as the `.mpy` caveat).
  */
-export interface InstallProgress {
+export interface InstallProgress extends InstallFileProgress {
   /** The package this event concerns. */
   name: string
   state: 'started' | 'running' | 'note' | 'done' | 'error'

@@ -118,6 +118,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A library install now ticks off file by file, and names what it is really
+  installing** (#895). Installing the Arduino Modulino library looked like a
+  hang. It was not: it copies 22 files over the raw REPL, plus three dependency
+  packages — `lsm6dsox`, `ltr-381rgb-01` and `HS3003` — that its own
+  `package.json` pulls in transitively. But an install was enqueued as ONE
+  device-queue task whose `run` never declared any steps, so the whole thing was
+  a single motionless row for minutes at a time. That distinction matters more
+  than usual here, because the documented response to a hung install is
+  Disconnect, which mid-write is exactly what #864 exists to stop being
+  destructive. The install now declares its whole file list before the first
+  write — a list that grew as it went could never say how much was left — and
+  ticks each file off as it lands, with the dependency that brought a file named
+  beside it, so a pause on `lsm6dsox.py` reads as what it is rather than as
+  "still stuck on modulino". Every install gets this, not just the Modules
+  panel: the Packages panel, both Driver Install banners, the instruments-library
+  and missing-library banners, and the parts panel's "Works with" installs, on
+  the desktop and in the browser alike, because they all share one writer
+  underneath and the reporting was fixed there.
+
 - **The recommended firmware build is now reachable for the boards that need it**
   (#885). A board profile can name the build a board actually requires — the
   Adafruit ESP32 Feather V2 needs `ESP32_GENERIC-SPIRAM`, because only that build

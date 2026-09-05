@@ -8,6 +8,7 @@ import {
 import { webMipFetch, writeFilesToDevice } from '../src/renderer/src/web/web-install'
 import { createWebPackagesApi } from '../src/renderer/src/web/web-packages'
 import { MipResolveError } from '../src/shared/mip-resolve'
+import type { InstallFileProgress } from '../src/shared/install-file-progress'
 import { CURATED_PACKAGES } from '../src/shared/packages/registry'
 
 /**
@@ -130,18 +131,35 @@ describe('writing a resolved package to the device', () => {
 
   it('reports per-file progress, so a 25-file package does not look hung', async () => {
     const steps: string[] = []
+    const details: InstallFileProgress[] = []
     await writeFilesToDevice(
       'pkg',
       [
         { path: '/lib/a.py', contents: 'a' },
-        { path: '/lib/b.py', contents: 'b' }
+        { path: '/lib/b.py', contents: 'b', dependency: 'bee' }
       ],
       fakeDevice(),
-      (m) => steps.push(m)
+      (m, detail) => {
+        steps.push(m)
+        if (detail) details.push(detail)
+      }
     )
-    expect(steps).toHaveLength(2)
-    expect(steps[1]).toContain('2/2')
-    expect(steps[1]).toContain('/lib/b.py')
+    // The whole list is declared BEFORE the first write (#895) — a progress
+    // list that grows as it goes cannot say how much is left — and then each
+    // file reports starting and landing, in prose and structurally at once.
+    expect(steps[0]).toContain('2 files')
+    expect(details[0].files).toEqual([
+      { path: '/lib/a.py', dependency: undefined },
+      { path: '/lib/b.py', dependency: 'bee' }
+    ])
+    expect(steps.at(-1)).toContain('2/2')
+    expect(steps.at(-1)).toContain('/lib/b.py')
+    expect(details.slice(1)).toEqual([
+      { fileIndex: 0, fileState: 'running' },
+      { fileIndex: 0, fileState: 'done' },
+      { fileIndex: 1, fileState: 'running' },
+      { fileIndex: 1, fileState: 'done' }
+    ])
   })
 
   it('tolerates a directory that already exists', async () => {

@@ -26,6 +26,7 @@ import {
   selectBundleMajor
 } from '../../shared/circuitpy-bundle'
 import type { RuntimeInfo } from '../../shared/dialect'
+import type { InstallFileEntry } from '../../shared/install-file-progress'
 import { createBundleHost, type BundleHost } from './bundle'
 
 /**
@@ -98,13 +99,14 @@ export function readBundledModuleSource(file: string): string {
 }
 
 /**
- * One file in a plan. `contents` is SOURCE TEXT unless `encoding` says
- * otherwise — `'base64'` marks a binary file (an Adafruit `.mpy`) that the
- * writer must decode back to bytes. Absent means `'utf8'`, so every plan built
- * before #758 keeps its meaning.
+ * One file in a plan: its device `path` and whichever dependency brought it
+ * (from {@link InstallFileEntry}), plus what to write there.
+ *
+ * `contents` is SOURCE TEXT unless `encoding` says otherwise — `'base64'` marks
+ * a binary file (an Adafruit `.mpy`) that the writer must decode back to bytes.
+ * Absent means `'utf8'`, so every plan built before #758 keeps its meaning.
  */
-export interface ModulePlanFile {
-  path: string
+export interface ModulePlanFile extends InstallFileEntry {
   contents: string
   encoding?: 'utf8' | 'base64'
 }
@@ -172,13 +174,18 @@ async function buildBundlePlan(
       inflate: host.inflate,
       target: MODULES_LIB_DIR
     })
+    // The bundle installs dependencies BEFORE the library that needs them, so
+    // the library the user asked for is the LAST one — the same slice
+    // `bundleInstallNote` takes to name the others.
+    const root = resolved.modules[resolved.modules.length - 1]
     return {
       id: def.id,
       importName: def.importName,
       files: resolved.files.map((f) => ({
         path: f.path,
         contents: Buffer.from(f.bytes).toString('base64'),
-        encoding: 'base64' as const
+        encoding: 'base64' as const,
+        dependency: f.module === root ? undefined : f.module
       })),
       spec: module,
       notes: [
@@ -257,7 +264,13 @@ export async function buildModuleInstallPlan(
     return {
       id: def.id,
       importName: def.importName,
-      files: resolved.files.map((f) => ({ path: f.path, contents: f.contents })),
+      files: resolved.files.map((f) => ({
+        path: f.path,
+        contents: f.contents,
+        // Root first (see the note above), so a file declared by anything else
+        // arrived transitively and is named by what brought it (#895).
+        dependency: f.package === resolved.packages[0] ? undefined : f.package
+      })),
       spec,
       notes
     }

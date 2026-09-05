@@ -41,7 +41,12 @@ import type {
 } from '../../../shared/packages/types'
 import { MipResolveError, resolveMipSpec } from '../../../shared/mip-resolve'
 import { resolveFailureMessage, hostInstallNote } from '../../../shared/install-messages'
-import { webMipFetch, writeFilesToDevice, type InstallDevice } from './web-install'
+import {
+  webMipFetch,
+  writeFilesToDevice,
+  type InstallDevice,
+  type InstallFile
+} from './web-install'
 
 /** Build the web `packages` API surface (merged over the fallback stub). */
 export function createWebPackagesApi(): Record<string, unknown> {
@@ -73,7 +78,7 @@ export function createWebPackagesApi(): Record<string, unknown> {
       emit({ name, state: 'started' })
       emit({ name, state: 'running', message: `Downloading ${name}…` })
 
-      let files: { path: string; contents: string }[]
+      let files: InstallFile[]
       const notes = installNotes(opts)
       try {
         const resolved = await resolveMipSpec(name, {
@@ -81,7 +86,12 @@ export function createWebPackagesApi(): Record<string, unknown> {
           target,
           index: opts.index?.trim() || undefined
         })
-        files = resolved.files.map((f) => ({ path: f.path, contents: f.contents }))
+        files = resolved.files.map((f) => ({
+          path: f.path,
+          contents: f.contents,
+          // Root spec first, so anything else came along transitively (#895).
+          dependency: f.package === resolved.packages[0] ? undefined : f.package
+        }))
         notes.push(
           hostInstallNote({
             name,
@@ -111,7 +121,7 @@ export function createWebPackagesApi(): Record<string, unknown> {
         name,
         files,
         window.api.device as unknown as InstallDevice,
-        (message) => emit({ name, state: 'running', message })
+        (message, detail) => emit({ name, state: 'running', message, ...detail })
       )
       emit({
         name,

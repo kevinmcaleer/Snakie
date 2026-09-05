@@ -73,6 +73,8 @@ import {
 } from './part-imports'
 import { installPartDriver } from './driver-install'
 import { enqueueDeviceTask } from '../lib/device-queue'
+import { installStepReporter } from '../lib/install-steps'
+import { installStepLabel } from '../../../shared/install-file-progress'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useSkeletonSync } from '../hooks/useSkeletonSync'
 import {
@@ -728,11 +730,9 @@ export function AppShell(): JSX.Element {
         await enqueueDeviceTask({
           key: 'instruments-lib',
           label: 'Installing the instruments library',
-          run: async (): Promise<void> => {
+          run: async (ctx): Promise<void> => {
             const source = await window.api.instruments.librarySource()
             if (!source) throw new Error('library source unavailable')
-            await window.api.device.mkdir(INSTRUMENTS_LIB_DIR).catch(() => undefined)
-            await window.api.device.writeFile(INSTRUMENTS_LIB_PATH, source)
             // A legacy copy at the FS root (`/instruments.py`) shadows `/lib` on
             // MicroPython's sys.path, so updating only `/lib` would leave the OLD
             // root copy being imported. If one is there, overwrite it with the same
@@ -742,16 +742,27 @@ export function AppShell(): JSX.Element {
               .stat(INSTRUMENTS_ROOT_PATH)
               .then(() => true)
               .catch(() => false)
-            if (rootShadow) {
-              await window.api.device.writeFile(INSTRUMENTS_ROOT_PATH, source)
-            }
-            // Install the `snakie.py` hardware umbrella beside it (best-effort — an
+            // The `snakie.py` hardware umbrella goes beside it (best-effort — an
             // older bundle without it just skips this), so `from snakie import Servo`
             // works and a vendor `servo` module can't shadow ours.
             const umbrella = await window.api.instruments.umbrellaSource().catch(() => '')
-            if (umbrella) {
-              await window.api.device.writeFile(SNAKIE_LIB_PATH, umbrella)
-              if (rootShadow) await window.api.device.writeFile(SNAKIE_ROOT_PATH, umbrella)
+            // Both questions — is there a root shadow, is there an umbrella — are
+            // answered BEFORE the first write, so the step list is the real one
+            // rather than one that grows as it goes (#895).
+            const writes = [
+              { path: INSTRUMENTS_LIB_PATH, contents: source },
+              ...(rootShadow ? [{ path: INSTRUMENTS_ROOT_PATH, contents: source }] : []),
+              ...(umbrella ? [{ path: SNAKIE_LIB_PATH, contents: umbrella }] : []),
+              ...(umbrella && rootShadow
+                ? [{ path: SNAKIE_ROOT_PATH, contents: umbrella }]
+                : [])
+            ]
+            ctx.setSteps(writes.map((w) => installStepLabel(w.path)))
+            await window.api.device.mkdir(INSTRUMENTS_LIB_DIR).catch(() => undefined)
+            for (const [index, write] of writes.entries()) {
+              ctx.step(index, 'running')
+              await window.api.device.writeFile(write.path, write.contents)
+              ctx.step(index, 'done')
             }
           }
         })
@@ -957,7 +968,14 @@ export function AppShell(): JSX.Element {
             const res = await enqueueDeviceTask({
               key: `package:${t.url as string}`,
               label: `Installing ${t.module}`,
-              run: () => window.api.packages.install(t.url as string)
+              // Per-file steps (#895) — a `mip` spec can bring dependencies, and
+              // this banner is one of the places an install looked like a hang.
+              run: (ctx) =>
+                window.api.packages.install(
+                  t.url as string,
+                  undefined,
+                  installStepReporter(ctx)
+                )
             })
             if (!res.ok) throw new Error(res.log || `Failed to install ${t.module}`)
           }
