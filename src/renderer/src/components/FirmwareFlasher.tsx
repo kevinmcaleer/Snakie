@@ -1219,12 +1219,55 @@ export function FirmwareFlasher({
               offset and the firmware family, and warns if the chosen build is for
               a different chip. Optional — "Other" leaves every field manual. */}
           <div className="firmware-field">
-            {/* The one action for "what have I plugged in" (#833). It scans, then
-                asks whatever it found what it is, and selects the matching
-                board — Detect and Identify were two buttons for two halves of
-                one question. Placed FIRST because it is the step that makes
-                every field below it unnecessary. */}
+            {/* Detect ran into the REPL holding the port (#845). Said out loud,
+                with the way out attached — knowing a port is busy is only half
+                of it when the thing holding it is this same app.
+                BELOW the button row, not inside it: it is a full-width status
+                message about what Detect just found, not a third button. */}
+            {detectConflict && (
+              <div
+                className="firmware-banner firmware-banner--warn firmware-conflict"
+                role="status"
+              >
+                <p className="firmware-conflict__text">{detectConflict.reason}</p>
+                <button
+                  type="button"
+                  className="firmware-conflict__action"
+                  onClick={() => void disconnectAndDetect()}
+                  disabled={disconnecting || identifying}
+                  title="Close the REPL connection and detect the board again"
+                >
+                  {disconnecting ? 'Disconnecting…' : 'Disconnect and detect'}
+                </button>
+              </div>
+            )}
+            <label className="firmware-field__label" htmlFor="firmware-profile">
+              Board
+            </label>
+            {/* The dropdown and the two ways of filling it in, on one row (#896).
+                Naming the board is the step that fills in the board type, the
+                flash offset and the firmware family — so the answer and the two
+                buttons that can supply it belong together, rather than the
+                buttons floating above the label they act on.
+                Detect asks what is plugged in; Board Finder answers "what have I
+                got" for a board that is not plugged in, or one detection could
+                not name. */}
             <div className="firmware-detect-row">
+              <select
+                id="firmware-profile"
+                className="firmware-select"
+                value={profileId}
+                disabled={flashing}
+                onChange={(e) => handleProfileChange(e.target.value)}
+              >
+                <option value="">Other / set up manually…</option>
+                {BOARD_PROFILES.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.label}
+                  </option>
+                ))}
+              </select>
+
               {isElectron() && (
                 <button
                   type="button"
@@ -1253,45 +1296,6 @@ export function FirmwareFlasher({
                 ⌕ Board Finder
               </button>
             </div>
-            {/* Detect ran into the REPL holding the port (#845). Said out loud,
-                with the way out attached — knowing a port is busy is only half
-                of it when the thing holding it is this same app.
-                BELOW the button row, not inside it: it is a full-width status
-                message about what Detect just found, not a third button. */}
-            {detectConflict && (
-              <div
-                className="firmware-banner firmware-banner--warn firmware-conflict"
-                role="status"
-              >
-                <p className="firmware-conflict__text">{detectConflict.reason}</p>
-                <button
-                  type="button"
-                  className="firmware-conflict__action"
-                  onClick={() => void disconnectAndDetect()}
-                  disabled={disconnecting || identifying}
-                  title="Close the REPL connection and detect the board again"
-                >
-                  {disconnecting ? 'Disconnecting…' : 'Disconnect and detect'}
-                </button>
-              </div>
-            )}
-            <label className="firmware-field__label" htmlFor="firmware-profile">
-              Board
-            </label>
-            <select
-              id="firmware-profile"
-              className="firmware-select"
-              value={profileId}
-              disabled={flashing}
-              onChange={(e) => handleProfileChange(e.target.value)}
-            >
-              <option value="">Other / set up manually…</option>
-              {BOARD_PROFILES.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.label}
-                </option>
-              ))}
-            </select>
             {profile?.notes && <p className="firmware-hint">{profile.notes}</p>}
             {/* Advisory, not a warning: a board runs on the plain build too, it
                 just may not get everything the board can do. */}
@@ -1720,41 +1724,50 @@ export function FirmwareFlasher({
 
               {catalog && !catalogLoading && (
                 <>
-                  <label className="firmware-field__label" htmlFor="firmware-cat-family">
-                    Family
-                  </label>
-                  <select
-                    id="firmware-cat-family"
-                    className="firmware-select"
-                    value={selFamily}
-                    disabled={flashing}
-                    onChange={(e) => setSelFamily(e.target.value)}
-                  >
-                    <option value="">Select a family…</option>
-                    {families.map((f) => (
-                      <option key={f.family} value={f.family}>
-                        {f.family}
-                      </option>
-                    ))}
-                  </select>
-
-                  <label className="firmware-field__label" htmlFor="firmware-cat-model">
-                    Model
-                  </label>
-                  <select
-                    id="firmware-cat-model"
-                    className="firmware-select"
-                    value={selModel}
-                    disabled={flashing || !family}
-                    onChange={(e) => setSelModel(e.target.value)}
-                  >
-                    <option value="">Select a model…</option>
-                    {models.map((m) => (
-                      <option key={`${m.vendor}|${m.model}`} value={`${m.vendor}|${m.model}`}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </select>
+                  {/* Two columns (#896). Family narrows Model, so they are one
+                      decision made in two steps — side by side they read as
+                      that, and stacked they read as two unrelated questions
+                      with the dialog growing a row taller for no reason. */}
+                  <div className="firmware-cols">
+                    <div className="firmware-col">
+                      <label className="firmware-field__label" htmlFor="firmware-cat-family">
+                        Family
+                      </label>
+                      <select
+                        id="firmware-cat-family"
+                        className="firmware-select"
+                        value={selFamily}
+                        disabled={flashing}
+                        onChange={(e) => setSelFamily(e.target.value)}
+                      >
+                        <option value="">Select a family…</option>
+                        {families.map((f) => (
+                          <option key={f.family} value={f.family}>
+                            {f.family}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="firmware-col">
+                      <label className="firmware-field__label" htmlFor="firmware-cat-model">
+                        Model
+                      </label>
+                      <select
+                        id="firmware-cat-model"
+                        className="firmware-select"
+                        value={selModel}
+                        disabled={flashing || !family}
+                        onChange={(e) => setSelModel(e.target.value)}
+                      >
+                        <option value="">Select a model…</option>
+                        {models.map((m) => (
+                          <option key={`${m.vendor}|${m.model}`} value={`${m.vendor}|${m.model}`}>
+                            {m.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
 
                   {model && (
                     <>

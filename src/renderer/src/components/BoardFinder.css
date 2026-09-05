@@ -11,7 +11,12 @@
 .bfind {
   position: fixed;
   inset: 0;
-  z-index: 200;
+  /* ABOVE the flash dialog's overlay (1100), which is the only thing that opens
+     this — it is reached from the button beside Detect board, so a value below
+     that renders the gallery behind the dialog that launched it and traps the
+     user. Still below the transfer/queue dialog (1250), which reports work in
+     progress and must stay on top of everything. */
+  z-index: 1150;
   display: flex;
   align-items: stretch;
   justify-content: stretch;
