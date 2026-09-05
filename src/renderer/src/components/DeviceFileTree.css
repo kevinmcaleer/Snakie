@@ -209,3 +209,44 @@
   outline-offset: -1.5px;
   background: color-mix(in srgb, var(--accent, #4ea1ff) 10%, transparent);
 }
+
+/* --- "the board is busy" hazard bar (#889) ---------------------------------
+ *
+ * Asked for explicitly: something unmistakable in the Device Files area while
+ * files are being written, because the modal can now be pushed aside (#889) and
+ * a silent tree that is quietly changing under you is worse than a slow one.
+ *
+ * Diagonal hazard stripes in the panel's own accent rather than literal yellow
+ * and black: the panel is a themed surface, and a saturated warning bar reads as
+ * an ERROR when nothing is wrong — the board is working, which is normal. The
+ * stripes carry the "do not touch this yet" meaning on their own.
+ *
+ * The animation is decorative, so it goes for anyone who asked for less motion;
+ * the bar itself stays, because the bar is the message.
+ */
+.devicetree__busy {
+  flex: 0 0 auto;
+  height: 4px;
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--accent) 0,
+    var(--accent) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+  background-size: 17px 100%;
+  background-color: var(--bg-sunken);
+  animation: devicetree-hazard 0.6s linear infinite;
+}
+
+@keyframes devicetree-hazard {
+  to {
+    background-position: 17px 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .devicetree__busy {
+    animation: none;
+  }
+}

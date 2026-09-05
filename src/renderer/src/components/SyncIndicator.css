@@ -169,3 +169,27 @@
 .syncind__err {
   color: var(--danger);
 }
+
+/* --- Stop, for the device queue (#889) ------------------------------------- */
+
+.syncind__stop {
+  align-self: flex-start;
+  padding: 0.2rem 0.6rem;
+  background: var(--bg-sunken);
+  color: var(--danger);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.syncind__stop:hover {
+  background: var(--bg-elevated);
+  border-color: var(--danger);
+}
+
+.syncind__stop:focus-visible {
+  outline: var(--border-w) solid var(--danger);
+  outline-offset: 2px;
+}
