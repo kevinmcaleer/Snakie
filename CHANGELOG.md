@@ -8,6 +8,44 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Seven more boards MicroPython builds nothing for** (#936, epic #884). #902
+  built the overlay and curated five entries, deliberately leaving the rest —
+  every entry is a claim about somebody's hardware that Snakie acts on, so the
+  bar is the maker's own page open in front of you. #934 then linked 11 of the
+  22 microcontroller parts to a board; the other 11 had nowhere to link because
+  the board was not in the catalogue at all. Seven now are: Pimoroni's **Tiny
+  2350**, **Servo 2040**, **Motor 2040**, **Pico LiPo 2** and **Pico LiPo 2 XL
+  W**, Cytron's **Maker Pi RP2040**, and Adafruit's **Feather ESP32-S3** (the
+  8 MB / no-PSRAM one). Each carries its flash, RAM and PSRAM with the page they
+  were read from, and a CircuitPython id checked against the published catalogue
+  or none at all. All seven are linked to their parts, so each one now opens with
+  its own pinout — and the Maker Pi RP2040 brings the first 3-D model to a board
+  in the finder.
+
+  **This batch had a hazard the first did not.** The Adafruit ESP32 entries
+  borrow a generic build because there is a right one to borrow. These are mostly
+  RP2040/RP2350, where a generic Pico build *runs* on nearly every board — and
+  running is not the same as being right. "It booted, so it was the correct
+  firmware" is exactly the reasoning that cost a week on the Feather V2. So a
+  donor build is offered only where the maker's own page says the board is
+  spec-identical to the donor: Cytron's does, and it is the only one here that
+  does. Where the maker publishes its own build, the entry says so and points
+  there, as the micro:bit v2 entry already did.
+
+  The Pico LiPo 2 is the case that settles it. It is an RP2350**B** with 16 MB of
+  flash and 8 MB of PSRAM; upstream's Pico 2 build is an RP2350**A** with 4 MB
+  and no PSRAM. Flashing it would boot, and quietly leave most of the board
+  switched off — the Feather V2 story one chip family across. It gets no donor
+  and a card that says why.
+
+### Changed
+
+- **Overlay boards can no longer invent a filter chip** (#936). A board's
+  `features` feed the gallery's facets, so `USB C` where upstream writes `USB-C`
+  fails nothing and silently splits one filter into two — #928 by another route.
+  Every feature string an overlay states is now held to upstream's own
+  vocabulary by a test.
+
 - **A board in the finder shows the board itself: front, back, model and
   pinout** (#934). The Board Finder knew 225 boards the way MicroPython
   describes them — a vendor, a chip, and a list of firmware to write. The parts

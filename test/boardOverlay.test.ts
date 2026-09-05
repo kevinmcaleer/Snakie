@@ -287,3 +287,94 @@ describe('what a board’s details say about its sizes', () => {
     expect(facts.map((f) => f.label)).not.toContain('External flash')
   })
 })
+
+/**
+ * The second batch (#936) — the boards upstream builds nothing for, beyond the
+ * Adafruit ESP32 family that #902 curated first.
+ *
+ * These are mostly RP2040/RP2350 boards, and they bring a hazard the first batch
+ * did not have: a generic Pico build RUNS on nearly all of them. Running is not
+ * the same as being right, and "it booted, so it was the correct firmware" is
+ * precisely the reasoning that cost a week on the Feather V2.
+ */
+describe('the RP2 boards upstream does not build for', () => {
+  const all = withOverlay(seed.boards)
+  const find = (id: string): IndexedBoard => all.find((b) => b.id === id)!
+
+  it('does not hand a Pico 2 build to a board with PSRAM', () => {
+    // The Feather V2 story, one chip family across. A Pico LiPo 2 is an RP2350B
+    // with 16 MB of flash and 8 MB of PSRAM; the Pico 2 build is an RP2350A with
+    // 4 MB and no PSRAM. It would boot, and leave most of the board switched off.
+    const lipo = find('PIMORONI_PICOLIPO2')
+    expect(lipo.substitute?.boardId).toBeNull()
+    expect(lipo.builds).toEqual([])
+    expect(lipo.psram?.bytes).toBe(8 * 1024 * 1024)
+    expect(lipo.substitute?.why).toMatch(/RP2350B/)
+  })
+
+  it('says where the firmware actually is, when it is not here', () => {
+    // A board with no build must still leave the reader somewhere to go, or the
+    // entry is just a dead end with a photograph.
+    for (const id of [
+      'PIMORONI_TINY2350',
+      'PIMORONI_SERVO2040',
+      'PIMORONI_MOTOR2040',
+      'PIMORONI_PICOLIPO2',
+      'PIMORONI_PICOLIPO2_XL_W'
+    ]) {
+      const b = find(id)
+      expect(b.builds, id).toEqual([])
+      expect(b.substitute?.why, id).toMatch(/github\.com\/pimoroni/)
+    }
+  })
+
+  it('borrows a Pico build only where the maker says the board IS a Pico', () => {
+    // Cytron's own page states the same RP2040, RAM and flash as a Pico. That is
+    // the endorsement; without one, an entry gets no donor.
+    const cytron = find('CYTRON_MAKER_PI_RP2040')
+    expect(cytron.substitute?.build).toBe('RPI_PICO')
+    expect(cytron.builds.length).toBeGreaterThan(0)
+  })
+
+  it('writes no esptool offset for a board that is flashed by drag-and-drop', () => {
+    // An RP2 board takes a .uf2 onto its bootloader drive. An offset here would
+    // be a number the flasher could act on for a board that has no such step.
+    for (const id of [
+      'PIMORONI_TINY2350',
+      'PIMORONI_SERVO2040',
+      'PIMORONI_MOTOR2040',
+      'PIMORONI_PICOLIPO2',
+      'PIMORONI_PICOLIPO2_XL_W',
+      'CYTRON_MAKER_PI_RP2040'
+    ]) {
+      expect(find(id).flashOffset, id).toBeNull()
+    }
+  })
+
+  it('keeps the ESP32-S3 Feather off the PSRAM build it has no PSRAM for', () => {
+    // Adafruit sells three ESP32-S3 Feathers and they do not take the same
+    // build. This entry is the 8 MB / no-PSRAM one, so the SPIRAM_OCT variant
+    // would print an initialisation error at every boot.
+    const f = find('ADAFRUIT_FEATHER_ESP32S3')
+    expect(f.substitute?.build).toBe('ESP32_GENERIC_S3')
+    expect(f.psram).toBeNull()
+    expect(f.builds.every((b) => !b.build.includes('SPIRAM'))).toBe(true)
+  })
+})
+
+describe('an overlay entry does not invent a filter chip', () => {
+  /**
+   * The facets are built from these strings. A near-miss — `USB C`, `Dual Core`,
+   * `RGB Led` — does not fail anything; it quietly splits one filter into two,
+   * which is #928 by another route. So every feature an overlay states must be
+   * one upstream already uses.
+   */
+  it('uses only feature names upstream already publishes', () => {
+    const known = new Set(seed.boards.flatMap((b) => [...b.features, ...b.notes]))
+    for (const e of OVERLAY_BOARDS) {
+      for (const f of e.features) {
+        expect(known.has(f), `${e.id} states a feature upstream never uses: ${f}`).toBe(true)
+      }
+    }
+  })
+})

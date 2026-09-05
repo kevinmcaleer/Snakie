@@ -80,11 +80,22 @@ describe('a link is the SAME board, not a near relative', () => {
   )
 
   it('refuses the pairing that started this', () => {
-    // Pimoroni's Pico LiPo 2 is RP2350; upstream's Pico LiPo is RP2040. Name
-    // matching put them together, so the table must not.
+    // Pimoroni's Pico LiPo 2 is RP2350B; upstream's `PIMORONI_PICOLIPO` is the
+    // RP2040 original. Name matching put them together, so the table must not —
+    // and now that the Pico LiPo 2 HAS a board of its own (the overlay entry),
+    // the check is sharper than "linked to nothing": it is linked to the right
+    // one, and upstream's RP2040 board is still linked to no part at all.
     expect(partLinkForBoard('PIMORONI_PICOLIPO')).toBeNull()
-    expect(boardLinkForPart('snakie-standard', 'pimoroni-pico-lipo-2')).toBeNull()
+    expect(boardLinkForPart('snakie-standard', 'pimoroni-pico-lipo-2')?.boardId).toBe(
+      'PIMORONI_PICOLIPO2'
+    )
     expect(chipsAgree('RP2350', 'rp2040')).toBe(false)
+  })
+
+  it('keeps the Tiny 2350 off upstream’s Tiny2040, for the same reason', () => {
+    // Two Pimoroni boards one digit apart, RP2350A against RP2040.
+    expect(partLinkForBoard('PIMORONI_TINY2040')).toBeNull()
+    expect(boardLinkForPart('snakie-standard', 'tiny2350')?.boardId).toBe('PIMORONI_TINY2350')
   })
 
   it('keeps the wireless and non-wireless Picos apart', () => {
