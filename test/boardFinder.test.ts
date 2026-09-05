@@ -7,9 +7,11 @@ import {
   boardFacts,
   boardInitials,
   buildLabel,
+  firmwareSummary,
   isFiltering,
+  peekFacts,
   shelvesByVendor,
-  toggleFeature,
+  toggleChip,
   variantList
 } from '../src/renderer/src/components/board-finder'
 import {
@@ -153,17 +155,20 @@ describe('variantList', () => {
 })
 
 describe('the filter chips', () => {
-  it('lists vendor, mcu and every feature — but never the search text', () => {
+  it('lists every vendor, mcu and feature ticked — but never the search text', () => {
     // Free text has its own input with its own clear; a second control for the
     // same value is a control that can disagree with it.
     const chips = activeFilterChips({
-      vendor: 'Adafruit',
-      mcu: 'esp32s3',
+      vendors: ['Adafruit', 'Pimoroni'],
+      mcus: ['esp32s3'],
       features: ['WiFi', 'BLE'],
       text: 'feather'
     })
     expect(chips).toEqual([
       { axis: 'vendor', value: 'Adafruit' },
+      // Both makers, because both are ticked — a chip row that showed only the
+      // first would leave a filter nobody can see or take off again (#919).
+      { axis: 'vendor', value: 'Pimoroni' },
       { axis: 'mcu', value: 'esp32s3' },
       { axis: 'feature', value: 'WiFi' },
       { axis: 'feature', value: 'BLE' }
@@ -172,6 +177,8 @@ describe('the filter chips', () => {
 
   it('counts search text and the flashable toggle as filtering, though neither is a chip', () => {
     expect(isFiltering({})).toBe(false)
+    expect(isFiltering({ vendors: [], mcus: [] })).toBe(false)
+    expect(isFiltering({ vendors: ['Adafruit'] })).toBe(true)
     expect(isFiltering({ text: '  ' })).toBe(false)
     expect(isFiltering({ text: 'pico' })).toBe(true)
     expect(isFiltering({ flashableOnly: true })).toBe(true)
@@ -179,10 +186,65 @@ describe('the filter chips', () => {
   })
 })
 
-describe('toggleFeature', () => {
-  it('adds a feature that is off and removes one that is on', () => {
-    expect(toggleFeature([], 'WiFi')).toEqual(['WiFi'])
-    expect(toggleFeature(['WiFi', 'BLE'], 'WiFi')).toEqual(['BLE'])
+describe('toggleChip', () => {
+  it('adds a value that is off and removes one that is on', () => {
+    expect(toggleChip([], 'WiFi')).toEqual(['WiFi'])
+    expect(toggleChip(['WiFi', 'BLE'], 'WiFi')).toEqual(['BLE'])
+  })
+
+  it('is the same toggle for a manufacturer, since only the MEANING differs', () => {
+    expect(toggleChip(['Adafruit'], 'Pimoroni')).toEqual(['Adafruit', 'Pimoroni'])
+    expect(toggleChip(['Adafruit', 'Pimoroni'], 'Adafruit')).toEqual(['Pimoroni'])
+  })
+})
+
+describe('the hover preview (#919)', () => {
+  it('says what there is to flash, and counts variants rather than listing them', () => {
+    expect(firmwareSummary(board())).toBe('MicroPython 1.29.0')
+    expect(
+      firmwareSummary(
+        board({
+          builds: [
+            build(),
+            build({ build: 'RPI_PICO-RISCV', variant: 'RISCV', version: '1.29.0' })
+          ]
+        })
+      )
+    ).toBe('MicroPython 1.29.0 · 2 builds')
+  })
+
+  it('says so plainly when there is nothing to flash', () => {
+    // The one fact that disqualifies a board, and the reason the preview leads
+    // with this line rather than burying it.
+    expect(firmwareSummary(board({ builds: [] }))).toBe('No published firmware')
+  })
+
+  it('counts only the NEWEST version, not every build ever published', () => {
+    const b = board({
+      builds: [
+        build({ date: '20250101', version: '1.28.0' }),
+        build({ date: '20260824', version: '1.29.0' })
+      ]
+    })
+    expect(firmwareSummary(b)).toBe('MicroPython 1.29.0')
+  })
+
+  it('drops the flash offset, which is an address rather than a fact about the board', () => {
+    const facts = peekFacts(board({ flashOffset: '0x1000', port: 'esp32' }))
+    expect(facts.map((f) => f.label)).toEqual(['MCU', 'Port'])
+  })
+
+  it('states at most four rows, so the preview has a height the gallery can predict', () => {
+    const b = board({
+      port: 'esp32',
+      flashOffset: '0x1000',
+      flash: { bytes: 8 * 1024 * 1024, source: 'Adafruit', scope: 'board' },
+      ram: { bytes: 520 * 1024, source: 'Espressif datasheet', scope: 'chip' },
+      psram: { bytes: 2 * 1024 * 1024, source: 'Adafruit', scope: 'board' }
+    })
+    expect(peekFacts(b)).toHaveLength(4)
+    // And no provenance: a source is for a figure you are about to rely on.
+    expect(peekFacts(b).every((f) => f.source === undefined)).toBe(true)
   })
 })
 

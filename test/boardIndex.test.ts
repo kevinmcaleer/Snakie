@@ -3,14 +3,14 @@ import { readFileSync } from 'node:fs'
 import {
   BOARD_INDEX_SCHEMA,
   defaultBuild,
-  featuresOf,
+  featureOptions,
   filterBoards,
   matchesFilter,
-  mcusOf,
+  mcuOptions,
   newerIndex,
   newestBuilds,
   parseBoardIndex,
-  vendorsOf,
+  vendorOptions,
   type BoardIndex,
   type IndexedBoard
 } from '../src/shared/board-index'
@@ -178,6 +178,39 @@ describe('filtering', () => {
     expect(filterBoards(boards, { features: ['WiFi', 'BLE'] }).map((b) => b.id)).toEqual(['B'])
   })
 
+  it('widens on manufacturer, because a board has only one (#919)', () => {
+    // The opposite of features, and the whole reason the two facets are not the
+    // same control underneath. Intersecting two makers is empty by
+    // construction, so "Adafruit AND LILYGO" could only ever return nothing —
+    // a chip pair that can only disappoint. Ticking both means both.
+    expect(filterBoards(boards, { vendors: ['Adafruit', 'LILYGO'] }).map((b) => b.id)).toEqual([
+      'A',
+      'D'
+    ])
+    expect(filterBoards(boards, { vendors: ['Adafruit'] }).map((b) => b.id)).toEqual(['A'])
+  })
+
+  it('widens on processor for the same reason', () => {
+    expect(filterBoards(boards, { mcus: ['rp2040', 'esp32s3'] }).map((b) => b.id)).toEqual([
+      'A',
+      'C'
+    ])
+  })
+
+  it('still narrows ACROSS facets, so a maker and a feature compound', () => {
+    // OR inside a facet, AND between them: LILYGO or Espressif, and of those
+    // only the ones with LoRa.
+    expect(
+      filterBoards(boards, { vendors: ['LILYGO', 'Espressif'], features: ['LoRa'] }).map(
+        (b) => b.id
+      )
+    ).toEqual(['D'])
+  })
+
+  it('treats an empty facet as no opinion rather than as no boards', () => {
+    expect(filterBoards(boards, { vendors: [], mcus: [] })).toHaveLength(4)
+  })
+
   it('matches text across vendor, product, id and mcu', () => {
     expect(filterBoards(boards, { text: 'lilygo' }).map((b) => b.id)).toEqual(['D'])
     expect(filterBoards(boards, { text: 'esp32s3' }).map((b) => b.id)).toEqual(['C'])
@@ -222,14 +255,32 @@ describe('the filter options', () => {
     board({ vendor: 'Espressif', mcu: 'esp32', features: ['WiFi', 'Camera'] })
   ]
 
-  it('lists each vendor and chip once, sorted', () => {
-    expect(vendorsOf(boards)).toEqual(['Adafruit', 'Espressif'])
-    expect(mcusOf(boards)).toEqual(['esp32', 'rp2040'])
+  it('lists each vendor and chip once, commonest first with its count (#919)', () => {
+    // Commonest-first is what makes a collapsed list of ten useful: the head is
+    // most people's board, where the first ten alphabetically are curiosities.
+    // The count travels with it because it is what makes that order legible.
+    expect(vendorOptions(boards)).toEqual([
+      { value: 'Espressif', count: 2 },
+      { value: 'Adafruit', count: 1 }
+    ])
+    expect(mcuOptions(boards)).toEqual([
+      { value: 'esp32', count: 2 },
+      { value: 'rp2040', count: 1 }
+    ])
+  })
+
+  it('breaks a tie alphabetically, so the order is stable between renders', () => {
+    const tied = [board({ vendor: 'Pimoroni' }), board({ vendor: 'Arduino' })]
+    expect(vendorOptions(tied).map((o) => o.value)).toEqual(['Arduino', 'Pimoroni'])
   })
 
   it('orders features commonest first, so the useful ones lead', () => {
     // Alphabetical would head the list with `Audio Codec` and bury WiFi.
-    expect(featuresOf(boards)).toEqual(['WiFi', 'BLE', 'Camera'])
+    expect(featureOptions(boards)).toEqual([
+      { value: 'WiFi', count: 3 },
+      { value: 'BLE', count: 1 },
+      { value: 'Camera', count: 1 }
+    ])
   })
 })
 
@@ -279,7 +330,7 @@ describe('the generated seed that actually ships', () => {
   })
 
   it('carries the boards Thonny’s catalogue does not', () => {
-    const vendors = vendorsOf(doc!.boards)
+    const vendors = vendorOptions(doc!.boards).map((o) => o.value)
     expect(vendors).toContain('Adafruit')
     expect(vendors.length).toBeGreaterThan(40)
   })

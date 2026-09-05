@@ -16,6 +16,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The Board Finder is dark on both skins, and its manufacturers are chips**
+  (#919). Two of its filters were dropdowns, which hold one value at a time and
+  keep the other 53 out of sight: you could look for an Adafruit board or a
+  Pimoroni one, never both, and nothing on screen said what the catalogue was
+  actually made of. Manufacturer and Processor are now chip rows like Features,
+  each chip carrying its own board count, ordered commonest-first with the tail
+  behind **Show more** / **Show less** — ten chips collapsed, which is 135 of the
+  225 boards by maker and 155 by chip family, so most people's board is named
+  before they open anything. Ticking two makers means **either**, not both, which
+  is the opposite of what ticking two features means and deliberately so: a board
+  has exactly one manufacturer, so an "Adafruit AND Pimoroni" filter could only
+  ever return nothing. A board's features are a set, so "WiFi and BLE" is a real
+  question. The gallery also stops following the theme: it is dark now on the
+  parchment skin too. It opens from a button inside the flash dialog, which has
+  been deliberately dark in both skins since #14 — a parchment sheet unrolling
+  out of a dark modal was the odd one out inside its own container — and 217
+  product photographs shot on white read as one beige field on parchment and as
+  217 lit objects on a dark ground.
+- **The full board page closes with an X, in the corner** (#919). It had a
+  "← All boards" button in the top left, which said the same thing as the
+  gallery's own close in a different idiom and a different place. It is now the
+  same control, in the same corner, and Esc still backs out one step.
 - **The flash dialog reads as fewer decisions** (#896). Detect board and Board
   Finder have moved to sit beside the Board dropdown rather than floating above
   the label they fill in — the dropdown is the answer, and those two buttons are
@@ -46,7 +68,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   every id has a handler and every handler an id. Open Folder moved onto it and
   its own channel is gone. State travels back the same way, so an item that
   should grey out has somewhere to learn that it should.
-
+- **A preview of the board you are resting on** (#919). Deciding between two
+  boards used to mean opening one, reading it, coming back, and opening the
+  other. Rest the pointer on a card and it grows into the same card with the rest
+  of the answer on it — what there is to flash and how many builds, the MCU and
+  port, the flash and RAM figures where they are sourced, the features it
+  carries, and a **Details** button into the full page. It waits 400 ms first, so a pointer
+  crossing the grid on its way to the sidebar opens nothing behind it, and it
+  flips above the card on the bottom row rather than opening into the edge of the
+  scroller. A touch is a tap, not a hover, so touch keeps the plain card and the
+  tap that already opened the full page; a keyboard gets the preview on focus,
+  with its Details button as the next stop and Enter on the card doing the same
+  thing. Nothing in it is reachable only by hovering.
 - **The boards MicroPython does not build for, and where the numbers come from**
   (#902, #897). The Board Finder had 15 Adafruit boards and not one Adafruit
   ESP32 board, because MicroPython publishes no firmware under any of those
