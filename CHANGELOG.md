@@ -8,6 +8,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Both file toolbars now sit the same way** (#868). The Device files actions
+  shared the title's row and were pushed to one end of it, while the Local files
+  actions had a centred row of their own — the same control in two places. Both
+  now span the full width of their panel with the icons centred. The device
+  panel's sync and tick glyphs were also drawn 14 units wide inside the same
+  14px box where refresh is drawn 10, which made them read as bigger icons; they
+  are redrawn to match. Refresh, New file and New folder had been defined twice,
+  byte for byte, once in each panel — they are one shared set now, so the two
+  toolbars cannot drift apart again.
+
 - **The Local files and Device files actions sit in a toolbar** (#865). The
   refresh / new file / new folder / open folder icons — and the device panel's
   sync / refresh / new file / new folder — were four loose glyphs floating in a

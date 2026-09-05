@@ -6,6 +6,7 @@ import { useSync } from '../store/sync'
 import { useFileSelection } from '../store/file-selection'
 import { ContextMenu, type ContextMenuItem, type ContextMenuPosition } from './ContextMenu'
 import { usePrompt } from './PromptModal'
+import { iconProps, NewFileIcon, NewFolderIcon, RefreshIcon } from './file-tree-icons'
 import './LocalFileTree.css'
 
 /**
@@ -25,52 +26,12 @@ import './LocalFileTree.css'
  * "open folder" icon launches the native picker.
  */
 
-/** Inline pixel icons matching the retro toolbar style (16×16, crispEdges). */
-const iconProps = {
-  viewBox: '0 0 16 16',
-  width: 14,
-  height: 14,
-  shapeRendering: 'crispEdges' as const,
-  'aria-hidden': true,
-  focusable: false
-}
-
-// page with a `+` (new file)
-const NewFileIcon = (): JSX.Element => (
-  <svg {...iconProps}>
-    <g fill="currentColor">
-      <path d="M3 1h6l4 4v10H3z M9 1v4h4" />
-      <rect x="7" y="8" width="2" height="6" />
-      <rect x="5" y="10" width="6" height="2" />
-    </g>
-  </svg>
-)
-
-// folder with a `+` (new folder)
-const NewFolderIcon = (): JSX.Element => (
-  <svg {...iconProps}>
-    <g fill="currentColor">
-      <path d="M1 3h5l2 2h7v9H1z" />
-      <rect x="7" y="8" width="2" height="5" fill="var(--bg-elevated)" />
-      <rect x="5.5" y="9.5" width="5" height="2" fill="var(--bg-elevated)" />
-    </g>
-  </svg>
-)
-
+/** The rest of the toolbar's icons are shared with the Device panel — see
+ *  {@link file://./file-tree-icons.tsx}. This one is local-only. */
 // folder (open a different folder)
 const OpenFolderIcon = (): JSX.Element => (
   <svg {...iconProps}>
     <path d="M1 3h5l2 2h7v8H1z" fill="currentColor" />
-  </svg>
-)
-
-// circular arrows (refresh) — re-read the current folder's listing
-const RefreshIcon = (): JSX.Element => (
-  <svg {...iconProps}>
-    <g fill="currentColor">
-      <path d="M3 8a5 5 0 0 1 8.5-3.5L13 3v4H9l1.6-1.6A3 3 0 0 0 5 8z" />
-      <path d="M13 8a5 5 0 0 1-8.5 3.5L3 13V9h4l-1.6 1.6A3 3 0 0 0 11 8z" />
-    </g>
   </svg>
 )
 
@@ -540,7 +501,7 @@ export function LocalFileTree(): JSX.Element {
           </button>
         </div>
         <div
-          className="localtree__header-actions localtree__header-actions--center btn-seg"
+          className="localtree__header-actions btn-seg btn-seg--full"
           role="toolbar"
           aria-label="File actions"
         >
