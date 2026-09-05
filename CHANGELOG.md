@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A refactoring for the WiFi trap that only bites on the second Run** (#871).
+  Pressing Run does a soft reboot, which re-runs your file — but a soft reboot
+  does not reset the ESP32's radio, so a station left mid-connect by the previous
+  run makes the next `connect()` raise `OSError: Wifi Internal State Error`. The
+  code is correct on a cold boot and broken on the second Run, which points the
+  blame at whatever you changed in between. Snakie now spots
+  `wlan.active(True)` followed by `wlan.connect(…)` with no `active(False)`
+  first, and offers to insert it — with a comment, because the line looks
+  pointless to anyone who has not met the bug. The "Why?" article explains the
+  soft-reset model and why an `isconnected()` guard, which is what everyone
+  tries first, cannot fix it.
+
 ### Fixed
 
 - **An interrupted install no longer leaves a broken file on the board** (#864).

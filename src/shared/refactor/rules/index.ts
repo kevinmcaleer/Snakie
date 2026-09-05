@@ -95,7 +95,8 @@ import { packIntoBufferRule } from './pack-into-buffer' // 85
 import { dropUModuleShimRule } from './drop-u-module-shim' // 86
 import { batchFileWritesRule } from './batch-file-writes' // 87
 import { integerDivisionRule } from './integer-division' // 88
-import { timerCallbackAllocationRule } from './timer-callback-allocation' // 89
+import { timerCallbackAllocationRule } from './timer-callback-allocation'
+import { wifiResetBeforeConnectRule } from './wifi-reset-before-connect' // 91
 
 // R6b — board-specific optimisation (§3.7)
 import { tryNativeEmitterRule } from './try-native-emitter' // 43
@@ -215,7 +216,8 @@ export const MICROPYTHON_RULES: RefactorRule<unknown>[] = [
   dropUModuleShimRule,
   batchFileWritesRule,
   integerDivisionRule,
-  timerCallbackAllocationRule
+  timerCallbackAllocationRule,
+  wifiResetBeforeConnectRule
 ]
 
 /** §3.7 — board-specific optimisation. Every rule here carries a `requires`
