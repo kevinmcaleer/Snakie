@@ -84,24 +84,58 @@
   min-width: 14rem;
   max-width: 26rem;
   padding: 0.45rem 0.55rem;
-  background: var(--bg-elevated);
-  color: var(--text);
-  border: var(--border-w) solid var(--border);
+  /* DARK IN BOTH THEMES, deliberately (#890) — the same #1f2430 panel and
+     #f4f6f8 ink the flash dialog uses, and for the same reason.
+     `--bg-elevated`/`--text` made this correct-by-the-rules and hard to read in
+     practice: on the skeuomorph skin it became brushed-metal grey under
+     near-black 0.72rem type, over a status bar that is itself elevated, so the
+     whole popup had almost no separation from what was behind it. A floating
+     readout wants maximum contrast, not theme continuity — it is a thing on top
+     of the app, not part of its surface. Every colour below is therefore this
+     popup's own; see FirmwareFlasher.css for the same decision. */
+  background: #1f2430;
+  color: #f4f6f8;
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: var(--radius);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
   font-size: 0.72rem;
   cursor: default;
 }
 
 .syncind__summary {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
   margin: 0;
-  color: var(--text);
+  color: #f4f6f8;
   font-weight: 600;
+}
+
+/* Maximise, top-left of the popup (#890). */
+.syncind__max {
+  flex: 0 0 auto;
+  padding: 0 0.25rem;
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
+  color: #f4f6f8;
+  font: inherit;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.syncind__max:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.syncind__max:focus-visible {
+  outline: 2px solid #8fbfff;
+  outline-offset: 1px;
 }
 
 .syncind__empty {
   margin: 0;
-  color: var(--text-muted);
+  color: #c7ccd4;
 }
 
 .syncind__list {
@@ -122,19 +156,22 @@
   align-items: baseline;
   gap: 0.4rem;
   padding: 0.1rem 0;
-  color: var(--text-muted);
+  color: #a8aeb8;
 }
 
 .syncind__row--done {
-  color: var(--text);
+  color: #f4f6f8;
 }
 
+/* Strong, distinct states (#890): amber for in-flight, green for arrived, red
+   for failed — each chosen against the #1f2430 panel rather than inherited from
+   a theme that knows nothing about it. */
 .syncind__row--syncing {
-  color: var(--accent);
+  color: #e7bf62;
 }
 
 .syncind__row--error {
-  color: var(--danger);
+  color: #ff9b8a;
 }
 
 .syncind__tick {
@@ -144,7 +181,7 @@
 }
 
 .syncind__row--done .syncind__tick {
-  color: var(--accent-2);
+  color: #6fdc9b;
 }
 
 .syncind__name {
@@ -162,12 +199,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text-muted);
+  color: #a8aeb8;
   font-size: 0.68rem;
 }
 
 .syncind__err {
-  color: var(--danger);
+  color: #ff9b8a;
 }
 
 /* --- Stop, for the device queue (#889) ------------------------------------- */
@@ -175,9 +212,9 @@
 .syncind__stop {
   align-self: flex-start;
   padding: 0.2rem 0.6rem;
-  background: var(--bg-sunken);
-  color: var(--danger);
-  border: var(--border-w) solid var(--border);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ff9b8a;
+  border: 1px solid rgba(255, 155, 138, 0.5);
   border-radius: var(--radius);
   font: inherit;
   font-weight: 600;
@@ -185,11 +222,11 @@
 }
 
 .syncind__stop:hover {
-  background: var(--bg-elevated);
-  border-color: var(--danger);
+  background: rgba(255, 155, 138, 0.16);
+  border-color: #ff9b8a;
 }
 
 .syncind__stop:focus-visible {
-  outline: var(--border-w) solid var(--danger);
+  outline: 2px solid #ff9b8a;
   outline-offset: 2px;
 }

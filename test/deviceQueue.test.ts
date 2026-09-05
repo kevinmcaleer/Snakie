@@ -239,6 +239,7 @@ describe('when the modal should appear', () => {
     tasks: [task()],
     busy: true,
     error: null,
+    minimised: false,
     ...over
   })
 

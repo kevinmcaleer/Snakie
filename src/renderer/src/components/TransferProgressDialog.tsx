@@ -31,6 +31,13 @@ export interface TransferProgressDialogProps {
   onClose: () => void
   /** Ask the running transfer to stop after the current file. */
   onCancel: () => void
+  /**
+   * Label for the close button while work is still running (#890). The device
+   * queue passes "Minimise", because there it puts the dialog into the status
+   * bar rather than ending anything — calling that "Close" would read as
+   * "stop", which is the button next to it.
+   */
+  minimiseLabel?: string
 }
 
 /** How long a finished, successful transfer stays on screen before closing. */
@@ -58,6 +65,7 @@ export function TransferProgressDialog({
   running,
   error,
   onClose,
+  minimiseLabel,
   onCancel
 }: TransferProgressDialogProps): JSX.Element {
   const done = progress ? progress.done : rows.filter((r) => r.state === 'done').length
@@ -146,9 +154,24 @@ export function TransferProgressDialog({
 
         <div className="transfer__actions">
           {running ? (
-            <button type="button" className="transfer__btn" onClick={onCancel}>
-              Cancel
-            </button>
+            <>
+              {/* Minimise sits BESIDE Cancel, never instead of it: "I want my
+                  app back" and "stop touching my board" are different wishes,
+                  and a dialog that offered only the second would make the first
+                  cost the transfer (#890). */}
+              {minimiseLabel && (
+                <button
+                  type="button"
+                  className="transfer__btn transfer__btn--primary"
+                  onClick={onClose}
+                >
+                  {minimiseLabel}
+                </button>
+              )}
+              <button type="button" className="transfer__btn" onClick={onCancel}>
+                Cancel
+              </button>
+            </>
           ) : (
             <button type="button" className="transfer__btn transfer__btn--primary" onClick={onClose}>
               Close
