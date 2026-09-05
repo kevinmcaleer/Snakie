@@ -15,12 +15,12 @@ import { registerUpdater, checkForUpdatesManual } from './updater'
 import { registerBoardIpc, openBoardView, disposeBoard } from './board'
 import { registerFindIpc, disposeFind } from './find'
 import { registerInstrumentWindowsIpc, disposeInstrumentWindows } from './instrumentWindows'
-import { registerWorkspaceIpc, requestOpenFolder, disposeWorkspace } from './workspace'
+import { registerWorkspaceIpc, disposeWorkspace } from './workspace'
 import { registerConsoleWindowIpc, disposeConsoleWindow } from './consoleWindow'
 import { registerPartsIpc } from './parts/ipc'
 import { registerRobotIpc } from './robot/ipc'
 import { registerFeedbackIpc } from './feedback/ipc'
-import { setupAppMenu } from './menu'
+import { setupAppMenu, disposeAppMenu } from './menu'
 
 // Disable GPU / hardware-accelerated rendering on the Raspberry Pi build (Linux
 // arm64). The Pi's GL stack can't report VSync timing to Chromium, which floods
@@ -252,10 +252,18 @@ app.whenReady().then(() => {
   // Build the application menu (issue #89). Its "Check for Updates…" item and
   // the clickable status-bar version both invoke the same user-initiated check.
   // Installed after `registerUpdater` so `checkForUpdatesManual` is assigned.
-  // File ▸ Open Folder… relays to the renderer, which owns the picker (#882);
-  // its resolver is captured by `registerWorkspaceIpc` below, and the menu only
-  // fires on a click, so registration order doesn't matter.
-  setupAppMenu(() => void checkForUpdatesManual(), openBoardView, requestOpenFolder)
+  // Everything else the menu does travels over the one `menu:command` channel to
+  // the main window (#914) — File ▸ Open Folder… relays to the renderer, which
+  // owns the picker (#882), and View ▸ Workspace to the layout store (#916). The
+  // window resolver is a closure and the menu only fires on a click, so
+  // registration order doesn't matter.
+  setupAppMenu(
+    {
+      'app.checkForUpdates': () => void checkForUpdatesManual(),
+      'view.boardWindow': openBoardView
+    },
+    () => mainWindow
+  )
 
   // Register the LLM (Claude) chat layer. All Anthropic API calls happen in the
   // main process; deltas stream back to whichever window is currently live.
@@ -319,4 +327,5 @@ app.on('before-quit', () => {
   disposeInstrumentWindows()
   disposeConsoleWindow()
   disposeWorkspace()
+  disposeAppMenu()
 })

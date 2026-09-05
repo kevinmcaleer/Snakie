@@ -8,6 +8,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Switch workspace from the menu, and one command channel behind it** (#914,
+  #916). **View ▸ Workspace** lists Code, Electronics and Build with a radio tick
+  on the one you are in, and **Cmd/Ctrl 1, 2 and 3** switch between them — the
+  first keyboard route to the three workspaces, and the shortcuts #920 asks for.
+  The tick follows the switch wherever it happens: pick Electronics in the
+  switcher and the menu agrees, because the renderer publishes what the menu
+  should show and the menu rebuilds. The submenu is built from the workspace list
+  itself, so a fourth workspace would appear in it — correctly labelled — with
+  nothing here edited.
+
+  Underneath, the menu now reaches the app through **one typed command channel**
+  instead of a hand-built one per item. Adding File ▸ Open Folder… cost six edits
+  — its own IPC channel, a relay, a preload subscription, a stub for the web
+  build, a listener, and another argument on `buildAppMenu` — and the menu work
+  still to come would have repeated that a dozen times, which is how a menu ends
+  up with items that quietly do nothing. There is now one id list shared by the
+  main process, the preload and the renderer, one dispatcher, and a test that
+  every id has a handler and every handler an id. Open Folder moved onto it and
+  its own channel is gone. State travels back the same way, so an item that
+  should grey out has somewhere to learn that it should.
+
 - **The boards MicroPython does not build for, and where the numbers come from**
   (#902, #897). The Board Finder had 15 Adafruit boards and not one Adafruit
   ESP32 board, because MicroPython publishes no firmware under any of those

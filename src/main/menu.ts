@@ -1,155 +1,120 @@
-import { app, Menu, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu } from 'electron'
+import { appMenuTemplate } from './menu-template'
+import {
+  EMPTY_MENU_STATE,
+  coerceMenuState,
+  type MainMenuCommand,
+  type MenuCommand,
+  type MenuState
+} from '../shared/menu-commands'
 
 /**
- * Application menu (issue #89).
+ * The application menu, and the one channel it talks to the app through (#914).
  *
- * Snakie previously relied on Electron's default menu (and `autoHideMenuBar`).
- * To add a "Check for Updates…" command we build an explicit menu from the
- * standard roles so the normal Edit / View / Window behaviour is preserved —
- * we only insert our own items. "Check for Updates…" goes:
+ * `menu-template.ts` decides what the menu LOOKS like; this file owns the two
+ * halves that need a live app:
  *
- *   - macOS  → in the app menu (first menu, named after the app), just after
- *              "About Snakie", matching the platform convention;
- *   - Win/Linux → in a Help menu (created here, since the default template has
- *              none) alongside the About item.
+ *   menu:command  (main → MAIN WINDOW)  a command id the renderer runs
+ *   menu:state    (MAIN WINDOW → main)  ticks + greyed-out items, then rebuild
  *
- * File ▸ Open Folder… (#882) and View ▸ Board View sit where their platform
- * conventions put them, and carry the accelerators that make them reachable
- * without hunting for a button.
+ * Clicking any item calls one `onCommand(id)`. A command in `handlers` is a main
+ * process action (the updater, the Board View window) and runs here; anything
+ * else is relayed to the main window, where one dispatcher turns it into a store
+ * action or one of the window events the app already listens for. That is why
+ * adding a menu item is no longer six edits and another positional argument on
+ * `buildAppMenu`.
  *
- * The item invokes the same `checkForUpdatesManual` the clickable status-bar
- * version triggers via IPC — a user-initiated GitHub update check (see
- * `updater.ts`). It works the same way everywhere: in packaged builds it checks
- * GitHub Releases and prompts to download; unpackaged it shows a friendly note.
- *
- * @param onCheckForUpdates handler for the "Check for Updates…" item.
- * @param onOpenBoard handler for the Board View item.
- * @param onOpenFolder handler for the File ▸ Open Folder… item.
+ * The state comes back the other way because the menu is built HERE and every
+ * fact it reflects — which workspace is showing, whether a board is connected,
+ * whether a file is open — lives THERE. A published state rebuilds the menu, so
+ * the View ▸ Workspace radio follows the in-app switcher (#916).
  */
-export function buildAppMenu(
-  onCheckForUpdates: () => void,
-  onOpenBoard: () => void,
-  onOpenFolder: () => void
-): Menu {
-  const isMac = process.platform === 'darwin'
-  const appName = app.name
 
-  const checkForUpdatesItem: MenuItemConstructorOptions = {
-    label: 'Check for Updates…',
-    click: () => onCheckForUpdates()
+/** The renderer's latest published state (ticks + greyed items). */
+let menuState: MenuState = EMPTY_MENU_STATE
+/** Serialised `menuState`, so a republish that changes nothing doesn't rebuild
+ *  the menu — the renderer publishes on every relevant state change, and on
+ *  macOS a needless `setApplicationMenu` visibly closes an open menu. */
+let menuStateKey = JSON.stringify(EMPTY_MENU_STATE)
+/** Resolver for the main editor window — the renderer that runs the relayed
+ *  commands. Captured at setup, so registration order doesn't matter. */
+let resolveMainWindow: () => BrowserWindow | null = () => null
+/** Main-process commands and what they do. `Record<MainMenuCommand, …>` makes a
+ *  command with no handler a COMPILE error, the same guarantee the renderer's
+ *  dispatcher gets from its own exhaustive table. */
+let mainHandlers: Record<MainMenuCommand, () => void> | null = null
+
+/** Route one clicked command: main-process commands run here, everything else
+ *  goes to the main window. A command sent while no main window exists is
+ *  dropped — there is nothing to run it. */
+function dispatch(id: MenuCommand): void {
+  const local = mainHandlers?.[id as MainMenuCommand]
+  if (local) {
+    local()
+    return
   }
-
-  // Opener for the Board View window (#185). The open windows themselves are
-  // listed automatically by the `role: 'windowMenu'` Window menu (now that the
-  // window has native chrome); this item just opens/focuses it from the keyboard.
-  const boardViewItem: MenuItemConstructorOptions = {
-    label: 'Board View',
-    accelerator: 'CmdOrCtrl+Shift+B',
-    click: () => onOpenBoard()
-  }
-
-  // Open Folder (#882). The main toolbar's folder icon was a duplicate of the
-  // Local Files panel's own, so it went — but that button was ALSO the only
-  // Open Folder reachable when the Files panel is collapsed, or in Electronics /
-  // Build where there is no files panel at all. The action lives here now, with
-  // the accelerator every editor uses for it, so removing the icon removed a
-  // duplicate rather than the ability.
-  const openFolderItem: MenuItemConstructorOptions = {
-    label: 'Open Folder…',
-    accelerator: 'CmdOrCtrl+O',
-    click: () => onOpenFolder()
-  }
-
-  const template: MenuItemConstructorOptions[] = [
-    // macOS app menu (omitted on Windows/Linux). About → Check for Updates → …
-    ...(isMac
-      ? ([
-          {
-            label: appName,
-            submenu: [
-              { role: 'about' },
-              checkForUpdatesItem,
-              { type: 'separator' },
-              { role: 'services' },
-              { type: 'separator' },
-              { role: 'hide' },
-              { role: 'hideOthers' },
-              { role: 'unhide' },
-              { type: 'separator' },
-              { role: 'quit' }
-            ]
-          }
-        ] as MenuItemConstructorOptions[])
-      : []),
-    {
-      label: 'File',
-      submenu: [openFolderItem, { type: 'separator' }, isMac ? { role: 'close' } : { role: 'quit' }]
-    },
-    {
-      label: 'Edit',
-      submenu: [
-        { role: 'undo' },
-        { role: 'redo' },
-        { type: 'separator' },
-        { role: 'cut' },
-        { role: 'copy' },
-        { role: 'paste' },
-        ...(isMac
-          ? ([
-              { role: 'pasteAndMatchStyle' },
-              { role: 'delete' },
-              { role: 'selectAll' }
-            ] as MenuItemConstructorOptions[])
-          : ([
-              { role: 'delete' },
-              { type: 'separator' },
-              { role: 'selectAll' }
-            ] as MenuItemConstructorOptions[]))
-      ]
-    },
-    {
-      label: 'View',
-      submenu: [
-        { role: 'reload' },
-        { role: 'forceReload' },
-        { role: 'toggleDevTools' },
-        { type: 'separator' },
-        boardViewItem,
-        { type: 'separator' },
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
-        { type: 'separator' },
-        { role: 'togglefullscreen' }
-      ]
-    },
-    // The Window menu uses the standard `windowMenu` role so the OS manages it —
-    // on macOS that AUTO-LISTS every open window (the main editor, the Board View
-    // and Find & Replace), which is what #185 wanted; this works now that those
-    // windows have native chrome (frameless windows were skipped by the OS list).
-    { role: 'windowMenu' },
-    {
-      role: 'help',
-      submenu: [
-        // On macOS "Check for Updates…" lives in the app menu, so the Help menu
-        // only needs the About item on Windows/Linux (macOS already has About in
-        // its app menu). Keep a Help menu everywhere for a consistent home.
-        ...(isMac ? [] : ([{ role: 'about' }, checkForUpdatesItem] as MenuItemConstructorOptions[]))
-      ]
-    }
-  ]
-
-  return Menu.buildFromTemplate(template)
+  const mw = resolveMainWindow()
+  if (mw && !mw.isDestroyed()) mw.webContents.send('menu:command', id)
 }
 
 /**
- * Build the application menu and install it as the global menu. Called once at
- * startup from `app.whenReady`.
+ * Build the application menu for the current app name, platform and state.
+ *
+ * @param onCommand handler for every command item in the menu.
+ * @param state the renderer's ticks + greyed-out items (defaults to none).
+ */
+export function buildAppMenu(
+  onCommand: (id: MenuCommand) => void,
+  state: MenuState = EMPTY_MENU_STATE
+): Menu {
+  return Menu.buildFromTemplate(
+    appMenuTemplate({
+      appName: app.name,
+      isMac: process.platform === 'darwin',
+      state,
+      onCommand
+    })
+  )
+}
+
+/** Rebuild the menu from the current state and install it. */
+function install(): void {
+  Menu.setApplicationMenu(buildAppMenu(dispatch, menuState))
+}
+
+/**
+ * Build the application menu, install it as the global menu, and register the
+ * command channel. Called once at startup from `app.whenReady`.
+ *
+ * @param handlers the main-process commands (updater, Board View window).
+ * @param getMainWindow resolves the live editor window, for relayed commands.
  */
 export function setupAppMenu(
-  onCheckForUpdates: () => void,
-  onOpenBoard: () => void,
-  onOpenFolder: () => void
+  handlers: Record<MainMenuCommand, () => void>,
+  getMainWindow: () => BrowserWindow | null
 ): void {
-  Menu.setApplicationMenu(buildAppMenu(onCheckForUpdates, onOpenBoard, onOpenFolder))
+  mainHandlers = handlers
+  resolveMainWindow = getMainWindow
+
+  // The renderer publishes what the menu should reflect whenever it changes.
+  // Sanitised here: it crosses a process boundary, so an unknown id or a
+  // non-boolean would otherwise reach the template as an item nobody can explain.
+  ipcMain.on('menu:state', (_e, raw: unknown) => {
+    const next = coerceMenuState(raw)
+    const key = JSON.stringify(next)
+    if (key === menuStateKey) return
+    menuState = next
+    menuStateKey = key
+    install()
+  })
+
+  install()
+}
+
+/** Forget the menu's wiring (used on quit / in tests). */
+export function disposeAppMenu(): void {
+  menuState = EMPTY_MENU_STATE
+  menuStateKey = JSON.stringify(EMPTY_MENU_STATE)
+  mainHandlers = null
+  resolveMainWindow = () => null
 }

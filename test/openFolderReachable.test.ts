@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
+import type { MenuItemConstructorOptions } from 'electron'
+import { appMenuTemplate } from '../src/main/menu-template'
+import type { MenuCommand } from '../src/shared/menu-commands'
 
 /**
  * Open Folder stays reachable (#882).
@@ -27,12 +30,23 @@ const PRELOAD = readFileSync('src/preload/index.ts', 'utf8')
 const FALLBACK = readFileSync('src/renderer/src/lib/preloadFallback.ts', 'utf8')
 const APP_SHELL = readFileSync('src/renderer/src/components/AppShell.tsx', 'utf8')
 
-/** The body of the `onOpenFolder` subscription in AppShell — what actually runs
- *  when the menu item fires. */
+/** The body of the app-menu command subscription in AppShell — what actually
+ *  runs when the Open Folder item fires. */
 function openFolderHandler(): string {
-  const start = APP_SHELL.indexOf('window.api.workspace.onOpenFolder(')
-  expect(start, 'AppShell subscribes to the menu request').toBeGreaterThan(-1)
+  const start = APP_SHELL.indexOf('window.api.menu.onCommand(')
+  expect(start, 'AppShell subscribes to the menu commands').toBeGreaterThan(-1)
   return APP_SHELL.slice(start, APP_SHELL.indexOf('return off', start))
+}
+
+/** The File submenu, as the menu template actually builds it. */
+function fileSubmenu(fired: MenuCommand[]): MenuItemConstructorOptions[] {
+  const template = appMenuTemplate({
+    appName: 'Snakie',
+    isMac: true,
+    onCommand: (id) => fired.push(id)
+  })
+  const file = template.find((m) => m.label === 'File')
+  return Array.isArray(file?.submenu) ? file.submenu : []
 }
 
 describe('the duplicate is gone', () => {
@@ -68,37 +82,48 @@ describe('the Local Files panel keeps it', () => {
 
 describe('the app menu covers a collapsed or absent panel', () => {
   it('offers File ▸ Open Folder… with the standard accelerator', () => {
-    expect(MENU).toContain("label: 'Open Folder…'")
-    expect(MENU).toContain("accelerator: 'CmdOrCtrl+O'")
-    // It has to be IN the File submenu, not merely declared: a menu item nothing
-    // lists is exactly as unreachable as the button that was removed.
-    const file = MENU.slice(MENU.indexOf("label: 'File'"))
-    expect(file.slice(0, file.indexOf(']'))).toContain('openFolderItem')
+    // Built from the real template, so this checks the item the user gets rather
+    // than a line of source: it has to be IN the File submenu, not merely
+    // declared — a menu item nothing lists is exactly as unreachable as the
+    // button that was removed.
+    const item = fileSubmenu([]).find((m) => m.label === 'Open Folder…')
+    expect(item, 'File ▸ Open Folder…').toBeTruthy()
+    expect(item?.accelerator).toBe('CmdOrCtrl+O')
+    expect(item?.enabled).toBe(true)
   })
 
   it('is wired to a real handler at startup', () => {
-    expect(MENU).toContain('click: () => onOpenFolder()')
-    expect(MAIN).toContain('requestOpenFolder')
+    // Clicking it fires the command; the menu routes commands to the main window
+    // and `setupAppMenu` is installed with the resolver that finds it (#914).
+    const fired: MenuCommand[] = []
+    const item = fileSubmenu(fired).find((m) => m.label === 'Open Folder…')
+    ;(item?.click as unknown as () => void)()
+    expect(fired).toEqual(['file.openFolder'])
+    expect(MAIN).toContain('setupAppMenu(')
   })
 })
 
 describe('the wire from the menu to the picker', () => {
-  const CHANNEL = 'workspace:openFolder'
+  // Open Folder had a hand-built channel of its own until #914; it now travels
+  // the ONE command channel every menu item uses.
+  const CHANNEL = 'menu:command'
 
   it('carries the request from main to the main window', () => {
-    expect(MAIN_WORKSPACE).toContain(`webContents.send('${CHANNEL}')`)
+    expect(MENU).toContain(`webContents.send('${CHANNEL}', id)`)
     // A destroyed window would throw and take the menu click with it.
-    expect(MAIN_WORKSPACE).toContain('isDestroyed()')
+    expect(MENU).toContain('isDestroyed()')
+    // The channel it replaced is gone, not left behind half-wired.
+    expect(MAIN_WORKSPACE).not.toContain('workspace:openFolder')
   })
 
   it('is exposed over the bridge on the SAME channel, and unsubscribes', () => {
     expect(PRELOAD).toContain(`ipcRenderer.on('${CHANNEL}'`)
     expect(PRELOAD).toContain(`ipcRenderer.removeListener('${CHANNEL}'`)
-    expect(PRELOAD).toContain('onOpenFolder:')
+    expect(PRELOAD).toContain('onCommand:')
   })
 
   it('is inert outside Electron, where there is no menu bar', () => {
-    expect(FALLBACK).toContain('onOpenFolder: unsub')
+    expect(FALLBACK).toContain('onCommand: unsub')
   })
 
   it('ends in the renderer actually opening a folder', () => {
