@@ -43,12 +43,16 @@ export interface MenuCommandDeps {
    *  to the renderer — `fs.openFolderDialog` is what turns a chosen directory
    *  into the workspace's `currentFolder` — so the menu only pulls the trigger. */
   openFolder: () => void
+  /** Show the keyboard-shortcut cheatsheet (#920). The sheet is generated from
+   *  the menu template, so this only has to raise it. */
+  showShortcuts: () => void
 }
 
 /** Every renderer menu command and what it does. */
 export function menuCommandHandlers(deps: MenuCommandDeps): Record<RendererMenuCommand, () => void> {
   const handlers = {
-    'file.openFolder': () => deps.openFolder()
+    'file.openFolder': () => deps.openFolder(),
+    'help.shortcuts': () => deps.showShortcuts()
   } as Record<RendererMenuCommand, () => void>
   // Derived from WORKSPACE_IDS, like the menu itself: a fourth workspace gets
   // its menu item AND its handler with no edit here.

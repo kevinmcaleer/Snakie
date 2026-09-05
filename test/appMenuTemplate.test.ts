@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { MenuItemConstructorOptions } from 'electron'
-import { appMenuTemplate, workspaceSubmenu } from '../src/main/menu-template'
+import { appMenuTemplate, workspaceSubmenu } from '../src/shared/menu-template'
 import {
   MAIN_MENU_COMMANDS,
   RENDERER_MENU_COMMANDS,

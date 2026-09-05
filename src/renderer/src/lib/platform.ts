@@ -25,6 +25,16 @@ export function isElectron(): boolean {
   return typeof navigator !== 'undefined' && /electron/i.test(navigator.userAgent)
 }
 
+/**
+ * True on macOS — which decides how a keyboard shortcut is PRINTED (⌘⇧B rather
+ * than Ctrl+Shift+B), not what it does. Electron resolves `CmdOrCtrl` itself in
+ * the main process; the renderer only has to render the same string the way the
+ * platform's own menu bar does (#920).
+ */
+export function isMac(): boolean {
+  return typeof navigator !== 'undefined' && /mac/i.test(navigator.userAgent)
+}
+
 /** Web Serial (`navigator.serial`) — used for ESP32/ESP8266 flashing via esptool-js. */
 export function hasWebSerial(): boolean {
   return typeof navigator !== 'undefined' && 'serial' in navigator
