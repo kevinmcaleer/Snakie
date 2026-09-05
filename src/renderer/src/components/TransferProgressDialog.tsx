@@ -3,15 +3,26 @@ import './TransferProgressDialog.css'
 
 /** One row in the dialog's file list. */
 export interface TransferRow {
+  /** React key. Falls back to the label, which is unique for a file list but
+   *  not for a queue, where a step can share a name with the task above it. */
+  id?: string
   label: string
   state: 'pending' | 'copying' | 'done' | 'error'
   error?: string
+  /** A sub-step of the row above it — one file of a queued folder copy. */
+  indent?: boolean
 }
 
 export interface TransferProgressDialogProps {
   /** What is being copied, for the heading: `mylib → /lib`. */
   title: string
   rows: TransferRow[]
+  /**
+   * How far through we are. Defaults to counting `rows`, which is right when
+   * every row is a file; the device queue passes its own because a row there can
+   * be a heading over the steps that actually count (#837).
+   */
+  progress?: { done: number; total: number }
   /** True while the transfer is still running. */
   running: boolean
   /** Set when the transfer finished badly; keeps the dialog open. */
@@ -43,13 +54,14 @@ export const AUTO_DISMISS_MS = 1200
 export function TransferProgressDialog({
   title,
   rows,
+  progress,
   running,
   error,
   onClose,
   onCancel
 }: TransferProgressDialogProps): JSX.Element {
-  const done = rows.filter((r) => r.state === 'done').length
-  const total = rows.length
+  const done = progress ? progress.done : rows.filter((r) => r.state === 'done').length
+  const total = progress ? progress.total : rows.length
   const pct = total === 0 ? 100 : Math.round((done / total) * 100)
   const listRef = useRef<HTMLUListElement>(null)
 
@@ -105,14 +117,21 @@ export function TransferProgressDialog({
           />
         </div>
 
+        {/* Deliberately noun-free: the same dialog now reports a folder copy and
+            a queue of driver installs, and "3 of 12 files" is a lie about one of
+            them. The title says what is happening; this says how far in. */}
         <p className="transfer__count">
-          {error ? 'Stopped' : running ? 'Copying' : 'Copied'} {done} of {total}{' '}
-          {total === 1 ? 'file' : 'files'}
+          {error ? 'Stopped' : running ? 'Working' : 'Finished'} — {done} of {total}
         </p>
 
         <ul className="transfer__list" ref={listRef}>
           {rows.map((row) => (
-            <li key={row.label} className={`transfer__row transfer__row--${row.state}`}>
+            <li
+              key={row.id ?? row.label}
+              className={`transfer__row transfer__row--${row.state}${
+                row.indent ? ' transfer__row--sub' : ''
+              }`}
+            >
               <span className="transfer__tick" aria-hidden="true">
                 {row.state === 'done' ? '☑' : row.state === 'error' ? '☒' : '☐'}
               </span>

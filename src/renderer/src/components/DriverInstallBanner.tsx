@@ -199,22 +199,27 @@ export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.El
   const setStatus = (id: string, status: DriverStatus): void =>
     setStatuses((prev) => ({ ...prev, [id]: status }))
 
-  const installOne = async (need: PartDriverNeed, d: DriverFile): Promise<void> => {
+  const installOne = async (need: PartDriverNeed, d: DriverFile): Promise<boolean> => {
     const id = driverKey(need, d)
     setStatus(id, { state: 'installing' })
     // The mip/copy sequence lives in the shared installer (also used by the main
     // editor's missing-library banner, #166) — this wrapper just maps to status.
     const res = await installPartDriver(need.libraryId, need.partId, d)
     setStatus(id, { state: res.ok ? 'ok' : 'error', message: res.message, note: res.note })
+    return !res.cancelled
   }
 
   const installAll = async (): Promise<void> => {
     if (running || !connected) return
     setRunning(true)
     try {
+      // A row that fails does NOT stop the run — installing what can be
+      // installed is the useful behaviour. A CANCEL does (#837): the user asked
+      // for the board to be left alone, and queueing the next driver behind
+      // their cancel would be answering a different question.
       for (const need of visibleNeeds) {
         for (const d of need.drivers) {
-          await installOne(need, d)
+          if (!(await installOne(need, d))) return
         }
       }
     } finally {
