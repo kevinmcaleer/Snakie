@@ -23,9 +23,7 @@ const BoardPane = lazy(() => import('./BoardPane'))
 const RobotDockPanel = lazy(() => import('./RobotDockPanel'))
 // The Sprite editor overlay (launched from the Display instrument's SPRITES
 // key) — lazy so the canvas editor + codecs load only when opened.
-const SpriteEditor = lazy(() =>
-  import('./SpriteEditor').then((m) => ({ default: m.SpriteEditor }))
-)
+const SpriteEditor = lazy(() => import('./SpriteEditor').then((m) => ({ default: m.SpriteEditor })))
 import { MiniViewer } from './MiniViewer'
 import { useTheme } from '../hooks/useTheme'
 import { Toolbar } from './Toolbar'
@@ -53,6 +51,7 @@ import { runFindCommand } from './findController'
 import { ShellPanel } from './ShellPanel'
 import { RightPanel } from './RightPanel'
 import { runMenuCommand } from '../lib/menuCommands'
+import { readRecentFolders } from '../store/workspace'
 import { menuStateFrom } from '../../../shared/menu-commands'
 import { ShortcutSheet } from './ShortcutSheet'
 import { IS_WEB } from '../lib/env'
@@ -60,7 +59,7 @@ import { StatusBar } from './StatusBar'
 import { SettingsDialog, type SettingsTab } from './SettingsDialog'
 import { OPEN_SETTINGS_EVENT } from './settingsBus'
 import { OPEN_SPRITE_EDITOR_EVENT, type OpenSpriteEditorDetail } from './sprite-editor-bus'
-import { HELP_EVENT, type HelpEventDetail } from './editorBridge'
+import { dispatchCloseTab, HELP_EVENT, type HelpEventDetail } from './editorBridge'
 import { InstrumentLibBanner } from './InstrumentLibBanner'
 import { NoticeStack } from './Notice'
 import { PartsImportBanner } from './PartsImportBanner'
@@ -152,8 +151,8 @@ function LeftView({
     return (
       <LeftRegion title={title}>
         <p className="region__empty">
-          {title} needs a real filesystem and local processes (git / the Python
-          plugin host), so it&apos;s only available in the Snakie desktop app.
+          {title} needs a real filesystem and local processes (git / the Python plugin host), so
+          it&apos;s only available in the Snakie desktop app.
         </p>
       </LeftRegion>
     )
@@ -232,7 +231,18 @@ export function AppShell(): JSX.Element {
   // us stream every edit / theme change to that window over IPC so it updates
   // live. `boardOpened` tracks whether the window has been opened this session
   // (so we only stream while it's open); it resets when the user closes it.
-  const { openFiles, activeId, currentFolder, reloadContent, openFolder } = useWorkspace()
+  const {
+    openFiles,
+    activeId,
+    currentFolder,
+    reloadContent,
+    openFolder,
+    openFolderPath,
+    openFileDialog,
+    newFile,
+    saveFile,
+    saveFileAs
+  } = useWorkspace()
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
   const [boardOpened, setBoardOpened] = useState(false)
 
@@ -462,10 +472,7 @@ export function AppShell(): JSX.Element {
   // markers in the dock header AND the default-visible singletons below, so a
   // file using an OLED lights the I²C-display instrument without the user
   // hunting for it. Recomputed only when the source/python-ness changes.
-  const inUse = useMemo(
-    () => deriveInUse(boardSource, boardIsPython),
-    [boardSource, boardIsPython]
-  )
+  const inUse = useMemo(() => deriveInUse(boardSource, boardIsPython), [boardSource, boardIsPython])
 
   // SCOPE/METER start hidden (nothing is open until you summon one — so the dock
   // button isn't lit with no instrument behind it); both open paths (the dock
@@ -522,7 +529,10 @@ export function AppShell(): JSX.Element {
     (): void => setInstrumentsLive(!instrumentsLive),
     [instrumentsLive, setInstrumentsLive]
   )
-  const stopInstrumentsLive = useCallback((): void => setInstrumentsLive(false), [setInstrumentsLive])
+  const stopInstrumentsLive = useCallback(
+    (): void => setInstrumentsLive(false),
+    [setInstrumentsLive]
+  )
 
   const instruments = useInstruments({
     source: boardSource,
@@ -602,9 +612,27 @@ export function AppShell(): JSX.Element {
   // radio tick follows the switcher however the switch was made — the switcher
   // itself, the menu, or another window's `workspace.show` (#914/#916). The menu
   // is built in the main process; this is the only place that knows the answer.
+  // The recent folders behind File ▸ Open Recent (#915). In STATE so that
+  // publishing them to the menu re-runs when a folder opens, and in a ref so the
+  // menu subscription — set up once — reads the current list rather than the one
+  // that existed when it subscribed.
+  const [recentFolders, setRecentFolders] = useState<string[]>(() => readRecentFolders())
+  const recentFoldersRef = useRef(recentFolders)
+  recentFoldersRef.current = recentFolders
   useEffect(() => {
-    window.api.menu.setState(menuStateFrom({ workspace: layout.active }))
-  }, [layout.active])
+    setRecentFolders(readRecentFolders())
+  }, [currentFolder])
+
+  useEffect(() => {
+    window.api.menu.setState(
+      menuStateFrom({
+        workspace: layout.active,
+        // Save / Save As / Close Tab grey out with nothing open (#915).
+        hasActiveFile: activeId !== null,
+        recentFolders
+      })
+    )
+  }, [layout.active, activeId, recentFolders])
   useEffect(() => {
     const off = window.api.board.onClosed(() => {
       if (poppedFromBoardRef.current) {
@@ -763,9 +791,7 @@ export function AppShell(): JSX.Element {
               { path: INSTRUMENTS_LIB_PATH, contents: source },
               ...(rootShadow ? [{ path: INSTRUMENTS_ROOT_PATH, contents: source }] : []),
               ...(umbrella ? [{ path: SNAKIE_LIB_PATH, contents: umbrella }] : []),
-              ...(umbrella && rootShadow
-                ? [{ path: SNAKIE_ROOT_PATH, contents: umbrella }]
-                : [])
+              ...(umbrella && rootShadow ? [{ path: SNAKIE_ROOT_PATH, contents: umbrella }] : [])
             ]
             ctx.setSteps(writes.map((w) => installStepLabel(w.path)))
             await window.api.device.mkdir(INSTRUMENTS_LIB_DIR).catch(() => undefined)
@@ -944,9 +970,9 @@ export function AppShell(): JSX.Element {
     // module name the import mentions), so that nag — and its one-click
     // install — must stand.
     const imported = boardIsPython ? parsePyImports(boardSource) : new Set<string>()
-    return (installedModules ? computeMissingOnBoard(requiredModules, installedModules) : []).filter(
-      (m) => imported.has(m.module) || !moduleCoveredByInstrument(m.module, inUse)
-    )
+    return (
+      installedModules ? computeMissingOnBoard(requiredModules, installedModules) : []
+    ).filter((m) => imported.has(m.module) || !moduleCoveredByInstrument(m.module, inUse))
   }, [installedModules, requiredModules, inUse, boardIsPython, boardSource])
   // #621: this is a notice ABOUT THE OPEN FILE ("this file doesn't import servo"),
   // so it belongs to the Code workspace only. It used to render above all three,
@@ -981,11 +1007,7 @@ export function AppShell(): JSX.Element {
               // Per-file steps (#895) — a `mip` spec can bring dependencies, and
               // this banner is one of the places an install looked like a hang.
               run: (ctx) =>
-                window.api.packages.install(
-                  t.url as string,
-                  undefined,
-                  installStepReporter(ctx)
-                )
+                window.api.packages.install(t.url as string, undefined, installStepReporter(ctx))
             })
             if (!res.ok) throw new Error(res.log || `Failed to install ${t.module}`)
           }
@@ -996,9 +1018,7 @@ export function AppShell(): JSX.Element {
         // and leave the "Install servo" button stuck on screen.) The ref keeps
         // them present across any later re-probe this connection.
         for (const t of targets) selfInstalledRef.current.add(t.module)
-        setInstalledModules(
-          (prev) => new Set([...(prev ?? []), ...targets.map((t) => t.module)])
-        )
+        setInstalledModules((prev) => new Set([...(prev ?? []), ...targets.map((t) => t.module)]))
         // Tell the OTHER windows too (the Board View's driver banner re-probes,
         // the device file tree re-lists).
         window.api.modules.notifyChanged()
@@ -1134,21 +1154,74 @@ export function AppShell(): JSX.Element {
   // whether the sheet is showing.
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
+  // --- what File ▸ … needs to know (#915) ------------------------------------
+  //
+  // Refs, not the values, because the menu subscription is set up once: reading
+  // `activeId` from the closure would save whichever file was open when the
+  // listener was created, which is the wrong file forever after the first tab
+  // switch.
+  const activeIdRef = useRef(activeId)
+  activeIdRef.current = activeId
+
+  /** Put the Files view in front — an Open that left the tree hidden would look
+   *  like it had done nothing (#775: Electronics and Build gate on the store). */
+  const revealFiles = useCallback((): void => {
+    setActivityView('files')
+    setLeftCollapsed('files', false)
+    filesRef.current?.expand()
+  }, [setActivityView, setLeftCollapsed])
+
   useEffect(() => {
     const off = window.api.menu.onCommand((id) => {
       runMenuCommand(id, {
         switchWorkspace: (target) => switchWorkspaceRef.current(target),
         showShortcuts: () => setShortcutsOpen(true),
         openFolder: () => {
-          setActivityView('files')
-          setLeftCollapsed('files', false)
-          filesRef.current?.expand()
+          revealFiles()
           void openFolder().catch(reporter('open folder', { notify: "Couldn't open the folder." }))
-        }
+        },
+        // --- File (#915) -------------------------------------------------
+        newFile: () => newFile(),
+        openFile: () =>
+          void openFileDialog().catch(
+            reporter('open file', { notify: "Couldn't open that file." })
+          ),
+        openRecent: (i) => {
+          // The list the MENU was built from, so slot i means the folder the
+          // user actually read there — not whatever the list says now.
+          const folder = recentFoldersRef.current[i]
+          if (!folder) return
+          revealFiles()
+          openFolderPath(folder)
+        },
+        save: () => {
+          if (!activeIdRef.current) return
+          void saveFile(activeIdRef.current).catch(
+            reporter('save', { notify: "Couldn't save the file." })
+          )
+        },
+        saveAs: () => {
+          if (!activeIdRef.current) return
+          void saveFileAs(activeIdRef.current).catch(
+            reporter('save as', { notify: "Couldn't save the file." })
+          )
+        },
+        // Through the tabs' own close, which prompts on a dirty buffer (#915).
+        closeTab: () => dispatchCloseTab()
       })
     })
     return off
-  }, [openFolder, setActivityView, setLeftCollapsed])
+  }, [
+    openFolder,
+    openFolderPath,
+    openFileDialog,
+    newFile,
+    saveFile,
+    saveFileAs,
+    setActivityView,
+    setLeftCollapsed,
+    revealFiles
+  ])
 
   // The Parts Library + Part Editor live in the Board Viewer window now (it's the
   // only place that uses parts), so the main window no longer hosts them.
@@ -1253,163 +1326,169 @@ export function AppShell(): JSX.Element {
             group makes the code panels structurally absent (no persisted flag can
             resurface them) and avoids RRP collapse races. */}
         <div className="shell__workarea">
-        {/* Code's panel group is ALWAYS mounted (#…) so the console terminal + editor
+          {/* Code's panel group is ALWAYS mounted (#…) so the console terminal + editor
             keep their state across a workspace switch, instead of remounting blank.
             The solo overlay (below) covers it for Electronics/Build. Sizes are
             recorded per-workspace via onLayout and applied imperatively on switch. */}
-        <PanelGroup
-          direction="horizontal"
-          ref={hGroupRef}
-          onLayout={(sizes) => layout.recordSizes('horizontal', sizes)}
-          className="shell__panels"
-        >
-          <Panel
-            ref={filesRef}
-            order={1}
-            collapsible
-            collapsedSize={0}
-            defaultSize={initialSizes.current.h[0]}
-            minSize={16}
-            onCollapse={() => layout.setCollapsed('files', true)}
-            onExpand={() => layout.setCollapsed('files', false)}
+          <PanelGroup
+            direction="horizontal"
+            ref={hGroupRef}
+            onLayout={(sizes) => layout.recordSizes('horizontal', sizes)}
+            className="shell__panels"
           >
-            <LeftView view={activityView} helpTarget={helpTarget} />
-          </Panel>
+            <Panel
+              ref={filesRef}
+              order={1}
+              collapsible
+              collapsedSize={0}
+              defaultSize={initialSizes.current.h[0]}
+              minSize={16}
+              onCollapse={() => layout.setCollapsed('files', true)}
+              onExpand={() => layout.setCollapsed('files', false)}
+            >
+              <LeftView view={activityView} helpTarget={helpTarget} />
+            </Panel>
 
-          {/* Hide the stitch when Files is collapsed — the panel isn't reopened by
+            {/* Hide the stitch when Files is collapsed — the panel isn't reopened by
               dragging this divider (any activity-bar button opens it for a purpose),
               so a visible resize thread there would be misleading (#…). */}
-          <PanelResizeHandle
-            className={`resize-handle resize-handle--vertical resize-handle--files${filesCollapsed ? ' is-collapsed' : ''}`}
-          />
+            <PanelResizeHandle
+              className={`resize-handle resize-handle--vertical resize-handle--files${filesCollapsed ? ' is-collapsed' : ''}`}
+            />
 
-          <Panel
-            ref={centreRef}
-            order={2}
-            collapsible
-            collapsedSize={0}
-            defaultSize={initialSizes.current.h[1]}
-            minSize={30}
-            onCollapse={() => layout.setCollapsed('centre', true)}
-            onExpand={() => layout.setCollapsed('centre', false)}
-          >
-            <div className="shell__center-col">
-              <PanelGroup
-                direction="vertical"
-                ref={vGroupRef}
-                className="shell__vgroup"
-                onLayout={(sizes) => layout.recordSizes('vertical', sizes)}
-              >
-                <Panel order={1} minSize={20}>
-                  <div className="shell__editor-region">
-                    <EditorArea
-                      chatOpen={!rightCollapsed}
-                      onToggleChat={IS_WEB ? undefined : () => toggle(rightRef)}
-                    />
-                  </div>
-                </Panel>
-
-                <PanelResizeHandle className="resize-handle resize-handle--horizontal" />
-
-                <Panel
-                  ref={shellRef}
-                  order={2}
-                  collapsible
-                  collapsedSize={0}
-                  defaultSize={initialSizes.current.v[1]}
-                  minSize={22}
-                  onCollapse={() => layout.setCollapsed('shell', true)}
-                  onExpand={() => layout.setCollapsed('shell', false)}
+            <Panel
+              ref={centreRef}
+              order={2}
+              collapsible
+              collapsedSize={0}
+              defaultSize={initialSizes.current.h[1]}
+              minSize={30}
+              onCollapse={() => layout.setCollapsed('centre', true)}
+              onExpand={() => layout.setCollapsed('centre', false)}
+            >
+              <div className="shell__center-col">
+                <PanelGroup
+                  direction="vertical"
+                  ref={vGroupRef}
+                  className="shell__vgroup"
+                  onLayout={(sizes) => layout.recordSizes('vertical', sizes)}
                 >
-                  <ShellPanel
-                    chatOpen={!rightCollapsed}
-                    onCollapse={() => {
-                      if (!exitFocus()) toggle(shellRef)
-                    }}
-                  />
-                </Panel>
-              </PanelGroup>
-              {/* Reopen rail (#592): when the console is collapsed to nothing, a
+                  <Panel order={1} minSize={20}>
+                    <div className="shell__editor-region">
+                      <EditorArea
+                        chatOpen={!rightCollapsed}
+                        onToggleChat={IS_WEB ? undefined : () => toggle(rightRef)}
+                      />
+                    </div>
+                  </Panel>
+
+                  <PanelResizeHandle className="resize-handle resize-handle--horizontal" />
+
+                  <Panel
+                    ref={shellRef}
+                    order={2}
+                    collapsible
+                    collapsedSize={0}
+                    defaultSize={initialSizes.current.v[1]}
+                    minSize={22}
+                    onCollapse={() => layout.setCollapsed('shell', true)}
+                    onExpand={() => layout.setCollapsed('shell', false)}
+                  >
+                    <ShellPanel
+                      chatOpen={!rightCollapsed}
+                      onCollapse={() => {
+                        if (!exitFocus()) toggle(shellRef)
+                      }}
+                    />
+                  </Panel>
+                </PanelGroup>
+                {/* Reopen rail (#592): when the console is collapsed to nothing, a
                   slim clickable bar is its own reopen affordance (the global
                   toolbar toggle is gone). */}
-              {shellCollapsed && !focus && (
-                <button
-                  type="button"
-                  className="shell__reopen shell__reopen--bottom"
-                  onClick={() => openPanel(shellRef)}
-                  title="Show the console"
-                >
-                  {/* Collapsed → UP chevron (the console expands upward). */}
-                  <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                    <path
-                      d="M4 10l4-4 4 4"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  <span>Console</span>
-                </button>
-              )}
-            </div>
-          </Panel>
+                {shellCollapsed && !focus && (
+                  <button
+                    type="button"
+                    className="shell__reopen shell__reopen--bottom"
+                    onClick={() => openPanel(shellRef)}
+                    title="Show the console"
+                  >
+                    {/* Collapsed → UP chevron (the console expands upward). */}
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 16 16"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d="M4 10l4-4 4 4"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <span>Console</span>
+                  </button>
+                )}
+              </div>
+            </Panel>
 
-          {/* (The Board View is NOT a panel here anymore — Electronics renders it in
+            {/* (The Board View is NOT a panel here anymore — Electronics renders it in
               the solo overlay below, so the group stays a stable Code layout.) */}
 
-          {/* The Chat right-pane is desktop-only — hidden on the web build. */}
-          {!IS_WEB && (
-            <>
-              <PanelResizeHandle className="resize-handle resize-handle--vertical" />
+            {/* The Chat right-pane is desktop-only — hidden on the web build. */}
+            {!IS_WEB && (
+              <>
+                <PanelResizeHandle className="resize-handle resize-handle--vertical" />
 
-              <Panel
-                ref={rightRef}
-                order={4}
-                collapsible
-                collapsedSize={0}
-                defaultSize={initialSizes.current.h[3]}
-                minSize={14}
-                onCollapse={() => layout.setCollapsed('right', true)}
-                onExpand={() => layout.setCollapsed('right', false)}
-              >
-                <RightPanel />
-              </Panel>
-            </>
-          )}
-        </PanelGroup>
-        {/* Electronics + Build overlay the Code panel group (which stays mounted
+                <Panel
+                  ref={rightRef}
+                  order={4}
+                  collapsible
+                  collapsedSize={0}
+                  defaultSize={initialSizes.current.h[3]}
+                  minSize={14}
+                  onCollapse={() => layout.setCollapsed('right', true)}
+                  onExpand={() => layout.setCollapsed('right', false)}
+                >
+                  <RightPanel />
+                </Panel>
+              </>
+            )}
+          </PanelGroup>
+          {/* Electronics + Build overlay the Code panel group (which stays mounted
             underneath). A lesson — opened here, deep-linked, or carried in by a
             tutorial that asked for this workspace — shows in a left panel. */}
-        {soloWorkspace && (
-          <div className="shell__solo shell__solo--overlay">
-            {soloLessonOpen && (
-              <aside className="shell__solo-lesson" aria-label="Lesson">
-                <LeftView view={activityView} helpTarget={helpTarget} />
-              </aside>
-            )}
-            {robotMain ? (
-              <div className="shell__robot-main">
-                <Suspense fallback={<div className="shell__robot3d-loading">Loading 3D…</div>}>
-                  <RobotDockPanel full />
-                </Suspense>
-              </div>
-            ) : (
-              <div className="shell__solo-board">
-                <Suspense
-                  fallback={
-                    <div className="board-pane__loading" role="status">
-                      Loading Board View…
-                    </div>
-                  }
-                >
-                  <BoardPane />
-                </Suspense>
-              </div>
-            )}
-          </div>
-        )}
+          {soloWorkspace && (
+            <div className="shell__solo shell__solo--overlay">
+              {soloLessonOpen && (
+                <aside className="shell__solo-lesson" aria-label="Lesson">
+                  <LeftView view={activityView} helpTarget={helpTarget} />
+                </aside>
+              )}
+              {robotMain ? (
+                <div className="shell__robot-main">
+                  <Suspense fallback={<div className="shell__robot3d-loading">Loading 3D…</div>}>
+                    <RobotDockPanel full />
+                  </Suspense>
+                </div>
+              ) : (
+                <div className="shell__solo-board">
+                  <Suspense
+                    fallback={
+                      <div className="board-pane__loading" role="status">
+                        Loading Board View…
+                      </div>
+                    }
+                  >
+                    <BoardPane />
+                  </Suspense>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* The INSTRUMENT DOCK lives OUTSIDE the PanelGroup — a fixed-width region
@@ -1418,10 +1497,7 @@ export function AppShell(): JSX.Element {
             redistribute each other's freed space). Shown by the toolbar
             Instruments button or an incoming `instruments:open`. */}
         {instrumentsVisible && dockWorkspace && (
-          <aside
-            className="shell__dock shell__dock--mini"
-            aria-label="Instrument dock"
-          >
+          <aside className="shell__dock shell__dock--mini" aria-label="Instrument dock">
             {/* Per-panel collapse (#592) — the dock hides itself; the toolbar
                 Instruments toggle is gone, so the reopen rail below takes over. */}
             <button
@@ -1524,7 +1600,6 @@ export function AppShell(): JSX.Element {
       )}
 
       {shortcutsOpen && <ShortcutSheet onClose={() => setShortcutsOpen(false)} />}
-
     </div>
   )
 }

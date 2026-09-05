@@ -46,14 +46,49 @@ export function workspaceMenuCommand(id: WorkspaceId): WorkspaceMenuCommand {
   return `workspace.show.${id}`
 }
 
-/** Commands the RENDERER performs, relayed to the main window. */
-export type RendererMenuCommand = 'file.openFolder' | 'help.shortcuts' | WorkspaceMenuCommand
+/**
+ * How many folders `File ▸ Open Recent` remembers (#915).
+ *
+ * The ids are FIXED — `file.openRecent.0` … `.7` — and the labels arrive with
+ * the rest of the renderer's state. A dynamic id per folder would mean a command
+ * union that changes at runtime, which is exactly what {@link
+ * isRendererMenuCommand} exists to make impossible.
+ */
+export const RECENT_FOLDER_SLOTS = [0, 1, 2, 3, 4, 5, 6, 7] as const
+export type RecentFolderSlot = (typeof RECENT_FOLDER_SLOTS)[number]
 
-/** Every renderer command, in menu order. The workspace entries are DERIVED
- *  from `WORKSPACE_IDS`, so a fourth workspace gets its command, its menu item
- *  and its handler without anyone editing a list. */
+/** `File ▸ Open Recent ▸ …` — one command per slot, not per folder. */
+export type RecentFolderMenuCommand = `file.openRecent.${RecentFolderSlot}`
+
+/** The command that opens the folder in slot `i`. */
+export function recentFolderMenuCommand(i: RecentFolderSlot): RecentFolderMenuCommand {
+  return `file.openRecent.${i}`
+}
+
+/** Commands the RENDERER performs, relayed to the main window. */
+export type RendererMenuCommand =
+  | 'file.new'
+  | 'file.openFile'
+  | 'file.openFolder'
+  | 'file.save'
+  | 'file.saveAs'
+  | 'file.closeTab'
+  | 'help.shortcuts'
+  | WorkspaceMenuCommand
+  | RecentFolderMenuCommand
+
+/** Every renderer command, in menu order. The workspace and recent-folder
+ *  entries are DERIVED from their own lists, so a fourth workspace or a ninth
+ *  recent slot gets its command, its menu item and its handler without anyone
+ *  editing a list. */
 export const RENDERER_MENU_COMMANDS: readonly RendererMenuCommand[] = [
+  'file.new',
+  'file.openFile',
   'file.openFolder',
+  ...RECENT_FOLDER_SLOTS.map(recentFolderMenuCommand),
+  'file.save',
+  'file.saveAs',
+  'file.closeTab',
   ...WORKSPACE_IDS.map(workspaceMenuCommand),
   'help.shortcuts'
 ]
@@ -82,11 +117,20 @@ export interface MenuState {
   enabled: Partial<Record<MenuCommand, boolean>>
   /** Ids to tick — radio items and checkboxes (`true` = checked). */
   checked: Partial<Record<MenuCommand, boolean>>
+  /**
+   * Recently opened folders, newest first, for `File ▸ Open Recent` (#915).
+   *
+   * The one piece of menu state that is not a flag, because this submenu's
+   * LABELS are renderer data — the folders themselves. Slot `i` is opened by
+   * {@link recentFolderMenuCommand}, so the ids stay fixed while the text
+   * changes, and an empty list simply means a greyed-out submenu.
+   */
+  recentFolders: string[]
 }
 
 /** The state a menu built before the renderer has spoken uses: everything
  *  enabled, nothing ticked. */
-export const EMPTY_MENU_STATE: MenuState = { enabled: {}, checked: {} }
+export const EMPTY_MENU_STATE: MenuState = { enabled: {}, checked: {}, recentFolders: [] }
 
 /** The renderer facts the menu reflects. #915–#918 add their fields here
  *  (`connected`, `hasFile`, …) and extend {@link menuStateFrom} to match. */
@@ -94,6 +138,15 @@ export interface MenuContext {
   /** The workspace showing in the main window — the radio tick in
    *  View ▸ Workspace, so switching in-app moves the tick too (#916). */
   workspace: WorkspaceId
+  /**
+   * Whether a file is open and focused (#915).
+   *
+   * Greys out Save, Save As and Close Tab. Offering Save with nothing to save is
+   * how a menu teaches people not to trust it.
+   */
+  hasActiveFile: boolean
+  /** Recently opened folders, newest first. */
+  recentFolders: string[]
 }
 
 /** Derive the menu's state from the renderer's. Pure, so what the menu shows is
@@ -101,7 +154,12 @@ export interface MenuContext {
 export function menuStateFrom(ctx: MenuContext): MenuState {
   const checked: Partial<Record<MenuCommand, boolean>> = {}
   for (const id of WORKSPACE_IDS) checked[workspaceMenuCommand(id)] = id === ctx.workspace
-  return { enabled: {}, checked }
+  const enabled: Partial<Record<MenuCommand, boolean>> = {
+    'file.save': ctx.hasActiveFile,
+    'file.saveAs': ctx.hasActiveFile,
+    'file.closeTab': ctx.hasActiveFile
+  }
+  return { enabled, checked, recentFolders: ctx.recentFolders.slice(0, RECENT_FOLDER_SLOTS.length) }
 }
 
 /** Every known command id (main + renderer) — the whitelist
@@ -130,5 +188,16 @@ function coerceFlags(raw: unknown): Partial<Record<MenuCommand, boolean>> {
  */
 export function coerceMenuState(raw: unknown): MenuState {
   const r = (raw ?? {}) as Record<string, unknown>
-  return { enabled: coerceFlags(r.enabled), checked: coerceFlags(r.checked) }
+  return {
+    enabled: coerceFlags(r.enabled),
+    checked: coerceFlags(r.checked),
+    // Same untrusted-shape rule as the flags: strings only, capped at the number
+    // of slots the menu actually has, so a garbled payload cannot grow the
+    // submenu past the ids that exist to open its entries.
+    recentFolders: Array.isArray(r.recentFolders)
+      ? r.recentFolders
+          .filter((f): f is string => typeof f === 'string' && f.length > 0)
+          .slice(0, RECENT_FOLDER_SLOTS.length)
+      : []
+  }
 }

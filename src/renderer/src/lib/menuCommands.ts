@@ -1,5 +1,7 @@
 import {
   isRendererMenuCommand,
+  RECENT_FOLDER_SLOTS,
+  recentFolderMenuCommand,
   workspaceMenuCommand,
   type RendererMenuCommand
 } from '../../../shared/menu-commands'
@@ -46,14 +48,52 @@ export interface MenuCommandDeps {
   /** Show the keyboard-shortcut cheatsheet (#920). The sheet is generated from
    *  the menu template, so this only has to raise it. */
   showShortcuts: () => void
+
+  // --- File (#915) ---------------------------------------------------------
+
+  /** A new untitled buffer — the store's `newFile`, which is what the toolbar's
+   *  + does. NOT the Files panel's "new file here", which needs a folder. */
+  newFile: () => void
+  /** Raise the file picker and open what it returns. */
+  openFile: () => void
+  /** Open the folder in recent slot `i`. Out-of-range slots do nothing: the
+   *  menu only shows the slots it has folders for, but the id survives a state
+   *  update that shortened the list. */
+  openRecent: (index: number) => void
+  /** Save the active file. Greyed out with none, so this is not reached then. */
+  save: () => void
+  /** Save the active file somewhere new, and follow it there. */
+  saveAs: () => void
+  /**
+   * Close the active TAB — not the window.
+   *
+   * MUST go through the tabs' own close, which prompts when the buffer is
+   * dirty. A menu item that discarded unsaved work while the × beside it asks
+   * first is the kind of inconsistency nobody reports and everybody gets bitten
+   * by once.
+   */
+  closeTab: () => void
 }
 
 /** Every renderer menu command and what it does. */
-export function menuCommandHandlers(deps: MenuCommandDeps): Record<RendererMenuCommand, () => void> {
+export function menuCommandHandlers(
+  deps: MenuCommandDeps
+): Record<RendererMenuCommand, () => void> {
   const handlers = {
+    'file.new': () => deps.newFile(),
+    'file.openFile': () => deps.openFile(),
     'file.openFolder': () => deps.openFolder(),
+    'file.save': () => deps.save(),
+    'file.saveAs': () => deps.saveAs(),
+    'file.closeTab': () => deps.closeTab(),
     'help.shortcuts': () => deps.showShortcuts()
   } as Record<RendererMenuCommand, () => void>
+  // Derived from the slot list, like the workspaces below: the submenu's ids are
+  // fixed and its labels come from the renderer's state, so a ninth slot is one
+  // number in `RECENT_FOLDER_SLOTS`.
+  for (const i of RECENT_FOLDER_SLOTS) {
+    handlers[recentFolderMenuCommand(i)] = () => deps.openRecent(i)
+  }
   // Derived from WORKSPACE_IDS, like the menu itself: a fourth workspace gets
   // its menu item AND its handler with no edit here.
   for (const id of WORKSPACE_IDS) {

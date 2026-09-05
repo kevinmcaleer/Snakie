@@ -33,9 +33,7 @@ export interface FindEventDetail {
 
 /** Dispatch the open-find event (used by the editor's keybinding commands). */
 export function dispatchOpenFind(withReplace: boolean): void {
-  window.dispatchEvent(
-    new CustomEvent<FindEventDetail>(FIND_EVENT, { detail: { withReplace } })
-  )
+  window.dispatchEvent(new CustomEvent<FindEventDetail>(FIND_EVENT, { detail: { withReplace } }))
 }
 
 /** Cross-panel "open help" event: switch the left sidebar to the Help view and
@@ -50,6 +48,27 @@ export interface HelpEventDetail {
 /** Dispatch the open-help event: reveal the Help view + open `articleId`. */
 export function dispatchOpenHelp(articleId: string): void {
   window.dispatchEvent(new CustomEvent<HelpEventDetail>(HELP_EVENT, { detail: { articleId } }))
+}
+
+/**
+ * "Close the active tab" (#915), fired by File ▸ Close Tab.
+ *
+ * An EVENT rather than a store call, because closing a tab is not just removing
+ * it: `EditorTabs` asks first when the buffer is dirty, and a menu item that
+ * went straight to the store would discard unsaved work while the × beside it
+ * asks — the sort of inconsistency nobody reports and everybody gets bitten by
+ * once. This routes the menu through the one implementation that prompts.
+ *
+ * It matters on the desktop specifically: ⌘W is now a menu ACCELERATOR, so
+ * Electron takes the key before the renderer sees a `keydown`, and the tabs'
+ * own shortcut handler never fires. That handler stays for the web build, which
+ * has no menu at all.
+ */
+export const CLOSE_TAB_EVENT = 'snakie:close-tab'
+
+/** Ask the editor tabs to close the active tab, prompting if it is dirty. */
+export function dispatchCloseTab(): void {
+  window.dispatchEvent(new CustomEvent(CLOSE_TAB_EVENT))
 }
 
 let current: Editor | null = null
