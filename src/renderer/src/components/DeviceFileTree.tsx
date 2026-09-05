@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DirEntry } from '../../../preload/index.d'
 import { useFileSelection } from '../store/file-selection'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
-import { bootFileNote } from './run-controls'
+import { bootRoleFor, type BootRole } from './run-controls'
 import { useWorkspace } from '../store/workspace'
 import { useSync } from '../store/sync'
 import { usageLabel, usedPct, type DiskUsage } from './disk-usage'
@@ -119,7 +119,7 @@ function DeviceRow({
   onDropInto,
   onDragOverRow,
   onDragLeaveRow,
-  bootNote
+  bootRole
 }: {
   row: FlatRow
   expanded: boolean
@@ -134,8 +134,8 @@ function DeviceRow({
   onDropInto: (e: React.DragEvent, dir: string) => void
   onDragOverRow: (e: React.DragEvent, row: FlatRow) => void
   onDragLeaveRow: () => void
-  /** Why this file does (or doesn't) run at boot — null for ordinary files (#755). */
-  bootNote: string | null
+  /** Why this file does (or doesn't) run at startup — null for ordinary files (#755, #872). */
+  bootRole: BootRole | null
 }): JSX.Element {
   const { path, entry, depth } = row
   return (
@@ -167,16 +167,18 @@ function DeviceRow({
         {entry.isDir ? (expanded ? '▼' : '▶') : '▤'}
       </span>
       <span className="tree-row__name">{entry.name}</span>
-      {/* Which file the board runs at boot (#755). CircuitPython tries code.py
-          before main.py, so a board carrying both runs only the first — and
-          editing the other looks like it does nothing. The marker says which
-          is which; the tooltip says why. */}
-      {bootNote && (
+      {/* Which files the board runs by itself (#755, #872). Two stages: the
+          setup file (`boot.py`) and then the program — and CircuitPython tries
+          code.py before main.py, so a board carrying both runs only the first
+          and editing the other looks like it does nothing. The marker says
+          which is which; the tooltip says what actually happens, which is the
+          part a file listing can never show. */}
+      {bootRole && (
         <span
-          className={`tree-row__boot${bootNote.includes('instead') ? ' tree-row__boot--shadowed' : ''}`}
-          title={bootNote}
+          className={`tree-row__boot${bootRole.shadowed ? ' tree-row__boot--shadowed' : ''}`}
+          title={bootRole.title}
         >
-          {bootNote.includes('instead') ? 'ignored' : 'runs at boot'}
+          {bootRole.label}
         </span>
       )}
       {/* Hover delete (#219): removes this row — or the whole selection when the
@@ -771,11 +773,11 @@ export function DeviceFileTree(): JSX.Element {
           <DeviceRow
             key={row.path}
             row={row}
-            bootNote={
+            bootRole={
               // Boot files only count in the ROOT — a `/lib/code.py` is just a
               // module. `depth === 0` is that test.
               row.depth === 0 && !row.entry.isDir
-                ? bootFileNote(row.entry.name, rootNames, status.runtime?.dialect)
+                ? bootRoleFor(row.entry.name, rootNames, status.runtime?.dialect)
                 : null
             }
             expanded={expanded.has(row.path)}

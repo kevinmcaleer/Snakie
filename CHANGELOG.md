@@ -19,6 +19,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pointless to anyone who has not met the bug. The "Why?" article explains the
   soft-reset model and why an `isconnected()` guard, which is what everyone
   tries first, cannot fix it.
+- **`boot.py` is labelled in the device tree, and CircuitPython's file order is
+  corrected** (#872). A file listing cannot show the one thing a beginner most
+  needs to know: which file the board runs on its own, without being asked. The
+  tree already marked the program — `code.py` on CircuitPython, `main.py` on
+  MicroPython — but said nothing about `boot.py`, which is a separate, earlier
+  pass and means different things on the two runtimes. MicroPython runs it at
+  every reset, before `main.py`. CircuitPython runs it once at power-on, before
+  USB is set up — which is the only moment settings like a writable CIRCUITPY
+  drive can be changed — and does *not* re-run it when you reset the board.
+  `boot.py` now carries a "runs first" label whose tooltip says which of those
+  is happening, the program's label names the setup file that ran before it, and
+  a `boot.txt` shadowed by a `boot.py` is marked "ignored" like any other
+  shadowed file. The CircuitPython search order was also wrong: it followed
+  Adafruit's learn guide (`code.txt, code.py, main.txt, main.py`) where the
+  runtime's own `main.c` has `main.py` *before* `main.txt`, so a board carrying
+  both was told the wrong one runs. Nothing is labelled at all when no board is
+  connected or the connect probe could not name a runtime — a confident wrong
+  label about which file runs is worse than no label.
 
 ### Fixed
 
