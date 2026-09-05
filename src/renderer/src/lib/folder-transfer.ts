@@ -17,6 +17,7 @@ import {
   type LocalEntry,
   type TransferPlan
 } from '../../../shared/transfer-plan'
+import { writeAtomically, type AtomicOps } from '../../../shared/atomic-write'
 
 /** What the progress dialog is told as a transfer runs. */
 export interface TransferEvent {
@@ -86,6 +87,13 @@ export async function planUploadOf(localRoot: string, deviceDir: string): Promis
  * on after a failure and reporting success at the end is worse — the user would
  * have a folder that looks complete and is not.
  */
+/** {@link writeAtomically} over the renderer's device bridge (#864). */
+const deviceAtomicOps: AtomicOps = {
+  stat: (path) => window.api.device.stat(path),
+  rename: (from, to) => window.api.device.rename(from, to),
+  remove: (path) => window.api.device.remove(path)
+}
+
 export async function runFolderUpload(
   plan: TransferPlan,
   report: TransferReporter,
@@ -108,7 +116,12 @@ export async function runFolderUpload(
     report({ index: i, total: plan.files.length, label: file.label, state: 'copying' })
     try {
       const bytes = await window.api.fs.readFileBytes(file.local)
-      await window.api.device.writeFileBytes(file.device, bytes)
+      // All-or-nothing (#864): the same reason the driver installer does it.
+      // Stopping mid-file used to leave a truncated file under its real name,
+      // which for a .py is a SyntaxError somewhere nobody will think to look.
+      await writeAtomically(deviceAtomicOps, file.device, bytes.length, (tmp) =>
+        window.api.device.writeFileBytes(tmp, bytes)
+      )
       copied++
       report({ index: i, total: plan.files.length, label: file.label, state: 'done' })
     } catch (err) {

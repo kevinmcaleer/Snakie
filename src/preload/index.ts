@@ -49,6 +49,7 @@ import {
 import { writeFailureMessage } from '../shared/install-messages'
 import type { RuntimeInfo } from '../shared/dialect'
 import { deviceDirsFor } from '../shared/mip-resolve'
+import { writeAtomically, type AtomicOps } from '../shared/atomic-write'
 import type {
   CopilotDeviceCode,
   CopilotPollResult
@@ -365,6 +366,13 @@ const updates = {
  * Modulino range is 25 files, and over the raw REPL each is a run of hex-chunk
  * round-trips — and silence here reads as a hang.
  */
+/** {@link writeAtomically} over the device IPC channels (#864). */
+const deviceAtomicOps: AtomicOps = {
+  stat: (path) => unwrap<{ size: number }>(ipcRenderer.invoke('device:stat', path)),
+  rename: (from, to) => unwrap<void>(ipcRenderer.invoke('device:rename', from, to)),
+  remove: (path) => unwrap<void>(ipcRenderer.invoke('device:remove', path))
+}
+
 async function writeFilesToBoard(
   name: string,
   files: ModulePlanFile[],
@@ -387,13 +395,20 @@ async function writeFilesToBoard(
       // bytes channel, never the text one: a `.mpy` that took the string route
       // would be silently corrupted by the UTF-8 round-trip and land as a file
       // that imports as garbage.
-      if (file.encoding === 'base64') {
-        await unwrap<void>(
-          ipcRenderer.invoke('device:writeFileBytes', file.path, Buffer.from(file.contents, 'base64'))
-        )
-      } else {
-        await unwrap<void>(ipcRenderer.invoke('device:writeFile', file.path, file.contents))
-      }
+      const bytes =
+        file.encoding === 'base64' ? Buffer.from(file.contents, 'base64') : null
+      // All-or-nothing (#864): the file arrives under a temporary name and is
+      // moved into place once it is whole, so an interrupted install leaves
+      // debris rather than a truncated module that imports as a SyntaxError.
+      await writeAtomically(
+        deviceAtomicOps,
+        file.path,
+        bytes ? bytes.length : Buffer.byteLength(file.contents, 'utf8'),
+        (tmp) =>
+          bytes
+            ? unwrap<void>(ipcRenderer.invoke('device:writeFileBytes', tmp, bytes))
+            : unwrap<void>(ipcRenderer.invoke('device:writeFile', tmp, file.contents))
+      )
     }
     return { ok: true, log: `Wrote ${files.map((f) => f.path).join(', ')}` }
   } catch (err) {

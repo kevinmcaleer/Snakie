@@ -6,6 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **An interrupted install no longer leaves a broken file on the board** (#864).
+  Driver and package installs wrote each file straight to its final name, so
+  stopping part-way — a disconnect, a cancel, an error on any one file — left a
+  truncated file that nothing knew was incomplete. The next import then failed
+  with a `SyntaxError` pointing into a vendor library, which reads as "that
+  library is broken" rather than "the install didn't finish". One real report
+  blamed line 159 of `lsm6dsox.py`, a line that is a perfectly ordinary `raise`
+  in the real file. Every file now arrives under a temporary name, is checked
+  against the size that should have landed, and is only then moved into place —
+  so the file on the board is the old one or the new one, never half of one, and
+  a short write fails loudly at install time instead of days later. The folder
+  copy does the same. Interrupted installs leave a `.snk-part` file behind,
+  which is inert and overwritten by the next attempt.
+
 ### Changed
 
 - **Both file toolbars now sit the same way** (#868). The Device files actions
