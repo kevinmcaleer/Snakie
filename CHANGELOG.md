@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.51.1] - 2026-09-05
+
 ### Fixed
 
 - **The packaged app showed twelve boards instead of 237** (#947). 0.51.0's
@@ -5975,7 +5977,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.51.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.51.1...HEAD
+[0.51.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.51.0...v0.51.1
 [0.51.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.46.0...v0.51.0
 [0.46.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.44.0...v0.46.0
 [0.44.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.43.0...v0.44.0
