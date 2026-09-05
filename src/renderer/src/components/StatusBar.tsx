@@ -581,6 +581,8 @@ export function StatusBar({
               </button>
             </div>
           )}
+          {/* Pop the board catalogue out full-screen — the same corner-bracket
+              icon the Parts Library uses to expand into its catalog (#893). */}
           <button
             type="button"
             className="statusbar__item statusbar__flash"
@@ -598,6 +600,7 @@ export function StatusBar({
           </button>
         </div>
       </div>
+
 
       {flasherOpen && (
         <FirmwareFlasher

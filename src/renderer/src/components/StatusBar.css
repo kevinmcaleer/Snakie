@@ -350,7 +350,16 @@
   color: var(--text);
 }
 
-/* Flash-firmware action — compact, sits at the far right. */
+/* Flash-firmware action — compact, sits at the far right. The Board Finder
+   pop-out (#893) sits beside it and wears exactly the same chrome, because they
+   are two halves of one job: find the board, then flash it. */
+.statusbar__boards {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.statusbar__boards,
 .statusbar__flash {
   background: transparent;
   border: var(--border-w) solid var(--border);
@@ -362,11 +371,13 @@
   line-height: 1.3rem;
 }
 
+.statusbar__boards:hover,
 .statusbar__flash:hover {
   border-color: var(--accent);
   color: var(--accent);
 }
 
+.statusbar__boards:focus-visible,
 .statusbar__flash:focus-visible {
   outline: var(--border-w) solid var(--accent);
   outline-offset: 1px;
