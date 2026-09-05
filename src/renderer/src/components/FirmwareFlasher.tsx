@@ -30,7 +30,14 @@ import {
   isVendorUf2Family,
   type FirmwareRuntime
 } from '../../../shared/firmware-runtime'
+import {
+  replPortConflict,
+  heldSerialPort,
+  retryAction,
+  type PortConflict
+} from '../../../shared/flash-dialog'
 import { useFocusTrap } from '../hooks/useFocusTrap'
+import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { hasWebUSB, isElectron } from '../lib/platform'
 import { flashEspInBrowser, requestEspPort } from '../lib/webFirmware/espFlash'
 import { flashMicrobitInBrowser, requestMicrobitDevice } from '../lib/webFirmware/microbitFlash'
@@ -142,6 +149,15 @@ export function FirmwareFlasher({
   const [identity, setIdentity] = useState<BoardIdentity | null>(null)
   const [identifying, setIdentifying] = useState(false)
   /**
+   * Detect could not run because the REPL has the port (#845).
+   *
+   * Set by Detect rather than derived from the connection, so the message
+   * appears because an action was taken and could not be carried out — not as a
+   * standing warning next to a board somebody is happily using.
+   */
+  const [detectConflict, setDetectConflict] = useState<PortConflict | null>(null)
+  const [disconnecting, setDisconnecting] = useState(false)
+  /**
    * Whether the advanced fields are showing (#833). Closed by default.
    *
    * Everything behind it is either derived from the board once it is known — the
@@ -206,6 +222,24 @@ export function FirmwareFlasher({
   const [autoScroll, setAutoScroll] = useState(true)
   // Move focus into the dialog on open, trap Tab, and restore it on close.
   const dialogRef = useFocusTrap<HTMLDivElement>()
+
+  /**
+   * The live REPL connection — because esptool and the REPL want the same port
+   * and only one of them can have it (#845).
+   *
+   * Mirrored into a ref for the same reason `profileRef` is: Detect `await`s a
+   * port scan before it needs this, by which point the callback's captured
+   * `status` can be a connection ago.
+   */
+  const deviceStatus = useDeviceStatus()
+  const statusRef = useRef(deviceStatus)
+  useEffect(() => {
+    statusRef.current = deviceStatus
+    // A board disconnected by any route — this dialog's button, the status bar,
+    // unplugging it — settles the question, so retract the message rather than
+    // leave it accusing a port nobody holds.
+    if (!heldSerialPort(deviceStatus)) setDetectConflict(null)
+  }, [deviceStatus])
 
   // --- Which Python is being flashed (#756) ---
   const [runtime, setRuntime] = useState<FirmwareRuntime>(initialRuntime ?? 'micropython')
@@ -655,16 +689,62 @@ export function FirmwareFlasher({
    * When it cannot work the board out it opens the advanced fields, because at
    * that point they stop being clutter and become the only way through. When it
    * can, they stay shut: there is nothing left to decide.
+   *
+   * `portIsFree` is set only by {@link disconnectAndDetect}, which has just let
+   * go of the port itself: the `device:status` push confirming that has not
+   * arrived yet, so the check below would still see the connection it just
+   * closed.
    */
-  const detectBoard = useCallback(async (): Promise<void> => {
+  const detectBoard = useCallback(async (portIsFree = false): Promise<void> => {
     const found = await refreshDetection()
     const serial = (found ?? []).find((c) => c.source === 'serial')
-    const known = serial?.port ? await identifyBoard(serial.port) : false
     // A UF2 / drive board has no esptool to interrogate, so detection alone
     // settles it — a mount that was found counts as a success.
     const drive = (found ?? []).some((c) => c.source !== 'serial')
+    /**
+     * Ask BEFORE esptool does (#845). A port Snakie holds for the REPL cannot be
+     * opened a second time, and `identifyBoard` reports that failure as an EMPTY
+     * identity — the same answer a board that is simply not in download mode
+     * gives. So the dialog said "hold BOOT, tap RESET", which cannot possibly fix
+     * a port held by the app doing the asking, and the real cause went unsaid.
+     *
+     * A drive board is exempt: nothing about it goes through the serial port, so
+     * an RP2040 in BOOTSEL is flashable with a REPL open on something else.
+     */
+    const conflict =
+      portIsFree || (drive && !serial)
+        ? null
+        : replPortConflict(statusRef.current, serial?.port)
+    setDetectConflict(conflict)
+    // Disconnecting is the way through this one; the advanced fields are not.
+    if (conflict) return
+    const known = serial?.port ? await identifyBoard(serial.port) : false
     if (!known && !drive) setAdvancedOpen(true)
   }, [refreshDetection, identifyBoard])
+
+  /**
+   * Hand the port back, then detect (#845).
+   *
+   * Snakie could take the port without asking — it has to end up free either
+   * way, since flashing needs it too. It asks because the board may be part-way
+   * through something: dropping the REPL stops whatever is running, empties the
+   * shell and takes every instrument's live feed with it. That is a fine thing
+   * to do on purpose and a bad thing to have happen to you, so it is one button
+   * with its consequence written on it rather than a silent side effect of
+   * pressing Detect.
+   */
+  const disconnectAndDetect = useCallback(async (): Promise<void> => {
+    setDisconnecting(true)
+    try {
+      await window.api.device.disconnect()
+    } catch {
+      // Already gone, or never really open — either way the port is free now,
+      // and detection below is the honest way to find out what is on it.
+    } finally {
+      setDisconnecting(false)
+    }
+    await detectBoard(true)
+  }, [detectBoard])
 
   /**
    * The build worth flashing for this board, from whichever source knows.
@@ -812,12 +892,25 @@ export function FirmwareFlasher({
     selectedMaintenance
   ])
 
-  const resetRun = useCallback((): void => {
+  /**
+   * Clear the RUN — and only the run (#838).
+   *
+   * The log, the progress bar and the outcome banner are everything a flash
+   * produced; the board, the runtime, the version, the port, the offset and the
+   * erase choice are everything the user put in. Nothing here may touch the
+   * second list: re-picking all of it after a flash that failed for a reason
+   * they have just fixed is the whole of the complaint.
+   */
+  const clearRun = useCallback((): void => {
     setLog([])
     setPercent(null)
     setOutcome('idle')
-    setFlashing(true)
   }, [])
+
+  const resetRun = useCallback((): void => {
+    clearRun()
+    setFlashing(true)
+  }, [clearRun])
 
   const handleFlash = useCallback(async (): Promise<void> => {
     resetRun()
@@ -930,6 +1023,8 @@ export function FirmwareFlasher({
   ])
 
   const finished = outcome === 'success' || outcome === 'error'
+  /** The second way out of a finished run — back, rather than out (#838). */
+  const retry = retryAction(outcome)
 
   return (
     <div
@@ -1058,6 +1153,26 @@ export function FirmwareFlasher({
               >
                 {identifying ? 'Asking the board…' : '⟳ Detect board'}
               </button>
+            )}
+            {/* Detect ran into the REPL holding the port (#845). Said out loud,
+                with the way out attached — knowing a port is busy is only half
+                of it when the thing holding it is this same app. */}
+            {detectConflict && (
+              <div
+                className="firmware-banner firmware-banner--warn firmware-conflict"
+                role="status"
+              >
+                <p className="firmware-conflict__text">{detectConflict.reason}</p>
+                <button
+                  type="button"
+                  className="firmware-conflict__action"
+                  onClick={() => void disconnectAndDetect()}
+                  disabled={disconnecting || identifying}
+                  title="Close the REPL connection and detect the board again"
+                >
+                  {disconnecting ? 'Disconnecting…' : 'Disconnect and detect'}
+                </button>
+              </div>
             )}
             <label className="firmware-field__label" htmlFor="firmware-profile">
               Board
@@ -1688,14 +1803,30 @@ export function FirmwareFlasher({
 
         <footer className="firmware-modal__footer">
           {finished ? (
-            <button
-              type="button"
-              className="btn btn--primary btn--lg"
-              onClick={onClose}
-              autoFocus
-            >
-              Done
-            </button>
+            <>
+              {/* Done used to be the only way out of a finished run, and it
+                  closed the dialog — losing the board, the version and every
+                  advanced option chosen to get here, right at the moment a
+                  failed flash makes you want to change one of them (#838). */}
+              {retry && (
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={clearRun}
+                  title={retry.title}
+                >
+                  {retry.label}
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn btn--primary btn--lg"
+                onClick={onClose}
+                autoFocus
+              >
+                Done
+              </button>
+            </>
           ) : (
             <>
               <button

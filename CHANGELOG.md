@@ -71,6 +71,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   breadcrumb is left alone deliberately: it only ever re-roots UP to a parent,
   which widens the tree, so nothing that was visible stops being visible and
   peeking one level up costs you nothing.
+- **A finished flash can go back instead of only closing** (#838). Done was the
+  only way out of a completed run, and it shut the dialog — throwing away the
+  board, the runtime, the firmware version, the port and every advanced option
+  chosen to get there. That is precisely the moment you want them: a flash that
+  failed usually failed for one reason you can now fix, and re-picking all six
+  selections to change one of them is the complaint. A second button sits beside
+  Done — **Try again** after a failure, **Flash another** after a success — and
+  returns to the options with everything still selected. It clears only what the
+  run produced: the log, the progress bar and the outcome banner.
+
+### Fixed
+
+- **Detect now says when the board is still connected to the REPL** (#845). A
+  serial port can only be open once, so while Snakie holds one for the REPL,
+  esptool cannot open it to ask the board what it is. That failure came back as
+  an empty identity — indistinguishable from a board that is merely not in
+  download mode — so the dialog offered the BOOT/RESET dance, which cannot
+  possibly free a port held by the app asking you to do it, and the real cause
+  was never said out loud. Detect now checks first and, when the REPL has the
+  port, names it and offers **Disconnect and detect** rather than doing it
+  behind your back: dropping the connection stops whatever the board is running,
+  empties the shell and takes the instruments' live feeds with it, which is a
+  fine thing to do on purpose and a bad thing to have happen to you. A board in
+  BOOTSEL is exempt — a drive copy never touches the serial port — and so is the
+  simulated device, which holds no hardware. Connected to one board and flashing
+  a second stays silent, since nothing is in the way.
 
 - **An interrupted install no longer leaves a broken file on the board** (#864).
   Driver and package installs wrote each file straight to its final name, so
