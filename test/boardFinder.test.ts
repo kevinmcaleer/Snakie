@@ -4,6 +4,7 @@ import {
   MEMORY_THRESHOLDS,
   NO_SIZE_PUBLISHED,
   PLAIN_BUILD_LABEL,
+  TINT_COUNT,
   UNKNOWN_VENDOR,
   activeFilterChips,
   boardFacts,
@@ -13,10 +14,10 @@ import {
   isFiltering,
   memoryThresholdLabel,
   peekFacts,
-  shelvesByVendor,
   toggleChip,
   unsizedNotice,
-  variantList
+  variantList,
+  vendorRuns
 } from '../src/renderer/src/components/board-finder'
 import {
   FLASH_BOARD_EVENT,
@@ -74,30 +75,123 @@ const board = (over: Partial<IndexedBoard> = {}): IndexedBoard => ({
   ...over
 })
 
+/**
+ * The 54 manufacturers the shipped board index actually carries.
+ *
+ * A snapshot, not a fixture invented to suit the test: the tint rules only have
+ * to hold for the catalogue people browse, and the names are what the hash sees.
+ * A handful of them clash on the way past — `Silicognition` and `Silicognition
+ * LLC` sit next to each other, as do `WeAct` and `WeAct Studio` — which is a
+ * fair sample of the awkwardness the real list contains.
+ */
+const VENDOR_SPREAD = [
+  'Actinius', 'Adafruit', 'Alif Semiconductor', 'Arduino', 'BBC', 'Cytron',
+  'Espressif', 'Espruino', 'Ezurio', 'Fez', 'George Robotics', 'HydraBus',
+  'I-SYST', 'Infineon Technologies', 'LEGO', 'LILYGO', 'LimiFrog', 'M5Stack',
+  'Machdyne', 'Makerdiary', 'McHobby', 'Microchip', 'MikroElektronika',
+  'MiniFig Boards', 'Netduino', 'Nordic Semiconductor', 'nullbits', 'NXP',
+  'Olimex', 'Particle', 'PHYTEC', 'Pimoroni', 'PJRC', 'Pololu', 'Pycom',
+  'PyMateIO', 'Raspberry Pi', 'Renesas Electronics', 'Seeed Studio',
+  'Silicognition', 'Silicognition LLC', 'Soldered Electronics', 'SparkFun',
+  'ST Microelectronics', 'u-blox', 'Unexpected Maker', 'VCC-GND Studio',
+  'Vekatech', 'Waveshare', 'WeAct', 'WeAct Studio', 'Wemos', 'Wireless-Tag',
+  'WIZnet'
+]
+
 afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('shelvesByVendor', () => {
-  it('groups by vendor, alphabetically, products sorted within a shelf', () => {
-    const shelves = shelvesByVendor([
+describe('vendorRuns (#927)', () => {
+  it('groups by vendor, alphabetically, products sorted within a run', () => {
+    const runs = vendorRuns([
       board({ id: 'B', vendor: 'Pimoroni', product: 'Tiny 2040' }),
       board({ id: 'A', vendor: 'Adafruit', product: 'QT Py' }),
       board({ id: 'C', vendor: 'Pimoroni', product: 'Badger 2040' })
     ])
-    expect(shelves.map((s) => s.vendor)).toEqual(['Adafruit', 'Pimoroni'])
-    expect(shelves[1].boards.map((b) => b.product)).toEqual(['Badger 2040', 'Tiny 2040'])
+    expect(runs.map((r) => r.vendor)).toEqual(['Adafruit', 'Pimoroni'])
+    expect(runs[1].boards.map((b) => b.product)).toEqual(['Badger 2040', 'Tiny 2040'])
   })
 
   it('buckets a blank vendor under Other, and puts it last despite the alphabet', () => {
     // 'Other' would sort between Adafruit and Pimoroni on name alone — it is a
     // bucket, not a maker, so it belongs below both.
-    const shelves = shelvesByVendor([
+    const runs = vendorRuns([
       board({ id: 'P', vendor: 'Pimoroni' }),
       board({ id: 'X', vendor: '   ' }),
       board({ id: 'A', vendor: 'Adafruit' })
     ])
-    expect(shelves.map((s) => s.vendor)).toEqual(['Adafruit', 'Pimoroni', UNKNOWN_VENDOR])
+    expect(runs.map((r) => r.vendor)).toEqual(['Adafruit', 'Pimoroni', UNKNOWN_VENDOR])
+  })
+
+  it('gives a maker exactly one run, so every one of its boards shares a tint', () => {
+    // The tint is painted per CELL, so "a maker's boards share a tint" is only
+    // true while a maker's boards share a run. Two runs for one maker would put
+    // the same colour on two bands with somebody else's boards between them.
+    const runs = vendorRuns([
+      board({ id: 'A1', vendor: 'Adafruit', product: 'QT Py' }),
+      board({ id: 'P1', vendor: 'Pimoroni', product: 'Tiny 2040' }),
+      board({ id: 'A2', vendor: 'Adafruit', product: 'Feather' })
+    ])
+    expect(runs.filter((r) => r.vendor === 'Adafruit')).toHaveLength(1)
+    expect(runs[0].boards.map((b) => b.id)).toEqual(['A2', 'A1'])
+  })
+
+  it('gives every maker a tint from the palette', () => {
+    const runs = vendorRuns(VENDOR_SPREAD.map((v, i) => board({ id: `b${i}`, vendor: v })))
+    for (const run of runs) {
+      expect(Number.isInteger(run.tint)).toBe(true)
+      expect(run.tint).toBeGreaterThanOrEqual(0)
+      expect(run.tint).toBeLessThan(TINT_COUNT)
+    }
+  })
+
+  it('keeps a tint clear of the two runs before it', () => {
+    // The one job a tint has. Six tints over 54 makers collide by chance often
+    // enough that a build without the step-on rule fails this many times over —
+    // hashing alone is not enough, which is exactly why the rule is there.
+    //
+    // TWO back, not one: `Arduino`, `BBC`, `Cytron` are consecutive here and
+    // BBC has a single board, so an Arduino and a Cytron on the same tint would
+    // draw one band with a stranger's card sitting inside it.
+    const runs = vendorRuns(VENDOR_SPREAD.map((v, i) => board({ id: `b${i}`, vendor: v })))
+    expect(runs.length).toBeGreaterThan(TINT_COUNT * 6)
+    for (let i = 1; i < runs.length; i += 1) {
+      const before = runs.slice(Math.max(0, i - 2), i)
+      expect(
+        before.map((r) => r.tint),
+        `${before.map((r) => r.vendor).join(', ')} → ${runs[i].vendor}`
+      ).not.toContain(runs[i].tint)
+    }
+  })
+
+  it('is the same assignment every time, whatever order the boards arrive in', () => {
+    // The grouping is only worth anything if it holds still: a tint that
+    // depended on upstream's file order would repaint the gallery whenever the
+    // index was refetched.
+    const boards = VENDOR_SPREAD.map((v, i) => board({ id: `b${i}`, vendor: v }))
+    const forwards = vendorRuns(boards)
+    const backwards = vendorRuns([...boards].reverse())
+    const tints = (runs: ReturnType<typeof vendorRuns>): string[] =>
+      runs.map((r) => `${r.vendor}=${r.tint}`)
+    expect(tints(backwards)).toEqual(tints(forwards))
+    expect(tints(vendorRuns(boards))).toEqual(tints(forwards))
+  })
+
+  it('keys a tint on the maker’s name, not on where it lands in the list', () => {
+    // Adding a maker at the top of the alphabet must not repaint the ones below
+    // it — the whole reason the tint is hashed rather than counted off. Only
+    // makers that end up touching a clash are allowed to move.
+    const names = ['Cytron', 'Espressif', 'Pimoroni', 'SparkFun', 'Waveshare']
+    const before = vendorRuns(names.map((v, i) => board({ id: `b${i}`, vendor: v })))
+    const after = vendorRuns([
+      ...names.map((v, i) => board({ id: `b${i}`, vendor: v })),
+      board({ id: 'new', vendor: 'Actinius' })
+    ])
+    const tintOf = (runs: ReturnType<typeof vendorRuns>, vendor: string): number =>
+      runs.find((r) => r.vendor === vendor)!.tint
+    expect(after[0].vendor).toBe('Actinius')
+    for (const name of names) expect(tintOf(after, name)).toBe(tintOf(before, name))
   })
 })
 

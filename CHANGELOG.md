@@ -6,6 +6,33 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The Board Finder fills its rows, and marks each manufacturer with a tint**
+  (#927). Every maker had its own shelf — its own heading, its own grid, its own
+  fresh row. With 54 makers and a median of two boards each, that was 54 headings
+  and 54 rows left mostly empty, so a catalogue of 225 boards took far more
+  scrolling than 225 boards should. They now go into one continuous grid, so a
+  row can hold the last two Arduinos and the first five Espressifs, and a maker
+  is marked instead by a soft tint on the ground **between** its cards — a band
+  that runs on across row ends for as long as the maker does and stops mid-row
+  where the next one starts. There are six tints for 54 makers, which is the
+  honest ratio: a tint says *the maker changed here* and is never asked to say
+  *which maker this is*. Every card still prints its manufacturer, so the
+  grouping is never carried by colour alone. A maker's tint comes from its name
+  rather than its position, so adding a board next release does not repaint the
+  gallery; it shifts only where it would otherwise land too close to itself.
+- **A board card at rest shows its photo, its maker and its name, and nothing
+  else** (#927). It also carried the chip, three feature chips with an overflow
+  count, and two firmware notes — a wall of specification that nobody reads while
+  scanning and that made every one of the 225 cards taller than it needed to be.
+  All of it is a beat away on the hover preview (#919), which states the firmware
+  **first**, and on the details page behind a click. Nothing that warns you about
+  a board has been lost on the way to flashing one: a card does not flash
+  anything, and every route from it to the flash button passes a screen that says
+  so. The manufacturer line also got brighter, because it is now the accessible
+  half of the new tints rather than a caption.
+
 ### Fixed
 
 - **The Board Finder opened behind the flash dialog** (#893). It was given the

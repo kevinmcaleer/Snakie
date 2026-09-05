@@ -3,10 +3,11 @@
  * =============================================================================
  *
  * `shared/board-index.ts` owns the index: parsing, filtering, and picking a
- * build. This module owns what the GALLERY does with it — how boards are shelved,
- * what a card shows when it has no photo, and which of upstream's fields are
- * stated as facts. The request that reaches the firmware flasher is next door in
- * `board-finder-bus.ts`, so a listener can import it without the gallery.
+ * build. This module owns what the GALLERY does with it — how boards are grouped
+ * and tinted, what a card shows when it has no photo, and which of upstream's
+ * fields are stated as facts. The request that reaches the firmware flasher is
+ * next door in `board-finder-bus.ts`, so a listener can import it without the
+ * gallery.
  *
  * Separate from the component, and DOM-free, so every one of those decisions is
  * a unit test in node rather than an assertion about JSX.
@@ -54,33 +55,121 @@ import {
 import type { FirmwareRuntime } from '../../../shared/firmware-runtime'
 
 // ---------------------------------------------------------------------------
-// Shelving
+// Runs (#927) — what replaced the shelves
 // ---------------------------------------------------------------------------
 
-/** One vendor's boards, the gallery's browsing unit. */
-export interface VendorShelf {
+/**
+ * One maker's boards, in the order they are laid out.
+ *
+ * This used to be a SHELF: its own section, its own heading, its own grid that
+ * started on a fresh row. With 54 makers and a median of two boards each, that
+ * was 54 headings and 54 part-empty rows — a page you scroll past rather than
+ * read, and the reason #927 exists. A RUN is the same group with no section
+ * around it: the boards go into one continuous grid, so a row can hold the end
+ * of one maker and the start of the next, and the group is marked by the
+ * {@link VendorRun.tint} behind its cards instead of by a heading above them.
+ *
+ * Losing the headings is only affordable because manufacturer became a filter
+ * facet in #919. The shelves were one way to find a maker; the facet is the
+ * other, and it is the better one — it says how many boards each maker has,
+ * and it composes with the other filters, which a heading never did.
+ */
+export interface VendorRun {
   vendor: string
   boards: IndexedBoard[]
+  /** Which of the {@link TINT_COUNT} tints this run's cards sit on. */
+  tint: number
 }
 
-/** Shelf heading for a board whose vendor upstream left blank. */
+/** Heading for a board whose vendor upstream left blank. */
 export const UNKNOWN_VENDOR = 'Other'
 
 /**
- * Group boards into vendor shelves — the Parts Catalog's category shelves, for a
- * catalogue whose natural sections are makers.
+ * How many tints the gallery has to separate its makers with.
  *
- * Vendors alphabetically, `Other` last; boards within a shelf by product name so
- * a vendor's range reads in order rather than in upstream's file order.
+ * There are 54 makers and six tints, and that ratio is the honest one: 54
+ * background tints that a person could tell apart do not exist — not at the
+ * strength that survives sitting behind product photography on a dark ground,
+ * and not in a quantity anyone could hold in their head. So the tint is a
+ * SEPARATOR, never a name. It answers "did the maker change here?" and it is
+ * not asked to answer "which maker is this?" — the card's own manufacturer line
+ * answers that, on every card, which is what keeps colour from being the only
+ * carrier of a distinction (WCAG 1.4.1, and plain sense besides).
+ *
+ * If a later tidy-up removes the manufacturer from the card, it removes the
+ * only thing that names a group, and the tint is left doing a job it cannot do.
+ *
+ * Six rather than eight because six can be told apart. Six tints over the
+ * alphabetical maker order collide about one boundary in six, which {@link
+ * vendorRuns} then resolves; eight would collide less often and read as noise.
  */
-export function shelvesByVendor(boards: readonly IndexedBoard[]): VendorShelf[] {
+export const TINT_COUNT = 6
+
+/**
+ * How many runs back a tint has to stay clear of.
+ *
+ * One is not enough, and the catalogue says so: `Arduino`, `BBC`, `Cytron` run
+ * consecutively and `BBC` has a single board. Give Arduino and Cytron the same
+ * tint — legal, if a tint need only differ from the one immediately before it —
+ * and their bands are separated by one card in a row of seven, which the eye
+ * joins into a single Arduino band with an odd card in the middle of it.
+ *
+ * Two is what breaks that, and two is affordable: it forbids two of six tints,
+ * so four remain to choose from. Three would forbid half the palette to buy
+ * separation between bands that already have two other bands between them.
+ */
+const TINT_LOOKBACK = 2
+
+/**
+ * FNV-1a, 32-bit — the tint is keyed on the maker's NAME, not its position.
+ *
+ * Position would be simpler and would still guarantee that neighbours differ,
+ * but it would re-colour half the catalogue every time upstream adds a maker:
+ * insert one name near the top of the alphabet and everything below it shifts a
+ * tint. Hashing the name means Adafruit's boards sit on the same tint next
+ * release as this one, which is the difference between a grouping and a
+ * flicker.
+ */
+function vendorHash(vendor: string): number {
+  let h = 0x811c9dc5
+  for (let i = 0; i < vendor.length; i += 1) {
+    h ^= vendor.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  return h >>> 0
+}
+
+/**
+ * Group boards into vendor runs and give each run a tint.
+ *
+ * Makers stay in alphabetical order, `Other` last, boards by product name
+ * within a maker — the shelves' ordering, kept deliberately. The tint only
+ * separates ADJACENT groups, so the boards of one maker have to be adjacent for
+ * it to separate anything; scattering the catalogue and tinting per card would
+ * turn 225 cards into 225 unrelated colour patches. Runs also keep the one
+ * thing the shelves were genuinely good at: a maker's range reads together.
+ *
+ * The tint is the maker's hash, EXCEPT where that lands on one of the last
+ * {@link TINT_LOOKBACK} runs' tints — then it steps forward until it does not,
+ * which always terminates because the palette is bigger than the lookback. The
+ * step is by one, and the palette is ordered so that "one on" is a long way
+ * round the hue wheel rather than a neighbouring shade (see `BoardFinder.css`)
+ * — a run stepping away from a clash must not land on a near-miss of it.
+ *
+ * The step is the one place a maker's tint depends on its neighbours rather
+ * than on its name, and that trade is the right way round: a tint that repeats
+ * near itself fails at the only job it has, while a tint that shifts when the
+ * catalogue changes merely disappoints a memory nobody was invited to form.
+ */
+export function vendorRuns(boards: readonly IndexedBoard[]): VendorRun[] {
   const byVendor = new Map<string, IndexedBoard[]>()
   for (const b of boards) {
     const vendor = b.vendor.trim() || UNKNOWN_VENDOR
-    const shelf = byVendor.get(vendor)
-    if (shelf) shelf.push(b)
+    const run = byVendor.get(vendor)
+    if (run) run.push(b)
     else byVendor.set(vendor, [b])
   }
+  const recent: number[] = []
   return [...byVendor.entries()]
     .sort(([a], [b]) => {
       // `Other` is a bucket, not a maker, so it sorts below the real ones
@@ -89,10 +178,20 @@ export function shelvesByVendor(boards: readonly IndexedBoard[]): VendorShelf[] 
       if (b === UNKNOWN_VENDOR) return -1
       return a.localeCompare(b)
     })
-    .map(([vendor, list]) => ({
-      vendor,
-      boards: [...list].sort((x, y) => x.product.localeCompare(y.product))
-    }))
+    .map(([vendor, list]) => {
+      const hashed = vendorHash(vendor) % TINT_COUNT
+      let tint = hashed
+      for (let step = 1; recent.includes(tint); step += 1) {
+        tint = (hashed + step) % TINT_COUNT
+      }
+      recent.push(tint)
+      if (recent.length > TINT_LOOKBACK) recent.shift()
+      return {
+        vendor,
+        tint,
+        boards: [...list].sort((x, y) => x.product.localeCompare(y.product))
+      }
+    })
 }
 
 // ---------------------------------------------------------------------------
