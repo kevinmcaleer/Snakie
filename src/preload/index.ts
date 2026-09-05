@@ -50,6 +50,7 @@ import { writeFailureMessage } from '../shared/install-messages'
 import type { RuntimeInfo } from '../shared/dialect'
 import { deviceDirsFor } from '../shared/mip-resolve'
 import { writeAtomically, type AtomicOps } from '../shared/atomic-write'
+import type { InstallFileProgress } from '../shared/install-file-progress'
 import type {
   CopilotDeviceCode,
   CopilotPollResult
@@ -376,7 +377,7 @@ const deviceAtomicOps: AtomicOps = {
 async function writeFilesToBoard(
   name: string,
   files: ModulePlanFile[],
-  onStep: (message: string) => void
+  onStep: (message: string, detail?: InstallFileProgress) => void
 ): Promise<{ ok: boolean; log: string }> {
   if (files.length === 0) {
     return { ok: false, log: `Couldn't install ${name}: nothing was resolved to write.` }
@@ -387,10 +388,19 @@ async function writeFilesToBoard(
       // An existing directory is fine — MicroPython raises EEXIST for it.
       await unwrap<void>(ipcRenderer.invoke('device:mkdir', dir)).catch(() => undefined)
     }
+    // Declare the whole list BEFORE the first write (#895). A progress list that
+    // grows as it goes cannot say how much is left, which is the question a user
+    // watching a 22-file install is actually asking.
+    onStep(`Writing ${files.length} file${files.length === 1 ? '' : 's'}…`, {
+      files: files.map((f) => f.path)
+    })
     let done = 0
-    for (const file of files) {
+    for (const [index, file] of files.entries()) {
       current = file.path
-      onStep(`Writing ${++done}/${files.length} — ${file.path}…`)
+      onStep(`Writing ${++done}/${files.length} — ${file.path}…`, {
+        fileIndex: index,
+        fileState: 'running'
+      })
       // A base64 file is BINARY — an Adafruit `.mpy` (#758). It goes down the
       // bytes channel, never the text one: a `.mpy` that took the string route
       // would be silently corrupted by the UTF-8 round-trip and land as a file
@@ -407,8 +417,12 @@ async function writeFilesToBoard(
         (tmp) =>
           bytes
             ? unwrap<void>(ipcRenderer.invoke('device:writeFileBytes', tmp, bytes))
-            : unwrap<void>(ipcRenderer.invoke('device:writeFile', tmp, file.contents))
+            : unwrap<void>(ipcRenderer.invoke('device:writeFileBytes', tmp, Buffer.from(file.contents, 'utf8')))
       )
+      onStep(`Wrote ${done}/${files.length} — ${file.path}`, {
+        fileIndex: index,
+        fileState: 'done'
+      })
     }
     return { ok: true, log: `Wrote ${files.map((f) => f.path).join(', ')}` }
   } catch (err) {
@@ -474,8 +488,8 @@ const packages = {
     }
     for (const note of plan.notes) emit({ name, state: 'note', message: note })
 
-    const written = await writeFilesToBoard(name, plan.files, (message) =>
-      emit({ name, state: 'running', message })
+    const written = await writeFilesToBoard(name, plan.files, (message, detail) =>
+      emit({ name, state: 'running', message, ...detail })
     )
     emit({
       name,
@@ -487,7 +501,7 @@ const packages = {
 }
 
 /** Lifecycle event for a per-module install (#120). Mirrors `InstallProgress`. */
-export interface ModuleInstallProgress {
+export interface ModuleInstallProgress extends InstallFileProgress {
   /** The catalog module id being installed. */
   id: string
   /** Lifecycle state. */
@@ -582,8 +596,8 @@ const modules = {
     }
     for (const note of plan.notes) emit({ id, state: 'note', message: note })
 
-    const written = await writeFilesToBoard(id, plan.files, (message) =>
-      emit({ id, state: 'running', message })
+    const written = await writeFilesToBoard(id, plan.files, (message, detail) =>
+      emit({ id, state: 'running', message, ...detail })
     )
     emit({
       id,

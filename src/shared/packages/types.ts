@@ -46,12 +46,14 @@ export interface InstallRequest {
   options?: InstallOptions
 }
 
+import type { InstallFileProgress } from '../install-file-progress'
+
 /**
  * A progress / lifecycle event pushed on the `packages:progress` channel while
  * an install runs. `state` drives the UI; `message` carries human-readable
  * detail (log line, error text, or a graceful note such as the `.mpy` caveat).
  */
-export interface InstallProgress {
+export interface InstallProgress extends InstallFileProgress {
   /** The package this event concerns. */
   name: string
   state: 'started' | 'running' | 'note' | 'done' | 'error'
