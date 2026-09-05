@@ -19,19 +19,33 @@
  * committed here as the bundled seed, so a fresh install and the offline
  * classroom build (#267) work with no network at all.
  *
- * WHAT UPSTREAM DOES NOT PUBLISH: flash size and RAM size. `features` carries
- * `External Flash` and `External RAM` as booleans and nothing more. So this
- * emits no `flashBytes`/`ramBytes` — the gallery shows storage and memory as
- * facts where a board profile happens to know them, and does not offer them as
- * filters, which would silently omit most of the catalogue.
+ * WHAT UPSTREAM DOES NOT PUBLISH: flash size, RAM size, and whether the board
+ * also runs CircuitPython. `features` carries `External Flash` and `External
+ * RAM` as booleans and nothing more. Those come from `board-specs.mjs` instead,
+ * which is where every figure's provenance lives — see #897 for why a number
+ * with no `source` is not published at all.
  *
  * Run:  node scripts/build-board-index.mjs [--tag v1.29.0] [--no-images]
+ *       node scripts/build-board-index.mjs --specs-only
+ *
+ * `--specs-only` re-reads the committed `boards.json` and rewrites just the
+ * derived fields — sizes, runtimes, CircuitPython ids. It exists because the
+ * curation in `board-specs.mjs` changes far more often than upstream's tree
+ * does, and a full run re-encodes 217 thumbnails into an unreviewable binary
+ * diff to say nothing about them.
  */
-import { mkdir, writeFile, rm } from 'node:fs/promises'
+import { mkdir, readFile, writeFile, rm } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import {
+  CIRCUITPYTHON_CATALOGS,
+  circuitPythonIdFor,
+  circuitPythonIndex,
+  runtimesForBoard,
+  specsForBoard
+} from './board-specs.mjs'
 
 const run = promisify(execFile)
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -208,7 +222,61 @@ async function thumbnail(srcBytes, destPath) {
   }
 }
 
+/**
+ * Attach the derived fields to every board, in place.
+ *
+ * Shared by the full run and `--specs-only` so the two cannot drift: a seed
+ * enriched by the quick path has to be byte-identical to one the slow path would
+ * have produced, or the quick path is just a second, worse generator.
+ */
+function addSpecs(boards, cpIndex) {
+  for (const b of boards) {
+    const { flash, ram, psram } = specsForBoard(b)
+    b.flash = flash
+    b.ram = ram
+    b.psram = psram
+    b.circuitPythonBoardId = cpIndex ? circuitPythonIdFor(b, cpIndex) : null
+    b.runtimes = runtimesForBoard(b, b.circuitPythonBoardId)
+  }
+  return boards
+}
+
+/** The CircuitPython catalogue, or null when it cannot be reached. */
+async function loadCircuitPython() {
+  try {
+    const catalogs = await Promise.all(CIRCUITPYTHON_CATALOGS.map((u) => getJson(u)))
+    return circuitPythonIndex(catalogs)
+  } catch (err) {
+    // Not fatal, and deliberately loud: a board index whose CircuitPython column
+    // is silently empty looks exactly like one where no board runs it.
+    process.stderr.write(`  WARNING: CircuitPython catalogue unavailable (${err.message})\n`)
+    return null
+  }
+}
+
+/** Report what is known and what is not, because the gaps are the point (#897). */
+function reportCoverage(boards) {
+  const n = (f) => boards.filter(f).length
+  process.stderr.write(
+    `  flash size on ${n((b) => b.flash)}/${boards.length}, ` +
+      `RAM on ${n((b) => b.ram)}, PSRAM on ${n((b) => b.psram)}, ` +
+      `CircuitPython confirmed on ${n((b) => b.circuitPythonBoardId)}\n`
+  )
+}
+
+/** Rewrite the committed seed's derived fields without touching anything else. */
+async function specsOnly() {
+  const path = join(OUT_DIR, 'boards.json')
+  const doc = JSON.parse(await readFile(path, 'utf8'))
+  process.stderr.write(`Re-deriving specs for ${doc.boards.length} boards in ${path}\n`)
+  addSpecs(doc.boards, await loadCircuitPython())
+  doc.generated = new Date().toISOString().slice(0, 10)
+  await writeFile(path, `${JSON.stringify(doc, null, 2)}\n`)
+  reportCoverage(doc.boards)
+}
+
 async function main() {
+  if (flag('--specs-only')) return specsOnly()
   const tag = value('--tag', null) ?? (await newestReleaseTag())
   const withImages = !flag('--no-images')
   process.stderr.write(`Building board index from MicroPython ${tag}\n`)
@@ -262,6 +330,7 @@ async function main() {
   const ok = boards.filter((b) => b && !b.error)
   const failed = boards.length - ok.length
   ok.sort((a, b) => a.vendor.localeCompare(b.vendor) || a.product.localeCompare(b.product))
+  addSpecs(ok, await loadCircuitPython())
 
   const doc = {
     schema: SCHEMA,
@@ -277,6 +346,7 @@ async function main() {
     `  wrote ${ok.length} boards (${withBuilds} with published firmware, ` +
       `${withThumbs} with thumbnails${failed ? `, ${failed} failed` : ''})\n`
   )
+  reportCoverage(ok)
 }
 
 main().catch((err) => {
