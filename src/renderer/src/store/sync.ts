@@ -37,6 +37,7 @@ import {
 import { baseName, FILE_SAVED_EVENT, type FileSavedDetail } from './workspace'
 import { useFileSelection } from './file-selection'
 import { planUploadOf, runFolderUpload } from '../lib/folder-transfer'
+import { deviceJoin } from '../../../shared/transfer-plan'
 
 /**
  * Is this local path a directory? (#848)
@@ -107,6 +108,12 @@ export interface SyncStore {
   status: SyncStatus
   /** Last error message when `status === 'error'`. */
   error: string | null
+  /**
+   * One row per tagged path, in tag order, with its own state — what the
+   * status-bar sync popup lists (#863). `status` above says whether a sync is
+   * running; this says which files have actually reached the board.
+   */
+  syncedFiles: SyncedFile[]
   isSynced: (path: string) => boolean
   /** Tag / untag a local path (tagging pushes it once if a board is connected). */
   toggleSync: (path: string) => void
@@ -118,6 +125,119 @@ export interface SyncStore {
 /** Device destination for a synced local file: `/<basename>` (mirrors upload). */
 export function deviceDestForLocal(localPath: string): string {
   return `/${baseName(localPath)}`
+}
+
+// ---------------------------------------------------------------------------
+// Per-file sync state (#863)
+// ---------------------------------------------------------------------------
+//
+// The coarse {@link SyncStatus} answers "is a sync happening", which is all the
+// toolbar glyph needed. The status-bar popup asks a different question — "which
+// of my tagged files have actually reached this board?" — so each tagged path
+// carries its own state. Kept as plain data with pure transitions so the whole
+// thing unit-tests in node, like the rest of this store's helpers.
+
+/** What has happened to ONE tagged path, on the currently-connected board. */
+export type FileSyncState = 'pending' | 'syncing' | 'done' | 'error'
+
+/** The store's record for one tagged path. */
+export interface FileSyncRecord {
+  state: FileSyncState
+  /** Failure message when `state === 'error'`. */
+  error?: string
+  /**
+   * Whether the path turned out to be a directory. Undefined until a sync has
+   * actually looked (`isDirectory` is asked at sync time, not tag time), which
+   * is why the popup shows no destination for a path it has never pushed —
+   * a folder and a file land in different places, so guessing would mislead.
+   */
+  dir?: boolean
+}
+
+export type FileSyncMap = Readonly<Record<string, FileSyncRecord>>
+
+/** One row of the status-bar popup. */
+export interface SyncedFile {
+  path: string
+  name: string
+  state: FileSyncState
+  /** Where it lands on the device — absent until a sync has established it. */
+  dest?: string
+  error?: string
+}
+
+/** Set `state` on each of `paths`, leaving every other record untouched. */
+export function markFiles(
+  map: FileSyncMap,
+  paths: string[],
+  state: FileSyncState,
+  error?: string
+): FileSyncMap {
+  if (paths.length === 0) return map
+  const next: Record<string, FileSyncRecord> = { ...map }
+  for (const path of paths) {
+    const prev = next[path]
+    const rec: FileSyncRecord = { state }
+    if (state === 'error' && error) rec.error = error
+    if (prev?.dir !== undefined) rec.dir = prev.dir
+    next[path] = rec
+  }
+  return next
+}
+
+/** Record what a sync discovered about `path`: a directory, or a plain file. */
+export function markKind(map: FileSyncMap, path: string, dir: boolean): FileSyncMap {
+  const prev = map[path] ?? { state: 'pending' as FileSyncState }
+  if (prev.dir === dir) return map
+  return { ...map, [path]: { ...prev, dir } }
+}
+
+/**
+ * Bring the record map in line with the tagged list: newly tagged paths start
+ * `pending` (tagged but not yet on the board), untagged ones are forgotten.
+ */
+export function reconcileFiles(map: FileSyncMap, tagged: string[]): FileSyncMap {
+  const next: Record<string, FileSyncRecord> = {}
+  for (const path of tagged) next[path] = map[path] ?? { state: 'pending' }
+  return next
+}
+
+/**
+ * Forget what was synced. Called when the board goes away: the next board to
+ * arrive may be a different one, and a green tick that means "synced to some
+ * board I saw earlier" is worse than no tick at all.
+ */
+export function clearSyncMarks(map: FileSyncMap): FileSyncMap {
+  const next: Record<string, FileSyncRecord> = {}
+  for (const [path, rec] of Object.entries(map)) {
+    next[path] = rec.dir === undefined ? { state: 'pending' } : { state: 'pending', dir: rec.dir }
+  }
+  return next
+}
+
+/**
+ * The popup's rows, in tag order. `folderDest` is where a tagged FOLDER lands
+ * (the highlighted device folder, #848); files keep `/<basename>`.
+ */
+export function syncedFileList(
+  tagged: string[],
+  map: FileSyncMap,
+  folderDest: string
+): SyncedFile[] {
+  return tagged.map((path) => {
+    const rec = map[path] ?? { state: 'pending' as FileSyncState }
+    const name = baseName(path)
+    const row: SyncedFile = { path, name, state: rec.state }
+    if (rec.dir === true) row.dest = deviceJoin(folderDest, name)
+    else if (rec.dir === false) row.dest = deviceDestForLocal(path)
+    if (rec.error) row.error = rec.error
+    return row
+  })
+}
+
+/** How many tagged paths have reached the board, for the popup's summary. */
+export function syncedCount(files: SyncedFile[]): number {
+  return files.filter((f) => f.state === 'done').length
 }
 
 /** Parse the persisted tagged-paths list, tolerating missing / corrupt storage. */
@@ -178,6 +298,8 @@ export function SyncProvider({ children }: { children: ReactNode }): JSX.Element
   const [syncOnSave, setSyncOnSaveState] = useState<boolean>(() => loadSyncOnSave())
   const [status, setStatus] = useState<SyncStatus>('idle')
   const [error, setError] = useState<string | null>(null)
+  // Per-path state behind the status-bar popup (#863).
+  const [fileStates, setFileStates] = useState<FileSyncMap>({})
 
   // Latest values for use inside event handlers without re-subscribing.
   const connectedRef = useRef(false)
@@ -196,9 +318,20 @@ export function SyncProvider({ children }: { children: ReactNode }): JSX.Element
       })
       .catch(() => undefined)
     return window.api.device.onStatus((s) => {
+      const wasConnected = connectedRef.current
       connectedRef.current = s.state === 'connected'
+      // The board went away. Forget which files were synced: the next board to
+      // arrive may be a different one, and a tick meaning "synced to a board I
+      // saw earlier" is worse than no tick at all (#863).
+      if (wasConnected && !connectedRef.current) setFileStates(clearSyncMarks)
     })
   }, [])
+
+  // Keep the per-path records in step with the tagged list: a newly tagged path
+  // starts `pending`, an untagged one is forgotten.
+  useEffect(() => {
+    setFileStates((prev) => reconcileFiles(prev, syncedPaths))
+  }, [syncedPaths])
 
   useEffect(() => {
     return () => {
@@ -235,24 +368,40 @@ export function SyncProvider({ children }: { children: ReactNode }): JSX.Element
       setStatus('syncing')
       setError(null)
       emitSyncStatus(`Syncing ${label}…`)
+      // Each path reports its own outcome as the loop reaches it, so the popup
+      // ticks off files one by one instead of flipping all of them at the end
+      // (#863). A path the loop never reaches keeps whatever it had, which is
+      // right: it genuinely has not been pushed.
       try {
         for (const path of paths) {
-          // A tagged FOLDER syncs itself and everything under it, into whichever
-          // device folder is highlighted right now (#848). Tagging a folder is
-          // what people actually mean — tagging its files one at a time both
-          // misses newly added ones and is tedious.
-          //
-          // Files keep their existing destination (`/<basename>`) rather than
-          // following the highlight: changing that would silently relocate
-          // every file anyone already had tagged.
-          if (await isDirectory(path)) {
-            const plan = await planUploadOf(path, deviceTargetDirRef.current)
-            const result = await runFolderUpload(plan, () => undefined)
-            if (!result.ok) throw new Error(result.error ?? `Could not sync ${baseName(path)}`)
-            continue
+          setFileStates((prev) => markFiles(prev, [path], 'syncing'))
+          try {
+            // A tagged FOLDER syncs itself and everything under it, into whichever
+            // device folder is highlighted right now (#848). Tagging a folder is
+            // what people actually mean — tagging its files one at a time both
+            // misses newly added ones and is tedious.
+            //
+            // Files keep their existing destination (`/<basename>`) rather than
+            // following the highlight: changing that would silently relocate
+            // every file anyone already had tagged.
+            const dir = await isDirectory(path)
+            setFileStates((prev) => markKind(prev, path, dir))
+            if (dir) {
+              const plan = await planUploadOf(path, deviceTargetDirRef.current)
+              const result = await runFolderUpload(plan, () => undefined)
+              if (!result.ok) throw new Error(result.error ?? `Could not sync ${baseName(path)}`)
+            } else {
+              const content = await window.api.fs.readFile(path)
+              await window.api.device.writeFile(deviceDestForLocal(path), content)
+            }
+            setFileStates((prev) => markFiles(prev, [path], 'done'))
+          } catch (err) {
+            // Record which file failed before letting the run end — the popup's
+            // job is to name the one that went wrong, not just that one did.
+            const message = err instanceof Error ? err.message : String(err)
+            setFileStates((prev) => markFiles(prev, [path], 'error', message))
+            throw err
           }
-          const content = await window.api.fs.readFile(path)
-          await window.api.device.writeFile(deviceDestForLocal(path), content)
         }
         settle('done', null, label)
       } catch (err) {
@@ -318,11 +467,17 @@ export function SyncProvider({ children }: { children: ReactNode }): JSX.Element
         setStatus('syncing')
         setError(null)
         emitSyncStatus(`Syncing ${label}…`)
+        // Only a FILE can be saved from an editor buffer, so this path knows the
+        // kind without asking the disk (#863).
+        setFileStates((prev) => markFiles(markKind(prev, detail.path, false), [detail.path], 'syncing'))
         try {
           await window.api.device.writeFile(deviceDestForLocal(detail.path), detail.content)
+          setFileStates((prev) => markFiles(prev, [detail.path], 'done'))
           settle('done', null, label)
         } catch (err) {
-          settle('error', err instanceof Error ? err.message : String(err), label)
+          const message = err instanceof Error ? err.message : String(err)
+          setFileStates((prev) => markFiles(prev, [detail.path], 'error', message))
+          settle('error', message, label)
         }
       })()
     }
@@ -330,18 +485,34 @@ export function SyncProvider({ children }: { children: ReactNode }): JSX.Element
     return () => window.removeEventListener(FILE_SAVED_EVENT, handler)
   }, [settle])
 
+  const syncedFiles = useMemo(
+    () => syncedFileList(syncedPaths, fileStates, deviceTargetDir),
+    [syncedPaths, fileStates, deviceTargetDir]
+  )
+
   const store = useMemo<SyncStore>(
     () => ({
       syncedPaths,
       syncOnSave,
       status,
       error,
+      syncedFiles,
       isSynced,
       toggleSync,
       setSyncOnSave,
       syncNow
     }),
-    [syncedPaths, syncOnSave, status, error, isSynced, toggleSync, setSyncOnSave, syncNow]
+    [
+      syncedPaths,
+      syncOnSave,
+      status,
+      error,
+      syncedFiles,
+      isSynced,
+      toggleSync,
+      setSyncOnSave,
+      syncNow
+    ]
   )
 
   return createElement(SyncContext.Provider, { value: store }, children)

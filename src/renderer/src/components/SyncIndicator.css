@@ -1,0 +1,171 @@
+/* --------------------------------------------------------------------------
+ * File-sync indicator + hover popup (#863)
+ *
+ * Lives in the status bar's right-hand group, which never gives way (#843), so
+ * everything here is `flex: 0 0 auto` and nothing wraps. Every colour is a
+ * theme token, so it reads correctly in BOTH the dark and skeuomorph skins —
+ * a popup that only works in one is a bug its author never sees.
+ * ------------------------------------------------------------------------ */
+
+.syncind {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.syncind__btn {
+  /* `.statusbar__item` supplies the padding, height and nowrap. */
+  gap: 0.3rem;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.syncind__count {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Sync is ON: the same green the device tree uses for a completed sync, so the
+   two indicators mean the same thing in the same colour. */
+.syncind__btn--on {
+  color: var(--accent-2);
+}
+
+/* Tagged files but auto-sync switched off — present, deliberately quiet. */
+.syncind__btn--off {
+  color: var(--text-muted);
+}
+
+.syncind__btn--error {
+  color: var(--danger);
+}
+
+.syncind__btn--syncing {
+  color: var(--accent);
+}
+
+.syncind__btn--syncing svg {
+  animation: syncind-spin 0.9s linear infinite;
+}
+
+@keyframes syncind-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .syncind__btn--syncing svg {
+    animation: none;
+  }
+}
+
+.syncind__btn:hover,
+.syncind__btn:focus-visible {
+  background: var(--bg-sunken);
+}
+
+/* --- popup ---------------------------------------------------------------- */
+
+.syncind__popup {
+  /* Fixed, not absolute: the status bar sets `overflow: hidden`, which would
+     clip an absolutely-positioned child at the bar's own 1.6rem height. The
+     inline `right`/`bottom` come from the button's measured rect. */
+  position: fixed;
+  right: 10px;
+  bottom: 2.2rem;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: max-content;
+  min-width: 14rem;
+  max-width: 26rem;
+  padding: 0.45rem 0.55rem;
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  font-size: 0.72rem;
+  cursor: default;
+}
+
+.syncind__summary {
+  margin: 0;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.syncind__empty {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.syncind__list {
+  /* The tag list has no upper bound, so it scrolls rather than growing past the
+     top of the window. */
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  max-height: 14rem;
+  overflow-y: auto;
+}
+
+.syncind__row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.1rem 0;
+  color: var(--text-muted);
+}
+
+.syncind__row--done {
+  color: var(--text);
+}
+
+.syncind__row--syncing {
+  color: var(--accent);
+}
+
+.syncind__row--error {
+  color: var(--danger);
+}
+
+.syncind__tick {
+  flex: 0 0 auto;
+  width: 1em;
+  text-align: center;
+}
+
+.syncind__row--done .syncind__tick {
+  color: var(--accent-2);
+}
+
+.syncind__name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.syncind__dest,
+.syncind__err {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+}
+
+.syncind__err {
+  color: var(--danger);
+}

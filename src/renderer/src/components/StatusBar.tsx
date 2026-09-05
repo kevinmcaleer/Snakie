@@ -32,6 +32,7 @@ import {
 } from '../../../shared/firmware-runtime'
 import type { FirmwareCatalog, UpdateStatus } from '../../../preload/index.d'
 import { BulbIcon } from './ui-icons'
+import { SyncIndicator } from './SyncIndicator'
 import './StatusBar.css'
 
 /**
@@ -491,6 +492,11 @@ export function StatusBar({
       <div className="statusbar__spacer" />
 
       <div className="statusbar__group statusbar__group--right">
+        {/* File sync (#863). First in the right-hand group so it sits next to
+            the message area — the sync messages land there, and the popup that
+            explains them should be adjacent. Renders nothing at all when
+            nothing is tagged and sync is off. */}
+        <SyncIndicator />
         {changedCount != null && (
           <span
             className="statusbar__item"

@@ -23,6 +23,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A file-sync indicator in the status bar, with the list behind it** (#863).
+  When file sync is on — or when anything is tagged — a small sync glyph sits in
+  the status bar showing how many of the tagged files are on the board (`2/3`).
+  Hover it (or click, or tab to it) and it lists every tagged file with a tick
+  against the ones that have actually arrived, a cross against any that failed
+  with the reason, and an empty box against the rest. Each row names where the
+  file lands, once a sync has established it — a folder follows the highlighted
+  device folder, a file goes to `/<name>`, and the popup no longer leaves you
+  guessing which. The glyph dims when files are tagged but sync-on-save is off,
+  which is the state that quietly catches people out, and disappears entirely
+  when there is nothing to report. Unplugging the board clears the ticks: the
+  next board may be a different one, and a tick meaning "synced to something I
+  saw earlier" is worse than no tick at all.
 - **Copy a whole folder to the board from the Files panel** (#848). Highlight a
   folder on the left and a folder on the device, and **Upload to device** copies
   the one into the other — recursively, keeping its name and its nesting. A
