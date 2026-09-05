@@ -45,6 +45,14 @@ const espressifSram = (bytes: number, chip: string): BoardSize => ({
   scope: 'chip'
 })
 
+/** An RP2040/RP2350's on-die SRAM. The flash beside it is always `board` scope:
+ *  these chips have none of their own, so every byte is the module's. */
+const rpSram = (bytes: number, chip: string): BoardSize => ({
+  bytes,
+  source: `Raspberry Pi ${chip} datasheet`,
+  scope: 'chip'
+})
+
 /** One board Snakie knows about and upstream does not. */
 export interface OverlayBoard {
   /** Upstream's id if it ever adds this board — so the step-aside can match. */
@@ -82,6 +90,26 @@ export interface OverlayBoard {
  * Snakie will act on, so the bar is a maker's own page open in front of me, not
  * a plausible-looking slug. The candidates that did not clear that bar are in
  * the issue rather than here.
+ *
+ * THE SECOND BATCH (#936) BROUGHT A HAZARD THE FIRST DID NOT. The Adafruit ESP32
+ * entries above borrow a generic build because there is a right one to borrow.
+ * Most of what follows is RP2040/RP2350, where a generic Pico build runs on
+ * nearly every board — and running is not the same as being right. "It booted,
+ * so it was the correct firmware" is exactly the reasoning that cost a week on
+ * the Feather V2.
+ *
+ * So a donor is offered only where the MAKER'S OWN PAGE says the board is
+ * spec-identical to the donor — Cytron's does, and is the only one here that
+ * does. Where the maker publishes its own build, the entry says so and points
+ * there, the way the micro:bit v2 entry does. `PIMORONI_PICOLIPO2` is the case
+ * that settles it: an RP2350B with 16 MB of flash and 8 MB of PSRAM, against a
+ * Pico 2 build that is an RP2350A with 4 MB and none. It would boot, and leave
+ * most of the board switched off.
+ *
+ * One more rule, quieter but easy to break: `features` feed the gallery's filter
+ * facets. `USB C` where upstream writes `USB-C` fails nothing and silently
+ * splits one facet in two, so the tests hold every string here to upstream's own
+ * vocabulary.
  */
 export const OVERLAY_BOARDS: OverlayBoard[] = [
   {
@@ -106,6 +134,42 @@ export const OVERLAY_BOARDS: OverlayBoard[] = [
       'initialised by the SPIRAM variant of the generic ESP32 build, so that is the one ' +
       'to flash — the plain build runs and leaves the PSRAM switched off.',
     profileId: 'adafruit-feather-esp32-v2'
+  },
+  {
+    // Adafruit 5323 — the 8 MB / NO PSRAM one. Adafruit sells three ESP32-S3
+    // Feathers and they do not take the same build; this entry is only the one
+    // whose page says "8MB Flash No PSRAM".
+    id: 'ADAFRUIT_FEATHER_ESP32S3',
+    vendor: 'Adafruit',
+    product: 'Feather ESP32-S3 (8 MB, no PSRAM)',
+    port: 'esp32',
+    mcu: 'esp32s3',
+    features: [
+      'BLE',
+      'WiFi',
+      'External Flash',
+      'USB-C',
+      'Feather',
+      'JST-SH',
+      'RGB LED',
+      'Battery Charging',
+      'Dual-core'
+    ],
+    url: 'https://www.adafruit.com/product/5323',
+    flashOffset: '0x0',
+    flash: { bytes: 8 * MiB, source: 'adafruit.com/product/5323', scope: 'board' },
+    ram: espressifSram(512 * KiB, 'ESP32-S3'),
+    // Stated absent on the product page, not merely unlisted — which is what
+    // decides the build below.
+    psram: null,
+    circuitPythonBoardId: 'adafruit_feather_esp32s3_nopsram',
+    donorBoardId: 'ESP32_GENERIC_S3',
+    donorBuild: 'ESP32_GENERIC_S3',
+    why:
+      'MicroPython publishes no build under this board’s name. This model has no PSRAM, so ' +
+      'the STANDARD generic ESP32-S3 build is the right one — the SPIRAM_OCT variant would ' +
+      'print a PSRAM initialisation error at every boot. The 4 MB / 2 MB PSRAM Feather is a ' +
+      'different board and takes a different build.'
   },
   {
     id: 'ADAFRUIT_HUZZAH32_FEATHER',
@@ -191,6 +255,179 @@ export const OVERLAY_BOARDS: OverlayBoard[] = [
       'MicroPython for the micro:bit v2 is published by the micro:bit Foundation, not by ' +
       'micropython.org, so there is no build here to flash. Get it from python.microbit.org.',
     profileId: 'microbit-v2'
+  },
+  {
+    // Cytron's own page states the board is spec-identical to a Pico — same
+    // RP2040, same 264 KB, same 2 MB — and that MicroPython for the Pico/RP2040
+    // is a supported way to use it. That is a maker's endorsement of the generic
+    // build, which is the bar for offering one here.
+    id: 'CYTRON_MAKER_PI_RP2040',
+    vendor: 'Cytron',
+    product: 'Maker Pi RP2040',
+    port: 'rp2',
+    mcu: 'rp2040',
+    features: ['External Flash', 'RGB LED', 'Dual-core', 'Battery Charging'],
+    url: 'https://www.cytron.io/p-maker-pi-rp2040-simplifying-robotics-with-raspberry-pi-rp2040',
+    // An RP2 board is flashed by dragging a .uf2 onto its bootloader drive, so
+    // there is no esptool offset to write at.
+    flashOffset: null,
+    flash: { bytes: 2 * MiB, source: 'cytron.io Maker Pi RP2040 specifications', scope: 'board' },
+    ram: rpSram(264 * KiB, 'RP2040'),
+    psram: null,
+    circuitPythonBoardId: 'cytron_maker_pi_rp2040',
+    donorBoardId: 'RPI_PICO',
+    donorBuild: 'RPI_PICO',
+    why:
+      'MicroPython publishes no build under this board’s name. Cytron states it carries the ' +
+      'same RP2040, the same 264 KB of RAM and the same 2 MB of flash as a Pico, so the Pico ' +
+      'build is the one to flash. The board ships with CircuitPython on it, so flashing ' +
+      'MicroPython replaces what is already there.'
+  },
+  {
+    // Pimoroni publishes a MicroPython build for each of the four boards below,
+    // with that board's own library baked in — `servo`, `motor`, `picographics`.
+    // Their pages send you there, so that is what these entries say, and none of
+    // them borrows a Pico build: a Servo 2040 running stock MicroPython is a
+    // board with no `servo` module, which is the entire reason someone bought it.
+    id: 'PIMORONI_TINY2350',
+    vendor: 'Pimoroni',
+    product: 'Tiny 2350',
+    port: 'rp2',
+    mcu: 'rp2350',
+    features: ['External Flash', 'USB-C', 'RGB LED', 'Dual-core', 'JST-SH'],
+    url: 'https://shop.pimoroni.com/products/tiny-2350',
+    flashOffset: null,
+    flash: { bytes: 4 * MiB, source: 'shop.pimoroni.com/products/tiny-2350', scope: 'board' },
+    ram: rpSram(520 * KiB, 'RP2350'),
+    psram: null,
+    circuitPythonBoardId: 'pimoroni_tiny2350',
+    donorBoardId: null,
+    donorBuild: null,
+    why:
+      'MicroPython publishes no build under this board’s name. Pimoroni publishes its own, ' +
+      'with the board’s RGB LED and Qw/ST libraries included — get it from ' +
+      'github.com/pimoroni/pimoroni-pico/releases.'
+  },
+  {
+    id: 'PIMORONI_SERVO2040',
+    vendor: 'Pimoroni',
+    product: 'Servo 2040',
+    port: 'rp2',
+    mcu: 'rp2040',
+    features: ['External Flash', 'USB-C', 'RGB LED', 'Dual-core', 'JST-SH'],
+    url: 'https://shop.pimoroni.com/products/servo-2040',
+    flashOffset: null,
+    flash: { bytes: 2 * MiB, source: 'shop.pimoroni.com/products/servo-2040', scope: 'board' },
+    ram: rpSram(264 * KiB, 'RP2040'),
+    psram: null,
+    circuitPythonBoardId: 'pimoroni_servo2040',
+    donorBoardId: null,
+    donorBuild: null,
+    why:
+      'MicroPython publishes no build under this board’s name. Pimoroni publishes its own, ' +
+      'and it is the one that carries the `servo` module this board exists to run — get it ' +
+      'from github.com/pimoroni/pimoroni-pico/releases.'
+  },
+  {
+    id: 'PIMORONI_MOTOR2040',
+    vendor: 'Pimoroni',
+    product: 'Motor 2040',
+    port: 'rp2',
+    mcu: 'rp2040',
+    features: ['External Flash', 'USB-C', 'RGB LED', 'Dual-core', 'JST-SH'],
+    url: 'https://shop.pimoroni.com/products/motor-2040',
+    flashOffset: null,
+    flash: { bytes: 2 * MiB, source: 'shop.pimoroni.com/products/motor-2040', scope: 'board' },
+    ram: rpSram(264 * KiB, 'RP2040'),
+    psram: null,
+    circuitPythonBoardId: 'pimoroni_motor2040',
+    donorBoardId: null,
+    donorBuild: null,
+    why:
+      'MicroPython publishes no build under this board’s name. Pimoroni publishes its own, ' +
+      'and it is the one that carries the `motor` and encoder modules this board exists to ' +
+      'run — get it from github.com/pimoroni/pimoroni-pico/releases.'
+  },
+  {
+    // The PSRAM board, and the reason none of the RP2350 entries borrows a Pico
+    // 2 build: this is an RP2350B with 16 MB of flash and 8 MB of PSRAM, and the
+    // Pico 2 build is an RP2350A with 4 MB and no PSRAM support. Flashing it
+    // would run, and quietly leave 12 MB of flash and all 8 MB of PSRAM switched
+    // off — which is, exactly, the Feather V2 story this file was opened for.
+    id: 'PIMORONI_PICOLIPO2',
+    vendor: 'Pimoroni',
+    product: 'Pico LiPo 2',
+    port: 'rp2',
+    mcu: 'rp2350',
+    features: [
+      'External Flash',
+      'External RAM',
+      'USB-C',
+      'Battery Charging',
+      'Dual-core',
+      'JST-SH'
+    ],
+    url: 'https://shop.pimoroni.com/en-us/products/pimoroni-pico-lipo-2',
+    flashOffset: null,
+    flash: {
+      bytes: 16 * MiB,
+      source: 'shop.pimoroni.com/products/pimoroni-pico-lipo-2',
+      scope: 'board'
+    },
+    ram: rpSram(520 * KiB, 'RP2350'),
+    psram: {
+      bytes: 8 * MiB,
+      source: 'shop.pimoroni.com/products/pimoroni-pico-lipo-2',
+      scope: 'board'
+    },
+    // circuitpython.org lists the original Pico LiPo (4 MB and 16 MB RP2040
+    // builds) and no Pico LiPo 2 at all — checked, not inferred from the slug.
+    circuitPythonBoardId: null,
+    donorBoardId: null,
+    donorBuild: null,
+    why:
+      'MicroPython publishes no build under this board’s name, and no upstream build fits it: ' +
+      'this is an RP2350B with 16 MB of flash and 8 MB of PSRAM, where the Pico 2 build is an ' +
+      'RP2350A with 4 MB and no PSRAM. Flashing that would run and leave most of the board ' +
+      'switched off. Pimoroni’s own build is at github.com/pimoroni/pico-lipo.'
+  },
+  {
+    id: 'PIMORONI_PICOLIPO2_XL_W',
+    vendor: 'Pimoroni',
+    product: 'Pico LiPo 2 XL W',
+    port: 'rp2',
+    mcu: 'rp2350',
+    features: [
+      'External Flash',
+      'External RAM',
+      'USB-C',
+      'Battery Charging',
+      'Dual-core',
+      'JST-SH',
+      'WiFi',
+      'BLE'
+    ],
+    url: 'https://shop.pimoroni.com/en-us/products/pimoroni-pico-lipo-2-xl-w',
+    flashOffset: null,
+    flash: {
+      bytes: 16 * MiB,
+      source: 'shop.pimoroni.com/products/pimoroni-pico-lipo-2-xl-w',
+      scope: 'board'
+    },
+    ram: rpSram(520 * KiB, 'RP2350'),
+    psram: {
+      bytes: 8 * MiB,
+      source: 'shop.pimoroni.com/products/pimoroni-pico-lipo-2-xl-w',
+      scope: 'board'
+    },
+    circuitPythonBoardId: null,
+    donorBoardId: null,
+    donorBuild: null,
+    why:
+      'MicroPython publishes no build under this board’s name, and no upstream build fits it: ' +
+      'an RP2350B with 16 MB of flash, 8 MB of PSRAM and a Raspberry Pi RM2 radio, none of ' +
+      'which the Pico 2 build knows about. Pimoroni’s own build is at ' +
+      'github.com/pimoroni/pico-lipo.'
   }
 ]
 
@@ -203,12 +440,8 @@ export const OVERLAY_BOARDS: OverlayBoard[] = [
  * the plain build, which is the original bug.
  */
 function toIndexedBoard(entry: OverlayBoard, upstream: readonly IndexedBoard[]): IndexedBoard {
-  const donor = entry.donorBoardId
-    ? upstream.find((b) => b.id === entry.donorBoardId)
-    : undefined
-  const borrowed = donor
-    ? newestBuilds(donor).filter((b) => b.build === entry.donorBuild)
-    : []
+  const donor = entry.donorBoardId ? upstream.find((b) => b.id === entry.donorBoardId) : undefined
+  const borrowed = donor ? newestBuilds(donor).filter((b) => b.build === entry.donorBuild) : []
   const runtimes: IndexedBoard['runtimes'] = []
   if (borrowed.length > 0) runtimes.push('micropython')
   if (entry.circuitPythonBoardId) runtimes.push('circuitpython')

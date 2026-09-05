@@ -59,6 +59,12 @@ export const BOARD_PART_LINKS: readonly BoardPartLink[] = [
     why: 'The overlay board from #902 and the part are the same Feather V2 — the board upstream builds nothing for.'
   },
   {
+    boardId: 'ADAFRUIT_FEATHER_ESP32S3',
+    libraryId: STD,
+    partId: 'adafruit-feather-esp32s3',
+    why: 'Adafruit product 5323 on both sides — the 8 MB / no-PSRAM Feather, not the 4 MB / 2 MB one.'
+  },
+  {
     boardId: 'ADAFRUIT_FEATHER_RP2040',
     libraryId: STD,
     partId: 'adafruit-feather-rp2040',
@@ -87,6 +93,42 @@ export const BOARD_PART_LINKS: readonly BoardPartLink[] = [
     libraryId: STD,
     partId: 'arduino-nano-esp32',
     why: 'Arduino ABX00083; ESP32-S3 on both sides. The part carries a back photo.'
+  },
+  {
+    boardId: 'CYTRON_MAKER_PI_RP2040',
+    libraryId: STD,
+    partId: 'cytron-maker-pi-rp2040',
+    why: 'Cytron MAKER-PI-RP2040 on both sides. The part carries a 3-D model.'
+  },
+  {
+    boardId: 'PIMORONI_MOTOR2040',
+    libraryId: STD,
+    partId: 'motor2040',
+    why: 'Pimoroni PIM618; RP2040 on both sides.'
+  },
+  {
+    boardId: 'PIMORONI_PICOLIPO2',
+    libraryId: STD,
+    partId: 'pimoroni-pico-lipo-2',
+    why: 'Pimoroni PIM775; RP2350B on both sides. NOT upstream’s `PIMORONI_PICOLIPO`, which is the RP2040 original.'
+  },
+  {
+    boardId: 'PIMORONI_PICOLIPO2_XL_W',
+    libraryId: STD,
+    partId: 'pimoroni-pico-lipo-2-xl-w',
+    why: 'Pimoroni PIM776; RP2350B with the RM2 radio on both sides — a different board from the plain Pico LiPo 2.'
+  },
+  {
+    boardId: 'PIMORONI_SERVO2040',
+    libraryId: STD,
+    partId: 'servo2040',
+    why: 'Pimoroni PIM613; RP2040 on both sides.'
+  },
+  {
+    boardId: 'PIMORONI_TINY2350',
+    libraryId: STD,
+    partId: 'tiny2350',
+    why: 'Pimoroni PIM721; RP2350A on both sides. NOT upstream’s `PIMORONI_TINY2040`, which is the RP2040 board.'
   },
   {
     boardId: 'RPI_PICO',
