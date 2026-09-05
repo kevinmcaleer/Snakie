@@ -203,14 +203,18 @@ if (!w.api) {
         workspaceListeners.add(cb)
         return () => workspaceListeners.delete(cb)
       },
-      // The Open Folder request comes from the DESKTOP app menu (#882); a browser
-      // has no menu bar to fire it, and the web build keeps its own Open Folder
-      // in the Local Files panel.
-      onOpenFolder: unsub,
       setFolder: (folder?: string): void => {
         workspaceFolder = folder && folder.trim() ? folder : undefined
       },
       folder: (): Promise<string | null> => Promise.resolve(workspaceFolder ?? null)
+    },
+    // The application menu (#914). A browser has no menu bar: nothing will ever
+    // fire a command, and there is no menu to tell about the workspace tick. So
+    // both halves are honest no-ops — the web build keeps its own Open Folder in
+    // the Local Files panel, and its own workspace switcher.
+    menu: {
+      onCommand: unsub,
+      setState: noop
     },
     /** The published board index (#893). Null outside Electron — the renderer
      *  has a complete BUNDLED seed served as a static asset, so a missing fetch

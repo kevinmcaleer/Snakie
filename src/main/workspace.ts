@@ -9,7 +9,10 @@ import { BrowserWindow, ipcMain } from 'electron'
  *   workspace:show       (any window → main → MAIN window)  switch workspace
  *   workspace:setFolder  (main window → main, send)         publish the folder
  *   workspace:folder     (any window → main, invoke)        read it back
- *   workspace:openFolder (app menu → MAIN window)           run Open Folder
+ *
+ * (File ▸ Open Folder… used to have a fourth channel of its own here. It moved
+ * onto the app menu's one `menu:command` channel in #914 — see `menu.ts` — so
+ * the next menu item doesn't add a fifth.)
  *
  * WHY A RELAY. The workspace switcher lives inside `AppShell`, in the main
  * window. A detached instrument (`instrumentWindows.ts`) or the board window has
@@ -33,28 +36,9 @@ import { BrowserWindow, ipcMain } from 'electron'
  *  `undefined` = no folder open (the userData fallback, same as before). */
 let projectFolder: string | undefined
 
-/** Resolver for the main editor window, captured at IPC registration so the app
- *  menu can reach the renderer that owns the folder picker (#882). */
-let resolveMainWindow: () => BrowserWindow | null = () => null
-
-/**
- * Ask the main window to run its Open Folder action — the File menu item and its
- * Cmd/Ctrl-O accelerator (#882).
- *
- * The picker itself belongs to the renderer: `fs.openFolderDialog` is what turns
- * a chosen directory into the workspace's `currentFolder` (and remembers it for
- * the next launch), so raising a dialog from here would open a folder nothing was
- * listening for. The menu only pulls the trigger.
- */
-export function requestOpenFolder(): void {
-  const mw = resolveMainWindow()
-  if (mw && !mw.isDestroyed()) mw.webContents.send('workspace:openFolder')
-}
-
 /** Register the workspace IPC. `getMainWindow` resolves the live editor window —
  *  the one that owns the workspace switcher. */
 export function registerWorkspaceIpc(getMainWindow: () => BrowserWindow | null): void {
-  resolveMainWindow = getMainWindow
   // Any window asks the MAIN window to show a workspace. Fire-and-forget: the
   // sender doesn't wait, and a request made while no main window exists is
   // simply dropped (there is nothing to switch).
@@ -74,5 +58,4 @@ export function registerWorkspaceIpc(getMainWindow: () => BrowserWindow | null):
 /** Forget the published folder (used on quit / in tests). */
 export function disposeWorkspace(): void {
   projectFolder = undefined
-  resolveMainWindow = () => null
 }

@@ -52,6 +52,8 @@ import { type UsedPins } from './parse-pins'
 import { runFindCommand } from './findController'
 import { ShellPanel } from './ShellPanel'
 import { RightPanel } from './RightPanel'
+import { runMenuCommand } from '../lib/menuCommands'
+import { menuStateFrom } from '../../../shared/menu-commands'
 import { IS_WEB } from '../lib/env'
 import { StatusBar } from './StatusBar'
 import { SettingsDialog, type SettingsTab } from './SettingsDialog'
@@ -595,6 +597,13 @@ export function AppShell(): JSX.Element {
     })
     return off
   }, [])
+  // …and the app menu is told which workspace is showing, so View ▸ Workspace's
+  // radio tick follows the switcher however the switch was made — the switcher
+  // itself, the menu, or another window's `workspace.show` (#914/#916). The menu
+  // is built in the main process; this is the only place that knows the answer.
+  useEffect(() => {
+    window.api.menu.setState(menuStateFrom({ workspace: layout.active }))
+  }, [layout.active])
   useEffect(() => {
     const off = window.api.board.onClosed(() => {
       if (poppedFromBoardRef.current) {
@@ -1106,20 +1115,30 @@ export function AppShell(): JSX.Element {
     return () => window.removeEventListener(HELP_EVENT, handler)
   }, [setActivityView, setLeftCollapsed])
 
-  // File ▸ Open Folder… from the app menu, or its Cmd/Ctrl-O accelerator (#882).
-  // The main toolbar's folder icon was a duplicate of the Local Files panel's,
-  // so it went — but the panel can be COLLAPSED (and Electronics/Build have no
-  // files panel at all), which would have left no way in. The menu is always
-  // there, so this is the reachable path; revealing the Files view first means
-  // the folder lands somewhere the user can see, rather than silently behind a
-  // collapsed panel. Both reveal calls are the ones the Help deep-link above
-  // uses, for the same solo-workspace reason.
+  // THE APP MENU'S COMMANDS (#914) — one subscription for the whole menu.
+  //
+  // File ▸ Open Folder… (#882): the main toolbar's folder icon was a duplicate of
+  // the Local Files panel's, so it went — but the panel can be COLLAPSED (and
+  // Electronics/Build have no files panel at all), which would have left no way
+  // in. The menu is always there, so this is the reachable path; revealing the
+  // Files view first means the folder lands somewhere the user can see, rather
+  // than silently behind a collapsed panel. Both reveal calls are the ones the
+  // Help deep-link above uses, for the same solo-workspace reason.
+  //
+  // View ▸ Workspace (#916) goes through the LAYOUT STORE's own switch — the very
+  // call the in-app switcher makes — so Electronics/Build get their sidebar gating
+  // right and Monaco stays mounted.
   useEffect(() => {
-    const off = window.api.workspace.onOpenFolder(() => {
-      setActivityView('files')
-      setLeftCollapsed('files', false)
-      filesRef.current?.expand()
-      void openFolder().catch(reporter('open folder', { notify: "Couldn't open the folder." }))
+    const off = window.api.menu.onCommand((id) => {
+      runMenuCommand(id, {
+        switchWorkspace: (target) => switchWorkspaceRef.current(target),
+        openFolder: () => {
+          setActivityView('files')
+          setLeftCollapsed('files', false)
+          filesRef.current?.expand()
+          void openFolder().catch(reporter('open folder', { notify: "Couldn't open the folder." }))
+        }
+      })
     })
     return off
   }, [openFolder, setActivityView, setLeftCollapsed])

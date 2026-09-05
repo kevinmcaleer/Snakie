@@ -12,6 +12,7 @@ ipcRenderer.setMaxListeners(40)
 import type { FlashMethod } from '../shared/board-profiles'
 import type { FirmwareRuntime } from '../shared/firmware-runtime'
 import type { BoardIdentity } from '../shared/esptool-identify'
+import type { MenuState, RendererMenuCommand } from '../shared/menu-commands'
 import type {
   CircuitPyDrive,
   ConnectOptions,
@@ -1356,18 +1357,34 @@ const workspace = {
     ipcRenderer.on('workspace:show', listener)
     return () => ipcRenderer.removeListener('workspace:show', listener)
   },
-  /** Subscribe to the app menu's File ▸ Open Folder… request (#882). The main
-   *  window listens and raises the picker; returns an unsubscribe function. */
-  onOpenFolder: (cb: () => void): (() => void) => {
-    const listener = (): void => cb()
-    ipcRenderer.on('workspace:openFolder', listener)
-    return () => ipcRenderer.removeListener('workspace:openFolder', listener)
-  },
   /** Publish the open project folder (the main window, when it changes). */
   setFolder: (folder?: string): void => ipcRenderer.send('workspace:setFolder', folder),
   /** The open project folder, or null when no folder is open. Readable from any
    *  window, with nothing opened to fetch it. */
   folder: (): Promise<string | null> => ipcRenderer.invoke('workspace:folder')
+}
+
+/**
+ * The application menu's one command channel (#914).
+ *
+ * Every menu item that the RENDERER performs arrives here as a single typed id
+ * (`file.openFolder`, `workspace.show.board`, …) instead of getting a channel,
+ * a relay, a subscription and a stub of its own — which is what adding
+ * File ▸ Open Folder… cost before this. And because a menu item is not only an
+ * action, state goes back the other way: the ticks and the greyed-out items are
+ * facts only the renderer knows, so it publishes them and the menu rebuilds.
+ */
+const menu = {
+  /** Subscribe to app-menu commands (the MAIN window listens). Returns an
+   *  unsubscribe function. */
+  onCommand: (cb: (id: RendererMenuCommand) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, id: RendererMenuCommand): void => cb(id)
+    ipcRenderer.on('menu:command', listener)
+    return () => ipcRenderer.removeListener('menu:command', listener)
+  },
+  /** Publish what the menu should reflect — the workspace radio tick, and later
+   *  the items that grey out. Fire-and-forget; the menu rebuilds if it changed. */
+  setState: (state: MenuState): void => ipcRenderer.send('menu:state', state)
 }
 
 /**
@@ -1426,6 +1443,8 @@ const api = {
   board,
   /** Workspace relay + the session's project folder (#775). */
   workspace,
+  /** The application menu's command channel + the state it reflects (#914). */
+  menu,
   /** Instrument launch relay: board window → main window scope/meter hosting. */
   instruments,
   /** Find & Replace window: native window ↔ main editor find/replace relay. */
