@@ -12,6 +12,7 @@ import {
   missingProjectImports,
   type BoardPackage
 } from '../lib/board-packages'
+import { enqueueDeviceTask } from '../lib/device-queue'
 import { ModulesPanel } from './ModulesPanel'
 import type { InstallProgress, PackageInfo } from '../../../preload/index.d'
 
@@ -312,15 +313,23 @@ function PackagesTab(): JSX.Element {
         if (p.state === 'note' && p.message) collectedNotes.push(p.message)
       }
       try {
-        const result = await window.api.packages.install(
-          name,
-          {
-            overwrite,
-            mpy: convertMpy,
-            index: customIndex.trim() || undefined
-          },
-          onProgress
-        )
+        // Queued (#837): installing two packages at once used to start two
+        // downloads that then took turns at the port, each reporting over the
+        // other. The second click now waits behind the first.
+        const result = await enqueueDeviceTask({
+          key: `package:${name}`,
+          label: `Installing ${name}`,
+          run: () =>
+            window.api.packages.install(
+              name,
+              {
+                overwrite,
+                mpy: convertMpy,
+                index: customIndex.trim() || undefined
+              },
+              onProgress
+            )
+        })
         setInstalls((prev) => ({
           ...prev,
           [name]: {

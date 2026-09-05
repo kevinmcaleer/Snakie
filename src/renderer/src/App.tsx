@@ -1,4 +1,5 @@
 import { AppShell } from './components/AppShell'
+import { DeviceQueueDialog } from './components/DeviceQueueDialog'
 import { PromptProvider } from './components/PromptModal'
 import { RefactorPreview } from './components/RefactorPreview'
 import { UpdateNotifier } from './components/UpdateNotifier'
@@ -30,6 +31,9 @@ function App(): JSX.Element {
                     <TutorialsProvider>
                       <AppShell />
                       <UpdateNotifier />
+                      {/* The board-is-busy modal (#837): renders nothing until
+                        a device file operation is queued. */}
+                      <DeviceQueueDialog />
                       {/* The refactoring diff preview (#634): renders nothing
                         until a refactoring is proposed from the editor. */}
                       <RefactorPreview />

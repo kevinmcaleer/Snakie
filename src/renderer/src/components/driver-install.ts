@@ -11,8 +11,16 @@
  * read via `parts.readDriverSource` in main (past the renderer CSP) and copied
  * to its target path, creating each ancestor folder first (MicroPython has no
  * recursive mkdir).
+ *
+ * Every route is QUEUED (#837). Two banners can be on screen at once for a fresh
+ * board — the Board View's driver banner and the editor's missing-library banner
+ * — and accepting both used to start both, each fighting the other for the port.
+ * Wrapping the sequence here rather than at each banner means both callers (and
+ * any future one) get the queue for free, and the board-is-busy modal names the
+ * driver it is on.
  */
 import { driverDeviceDirs, driverInstallMethod, driverModuleId } from './part-editor.util'
+import { DeviceOperationCancelled, enqueueDeviceTask } from '../lib/device-queue'
 import { moduleById } from '../../../shared/modules-catalog'
 import {
   parsePurgeCount,
@@ -33,6 +41,12 @@ export interface DriverInstallResult {
    * case that used to cost an hour of debugging now explains itself.
    */
   note?: string
+  /**
+   * The user cancelled the device queue while this driver was queued or running
+   * (#837). A caller installing a LIST of drivers must stop on it: cancelling
+   * and then watching the next install start is not a cancel.
+   */
+  cancelled?: boolean
 }
 
 /**
@@ -59,6 +73,26 @@ async function clearStaleModule(target: string): Promise<string | undefined> {
 
 /** Install ONE driver file onto the connected board. Never throws. */
 export async function installPartDriver(
+  libraryId: string,
+  partId: string,
+  d: DriverFile
+): Promise<DriverInstallResult> {
+  // Queued, and keyed by what it PUTS on the board rather than by which part
+  // asked for it: two parts needing the same driver is the common case, and
+  // installing it twice in a row is a round trip nobody benefits from.
+  return enqueueDeviceTask({
+    key: `driver:${d.source}->${d.target}`,
+    label: `Installing ${d.label?.trim() || d.source}`,
+    run: () => runDriverInstall(libraryId, partId, d)
+  }).catch((err) => ({
+    ok: false,
+    message: err instanceof Error ? err.message : String(err),
+    cancelled: err instanceof DeviceOperationCancelled
+  }))
+}
+
+/** The install sequence itself — always run through the device queue above. */
+async function runDriverInstall(
   libraryId: string,
   partId: string,
   d: DriverFile

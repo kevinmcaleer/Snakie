@@ -27,6 +27,7 @@ import './lib/preloadFallback'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import { BoardGraph } from './components/BoardGraph'
+import { DeviceQueueDialog } from './components/DeviceQueueDialog'
 import { OPEN_PART_EDITOR_EVENT, PARTS_CHANGED_EVENT, type OpenPartEditorDetail } from './components/PartsPanel'
 import { PartEditor } from './components/PartEditor'
 import { preloadPartImages } from './components/part-image-preload'
@@ -290,6 +291,9 @@ function BoardWindowApp(): JSX.Element {
         libraries={libraries}
         onAddToProject={addToProject}
       />
+      {/* The board-is-busy modal (#837). This window has its OWN device queue —
+          the driver banner installs from here — so it needs its own copy. */}
+      <DeviceQueueDialog />
       {/* Electronics ⇄ Build reconcile (#717) — the same self-contained control
           as the in-window pane; fixed here (this window is all board). */}
       <div className="esync__float esync__float--window">

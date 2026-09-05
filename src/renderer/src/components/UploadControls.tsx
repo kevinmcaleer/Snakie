@@ -5,7 +5,7 @@ import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { usePrompt } from './PromptModal'
 import { useFileSelection } from '../store/file-selection'
 import { planUploadOf, runFolderUpload } from '../lib/folder-transfer'
-import { TransferProgressDialog, type TransferRow } from './TransferProgressDialog'
+import { enqueueDeviceTask } from '../lib/device-queue'
 import { hostBaseName } from '../../../shared/transfer-plan'
 import './UploadControls.css'
 
@@ -70,15 +70,8 @@ export function UploadControls(): JSX.Element {
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState<Feedback>(null)
 
-  // Folder transfer (#848): the two panes' selections + the progress dialog.
+  // Folder transfer (#848): the two panes' selections.
   const { local: localSel, deviceTargetDir } = useFileSelection()
-  const [transfer, setTransfer] = useState<{
-    title: string
-    rows: TransferRow[]
-    running: boolean
-    error: string | null
-  } | null>(null)
-  const cancelled = useRef(false)
   /**
    * Guards against a SECOND upload starting before the first has registered
    * (#850).
@@ -86,7 +79,9 @@ export function UploadControls(): JSX.Element {
    * `busy` disables the button, but React state lands asynchronously — two
    * quick clicks both read the old value, both pass, and two transfers write
    * the same paths at once. A ref updates synchronously, so the second click
-   * sees the first immediately.
+   * sees the first immediately. (The device queue would serialise them anyway
+   * since #837, but a click that quietly does nothing beats one that queues a
+   * duplicate.)
    */
   const inFlight = useRef(false)
 
@@ -101,60 +96,49 @@ export function UploadControls(): JSX.Element {
   const canUpload = connected && (!!folderToUpload || !!activeFile) && !busy
   const canDownload = !!activeFile && activeFile.source === 'device' && !busy
 
-  /** Copy the highlighted local folder into the highlighted device folder. */
+  /**
+   * Copy the highlighted local folder into the highlighted device folder.
+   *
+   * The copy is a QUEUED device task (#837), so it can neither start on top of a
+   * running driver install nor have one start on top of it, and the shared
+   * board-is-busy modal reports it — the per-file tick list of #848 is now this
+   * task's steps.
+   */
   const uploadFolder = useCallback(
     async (localRoot: string): Promise<void> => {
-      cancelled.current = false
       setBusy(true)
       setFeedback(null)
       const name = hostBaseName(localRoot)
-      const title = `Copying ${name} → ${deviceTargetDir}`
-      // Plan BEFORE the dialog claims a file count, so the list it shows is the
-      // real one rather than a guess that grows as the walk catches up.
-      setTransfer({ title, rows: [], running: true, error: null })
       try {
-        const plan = await planUploadOf(localRoot, deviceTargetDir)
-        setTransfer({
-          title: `Copying ${name} → ${plan.root}`,
-          rows: plan.files.map((f) => ({ label: f.label, state: 'pending' as const })),
-          running: true,
-          error: null
-        })
-
-        const result = await runFolderUpload(
-          plan,
-          (event) => {
-            setTransfer((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    rows: prev.rows.map((row, i) =>
-                      i === event.index
-                        ? { ...row, state: event.state, error: event.error }
-                        : row
-                    )
-                  }
-                : prev
+        const { root, copied } = await enqueueDeviceTask({
+          key: `folder:${localRoot}->${deviceTargetDir}`,
+          label: `Copying ${name} → ${deviceTargetDir}`,
+          run: async (ctx) => {
+            // Plan BEFORE claiming a file count, so the list the modal shows is
+            // the real one rather than a guess that grows as the walk catches up.
+            const plan = await planUploadOf(localRoot, deviceTargetDir)
+            ctx.setSteps(plan.files.map((f) => f.label))
+            const result = await runFolderUpload(
+              plan,
+              (event) =>
+                ctx.step(
+                  event.index,
+                  event.state === 'copying' ? 'running' : event.state,
+                  event.error
+                ),
+              () => ctx.cancelled
             )
-          },
-          () => cancelled.current
-        )
-
-        setTransfer((prev) =>
-          prev ? { ...prev, running: false, error: result.ok ? null : (result.error ?? null) } : prev
-        )
-        setFeedback(
-          result.ok
-            ? {
-                kind: 'success',
-                message: `Copied ${result.copied} file${result.copied === 1 ? '' : 's'} to ${plan.root}.`
-              }
-            : { kind: 'error', message: `Copy stopped: ${result.error}` }
-        )
+            if (!result.ok) throw new Error(result.error ?? 'Copy stopped.')
+            return { root: plan.root, copied: result.copied }
+          }
+        })
+        setFeedback({
+          kind: 'success',
+          message: `Copied ${copied} file${copied === 1 ? '' : 's'} to ${root}.`
+        })
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
-        setTransfer((prev) => (prev ? { ...prev, running: false, error: message } : prev))
-        setFeedback({ kind: 'error', message: `Copy failed: ${message}` })
+        setFeedback({ kind: 'error', message: `Copy stopped: ${message}` })
       } finally {
         setBusy(false)
       }
@@ -188,7 +172,11 @@ export function UploadControls(): JSX.Element {
     setBusy(true)
     setFeedback({ kind: 'info', message: `Uploading ${activeFile.name}…` })
     try {
-      await window.api.device.writeFile(dest, activeFile.content)
+      await enqueueDeviceTask({
+        key: `write:${dest}`,
+        label: `Uploading ${activeFile.name} → ${dest}`,
+        run: () => window.api.device.writeFile(dest, activeFile.content)
+      })
       setFeedback({
         kind: 'success',
         message: `Uploaded to ${dest}. Refresh the board tree to see it.`
@@ -283,18 +271,6 @@ export function UploadControls(): JSX.Element {
           <ArrowDownIcon />
         </button>
       </div>
-      {transfer && (
-        <TransferProgressDialog
-          title={transfer.title}
-          rows={transfer.rows}
-          running={transfer.running}
-          error={transfer.error}
-          onCancel={() => {
-            cancelled.current = true
-          }}
-          onClose={() => setTransfer(null)}
-        />
-      )}
       {feedback && (
         <p
           className={`upload-controls__feedback upload-controls__feedback--${feedback.kind}`}

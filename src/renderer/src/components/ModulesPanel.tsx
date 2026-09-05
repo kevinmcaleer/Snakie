@@ -16,6 +16,7 @@ import {
   type ModuleInstallUiState
 } from '../lib/modulesManager'
 import { probeOutdatedModules } from '../lib/moduleFreshness'
+import { enqueueDeviceTask } from '../lib/device-queue'
 import type { ModuleInstallProgress } from '../../../preload/index.d'
 
 /**
@@ -31,7 +32,9 @@ import type { ModuleInstallProgress } from '../../../preload/index.d'
  * Mechanism (all via `window.api.modules`, mirroring the Packages tab): the main
  * process resolves a per-module install plan — a bundled `.py`'s contents, or an
  * upstream package downloaded there (#776) — and the files are written over the
- * existing serialized device channel. Already-installed detection is a cheap
+ * existing serialized device channel. Each install goes through the shared
+ * DEVICE QUEUE (#837), so a second INSTALL click waits its turn instead of
+ * racing the first for the port. Already-installed detection is a cheap
  * `import <name>` probe on the board (`probeInstalled`) — re-run on connect +
  * after each install.
  *
@@ -134,7 +137,11 @@ export function ModulesPanel(): JSX.Element {
       if (p.state === 'note' && p.message) collected.push(p.message)
     }
     try {
-      const result = await window.api.modules.install(def.id, onProgress)
+      const result = await enqueueDeviceTask({
+        key: `module:${def.id}`,
+        label: `Installing ${def.name}`,
+        run: () => window.api.modules.install(def.id, onProgress)
+      })
       setInstalls((prev) => ({
         ...prev,
         [def.id]: {
