@@ -122,19 +122,19 @@ describe('the app menu command channel (#914)', () => {
   })
 
   it('rebuilds the menu when the renderer publishes its state', () => {
-    publish(menuStateFrom({ workspace: 'robot', hasActiveFile: true, recentFolders: [] }))
+    publish(menuStateFrom({ workspace: 'robot', hasActiveFile: true, recentFolders: [], connected: true, hasSyncedFiles: true }))
     expect(installed).toHaveLength(2)
     const ticked = items().filter((m) => m.checked)
     expect(ticked.map((m) => m.label)).toEqual(['Build'])
   })
 
   it('does not rebuild when the state has not actually changed', () => {
-    publish(menuStateFrom({ workspace: 'board', hasActiveFile: true, recentFolders: [] }))
-    publish(menuStateFrom({ workspace: 'board', hasActiveFile: true, recentFolders: [] }))
+    publish(menuStateFrom({ workspace: 'board', hasActiveFile: true, recentFolders: [], connected: true, hasSyncedFiles: true }))
+    publish(menuStateFrom({ workspace: 'board', hasActiveFile: true, recentFolders: [], connected: true, hasSyncedFiles: true }))
     // A rebuild closes an open menu on macOS, and the renderer republishes on
     // every mount — so an unchanged state must be a no-op.
     expect(installed).toHaveLength(2)
-    publish(menuStateFrom({ workspace: 'code', hasActiveFile: true, recentFolders: [] }))
+    publish(menuStateFrom({ workspace: 'code', hasActiveFile: true, recentFolders: [], connected: true, hasSyncedFiles: true }))
     expect(installed).toHaveLength(3)
   })
 

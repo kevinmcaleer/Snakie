@@ -73,6 +73,33 @@ export interface MenuCommandDeps {
    * by once.
    */
   closeTab: () => void
+
+  // --- Device (#918) -------------------------------------------------------
+
+  /** Connect to the selected port — `ConnectionControl`'s own connect. */
+  connect: () => void
+  /** Disconnect, freeing the serial port (#845 — this is how the flasher gets
+   *  at the board, and the documented escape from an install that looks stuck). */
+  disconnect: () => void
+  /**
+   * Run the active file.
+   *
+   * MUST be the toolbar's own Run. It auto-connects, prefers a real board over
+   * the simulator, says so when the board it was using has vanished, and does a
+   * soft reboot so `boot.py` runs again (#871). A second Run that skipped any of
+   * that would be a different Run wearing the same word.
+   */
+  run: () => void
+  /** Interrupt the running program, or soft-reset when nothing is running —
+   *  the toolbar's Stop, which decides between the two. */
+  stop: () => void
+  /** Soft reset the board. One API call, so the menu makes it. */
+  softReset: () => void
+  /** Push the tagged files to the board now. */
+  syncNow: () => void
+
+  /** Open the Help panel (#918). */
+  showHelp: () => void
 }
 
 /** Every renderer menu command and what it does. */
@@ -86,6 +113,13 @@ export function menuCommandHandlers(
     'file.save': () => deps.save(),
     'file.saveAs': () => deps.saveAs(),
     'file.closeTab': () => deps.closeTab(),
+    'device.connect': () => deps.connect(),
+    'device.disconnect': () => deps.disconnect(),
+    'device.run': () => deps.run(),
+    'device.stop': () => deps.stop(),
+    'device.softReset': () => deps.softReset(),
+    'device.syncNow': () => deps.syncNow(),
+    'help.snakieHelp': () => deps.showHelp(),
     'help.shortcuts': () => deps.showShortcuts()
   } as Record<RendererMenuCommand, () => void>
   // Derived from the slot list, like the workspaces below: the submenu's ids are

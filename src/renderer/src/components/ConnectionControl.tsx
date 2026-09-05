@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { isVirtualPort, VIRTUAL_PORT_LABEL, VIRTUAL_PORT_PATH } from '../../../shared/virtual-device'
+import {
+  isVirtualPort,
+  VIRTUAL_PORT_LABEL,
+  VIRTUAL_PORT_PATH
+} from '../../../shared/virtual-device'
+import { onDeviceAction } from './device-bus'
 import { SimMemoryDialog } from './SimMemoryDialog'
 import { pushSimHeapBytes, readSimHeapBytes, writeSimHeapBytes } from '../store/sim-memory'
 import type { DeviceStatus, PortCircuitPy, PortInfo } from '../../../preload/index.d'
@@ -117,6 +122,32 @@ export function ConnectionControl({ status }: ConnectionControlProps): JSX.Eleme
     }
   }, [connected, selected])
 
+  // Device ▸ Connect / Disconnect (#918). Addressed separately rather than as
+  // the toggle above, because a menu says what it will do before you choose it:
+  // "Disconnect" has to mean disconnect, not "toggle whatever the state is now".
+  useEffect(
+    () =>
+      onDeviceAction('connect', () => {
+        if (connected || !selected) return
+        setError(null)
+        window.api.device
+          .connect(selected)
+          .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+      }),
+    [connected, selected]
+  )
+  useEffect(
+    () =>
+      onDeviceAction('disconnect', () => {
+        if (!connected) return
+        setError(null)
+        window.api.device
+          .disconnect()
+          .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+      }),
+    [connected]
+  )
+
   /** Persist a new simulated heap and hand it to the device layer. */
   const saveHeap = useCallback(async (bytes: number): Promise<number> => {
     const stored = writeSimHeapBytes(bytes)
@@ -191,7 +222,11 @@ export function ConnectionControl({ status }: ConnectionControlProps): JSX.Eleme
           // real device node — show just its USB name. OS serial paths (e.g.
           // /dev/ttyACM0) DO identify the port, so keep those.
           const isWebSerial = p.path.startsWith('webserial://')
-          const base = isWebSerial ? detail || 'USB board' : detail ? `${p.path} — ${detail}` : p.path
+          const base = isWebSerial
+            ? detail || 'USB board'
+            : detail
+              ? `${p.path} — ${detail}`
+              : p.path
           // A board whose CIRCUITPY drive we found says what it's running before
           // you connect to it (#753). Only shown when the drive was tied to THIS
           // port, so a second board can't borrow the first one's identity.

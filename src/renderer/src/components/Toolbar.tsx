@@ -4,6 +4,7 @@ import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
 import { useConsole } from '../store/console'
+import { onDeviceAction } from './device-bus'
 import { isVirtualPort } from '../../../shared/virtual-device'
 import { runTitle, stopTitle } from './run-controls'
 import './RunControls.css'
@@ -26,7 +27,6 @@ const ToolIcon = (children: ReactNode): JSX.Element => (
   </svg>
 )
 
-
 // page with a `+` (new file)
 const NEW_FILE_ICON = ToolIcon(
   <g fill="currentColor">
@@ -44,7 +44,6 @@ const SAVE_ICON = ToolIcon(
     <rect x="3.5" y="9" width="9" height="5" fill="var(--bg-elevated)" />
   </g>
 )
-
 
 /**
  * Glossy green snake brand mark from the Skeuomorph concept: a green
@@ -77,7 +76,6 @@ const SNAKE_LOGO = (
     <path d="M24.4 8l3 .7m-3-.7l3-.9" stroke="#e23b2b" strokeWidth="1.1" strokeLinecap="round" />
   </svg>
 )
-
 
 /**
  * TOP TOOLBAR.
@@ -194,12 +192,22 @@ export function Toolbar(): JSX.Element {
       window.api.device.interrupt().catch(reporter('stop', { notify: "Couldn't stop the board." }))
       setRunning(false)
     } else {
-      window.api.device.softReset().catch(reporter('reset', { notify: "Couldn't reset the board." }))
+      window.api.device
+        .softReset()
+        .catch(reporter('reset', { notify: "Couldn't reset the board." }))
     }
   }, [running])
 
+  // Device ▸ Run / Stop (#918) reach the SAME handlers as the toolbar buttons.
+  // Run in particular carries the auto-connect, the real-board preference and
+  // the soft reboot that #871 turns on — a menu item that reimplemented any of
+  // that would be a different Run wearing the same word.
+  useEffect(() => onDeviceAction('run', () => void handleRun()), [handleRun])
+  useEffect(() => onDeviceAction('stop', handleStop), [handleStop])
+
   const handleSave = useCallback(() => {
-    if (activeId) void saveFile(activeId).catch(reporter('save file', { notify: "Couldn't save the file." }))
+    if (activeId)
+      void saveFile(activeId).catch(reporter('save file', { notify: "Couldn't save the file." }))
   }, [activeId, saveFile])
 
   return (
@@ -208,71 +216,70 @@ export function Toolbar(): JSX.Element {
           that's balanced by an empty side on the right, so the workspace
           switcher sits CENTRED at the top of the toolbar (not shoved right). */}
       <div className="toolbar__side">
-      <div className="toolbar__brand">
-        {SNAKE_LOGO}
-        <span className="toolbar__wordmark">Snakie</span>
-      </div>
+        <div className="toolbar__brand">
+          {SNAKE_LOGO}
+          <span className="toolbar__wordmark">Snakie</span>
+        </div>
 
-      <div className="toolbar__group">
-        <div className="toolbar__seg" role="group" aria-label="File actions">
+        <div className="toolbar__group">
+          <div className="toolbar__seg" role="group" aria-label="File actions">
+            <button
+              type="button"
+              className="btn btn--ghost btn--icon toolbar__seg-btn"
+              onClick={newFile}
+              title="New file"
+              aria-label="New file"
+            >
+              {NEW_FILE_ICON}
+            </button>
+            <button
+              type="button"
+              className="btn btn--ghost btn--icon toolbar__seg-btn"
+              onClick={handleSave}
+              disabled={!activeFile}
+              title={activeFile ? `Save ${activeFile.name}` : 'Open a file to save'}
+              aria-label="Save active file"
+            >
+              {SAVE_ICON}
+            </button>
+          </div>
+        </div>
+
+        <span className="toolbar__divider" aria-hidden="true" />
+
+        <div className="toolbar__group">
           <button
             type="button"
-            className="btn btn--ghost btn--icon toolbar__seg-btn"
-            onClick={newFile}
-            title="New file"
-            aria-label="New file"
+            className="btn btn--primary"
+            onClick={() => void handleRun()}
+            disabled={!canRun}
+            title={runTitle({
+              activeFileName: activeFile?.name,
+              connected,
+              connecting,
+              dialect: status.runtime?.dialect
+            })}
+            aria-label="Run active file on device"
           >
-            {NEW_FILE_ICON}
+            <span className="btn__glyph" aria-hidden="true">
+              ▶
+            </span>
+            <span>Run</span>
           </button>
           <button
             type="button"
-            className="btn btn--ghost btn--icon toolbar__seg-btn"
-            onClick={handleSave}
-            disabled={!activeFile}
-            title={activeFile ? `Save ${activeFile.name}` : 'Open a file to save'}
-            aria-label="Save active file"
+            className="btn btn--danger"
+            onClick={handleStop}
+            disabled={!connected}
+            title={stopTitle({ connected, running, dialect: status.runtime?.dialect })}
+            aria-label={running ? 'Stop / interrupt running program' : 'Reset the board'}
           >
-            {SAVE_ICON}
+            <span className="btn__glyph" aria-hidden="true">
+              {running ? '■' : '⟳'}
+            </span>
+            <span>{running ? 'Stop' : 'Reset'}</span>
           </button>
         </div>
-      </div>
-
-      <span className="toolbar__divider" aria-hidden="true" />
-
-      <div className="toolbar__group">
-        <button
-          type="button"
-          className="btn btn--primary"
-          onClick={() => void handleRun()}
-          disabled={!canRun}
-          title={runTitle({
-            activeFileName: activeFile?.name,
-            connected,
-            connecting,
-            dialect: status.runtime?.dialect
-          })}
-          aria-label="Run active file on device"
-        >
-          <span className="btn__glyph" aria-hidden="true">
-            ▶
-          </span>
-          <span>Run</span>
-        </button>
-        <button
-          type="button"
-          className="btn btn--danger"
-          onClick={handleStop}
-          disabled={!connected}
-          title={stopTitle({ connected, running, dialect: status.runtime?.dialect })}
-          aria-label={running ? 'Stop / interrupt running program' : 'Reset the board'}
-        >
-          <span className="btn__glyph" aria-hidden="true">
-            {running ? '■' : '⟳'}
-          </span>
-          <span>{running ? 'Stop' : 'Reset'}</span>
-        </button>
-      </div>
-
       </div>
 
       {/* Workspace layouts (epic #259): Code · Electronics · Build + reset.

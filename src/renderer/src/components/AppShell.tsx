@@ -51,6 +51,7 @@ import { runFindCommand } from './findController'
 import { ShellPanel } from './ShellPanel'
 import { RightPanel } from './RightPanel'
 import { runMenuCommand } from '../lib/menuCommands'
+import { dispatchDeviceAction } from './device-bus'
 import { readRecentFolders } from '../store/workspace'
 import { menuStateFrom } from '../../../shared/menu-commands'
 import { ShortcutSheet } from './ShortcutSheet'
@@ -59,7 +60,12 @@ import { StatusBar } from './StatusBar'
 import { SettingsDialog, type SettingsTab } from './SettingsDialog'
 import { OPEN_SETTINGS_EVENT } from './settingsBus'
 import { OPEN_SPRITE_EDITOR_EVENT, type OpenSpriteEditorDetail } from './sprite-editor-bus'
-import { dispatchCloseTab, HELP_EVENT, type HelpEventDetail } from './editorBridge'
+import {
+  dispatchCloseTab,
+  dispatchOpenHelp,
+  HELP_EVENT,
+  type HelpEventDetail
+} from './editorBridge'
 import { InstrumentLibBanner } from './InstrumentLibBanner'
 import { NoticeStack } from './Notice'
 import { PartsImportBanner } from './PartsImportBanner'
@@ -78,6 +84,7 @@ import { enqueueDeviceTask } from '../lib/device-queue'
 import { installStepReporter } from '../lib/install-steps'
 import { installStepLabel } from '../../../shared/install-file-progress'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
+import { useSync } from '../store/sync'
 import { useSkeletonSync } from '../hooks/useSkeletonSync'
 import {
   INSTRUMENTS_LIB_PATH,
@@ -616,6 +623,16 @@ export function AppShell(): JSX.Element {
   // publishing them to the menu re-runs when a folder opens, and in a ref so the
   // menu subscription — set up once — reads the current list rather than the one
   // that existed when it subscribed.
+  // Device state for the menu (#918). `deviceStatus` is read further down for
+  // other reasons; the menu needs only the one fact.
+  const menuSync = useSync()
+  // Read where the menu state is published, not where `deviceStatus` is read
+  // further down — that one is declared later and this effect runs first.
+  const menuConnected = useDeviceStatus().state === 'connected'
+  // The subscription is set up once, so the handler must read the CURRENT
+  // `syncNow` rather than the one that existed when it subscribed.
+  const syncNowRef = useRef(menuSync.syncNow)
+  syncNowRef.current = menuSync.syncNow
   const [recentFolders, setRecentFolders] = useState<string[]>(() => readRecentFolders())
   const recentFoldersRef = useRef(recentFolders)
   recentFoldersRef.current = recentFolders
@@ -629,10 +646,13 @@ export function AppShell(): JSX.Element {
         workspace: layout.active,
         // Save / Save As / Close Tab grey out with nothing open (#915).
         hasActiveFile: activeId !== null,
-        recentFolders
+        recentFolders,
+        // Connect/Disconnect, Stop, Soft Reset and Sync follow the board (#918).
+        connected: menuConnected,
+        hasSyncedFiles: menuSync.syncedPaths.length > 0
       })
     )
-  }, [layout.active, activeId, recentFolders])
+  }, [layout.active, activeId, recentFolders, menuConnected, menuSync.syncedPaths.length])
   useEffect(() => {
     const off = window.api.board.onClosed(() => {
       if (poppedFromBoardRef.current) {
@@ -1207,7 +1227,27 @@ export function AppShell(): JSX.Element {
           )
         },
         // Through the tabs' own close, which prompts on a dirty buffer (#915).
-        closeTab: () => dispatchCloseTab()
+        closeTab: () => dispatchCloseTab(),
+        // --- Device (#918) -------------------------------------------------
+        // Run and Stop reach the TOOLBAR's handlers; Connect and Disconnect
+        // reach ConnectionControl's. Reimplementing Run here would drop the
+        // auto-connect and the soft reboot #871 turns on.
+        connect: () => dispatchDeviceAction('connect'),
+        disconnect: () => dispatchDeviceAction('disconnect'),
+        run: () => dispatchDeviceAction('run'),
+        stop: () => dispatchDeviceAction('stop'),
+        // These two have no component state behind them — one API call and one
+        // store call — so routing a message to somebody who would do the same
+        // would only add a place for it to go missing.
+        softReset: () =>
+          void window.api.device
+            .softReset()
+            .catch(reporter('soft reset', { notify: "Couldn't reset the board." })),
+        syncNow: () =>
+          void syncNowRef
+            .current()
+            .catch(reporter('sync now', { notify: "Couldn't sync to the board." })),
+        showHelp: () => dispatchOpenHelp('')
       })
     })
     return off

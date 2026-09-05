@@ -56,7 +56,14 @@ function deps(): {
     },
     save: () => rec.fired.push('save'),
     saveAs: () => rec.fired.push('saveAs'),
-    closeTab: () => rec.fired.push('closeTab')
+    closeTab: () => rec.fired.push('closeTab'),
+    connect: () => rec.fired.push('connect'),
+    disconnect: () => rec.fired.push('disconnect'),
+    run: () => rec.fired.push('run'),
+    stop: () => rec.fired.push('stop'),
+    softReset: () => rec.fired.push('softReset'),
+    syncNow: () => rec.fired.push('syncNow'),
+    showHelp: () => rec.fired.push('showHelp')
   }
   return rec
 }
@@ -119,7 +126,7 @@ describe('menu command union ↔ renderer dispatcher (#914)', () => {
     for (const bad of [
       'workspace.show.datalab',
       'file.openRecent.99',
-      'device.disconnect',
+      'device.reboot',
       '',
       42,
       null,
@@ -135,16 +142,30 @@ describe('menu command union ↔ renderer dispatcher (#914)', () => {
 describe('menu state travelling back to the menu (#914)', () => {
   it('ticks exactly the active workspace', () => {
     for (const active of WORKSPACE_IDS) {
-      const state = menuStateFrom({ workspace: active, hasActiveFile: true, recentFolders: [] })
+      const state = menuStateFrom({
+        workspace: active,
+        hasActiveFile: true,
+        recentFolders: [],
+        connected: true,
+        hasSyncedFiles: true
+      })
       for (const id of WORKSPACE_IDS) {
         expect(state.checked[workspaceMenuCommand(id)], `${active}/${id}`).toBe(id === active)
       }
-      // The workspace itself greys nothing out — only the File items carry
-      // enablement, and with a file open they are all usable.
+      // The workspace itself greys nothing out. Everything listed here is a
+      // FILE or DEVICE item, and with a file open and a board connected they are
+      // all usable except Connect, whose whole job is to be the other half of
+      // Disconnect (#918).
       expect(state.enabled).toEqual({
         'file.save': true,
         'file.saveAs': true,
-        'file.closeTab': true
+        'file.closeTab': true,
+        'device.connect': false,
+        'device.disconnect': true,
+        'device.run': true,
+        'device.stop': true,
+        'device.softReset': true,
+        'device.syncNow': true
       })
     }
   })
@@ -155,7 +176,7 @@ describe('menu state travelling back to the menu (#914)', () => {
 
   it('coerceMenuState keeps known ids with boolean values and drops the rest', () => {
     const state = coerceMenuState({
-      enabled: { 'file.openFolder': false, 'device.disconnect': false, 'view.boardWindow': 'yes' },
+      enabled: { 'file.openFolder': false, 'device.reboot': false, 'view.boardWindow': 'yes' },
       checked: { [workspaceMenuCommand('robot')]: true, 'workspace.show.datalab': true }
     })
     expect(state).toEqual({

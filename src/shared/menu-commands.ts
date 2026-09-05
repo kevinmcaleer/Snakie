@@ -73,7 +73,14 @@ export type RendererMenuCommand =
   | 'file.save'
   | 'file.saveAs'
   | 'file.closeTab'
+  | 'device.connect'
+  | 'device.disconnect'
+  | 'device.run'
+  | 'device.stop'
+  | 'device.softReset'
+  | 'device.syncNow'
   | 'help.shortcuts'
+  | 'help.snakieHelp'
   | WorkspaceMenuCommand
   | RecentFolderMenuCommand
 
@@ -89,7 +96,14 @@ export const RENDERER_MENU_COMMANDS: readonly RendererMenuCommand[] = [
   'file.save',
   'file.saveAs',
   'file.closeTab',
+  'device.connect',
+  'device.disconnect',
+  'device.run',
+  'device.stop',
+  'device.softReset',
+  'device.syncNow',
   ...WORKSPACE_IDS.map(workspaceMenuCommand),
+  'help.snakieHelp',
   'help.shortcuts'
 ]
 
@@ -147,6 +161,18 @@ export interface MenuContext {
   hasActiveFile: boolean
   /** Recently opened folders, newest first. */
   recentFolders: string[]
+  /**
+   * Whether a board is connected (#918).
+   *
+   * The strongest case for state travelling back to the menu at all: device
+   * state changes constantly — a board is unplugged, a cable is knocked — and a
+   * Run item that looks available with nothing plugged in is worse than no menu,
+   * because it makes the app look broken rather than the board look absent.
+   */
+  connected: boolean
+  /** Whether anything is tagged for sync in the current folder — Sync now with
+   *  nothing tagged would do nothing, loudly. */
+  hasSyncedFiles: boolean
 }
 
 /** Derive the menu's state from the renderer's. Pure, so what the menu shows is
@@ -157,7 +183,19 @@ export function menuStateFrom(ctx: MenuContext): MenuState {
   const enabled: Partial<Record<MenuCommand, boolean>> = {
     'file.save': ctx.hasActiveFile,
     'file.saveAs': ctx.hasActiveFile,
-    'file.closeTab': ctx.hasActiveFile
+    'file.closeTab': ctx.hasActiveFile,
+    // Connect and Disconnect are opposites, so exactly one is ever available —
+    // an enabled Disconnect with nothing connected is a menu describing a state
+    // the app is not in.
+    'device.connect': !ctx.connected,
+    'device.disconnect': ctx.connected,
+    // RUN stays available with no board: it auto-connects, and that is the whole
+    // reason a first-time user with nothing plugged in still gets the simulator
+    // rather than a dead button. It needs a FILE, though.
+    'device.run': ctx.hasActiveFile,
+    'device.stop': ctx.connected,
+    'device.softReset': ctx.connected,
+    'device.syncNow': ctx.connected && ctx.hasSyncedFiles
   }
   return { enabled, checked, recentFolders: ctx.recentFolders.slice(0, RECENT_FOLDER_SLOTS.length) }
 }

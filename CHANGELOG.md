@@ -8,6 +8,40 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A Device menu** (#918, epic #913). Everything you do *to the board* was
+  reachable only from the toolbar or the console panel — including Run and Stop,
+  the two most-used actions in the app, which had no keyboard route at all.
+  There is now Device ▸ Connect / Disconnect · Run (⌘R) · Stop (⌘.) · Soft Reset
+  · Sync Now.
+
+  Every item greys out when it cannot act, which is the strongest case for the
+  menu carrying renderer state at all: device state changes constantly, a cable
+  gets knocked, and a Run item that looks available with nothing plugged in makes
+  the *app* look broken rather than the board look absent. Connect and Disconnect
+  are opposites, so exactly one is ever offered. **Run is the exception** — it
+  stays available with no board, because it auto-connects, and that is what makes
+  it work for someone who has just opened the app. What Run needs is a file.
+
+  **⌘R came from somewhere.** `role: 'reload'` owned it. In an editor for running
+  MicroPython, ⌘R meaning "run my program" is worth more than reloading the
+  renderer, so the plain reload stands down — Force Reload still does the
+  stronger version of the same thing on ⇧⌘R, and is the one that helps when a
+  renderer is actually stuck. A test now asserts no binding in the whole menu is
+  claimed twice, on either platform, which is what would have caught this.
+
+  Run and Stop reach the **toolbar's own handlers**, and Connect/Disconnect the
+  connection control's. That matters most for Run: it auto-connects, prefers a
+  real board over the simulator, says so out loud when the board it was using has
+  vanished, and does the soft reboot #871 turns on. A second Run would have been
+  a different Run wearing the same word.
+
+- **Help ▸ Snakie Help** (#918). Snakie has a whole help system — the Help panel,
+  the "Why?" article behind every refactoring — reachable until now only from
+  inside the panels that use it. On macOS the Help menu held nothing of Snakie's
+  at all.
+
+### Added
+
 - **A File menu that does what a File menu does** (#915, epic #913). It was two
   items — `Open Folder…` and Quit. It is now New File (⌘N), Open File… (⌘O),
   Open Folder… (⇧⌘O), Open Recent ▸, Save (⌘S), Save As… (⇧⌘S) and Close Tab
