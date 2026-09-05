@@ -453,16 +453,31 @@ async function main() {
       // the gallery — it is real, someone owns one — it just cannot be flashed
       // from here, and the UI says so rather than pretending.
     }
-    const image = (meta.images ?? [])[0] ?? null
+    const named = (meta.images ?? [])[0] ?? null
+    // What the board's `board.json` SAYS its picture is. Whether that file
+    // exists is a separate question, answered just below.
+    let image = named ? `${MPY}/resources/micropython-media/boards/${p.board}/${named}` : null
     let thumb = null
     if (withImages && image) {
-      const url = `${MPY}/resources/micropython-media/boards/${p.board}/${image}`
       try {
-        const bytes = Buffer.from(await (await fetch(url)).arrayBuffer())
-        const name = `${p.board}.jpg`
-        if (await thumbnail(bytes, join(OUT_DIR, 'thumbs', name))) thumb = name
+        const res = await fetch(image)
+        if (res.ok) {
+          const bytes = Buffer.from(await res.arrayBuffer())
+          const name = `${p.board}.jpg`
+          if (await thumbnail(bytes, join(OUT_DIR, 'thumbs', name))) thumb = name
+        } else {
+          // Upstream names a file its media repo does not publish at that path,
+          // and seven boards do (#931). Recording the URL anyway would hand the
+          // details page a link to a 404 — so the board has no picture, which
+          // is the truth and what the gallery's placeholder is for. NOT the
+          // same as the two failures either side of this: a `catch` here is the
+          // network, and a `thumbnail` that returns false is this machine
+          // having no resizer. Both leave the URL alone, because in both the
+          // picture is presumed to be there.
+          image = null
+        }
       } catch {
-        /* no picture; the tile falls back to a placeholder */
+        /* no picture this run; the tile falls back to a placeholder */
       }
     }
     return {
@@ -478,7 +493,7 @@ async function main() {
       url: meta.url || null,
       variants: meta.variants ?? {},
       flashOffset: meta.deploy_options?.flash_offset ?? null,
-      image: image ? `${MPY}/resources/micropython-media/boards/${p.board}/${image}` : null,
+      image,
       thumb,
       builds
     }

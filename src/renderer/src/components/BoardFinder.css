@@ -489,14 +489,89 @@
   object-fit: contain;
 }
 
-/* A board with no thumbnail (8 of the 225) gets its initials, not a broken
-   image icon. */
+/*
+ * A BOARD WITH NO PHOTOGRAPH (#931) — 8 of the 225.
+ * ---------------------------------------------------------------------------
+ * A drawn board, where this used to print the product name's two initials next
+ * to the product name. `board-finder.ts` argues the choice; this file only has
+ * to make one SVG work in the three wells it lands in — the card, the preview
+ * and the details — which differ in nothing but size.
+ *
+ * CAPPED, because they differ in size by a lot. The details well is 320px wide
+ * against the card's 166, and a drawing filling it would set the chip's marking
+ * at 19px: a diagram enlarged, where the card's is a board at the size a board
+ * is looked at. Capped, the same drawing sits centred in the big well with the
+ * weight it has in the small one.
+ *
+ * IT DEPENDS ON ITS WELL STAYING OPAQUE. All three are `--bf-sunk`, which is
+ * what keeps a maker's tint off the photographs (see THE MAKER TINTS above),
+ * and these lines are drawn dim on the assumption of that ground. Let a tint
+ * reach in here and six different colours get to decide whether the drawing is
+ * visible at all.
+ */
 .bfind__noimg {
-  font-family: var(--font-mono), monospace;
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 240px;
   color: var(--bf-ink4);
+}
+
+/* The board itself, raised off the well the way a card is. */
+.bfind__noimg-pcb {
+  fill: var(--bf-card);
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.bfind__noimg-hole {
+  fill: var(--bf-sunk);
+  stroke: currentColor;
+  stroke-width: 1.2;
+}
+
+/* Headers and the edge connector — solid, because at tile size none of them is
+   two pixels across and an outline would disappear. */
+.bfind__noimg-pad,
+.bfind__noimg-port {
+  fill: currentColor;
+  opacity: 0.7;
+}
+
+.bfind__noimg-leg line {
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+/* The package, sunk back to the well's own colour so the marking on it can have
+   the contrast the rest of the drawing deliberately does not. */
+.bfind__noimg-chip {
+  fill: var(--bf-sunk);
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.bfind__noimg-pin1 {
+  fill: currentColor;
+}
+
+/* The MCU, marked on the package. `--bf-ink2` — 6.4:1 on `--bf-sunk` — because
+   it is the one thing here meant to be READ rather than recognised, and on a
+   resting card it is a fact stated nowhere else since #927 took the chip line
+   off. The drawing around it is `--bf-ink4` and meant to recede.
+   Lengths are viewBox user units, not screen pixels: the viewBox is 160 wide,
+   so 10 here is 10px in a 160px-wide card well and scales from there. */
+.bfind__noimg-mark {
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  font-weight: 700;
+  fill: var(--bf-ink2);
+}
+/* An order code too long for one line gets two, and both have to fit between
+   the package's edges — see `chipSilkscreen` for the wrap. */
+.bfind__noimg-mark.is-two {
+  font-size: 8px;
 }
 
 .bfind__card-body {

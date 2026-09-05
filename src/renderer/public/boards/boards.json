@@ -1517,7 +1517,7 @@
       "url": "https://www.experiential.bot/",
       "variants": {},
       "flashOffset": null,
-      "image": "https://micropython.org/resources/micropython-media/boards/CYTRON_NANOXRP_CONTROLLER/nanoxrp-board.jpg",
+      "image": null,
       "thumb": null,
       "builds": [
         {
@@ -3003,7 +3003,7 @@
       "url": "https://www.infineon.com/evaluation-board/kit-pse84-ai",
       "variants": {},
       "flashOffset": null,
-      "image": "https://micropython.org/resources/micropython-media/boards/KIT_PSE84_AI/kit_pse84_ai.jpg",
+      "image": null,
       "thumb": null,
       "builds": [],
       "flash": {
@@ -8089,7 +8089,7 @@
       "url": "https://www.st.com/en/evaluation-tools/32f469idiscovery.html",
       "variants": {},
       "flashOffset": null,
-      "image": "https://micropython.org/resources/micropython-media/boards/STM32F469DISC/stm32f469disc.jpg",
+      "image": null,
       "thumb": null,
       "builds": [
         {
@@ -11029,7 +11029,7 @@
         "RISCV": "RISC V"
       },
       "flashOffset": null,
-      "image": "https://micropython.org/resources/micropython-media/boards/WAVESHARE_RP2350B_CORE/waveshare_rp2350b_core.png",
+      "image": null,
       "thumb": null,
       "builds": [
         {
@@ -11237,7 +11237,7 @@
       "url": "https://github.com/WeActStudio/WeActStudio.MiniSTM32H723",
       "variants": {},
       "flashOffset": null,
-      "image": "https://micropython.org/resources/micropython-media/boards/WEACTSTUDIO_MINI_STM32H723/weact_stm32h723.jpg",
+      "image": null,
       "thumb": null,
       "builds": [
         {
@@ -11287,7 +11287,7 @@
       "url": "https://github.com/WeActStudio/MiniSTM32H7xx",
       "variants": {},
       "flashOffset": null,
-      "image": "https://micropython.org/resources/micropython-media/boards/WEACTSTUDIO_MINI_STM32H743/weact_stm32h743.jpg",
+      "image": null,
       "thumb": null,
       "builds": [
         {
@@ -11337,7 +11337,7 @@
       "url": "https://github.com/WeActStudio/WeActStudio.STM32U585Cx_CoreBoard",
       "variants": {},
       "flashOffset": null,
-      "image": "https://micropython.org/resources/micropython-media/boards/WEACTSTUDIO_MINI_STM32U585/weact_u585ci.jpg",
+      "image": null,
       "thumb": null,
       "builds": [
         {
