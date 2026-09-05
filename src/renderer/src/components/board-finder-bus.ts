@@ -29,6 +29,8 @@
  * the payload type without pulling in the gallery component or the index.
  */
 import { defaultBuild, type BoardBuild, type IndexedBoard } from '../../../shared/board-index'
+import { flashTargetForFamily } from '../../../shared/firmware-runtime'
+import type { BoardType } from '../../../main/firmware/types'
 
 /** Window event name. `event.detail` is a {@link BoardFlashRequest}. */
 export const FLASH_BOARD_EVENT = 'snakie:flash-board'
@@ -89,4 +91,38 @@ export function requestFlash(board: IndexedBoard): boolean {
   if (!detail) return false
   window.dispatchEvent(new CustomEvent<BoardFlashRequest>(FLASH_BOARD_EVENT, { detail }))
   return true
+}
+
+/**
+ * What the flasher should select for a request (#893).
+ *
+ * Pure, so the mapping is testable without mounting a modal — and separate from
+ * the flasher so the gallery's end and the flasher's end agree on one rule
+ * rather than two.
+ *
+ * The OFFSET comes from upstream's own `deploy_options.flash_offset` when it
+ * says, and only falls back to inference when it does not. That matters more
+ * than it looks: the bootloader offset is per chip and not a simple "the
+ * original ESP32 versus the rest" — the S2 shares the original's `0x1000` while
+ * the S3 and every RISC-V part are `0x0`. Getting it wrong flashes cleanly and
+ * leaves a dead board, so a figure the board itself publishes beats one we work
+ * out.
+ *
+ * The chip family drives the board TYPE rather than the port, because the port
+ * is too coarse: `esp32` covers the S2, S3, C3, C6 and P4, which do not share an
+ * offset.
+ */
+export function flasherSelectionFor(req: BoardFlashRequest): {
+  board: BoardType
+  offset: string | undefined
+  url: string
+  family: string
+} {
+  const target = flashTargetForFamily(req.mcu || req.port)
+  return {
+    board: target.board,
+    offset: req.flashOffset ?? target.offset,
+    url: req.build.url,
+    family: req.mcu || req.port
+  }
 }
