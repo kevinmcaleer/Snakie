@@ -501,3 +501,32 @@
 .firmware-advanced-toggle:hover {
   color: #f4f6f8;
 }
+
+/* The Board Finder button, beside Detect board (#893).
+ *
+ * Detect is the happy path and stays prominent; this is the answer for a board
+ * that is not plugged in yet, or one detection could not name — the same
+ * question asked the other way round, so it sits beside it rather than
+ * competing with it. Quieter fill, same size and shape. */
+/* Detect and Board Finder sit on ONE row. `.firmware-detect` is
+   `align-self: flex-start` in a column, so two of them would stack. */
+.firmware-detect-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.firmware-detect-row .firmware-detect {
+  margin-bottom: 0;
+}
+
+.firmware-detect--finder {
+  background: rgba(255, 255, 255, 0.08);
+  color: #c7ccd4;
+}
+
+.firmware-detect--finder:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  color: #f4f6f8;
+}

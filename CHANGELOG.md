@@ -8,6 +8,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A Board Finder, and the firmware picker finally knows every board** (#893).
+  The picker showed Thonny's catalogue, which lists no Adafruit boards at all
+  and no ESP32 variants — which is how an ESP32 Feather V2 ends up running a
+  build with its 2 MB of PSRAM switched off. Snakie now carries its own index,
+  generated from what MicroPython actually publishes: **225 boards from 54
+  manufacturers**, each with its photo, chip, features, the variants named and
+  described in upstream's own words, and the builds that exist. Open it from
+  **Board Finder**, beside Detect board in the flash dialog, and filter by
+  manufacturer, processor or features — or just search. Pick a board and the
+  dialog fills itself in, newest MicroPython selected, with the flash offset
+  taken from the figure the board itself publishes rather than one inferred from
+  its chip. The index is refreshed daily and is not tied to a Snakie release, so
+  a board added upstream shows up without waiting for an update; the full
+  catalogue ships with the app, so it works with no network at all.
+
+### Added
+
 - **Board Finder — a gallery of every board MicroPython builds for** (#893). The
   firmware picker showed Thonny's catalogue, which carries no Adafruit boards and
   no ESP32 variants; **Board Finder** in the status bar, beside Flash firmware,
