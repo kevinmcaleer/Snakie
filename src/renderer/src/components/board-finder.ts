@@ -520,9 +520,7 @@ export function unsizedNotice(count: number): string | null {
 
 /** Add or remove one feature, so the chips toggle rather than only accumulate. */
 export function toggleFeature(features: readonly string[], feature: string): string[] {
-  return features.includes(feature)
-    ? features.filter((f) => f !== feature)
-    : [...features, feature]
+  return features.includes(feature) ? features.filter((f) => f !== feature) : [...features, feature]
 }
 
 /** Same toggle, typed for the runtime chips. */
@@ -530,9 +528,7 @@ export function toggleRuntime(
   runtimes: readonly FirmwareRuntime[],
   runtime: FirmwareRuntime
 ): FirmwareRuntime[] {
-  return runtimes.includes(runtime)
-    ? runtimes.filter((r) => r !== runtime)
-    : [...runtimes, runtime]
+  return runtimes.includes(runtime) ? runtimes.filter((r) => r !== runtime) : [...runtimes, runtime]
 }
 
 // ---------------------------------------------------------------------------
@@ -601,3 +597,36 @@ export const RUNTIME_CAVEAT =
   'This is MicroPython’s catalogue, so CircuitPython-only boards are not in it. ' +
   'CircuitPython is marked only where the board id was confirmed — the rest are ' +
   'unconfirmed, not unsupported.'
+
+// --- where the hover preview grows (#938) ------------------------------------
+
+/** The edges of a box, as `getBoundingClientRect` gives them. */
+export interface Span {
+  left: number
+  right: number
+}
+
+/** Which way the preview's extra width goes. */
+export type PeekSide = 'centre' | 'left' | 'right'
+
+/**
+ * Where to put a preview twice the width of the cell it grew from.
+ *
+ * Centred is the default and the one that reads as deliberate — the card grows
+ * evenly out of the thing you are pointing at. The first and last columns have
+ * nowhere to put half a card, so they anchor to their own edge and grow inward.
+ *
+ * Measured against the SCROLLER, not the window: the scroller is the box the
+ * preview must not hang out of, and the gallery has a margin around it that the
+ * window knows nothing about.
+ *
+ * Left wins a tie. A viewport too narrow to hold the doubled card at all is the
+ * only case where both tests pass, and pinning it to the left edge at least
+ * keeps the start of the card — including the photo — on screen.
+ */
+export function peekSide(cell: Span, view: Span): PeekSide {
+  const grow = (cell.right - cell.left) / 2
+  if (cell.left - grow < view.left) return 'left'
+  if (cell.right + grow > view.right) return 'right'
+  return 'centre'
+}
