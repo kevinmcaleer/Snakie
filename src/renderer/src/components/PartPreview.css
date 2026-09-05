@@ -1,0 +1,251 @@
+/* --------------------------------------------------------------------------
+ * The part stage (#934) — tabs, coin flip, mat, pinout readout.
+ *
+ * Lifted out of PartDetailsView.css so the Parts Catalog and the Board Finder
+ * stage a board the same way rather than nearly the same way. Unique `ppv__`
+ * BEM prefix: this CSS is global, and a shared prefix is how two panels end up
+ * restyling each other.
+ *
+ * The CHROME is themeable and the MAT is not, deliberately. Hosts disagree about
+ * their own surface — the catalog is a light page, the Board Finder is dark in
+ * both skins on purpose — so tabs and buttons read their colours from `--ppv-*`
+ * and a dark host restates the four of them. The mat stays `--bc-mat` in every
+ * host because pin labels and schematic strokes are drawn light app-wide; a
+ * light stage would hide the very pinout this view exists to show.
+ * ------------------------------------------------------------------------ */
+
+.ppv {
+  /* The catalog's own values — a light page. A dark host restates these four. */
+  --ppv-chrome-bg: #fff;
+  --ppv-chrome-ink: #5b665f;
+  --ppv-chrome-line: #dcdfd8;
+  --ppv-chrome-line-hi: #b9c2ba;
+  --ppv-chrome-on: #0b7a6b;
+  --ppv-chrome-on-ink: #fff;
+  /* The two pin roles a reader must not misread. Themeable for the same reason
+     the chrome is: no single mid-tone clears 3:1 on both a white page and the
+     Board Finder's #262a21 — these two are measured against white (5.5:1 and
+     7.6:1), and the dark host restates them with values measured against its
+     own card (5.8:1 and 5.4:1). */
+  --ppv-pwr: #b4451f;
+  --ppv-gnd: #4a5560;
+  min-width: 0;
+}
+
+.ppv__tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.ppv__tablist {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ppv__tabs-spacer {
+  flex: 1 1 auto;
+}
+
+.ppv__tab {
+  height: 30px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ppv-chrome-ink);
+  background: var(--ppv-chrome-bg);
+  border: 1.5px solid var(--ppv-chrome-line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.ppv__tab:hover {
+  border-color: var(--ppv-chrome-line-hi);
+}
+.ppv__tab.is-active {
+  color: var(--ppv-chrome-on-ink);
+  background: var(--ppv-chrome-on);
+  border-color: var(--ppv-chrome-on);
+}
+
+.ppv__flip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ppv-chrome-ink);
+  background: var(--ppv-chrome-bg);
+  border: 1.5px solid var(--ppv-chrome-line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.ppv__flip-btn:hover:not(:disabled) {
+  border-color: var(--ppv-chrome-line-hi);
+}
+.ppv__flip-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* The mat. A DARK island in every theme, like the docked part preview, the Board
+   View and the Mini Board View (#181): the silk pin labels (`.pcv__pin-label`)
+   and the schematic symbol (`--sc-fill`) are drawn light-on-dark everywhere
+   outside the Part Editor, so a white stage would leave a part's pinout — the
+   whole point of this view — as pale grey text on white. `--bc-mat` is the
+   board-canvas material hook the rest of the app stages parts on.
+
+   Only the board turns on it — flipping the frame would spin its background and
+   border too, which reads as the viewer tipping over rather than a board being
+   turned over in your hands. */
+.ppv__stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  max-height: 58vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  background: var(--bc-mat, #0c0f12);
+  border: 1px solid #2b3136;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+/* The schematic symbol is an <svg> straight in the stage (no wrapper of its own). */
+.ppv__stage > svg {
+  width: 100%;
+  height: 100%;
+}
+
+.ppv__flip {
+  width: 100%;
+  height: 100%;
+  transform-origin: center center;
+}
+.ppv__flip.is-flipping {
+  animation: ppv-flip 420ms ease-in-out;
+}
+
+@keyframes ppv-flip {
+  0% {
+    transform: perspective(1600px) rotateY(0deg);
+  }
+  50% {
+    transform: perspective(1600px) rotateY(90deg);
+  }
+  100% {
+    transform: perspective(1600px) rotateY(0deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Keep the face CHANGE — that is the information — and drop the spin. */
+  .ppv__flip.is-flipping {
+    animation: ppv-flip-fade 420ms ease-in-out;
+  }
+  @keyframes ppv-flip-fade {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.25;
+    }
+  }
+}
+
+/* On the dark mat, so light ink. */
+.ppv__stage-note {
+  font-size: 13px;
+  color: #aeb4bd;
+}
+
+/* --- the pinout readout (#934) -------------------------------------------- */
+
+.ppv__pinout {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+/* Reserves its line whether or not a pad is hovered: a strip that appeared on
+   hover would shift the board out from under the pointer that summoned it. */
+.ppv__pin-read {
+  flex: 1 1 16rem;
+  min-width: 0;
+  min-height: 26px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.ppv__pin-name {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--ppv-chrome-on);
+}
+
+.ppv__pin-num,
+.ppv__pin-hint {
+  color: var(--ppv-chrome-ink);
+  opacity: 0.8;
+}
+
+/* Power and ground are the two the reader must not misread, so they are the two
+   that carry a colour of their own rather than the chrome ink. */
+.ppv__pin-role {
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--ppv-chrome-line);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ppv-chrome-ink);
+}
+.ppv__pin-role.is-pwr {
+  color: var(--ppv-pwr);
+  border-color: color-mix(in srgb, var(--ppv-pwr) 50%, transparent);
+}
+.ppv__pin-role.is-gnd {
+  color: var(--ppv-gnd);
+  border-color: color-mix(in srgb, var(--ppv-gnd) 50%, transparent);
+}
+
+.ppv__pin-fn {
+  padding: 1px 7px;
+  border-radius: 4px;
+  background: var(--ppv-chrome-line);
+  color: var(--ppv-chrome-ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.ppv__pin-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ppv-chrome-ink);
+}
+
+.ppv__pin-pick select {
+  font: inherit;
+  font-size: 12px;
+  max-width: 11rem;
+  padding: 3px 6px;
+  color: var(--ppv-chrome-ink);
+  background: var(--ppv-chrome-bg);
+  border: 1.5px solid var(--ppv-chrome-line);
+  border-radius: 7px;
+}

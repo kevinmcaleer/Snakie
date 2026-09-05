@@ -204,6 +204,17 @@ export interface PartCanvasProps {
   showGrid?: boolean
   /** Non-interactive render (the Parts panel detail). */
   readOnly?: boolean
+  /**
+   * Report the pin under the pointer, by index, or null on the way out (#934).
+   *
+   * OPT-IN, and the only thing that puts hit targets on the pads: authoring must
+   * keep its clicks, so a canvas nobody asked for this on behaves exactly as it
+   * did. Given alongside {@link hoverPin} it drives the reading views' pinout
+   * readout — hover a pad, be told which pin it is in words.
+   */
+  onHoverPin?: (index: number | null) => void
+  /** The pin to draw as focused — normally whatever {@link onHoverPin} last said. */
+  hoverPin?: number | null
   /** Active tool (interactive only). */
   tool?: CanvasTool
   /** Current selection (interactive only). */
@@ -417,6 +428,8 @@ export function PartCanvas({
   side = 'front',
   showGrid = false,
   readOnly = false,
+  onHoverPin,
+  hoverPin = null,
   tool = 'select',
   selection = null,
   groupSelect,
@@ -3470,6 +3483,32 @@ export function PartCanvas({
                 {/* Mask the pad (not its label) so the through-hole shows the real
                     background, not a painted dot (#171). */}
                 {hasCuts ? <g mask={`url(#${maskId})`}>{pad}</g> : pad}
+                {/* The focused pad, ringed (#934). Drawn OVER the pad and under
+                    the hit area so the ring never eats its own pointer events. */}
+                {onHoverPin && hoverPin === i && (
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    r={size * 0.95}
+                    className="pcv__pin-focus"
+                    fill="none"
+                    pointerEvents="none"
+                  />
+                )}
+                {/* The hit target. Generous on purpose — a 2.54 mm pad drawn small
+                    enough to fit a 40-pin board on screen is a hard thing to land
+                    a pointer on, and this is a READING gesture, not a precise one.
+                    Touch gets no leave event, so it is left to the next enter. */}
+                {onHoverPin && (
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    r={Math.max(size * 1.15, 5)}
+                    fill="transparent"
+                    onPointerEnter={() => onHoverPin(i)}
+                    onPointerLeave={(e) => e.pointerType !== 'touch' && onHoverPin(null)}
+                  />
+                )}
                 {/* The pin's label annotation (number box + label + chips) — a single
                     group so it can be DRAGGED to a hand-placed spot (#…), stored as
                     `labelOffset` and applied here as a translate. `labelHidden` pins

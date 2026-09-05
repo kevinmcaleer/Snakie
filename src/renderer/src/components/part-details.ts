@@ -24,7 +24,7 @@ import { driverInstallMethod, driverModuleId, type DriverInstallMethod } from '.
 import { installPathFor, moduleById, type ModuleDef } from '../../../shared/modules-catalog'
 import { parsePartHelp, type PartHelpMeta } from './part-help-meta'
 import { isExternalMeshRef, meshKind, resolveMeshPath } from './robot-mesh'
-import type { PartDefinition } from '../../../shared/part'
+import type { PartDefinition, PartPin, PartPinType } from '../../../shared/part'
 
 /** Trim a maybe-string down to a non-empty value, or `undefined`. */
 function text(v: unknown): string | undefined {
@@ -337,4 +337,87 @@ export function partDetailSections(part: PartDefinition): PartDetailSection[] {
   if (partDocLinks(part).length > 0) out.push('links')
   if (partHelpBody(part)) out.push('help')
   return out
+}
+
+// --- The pinout readout (#934) ----------------------------------------------
+
+/** One pad, said in words. */
+export interface PinoutReading {
+  /** The silk name, e.g. `GP4` — always present, it is the pin's primary label. */
+  name: string
+  /** `Pin 6`, or null where the part prints no number. */
+  number: string | null
+  /** The electrical role in the reader's words, e.g. `Ground`. */
+  role: string
+  /** One phrase per capability, e.g. `I2C0 SDA`, `PWM 2A`, `ADC0`. */
+  functions: string[]
+}
+
+const PIN_ROLE: Record<PartPinType, string> = {
+  pwr: 'Power',
+  gnd: 'Ground',
+  io: 'I/O',
+  other: 'Other'
+}
+
+/**
+ * What a pad does, for the hover readout.
+ *
+ * The board already draws every pin's capability chips, so this is not there to
+ * repeat them — it is there because a 40-pin Pico draws eighty chips at once and
+ * the question is always about ONE pad. Hovering says which.
+ *
+ * A capability with a bus number is named with it (`I2C0 SDA`, not `I2C SDA`),
+ * because "which I2C" is the thing that decides whether two devices can share a
+ * bus, and it is the part of the answer a pinout diagram usually makes you count
+ * across the board to find. Every such number is one the PART author wrote down;
+ * none is inferred here — with the single, chip-gated exception below.
+ *
+ * `mcu` is the part's chip, and it buys exactly one thing: the PWM SLICE. On an
+ * RP2040/RP2350 the slice is fixed by the GPIO number and it is the fact that
+ * matters (two pads on one slice cannot run different duty cycles), so it is
+ * worth deriving. It is derived for NO other chip: an ESP32 routes PWM through a
+ * matrix and an nRF52 through four instances, and "PWM 2A" on either would be a
+ * number this function made up. Given no chip, nothing is derived.
+ */
+export function pinoutReading(pin: PartPin, mcu?: string): PinoutReading {
+  // The two families whose slice mapping is fixed by the GPIO number.
+  const slices = /^rp2[0-9]{3}$/i.test((mcu ?? '').trim())
+  const caps = pin.type === 'io' ? (pin.capabilities ?? []) : []
+  const functions: string[] = []
+  for (const c of caps) {
+    switch (c) {
+      case 'i2c':
+      case 'spi':
+      case 'uart': {
+        const bus = pin.buses?.[c]
+        const sig = pin.signals?.[c]
+        const name = `${c.toUpperCase()}${bus != null ? bus : ''}`
+        functions.push(sig ? `${name} ${sig}` : name)
+        break
+      }
+      case 'pwm': {
+        // The channel alone is still worth saying — `PWM B` tells you which half
+        // of a slice the pad is, which is the half that collides.
+        const sig = pin.signals?.pwm
+        // RP2040/RP2350: slice = (gpio / 2) mod 8, per the datasheet's PWM table.
+        const slice = slices && pin.gpio != null ? Math.floor((pin.gpio % 16) / 2) : null
+        functions.push(slice != null && sig ? `PWM ${slice}${sig}` : sig ? `PWM ${sig}` : 'PWM')
+        break
+      }
+      case 'adc': {
+        const ch = pin.buses?.adc
+        functions.push(ch != null ? `ADC${ch}` : 'ADC')
+        break
+      }
+      default:
+        functions.push(c.toUpperCase())
+    }
+  }
+  return {
+    name: pin.label || pin.name,
+    number: pin.number != null ? `Pin ${pin.number}` : null,
+    role: PIN_ROLE[pin.type] ?? 'Other',
+    functions
+  }
 }

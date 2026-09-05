@@ -507,6 +507,19 @@
   fill: #cfd6dd;
 }
 
+/* The pad under the pointer, in the reading views (#934).
+   Amber rather than the theme accent: the accent is already the ACTIVE tab and
+   the selected pad in the editor, and this ring means neither — it is a pointer
+   following the reader's own hand. Sits on `--bc-mat`, the dark board island
+   every reading view stages a part on, so it is a light ring by construction. */
+.pcv__pin-focus {
+  stroke: #e7bf62;
+  stroke-width: 1.6;
+  /* The pads are drawn small on a 40-pin board; a soft glow is what makes the
+     ring findable at that size without thickening it into the neighbours. */
+  filter: drop-shadow(0 0 3px #e7bf6288);
+}
+
 /* Boxed pin annotation (breadboard MCU): a SOLID dark-grey GPIO number box with
    centred white text and no border — a simple, high-contrast chip that reads on
    both the dark board islands and the light editor canvas (#…). */

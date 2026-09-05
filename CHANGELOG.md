@@ -6,6 +6,41 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A board in the finder shows the board itself: front, back, model and
+  pinout** (#934). The Board Finder knew 225 boards the way MicroPython
+  describes them — a vendor, a chip, and a list of firmware to write. The parts
+  library knew 22 of those boards as hardware — a photograph, a back, sometimes
+  a 3-D model, and every pad with its GPIO, its bus and its signal. Neither knew
+  what the other held, so a Pico's details page could tell you exactly which
+  `.uf2` to flash and not one thing about where GP4 is. A board's page now ends
+  with the board itself, turned over, modelled where there is a model, and read
+  pad by pad: hover a pad and it is ringed, and named underneath in words —
+  `GP4 · Pin 6 · I/O · I2C0 SDA · SPI0 RX · PWM 2A`. The bus number is the part
+  that matters and the part a pinout diagram usually makes you count across the
+  board to find. Because hovering is not available to everyone, the same readout
+  is driven by a pin picker beside it, and announced politely as it changes. The
+  Parts Catalog's own details page gains the readout at the same time, from the
+  same component: the stage is now one implementation shared by both, rather
+  than the two-that-drift the board view has already been.
+
+  **The join is a hand-written table, on purpose.** Matching on vendor and
+  product name was tried first and is not close: it silently paired Pimoroni's
+  `Pico LiPo 2`, an RP2350 board, with upstream's `Pico LiPo`, which is RP2040.
+  Same maker, same product line, one word apart, different chip, different
+  pinout — and a finder that answers "where is GP4" with another board's pad map
+  is worse than one that says nothing, because the wrong answer still looks like
+  an answer to someone holding a soldering iron. So every pairing names both ids
+  outright and carries its reason, and a test holds each one to its chip. That
+  test is what caught the Pico LiPo, and it is the check that stays.
+
+  Eleven of the 22 microcontroller parts clear that bar, including the Feather
+  ESP32 V2 that #902 curated. The other eleven are real boards MicroPython
+  builds nothing under — the Tiny 2350, Servo 2040, Pico LiPo 2, Maker Pi RP2040
+  — and they stay out until each is verified, so 214 of the 225 boards show
+  exactly what they showed before, and none shows a heading over an empty frame.
+
 ### Changed
 
 - **A board with no photograph gets a drawn board, not its initials** (#931).
