@@ -324,40 +324,30 @@
 
 /* --- the grid ------------------------------------------------------------- */
 
-.bfind__shelves {
+.bfind__gallery {
   flex: 1 1 auto;
   overflow-y: auto;
   padding: 16px 18px 28px;
 }
 
-.bfind__shelf {
-  margin-bottom: 22px;
-}
-
-.bfind__shelf-name {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 10px;
-  font-size: 13px;
-  font-weight: 800;
-  color: var(--bf-ink);
-}
-
-.bfind__shelf-count {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--bf-ink3);
-  background: var(--bf-card);
-  border: 1px solid var(--bf-line);
-  border-radius: 999px;
-  padding: 1px 8px;
-}
-
+/*
+ * ONE GRID, WITH NO GAP (#927).
+ *
+ * The gap moved into the cells as padding, and that is the whole trick behind
+ * the maker tints. A maker's tint is painted on its CELLS, not on its cards, so
+ * with the cells butted against each other the tinted areas of consecutive cards
+ * join into one continuous ground — a band with card-shaped holes in it, running
+ * on across row ends for as long as the maker does, and stopping mid-row where
+ * the next maker starts. Restore `gap` here and every band breaks into separate
+ * patches, which is the thing the tint exists to avoid.
+ *
+ * The cards keep exactly the 12px between them they had before: 6px of padding
+ * on each of two neighbouring cells.
+ */
 .bfind__grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
-  gap: 12px;
+  gap: 0;
 }
 
 .bfind__empty,
@@ -372,14 +362,88 @@
 
 /* The card's cell. It exists so the hover preview can be the card's SIBLING
    rather than its child: the card is a button, and a button inside a button is
-   not markup a browser will honour. */
+   not markup a browser will honour. Since #927 it is also what carries the
+   maker tint — see the palette below. */
 .bfind__cell {
   position: relative;
   display: flex;
+  padding: var(--bf-cell-pad);
+  background: var(--bf-tint);
 }
 /* A preview covers its neighbours, never the other way round. */
 .bfind__cell.is-peeking {
   z-index: 3;
+}
+
+/*
+ * THE MAKER TINTS (#927) — six of them, for 54 makers.
+ * ---------------------------------------------------------------------------
+ * A tint says "the maker changed here", and that is all it is asked to say.
+ * Six colours cannot name 54 makers and are not trying to; every card prints
+ * its manufacturer, which is what actually identifies the group and what keeps
+ * this from being a distinction carried by colour alone. `board-finder.ts`
+ * argues the ratio; this file only has to make six grounds tellable apart.
+ *
+ * They are FLAT, not gradients. A run wraps across rows, and a gradient defined
+ * per cell would restart at every card — a run of eight boards would read as
+ * eight stripes, which says the opposite of what the band is for.
+ *
+ * They sit BESIDE the cards and never under them. The card is opaque
+ * `--bf-card` and the photo well opaque `--bf-sunk`, so a tint reaches neither
+ * the photographs — which are the content here, and which a wash over them
+ * would flatten — nor a single character of text. That is what lets these be
+ * strong enough to actually see: the first cut was ~10% alpha, faint enough
+ * that the bands it drew could not be made out, and there was no contrast
+ * budget being spent to justify the caution. Nothing readable moves if you take
+ * them further still.
+ *
+ * The alphas differ per hue rather than being one number, because they are
+ * matched by eye and not by arithmetic: lime and teal carry further at the same
+ * alpha than blue and violet do, and six tints that read as equally present
+ * matter more than six that share a formula.
+ *
+ * The ORDER matters too. A run whose hash lands on a tint too near itself steps
+ * forward through this list until it is clear (`vendorRuns`), so the entries
+ * are arranged with each a long way round the hue wheel from the next — ≥85°,
+ * never adjacent shades. A run stepping away from a clash must not land on a
+ * near-miss of the very tint it was stepping away from.
+ */
+.bfind {
+  /* Half the space between two cards; the other half is the next cell's. */
+  --bf-cell-pad: 6px;
+  --bf-tint: transparent;
+}
+.bfind__cell.is-tint0 {
+  --bf-tint: hsl(180 45% 48% / 0.22); /* teal */
+  --bf-tint-edge: hsl(180 55% 62% / 0.85);
+}
+.bfind__cell.is-tint1 {
+  --bf-tint: hsl(325 45% 55% / 0.28); /* rose */
+  --bf-tint-edge: hsl(325 60% 68% / 0.85);
+}
+.bfind__cell.is-tint2 {
+  --bf-tint: hsl(75 40% 48% / 0.2); /* lime */
+  --bf-tint-edge: hsl(75 50% 60% / 0.85);
+}
+.bfind__cell.is-tint3 {
+  --bf-tint: hsl(215 55% 58% / 0.32); /* blue */
+  --bf-tint-edge: hsl(215 70% 68% / 0.9);
+}
+.bfind__cell.is-tint4 {
+  --bf-tint: hsl(10 50% 55% / 0.28); /* terracotta */
+  --bf-tint-edge: hsl(10 65% 64% / 0.85);
+}
+.bfind__cell.is-tint5 {
+  --bf-tint: hsl(265 50% 62% / 0.34); /* violet */
+  --bf-tint-edge: hsl(265 65% 74% / 0.9);
+}
+
+/* Where a maker's run begins. The tint change already marks it, but a run that
+   happens to start at the left edge of a row has its boundary hidden in the
+   row break — this puts a tick on it either way. It is the last trace of the
+   vendor headings, and deliberately not a heading: the name is on the card. */
+.bfind__cell.is-run-start {
+  box-shadow: inset 2px 0 0 var(--bf-tint-edge);
 }
 
 .bfind__card {
@@ -443,12 +507,18 @@
   min-width: 0;
 }
 
+/* `--bf-ink2`, not the `--bf-ink3` this was, and the tints are why (#927). This
+   line is the only thing that NAMES the group a tint is drawing, so it stopped
+   being a caption the moment the shelf headings went. At 10px on `--bf-card`
+   ink3 came to 4.39:1, which is under AA for text this size — close enough to
+   ignore while it was a detail, not while it is the accessible half of the
+   grouping. ink2 is 5.3:1. */
 .bfind__card-vendor {
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--bf-ink3);
+  color: var(--bf-ink2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -461,12 +531,7 @@
   color: var(--bf-ink);
 }
 
-.bfind__card-mcu {
-  font-family: var(--font-mono), monospace;
-  font-size: 11px;
-  color: var(--bf-ink2);
-}
-
+/* Only the preview carries these now (#927) — see `BoardCard`. */
 .bfind__card-feats {
   display: flex;
   flex-wrap: wrap;
@@ -485,22 +550,20 @@
   padding: 1px 5px;
 }
 
-/* Says at a glance that this one cannot be flashed from here. */
-.bfind__card-nofw {
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--bf-gold);
-}
-
 /* --- the hover preview (#919) --------------------------------------------- */
 
 /* Grows out of the card it covers, 10px proud on each side so it reads as the
-   same card enlarged rather than as a tooltip that happens to be near one. */
+   same card enlarged rather than as a tooltip that happens to be near one.
+   Measured from the CARD, not the cell — the cell gained the grid's gap as
+   padding in #927, so the two are no longer the same box and a raw -10px here
+   would stand the preview 16px proud instead. */
 .bfind__peek {
+  --bf-peek-proud: 10px;
+  --bf-peek-off: calc(var(--bf-cell-pad) - var(--bf-peek-proud));
   position: absolute;
-  left: -10px;
-  right: -10px;
-  top: -10px;
+  left: var(--bf-peek-off);
+  right: var(--bf-peek-off);
+  top: var(--bf-peek-off);
   display: flex;
   flex-direction: column;
   background: var(--bf-card);
@@ -515,7 +578,7 @@
 /* The bottom row grows UP instead, or it would open into the scroller's edge. */
 .bfind__peek.is-up {
   top: auto;
-  bottom: -10px;
+  bottom: var(--bf-peek-off);
   transform-origin: 50% 100%;
 }
 @keyframes bfind-peek {

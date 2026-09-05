@@ -38,11 +38,11 @@ import {
   isFiltering,
   memoryThresholdLabel,
   peekFacts,
-  shelvesByVendor,
   toggleChip,
   toggleRuntime,
   unsizedNotice,
-  variantList
+  variantList,
+  vendorRuns
 } from './board-finder'
 import { requestFlash } from './board-finder-bus'
 import './BoardFinder.css'
@@ -53,9 +53,17 @@ import './BoardFinder.css'
  * Every board MicroPython builds for — 225 of them, 54 vendors — as a gallery
  * with the filters that actually narrow it: manufacturer, processor, features,
  * and a search box. A sibling of the Parts Catalog (#613): same pop-out
- * affordance, same shelves-then-flat-grid behaviour, same details-over-the-grid
- * detour. Unlike the rest of the app's chrome it is DARK in both skins — see
- * `BoardFinder.css`, which says why, and why that is not an oversight to tidy up.
+ * affordance, same details-over-the-grid detour. Unlike the rest of the app's
+ * chrome it is DARK in both skins — see `BoardFinder.css`, which says why, and
+ * why that is not an oversight to tidy up.
+ *
+ * ONE GRID, TINTED IN RUNS (#927). Each maker used to get its own shelf, which
+ * with 54 makers and a median of two boards apiece meant 54 headings and 54
+ * rows left part-empty — a lot of scrolling to see a small catalogue. Now every
+ * board goes into one continuous grid, so a row can hold the tail of one maker
+ * and the head of the next, and a maker is marked by a tint on the ground behind
+ * its cards instead. `vendorRuns` in `board-finder.ts` decides both the order
+ * and the tints, and argues why a tint can only ever be a separator here.
  *
  * Clicking a board asks the firmware flasher to open on it with the newest build
  * already chosen — see `board-finder-bus.ts`, which is the whole of that seam.
@@ -63,7 +71,9 @@ import './BoardFinder.css'
  * RESTING on a board opens a preview instead (#919): the same card, grown, with
  * the facts that decide whether it is the one — see {@link BoardCell} for the
  * three things that keep that from pouncing, and for how it is reached without a
- * pointer at all.
+ * pointer at all. The resting card is down to the photo, the maker and the name
+ * (#927), which makes that preview load-bearing rather than a bonus — {@link
+ * BoardCard} says what moved onto it and why that is safe.
  *
  * ON THE FILTERS. MEMORY is a filter now (#897): 226 of the 230 boards have a
  * sourced RAM figure, up from 86, and it is one comparable quantity. The four
@@ -211,11 +221,14 @@ export function BoardFinder({ onClose, origin, closing, onClosed }: BoardFinderP
     return FIRMWARE_RUNTIMES.map((r) => ({ value: r, count: counts[r] }))
   }, [all])
 
-  // Shelves are for BROWSING. Once anything is narrowing the catalogue the
-  // result set IS the answer, and re-sectioning it by vendor fights the vendor
-  // filter that is already on screen.
+  // ONE grid, filtered or not (#927). This used to fork: vendor shelves while
+  // browsing, a flat grid once anything narrowed the catalogue, on the reasoning
+  // that re-SECTIONING a result set fights the vendor filter beside it. That
+  // reasoning was about sections, and there are no sections any more — a run is
+  // an ordering plus a tint inside a single grid, which narrows to a subset
+  // without leaving holes in it. `filtering` still gates the Clear button.
   const filtering = isFiltering(filter)
-  const shelves = useMemo(() => (filtering ? [] : shelvesByVendor(matched)), [filtering, matched])
+  const runs = useMemo(() => vendorRuns(matched), [matched])
 
   const clearFilters = useCallback((): void => {
     setText('')
@@ -358,7 +371,7 @@ export function BoardFinder({ onClose, origin, closing, onClosed }: BoardFinderP
             )}
           </aside>
 
-          <div className="bfind__shelves">
+          <div className="bfind__gallery">
             {boards === null && <div className="bfind__loading">Loading boards…</div>}
             {boards !== null && matched.length === 0 && (
               <div className="bfind__empty">
@@ -368,30 +381,26 @@ export function BoardFinder({ onClose, origin, closing, onClosed }: BoardFinderP
               </div>
             )}
 
-            {/* Filtered ⇒ ONE grid; the card carries the vendor the shelf
-                heading used to supply, so collapsing loses nothing. */}
-            {filtering && matched.length > 0 && (
+            {matched.length > 0 && (
               <div className="bfind__grid">
-                {matched.map((b) => (
-                  <BoardCell key={b.id} board={b} onOpen={() => setSelected(b)} />
-                ))}
+                {/* Runs are flattened straight into the grid rather than wrapped
+                    — a wrapper per run would be a grid item per run, which is
+                    the row-per-maker this issue removes. What survives the
+                    flattening is the tint on each cell, and a marker on the
+                    card the run starts at. */}
+                {runs.map((run) =>
+                  run.boards.map((b, i) => (
+                    <BoardCell
+                      key={b.id}
+                      board={b}
+                      tint={run.tint}
+                      runStart={i === 0}
+                      onOpen={() => setSelected(b)}
+                    />
+                  ))
+                )}
               </div>
             )}
-
-            {!filtering &&
-              shelves.map((shelf) => (
-                <section className="bfind__shelf" key={shelf.vendor}>
-                  <h3 className="bfind__shelf-name">
-                    {shelf.vendor}
-                    <span className="bfind__shelf-count">{shelf.boards.length}</span>
-                  </h3>
-                  <div className="bfind__grid">
-                    {shelf.boards.map((b) => (
-                      <BoardCell key={b.id} board={b} onOpen={() => setSelected(b)} />
-                    ))}
-                  </div>
-                </section>
-              ))}
           </div>
         </div>
 
@@ -477,10 +486,8 @@ function ChipFacet({
   )
 }
 
-/** How many feature chips fit on a card before it starts to look like a list. */
-const CARD_FEATURE_LIMIT = 3
-
-/** And on the preview, which has room for more but still a height to keep. */
+/** How many feature chips the preview shows before it stops being a preview.
+ *  The resting card shows none at all since #927 — see {@link BoardCard}. */
 const PEEK_FEATURE_LIMIT = 6
 
 /**
@@ -515,7 +522,19 @@ const PEEK_OVERHANG_PX = 180
  * itself doing exactly what that button does. Nothing here is reachable only by
  * hovering.
  */
-function BoardCell({ board, onOpen }: { board: IndexedBoard; onOpen: () => void }): JSX.Element {
+function BoardCell({
+  board,
+  tint,
+  runStart,
+  onOpen
+}: {
+  board: IndexedBoard
+  /** Which of the maker tints this card's ground is painted in (#927). */
+  tint: number
+  /** First card of its maker's run — the one that gets the edge marker. */
+  runStart: boolean
+  onOpen: () => void
+}): JSX.Element {
   const [peeking, setPeeking] = useState(false)
   // Grow UPWARD when there is no room below inside the scroller: the bottom row
   // is otherwise a preview clipped to the two lines that were already visible.
@@ -539,7 +558,7 @@ function BoardCell({ board, onOpen }: { board: IndexedBoard; onOpen: () => void 
 
   const open = useCallback((): void => {
     const el = cell.current
-    const scroller = el?.closest('.bfind__shelves')
+    const scroller = el?.closest('.bfind__gallery')
     if (el && scroller) {
       const room = scroller.getBoundingClientRect().bottom - el.getBoundingClientRect().bottom
       setUp(room < PEEK_OVERHANG_PX)
@@ -554,7 +573,7 @@ function BoardCell({ board, onOpen }: { board: IndexedBoard; onOpen: () => void 
 
   return (
     <div
-      className={`bfind__cell${peeking ? ' is-peeking' : ''}`}
+      className={`bfind__cell is-tint${tint}${runStart ? ' is-run-start' : ''}${peeking ? ' is-peeking' : ''}`}
       ref={cell}
       onPointerEnter={(e) => {
         if (e.pointerType !== 'mouse') return
@@ -654,7 +673,32 @@ function BoardPeek({
   )
 }
 
-/** One board in the grid. */
+/**
+ * One board in the grid, at rest: the photo, the maker, the name (#927).
+ *
+ * It used to carry the chip, three feature chips with an overflow count, the
+ * substitute-firmware line and the no-firmware line as well. Multiplied by 225
+ * cards that is a wall of specification nobody reads while scanning, and it is
+ * what made every card tall enough to need the scrolling this issue is about.
+ * The preview states all of it a beat later, which is the arrangement #919 built
+ * and this finishes: the resting card is for FINDING a board and the preview is
+ * for deciding on it.
+ *
+ * TWO OF THE DROPPED LINES WERE WARNINGS, and dropping them is safe for a reason
+ * worth writing down rather than assuming. #893 put "Flashes ⟨other board⟩" on
+ * the face of the card because flashing a board with another board's firmware is
+ * the mistake epic #884 exists to prevent. But a card does not flash anything —
+ * clicking one opens the details, and the flash button is there, under the
+ * substitute's own section explaining it. The same goes for "No published
+ * firmware", which the preview states FIRST and the details state instead of a
+ * flash button. There is no route from this card to a flash that does not pass a
+ * screen saying so. Put them back if that ever stops being true.
+ *
+ * The manufacturer line stays, and not only because the issue asked for it:
+ * it is the only thing that names the group the tint is drawing (see
+ * `TINT_COUNT`), so removing it would leave 54 makers distinguished by six
+ * colours and nothing else.
+ */
 function BoardCard({
   board,
   onOpen
@@ -663,7 +707,6 @@ function BoardCard({
   onOpen: () => void
 }): JSX.Element {
   const src = thumbUrl(board.thumb)
-  const extra = board.features.length - CARD_FEATURE_LIMIT
   return (
     <button type="button" className="bfind__card" onClick={onOpen}>
       <span className="bfind__card-img">
@@ -681,26 +724,6 @@ function BoardCard({
       <span className="bfind__card-body">
         <span className="bfind__card-vendor">{board.vendor || 'Unknown'}</span>
         <span className="bfind__card-name">{board.product}</span>
-        <span className="bfind__card-mcu">{board.mcu}</span>
-        {board.features.length > 0 && (
-          <span className="bfind__card-feats">
-            {board.features.slice(0, CARD_FEATURE_LIMIT).map((f) => (
-              <span className="bfind__feat" key={f}>
-                {f}
-              </span>
-            ))}
-            {extra > 0 && <span className="bfind__feat">+{extra}</span>}
-          </span>
-        )}
-        {/* Said on the FACE of the card, not buried in the details: picking a
-            board whose firmware is really another board's is the exact mistake
-            this epic exists to stop someone making by accident. */}
-        {board.substitute?.build && (
-          <span className="bfind__card-sub">Flashes {board.substitute.build}</span>
-        )}
-        {board.builds.length === 0 && (
-          <span className="bfind__card-nofw">No published firmware</span>
-        )}
       </span>
     </button>
   )
