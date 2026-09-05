@@ -1,0 +1,188 @@
+/*
+ * Simulated-device memory dialog (SimMemoryDialog.tsx, #901).
+ *
+ * Follows the PromptModal overlay pattern — a centred card over a dimmed
+ * backdrop — and takes every colour from the shared tokens, so it reads
+ * correctly on both the skeuomorph parchment and the dark skin.
+ */
+
+.simmem-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 1rem;
+}
+
+.simmem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  width: min(30rem, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  padding: 1rem 1.1rem;
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--pixel-shadow);
+  font-family: var(--font-ui);
+}
+
+.simmem__title {
+  margin: 0;
+  font-family: var(--font-pixel);
+  font-size: 0.9rem;
+}
+
+.simmem__lede {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.simmem__presets {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0.5rem;
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+}
+
+.simmem__legend {
+  padding: 0 0.3rem;
+  font-family: var(--font-pixel);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.simmem__preset {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.35rem 0.4rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.simmem__preset:hover {
+  background: var(--bg-sunken);
+}
+
+/* The chosen row is marked with the accent, which is defined in both skins —
+   never a literal, which would only ever look right in one of them. */
+.simmem__preset--on {
+  background: var(--bg-sunken);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.simmem__preset input {
+  margin-top: 0.15rem;
+  accent-color: var(--accent);
+}
+
+.simmem__preset-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.simmem__preset-label {
+  font-size: 0.82rem;
+}
+
+.simmem__preset-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.simmem__custom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-size: 0.8rem;
+}
+
+.simmem__custom-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.simmem__input {
+  width: 7rem;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.35rem 0.45rem;
+}
+
+.simmem__input:focus-visible {
+  outline: var(--border-w) solid var(--accent);
+  outline-offset: 2px;
+}
+
+.simmem__unit {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.simmem__caveat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.6rem 0.7rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+  background: var(--bg-sunken);
+  border-radius: var(--radius);
+  border-left: 3px solid var(--accent);
+}
+
+.simmem__caveat p {
+  margin: 0;
+}
+
+.simmem__caveat strong {
+  color: var(--text);
+}
+
+.simmem__caveat code,
+.simmem__lede code,
+.simmem__status code {
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+}
+
+.simmem__status {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.simmem__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* The cog beside the port dropdown. It inherits the shell header's ghost-chip
+   treatment from ShellPanel.css, so only the glyph box needs setting here. */
+.conn-control__cog {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.35rem;
+  line-height: 0;
+}

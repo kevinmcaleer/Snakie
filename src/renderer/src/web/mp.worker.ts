@@ -22,7 +22,7 @@ import { SIM_MACHINE_PY } from '../../../shared/sim-machine'
 import { INSTRUMENTS_PY, SNAKIE_PY } from './web-lib-sources'
 
 type InMsg =
-  | { type: 'init' }
+  | { type: 'init'; heapBytes?: number }
   | { type: 'feed'; id: number; data: string }
   | { type: 'run'; id: number; code: string }
   | { type: 'runStream'; id: number; code: string }
@@ -94,7 +94,11 @@ self.onmessage = async (e: MessageEvent<InMsg>): Promise<void> => {
       url: mpWasmUrl,
       linebuffer: false,
       stdout: collect,
-      stderr: collect
+      stderr: collect,
+      // The GC heap the interpreter starts with (#901). Omitted → the port's own
+      // 1 MB default. It is fixed here, at `mp_js_init` — which is why changing
+      // it costs a restart rather than applying to a live session.
+      ...(msg.heapBytes ? { heapsize: msg.heapBytes } : {})
     })
     setInterval(flush, 24)
     // The WASM port has no `machine` module — install a simulated one so

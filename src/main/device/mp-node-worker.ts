@@ -22,7 +22,7 @@ const MP_MJS = '@micropython/micropython-webassembly-pyscript/micropython.mjs'
 const MP_WASM = '@micropython/micropython-webassembly-pyscript/micropython.wasm'
 
 type InMsg =
-  | { type: 'init' }
+  | { type: 'init'; heapBytes?: number }
   | { type: 'feed'; id: number; data: string }
   | { type: 'run'; id: number; code: string }
   | { type: 'runStream'; id: number; code: string }
@@ -78,7 +78,11 @@ port.on('message', async (msg: InMsg): Promise<void> => {
       url: require.resolve(MP_WASM),
       linebuffer: false,
       stdout: collect,
-      stderr: collect
+      stderr: collect,
+      // The GC heap the interpreter starts with (#901). Omitted → the port's own
+      // 1 MB default. It is fixed here, at `mp_js_init` — which is why changing
+      // it costs a restart rather than applying to a live session.
+      ...(msg.heapBytes ? { heapsize: msg.heapBytes } : {})
     })
     mp = loaded
     const timer = setInterval(flush, 16)

@@ -118,6 +118,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The simulated board's memory is yours to set, with a cog in the console**
+  (#901). Picked from the port dropdown, the Simulated device now carries a cog
+  that sets the heap its MicroPython interpreter boots with — presets in the
+  region of an ESP8266, an ESP32 with its PSRAM off, a Pico, or a board with
+  PSRAM working, plus a custom size. The point is to meet a tight board's first
+  `MemoryError` at your desk rather than on hardware.
+
+  The dialog is equally clear about what the setting is *not*, because the
+  WebAssembly build only goes so far. It **is** a real knob: `loadMicroPython()`
+  takes a `heapsize` and passes it to `mp_js_init`, and with a small heap a big
+  allocation genuinely fails. But it is a **starting** heap, not a ceiling —
+  that build grows its heap on demand, so the allocation that just raised
+  `MemoryError` succeeds when you retry it, and no setting here can starve a
+  program that grows gradually. And `gc.mem_free()` reports the WebAssembly
+  heap's headroom, around 128 MB, whatever you choose. Both facts are stated in
+  the dialog rather than left to be discovered; a memory setting that quietly
+  failed to bound memory would be worse than none. Changing the heap needs a
+  restart (it is fixed when the interpreter starts), so the button says so, and
+  warns that restarting clears the simulator's files exactly as Stop does.
+
 - **A refactoring for the WiFi trap that only bites on the second Run** (#871).
   Pressing Run does a soft reboot, which re-runs your file — but a soft reboot
   does not reset the ESP32's radio, so a station left mid-connect by the previous

@@ -3,12 +3,14 @@ import { scratchBlock } from '../../shared/device-scratch'
 import { VIRTUAL_PORT_PATH } from '../../shared/virtual-device'
 import { MicroPythonRuntime, type ReplRuntime } from './MicroPythonRuntime'
 import { isProbeCode, simulateProbeResponse, simulatedTelemetryFrame } from '../../shared/simulation'
+import { clampSimHeapBytes, SIM_HEAP_DEFAULT_BYTES } from '../../shared/sim-memory'
 import type { RuntimeInfo } from '../../shared/dialect'
 import type {
   ConnectionState,
   DeviceStatus,
   DirEntry,
   ExecResult,
+  SimMemoryState,
   SnakieDevice,
   StatResult
 } from './types'
@@ -54,6 +56,10 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
   private readonly runtime: ReplRuntime
   /** Latest control payload per target (for inspection / future feedback). */
   private readonly control = new Map<string, string>()
+  /** GC heap the NEXT boot will use (#901) — set from the console's cog. */
+  private heapBytes = SIM_HEAP_DEFAULT_BYTES
+  /** GC heap the LIVE interpreter actually started with; null when not running. */
+  private bootedHeapBytes: number | null = null
 
   constructor(runtime: ReplRuntime = new MicroPythonRuntime()) {
     super()
@@ -86,16 +92,32 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
     return this.state === 'connected'
   }
 
+  /**
+   * The simulated board's heap (#901). `setMemory` only names what the NEXT boot
+   * will use: the heap is fixed at `mp_js_init`, so it cannot be applied to a
+   * running interpreter — the caller restarts the simulator to take it up.
+   */
+  setMemory(bytes: number): void {
+    this.heapBytes = clampSimHeapBytes(bytes)
+  }
+
+  getMemory(): SimMemoryState {
+    return { configured: this.heapBytes, booted: this.bootedHeapBytes }
+  }
+
   async connect(): Promise<void> {
     if (this.state === 'connected') return
     // Mimic the real flow: a brief "connecting" then "connected".
     this.setState('connecting')
     try {
       // Boot the interpreter; its banner + prompt stream out via `data`.
-      await this.runtime.init((chunk) => this.emit('data', chunk))
+      await this.runtime.init((chunk) => this.emit('data', chunk), this.heapBytes)
+      this.bootedHeapBytes = this.heapBytes
     } catch (err) {
       // The REPL couldn't start — still connect so the instruments + Board
       // Viewer work; just print a notice instead of a live Python prompt.
+      // No interpreter came up, so no heap was chosen — don't claim one.
+      this.bootedHeapBytes = null
       const reason = err instanceof Error ? err.message : String(err)
       this.emit(
         'data',
@@ -113,6 +135,7 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
   async disconnect(): Promise<void> {
     this.stopTelemetry()
     this.control.clear()
+    this.bootedHeapBytes = null
     this.runtime.dispose()
     if (this.state !== 'disconnected') this.setState('disconnected')
   }

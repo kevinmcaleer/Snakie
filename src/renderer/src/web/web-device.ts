@@ -18,6 +18,7 @@ import { WorkerMicroPythonRuntime } from './worker-runtime'
 import { scratchBlock } from '../../../shared/device-scratch'
 import { VIRTUAL_PORT_PATH, VIRTUAL_PORT_LABEL } from '../../../shared/virtual-device'
 import { isProbeCode, simulateProbeResponse, simulatedTelemetryFrame } from '../../../shared/simulation'
+import { clampSimHeapBytes, SIM_HEAP_DEFAULT_BYTES } from '../../../shared/sim-memory'
 import type { RuntimeInfo } from '../../../shared/dialect'
 
 /** How often the simulated board "prints" a telemetry frame (matches the desktop sim). */
@@ -81,6 +82,11 @@ export function createWebDeviceApi(): Record<string, unknown> {
   // radar animate on the web sim with no hardware or running program.
   let tick = 0
   let telemetry: ReturnType<typeof setInterval> | null = null
+  // The GC heap the NEXT boot uses, and the one the LIVE interpreter started
+  // with (#901) — the twin of the desktop SimulatedDevice's pair. They differ
+  // exactly while a restart is owed, because the heap is fixed at `mp_js_init`.
+  let heapBytes = SIM_HEAP_DEFAULT_BYTES
+  let bootedHeapBytes: number | null = null
 
   const emitData = (chunk: Uint8Array): void => dataSubs.forEach((cb) => cb(chunk))
 
@@ -121,8 +127,11 @@ export function createWebDeviceApi(): Record<string, unknown> {
       setState('connecting')
       runtime = new WorkerMicroPythonRuntime()
       try {
-        await runtime.init(emitData)
+        await runtime.init(emitData, heapBytes)
+        bootedHeapBytes = heapBytes
       } catch (err) {
+        // No interpreter came up, so no heap was chosen — don't claim one.
+        bootedHeapBytes = null
         emitData(
           enc.encode(
             `\r\nSimulated device — Python REPL unavailable (${String(err)}).\r\n>>> `
@@ -133,8 +142,16 @@ export function createWebDeviceApi(): Record<string, unknown> {
       startTelemetry()
     },
 
+    setSimMemory: async (bytes: number) => {
+      heapBytes = clampSimHeapBytes(bytes)
+      return { configured: heapBytes, booted: bootedHeapBytes }
+    },
+
+    getSimMemory: async () => ({ configured: heapBytes, booted: bootedHeapBytes }),
+
     disconnect: async () => {
       stopTelemetry()
+      bootedHeapBytes = null
       runtime?.dispose()
       runtime = null
       if (state !== 'disconnected') setState('disconnected')

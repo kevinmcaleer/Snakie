@@ -56,6 +56,7 @@ export type {
   ExecResult,
   DirEntry,
   StatResult,
+  SimMemoryState,
   IpcResult
 } from '../main/device/types'
 

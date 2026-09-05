@@ -26,9 +26,14 @@ export class WorkerMicroPythonRuntime {
   private readyReject: ((err: Error) => void) | null = null
   /** In-flight feed/run count — >0 means the interpreter is running. */
   private busy = 0
+  /** GC heap for every spawn, including the Stop reboot (#901). */
+  private heapBytes: number | undefined
 
-  async init(onOutput: (chunk: Uint8Array) => void): Promise<void> {
+  /** `heapBytes` is the GC heap the interpreter starts with (#901) — remembered,
+   *  so the reboot a Stop performs comes back with the heap the user asked for. */
+  async init(onOutput: (chunk: Uint8Array) => void, heapBytes?: number): Promise<void> {
     this.onOutput = onOutput
+    this.heapBytes = heapBytes
     await this.spawn()
   }
 
@@ -54,7 +59,7 @@ export class WorkerMicroPythonRuntime {
       this.readyResolve = res
       this.readyReject = rej
     })
-    worker.postMessage({ type: 'init' })
+    worker.postMessage({ type: 'init', heapBytes: this.heapBytes })
     return ready
   }
 
