@@ -1345,7 +1345,17 @@ const workspace = {
   folder: (): Promise<string | null> => ipcRenderer.invoke('workspace:folder')
 }
 
+/**
+ * The published board index (#893) — "newer than what shipped", fetched here
+ * because the renderer's CSP forbids outbound requests. Null on any failure;
+ * the renderer keeps its bundled seed.
+ */
+const boards = {
+  fetchIndex: (): Promise<unknown | null> => unwrap(ipcRenderer.invoke('boards:fetchIndex'))
+}
+
 const api = {
+  boards,
   /** Example round-trip channel used to prove the bridge works. */
   ping: (): Promise<string> => ipcRenderer.invoke('ping'),
   /** The application version (from package.json), shown in the status bar. */
