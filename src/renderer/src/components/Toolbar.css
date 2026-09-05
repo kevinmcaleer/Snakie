@@ -1,9 +1,9 @@
 /*
  * Toolbar.css — small additions for the file-action icon group placed to the
- * LEFT of the Run button (New File / Open Folder / Save), plus the vertical
- * divider separating it from the Run/Stop group. Reuses the shared `.btn`
- * family from index.css; this only adds an icon-button sizing variant and the
- * divider so the shared stylesheet stays untouched.
+ * LEFT of the Run button (New File / Save), plus the vertical divider separating
+ * it from the Run/Stop group. Reuses the shared `.btn` family from index.css;
+ * this only adds an icon-button sizing variant and the divider so the shared
+ * stylesheet stays untouched.
  */
 
 .toolbar__divider {
@@ -35,8 +35,9 @@
   color: #3a7a34;
 }
 
-/* File-action group (New / Open / Save). The Skeuomorph skin fuses these into a
- * single segmented control; other themes keep them as spaced icon buttons. */
+/* File-action group (New / Save). Open Folder moved to the Local Files panel it
+ * acts on (#882). The Skeuomorph skin fuses these into a single segmented
+ * control; other themes keep them as spaced icon buttons. */
 .toolbar__seg {
   display: flex;
   align-items: center;

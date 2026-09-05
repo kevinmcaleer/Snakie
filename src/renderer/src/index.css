@@ -299,7 +299,7 @@
   text-shadow: 0 1px 0 #fff;
 }
 
-/* New / Open / Save fuse into one brushed-metal segmented control (the internal
+/* New / Save fuse into one brushed-metal segmented control (the internal
  * dividers were intentionally removed in the refined concept). */
 :root[data-theme='skeuomorph'] .toolbar__seg {
   gap: 0;
@@ -332,10 +332,6 @@
 :root[data-theme='skeuomorph'] .toolbar__seg .btn:active:not(:disabled) {
   transform: none;
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.22);
-}
-
-:root[data-theme='skeuomorph'] .toolbar__seg .toolbar__seg-btn--open {
-  color: #9a7b3a;
 }
 
 /* --- Buttons: glossy bevelled pills -------------------------------------- */
@@ -1023,7 +1019,7 @@
   text-shadow: 0 1px 0 #000;
 }
 
-/* New / Open / Save: one dark brushed-metal segmented control. */
+/* New / Save: one dark brushed-metal segmented control. */
 :root[data-theme='dark'] .toolbar__seg {
   gap: 0;
   border-radius: 9px;
@@ -1055,10 +1051,6 @@
 :root[data-theme='dark'] .toolbar__seg .btn:active:not(:disabled) {
   transform: none;
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
-}
-
-:root[data-theme='dark'] .toolbar__seg .toolbar__seg-btn--open {
-  color: #e3bd6a;
 }
 
 /* --- Buttons: glossy bevelled dark pills --------------------------------- */

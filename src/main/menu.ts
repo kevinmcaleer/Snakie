@@ -6,12 +6,16 @@ import { app, Menu, type MenuItemConstructorOptions } from 'electron'
  * Snakie previously relied on Electron's default menu (and `autoHideMenuBar`).
  * To add a "Check for Updates…" command we build an explicit menu from the
  * standard roles so the normal Edit / View / Window behaviour is preserved —
- * we only insert our own item:
+ * we only insert our own items. "Check for Updates…" goes:
  *
  *   - macOS  → in the app menu (first menu, named after the app), just after
  *              "About Snakie", matching the platform convention;
  *   - Win/Linux → in a Help menu (created here, since the default template has
  *              none) alongside the About item.
+ *
+ * File ▸ Open Folder… (#882) and View ▸ Board View sit where their platform
+ * conventions put them, and carry the accelerators that make them reachable
+ * without hunting for a button.
  *
  * The item invokes the same `checkForUpdatesManual` the clickable status-bar
  * version triggers via IPC — a user-initiated GitHub update check (see
@@ -19,8 +23,14 @@ import { app, Menu, type MenuItemConstructorOptions } from 'electron'
  * GitHub Releases and prompts to download; unpackaged it shows a friendly note.
  *
  * @param onCheckForUpdates handler for the "Check for Updates…" item.
+ * @param onOpenBoard handler for the Board View item.
+ * @param onOpenFolder handler for the File ▸ Open Folder… item.
  */
-export function buildAppMenu(onCheckForUpdates: () => void, onOpenBoard: () => void): Menu {
+export function buildAppMenu(
+  onCheckForUpdates: () => void,
+  onOpenBoard: () => void,
+  onOpenFolder: () => void
+): Menu {
   const isMac = process.platform === 'darwin'
   const appName = app.name
 
@@ -36,6 +46,18 @@ export function buildAppMenu(onCheckForUpdates: () => void, onOpenBoard: () => v
     label: 'Board View',
     accelerator: 'CmdOrCtrl+Shift+B',
     click: () => onOpenBoard()
+  }
+
+  // Open Folder (#882). The main toolbar's folder icon was a duplicate of the
+  // Local Files panel's own, so it went — but that button was ALSO the only
+  // Open Folder reachable when the Files panel is collapsed, or in Electronics /
+  // Build where there is no files panel at all. The action lives here now, with
+  // the accelerator every editor uses for it, so removing the icon removed a
+  // duplicate rather than the ability.
+  const openFolderItem: MenuItemConstructorOptions = {
+    label: 'Open Folder…',
+    accelerator: 'CmdOrCtrl+O',
+    click: () => onOpenFolder()
   }
 
   const template: MenuItemConstructorOptions[] = [
@@ -61,7 +83,7 @@ export function buildAppMenu(onCheckForUpdates: () => void, onOpenBoard: () => v
       : []),
     {
       label: 'File',
-      submenu: [isMac ? { role: 'close' } : { role: 'quit' }]
+      submenu: [openFolderItem, { type: 'separator' }, isMac ? { role: 'close' } : { role: 'quit' }]
     },
     {
       label: 'Edit',
@@ -124,6 +146,10 @@ export function buildAppMenu(onCheckForUpdates: () => void, onOpenBoard: () => v
  * Build the application menu and install it as the global menu. Called once at
  * startup from `app.whenReady`.
  */
-export function setupAppMenu(onCheckForUpdates: () => void, onOpenBoard: () => void): void {
-  Menu.setApplicationMenu(buildAppMenu(onCheckForUpdates, onOpenBoard))
+export function setupAppMenu(
+  onCheckForUpdates: () => void,
+  onOpenBoard: () => void,
+  onOpenFolder: () => void
+): void {
+  Menu.setApplicationMenu(buildAppMenu(onCheckForUpdates, onOpenBoard, onOpenFolder))
 }

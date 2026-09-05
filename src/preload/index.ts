@@ -1331,6 +1331,13 @@ const workspace = {
     ipcRenderer.on('workspace:show', listener)
     return () => ipcRenderer.removeListener('workspace:show', listener)
   },
+  /** Subscribe to the app menu's File ▸ Open Folder… request (#882). The main
+   *  window listens and raises the picker; returns an unsubscribe function. */
+  onOpenFolder: (cb: () => void): (() => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on('workspace:openFolder', listener)
+    return () => ipcRenderer.removeListener('workspace:openFolder', listener)
+  },
   /** Publish the open project folder (the main window, when it changes). */
   setFolder: (folder?: string): void => ipcRenderer.send('workspace:setFolder', folder),
   /** The open project folder, or null when no folder is open. Readable from any

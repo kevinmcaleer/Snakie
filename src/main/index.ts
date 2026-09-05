@@ -14,7 +14,7 @@ import { registerUpdater, checkForUpdatesManual } from './updater'
 import { registerBoardIpc, openBoardView, disposeBoard } from './board'
 import { registerFindIpc, disposeFind } from './find'
 import { registerInstrumentWindowsIpc, disposeInstrumentWindows } from './instrumentWindows'
-import { registerWorkspaceIpc, disposeWorkspace } from './workspace'
+import { registerWorkspaceIpc, requestOpenFolder, disposeWorkspace } from './workspace'
 import { registerConsoleWindowIpc, disposeConsoleWindow } from './consoleWindow'
 import { registerPartsIpc } from './parts/ipc'
 import { registerRobotIpc } from './robot/ipc'
@@ -250,7 +250,10 @@ app.whenReady().then(() => {
   // Build the application menu (issue #89). Its "Check for Updates…" item and
   // the clickable status-bar version both invoke the same user-initiated check.
   // Installed after `registerUpdater` so `checkForUpdatesManual` is assigned.
-  setupAppMenu(() => void checkForUpdatesManual(), openBoardView)
+  // File ▸ Open Folder… relays to the renderer, which owns the picker (#882);
+  // its resolver is captured by `registerWorkspaceIpc` below, and the menu only
+  // fires on a click, so registration order doesn't matter.
+  setupAppMenu(() => void checkForUpdatesManual(), openBoardView, requestOpenFolder)
 
   // Register the LLM (Claude) chat layer. All Anthropic API calls happen in the
   // main process; deltas stream back to whichever window is currently live.
