@@ -719,7 +719,7 @@ export function DeviceFileTree(): JSX.Element {
         </span>
         {/* Icon-only header actions mirroring the local section (issue #104):
             the file-sync toggle (#178), then Refresh, New file, New folder. */}
-        <div className="devicetree__header-actions">
+        <div className="devicetree__header-actions btn-seg" role="toolbar" aria-label="Device file actions">
           {/* One sync toggle: turning it ON syncs the tagged files now AND keeps
               them auto-syncing on every save; turning it OFF stops auto-syncing.
               The icon turns into a green tick for a moment when a sync completes. */}

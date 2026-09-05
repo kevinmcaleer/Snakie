@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The Local files and Device files actions sit in a toolbar** (#865). The
+  refresh / new file / new folder / open folder icons — and the device panel's
+  sync / refresh / new file / new folder — were four loose glyphs floating in a
+  panel header. They are now one segmented control, seamed like the main
+  toolbar's New / New folder / Open group, so a file operation looks like a file
+  operation wherever you are in the app. The fused look had only ever been
+  defined for the skeuomorph skin; this group is one definition that works in
+  both, and each is a labelled `toolbar` for screen readers.
+
+
 ### Fixed
 
 - **Two device writes at once no longer produce empty files** (#850). Each

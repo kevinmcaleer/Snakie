@@ -1839,6 +1839,76 @@ body {
   color: var(--accent);
 }
 
+/* --- Segmented icon group: the "mini toolbar" (#865) ----------------------
+ *
+ * A row of icon buttons fused into one instrument-like control, the way the
+ * main toolbar's New / New folder / Open group already reads. Used by the Local
+ * files and Device files panel headers so their file operations sit in a
+ * toolbar rather than floating as loose glyphs.
+ *
+ * SPECIFICITY, which is the whole difficulty here. The skeuomorph skin styles
+ * `.btn` at `:root[data-theme='skeuomorph'] .btn` — three components — so a
+ * plain `.btn-seg .btn` (two) loses to it and the children keep their pill
+ * borders and gradient inside the group. Each child rule is therefore written
+ * TWICE: once unscoped for the dark skin, once skin-scoped to outrank the
+ * skeuomorph pill. The existing `.toolbar__seg` block does the same thing for
+ * the same reason.
+ *
+ * Both skins are covered deliberately: the toolbar's fused look was only ever
+ * defined under skeuomorph, so the dark theme has three loose buttons. This
+ * group looks the same in both.
+ */
+.btn-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  flex: 0 0 auto;
+  border: var(--border-w) solid var(--shellbd, var(--border));
+  border-radius: var(--radius);
+  background: var(--rail, var(--bg-sunken));
+  /* Clips the children's square corners back to the group's radius. */
+  overflow: hidden;
+}
+
+.btn-seg .btn,
+:root[data-theme='skeuomorph'] .btn-seg .btn {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Hairline between segments. On the button's own left edge rather than a
+   pseudo-element, so it goes when the button does. */
+.btn-seg .btn + .btn,
+:root[data-theme='skeuomorph'] .btn-seg .btn + .btn {
+  border-left: var(--border-w) solid var(--shellbd, var(--border));
+}
+
+.btn-seg .btn:hover:not(:disabled),
+:root[data-theme='skeuomorph'] .btn-seg .btn:hover:not(:disabled) {
+  background: var(--bg-elevated);
+}
+
+.btn-seg .btn:active:not(:disabled),
+:root[data-theme='skeuomorph'] .btn-seg .btn:active:not(:disabled) {
+  transform: none;
+  box-shadow: var(--pixel-shadow-active, inset 0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+/* A toggle inside the group (the device tree's sync switch) shows its ON state
+ * as a filled segment — it cannot use the usual accent BORDER, having none.
+ *
+ * BACKGROUND ONLY, deliberately. `.btn--ghost.is-active` already supplies the
+ * accent text colour, and the device tree overrides that with a green tick /
+ * red cross for the sync outcome using a doubled class (0,2,0). Setting `color`
+ * here would be (0,3,0) and silently win, so a completed sync would stop being
+ * green the moment auto-sync was on — which is most of the time. */
+.btn-seg .btn.is-active,
+:root[data-theme='skeuomorph'] .btn-seg .btn.is-active {
+  background: var(--bg-sunken);
+}
+
 /* Connection status indicator — placeholder, purely visual. */
 .conn-status {
   display: inline-flex;

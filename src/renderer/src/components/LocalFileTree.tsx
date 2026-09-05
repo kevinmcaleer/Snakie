@@ -539,7 +539,11 @@ export function LocalFileTree(): JSX.Element {
             </svg>
           </button>
         </div>
-        <div className="localtree__header-actions localtree__header-actions--center">
+        <div
+          className="localtree__header-actions localtree__header-actions--center btn-seg"
+          role="toolbar"
+          aria-label="File actions"
+        >
           <button
             className="btn btn--ghost btn--icon"
             onClick={() => void refresh()}

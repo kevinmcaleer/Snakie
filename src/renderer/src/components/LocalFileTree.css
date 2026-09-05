@@ -41,15 +41,20 @@
   white-space: nowrap;
 }
 
+/* The file actions are a segmented group now (`.btn-seg` in index.css, #865),
+   which supplies the seams between the buttons — so no `gap` here: a gap would
+   show the group's own background through the middle of the control. */
 .localtree__header-actions {
   display: flex;
   align-items: center;
-  gap: 0.2rem;
   flex: 0 0 auto;
 }
-/* The 4 file-action icons sit CENTRED on their own row. */
+/* The 4 file-action icons sit CENTRED on their own row.
+   `align-self`, not `justify-content`: the header is a COLUMN flex with
+   `align-items: stretch`, so the group would otherwise be pulled to the full
+   panel width and read as a bar rather than a toolbar. */
 .localtree__header-actions--center {
-  justify-content: center;
+  align-self: center;
 }
 /* Collapse-the-Files-panel chevron, pinned top-right. */
 .localtree__collapse {
