@@ -6,6 +6,7 @@ import { registerDeviceIpc, disposeDevice } from './device/ipc'
 import { registerFsIpc } from './fs/ipc'
 import { registerPackagesIpc } from './packages/ipc'
 import { registerModulesIpc } from './modules/ipc'
+import { registerBoardsIpc } from './boards/ipc'
 import { registerLlmIpc } from './llm/ipc'
 import { registerFirmwareIpc } from './firmware/ipc'
 import { registerGitIpc } from './git/ipc'
@@ -228,6 +229,7 @@ app.whenReady().then(() => {
   // `mip` snippet) for the renderer's Modules manager to run over the existing
   // device channel — so only the drivers a robot uses get written to the board.
   registerModulesIpc()
+  registerBoardsIpc()
 
   // Register the firmware-flashing layer (ESP via esptool, RP2040 via UF2 copy).
   // The file dialog is parented to the live window and progress is routed to it.
