@@ -573,13 +573,27 @@
  * that is not plugged in yet, or one detection could not name — the same
  * question asked the other way round, so it sits beside it rather than
  * competing with it. Quieter fill, same size and shape. */
-/* Detect and Board Finder sit on ONE row. `.firmware-detect` is
-   `align-self: flex-start` in a column, so two of them would stack. */
+/* The Board dropdown and its two fill-in buttons on one row (#896).
+ *
+ * The select takes the room and the buttons keep their size, so a long board
+ * name is what gives way rather than "Detect board" wrapping to two lines. They
+ * wrap to their own line before that happens on a narrow dialog. */
 .firmware-detect-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
+}
+
+.firmware-detect-row .firmware-select {
+  flex: 1 1 12rem;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.firmware-detect-row .firmware-detect {
+  flex: 0 0 auto;
 }
 
 .firmware-detect-row .firmware-detect {
@@ -594,4 +608,29 @@
 .firmware-detect--finder:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.14);
   color: #f4f6f8;
+}
+
+/* Family and Model side by side (#896).
+ *
+ * Family narrows Model, so they are one decision in two steps and read as that
+ * when adjacent. `minmax(0, 1fr)` rather than `1fr`: a grid track's default
+ * `min-width: auto` refuses to shrink below its widest option, and some board
+ * names in that list are long enough to push the second column off the dialog. */
+.firmware-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 0.6rem;
+}
+
+.firmware-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* One column on a narrow dialog, where two would leave each too tight to read. */
+@media (max-width: 30rem) {
+  .firmware-cols {
+    grid-template-columns: 1fr;
+  }
 }

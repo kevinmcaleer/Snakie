@@ -6,6 +6,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Board Finder opened behind the flash dialog** (#893). It was given the
+  Parts Catalog's stacking order, which is right for a gallery opened from a
+  panel with nothing above it — but wrong for one opened from a button inside a
+  modal. It rendered behind the dialog that launched it: invisible, unreachable,
+  and with the dialog still modal in front of it.
+
+### Changed
+
+- **The flash dialog reads as fewer decisions** (#896). Detect board and Board
+  Finder have moved to sit beside the Board dropdown rather than floating above
+  the label they fill in — the dropdown is the answer, and those two buttons are
+  the ways of supplying it. Family and Model are now side by side, since Family
+  narrows Model and they are one decision made in two steps; stacked, they read
+  as two unrelated questions and made the dialog a row taller for nothing. Both
+  fall back to a single column on a narrow window.
+
 ### Added
 
 - **The boards MicroPython does not build for, and where the numbers come from**
