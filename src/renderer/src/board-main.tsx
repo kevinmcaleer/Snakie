@@ -28,7 +28,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import { BoardGraph } from './components/BoardGraph'
 import { DeviceQueueDialog } from './components/DeviceQueueDialog'
-import { OPEN_PART_EDITOR_EVENT, PARTS_CHANGED_EVENT, type OpenPartEditorDetail } from './components/PartsPanel'
+import {
+  OPEN_PART_CATALOG_EVENT,
+  OPEN_PART_EDITOR_EVENT,
+  PARTS_CHANGED_EVENT,
+  type OpenPartEditorDetail
+} from './components/PartsPanel'
 import { PartEditor } from './components/PartEditor'
 import { preloadPartImages } from './components/part-image-preload'
 import { blankRobot, type RobotDefinition } from '../../shared/robot'
@@ -154,12 +159,37 @@ function BoardWindowApp(): JSX.Element {
           })
         })
         .catch(() =>
-          setEditing({ libraryId: detail.libraryId, part: detail.part, libraries: [], existingParts: [] })
+          setEditing({
+            libraryId: detail.libraryId,
+            part: detail.part,
+            libraries: [],
+            existingParts: []
+          })
         )
     }
     window.addEventListener(OPEN_PART_EDITOR_EVENT, handler)
     return () => window.removeEventListener(OPEN_PART_EDITOR_EVENT, handler)
   }, [])
+
+  /**
+   * Tools ▸ Parts Catalog / Part Editor, relayed from the MAIN window (#917).
+   *
+   * Those two live here, not there, so the menu's route is: main window asks the
+   * main process, which opens this window if it is not already up and then sends
+   * the tool's name. Here it becomes the same local event a button in this window
+   * would have fired, so there is one way in rather than two.
+   *
+   * The Part Editor opens on nothing in particular — it is the authoring surface,
+   * and which part it edits is chosen inside it — so the catalog is what the menu
+   * can usefully open, and `partEditor` opens the catalog you pick a part from.
+   */
+  useEffect(
+    () =>
+      window.api.board.onOpenTool(() => {
+        window.dispatchEvent(new CustomEvent(OPEN_PART_CATALOG_EVENT))
+      }),
+    []
+  )
 
   // Installed libraries (for the wiring canvas + add-to-project); refresh on save.
   useEffect(() => {
@@ -266,7 +296,8 @@ function BoardWindowApp(): JSX.Element {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key !== 'Escape') return
       const el = document.activeElement as HTMLElement | null
-      if (el && (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA')) return
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA'))
+        return
       if (editing) setEditing(null)
       else window.api.board.close()
     }

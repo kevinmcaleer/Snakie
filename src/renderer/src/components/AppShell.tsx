@@ -52,6 +52,9 @@ import { ShellPanel } from './ShellPanel'
 import { RightPanel } from './RightPanel'
 import { runMenuCommand } from '../lib/menuCommands'
 import { dispatchDeviceAction } from './device-bus'
+import { dispatchOpenTool, onOpenTool } from './tools-bus'
+import { FLASH_BOARD_EVENT } from './board-finder-bus'
+import { BoardFinder } from './BoardFinder'
 import { readRecentFolders } from '../store/workspace'
 import { menuStateFrom } from '../../../shared/menu-commands'
 import { ShortcutSheet } from './ShortcutSheet'
@@ -62,6 +65,7 @@ import { OPEN_SETTINGS_EVENT } from './settingsBus'
 import { OPEN_SPRITE_EDITOR_EVENT, type OpenSpriteEditorDetail } from './sprite-editor-bus'
 import {
   dispatchCloseTab,
+  dispatchOpenFind,
   dispatchOpenHelp,
   HELP_EVENT,
   type HelpEventDetail
@@ -1174,6 +1178,33 @@ export function AppShell(): JSX.Element {
   // whether the sheet is showing.
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
+  /**
+   * The Board Finder on its own (#917).
+   *
+   * It also lives INSIDE the flash dialog, where the pick lands in the dialog
+   * you are already looking at (#896) — unchanged. This is the other door, and
+   * it is mounted HERE rather than in the status bar on purpose: #896 moved the
+   * gallery out of the status bar so there were not two entry points that
+   * disagreed about where a pick lands, and putting one back there would undo
+   * exactly that. The app frame owns a menu-opened modal; the status bar owns
+   * its own dialog.
+   *
+   * The two doors agree about the destination: a pick always ends in the
+   * flasher. From inside, the flasher is mounted and hears it. From here, the
+   * request is retained by the bus, the flasher is asked to open, and it reads
+   * the request as it mounts.
+   */
+  const [finderOpen, setFinderOpen] = useState(false)
+  useEffect(() => onOpenTool('boardFinder', () => setFinderOpen(true)), [])
+  useEffect(() => {
+    const onFlash = (): void => {
+      setFinderOpen(false)
+      dispatchOpenTool('flasher')
+    }
+    window.addEventListener(FLASH_BOARD_EVENT, onFlash)
+    return () => window.removeEventListener(FLASH_BOARD_EVENT, onFlash)
+  }, [])
+
   // --- what File ▸ … needs to know (#915) ------------------------------------
   //
   // Refs, not the values, because the menu subscription is set up once: reading
@@ -1247,7 +1278,21 @@ export function AppShell(): JSX.Element {
           void syncNowRef
             .current()
             .catch(reporter('sync now', { notify: "Couldn't sync to the board." })),
-        showHelp: () => dispatchOpenHelp('')
+        showHelp: () => dispatchOpenHelp(''),
+        // --- Tools (#917) ---------------------------------------------------
+        // The first two are the status bar's; the rest already answer to an
+        // event, which is the one-line case this dispatcher was built for.
+        openFlasher: () => dispatchOpenTool('flasher'),
+        openBoardFinder: () => dispatchOpenTool('boardFinder'),
+        // In the OTHER window. The main process opens it and relays.
+        openPartsCatalog: () =>
+          void window.api.board
+            .openTool('partsCatalog')
+            .catch(reporter('parts catalog', { notify: "Couldn't open the Parts Catalog." })),
+        openSpriteEditor: () =>
+          window.dispatchEvent(new CustomEvent(OPEN_SPRITE_EDITOR_EVENT, { detail: {} })),
+        openFind: () => dispatchOpenFind(false),
+        openSettings: () => window.dispatchEvent(new CustomEvent(OPEN_SETTINGS_EVENT))
       })
     })
     return off
@@ -1640,6 +1685,9 @@ export function AppShell(): JSX.Element {
       )}
 
       {shortcutsOpen && <ShortcutSheet onClose={() => setShortcutsOpen(false)} />}
+      {/* Tools ▸ Board Finder (#917) — the standalone door; the other is inside
+          the flash dialog, and both end a pick in the same place. */}
+      {finderOpen && <BoardFinder onClose={() => setFinderOpen(false)} />}
     </div>
   )
 }

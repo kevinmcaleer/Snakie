@@ -89,8 +89,32 @@ export function flashRequestFor(board: IndexedBoard): BoardFlashRequest | null {
 export function requestFlash(board: IndexedBoard): boolean {
   const detail = flashRequestFor(board)
   if (!detail) return false
+  pending = detail
   window.dispatchEvent(new CustomEvent<BoardFlashRequest>(FLASH_BOARD_EVENT, { detail }))
   return true
+}
+
+/**
+ * The last request, still waiting for a flasher (#917).
+ *
+ * The gallery used to live only INSIDE the flash dialog, so the flasher was
+ * always mounted and could simply listen. Opening the gallery on its own from
+ * Tools breaks that: the pick fires before there is anything to hear it, and the
+ * flasher only opens BECAUSE of the pick.
+ *
+ * So the request is retained as well as announced. A flasher already open hears
+ * the event and clears this; a flasher opening in response reads it on mount and
+ * clears it then. One request, either way, and never twice — which matters,
+ * because applying it twice would silently re-select a board the user had since
+ * changed by hand.
+ */
+let pending: BoardFlashRequest | null = null
+
+/** Take the waiting request, if any. Clears it — a request is used once. */
+export function takePendingFlash(): BoardFlashRequest | null {
+  const held = pending
+  pending = null
+  return held
 }
 
 /**

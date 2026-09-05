@@ -4,6 +4,7 @@ import { useWorkspace } from '../store/workspace'
 import { useConsole } from '../store/console'
 import { useEditorSettings } from '../store/settings'
 import { FirmwareFlasher } from './FirmwareFlasher'
+import { onOpenTool } from './tools-bus'
 import { CoffeeLink } from './CoffeeLink'
 import { updateButtonView } from './updateButton'
 import { liveWarningVisible } from './instrument-host'
@@ -96,6 +97,10 @@ export function StatusBar({
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
 
   const [flasherOpen, setFlasherOpen] = useState(false)
+  // Tools ▸ Firmware Flasher (#917). The status bar owns the dialog, so it opens
+  // it; the menu only asks. It does NOT own the Board Finder — that stays inside
+  // the dialog (#896) and, since #917, in the app frame for the standalone case.
+  useEffect(() => onOpenTool('flasher', () => setFlasherOpen(true)), [])
   // A newer build than the connected device is running — MicroPython (#173) or
   // CircuitPython (#757) — plus dismissal. The update names its own runtime, so
   // the prompt never tells a CircuitPython user about a MicroPython release.

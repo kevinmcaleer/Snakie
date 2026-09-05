@@ -8,6 +8,36 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A Tools menu** (#917, epic #913). Firmware Flasher · Board Finder · Parts
+  Catalog · Sprite Editor · Find & Replace (⌘F) · Settings (⌘,) — all of them
+  reachable until now only by knowing which panel hid the button.
+
+  **The Board Finder is the one worth explaining.** It was two clicks deep behind
+  another tool: the only way in was to open the firmware flasher. #896 put it
+  there deliberately, so a pick lands in the dialog you are already looking at,
+  and that has not changed. But #934 gave it pinouts, photographs and 3-D models,
+  which makes it a reference tool that can start a flash rather than a step
+  inside one — and making someone open a *firmware flasher* to ask "which board
+  is this, and where is GP4" was the wrong shape.
+
+  So it has two doors now, and they agree about the destination: a pick always
+  ends in the flasher. Opened inside it, the flasher is mounted and hears the
+  pick. Opened on its own, the request is retained, the flasher is asked to open,
+  and it reads the request as it mounts — once, and only once, because applying
+  it twice would silently re-select a board you had since changed by hand. The
+  standalone door is the app frame's, **not** the status bar's: #896 moved the
+  gallery out of the status bar precisely so there were not two entry points that
+  disagreed, and putting one back there would have undone that.
+
+  The Parts Catalog lives in the Board Viewer window rather than the main one, so
+  its item opens that window first and then asks it — waiting for the window to
+  finish loading when it had to be created, since a message sent to a renderer
+  that does not exist yet is simply lost. Sprite Editor, Find and Settings reuse
+  the events they already answer to, which is the one-line case the command
+  channel was built for.
+
+### Added
+
 - **A Device menu** (#918, epic #913). Everything you do *to the board* was
   reachable only from the toolbar or the console panel — including Run and Stop,
   the two most-used actions in the app, which had no keyboard route at all.

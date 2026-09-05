@@ -215,6 +215,28 @@ export function registerBoardIpc(getMainWindow: () => BrowserWindow | null): voi
     }
   })
 
+  /**
+   * Relay a tool request to the BOARD VIEWER window, opening it first (#917).
+   *
+   * The Parts Catalog and the Part Editor live in that window, not the main one,
+   * so `Tools ▸ Parts Catalog` from the main window's menu has two steps: make
+   * sure the window exists, then tell it what to show. Opening it is awaited, so
+   * the message cannot arrive before there is a renderer to hear it.
+   */
+  ipcMain.handle('board:tool', (_e, tool: string) => {
+    openBoardView()
+    const win = boardWindow
+    if (!win || win.isDestroyed()) return
+    // A window that has just been created is not ready for a message yet; one
+    // that was already open is. `did-finish-load` has fired for the latter, so
+    // the check is on the contents rather than on which path we came down.
+    if (win.webContents.isLoading()) {
+      win.webContents.once('did-finish-load', () => win.webContents.send('board:tool', tool))
+    } else {
+      win.webContents.send('board:tool', tool)
+    }
+  })
+
   ipcMain.handle('board:listUserBoards', () => readUserBoards())
 
   ipcMain.handle('board:openBoardsFolder', async () => {
