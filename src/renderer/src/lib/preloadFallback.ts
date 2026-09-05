@@ -207,6 +207,12 @@ if (!w.api) {
       },
       folder: (): Promise<string | null> => Promise.resolve(workspaceFolder ?? null)
     },
+    /** The published board index (#893). Null outside Electron — the renderer
+     *  has a complete BUNDLED seed served as a static asset, so a missing fetch
+     *  costs "boards added since this release", not the gallery. */
+    boards: {
+      fetchIndex: P(null)
+    },
     board: {
       open: P(undefined),
       close: noop,
