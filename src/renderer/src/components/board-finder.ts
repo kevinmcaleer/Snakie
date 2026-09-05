@@ -199,17 +199,85 @@ export function vendorRuns(boards: readonly IndexedBoard[]): VendorRun[] {
 // ---------------------------------------------------------------------------
 
 /**
- * The two letters a photo-less board shows instead (8 of the 225 have no thumb).
+ * A BOARD WITH NO PHOTOGRAPH (#931) — 8 of the 225.
+ * ---------------------------------------------------------------------------
+ * Seven of the eight DO name a picture upstream; those URLs 404, because
+ * `board.json` names a file micropython.org's media repo never published at
+ * that path. So this is not a fetch to fix — there is no photograph, and the
+ * gallery has to draw something in its place.
  *
- * Initials of the first two words, so `Feather RP2350` reads `FR` rather than
- * `FE` — a vendor's range is mostly one-word-apart, and the second word is what
- * tells two of them apart. Falls back to the board id, which is never empty.
+ * What it draws is a board: a PCB outline with headers, mounting holes and a
+ * chip in the middle, with the chip MARKED with the board's MCU. Three things
+ * that ruled out the alternatives:
+ *
+ *   - it must not read as a BROKEN IMAGE or a spinner. Both say something went
+ *     wrong here, and nothing did — nobody published a photo, which is a fact
+ *     about the catalogue and not a fault in the app;
+ *   - it must not REPEAT THE CARD. This replaces the board's initials, which
+ *     were the product name abbreviated and printed next to the product name;
+ *     the card already prints the maker and the name (#927) and nothing else,
+ *     so a placeholder saying either spends the space twice;
+ *   - it must say something the card cannot. #927 took the chip line OFF the
+ *     resting card, so on the eight that land here the MCU is stated nowhere
+ *     until the preview opens. A drawn chip is exactly where a chip's name
+ *     goes, so the one fact worth recovering has a place to sit.
+ *
+ * That last point is also why the drawing is LABELLED rather than
+ * `aria-hidden`, which is what the initials were — see {@link noPhotoLabel}.
  */
-export function boardInitials(board: IndexedBoard): string {
-  const words = board.product.trim().split(/\s+/).filter(Boolean)
-  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase()
-  const source = words[0] || board.id
-  return source.slice(0, 2).toUpperCase()
+
+/**
+ * How many characters fit on one line of the drawn chip.
+ *
+ * Nine, because `stm32f411` is the longest MCU in the catalogue that names a
+ * chip FAMILY, and a family is what 223 of the 225 boards carry. The two that
+ * do not carry a full order code (`PSE846GPS2DBZC4`, `AE722F80F55D5XX`), and
+ * one of them — Infineon's KIT_PSE84_AI — is a board with no photograph.
+ */
+const SILKSCREEN_COLUMNS = 9
+
+/**
+ * What is printed on the drawn chip: the board's MCU, in one line or two.
+ *
+ * UPPERCASE, because a package is marked in uppercase and because the
+ * lowercase `rp2040` upstream publishes is the exact string the Specification
+ * list prints. This has to read as a marking on a chip; a data field in a
+ * picture frame would just be the initials problem again in longer words.
+ *
+ * TWO LINES for an order code too long to fit, which is what the marking on a
+ * real package does with one — and the split is by character count rather than
+ * at some meaningful boundary because a part number has none. Two lines hold
+ * 22 characters at the size they are drawn, against a longest-in-catalogue of
+ * 15, so nothing overflows the package.
+ *
+ * EMPTY when upstream names no MCU. A blank package is honest about knowing
+ * nothing; the word "unknown" silkscreened on a chip is a caption for a fault,
+ * which is the reading this whole placeholder exists to avoid.
+ */
+export function chipSilkscreen(board: IndexedBoard): string[] {
+  const mcu = board.mcu.trim().toUpperCase()
+  if (!mcu) return []
+  if (mcu.length <= SILKSCREEN_COLUMNS) return [mcu]
+  const split = Math.ceil(mcu.length / 2)
+  return [mcu.slice(0, split), mcu.slice(split)]
+}
+
+/**
+ * What a screen reader hears where the photograph would be.
+ *
+ * The initials this replaces were `aria-hidden`, and rightly: they were the
+ * product name shortened, sitting beside the product name. The drawing is not,
+ * because it carries the MCU, and on a resting card that is a fact stated
+ * nowhere else. It also says the thing a sighted reader gets from the drawing
+ * being a drawing — that there is no photograph of this board — which no text
+ * on the card says either.
+ *
+ * The MCU goes in as upstream spells it, not as the chip is marked: the
+ * uppercasing is a drawing decision, and `RP2040` risks being spelt out.
+ */
+export function noPhotoLabel(board: IndexedBoard): string {
+  const mcu = board.mcu.trim()
+  return mcu ? `No photo published, ${mcu}` : 'No photo published'
 }
 
 /**

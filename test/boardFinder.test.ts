@@ -8,11 +8,12 @@ import {
   UNKNOWN_VENDOR,
   activeFilterChips,
   boardFacts,
-  boardInitials,
   buildLabel,
+  chipSilkscreen,
   firmwareSummary,
   isFiltering,
   memoryThresholdLabel,
+  noPhotoLabel,
   peekFacts,
   toggleChip,
   unsizedNotice,
@@ -195,19 +196,56 @@ describe('vendorRuns (#927)', () => {
   })
 })
 
-describe('boardInitials', () => {
-  it('takes one letter from each of the first two words', () => {
-    // Not the first two letters: an Adafruit range is mostly "Feather …", so
-    // 'FE' would be identical across a dozen boards.
-    expect(boardInitials(board({ product: 'Feather RP2350' }))).toBe('FR')
+describe('the boards with no photograph (#931)', () => {
+  describe('chipSilkscreen', () => {
+    it('marks the drawn chip with the MCU, as a package is marked', () => {
+      // Uppercase, because this has to read as a marking rather than as the
+      // Specification list's `rp2040` shown twice.
+      expect(chipSilkscreen(board({ mcu: 'rp2040' }))).toEqual(['RP2040'])
+    })
+
+    it('keeps the longest chip FAMILY on one line', () => {
+      // `stm32f411` is nine characters, which is the width the package is drawn
+      // to hold. Wrapping this one would wrap most of the STM32 catalogue.
+      expect(chipSilkscreen(board({ mcu: 'stm32f411' }))).toEqual(['STM32F411'])
+    })
+
+    it('wraps a full order code onto a second line', () => {
+      // Infineon's KIT_PSE84_AI, which is both one of the two boards carrying an
+      // order code instead of a family AND one of the eight with no photo — so
+      // this is the case that actually renders, not a hypothetical.
+      expect(chipSilkscreen(board({ mcu: 'PSE846GPS2DBZC4' }))).toEqual(['PSE846GP', 'S2DBZC4'])
+      // Alif's, the other one. Two lines, neither wider than the package.
+      const alif = chipSilkscreen(board({ mcu: 'AE722F80F55D5XX' }))
+      expect(alif).toHaveLength(2)
+      for (const line of alif) expect(line.length).toBeLessThanOrEqual(9)
+    })
+
+    it('leaves the package blank rather than marking it "unknown"', () => {
+      // A caption where a part number goes is how a placeholder starts reading
+      // as a fault, which is the whole thing this drawing exists to avoid.
+      expect(chipSilkscreen(board({ mcu: '' }))).toEqual([])
+      expect(chipSilkscreen(board({ mcu: '   ' }))).toEqual([])
+    })
   })
 
-  it('falls back to the first two letters of a single-word product', () => {
-    expect(boardInitials(board({ product: 'Pico' }))).toBe('PI')
-  })
+  describe('noPhotoLabel', () => {
+    it('says there is no photograph, and names the chip', () => {
+      // The drawing is NOT `aria-hidden`, unlike the initials it replaces: it
+      // carries the MCU, and a resting card has said nothing about the chip
+      // since #927.
+      expect(noPhotoLabel(board({ mcu: 'rp2350' }))).toBe('No photo published, rp2350')
+    })
 
-  it('falls back to the board id when the product name is empty', () => {
-    expect(boardInitials(board({ product: '', id: 'ESP32_GENERIC' }))).toBe('ES')
+    it('spells the chip as upstream does, not as the package is marked', () => {
+      // The uppercasing is a drawing decision; `RP2040` read aloud risks being
+      // spelt out letter by letter.
+      expect(noPhotoLabel(board({ mcu: 'esp32s3' }))).not.toContain('ESP32S3')
+    })
+
+    it('still says why there is no picture when upstream names no chip', () => {
+      expect(noPhotoLabel(board({ mcu: '' }))).toBe('No photo published')
+    })
   })
 })
 

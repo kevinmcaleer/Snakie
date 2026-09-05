@@ -362,6 +362,22 @@ describe('the generated seed that actually ships', () => {
     expect(previews).toEqual([])
   })
 
+  it('names no picture for a board whose picture could not be fetched (#931)', () => {
+    // Seven boards name an image in upstream's `board.json` whose URL 404s —
+    // the media repo never published a file at that path. The generator used to
+    // record the URL regardless, which is a dead link waiting for whatever
+    // renders `image` next; it drops it now, and this is what notices if that
+    // regresses.
+    //
+    // It would also trip on a transport blip during a refresh, and that is the
+    // safe side to fail on: the workflow runs this BEFORE it commits, so a run
+    // that could not reach a board's photo leaves yesterday's good index in
+    // place rather than shipping one that quietly lost a picture.
+    const raw = JSON.parse(readFileSync('src/renderer/public/boards/boards.json', 'utf8'))
+    const dead = raw.boards.filter((b) => !b.thumb && b.image).map((b) => b.id)
+    expect(dead).toEqual([])
+  })
+
   /**
    * This used to assert that NO flash or RAM figure appeared at all, on the
    * grounds that upstream publishes none and anything that showed up must have

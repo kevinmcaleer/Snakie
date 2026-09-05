@@ -32,11 +32,12 @@ import {
   MEMORY_THRESHOLDS,
   RUNTIME_CAVEAT,
   boardFacts,
-  boardInitials,
   buildLabel,
+  chipSilkscreen,
   firmwareSummary,
   isFiltering,
   memoryThresholdLabel,
+  noPhotoLabel,
   peekFacts,
   toggleChip,
   toggleRuntime,
@@ -632,9 +633,7 @@ function BoardPeek({
         {src ? (
           <img src={src} alt="" loading="lazy" draggable={false} />
         ) : (
-          <span className="bfind__noimg" aria-hidden="true">
-            {boardInitials(board)}
-          </span>
+          <BoardNoPhoto board={board} />
         )}
       </div>
       <div className="bfind__peek-body">
@@ -670,6 +669,79 @@ function BoardPeek({
         </button>
       </div>
     </div>
+  )
+}
+
+/**
+ * What stands in for the photograph on the eight boards that have none (#931).
+ *
+ * A drawn board — outline, headers, mounting holes, and a chip marked with the
+ * board's MCU. `board-finder.ts` argues the choice at length: why not a broken
+ * frame, why not the initials this replaces, and why the marking is the one
+ * thing here worth reading. This function is only how it is drawn.
+ *
+ * ONE COMPONENT, THREE WELLS. It goes in the card, the hover preview and the
+ * details, which are 166, 186 and up to 320 CSS pixels wide. It is one SVG on
+ * one `0 0 160 120` grid rather than three drawings, because the placeholder it
+ * replaces was three copies of an idea and they had already drifted — the
+ * details page inherited a 22px monogram sized for a tile. Everything here
+ * scales with the box; `BoardFinder.css` caps how far, and says why.
+ *
+ * It is LINE ART, not a rendered board. These sit in a grid of real product
+ * photographs, and a plausible green PCB among them would be read as a
+ * photograph of some board — which is worse than an obvious stand-in. Drawn in
+ * the gallery's own dim ink, it is unmistakably a diagram.
+ */
+function BoardNoPhoto({ board }: { board: IndexedBoard }): JSX.Element {
+  const lines = chipSilkscreen(board)
+  const two = lines.length > 1
+  return (
+    <svg className="bfind__noimg" viewBox="0 0 160 120" role="img" aria-label={noPhotoLabel(board)}>
+      {/* The connector, off the left edge — the cue that says "development
+          board" before any of the detail is legible at tile size. */}
+      <rect className="bfind__noimg-port" x="1" y="51" width="17" height="18" rx="3" />
+      <rect className="bfind__noimg-pcb" x="10" y="16" width="140" height="88" rx="8" />
+      {[21, 139].map((x) =>
+        [27, 93].map((y) => (
+          <circle className="bfind__noimg-hole" key={`${x}-${y}`} cx={x} cy={y} r="3.2" />
+        ))
+      )}
+      {/* Two header rows. Ten a side rather than a real pin count: this is not
+          any particular board, and a countable row would invite counting. */}
+      {[19.5, 95.5].map((y) =>
+        Array.from({ length: 10 }, (_, i) => (
+          <rect
+            className="bfind__noimg-pad"
+            key={`${y}-${i}`}
+            x={31 + i * 10}
+            y={y}
+            width="5"
+            height="5"
+            rx="1.2"
+          />
+        ))
+      )}
+      {[48, 55, 62, 69].map((y) => (
+        <g className="bfind__noimg-leg" key={y}>
+          <line x1="44" y1={y} x2="49" y2={y} />
+          <line x1="111" y1={y} x2="116" y2={y} />
+        </g>
+      ))}
+      <rect className="bfind__noimg-chip" x="49" y="42" width="62" height="36" rx="3" />
+      {/* Pin 1, in the corner it is always in. */}
+      <circle className="bfind__noimg-pin1" cx="54.5" cy="47.5" r="2.2" />
+      {lines.map((line, i) => (
+        <text
+          className={`bfind__noimg-mark${two ? ' is-two' : ''}`}
+          key={line}
+          x="80"
+          y={two ? 57 + i * 10 : 63.6}
+          textAnchor="middle"
+        >
+          {line}
+        </text>
+      ))}
+    </svg>
   )
 }
 
@@ -716,9 +788,7 @@ function BoardCard({
           // board — announcing it twice is noise, not access.
           <img src={src} alt="" loading="lazy" draggable={false} />
         ) : (
-          <span className="bfind__noimg" aria-hidden="true">
-            {boardInitials(board)}
-          </span>
+          <BoardNoPhoto board={board} />
         )}
       </span>
       <span className="bfind__card-body">
@@ -787,9 +857,7 @@ function BoardDetails({
           {src ? (
             <img src={src} alt={`${board.vendor} ${board.product}`} loading="lazy" />
           ) : (
-            <span className="bfind__noimg" aria-hidden="true">
-              {boardInitials(board)}
-            </span>
+            <BoardNoPhoto board={board} />
           )}
         </div>
 

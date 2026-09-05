@@ -8,6 +8,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **A board with no photograph gets a drawn board, not its initials** (#931).
+  Eight of the 225 have no picture — seven of them name one upstream, and those
+  URLs 404, because MicroPython's media repository never published a file at
+  that path. So there is nothing to fetch, and the tile has to draw something.
+  It used to draw the product name's two initials, in a well beside the product
+  name, at three different sizes in three different places. It now draws a
+  board: an outline with headers, mounting holes and a chip in the middle, with
+  the chip marked with the board's MCU. That marking is the point — since #927
+  the resting card names only the maker and the board, so on these eight the
+  chip was stated nowhere until the preview opened, and a chip is exactly where
+  a chip's name belongs. It is line art rather than a plausible green PCB, so
+  that among 217 real product photographs it can only be read as a stand-in; and
+  it is one drawing scaling across the card, the preview and the details rather
+  than three that can drift apart. Screen readers get it as "No photo published"
+  plus the chip, where the initials were hidden from them entirely — rightly,
+  since they said nothing the card did not already print.
+
 - **The Board Finder fills its rows, and marks each manufacturer with a tint**
   (#927). Every maker had its own shelf — its own heading, its own grid, its own
   fresh row. With 54 makers and a median of two boards each, that was 54 headings
@@ -53,6 +70,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   code editor.
 
 ### Fixed
+
+- **The board index recorded picture URLs that 404** (#931). When upstream names
+  an image its media repository does not publish, the generator noticed — that
+  is why those boards have no thumbnail — but wrote the dead URL into the index
+  anyway, waiting for whatever renders it next. It now drops the URL when the
+  fetch comes back "not found", and keeps it when the failure was the network or
+  a machine with no image resizer, where the picture is presumably still there.
+  Seven boards in the shipped index lose a link to nowhere.
 
 - **The Board Finder opened behind the flash dialog** (#893). It was given the
   Parts Catalog's stacking order, which is right for a gallery opened from a
