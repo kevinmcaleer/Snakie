@@ -8,6 +8,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Two installs offered at once no longer race each other** (#837). A freshly
+  connected board can put several offers on screen together — the instruments
+  library, the missing-library banner, the Board View's driver banner, the
+  Modules and Packages panels — and accepting a second one started it there and
+  then, on top of the first. The individual writes were already safe (#850), but
+  the two operations still took turns at the port, each reporting progress over
+  the other, and the app showed a state no single install was in. Every device
+  file operation now goes through one queue: the first runs, the rest wait their
+  turn, and two offers of the same driver install it once rather than twice.
+  While the board is busy, a modal says what is running and what is queued
+  behind it, so the app cannot look ready for work it would refuse — with a
+  Cancel that hands you straight back to the interface, without waiting for a
+  board that has stopped answering. It waits a moment before appearing, so a
+  quick one-file upload does not flash a dialog up and straight back down, and
+  it stays put on failure. The folder copy's per-file tick list from #848 is now
+  the queue's view of that one operation, so there is one progress dialog rather
+  than two that could disagree about the same board.
+
 - **An interrupted install no longer leaves a broken file on the board** (#864).
   Driver and package installs wrote each file straight to its final name, so
   stopping part-way — a disconnect, a cancel, an error on any one file — left a

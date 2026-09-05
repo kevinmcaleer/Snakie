@@ -1,5 +1,5 @@
 /*
- * Folder-transfer progress dialog (#848).
+ * Folder-transfer / device-queue progress dialog (#848, #837).
  *
  * Same overlay treatment as PromptModal, and every colour comes from a theme
  * token so it reads correctly in BOTH the dark and skeuomorph skins — a dialog
@@ -88,6 +88,12 @@
   gap: 0.45rem;
   padding: 0.12rem 0.55rem;
   color: var(--text-muted);
+}
+
+/* A queued task's own steps (#837) — the files inside a folder copy. Indented
+   so the list reads as a tree rather than a flat run of unrelated names. */
+.transfer__row--sub .transfer__name {
+  padding-left: 1rem;
 }
 
 .transfer__row--copying {

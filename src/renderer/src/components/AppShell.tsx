@@ -72,6 +72,7 @@ import {
   type RequiredModule
 } from './part-imports'
 import { installPartDriver } from './driver-install'
+import { enqueueDeviceTask } from '../lib/device-queue'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useSkeletonSync } from '../hooks/useSkeletonSync'
 import {
@@ -720,30 +721,39 @@ export function AppShell(): JSX.Element {
     setLibError(null)
     void (async (): Promise<void> => {
       try {
-        const source = await window.api.instruments.librarySource()
-        if (!source) throw new Error('library source unavailable')
-        await window.api.device.mkdir(INSTRUMENTS_LIB_DIR).catch(() => undefined)
-        await window.api.device.writeFile(INSTRUMENTS_LIB_PATH, source)
-        // A legacy copy at the FS root (`/instruments.py`) shadows `/lib` on
-        // MicroPython's sys.path, so updating only `/lib` would leave the OLD
-        // root copy being imported. If one is there, overwrite it with the same
-        // new source so `import instruments` gets the current code wherever it
-        // resolves from.
-        const rootShadow = await window.api.device
-          .stat(INSTRUMENTS_ROOT_PATH)
-          .then(() => true)
-          .catch(() => false)
-        if (rootShadow) {
-          await window.api.device.writeFile(INSTRUMENTS_ROOT_PATH, source)
-        }
-        // Install the `snakie.py` hardware umbrella beside it (best-effort — an
-        // older bundle without it just skips this), so `from snakie import Servo`
-        // works and a vendor `servo` module can't shadow ours.
-        const umbrella = await window.api.instruments.umbrellaSource().catch(() => '')
-        if (umbrella) {
-          await window.api.device.writeFile(SNAKIE_LIB_PATH, umbrella)
-          if (rootShadow) await window.api.device.writeFile(SNAKIE_ROOT_PATH, umbrella)
-        }
+        // Queued (#837): this banner and the missing-library banner below can be
+        // on screen together for a freshly connected board, and taking both
+        // offers used to start both writes at once.
+        await enqueueDeviceTask({
+          key: 'instruments-lib',
+          label: 'Installing the instruments library',
+          run: async (): Promise<void> => {
+            const source = await window.api.instruments.librarySource()
+            if (!source) throw new Error('library source unavailable')
+            await window.api.device.mkdir(INSTRUMENTS_LIB_DIR).catch(() => undefined)
+            await window.api.device.writeFile(INSTRUMENTS_LIB_PATH, source)
+            // A legacy copy at the FS root (`/instruments.py`) shadows `/lib` on
+            // MicroPython's sys.path, so updating only `/lib` would leave the OLD
+            // root copy being imported. If one is there, overwrite it with the same
+            // new source so `import instruments` gets the current code wherever it
+            // resolves from.
+            const rootShadow = await window.api.device
+              .stat(INSTRUMENTS_ROOT_PATH)
+              .then(() => true)
+              .catch(() => false)
+            if (rootShadow) {
+              await window.api.device.writeFile(INSTRUMENTS_ROOT_PATH, source)
+            }
+            // Install the `snakie.py` hardware umbrella beside it (best-effort — an
+            // older bundle without it just skips this), so `from snakie import Servo`
+            // works and a vendor `servo` module can't shadow ours.
+            const umbrella = await window.api.instruments.umbrellaSource().catch(() => '')
+            if (umbrella) {
+              await window.api.device.writeFile(SNAKIE_LIB_PATH, umbrella)
+              if (rootShadow) await window.api.device.writeFile(SNAKIE_ROOT_PATH, umbrella)
+            }
+          }
+        })
         setLibState('present')
         // The device's files changed — tell every window so e.g. the Device
         // Files tree re-lists and shows the fresh /lib/instruments.py.
@@ -941,7 +951,13 @@ export function AppShell(): JSX.Element {
               if (!res.ok) throw new Error(res.message || `Failed to install ${t.module}`)
             }
           } else {
-            const res = await window.api.packages.install(t.url as string)
+            // Queued like every other device file operation (#837) — the driver
+            // route above already is, via `installPartDriver`.
+            const res = await enqueueDeviceTask({
+              key: `package:${t.url as string}`,
+              label: `Installing ${t.module}`,
+              run: () => window.api.packages.install(t.url as string)
+            })
             if (!res.ok) throw new Error(res.log || `Failed to install ${t.module}`)
           }
         }

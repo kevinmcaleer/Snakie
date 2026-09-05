@@ -12,6 +12,7 @@ import { encodePartDrag } from './part-drag'
 import { availableToInstall } from '../../../shared/part-registry'
 import type { BundledPartStatus } from '../../../shared/bundled-seed'
 import { moduleById, type ModuleDef } from '../../../shared/modules-catalog'
+import { enqueueDeviceTask } from '../lib/device-queue'
 import type { SuggestedModule } from '../../../shared/part'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import type {
@@ -916,7 +917,13 @@ function WorksWith({ suggests }: { suggests: SuggestedModule[] }): JSX.Element |
   const install = useCallback(async (def: ModuleDef): Promise<void> => {
     setBusy(def.id)
     try {
-      await window.api.modules.install(def.id)
+      // Queued (#837) — and keyed the same way the Modules panel keys it, so
+      // clicking INSTALL in both places installs the module once.
+      await enqueueDeviceTask({
+        key: `module:${def.id}`,
+        label: `Installing ${def.name}`,
+        run: () => window.api.modules.install(def.id)
+      })
       setDone((n) => n + 1)
     } catch {
       // The Modules panel is the place with a full install log; here a failure
