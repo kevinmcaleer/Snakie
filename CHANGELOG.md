@@ -8,6 +8,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Minimise the copy dialog to the status bar, and bring it back** (#890). A
+  folder copy or a driver install can be put away with **Minimise** — which sits
+  beside Cancel rather than replacing it, because "give me my app back" and
+  "stop touching my board" are different wishes. The sync popup then carries a
+  maximise control in its top-left corner to bring the dialog back. The popup
+  itself is now the same dark panel with white text the flash dialog uses:
+  taking its colours from the theme was correct by the rules and hard to read in
+  practice, since on the light skin it became brushed-metal grey under near-black
+  type, floating over a status bar that is itself elevated. Row states get strong
+  distinct colours — amber in flight, green arrived, red failed.
+
 - **The board says when it is busy, and you can get out of its way** (#889).
   Installing a driver or copying a folder now shows a progress dialog — and that
   dialog can be pushed aside so the app stays usable while the work runs on.
