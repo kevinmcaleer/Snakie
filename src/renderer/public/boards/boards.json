@@ -32,8 +32,17 @@
           "url": "https://micropython.org/resources/firmware/ACTINIUS_ICARUS-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "Nordic nRF9160 product specification",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 262144,
+        "source": "Nordic nRF9160 product specification",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -69,8 +78,21 @@
           "url": "https://micropython.org/resources/firmware/ADAFRUIT_F405_EXPRESS-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "ST STM32F405RG (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": {
+        "bytes": 2097152,
+        "source": "adafruit.com/product/4382",
+        "scope": "board"
+      },
+      "ram": {
+        "bytes": 196608,
+        "source": "ST STM32F405RG (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -112,8 +134,21 @@
           "url": "https://micropython.org/resources/firmware/ADAFRUIT_FEATHER_M0_EXPRESS-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 262144,
+        "source": "Microchip SAM D21/DA1 datasheet DS40001882G",
+        "scope": "chip"
+      },
+      "externalFlash": {
+        "bytes": 2097152,
+        "source": "adafruit.com/product/3403",
+        "scope": "board"
+      },
+      "ram": {
+        "bytes": 32768,
+        "source": "Microchip SAM D21/DA1 datasheet DS40001882G",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": "feather_m0_express",
       "runtimes": [
@@ -156,8 +191,21 @@
           "url": "https://micropython.org/resources/firmware/ADAFRUIT_FEATHER_M4_EXPRESS-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "Microchip SAM D5x/E5x datasheet DS60001507",
+        "scope": "chip"
+      },
+      "externalFlash": {
+        "bytes": 2097152,
+        "source": "adafruit.com/product/3857",
+        "scope": "board"
+      },
+      "ram": {
+        "bytes": 196608,
+        "source": "Microchip SAM D5x/E5x datasheet DS60001507",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": "feather_m4_express",
       "runtimes": [
@@ -195,6 +243,7 @@
         }
       ],
       "flash": null,
+      "externalFlash": null,
       "ram": null,
       "psram": null,
       "circuitPythonBoardId": "feather_nrf52840_express",
@@ -240,7 +289,12 @@
           "url": "https://micropython.org/resources/firmware/ADAFRUIT_FEATHER_RP2040-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 8388608,
+        "source": "adafruit.com/product/4884",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 270336,
         "source": "Raspberry Pi RP2040 datasheet",
@@ -293,6 +347,7 @@
         }
       ],
       "flash": null,
+      "externalFlash": null,
       "ram": {
         "bytes": 532480,
         "source": "Raspberry Pi RP2350 datasheet",
@@ -338,8 +393,21 @@
           "url": "https://micropython.org/resources/firmware/ADAFRUIT_ITSYBITSY_M0_EXPRESS-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 262144,
+        "source": "Microchip SAM D21/DA1 datasheet DS40001882G",
+        "scope": "chip"
+      },
+      "externalFlash": {
+        "bytes": 2097152,
+        "source": "adafruit.com/product/3727",
+        "scope": "board"
+      },
+      "ram": {
+        "bytes": 32768,
+        "source": "Microchip SAM D21/DA1 datasheet DS40001882G",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": "itsybitsy_m0_express",
       "runtimes": [
@@ -380,8 +448,21 @@
           "url": "https://micropython.org/resources/firmware/ADAFRUIT_ITSYBITSY_M4_EXPRESS-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "Microchip SAM D5x/E5x datasheet DS60001507",
+        "scope": "chip"
+      },
+      "externalFlash": {
+        "bytes": 2097152,
+        "source": "adafruit.com/product/3800",
+        "scope": "board"
+      },
+      "ram": {
+        "bytes": 196608,
+        "source": "Microchip SAM D5x/E5x datasheet DS60001507",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": "itsybitsy_m4_express",
       "runtimes": [
@@ -423,7 +504,12 @@
           "url": "https://micropython.org/resources/firmware/ADAFRUIT_ITSYBITSY_RP2040-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 8388608,
+        "source": "adafruit.com/product/4888",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 270336,
         "source": "Raspberry Pi RP2040 datasheet",
@@ -472,8 +558,21 @@
           "url": "https://micropython.org/resources/firmware/ADAFRUIT_METRO_M4_EXPRESS-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "Microchip SAM D5x/E5x datasheet DS60001507",
+        "scope": "chip"
+      },
+      "externalFlash": {
+        "bytes": 2097152,
+        "source": "adafruit.com/product/4000",
+        "scope": "board"
+      },
+      "ram": {
+        "bytes": 196608,
+        "source": "Microchip SAM D5x/E5x datasheet DS60001507",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -516,8 +615,17 @@
           "url": "https://micropython.org/resources/firmware/ADAFRUIT_METRO_M7-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 8388608,
+        "source": "MicroPython ports/mimxrt/boards/ADAFRUIT_METRO_M7/mpconfigboard.mk (MICROPY_HW_FLASH_SIZE)",
+        "scope": "board"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 131072,
+        "source": "NXP i.MX RT1010 datasheet IMXRT1010CEC",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -556,8 +664,17 @@
           "url": "https://micropython.org/resources/firmware/ADAFRUIT_NEOKEY_TRINKEY-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 262144,
+        "source": "Microchip SAM D21/DA1 datasheet DS40001882G",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 32768,
+        "source": "Microchip SAM D21/DA1 datasheet DS40001882G",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -611,8 +728,17 @@
           "url": "https://micropython.org/resources/firmware/ADAFRUIT_QTPY_SAMD21-SPIFLASH-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 262144,
+        "source": "Microchip SAM D21/DA1 datasheet DS40001882G",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 32768,
+        "source": "Microchip SAM D21/DA1 datasheet DS40001882G",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -654,7 +780,12 @@
           "url": "https://micropython.org/resources/firmware/ADAFRUIT_QTPY_RP2040-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 8388608,
+        "source": "adafruit.com/product/4900",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 270336,
         "source": "Raspberry Pi RP2040 datasheet",
@@ -699,8 +830,17 @@
           "url": "https://micropython.org/resources/firmware/ADAFRUIT_TRINKET_M0-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 262144,
+        "source": "Microchip SAM D21/DA1 datasheet DS40001882G",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 32768,
+        "source": "Microchip SAM D21/DA1 datasheet DS40001882G",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": "trinket_m0",
       "runtimes": [
@@ -724,8 +864,17 @@
       "image": "https://micropython.org/resources/micropython-media/boards/ALIF_ENSEMBLE/ensemble-devkit-gen-2.jpg",
       "thumb": "ALIF_ENSEMBLE.jpg",
       "builds": [],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 5767168,
+        "source": "Alif Ensemble E7 datasheet ADTS0005 (MRAM / SRAM)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 14155776,
+        "source": "Alif Ensemble E7 datasheet ADTS0005 (MRAM / SRAM)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": []
@@ -766,9 +915,26 @@
           "url": "https://micropython.org/resources/firmware/ARDUINO_GIGA-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
-      "psram": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "ST STM32H747XI (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": {
+        "bytes": 16777216,
+        "source": "docs.arduino.cc/hardware/giga-r1-wifi (AT25SF128A)",
+        "scope": "board"
+      },
+      "ram": {
+        "bytes": 1081344,
+        "source": "ST STM32H747XI (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "psram": {
+        "bytes": 8388608,
+        "source": "docs.arduino.cc/hardware/giga-r1-wifi (AS4C4M16SA SDRAM)",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -810,8 +976,17 @@
           "url": "https://micropython.org/resources/firmware/ARDUINO_NANO_33_BLE_SENSE-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "Nordic nRF52840 product specification",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 262144,
+        "source": "Nordic nRF52840 product specification",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -853,13 +1028,22 @@
           "url": "https://micropython.org/resources/firmware/ARDUINO_NANO_ESP32-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 16777216,
+        "source": "MicroPython ports/esp32/boards/ARDUINO_NANO_ESP32/sdkconfig.board (CONFIG_ESPTOOLPY_FLASHSIZE)",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 524288,
         "source": "Espressif ESP32-S3 datasheet",
         "scope": "chip"
       },
-      "psram": null,
+      "psram": {
+        "bytes": 8388608,
+        "source": "docs.arduino.cc/hardware/nano-esp32 (in the NORA-W106 module)",
+        "scope": "board"
+      },
       "circuitPythonBoardId": "arduino_nano_esp32s3",
       "runtimes": [
         "micropython",
@@ -904,7 +1088,12 @@
           "url": "https://micropython.org/resources/firmware/ARDUINO_NANO_RP2040_CONNECT-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 16777216,
+        "source": "docs.arduino.cc/hardware/nano-rp2040-connect (AT25SF128A)",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 270336,
         "source": "Raspberry Pi RP2040 datasheet",
@@ -953,8 +1142,21 @@
           "url": "https://micropython.org/resources/firmware/ARDUINO_NICLA_VISION-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "ST STM32H747XI (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": {
+        "bytes": 16777216,
+        "source": "docs.arduino.cc/hardware/nicla-vision (AT25QL128A)",
+        "scope": "board"
+      },
+      "ram": {
+        "bytes": 1081344,
+        "source": "ST STM32H747XI (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -996,8 +1198,21 @@
           "url": "https://micropython.org/resources/firmware/ARDUINO_OPTA-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "ST STM32H747XI (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": {
+        "bytes": 16777216,
+        "source": "docs.arduino.cc/hardware/opta",
+        "scope": "board"
+      },
+      "ram": {
+        "bytes": 1081344,
+        "source": "ST STM32H747XI (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -1040,8 +1255,21 @@
           "url": "https://micropython.org/resources/firmware/ARDUINO_PORTENTA_C33-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "docs.arduino.cc/hardware/portenta-c33",
+        "scope": "board"
+      },
+      "externalFlash": {
+        "bytes": 16777216,
+        "source": "docs.arduino.cc/hardware/portenta-c33 (MX25L12833F)",
+        "scope": "board"
+      },
+      "ram": {
+        "bytes": 524288,
+        "source": "Renesas RA6M5 group datasheet",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -1085,9 +1313,26 @@
           "url": "https://micropython.org/resources/firmware/ARDUINO_PORTENTA_H7-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
-      "psram": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "ST STM32H747XI (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": {
+        "bytes": 16777216,
+        "source": "docs.arduino.cc/hardware/portenta-h7",
+        "scope": "board"
+      },
+      "ram": {
+        "bytes": 1081344,
+        "source": "ST STM32H747XI (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "psram": {
+        "bytes": 8388608,
+        "source": "docs.arduino.cc/hardware/portenta-h7 (SDRAM)",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -1122,8 +1367,17 @@
           "url": "https://micropython.org/resources/firmware/ARDUINO_PRIMO-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "MicroPython ports/nrf/boards/nrf52832_512k_64k.ld",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 65536,
+        "source": "MicroPython ports/nrf/boards/nrf52832_512k_64k.ld",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -1159,8 +1413,17 @@
           "url": "https://micropython.org/resources/firmware/MICROBIT-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 262144,
+        "source": "MicroPython ports/nrf/boards/nrf51x22_256k_16k.ld",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 16384,
+        "source": "MicroPython ports/nrf/boards/nrf51x22_256k_16k.ld",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -1217,7 +1480,12 @@
           "url": "https://micropython.org/resources/firmware/CYTRON_MOTION_2350_PRO-RISCV-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "cytron.io/p-motion-2350-pro",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 532480,
         "source": "Raspberry Pi RP2350 datasheet",
@@ -1268,6 +1536,7 @@
         }
       ],
       "flash": null,
+      "externalFlash": null,
       "ram": {
         "bytes": 270336,
         "source": "Raspberry Pi RP2040 datasheet",
@@ -1374,6 +1643,7 @@
         }
       ],
       "flash": null,
+      "externalFlash": null,
       "ram": {
         "bytes": 532480,
         "source": "Espressif ESP32 datasheet",
@@ -1435,6 +1705,7 @@
         }
       ],
       "flash": null,
+      "externalFlash": null,
       "ram": {
         "bytes": 278528,
         "source": "Espressif ESP32-C2 datasheet",
@@ -1480,6 +1751,7 @@
         }
       ],
       "flash": null,
+      "externalFlash": null,
       "ram": {
         "bytes": 409600,
         "source": "Espressif ESP32-C3 datasheet",
@@ -1525,6 +1797,7 @@
         }
       ],
       "flash": null,
+      "externalFlash": null,
       "ram": {
         "bytes": 393216,
         "source": "Espressif ESP32-C5 datasheet (HP SRAM)",
@@ -1569,6 +1842,7 @@
         }
       ],
       "flash": null,
+      "externalFlash": null,
       "ram": {
         "bytes": 524288,
         "source": "Espressif ESP32-C6 datasheet (HP SRAM)",
@@ -1605,7 +1879,12 @@
         }
       ],
       "flash": null,
-      "ram": null,
+      "externalFlash": null,
+      "ram": {
+        "bytes": 327680,
+        "source": "Espressif ESP32-H2 datasheet (HP SRAM)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -1700,6 +1979,7 @@
         }
       ],
       "flash": null,
+      "externalFlash": null,
       "ram": {
         "bytes": 786432,
         "source": "Espressif ESP32-P4 datasheet (HP SRAM)",
@@ -1745,6 +2025,7 @@
         }
       ],
       "flash": null,
+      "externalFlash": null,
       "ram": {
         "bytes": 327680,
         "source": "Espressif ESP32-S2 datasheet",
@@ -1807,6 +2088,7 @@
         }
       ],
       "flash": null,
+      "externalFlash": null,
       "ram": {
         "bytes": 524288,
         "source": "Espressif ESP32-S3 datasheet",
@@ -1897,6 +2179,7 @@
         }
       ],
       "flash": null,
+      "externalFlash": null,
       "ram": null,
       "psram": null,
       "circuitPythonBoardId": null,
@@ -1933,8 +2216,17 @@
           "url": "https://micropython.org/resources/firmware/ESPRUINO_PICO-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 393216,
+        "source": "ST STM32F401CD (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 98304,
+        "source": "ST STM32F401CD (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -1970,8 +2262,17 @@
           "url": "https://micropython.org/resources/firmware/DVK_BL652-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "MicroPython ports/nrf/boards/nrf52832_512k_64k.ld",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 65536,
+        "source": "MicroPython ports/nrf/boards/nrf52832_512k_64k.ld",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -2007,8 +2308,17 @@
           "url": "https://micropython.org/resources/firmware/CERB40-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "ST STM32F405RG (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 196608,
+        "source": "ST STM32F405RG (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -2044,8 +2354,21 @@
           "url": "https://micropython.org/resources/firmware/PYBD_SF2-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "ST STM32F722IE (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": {
+        "bytes": 4194304,
+        "source": "store.micropython.org PYBD-SF2 (2 MiB XIP + 2 MiB filesystem)",
+        "scope": "board"
+      },
+      "ram": {
+        "bytes": 262144,
+        "source": "ST STM32F722IE (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -2081,8 +2404,21 @@
           "url": "https://micropython.org/resources/firmware/PYBD_SF3-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "ST STM32F733IE (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": {
+        "bytes": 4194304,
+        "source": "store.micropython.org PYBD-SF3 (2 MiB XIP + 2 MiB filesystem)",
+        "scope": "board"
+      },
+      "ram": {
+        "bytes": 262144,
+        "source": "ST STM32F733IE (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -2121,8 +2457,21 @@
           "url": "https://micropython.org/resources/firmware/PYBD_SF6-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "ST STM32F767II (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": {
+        "bytes": 4194304,
+        "source": "store.micropython.org PYBD-SF6 (2 MiB XIP + 2 MiB filesystem)",
+        "scope": "board"
+      },
+      "ram": {
+        "bytes": 524288,
+        "source": "ST STM32F767II (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -2219,8 +2568,17 @@
           "url": "https://micropython.org/resources/firmware/PYBLITEV10-NETWORK-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "ST STM32F411RE (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 131072,
+        "source": "ST STM32F411RE (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -2317,8 +2675,17 @@
           "url": "https://micropython.org/resources/firmware/PYBV10-NETWORK-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "ST STM32F405RG (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 196608,
+        "source": "ST STM32F405RG (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -2415,8 +2782,17 @@
           "url": "https://micropython.org/resources/firmware/PYBV11-NETWORK-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "ST STM32F405RG (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 196608,
+        "source": "ST STM32F405RG (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -2452,8 +2828,17 @@
           "url": "https://micropython.org/resources/firmware/HYDRABUS-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "ST STM32F405 (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 196608,
+        "source": "ST STM32F405 (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -2489,8 +2874,17 @@
           "url": "https://micropython.org/resources/firmware/BLUEIO_TAG_EVIM-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "MicroPython ports/nrf/boards/nrf52832_512k_64k.ld",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 65536,
+        "source": "MicroPython ports/nrf/boards/nrf52832_512k_64k.ld",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -2526,8 +2920,17 @@
           "url": "https://micropython.org/resources/firmware/IBK_BLYST_NANO-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "MicroPython ports/nrf/boards/nrf52832_512k_64k.ld",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 65536,
+        "source": "MicroPython ports/nrf/boards/nrf52832_512k_64k.ld",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -2563,8 +2966,17 @@
           "url": "https://micropython.org/resources/firmware/IDK_BLYST_NANO-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "MicroPython ports/nrf/boards/nrf52832_512k_64k.ld",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 65536,
+        "source": "MicroPython ports/nrf/boards/nrf52832_512k_64k.ld",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -2594,8 +3006,17 @@
       "image": "https://micropython.org/resources/micropython-media/boards/KIT_PSE84_AI/kit_pse84_ai.jpg",
       "thumb": null,
       "builds": [],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "Infineon PSOC Edge E8x datasheet 002-37630 (RRAM / total SRAM)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 6291456,
+        "source": "Infineon PSOC Edge E8x datasheet 002-37630 (RRAM / total SRAM)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": []
@@ -2630,7 +3051,12 @@
         }
       ],
       "flash": null,
-      "ram": null,
+      "externalFlash": null,
+      "ram": {
+        "bytes": 327680,
+        "source": "ST STM32F413 line (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -2667,7 +3093,12 @@
         }
       ],
       "flash": null,
-      "ram": null,
+      "externalFlash": null,
+      "ram": {
+        "bytes": 327680,
+        "source": "ST STM32F413 line (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -2706,6 +3137,7 @@
         }
       ],
       "flash": null,
+      "externalFlash": null,
       "ram": {
         "bytes": 524288,
         "source": "Espressif ESP32-S3 datasheet",
@@ -2754,7 +3186,12 @@
           "url": "https://micropython.org/resources/firmware/LILYGO_TTGO_LORA32-20260406-v1.28.0.bin"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 4194304,
+        "source": "lilygo.cc/products/lora3 (V1.6.1)",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 532480,
         "source": "Espressif ESP32 datasheet",
@@ -2796,7 +3233,12 @@
         }
       ],
       "flash": null,
-      "ram": null,
+      "externalFlash": null,
+      "ram": {
+        "bytes": 131072,
+        "source": "ST STM32L476 line (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -2839,7 +3281,12 @@
           "url": "https://micropython.org/resources/firmware/M5STACK_ATOM-20260406-v1.28.0.bin"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 4194304,
+        "source": "docs.m5stack.com/en/core/ATOM Matrix",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 532480,
         "source": "Espressif ESP32 datasheet",
@@ -2886,7 +3333,12 @@
           "url": "https://micropython.org/resources/firmware/M5STACK_ATOMS3_LITE-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 8388608,
+        "source": "docs.m5stack.com/en/core/AtomS3 Lite",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 524288,
         "source": "Espressif ESP32-S3 datasheet",
@@ -2935,7 +3387,12 @@
           "url": "https://micropython.org/resources/firmware/M5STACK_NANOC6-20260406-v1.28.0.bin"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 4194304,
+        "source": "docs.m5stack.com/en/core/M5NanoC6",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 524288,
         "source": "Espressif ESP32-C6 datasheet (HP SRAM)",
@@ -2975,8 +3432,17 @@
           "url": "https://micropython.org/resources/firmware/M5STACK_NANOH2-20260824-v1.29.0.bin"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 4194304,
+        "source": "docs.m5stack.com/en/core/NanoH2",
+        "scope": "board"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 327680,
+        "source": "Espressif ESP32-H2 datasheet (HP SRAM)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -3017,6 +3483,7 @@
         }
       ],
       "flash": null,
+      "externalFlash": null,
       "ram": {
         "bytes": 270336,
         "source": "Raspberry Pi RP2040 datasheet",
@@ -3061,8 +3528,17 @@
           "url": "https://micropython.org/resources/firmware/MAKERDIARY_RT1011_NANO_KIT-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 16777216,
+        "source": "MicroPython ports/mimxrt/boards/MAKERDIARY_RT1011_NANO_KIT/mpconfigboard.mk (MICROPY_HW_FLASH_SIZE)",
+        "scope": "board"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 131072,
+        "source": "NXP i.MX RT1010 datasheet IMXRT1010CEC",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": "makerdiary_imxrt1011_nanokit",
       "runtimes": [
@@ -3099,8 +3575,17 @@
           "url": "https://micropython.org/resources/firmware/NRF52840_MDK_USB_DONGLE-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "Nordic nRF52840 product specification",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 262144,
+        "source": "Nordic nRF52840 product specification",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -3136,8 +3621,17 @@
           "url": "https://micropython.org/resources/firmware/GARATRONIC_NADHAT_F405-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "ST STM32F405RG (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 196608,
+        "source": "ST STM32F405RG (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -3173,8 +3667,17 @@
           "url": "https://micropython.org/resources/firmware/GARATRONIC_PYBSTICK26_F411-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "ST STM32F411RE (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 131072,
+        "source": "ST STM32F411RE (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -3216,6 +3719,7 @@
         }
       ],
       "flash": null,
+      "externalFlash": null,
       "ram": {
         "bytes": 409600,
         "source": "Espressif ESP32-C3 datasheet",
@@ -3262,6 +3766,7 @@
         }
       ],
       "flash": null,
+      "externalFlash": null,
       "ram": {
         "bytes": 270336,
         "source": "Raspberry Pi RP2040 datasheet",
@@ -3304,8 +3809,17 @@
           "url": "https://micropython.org/resources/firmware/SAMD_GENERIC_D21X18-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 262144,
+        "source": "Microchip SAM D21/DA1 datasheet DS40001882G",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 32768,
+        "source": "Microchip SAM D21/DA1 datasheet DS40001882G",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -3343,8 +3857,17 @@
           "url": "https://micropython.org/resources/firmware/SAMD_GENERIC_D51X19-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "Microchip SAM D5x/E5x datasheet DS60001507",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 196608,
+        "source": "Microchip SAM D5x/E5x datasheet DS60001507",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -3382,8 +3905,17 @@
           "url": "https://micropython.org/resources/firmware/SAMD_GENERIC_D51X20-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "Microchip SAM D5x/E5x datasheet DS60001507",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 262144,
+        "source": "Microchip SAM D5x/E5x datasheet DS60001507",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -3422,8 +3954,17 @@
           "url": "https://micropython.org/resources/firmware/SAMD21_XPLAINED_PRO-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 262144,
+        "source": "Microchip SAM D21/DA1 datasheet DS40001882G",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 32768,
+        "source": "Microchip SAM D21/DA1 datasheet DS40001882G",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -3462,7 +4003,12 @@
         }
       ],
       "flash": null,
-      "ram": null,
+      "externalFlash": null,
+      "ram": {
+        "bytes": 196608,
+        "source": "ST STM32F407 line (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -3500,8 +4046,17 @@
           "url": "https://micropython.org/resources/firmware/MIKROE_QUAIL-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "ST STM32F427VI (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 262144,
+        "source": "ST STM32F427VI (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -3537,8 +4092,17 @@
           "url": "https://micropython.org/resources/firmware/RA4M1_CLICKER-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 262144,
+        "source": "Renesas RA4M1 group datasheet",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 32768,
+        "source": "Renesas RA4M1 group datasheet",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -3578,8 +4142,17 @@
           "url": "https://micropython.org/resources/firmware/MINISAM_M4-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "Microchip SAM D5x/E5x datasheet DS60001507",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 196608,
+        "source": "Microchip SAM D5x/E5x datasheet DS60001507",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -3615,8 +4188,17 @@
           "url": "https://micropython.org/resources/firmware/NETDUINO_PLUS_2-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "ST STM32F405RG (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 196608,
+        "source": "ST STM32F405RG (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -3652,8 +4234,17 @@
           "url": "https://micropython.org/resources/firmware/PCA10000-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 262144,
+        "source": "MicroPython ports/nrf/boards/nrf51x22_256k_16k.ld",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 16384,
+        "source": "MicroPython ports/nrf/boards/nrf51x22_256k_16k.ld",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -3689,8 +4280,17 @@
           "url": "https://micropython.org/resources/firmware/PCA10001-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 262144,
+        "source": "MicroPython ports/nrf/boards/nrf51x22_256k_16k.ld",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 16384,
+        "source": "MicroPython ports/nrf/boards/nrf51x22_256k_16k.ld",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -3726,8 +4326,17 @@
           "url": "https://micropython.org/resources/firmware/PCA10028-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 262144,
+        "source": "MicroPython ports/nrf/boards/nrf51x22_256k_32k.ld",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 32768,
+        "source": "MicroPython ports/nrf/boards/nrf51x22_256k_32k.ld",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -3763,8 +4372,17 @@
           "url": "https://micropython.org/resources/firmware/PCA10031-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 262144,
+        "source": "MicroPython ports/nrf/boards/nrf51x22_256k_32k.ld",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 32768,
+        "source": "MicroPython ports/nrf/boards/nrf51x22_256k_32k.ld",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -3800,8 +4418,17 @@
           "url": "https://micropython.org/resources/firmware/PCA10040-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "MicroPython ports/nrf/boards/nrf52832_512k_64k.ld",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 65536,
+        "source": "MicroPython ports/nrf/boards/nrf52832_512k_64k.ld",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -3837,8 +4464,17 @@
           "url": "https://micropython.org/resources/firmware/PCA10056-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "Nordic nRF52840 product specification",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 262144,
+        "source": "Nordic nRF52840 product specification",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": "pca10056",
       "runtimes": [
@@ -3875,8 +4511,17 @@
           "url": "https://micropython.org/resources/firmware/PCA10059-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "Nordic nRF52840 product specification",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 262144,
+        "source": "Nordic nRF52840 product specification",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": "pca10059",
       "runtimes": [
@@ -3913,8 +4558,17 @@
           "url": "https://micropython.org/resources/firmware/PCA10090-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "Nordic nRF9160 product specification",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 262144,
+        "source": "Nordic nRF9160 product specification",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -3955,7 +4609,12 @@
           "url": "https://micropython.org/resources/firmware/NULLBITS_BIT_C_PRO-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 4194304,
+        "source": "Raspberry Pi pico-sdk src/boards/include/boards/nullbits_bit_c_pro.h (PICO_FLASH_SIZE_BYTES)",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 270336,
         "source": "Raspberry Pi RP2040 datasheet",
@@ -4002,8 +4661,17 @@
           "url": "https://micropython.org/resources/firmware/MIMXRT1010_EVK-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 16777216,
+        "source": "MicroPython ports/mimxrt/boards/MIMXRT1010_EVK/mpconfigboard.mk (MICROPY_HW_FLASH_SIZE)",
+        "scope": "board"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 131072,
+        "source": "NXP i.MX RT1010 datasheet IMXRT1010CEC",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -4044,7 +4712,12 @@
           "url": "https://micropython.org/resources/firmware/MIMXRT1015_EVK-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 16777216,
+        "source": "MicroPython ports/mimxrt/boards/MIMXRT1015_EVK/mpconfigboard.mk (MICROPY_HW_FLASH_SIZE)",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": null,
       "psram": null,
       "circuitPythonBoardId": null,
@@ -4090,9 +4763,22 @@
           "url": "https://micropython.org/resources/firmware/MIMXRT1020_EVK-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
-      "psram": null,
+      "flash": {
+        "bytes": 8388608,
+        "source": "MicroPython ports/mimxrt/boards/MIMXRT1020_EVK/mpconfigboard.mk (MICROPY_HW_FLASH_SIZE)",
+        "scope": "board"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 262144,
+        "source": "NXP i.MX RT1020 datasheet IMXRT1020CEC",
+        "scope": "chip"
+      },
+      "psram": {
+        "bytes": 33554432,
+        "source": "MicroPython ports/mimxrt/boards/MIMXRT1020_EVK/mpconfigboard.mk (MICROPY_HW_SDRAM_SIZE)",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -4136,9 +4822,22 @@
           "url": "https://micropython.org/resources/firmware/MIMXRT1050_EVK-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
-      "psram": null,
+      "flash": {
+        "bytes": 67108864,
+        "source": "MicroPython ports/mimxrt/boards/MIMXRT1050_EVK/mpconfigboard.mk (MICROPY_HW_FLASH_SIZE)",
+        "scope": "board"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 524288,
+        "source": "NXP i.MX RT1050 datasheet IMXRT1050CEC",
+        "scope": "chip"
+      },
+      "psram": {
+        "bytes": 33554432,
+        "source": "MicroPython ports/mimxrt/boards/MIMXRT1050_EVK/mpconfigboard.mk (MICROPY_HW_SDRAM_SIZE)",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -4183,9 +4882,22 @@
           "url": "https://micropython.org/resources/firmware/MIMXRT1060_EVK-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
-      "psram": null,
+      "flash": {
+        "bytes": 8388608,
+        "source": "MicroPython ports/mimxrt/boards/MIMXRT1060_EVK/mpconfigboard.mk (MICROPY_HW_FLASH_SIZE)",
+        "scope": "board"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 1048576,
+        "source": "NXP i.MX RT1060 datasheet IMXRT1060CEC",
+        "scope": "chip"
+      },
+      "psram": {
+        "bytes": 33554432,
+        "source": "MicroPython ports/mimxrt/boards/MIMXRT1060_EVK/mpconfigboard.mk (MICROPY_HW_SDRAM_SIZE)",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -4230,9 +4942,22 @@
           "url": "https://micropython.org/resources/firmware/MIMXRT1064_EVK-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
-      "psram": null,
+      "flash": {
+        "bytes": 4194304,
+        "source": "MicroPython ports/mimxrt/boards/MIMXRT1064_EVK/mpconfigboard.mk (MICROPY_HW_FLASH_SIZE)",
+        "scope": "board"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 1048576,
+        "source": "NXP i.MX RT1064 datasheet IMXRT1064CEC",
+        "scope": "chip"
+      },
+      "psram": {
+        "bytes": 33554432,
+        "source": "MicroPython ports/mimxrt/boards/MIMXRT1064_EVK/mpconfigboard.mk (MICROPY_HW_SDRAM_SIZE)",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -4277,9 +5002,22 @@
           "url": "https://micropython.org/resources/firmware/MIMXRT1170_EVK-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
-      "psram": null,
+      "flash": {
+        "bytes": 16777216,
+        "source": "MicroPython ports/mimxrt/boards/MIMXRT1170_EVK/mpconfigboard.mk (MICROPY_HW_FLASH_SIZE)",
+        "scope": "board"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 2097152,
+        "source": "NXP i.MX RT1170 datasheet IMXRT1170CEC",
+        "scope": "chip"
+      },
+      "psram": {
+        "bytes": 67108864,
+        "source": "MicroPython ports/mimxrt/boards/MIMXRT1170_EVK/mpconfigboard.mk (MICROPY_HW_SDRAM_SIZE)",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -4322,6 +5060,7 @@
         }
       ],
       "flash": null,
+      "externalFlash": null,
       "ram": {
         "bytes": 532480,
         "source": "Espressif ESP32 datasheet",
@@ -4370,7 +5109,12 @@
           "url": "https://micropython.org/resources/firmware/OLIMEX_ESP32_POE-20260406-v1.28.0.bin"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 4194304,
+        "source": "olimex.com ESP32-POE user manual (WROOM-32E)",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 532480,
         "source": "Espressif ESP32 datasheet",
@@ -4415,8 +5159,17 @@
           "url": "https://micropython.org/resources/firmware/OLIMEX_RT1010-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "MicroPython ports/mimxrt/boards/OLIMEX_RT1010/mpconfigboard.mk (MICROPY_HW_FLASH_SIZE)",
+        "scope": "board"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 131072,
+        "source": "NXP i.MX RT1010 datasheet IMXRT1010CEC",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -4452,8 +5205,17 @@
           "url": "https://micropython.org/resources/firmware/OLIMEX_E407-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "ST STM32F407ZG (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 196608,
+        "source": "ST STM32F407ZG (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -4489,8 +5251,17 @@
           "url": "https://micropython.org/resources/firmware/OLIMEX_H407-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "ST STM32F407ZG (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 196608,
+        "source": "ST STM32F407ZG (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -4526,8 +5297,17 @@
           "url": "https://micropython.org/resources/firmware/PARTICLE_XENON-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "Nordic nRF52840 product specification",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 262144,
+        "source": "Nordic nRF52840 product specification",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": "particle_xenon",
       "runtimes": [
@@ -4577,9 +5357,22 @@
           "url": "https://micropython.org/resources/firmware/PHYBOARD_RT1170-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
-      "psram": null,
+      "flash": {
+        "bytes": 16777216,
+        "source": "MicroPython ports/mimxrt/boards/PHYBOARD_RT1170/mpconfigboard.mk (MICROPY_HW_FLASH_SIZE)",
+        "scope": "board"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 2097152,
+        "source": "NXP i.MX RT1170 datasheet IMXRT1170CEC",
+        "scope": "chip"
+      },
+      "psram": {
+        "bytes": 67108864,
+        "source": "MicroPython ports/mimxrt/boards/PHYBOARD_RT1170/mpconfigboard.mk (MICROPY_HW_SDRAM_SIZE)",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -4637,6 +5430,7 @@
         }
       ],
       "flash": null,
+      "externalFlash": null,
       "ram": {
         "bytes": 270336,
         "source": "Raspberry Pi RP2040 datasheet",
@@ -4699,6 +5493,7 @@
         }
       ],
       "flash": null,
+      "externalFlash": null,
       "ram": {
         "bytes": 270336,
         "source": "Raspberry Pi RP2040 datasheet",
@@ -4743,8 +5538,17 @@
           "url": "https://micropython.org/resources/firmware/TEENSY40-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "MicroPython ports/mimxrt/boards/TEENSY40/mpconfigboard.mk (MICROPY_HW_FLASH_SIZE)",
+        "scope": "board"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 1048576,
+        "source": "NXP i.MX RT1060 datasheet IMXRT1060CEC",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": "teensy40",
       "runtimes": [
@@ -4786,8 +5590,17 @@
           "url": "https://micropython.org/resources/firmware/TEENSY41-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 8388608,
+        "source": "MicroPython ports/mimxrt/boards/TEENSY41/mpconfigboard.mk (MICROPY_HW_FLASH_SIZE)",
+        "scope": "board"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 1048576,
+        "source": "NXP i.MX RT1060 datasheet IMXRT1060CEC",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": "teensy41",
       "runtimes": [
@@ -4831,7 +5644,12 @@
           "url": "https://micropython.org/resources/firmware/POLOLU_3PI_2040_ROBOT-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 16777216,
+        "source": "pololu.com/docs/0J86/6.1",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 270336,
         "source": "Raspberry Pi RP2040 datasheet",
@@ -4880,7 +5698,12 @@
           "url": "https://micropython.org/resources/firmware/POLOLU_ZUMO_2040_ROBOT-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 16777216,
+        "source": "pololu.com/docs/0J87/1",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 270336,
         "source": "Raspberry Pi RP2040 datasheet",
@@ -4913,6 +5736,7 @@
       "thumb": "WIPY.jpg",
       "builds": [],
       "flash": null,
+      "externalFlash": null,
       "ram": null,
       "psram": null,
       "circuitPythonBoardId": null,
@@ -4940,8 +5764,17 @@
           "url": "https://micropython.org/resources/firmware/GARATRONIC_PYMATE_CORE8ADI8DOSC-20260824-v1.29.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "ST STM32F412RE (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 262144,
+        "source": "ST STM32F412RE (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -4986,6 +5819,7 @@
         "source": "raspberrypi.com Pico series documentation",
         "scope": "board"
       },
+      "externalFlash": null,
       "ram": {
         "bytes": 270336,
         "source": "Raspberry Pi RP2040 datasheet",
@@ -5052,6 +5886,7 @@
         "source": "raspberrypi.com Pico series documentation",
         "scope": "board"
       },
+      "externalFlash": null,
       "ram": {
         "bytes": 532480,
         "source": "Raspberry Pi RP2350 datasheet",
@@ -5120,6 +5955,7 @@
         "source": "raspberrypi.com Pico series documentation",
         "scope": "board"
       },
+      "externalFlash": null,
       "ram": {
         "bytes": 532480,
         "source": "Raspberry Pi RP2350 datasheet",
@@ -5172,6 +6008,7 @@
         "source": "raspberrypi.com Pico series documentation",
         "scope": "board"
       },
+      "externalFlash": null,
       "ram": {
         "bytes": 270336,
         "source": "Raspberry Pi RP2040 datasheet",
@@ -5213,8 +6050,17 @@
           "url": "https://micropython.org/resources/firmware/EK_RA4M1-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 262144,
+        "source": "Renesas RA4M1 group datasheet",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 32768,
+        "source": "Renesas RA4M1 group datasheet",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -5250,8 +6096,17 @@
           "url": "https://micropython.org/resources/firmware/EK_RA4W1-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "Renesas RA4W1 group datasheet",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 98304,
+        "source": "Renesas RA4W1 group datasheet",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -5287,8 +6142,17 @@
           "url": "https://micropython.org/resources/firmware/EK_RA6M1-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "Renesas RA6M1 group datasheet",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 262144,
+        "source": "Renesas RA6M1 group datasheet",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -5325,7 +6189,12 @@
         }
       ],
       "flash": null,
-      "ram": null,
+      "externalFlash": null,
+      "ram": {
+        "bytes": 393216,
+        "source": "Renesas RA6M2 group datasheet",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -5367,9 +6236,22 @@
           "url": "https://micropython.org/resources/firmware/SEEED_ARCH_MIX-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
-      "psram": null,
+      "flash": {
+        "bytes": 8388608,
+        "source": "MicroPython ports/mimxrt/boards/SEEED_ARCH_MIX/mpconfigboard.mk (MICROPY_HW_FLASH_SIZE)",
+        "scope": "board"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 524288,
+        "source": "NXP i.MX RT1050 datasheet IMXRT1050CEC",
+        "scope": "chip"
+      },
+      "psram": {
+        "bytes": 33554432,
+        "source": "MicroPython ports/mimxrt/boards/SEEED_ARCH_MIX/mpconfigboard.mk (MICROPY_HW_SDRAM_SIZE)",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -5412,8 +6294,21 @@
           "url": "https://micropython.org/resources/firmware/SEEED_WIO_TERMINAL-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "Microchip SAM D5x/E5x datasheet DS60001507",
+        "scope": "chip"
+      },
+      "externalFlash": {
+        "bytes": 4194304,
+        "source": "seeedstudio.com Wio-Terminal-p-4509",
+        "scope": "board"
+      },
+      "ram": {
+        "bytes": 196608,
+        "source": "Microchip SAM D5x/E5x datasheet DS60001507",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -5448,7 +6343,12 @@
           "url": "https://micropython.org/resources/firmware/SEEED_XIAO_ESP32C3-20260824-v1.29.0.bin"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 4194304,
+        "source": "seeedstudio.com Seeed-XIAO-ESP32C3-p-5431",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 409600,
         "source": "Espressif ESP32-C3 datasheet",
@@ -5491,13 +6391,22 @@
           "url": "https://micropython.org/resources/firmware/SEEED_XIAO_ESP32C5-20260824-v1.29.0.bin"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 8388608,
+        "source": "wiki.seeedstudio.com/xiao_esp32c5_getting_started",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 393216,
         "source": "Espressif ESP32-C5 datasheet (HP SRAM)",
         "scope": "chip"
       },
-      "psram": null,
+      "psram": {
+        "bytes": 8388608,
+        "source": "wiki.seeedstudio.com/xiao_esp32c5_getting_started",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -5539,7 +6448,12 @@
           "url": "https://micropython.org/resources/firmware/SEEED_XIAO_ESP32C6-20260406-v1.28.0.bin"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 4194304,
+        "source": "seeedstudio.com Seeed-Studio-XIAO-ESP32C6-p-5884",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 524288,
         "source": "Espressif ESP32-C6 datasheet (HP SRAM)",
@@ -5587,6 +6501,7 @@
         "source": "MicroPython ports/esp32/boards/SEEED_XIAO_ESP32S3/mpconfigboard.cmake",
         "scope": "board"
       },
+      "externalFlash": null,
       "ram": {
         "bytes": 524288,
         "source": "Espressif ESP32-S3 datasheet",
@@ -5640,8 +6555,21 @@
           "url": "https://micropython.org/resources/firmware/SEEED_XIAO_NRF52-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "Nordic nRF52840 product specification",
+        "scope": "chip"
+      },
+      "externalFlash": {
+        "bytes": 2097152,
+        "source": "seeedstudio.com Seeed-XIAO-BLE-Sense-nRF52840-p-5253",
+        "scope": "board"
+      },
+      "ram": {
+        "bytes": 262144,
+        "source": "Nordic nRF52840 product specification",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -5683,7 +6611,12 @@
           "url": "https://micropython.org/resources/firmware/SEEED_XIAO_RP2040-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "Raspberry Pi pico-sdk src/boards/include/boards/seeed_xiao_rp2040.h (PICO_FLASH_SIZE_BYTES)",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 270336,
         "source": "Raspberry Pi RP2040 datasheet",
@@ -5746,7 +6679,12 @@
           "url": "https://micropython.org/resources/firmware/SEEED_XIAO_RP2350-RISCV-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "Raspberry Pi pico-sdk src/boards/include/boards/seeed_xiao_rp2350.h (PICO_FLASH_SIZE_BYTES)",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 532480,
         "source": "Raspberry Pi RP2350 datasheet",
@@ -5789,8 +6727,17 @@
           "url": "https://micropython.org/resources/firmware/SEEED_XIAO_SAMD21-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 262144,
+        "source": "Microchip SAM D21/DA1 datasheet DS40001882G",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 32768,
+        "source": "Microchip SAM D21/DA1 datasheet DS40001882G",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -5833,6 +6780,7 @@
         }
       ],
       "flash": null,
+      "externalFlash": null,
       "ram": {
         "bytes": 532480,
         "source": "Espressif ESP32 datasheet",
@@ -5881,7 +6829,12 @@
           "url": "https://micropython.org/resources/firmware/SIL_MANT1S-20260406-v1.28.0.bin"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 8388608,
+        "source": "MicroPython ports/esp32/boards/SIL_MANT1S/sdkconfig.board (CONFIG_ESPTOOLPY_FLASHSIZE)",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 532480,
         "source": "Espressif ESP32 datasheet",
@@ -5927,7 +6880,12 @@
           "url": "https://micropython.org/resources/firmware/SIL_RP2040_SHIM-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 4194304,
+        "source": "MicroPython ports/rp2/boards/SIL_RP2040_SHIM/mpconfigboard.cmake (PICO_FLASH_SIZE_BYTES)",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 270336,
         "source": "Raspberry Pi RP2040 datasheet",
@@ -5974,7 +6932,12 @@
           "url": "https://micropython.org/resources/firmware/SOLDERED_NULA_MINI-20260406-v1.28.0.bin"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 4194304,
+        "source": "soldered.com/product/nula-mini-esp32-c6",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 524288,
         "source": "Espressif ESP32-C6 datasheet (HP SRAM)",
@@ -6018,7 +6981,12 @@
           "url": "https://micropython.org/resources/firmware/SOLDERED_NULA_MAX_RP2350-20260824-v1.29.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 16777216,
+        "source": "MicroPython ports/rp2/boards/SOLDERED_NULA_MAX_RP2350/soldered_nula_max_rp2350.h (PICO_FLASH_SIZE_BYTES)",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 532480,
         "source": "Raspberry Pi RP2350 datasheet",
@@ -6065,6 +7033,7 @@
         }
       ],
       "flash": null,
+      "externalFlash": null,
       "ram": {
         "bytes": 532480,
         "source": "Espressif ESP32 datasheet",
@@ -6131,13 +7100,22 @@
           "url": "https://micropython.org/resources/firmware/SPARKFUN_IOTNODE_LORAWAN_RP2350-RISCV-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 16777216,
+        "source": "MicroPython ports/rp2/boards/SPARKFUN_IOTNODE_LORAWAN_RP2350/sparkfun_iotnode_lorawan_rp2350.h (PICO_FLASH_SIZE_BYTES)",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 532480,
         "source": "Raspberry Pi RP2350 datasheet",
         "scope": "chip"
       },
-      "psram": null,
+      "psram": {
+        "bytes": 8388608,
+        "source": "docs.sparkfun.com/SparkFun_IoT_Node_LoRaWAN",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -6172,8 +7150,21 @@
           "url": "https://micropython.org/resources/firmware/SPARKFUN_MICROMOD_STM32-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "ST STM32F405RG (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": {
+        "bytes": 16777216,
+        "source": "learn.sparkfun.com micromod-stm32-processor-hookup-guide (128 Mbit)",
+        "scope": "board"
+      },
+      "ram": {
+        "bytes": 196608,
+        "source": "ST STM32F405RG (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -6215,7 +7206,12 @@
           "url": "https://micropython.org/resources/firmware/SPARKFUN_PROMICRO-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 16777216,
+        "source": "sparkfun.com/sparkfun-pro-micro-rp2040.html",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 270336,
         "source": "Raspberry Pi RP2040 datasheet",
@@ -6280,13 +7276,22 @@
           "url": "https://micropython.org/resources/firmware/SPARKFUN_PROMICRO_RP2350-RISCV-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 16777216,
+        "source": "Raspberry Pi pico-sdk src/boards/include/boards/sparkfun_promicro_rp2350.h (PICO_FLASH_SIZE_BYTES)",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 532480,
         "source": "Raspberry Pi RP2350 datasheet",
         "scope": "chip"
       },
-      "psram": null,
+      "psram": {
+        "bytes": 8388608,
+        "source": "sparkfun.com/sparkfun-pro-micro-rp2350.html",
+        "scope": "board"
+      },
       "circuitPythonBoardId": "sparkfun_pro_micro_rp2350",
       "runtimes": [
         "micropython",
@@ -6327,8 +7332,21 @@
           "url": "https://micropython.org/resources/firmware/SPARKFUN_SAMD51_THING_PLUS-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "Microchip SAM D5x/E5x datasheet DS60001507",
+        "scope": "chip"
+      },
+      "externalFlash": {
+        "bytes": 524288,
+        "source": "learn.sparkfun.com samd51-thing-plus-hookup-guide (4 Mbit, AT25SF041)",
+        "scope": "board"
+      },
+      "ram": {
+        "bytes": 262144,
+        "source": "Microchip SAM D5x/E5x datasheet DS60001507",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": "sparkfun_samd51_thing_plus",
       "runtimes": [
@@ -6392,13 +7410,22 @@
           "url": "https://micropython.org/resources/firmware/SPARKFUN_IOTREDBOARD_RP2350-RISCV-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 16777216,
+        "source": "MicroPython ports/rp2/boards/SPARKFUN_IOTREDBOARD_RP2350/sparkfun_iotredboard_rp2350.h (PICO_FLASH_SIZE_BYTES)",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 532480,
         "source": "Raspberry Pi RP2350 datasheet",
         "scope": "chip"
       },
-      "psram": null,
+      "psram": {
+        "bytes": 8388608,
+        "source": "sparkfun.com/sparkfun-iot-redboard-rp2350.html",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -6439,8 +7466,21 @@
           "url": "https://micropython.org/resources/firmware/SPARKFUN_REDBOARD_TURBO-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 262144,
+        "source": "Microchip SAM D21/DA1 datasheet DS40001882G",
+        "scope": "chip"
+      },
+      "externalFlash": {
+        "bytes": 4194304,
+        "source": "learn.sparkfun.com redboard-turbo-hookup-guide",
+        "scope": "board"
+      },
+      "ram": {
+        "bytes": 32768,
+        "source": "Microchip SAM D21/DA1 datasheet DS40001882G",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": "sparkfun_redboard_turbo",
       "runtimes": [
@@ -6481,8 +7521,17 @@
           "url": "https://micropython.org/resources/firmware/SPARKFUN_SAMD21_DEV_BREAKOUT-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 262144,
+        "source": "Microchip SAM D21/DA1 datasheet DS40001882G",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 32768,
+        "source": "Microchip SAM D21/DA1 datasheet DS40001882G",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -6527,7 +7576,12 @@
           "url": "https://micropython.org/resources/firmware/SPARKFUN_THINGPLUS-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 16777216,
+        "source": "sparkfun.com/sparkfun-thing-plus-rp2040.html",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 270336,
         "source": "Raspberry Pi RP2040 datasheet",
@@ -6580,13 +7634,22 @@
           "url": "https://micropython.org/resources/firmware/SPARKFUN_THINGPLUS_ESP32C5-20260406-v1.28.0.bin"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 8388608,
+        "source": "sparkfun.com/sparkfun-thing-plus-esp32-c5.html",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 393216,
         "source": "Espressif ESP32-C5 datasheet (HP SRAM)",
         "scope": "chip"
       },
-      "psram": null,
+      "psram": {
+        "bytes": 8388608,
+        "source": "sparkfun.com/sparkfun-thing-plus-esp32-c5.html",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -6649,13 +7712,22 @@
           "url": "https://micropython.org/resources/firmware/SPARKFUN_THINGPLUS_RP2350-RISCV-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 16777216,
+        "source": "Raspberry Pi pico-sdk src/boards/include/boards/sparkfun_thingplus_rp2350.h (PICO_FLASH_SIZE_BYTES)",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 532480,
         "source": "Raspberry Pi RP2350 datasheet",
         "scope": "chip"
       },
-      "psram": null,
+      "psram": {
+        "bytes": 8388608,
+        "source": "sparkfun.com/sparkfun-thing-plus-rp2350.html",
+        "scope": "board"
+      },
       "circuitPythonBoardId": "sparkfun_thing_plus_rp2350",
       "runtimes": [
         "micropython",
@@ -6717,13 +7789,22 @@
           "url": "https://micropython.org/resources/firmware/SPARKFUN_XRP_CONTROLLER-RISCV-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 16777216,
+        "source": "MicroPython ports/rp2/boards/SPARKFUN_XRP_CONTROLLER/sparkfun_xrp_controller.h (PICO_FLASH_SIZE_BYTES)",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 532480,
         "source": "Raspberry Pi RP2350 datasheet",
         "scope": "chip"
       },
-      "psram": null,
+      "psram": {
+        "bytes": 8388608,
+        "source": "sparkfun.com/…xrp-controller.html",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -6766,7 +7847,12 @@
           "url": "https://micropython.org/resources/firmware/SPARKFUN_XRP_CONTROLLER_BETA-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "sparkfun.com/…xrp-controller-beta.html (it carries a Pico W)",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 270336,
         "source": "Raspberry Pi RP2040 datasheet",
@@ -6807,8 +7893,17 @@
           "url": "https://micropython.org/resources/firmware/B_L072Z_LRWAN1-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 196608,
+        "source": "ST STM32L072CZ (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 20480,
+        "source": "ST STM32L072CZ (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -6845,7 +7940,12 @@
         }
       ],
       "flash": null,
-      "ram": null,
+      "externalFlash": null,
+      "ram": {
+        "bytes": 131072,
+        "source": "ST STM32L475 line (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -6882,7 +7982,12 @@
         }
       ],
       "flash": null,
-      "ram": null,
+      "externalFlash": null,
+      "ram": {
+        "bytes": 196608,
+        "source": "ST STM32F407 line (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -6919,7 +8024,12 @@
         }
       ],
       "flash": null,
-      "ram": null,
+      "externalFlash": null,
+      "ram": {
+        "bytes": 131072,
+        "source": "ST STM32F411 line (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -6956,7 +8066,12 @@
         }
       ],
       "flash": null,
-      "ram": null,
+      "externalFlash": null,
+      "ram": {
+        "bytes": 262144,
+        "source": "ST STM32F429 line (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -6993,7 +8108,12 @@
         }
       ],
       "flash": null,
-      "ram": null,
+      "externalFlash": null,
+      "ram": {
+        "bytes": 393216,
+        "source": "ST STM32F469 line (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7030,7 +8150,12 @@
         }
       ],
       "flash": null,
-      "ram": null,
+      "externalFlash": null,
+      "ram": {
+        "bytes": 327680,
+        "source": "ST STM32F746 line (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7067,7 +8192,12 @@
         }
       ],
       "flash": null,
-      "ram": null,
+      "externalFlash": null,
+      "ram": {
+        "bytes": 524288,
+        "source": "ST STM32F769 line (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7103,8 +8233,17 @@
           "url": "https://micropython.org/resources/firmware/STM32H7B3I_DK-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "ST STM32H7B3LI datasheet (192 KB TCM + 1.18 MB user SRAM)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 1409024,
+        "source": "ST STM32H7B3LI datasheet (192 KB TCM + 1.18 MB user SRAM)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7142,7 +8281,12 @@
         }
       ],
       "flash": null,
-      "ram": null,
+      "externalFlash": null,
+      "ram": {
+        "bytes": 1081344,
+        "source": "ST STM32H747 line (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7179,7 +8323,12 @@
         }
       ],
       "flash": null,
-      "ram": null,
+      "externalFlash": null,
+      "ram": {
+        "bytes": 131072,
+        "source": "ST STM32L476 line (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7216,7 +8365,12 @@
         }
       ],
       "flash": null,
-      "ram": null,
+      "externalFlash": null,
+      "ram": {
+        "bytes": 327680,
+        "source": "ST STM32L496 line (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7252,8 +8406,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_F091RC-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 262144,
+        "source": "ST STM32F091RC (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 32768,
+        "source": "ST STM32F091RC (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7289,8 +8452,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_F401RE-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "ST STM32F401xE (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 98304,
+        "source": "ST STM32F401xE (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7326,8 +8498,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_F411RE-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "ST STM32F411xE (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 131072,
+        "source": "ST STM32F411xE (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7363,8 +8544,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_F412ZG-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "ST STM32F412ZG (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 262144,
+        "source": "ST STM32F412ZG (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7400,8 +8590,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_F413ZH-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1572864,
+        "source": "ST STM32F413ZH (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 327680,
+        "source": "ST STM32F413ZH (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7437,8 +8636,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_F429ZI-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "ST STM32F429ZI (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 262144,
+        "source": "ST STM32F429ZI (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7474,8 +8682,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_F439ZI-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "ST STM32F439ZI (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 262144,
+        "source": "ST STM32F439ZI (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7511,8 +8728,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_F446RE-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "ST STM32F446RE (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 131072,
+        "source": "ST STM32F446RE (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7548,8 +8774,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_F722ZE-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "ST STM32F722ZE (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 262144,
+        "source": "ST STM32F722ZE (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7585,8 +8820,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_F746ZG-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "ST STM32F746ZG (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 327680,
+        "source": "ST STM32F746ZG (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7622,8 +8866,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_F756ZG-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "ST STM32F756ZG (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 327680,
+        "source": "ST STM32F756ZG (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7659,8 +8912,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_F767ZI-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "ST STM32F767ZI (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 524288,
+        "source": "ST STM32F767ZI (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7696,8 +8958,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_G0B1RE-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "ST STM32G0B1xE (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 147456,
+        "source": "ST STM32G0B1xE (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7733,8 +9004,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_G474RE-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "ST STM32G474RE (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 131072,
+        "source": "ST STM32G474RE (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7770,8 +9050,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_H563ZI-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "ST STM32H563ZI (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 655360,
+        "source": "ST STM32H563ZI (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7807,8 +9096,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_H723ZG-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "ST STM32H723ZG (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 573440,
+        "source": "ST STM32H723ZG (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7844,8 +9142,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_H743ZI-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "ST STM32H743ZI (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 1081344,
+        "source": "ST STM32H743ZI (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7881,8 +9188,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_H743ZI2-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "ST STM32H743ZI (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 1081344,
+        "source": "ST STM32H743ZI (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7918,8 +9234,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_H753ZI-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "ST STM32H753ZI (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 1081344,
+        "source": "ST STM32H753ZI (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7955,8 +9280,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_H7A3ZI_Q-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "ST STM32H7A3ZI datasheet (192 KB TCM + 1.18 MB user SRAM)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 1409024,
+        "source": "ST STM32H7A3ZI datasheet (192 KB TCM + 1.18 MB user SRAM)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -7992,8 +9326,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_L073RZ-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 196608,
+        "source": "ST STM32L073RZ (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 20480,
+        "source": "ST STM32L073RZ (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -8029,8 +9372,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_L152RE-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "ST STM32L152xE (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 81920,
+        "source": "ST STM32L152xE (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -8066,8 +9418,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_L432KC-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 262144,
+        "source": "ST STM32L432KC (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 65536,
+        "source": "ST STM32L432KC (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -8103,8 +9464,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_L452RE-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "ST STM32L452RE (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 163840,
+        "source": "ST STM32L452RE (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -8140,8 +9510,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_L476RG-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "ST STM32L476RG (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 131072,
+        "source": "ST STM32L476RG (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -8177,8 +9556,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_L4A6ZG-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "ST STM32L4A6ZG (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 327680,
+        "source": "ST STM32L4A6ZG (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -8214,8 +9602,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_U5A5ZJ_Q-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 4194304,
+        "source": "ST STM32U5A5ZJ (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 2572288,
+        "source": "ST STM32U5A5ZJ (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -8251,8 +9648,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_WB55-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "ST STM32WB55RG (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 262144,
+        "source": "ST STM32WB55RG (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -8288,8 +9694,17 @@
           "url": "https://micropython.org/resources/firmware/NUCLEO_WL55-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 262144,
+        "source": "ST STM32WL55JC (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 65536,
+        "source": "ST STM32WL55JC (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -8326,7 +9741,12 @@
         }
       ],
       "flash": null,
-      "ram": null,
+      "externalFlash": null,
+      "ram": {
+        "bytes": 262144,
+        "source": "ST STM32F439 line (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -8362,8 +9782,17 @@
           "url": "https://micropython.org/resources/firmware/USBDONGLE_WB55-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "ST STM32WB55CG (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 262144,
+        "source": "ST STM32WB55CG (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -8399,8 +9828,17 @@
           "url": "https://micropython.org/resources/firmware/EVK_NINA_B1-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "MicroPython ports/nrf/boards/nrf52832_512k_64k.ld",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 65536,
+        "source": "MicroPython ports/nrf/boards/nrf52832_512k_64k.ld",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -8436,8 +9874,17 @@
           "url": "https://micropython.org/resources/firmware/EVK_NINA_B3-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "Nordic nRF52840 product specification",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 262144,
+        "source": "Nordic nRF52840 product specification",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -8484,13 +9931,22 @@
           "url": "https://micropython.org/resources/firmware/UM_FEATHERS2-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 16777216,
+        "source": "feathers2.io",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 327680,
         "source": "Espressif ESP32-S2 datasheet",
         "scope": "chip"
       },
-      "psram": null,
+      "psram": {
+        "bytes": 8388608,
+        "source": "feathers2.io",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -8537,12 +9993,17 @@
         }
       ],
       "flash": null,
+      "externalFlash": null,
       "ram": {
         "bytes": 327680,
         "source": "Espressif ESP32-S2 datasheet",
         "scope": "chip"
       },
-      "psram": null,
+      "psram": {
+        "bytes": 2097152,
+        "source": "help.unexpectedmaker.com PSRAM table",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -8587,13 +10048,22 @@
           "url": "https://micropython.org/resources/firmware/UM_FEATHERS3-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 16777216,
+        "source": "esp32s3.com/feathers3.html",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 524288,
         "source": "Espressif ESP32-S3 datasheet",
         "scope": "chip"
       },
-      "psram": null,
+      "psram": {
+        "bytes": 8388608,
+        "source": "esp32s3.com/feathers3.html",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -8638,13 +10108,22 @@
           "url": "https://micropython.org/resources/firmware/UM_FEATHERS3NEO-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 8388608,
+        "source": "esp32s3.com/feathers3neo.html",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 524288,
         "source": "Espressif ESP32-S3 datasheet",
         "scope": "chip"
       },
-      "psram": null,
+      "psram": {
+        "bytes": 2097152,
+        "source": "esp32s3.com/feathers3neo.html",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -8687,13 +10166,22 @@
           "url": "https://micropython.org/resources/firmware/UM_NANOS3-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 8388608,
+        "source": "esp32s3.com/nanos3.html",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 524288,
         "source": "Espressif ESP32-S3 datasheet",
         "scope": "chip"
       },
-      "psram": null,
+      "psram": {
+        "bytes": 8388608,
+        "source": "esp32s3.com/nanos3.html",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -8736,13 +10224,22 @@
           "url": "https://micropython.org/resources/firmware/UM_OMGS3-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 8388608,
+        "source": "esp32s3.com/omgs3.html",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 524288,
         "source": "Espressif ESP32-S3 datasheet",
         "scope": "chip"
       },
-      "psram": null,
+      "psram": {
+        "bytes": 2097152,
+        "source": "esp32s3.com/omgs3.html",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -8787,13 +10284,22 @@
           "url": "https://micropython.org/resources/firmware/UM_PROS3-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 16777216,
+        "source": "esp32s3.com/pros3.html",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 524288,
         "source": "Espressif ESP32-S3 datasheet",
         "scope": "chip"
       },
-      "psram": null,
+      "psram": {
+        "bytes": 8388608,
+        "source": "esp32s3.com/pros3.html",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -8841,13 +10347,22 @@
           "url": "https://micropython.org/resources/firmware/UM_RGBTOUCH_MINI-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 8388608,
+        "source": "unexpectedmaker.com shop, RGB Touch Mini",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 524288,
         "source": "Espressif ESP32-S3 datasheet",
         "scope": "chip"
       },
-      "psram": null,
+      "psram": {
+        "bytes": 2097152,
+        "source": "unexpectedmaker.com shop, RGB Touch Mini",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -8890,7 +10405,12 @@
           "url": "https://micropython.org/resources/firmware/UM_TINYC6-20260406-v1.28.0.bin"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 8388608,
+        "source": "unexpectedmaker.com shop, TinyC6",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 524288,
         "source": "Espressif ESP32-C6 datasheet (HP SRAM)",
@@ -8941,13 +10461,22 @@
           "url": "https://micropython.org/resources/firmware/UM_TINYPICO-20260406-v1.28.0.bin"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 4194304,
+        "source": "unexpectedmaker.com shop, TinyPICO",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 532480,
         "source": "Espressif ESP32 datasheet",
         "scope": "chip"
       },
-      "psram": null,
+      "psram": {
+        "bytes": 4194304,
+        "source": "unexpectedmaker.com shop, TinyPICO",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -8992,13 +10521,22 @@
           "url": "https://micropython.org/resources/firmware/UM_TINYS2-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 4194304,
+        "source": "unexpectedmaker.com shop, TinyS2",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 327680,
         "source": "Espressif ESP32-S2 datasheet",
         "scope": "chip"
       },
-      "psram": null,
+      "psram": {
+        "bytes": 2097152,
+        "source": "unexpectedmaker.com shop, TinyS2",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -9043,13 +10581,22 @@
           "url": "https://micropython.org/resources/firmware/UM_TINYS3-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 8388608,
+        "source": "esp32s3.com/tinys3.html",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 524288,
         "source": "Espressif ESP32-S3 datasheet",
         "scope": "chip"
       },
-      "psram": null,
+      "psram": {
+        "bytes": 8388608,
+        "source": "esp32s3.com/tinys3.html",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -9093,13 +10640,22 @@
           "url": "https://micropython.org/resources/firmware/UM_TINYWATCHS3-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 8388608,
+        "source": "help.unexpectedmaker.com/docs/products/tinywatch-s3",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 524288,
         "source": "Espressif ESP32-S3 datasheet",
         "scope": "chip"
       },
-      "psram": null,
+      "psram": {
+        "bytes": 2097152,
+        "source": "help.unexpectedmaker.com/docs/products/tinywatch-s3",
+        "scope": "board"
+      },
       "circuitPythonBoardId": null,
       "runtimes": [
         "micropython"
@@ -9134,8 +10690,17 @@
           "url": "https://micropython.org/resources/firmware/VCC_GND_F407VE-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "ST STM32F407VE (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 196608,
+        "source": "ST STM32F407VE (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -9171,8 +10736,17 @@
           "url": "https://micropython.org/resources/firmware/VCC_GND_F407ZG-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "ST STM32F407ZG (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 196608,
+        "source": "ST STM32F407ZG (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -9208,8 +10782,17 @@
           "url": "https://micropython.org/resources/firmware/VCC_GND_H743VI-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "ST STM32H743VI (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 1081344,
+        "source": "ST STM32H743VI (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -9248,7 +10831,12 @@
         }
       ],
       "flash": null,
-      "ram": null,
+      "externalFlash": null,
+      "ram": {
+        "bytes": 524288,
+        "source": "Renesas RA6M5 group datasheet",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -9290,7 +10878,12 @@
           "url": "https://micropython.org/resources/firmware/WAVESHARE_RP2040_LCD_0_96-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "waveshare.com/product/rp2040-lcd-0.96.htm (W25Q16)",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 270336,
         "source": "Raspberry Pi RP2040 datasheet",
@@ -9354,6 +10947,7 @@
         }
       ],
       "flash": null,
+      "externalFlash": null,
       "ram": {
         "bytes": 270336,
         "source": "Raspberry Pi RP2040 datasheet",
@@ -9399,7 +10993,12 @@
           "url": "https://micropython.org/resources/firmware/WAVESHARE_RP2040_ZERO-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "Raspberry Pi pico-sdk src/boards/include/boards/waveshare_rp2040_zero.h (PICO_FLASH_SIZE_BYTES)",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 270336,
         "source": "Raspberry Pi RP2040 datasheet",
@@ -9462,7 +11061,12 @@
           "url": "https://micropython.org/resources/firmware/WAVESHARE_RP2350B_CORE-RISCV-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 16777216,
+        "source": "MicroPython ports/rp2/boards/WAVESHARE_RP2350B_CORE/mpconfigboard.cmake (PICO_FLASH_SIZE_BYTES)",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 532480,
         "source": "Raspberry Pi RP2350 datasheet",
@@ -9501,13 +11105,22 @@
           "url": "https://micropython.org/resources/firmware/WAVESHARE_ESP32_S3_PICO-20260824-v1.29.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 16777216,
+        "source": "waveshare.com/ESP32-S3-Pico.htm (W25Q128)",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 524288,
         "source": "Espressif ESP32-S3 datasheet",
         "scope": "chip"
       },
-      "psram": null,
+      "psram": {
+        "bytes": 2097152,
+        "source": "waveshare.com/ESP32-S3-Pico.htm (in the ESP32-S3R2 package)",
+        "scope": "board"
+      },
       "circuitPythonBoardId": "waveshare_esp32_s3_pico",
       "runtimes": [
         "micropython",
@@ -9594,6 +11207,7 @@
         }
       ],
       "flash": null,
+      "externalFlash": null,
       "ram": {
         "bytes": 270336,
         "source": "Raspberry Pi RP2040 datasheet",
@@ -9634,8 +11248,21 @@
           "url": "https://micropython.org/resources/firmware/WEACTSTUDIO_MINI_STM32H723-20260824-v1.29.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 1048576,
+        "source": "ST STM32H723VG (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": {
+        "bytes": 16777216,
+        "source": "github.com/WeActStudio/WeActStudio.MiniSTM32H723 (8 MB SPI + 8 MB OSPI)",
+        "scope": "board"
+      },
+      "ram": {
+        "bytes": 573440,
+        "source": "ST STM32H723VG (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -9678,8 +11305,21 @@
           "url": "https://micropython.org/resources/firmware/WEACTSTUDIO_MINI_STM32H743-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "ST STM32H743VI (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": {
+        "bytes": 16777216,
+        "source": "github.com/WeActStudio/MiniSTM32H7xx (8 MB SPI + 8 MB QSPI)",
+        "scope": "board"
+      },
+      "ram": {
+        "bytes": 1081344,
+        "source": "ST STM32H743VI (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -9715,8 +11355,17 @@
           "url": "https://micropython.org/resources/firmware/WEACTSTUDIO_MINI_STM32U585-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "ST STM32U585CI (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 802816,
+        "source": "ST STM32U585CI (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -9773,7 +11422,12 @@
           "url": "https://micropython.org/resources/firmware/WEACTSTUDIO_RP2350B_CORE-RISCV-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 16777216,
+        "source": "Raspberry Pi pico-sdk src/boards/include/boards/weact_studio_rp2350b_core.h (PICO_FLASH_SIZE_BYTES)",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 532480,
         "source": "Raspberry Pi RP2350 datasheet",
@@ -9890,8 +11544,17 @@
           "url": "https://micropython.org/resources/firmware/WEACT_F411_BLACKPILL-V31_XTAL_8M-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 524288,
+        "source": "ST STM32F411CE (CubeMX MCU database)",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 131072,
+        "source": "ST STM32F411CE (CubeMX MCU database)",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -9932,7 +11595,12 @@
           "url": "https://micropython.org/resources/firmware/LOLIN_C3_MINI-20260406-v1.28.0.bin"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 4194304,
+        "source": "wemos.cc/en/latest/c3/c3_mini.html",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 409600,
         "source": "Espressif ESP32-C3 datasheet",
@@ -9979,13 +11647,22 @@
           "url": "https://micropython.org/resources/firmware/LOLIN_S2_MINI-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 4194304,
+        "source": "wemos.cc/en/latest/s2/s2_mini.html",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 327680,
         "source": "Espressif ESP32-S2 datasheet",
         "scope": "chip"
       },
-      "psram": null,
+      "psram": {
+        "bytes": 2097152,
+        "source": "wemos.cc/en/latest/s2/s2_mini.html",
+        "scope": "board"
+      },
       "circuitPythonBoardId": "lolin_s2_mini",
       "runtimes": [
         "micropython",
@@ -10028,13 +11705,22 @@
           "url": "https://micropython.org/resources/firmware/LOLIN_S2_PICO-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 4194304,
+        "source": "wemos.cc/en/latest/s2/s2_pico.html",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 327680,
         "source": "Espressif ESP32-S2 datasheet",
         "scope": "chip"
       },
-      "psram": null,
+      "psram": {
+        "bytes": 2097152,
+        "source": "wemos.cc/en/latest/s2/s2_pico.html",
+        "scope": "board"
+      },
       "circuitPythonBoardId": "lolin_s2_pico",
       "runtimes": [
         "micropython",
@@ -10070,8 +11756,17 @@
           "url": "https://micropython.org/resources/firmware/WT51822_S4AT-20260406-v1.28.0.hex"
         }
       ],
-      "flash": null,
-      "ram": null,
+      "flash": {
+        "bytes": 262144,
+        "source": "MicroPython ports/nrf/boards/nrf51x22_256k_16k.ld",
+        "scope": "chip"
+      },
+      "externalFlash": null,
+      "ram": {
+        "bytes": 16384,
+        "source": "MicroPython ports/nrf/boards/nrf51x22_256k_16k.ld",
+        "scope": "chip"
+      },
       "psram": null,
       "circuitPythonBoardId": null,
       "runtimes": [
@@ -10112,7 +11807,12 @@
           "url": "https://micropython.org/resources/firmware/W5100S_EVB_PICO-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "docs.wiznet.io W5100S-EVB-Pico",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 270336,
         "source": "Raspberry Pi RP2040 datasheet",
@@ -10159,7 +11859,12 @@
           "url": "https://micropython.org/resources/firmware/W5500_EVB_PICO-20260406-v1.28.0.uf2"
         }
       ],
-      "flash": null,
+      "flash": {
+        "bytes": 2097152,
+        "source": "docs.wiznet.io W5500-EVB-Pico",
+        "scope": "board"
+      },
+      "externalFlash": null,
       "ram": {
         "bytes": 270336,
         "source": "Raspberry Pi RP2040 datasheet",

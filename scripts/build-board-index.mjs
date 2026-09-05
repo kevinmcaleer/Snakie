@@ -19,11 +19,17 @@
  * committed here as the bundled seed, so a fresh install and the offline
  * classroom build (#267) work with no network at all.
  *
- * WHAT UPSTREAM DOES NOT PUBLISH: flash size, RAM size, and whether the board
- * also runs CircuitPython. `features` carries `External Flash` and `External
- * RAM` as booleans and nothing more. Those come from `board-specs.mjs` instead,
- * which is where every figure's provenance lives — see #897 for why a number
- * with no `source` is not published at all.
+ * WHAT UPSTREAM DOES NOT PUBLISH IN `board.json`: flash size, RAM size, and
+ * whether the board also runs CircuitPython. `features` carries `External Flash`
+ * and `External RAM` as booleans and nothing more.
+ *
+ * It does, though, publish sizes NEXT to `board.json`, in the build
+ * configuration each board needs to compile at all — which is a better citation
+ * than a product page, because it is what the firmware people flash was built
+ * against. `board-config.mjs` reads those, one small reader per port;
+ * `board-specs.mjs` turns a chip name into a datasheet figure and holds the
+ * curation for everything neither can reach. Every number ends up with a
+ * `source` — see #897 for why one without is not published at all.
  *
  * Run:  node scripts/build-board-index.mjs [--tag v1.29.0] [--no-images]
  *       node scripts/build-board-index.mjs --specs-only
@@ -32,7 +38,8 @@
  * derived fields — sizes, runtimes, CircuitPython ids. It exists because the
  * curation in `board-specs.mjs` changes far more often than upstream's tree
  * does, and a full run re-encodes 217 thumbnails into an unreviewable binary
- * diff to say nothing about them.
+ * diff to say nothing about them. It still needs the network: the sizes are
+ * read from upstream's tree, not remembered.
  */
 import { mkdir, readFile, writeFile, rm } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
@@ -46,6 +53,12 @@ import {
   runtimesForBoard,
   specsForBoard
 } from './board-specs.mjs'
+import {
+  PORT_CONFIG_FILES,
+  nrfMemoryScriptsFor,
+  picoSdkBoardFor,
+  readBoardConfig
+} from './board-config.mjs'
 
 const run = promisify(execFile)
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -149,11 +162,23 @@ async function newestReleaseTag() {
   return stable[0]
 }
 
-/** Every `board.json` path in the tree, one API call. */
-async function boardPaths(tag) {
+/**
+ * Upstream's whole file listing at `tag`, one API call.
+ *
+ * Worth keeping whole rather than filtering to `board.json` on the way past: the
+ * same response says which per-board config files exist (so #897's readers ask
+ * for nothing that would 404) and pins the pico-sdk revision, which is a
+ * submodule and therefore a `commit` entry carrying its sha.
+ */
+async function repoTree(tag) {
   const tree = await getJson(`${GH}/git/trees/${tag}?recursive=1`, ghHeaders())
   if (tree.truncated) throw new Error('tree response was truncated — cannot enumerate boards')
   return tree.tree
+}
+
+/** Every `board.json` path in the tree. */
+function boardPaths(tree) {
+  return tree
     .filter((e) => e.path.endsWith('/board.json'))
     .map((e) => ({ path: e.path, port: e.path.split('/')[1], board: e.path.split('/')[3] }))
 }
@@ -223,20 +248,128 @@ async function thumbnail(srcBytes, destPath) {
 }
 
 /**
+ * What MicroPython's own tree says about each board's hardware (#897).
+ *
+ * Two passes, because rp2's answer may live in a pico-sdk header whose NAME is
+ * only known once the board's `mpconfigboard.cmake` has been read. `tree` is
+ * consulted first so nothing is requested that does not exist — a 404 per board
+ * is both rude and slow against someone else's hosting.
+ *
+ * A board whose files cannot be fetched yields `{}`, which reads downstream as
+ * "nothing known", not as an error: this enriches the index, it does not gate it.
+ */
+async function gatherConfigs(tag, boards, tree) {
+  const present = new Set(tree.map((e) => e.path))
+  const picoSdkSha = tree.find((e) => e.path === 'lib/pico-sdk' && e.type === 'commit')?.sha ?? null
+
+  const fetched = await pooled(boards, CONCURRENCY, async (b) => {
+    const dir = `ports/${b.port}/boards/${b.id}`
+    const files = {}
+    for (const name of PORT_CONFIG_FILES[b.port] ?? []) {
+      if (present.has(`${dir}/${name}`)) files[name] = await getText(`${RAW}/${tag}/${dir}/${name}`)
+    }
+    // A pico-sdk board header the board ships itself — the strongest rp2 source,
+    // because nobody writes one of these about somebody else's board.
+    const ownHeaders = {}
+    if (b.port === 'rp2') {
+      for (const e of tree) {
+        if (!e.path.startsWith(`${dir}/`) || !e.path.endsWith('.h')) continue
+        const name = e.path.slice(dir.length + 1)
+        if (name === 'mpconfigboard.h' || name.includes('/')) continue
+        ownHeaders[name] = await getText(`${RAW}/${tag}/${e.path}`)
+      }
+    }
+    return { files, ownHeaders }
+  })
+
+  // Second pass: the files those configs turned out to name — pico-sdk board
+  // headers, and the nrf memory maps that are the only thing separating an
+  // nRF52832 QFAA from a QFAB. Both are shared between boards, so they are
+  // gathered once by name rather than per board.
+  //
+  // The pico-sdk is fetched at the revision MicroPython PINS, not at whatever is
+  // newest, so the figure is the one this firmware was built against. That is
+  // not a formality: the pinned revision gives the XIAO RP2350 2 MB, agreeing
+  // with Seeed, where a later pico-sdk gives 4 MB.
+  const picoHeaders = new Map()
+  const nrfScripts = new Map()
+  boards.forEach((b, i) => {
+    const got = fetched[i]
+    if (!got?.files) return
+    if (b.port === 'rp2' && picoSdkSha) {
+      const name = picoSdkBoardFor(got.files, b.id)
+      if (name) picoHeaders.set(name, null)
+    }
+    if (b.port === 'nrf') {
+      for (const name of nrfMemoryScriptsFor(got.files)) {
+        if (present.has(`ports/nrf/boards/${name}`)) nrfScripts.set(name, null)
+      }
+    }
+  })
+  await Promise.all([
+    fetchInto(picoHeaders, (name) =>
+      getText(
+        `https://raw.githubusercontent.com/raspberrypi/pico-sdk/${picoSdkSha}/src/boards/include/boards/${name}.h`
+      )
+    ),
+    fetchInto(nrfScripts, (name) => getText(`${RAW}/${tag}/ports/nrf/boards/${name}`))
+  ])
+
+  const out = new Map()
+  boards.forEach((b, i) => {
+    const got = fetched[i]
+    if (!got?.files) return out.set(b.id, {})
+    out.set(
+      b.id,
+      readBoardConfig(b.port, got.files, {
+        boardId: b.id,
+        ownHeaders: got.ownHeaders,
+        picoSdkHeaders: Object.fromEntries(picoHeaders),
+        // Only the scripts THIS board names, so a board never sees another's.
+        nrfScripts: Object.fromEntries(
+          nrfMemoryScriptsFor(got.files)
+            .map((name) => [name, nrfScripts.get(name)])
+            .filter(([, text]) => typeof text === 'string')
+        )
+      })
+    )
+  })
+  return out
+}
+
+/** Fill a `name → null` map with `fetch(name)`, dropping whatever fails. */
+async function fetchInto(map, fetchOne) {
+  const names = [...map.keys()]
+  const got = await pooled(names, CONCURRENCY, fetchOne)
+  names.forEach((name, i) => {
+    if (typeof got[i] === 'string') map.set(name, got[i])
+  })
+}
+
+/**
  * Attach the derived fields to every board, in place.
  *
  * Shared by the full run and `--specs-only` so the two cannot drift: a seed
  * enriched by the quick path has to be byte-identical to one the slow path would
  * have produced, or the quick path is just a second, worse generator.
  */
-function addSpecs(boards, cpIndex) {
+function addSpecs(boards, cpIndex, configs) {
+  const derived = ['flash', 'externalFlash', 'ram', 'psram', 'circuitPythonBoardId', 'runtimes']
   for (const b of boards) {
-    const { flash, ram, psram } = specsForBoard(b)
+    const { flash, externalFlash, ram, psram } = specsForBoard(b, configs?.get(b.id) ?? {})
+    const circuitPythonBoardId = cpIndex ? circuitPythonIdFor(b, cpIndex) : null
+    // Cleared and re-set in one order, so a seed enriched by `--specs-only`
+    // matches one the full run wrote KEY FOR KEY. Assigning over the existing
+    // fields instead would leave a field added since the seed was last built
+    // sitting at the end of the object, and the two paths would differ in a diff
+    // while agreeing on every value.
+    for (const key of derived) delete b[key]
     b.flash = flash
+    b.externalFlash = externalFlash
     b.ram = ram
     b.psram = psram
-    b.circuitPythonBoardId = cpIndex ? circuitPythonIdFor(b, cpIndex) : null
-    b.runtimes = runtimesForBoard(b, b.circuitPythonBoardId)
+    b.circuitPythonBoardId = circuitPythonBoardId
+    b.runtimes = runtimesForBoard(b, circuitPythonBoardId)
   }
   return boards
 }
@@ -254,22 +387,45 @@ async function loadCircuitPython() {
   }
 }
 
-/** Report what is known and what is not, because the gaps are the point (#897). */
+/**
+ * Report what is known and what is not, because the gaps are the point (#897).
+ *
+ * Broken down by vendor as well as in total: "flash on 195 of 225" hides that a
+ * whole maker's range is missing, and which maker it is decides whether the
+ * gallery can offer a size filter without quietly dropping them.
+ */
 function reportCoverage(boards) {
   const n = (f) => boards.filter(f).length
   process.stderr.write(
     `  flash size on ${n((b) => b.flash)}/${boards.length}, ` +
-      `RAM on ${n((b) => b.ram)}, PSRAM on ${n((b) => b.psram)}, ` +
+      `external flash on ${n((b) => b.externalFlash)}, ` +
+      `RAM on ${n((b) => b.ram)}, external RAM on ${n((b) => b.psram)}, ` +
       `CircuitPython confirmed on ${n((b) => b.circuitPythonBoardId)}\n`
   )
+  const byVendor = new Map()
+  for (const b of boards) {
+    const row = byVendor.get(b.vendor) ?? { total: 0, flash: 0, ram: 0 }
+    row.total += 1
+    if (b.flash) row.flash += 1
+    if (b.ram) row.ram += 1
+    byVendor.set(b.vendor, row)
+  }
+  for (const [vendor, row] of [...byVendor].sort((a, b) => b[1].total - a[1].total)) {
+    if (row.flash === row.total && row.ram === row.total) continue
+    process.stderr.write(
+      `    ${vendor}: flash ${row.flash}/${row.total}, RAM ${row.ram}/${row.total}\n`
+    )
+  }
 }
 
 /** Rewrite the committed seed's derived fields without touching anything else. */
 async function specsOnly() {
   const path = join(OUT_DIR, 'boards.json')
   const doc = JSON.parse(await readFile(path, 'utf8'))
-  process.stderr.write(`Re-deriving specs for ${doc.boards.length} boards in ${path}\n`)
-  addSpecs(doc.boards, await loadCircuitPython())
+  const tag = value('--tag', null) ?? doc.micropython
+  process.stderr.write(`Re-deriving specs for ${doc.boards.length} boards in ${path} (${tag})\n`)
+  const configs = await gatherConfigs(tag, doc.boards, await repoTree(tag))
+  addSpecs(doc.boards, await loadCircuitPython(), configs)
   doc.generated = new Date().toISOString().slice(0, 10)
   await writeFile(path, `${JSON.stringify(doc, null, 2)}\n`)
   reportCoverage(doc.boards)
@@ -281,7 +437,8 @@ async function main() {
   const withImages = !flag('--no-images')
   process.stderr.write(`Building board index from MicroPython ${tag}\n`)
 
-  const paths = await boardPaths(tag)
+  const tree = await repoTree(tag)
+  const paths = boardPaths(tree)
   process.stderr.write(`  ${paths.length} boards in the tree\n`)
 
   await mkdir(join(OUT_DIR, 'thumbs'), { recursive: true })
@@ -330,7 +487,7 @@ async function main() {
   const ok = boards.filter((b) => b && !b.error)
   const failed = boards.length - ok.length
   ok.sort((a, b) => a.vendor.localeCompare(b.vendor) || a.product.localeCompare(b.product))
-  addSpecs(ok, await loadCircuitPython())
+  addSpecs(ok, await loadCircuitPython(), await gatherConfigs(tag, ok, tree))
 
   const doc = {
     schema: SCHEMA,

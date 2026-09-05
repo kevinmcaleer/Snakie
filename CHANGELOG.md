@@ -80,6 +80,43 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   tap that already opened the full page; a keyboard gets the preview on focus,
   with its Details button as the next stop and Enter on the card doing the same
   thing. Nothing in it is reachable only by hovering.
+- **Sizes for almost every board, and a memory filter that earns its place**
+  (#897). The board index could attribute a flash size for 10 boards of 230 and
+  a RAM size for 86, so both were shown as facts and neither was offered as a
+  filter. Now **187 boards have a flash figure and 226 have a RAM one**, and
+  every one still names its source.
+
+  Most of that came from reading what MicroPython already publishes NEXT to
+  `board.json` — the build configuration each board needs in order to compile at
+  all, which is a better citation than a product page because it is what the
+  firmware people flash was built against. A Teensy 4.1's `mpconfigboard.mk`
+  states its 8 MB QSPI part; an nRF52832 board's makefile names the memory map it
+  links against, which is the only thing that separates the 512 KB part from the
+  256 KB one; an RP2040 board's config names a pico-sdk board header — and that
+  is read at the revision MicroPython PINS, which is how the XIAO RP2350 gets
+  Seeed's 2 MB rather than a later SDK's 4 MB. Chip part numbers then go to the
+  silicon vendor's datasheet, and the rest is curation from the makers' own
+  pages, vendor by vendor.
+
+  A board that carries flash in TWO places now says so in both: a Feather M0
+  Express reads "Flash 256 KB (the chip's internal flash)" and "External flash
+  2 MB", where before a chip figure would have suppressed the note about the
+  SPI chip entirely.
+
+  **Memory** is a filter now — `≥ 32 KB` through `≥ 1 MB` — because 226 of 230
+  boards can answer it and it says something the processor dropdown cannot:
+  `stm32f4` runs from 96 KB to 384 KB, `mimxrt` from 128 KB to 2 MB. The four
+  boards with no published figure are **counted and named under the control**
+  rather than quietly dropped. **Storage is still not a filter**, and no longer
+  for want of numbers: 107 of those flash figures are the flash inside the
+  microcontroller and 80 are the chip on the module, which are not the same
+  quantity to rank boards by — and every `ESP32_GENERIC` entry is missing one,
+  because its size belongs to whichever module the buyer has.
+
+  Boards where the sources genuinely disagree say nothing and record why: the
+  Werkzeug's flash changed size in March 2025, the wESP32's changed at revision
+  7, and upstream's `FEATHER52` links one Adafruit product while building for
+  another.
 - **The boards MicroPython does not build for, and where the numbers come from**
   (#902, #897). The Board Finder had 15 Adafruit boards and not one Adafruit
   ESP32 board, because MicroPython publishes no firmware under any of those
@@ -103,13 +140,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
   And boards now state their **flash, RAM and PSRAM** — each naming where the
   figure came from, because upstream publishes none of them and a number nobody
-  can check is not worth showing. 86 boards have a RAM figure (their chip's
-  SRAM, marked as the chip's rather than the board's) and 10 have a flash figure,
-  from the maker's own documentation. The rest say nothing rather than guessing:
-  an `stm32f4` spans 96 KB to 256 KB of SRAM, and a wrong flash size sends
-  someone to a board that cannot hold their program. Storage and memory still are
-  not filters at that coverage — a size control would hide the catalogue rather
-  than narrow it.
+  can check is not worth showing. Anything that could not be attributed says
+  nothing rather than guessing: an `stm32f4` spans 96 KB to 256 KB of SRAM, and a
+  wrong flash size sends someone to a board that cannot hold their program.
 
 - **A Board Finder, and the firmware picker finally knows every board** (#893).
   The picker showed Thonny's catalogue, which lists no Adafruit boards at all

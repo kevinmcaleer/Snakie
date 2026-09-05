@@ -59,6 +59,8 @@ export interface OverlayBoard {
   /** esptool write offset, or null where the board is not flashed that way. */
   flashOffset: string | null
   flash: BoardSize | null
+  /** A second flash chip beside the MCU, where the maker states its size (#897). */
+  externalFlash?: BoardSize | null
   ram: BoardSize | null
   psram: BoardSize | null
   /** Confirmed against circuitpython.org's published catalogue, or null. */
@@ -230,6 +232,7 @@ function toIndexedBoard(entry: OverlayBoard, upstream: readonly IndexedBoard[]):
     thumb: null,
     builds: borrowed,
     flash: entry.flash,
+    externalFlash: entry.externalFlash ?? null,
     ram: entry.ram,
     psram: entry.psram,
     runtimes,

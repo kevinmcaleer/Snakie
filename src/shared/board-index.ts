@@ -33,8 +33,8 @@
  * comes from somewhere else, and every figure therefore carries a {@link
  * BoardSize.source} naming it. A number with no provenance is not worth
  * publishing: a wrong flash size sends someone to a board that cannot hold their
- * program. They are still NOT offered as filters — see `board-finder.ts` for the
- * coverage that decision turns on.
+ * program. Whether they are offered as FILTERS is a separate question, decided
+ * on coverage — see `board-finder.ts`.
  *
  * Pure — parsing, filtering and picking, no IO — so all of it unit-tests in node.
  */
@@ -144,11 +144,33 @@ export interface IndexedBoard {
   /** Bundled thumbnail filename, or null where none could be made. */
   thumb: string | null
   builds: BoardBuild[]
-  /** On-board flash, when a sourced figure exists (#897). Usually `board` scope. */
+  /**
+   * The flash a program is written into (#897).
+   *
+   * `chip` scope where the microcontroller has its own — an STM32F405's 1 MB is
+   * on the die and true of every board carrying one. `board` scope on the parts
+   * with NO internal flash at all, where it is entirely a property of the
+   * module: RP2040, RP2350, ESP32 and i.MX RT.
+   */
   flash: BoardSize | null
+  /**
+   * A SEPARATE flash chip the board adds, when its size is sourced (#897).
+   *
+   * Distinct from {@link flash} because on half the catalogue they are both real
+   * and different: the Feather M0 Express has 256 KB inside the SAMD21 and 2 MB
+   * of SPI flash beside it, and answering "how much flash?" with either number
+   * alone is answering a different question from the one that was asked. Null on
+   * boards with no second chip AND on boards that have one whose size nobody
+   * publishes — `features` still carries `External Flash` for the latter, and the
+   * card says the size is unknown rather than implying there is none.
+   */
+  externalFlash: BoardSize | null
   /** Built-in SRAM (#897). Usually `chip` scope — it follows from `mcu`. */
   ram: BoardSize | null
-  /** External PSRAM/SPIRAM, when the board has any and the size is sourced. */
+  /**
+   * External RAM — SPI PSRAM on the ESP32 and RP2350 boards, SDRAM on the bigger
+   * i.MX RT and STM32H7 ones. One field, because it answers one question.
+   */
   psram: BoardSize | null
   /**
    * The runtimes with a published, flashable build for THIS board (#902).
@@ -270,6 +292,7 @@ export function parseBoardIndex(raw: unknown): BoardIndex | null {
       thumb: strOrNull(b.thumb),
       builds,
       flash: parseSize(b.flash),
+      externalFlash: parseSize(b.externalFlash),
       ram: parseSize(b.ram),
       psram: parseSize(b.psram),
       // DERIVED, not read, when the document does not say — which is what a
@@ -335,6 +358,16 @@ export interface BoardFilter {
    * question someone switching a class from one to the other actually has.
    */
   runtimes?: FirmwareRuntime[]
+  /**
+   * Keep only boards with at least this much on-chip RAM, in bytes (#897).
+   *
+   * A board with NO published RAM figure does not match — there is no honest
+   * way to include it — so the gallery counts those separately and says how
+   * many it dropped for want of a figure. See {@link boardsWithoutRam}.
+   *
+   * There is deliberately no `minFlash` beside this. See `board-finder.ts`.
+   */
+  minRam?: number
   /** Hide boards with no published firmware. */
   flashableOnly?: boolean
 }
@@ -350,6 +383,9 @@ export function matchesFilter(board: IndexedBoard, filter: BoardFilter): boolean
   // must not hide the catalogue.
   if (filter.vendors?.length && !filter.vendors.includes(board.vendor)) return false
   if (filter.mcus?.length && !filter.mcus.includes(board.mcu)) return false
+  // A size threshold is a different shape from a facet: one comparable number,
+  // not a set of values, so it narrows on its own terms (#897).
+  if (filter.minRam && (board.ram === null || board.ram.bytes < filter.minRam)) return false
   for (const f of filter.features ?? []) {
     if (!board.features.includes(f)) return false
   }
@@ -369,6 +405,26 @@ export function matchesFilter(board: IndexedBoard, filter: BoardFilter): boolean
 
 export function filterBoards(boards: readonly IndexedBoard[], filter: BoardFilter): IndexedBoard[] {
   return boards.filter((b) => matchesFilter(b, filter))
+}
+
+/**
+ * Boards with no published RAM figure, among those the OTHER filters keep.
+ *
+ * The whole design of #897 is that a missing figure is stated rather than
+ * hidden, and a size filter is the one place that promise is easy to break: a
+ * board with no number silently drops out of the list and nobody is told. This
+ * is what the gallery prints instead — "4 boards have no published RAM figure
+ * and are not shown" — so the gap stays visible at the moment it bites.
+ *
+ * `minRam` is ignored when counting, on purpose: the answer must not depend on
+ * where the threshold happens to sit.
+ */
+export function boardsWithoutRam(
+  boards: readonly IndexedBoard[],
+  filter: BoardFilter
+): IndexedBoard[] {
+  const rest = { ...filter, minRam: undefined }
+  return boards.filter((b) => b.ram === null && matchesFilter(b, rest))
 }
 
 /** One choice on a chip facet: the value, and how many boards carry it. */

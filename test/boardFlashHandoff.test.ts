@@ -39,6 +39,7 @@ const board = (over: Partial<IndexedBoard> = {}): IndexedBoard => ({
     }
   ],
   flash: null,
+  externalFlash: null,
   ram: null,
   psram: null,
   runtimes: ['micropython'],

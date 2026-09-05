@@ -859,6 +859,13 @@
   color: var(--bf-ink3);
 }
 
+/* The count of boards a size filter dropped for want of a figure (#897). It has
+   to read as a caveat about the RESULT rather than more small print about the
+   control, so it takes the warning token — which both skins define. */
+.bfind__facet-note.is-warn {
+  color: var(--warn, var(--accent));
+}
+
 /* --- boards Snakie carries and upstream does not (#902) ------------------- */
 
 /* On the card face: this board flashes another board's build. */
