@@ -139,6 +139,17 @@ export function registerDeviceIpc(getWebContents: () => WebContents | undefined)
 
   ipcMain.handle('device:disconnect', () => wrap(() => getActive().disconnect()))
 
+  // The simulated board's heap (#901). Addressed to the SIMULATOR, not to
+  // `getActive()` — the console's cog sets it whether or not the sim is the
+  // backend in use, and the value has to be in place before the next boot.
+  ipcMain.handle('device:setSimMemory', (_e, bytes: number) =>
+    wrap(async () => {
+      simDev.setMemory(bytes)
+      return simDev.getMemory()
+    })
+  )
+  ipcMain.handle('device:getSimMemory', () => wrap(async () => simDev.getMemory()))
+
   ipcMain.handle('device:getStatus', () => wrap(async () => getActive().getStatus()))
 
   ipcMain.handle('device:exec', (_e, code: string) => wrap(() => getActive().exec(code)))

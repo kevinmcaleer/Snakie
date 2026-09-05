@@ -12,8 +12,13 @@ const defaultWorkerPath = join(dirname(fileURLToPath(import.meta.url)), WORKER_F
  * can be unit-tested against a lightweight fake without loading WebAssembly.
  */
 export interface ReplRuntime {
-  /** Boot the runtime; `onOutput` receives REPL output as raw byte chunks. */
-  init(onOutput: (chunk: Buffer) => void): Promise<void>
+  /**
+   * Boot the runtime; `onOutput` receives REPL output as raw byte chunks.
+   * `heapBytes` is the GC heap the interpreter starts with (#901); the runtime
+   * REMEMBERS it, because a Stop reboots the worker and the fresh interpreter
+   * has to come back with the same heap the user asked for.
+   */
+  init(onOutput: (chunk: Buffer) => void, heapBytes?: number): Promise<void>
   /** Feed raw input bytes (keystrokes, paste-mode payloads, control chars). */
   feed(data: string): Promise<void>
   /**
@@ -69,6 +74,8 @@ export class MicroPythonRuntime implements ReplRuntime {
   /** In-flight feed/run count — >0 means the interpreter is busy/running. */
   private busy = 0
   private readonly workerPath: string
+  /** GC heap for every spawn, including the Stop reboot (#901). */
+  private heapBytes: number | undefined
 
   /** `workerFile` overrides the bundled worker path. Falls back to
    *  `SNAKIE_MP_WORKER` (set by the vitest setup, which compiles the worker to a
@@ -77,8 +84,9 @@ export class MicroPythonRuntime implements ReplRuntime {
     this.workerPath = workerFile ?? process.env.SNAKIE_MP_WORKER ?? defaultWorkerPath
   }
 
-  async init(onOutput: (chunk: Buffer) => void): Promise<void> {
+  async init(onOutput: (chunk: Buffer) => void, heapBytes?: number): Promise<void> {
     this.onOutput = onOutput
+    this.heapBytes = heapBytes
     await this.spawn()
   }
 
@@ -105,7 +113,7 @@ export class MicroPythonRuntime implements ReplRuntime {
       this.readyResolve = res
       this.readyReject = rej
     })
-    worker.postMessage({ type: 'init' })
+    worker.postMessage({ type: 'init', heapBytes: this.heapBytes })
     return ready
   }
 

@@ -54,6 +54,13 @@ export function createWebDeviceRouter(): Record<string, unknown> {
       await call(active, 'disconnect')
     },
 
+    // The heap setting belongs to the SIMULATOR, so it goes there whichever
+    // backend happens to be active — the console's cog is reachable while a
+    // real board is connected, and the value must be in place before the next
+    // simulator boot (#901).
+    setSimMemory: async (bytes: number): Promise<unknown> => call(sim, 'setSimMemory', bytes),
+    getSimMemory: async (): Promise<unknown> => call(sim, 'getSimMemory'),
+
     getStatus: async () => call(active, 'getStatus'),
 
     // ── Everything else delegates to the active backend ──────────────────────

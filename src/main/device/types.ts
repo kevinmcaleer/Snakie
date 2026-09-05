@@ -38,6 +38,17 @@ export interface ConnectOptions {
   baudRate?: number
 }
 
+/**
+ * The simulated board's heap setting (#901). `configured` is what the next boot
+ * will use; `booted` is what the interpreter actually started with, or null when
+ * nothing is running. They differ exactly when a restart is still owed — the
+ * heap is fixed at `mp_js_init`, so a change cannot reach a live interpreter.
+ */
+export interface SimMemoryState {
+  configured: number
+  booted: number | null
+}
+
 /** Connection lifecycle states. */
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
 

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { isVirtualPort, VIRTUAL_PORT_LABEL } from '../../../shared/virtual-device'
+import { isVirtualPort, VIRTUAL_PORT_LABEL, VIRTUAL_PORT_PATH } from '../../../shared/virtual-device'
+import { SimMemoryDialog } from './SimMemoryDialog'
+import { pushSimHeapBytes, readSimHeapBytes, writeSimHeapBytes } from '../store/sim-memory'
 import type { DeviceStatus, PortCircuitPy, PortInfo } from '../../../preload/index.d'
 
 /**
@@ -35,9 +37,17 @@ export function ConnectionControl({ status }: ConnectionControlProps): JSX.Eleme
   const [selected, setSelected] = useState<string>('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Simulated-device memory (#901): the stored preference, the heap the live
+  // simulator actually booted with, and whether the cog's dialog is open.
+  const [memOpen, setMemOpen] = useState(false)
+  const [heapBytes, setHeapBytes] = useState(readSimHeapBytes)
+  const [bootedHeap, setBootedHeap] = useState<number | null>(null)
 
   const connected = status.state === 'connected'
   const connecting = status.state === 'connecting' || busy
+  // The cog belongs to the SELECTED port, not the connected one — the setting is
+  // about the simulator's next boot, so it has to be reachable before connecting.
+  const simSelected = isVirtualPort(selected)
 
   const refreshPorts = useCallback(async (): Promise<void> => {
     try {
@@ -55,6 +65,31 @@ export function ConnectionControl({ status }: ConnectionControlProps): JSX.Eleme
   useEffect(() => {
     void refreshPorts()
   }, [refreshPorts])
+
+  // Hand the stored heap to the device layer once, on mount, so a preference set
+  // in an earlier session is in force before anything auto-connects the sim
+  // (the web build does so ~400ms after first render) (#901).
+  useEffect(() => {
+    void pushSimHeapBytes(readSimHeapBytes())
+  }, [])
+
+  // What the LIVE simulator booted with — the device layer owns that truth, so
+  // the dialog can say honestly whether a restart is still owed. Re-read on
+  // every connection change, since connecting is what fixes a heap in place.
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const state = await window.api.device.getSimMemory?.()
+        if (!cancelled && state) setBootedHeap(state.booted)
+      } catch {
+        /* an older preload has no such channel — the dialog just won't offer a restart */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [status.state, status.path])
 
   // Keep the dropdown showing the active port while connected.
   // Keep the dropdown showing the active port while connected. A board picked via
@@ -81,6 +116,50 @@ export function ConnectionControl({ status }: ConnectionControlProps): JSX.Eleme
       setBusy(false)
     }
   }, [connected, selected])
+
+  /** Persist a new simulated heap and hand it to the device layer. */
+  const saveHeap = useCallback(async (bytes: number): Promise<number> => {
+    const stored = writeSimHeapBytes(bytes)
+    setHeapBytes(stored)
+    await pushSimHeapBytes(stored)
+    return stored
+  }, [])
+
+  const handleSaveHeap = useCallback(
+    (bytes: number): void => {
+      void saveHeap(bytes)
+      setMemOpen(false)
+    },
+    [saveHeap]
+  )
+
+  /**
+   * Save AND restart the simulator, because the heap is fixed at interpreter
+   * start-up. A disconnect/connect cycle is the supported way to get a fresh
+   * interpreter — the same terminate-and-respawn Stop performs — so the RAM
+   * filesystem resets with it, which the dialog warns about before we get here.
+   */
+  const handleSaveAndRestartHeap = useCallback(
+    (bytes: number): void => {
+      setMemOpen(false)
+      void (async () => {
+        setError(null)
+        setBusy(true)
+        try {
+          await saveHeap(bytes)
+          await window.api.device.disconnect()
+          await window.api.device.connect(VIRTUAL_PORT_PATH)
+          const state = await window.api.device.getSimMemory?.()
+          if (state) setBootedHeap(state.booted)
+        } catch (err) {
+          setError(err instanceof Error ? err.message : String(err))
+        } finally {
+          setBusy(false)
+        }
+      })()
+    },
+    [saveHeap]
+  )
 
   return (
     <div className="conn-control" title={error ?? undefined}>
@@ -125,6 +204,28 @@ export function ConnectionControl({ status }: ConnectionControlProps): JSX.Eleme
           )
         })}
       </select>
+      {/* Memory cog — only for the simulated board, which is the only device
+          whose RAM we get to choose (#901). */}
+      {simSelected && (
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm conn-control__cog"
+          onClick={() => setMemOpen(true)}
+          title="Simulated device memory"
+          aria-label="Simulated device memory"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            <circle cx="8" cy="8" r="2.2" fill="none" stroke="currentColor" strokeWidth="1.3" />
+            <path
+              d="M8 1.6v1.6M8 12.8v1.6M14.4 8h-1.6M3.2 8H1.6M12.5 3.5l-1.1 1.1M4.6 11.4l-1.1 1.1M12.5 12.5l-1.1-1.1M4.6 4.6 3.5 3.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.3"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+      )}
       <button
         type="button"
         className={`btn btn--sm ${connected ? 'btn--danger' : 'btn--primary'}`}
@@ -133,6 +234,15 @@ export function ConnectionControl({ status }: ConnectionControlProps): JSX.Eleme
       >
         {connected ? 'Disconnect' : connecting ? 'Connecting…' : 'Connect'}
       </button>
+      {memOpen && (
+        <SimMemoryDialog
+          value={heapBytes}
+          booted={bootedHeap}
+          onSave={handleSaveHeap}
+          onSaveAndRestart={handleSaveAndRestartHeap}
+          onClose={() => setMemOpen(false)}
+        />
+      )}
     </div>
   )
 }

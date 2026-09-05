@@ -20,6 +20,7 @@ import type {
   ExecResult,
   IpcResult,
   PortInfo,
+  SimMemoryState,
   StatResult
 } from '../main/device/types'
 import type { FsEntry, FsStat } from '../main/fs/types'
@@ -198,6 +199,13 @@ const device = {
     unwrap(ipcRenderer.invoke('device:connect', path, opts)),
   /** Close the active connection. */
   disconnect: (): Promise<void> => unwrap(ipcRenderer.invoke('device:disconnect')),
+  /** Set the GC heap the SIMULATED board boots with (#901). Returns the new
+   *  state; `booted` still names the live interpreter's heap, so a caller can
+   *  see that a restart is owed. */
+  setSimMemory: (bytes: number): Promise<SimMemoryState> =>
+    unwrap(ipcRenderer.invoke('device:setSimMemory', bytes)),
+  /** The simulated board's configured vs actually-booted heap (#901). */
+  getSimMemory: (): Promise<SimMemoryState> => unwrap(ipcRenderer.invoke('device:getSimMemory')),
   /** Current connection status snapshot. */
   getStatus: (): Promise<DeviceStatus> => unwrap(ipcRenderer.invoke('device:getStatus')),
   /** Run code in the raw REPL, returning captured stdout/stderr. */
