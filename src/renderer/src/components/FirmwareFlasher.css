@@ -501,3 +501,45 @@
 .firmware-advanced-toggle:hover {
   color: #f4f6f8;
 }
+
+/* The REPL is holding the port Detect needs (#845). A warning with its own way
+   out attached, because "that port is busy" is only half the story when the
+   thing holding it is this same app. Laid out on the warning banner, so its
+   colours are the dialog's own dark palette in BOTH themes — see the note at the
+   top of this file. */
+.firmware-conflict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+  margin-bottom: 0.5rem;
+}
+
+.firmware-conflict__text {
+  /* Wraps first and takes the whole row when the button no longer fits beside it. */
+  flex: 1 1 16rem;
+  margin: 0;
+}
+
+.firmware-conflict__action {
+  flex: 0 0 auto;
+  padding: 0.35rem 0.7rem;
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #f4f6f8;
+  background: rgba(255, 255, 255, 0.12);
+  border: var(--border-w) solid var(--accent);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.firmware-conflict__action:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.firmware-conflict__action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
