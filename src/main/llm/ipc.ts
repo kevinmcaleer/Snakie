@@ -15,9 +15,11 @@
  * Errors cross IPC as the same serializable {@link IpcResult} shape used by the
  * device/fs layers. The API key never appears in a log line or an error message.
  */
+
 import { ipcMain, type WebContents } from 'electron'
 import type { IpcResult } from '../device/types'
 import { getKey, hasKey, isEncryptionAvailable, setKey } from './keyStore'
+import { fetchAvailableModels, getProviderConfig, setProviderConfig } from './providers/providerConfig'
 import { DEFAULT_PROVIDER_ID, getProvider, listProviders } from './providers/registry'
 import {
   clearCopilotTokenCache,
@@ -46,7 +48,10 @@ export const LLM_CHANNELS = {
   sendMessage: 'llm:sendMessage',
   complete: 'llm:complete',
   copilotDeviceStart: 'llm:copilotDeviceStart',
-  copilotDevicePoll: 'llm:copilotDevicePoll'
+  copilotDevicePoll: 'llm:copilotDevicePoll',
+  getProviderConfig: 'llm:getProviderConfig',
+  setProviderConfig: 'llm:setProviderConfig',
+  fetchModels: 'llm:fetchModels'
 } as const
 
 /** Upper bound on the prompt context sent for a single inline completion. */
@@ -107,7 +112,7 @@ export function registerLlmIpc(getWebContents: () => WebContents | undefined): v
       }
 
       const apiKey = await getKey(providerId)
-      if (!apiKey) {
+      if (!apiKey && providerId !== 'local') {
         throw new Error(
           `No API key set for ${provider.info.label}. Add your key in the chat settings.`
         )
@@ -117,7 +122,7 @@ export function registerLlmIpc(getWebContents: () => WebContents | undefined): v
       push({ type: 'start', requestId })
       try {
         const full = await provider.streamChat({
-          apiKey,
+          apiKey: apiKey || '',
           model: req.model || provider.info.defaultModel,
           effort: req.effort,
           speed: req.speed,
@@ -148,7 +153,7 @@ export function registerLlmIpc(getWebContents: () => WebContents | undefined): v
       }
 
       const apiKey = await getKey(providerId)
-      if (!apiKey) {
+      if (!apiKey && providerId !== 'local') {
         // No key → no suggestion. The renderer only calls this when it believes
         // a key is set, but guard anyway so a race never throws into the editor.
         return ''
@@ -158,7 +163,7 @@ export function registerLlmIpc(getWebContents: () => WebContents | undefined): v
       const suffix = (req.suffix ?? '').slice(0, MAX_COMPLETION_SUFFIX)
 
       return provider.complete({
-        apiKey,
+        apiKey: apiKey || '',
         model: req.model || provider.info.defaultCompletionModel || provider.info.defaultModel,
         prefix,
         suffix,
@@ -187,5 +192,21 @@ export function registerLlmIpc(getWebContents: () => WebContents | undefined): v
       }
       return { status: result.status, message: result.message }
     })
+  )
+
+  ipcMain.handle(LLM_CHANNELS.getProviderConfig, (_e, providerId: string) =>
+    wrap(async (): Promise<Record<string, string>> => {
+      return getProviderConfig(providerId || DEFAULT_PROVIDER_ID)
+    })
+  )
+
+  ipcMain.handle(
+    LLM_CHANNELS.setProviderConfig,
+    (_e, providerId: string, config: Record<string, string>) =>
+      wrap(() => setProviderConfig(providerId || DEFAULT_PROVIDER_ID, config))
+  )
+
+  ipcMain.handle(LLM_CHANNELS.fetchModels, (_e, baseURL: string) =>
+    wrap(async (): Promise<string[]> => fetchAvailableModels(baseURL))
   )
 }
