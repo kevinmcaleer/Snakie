@@ -311,8 +311,21 @@ export function newerIndex(a: BoardIndex | null, b: BoardIndex | null): BoardInd
 export interface BoardFilter {
   /** Free text over vendor, product, id and mcu. */
   text?: string
-  vendor?: string
-  mcu?: string
+  /**
+   * Makers to keep — ANY of them, not all (#919).
+   *
+   * This is the opposite of {@link features}, and deliberately so. A board has
+   * exactly ONE vendor, so intersecting two of them is empty by construction: an
+   * "Adafruit AND Pimoroni" chip pair could only ever return nothing, which is
+   * not a filter but a trap. A board's features are a SET, so "WiFi and BLE" is
+   * a question with answers. Same rule for {@link mcus}.
+   *
+   * So: OR within a facet whose value is single, AND across facets — ticking
+   * Adafruit and Pimoroni shows both makers, and adding WiFi then narrows that.
+   */
+  vendors?: string[]
+  /** Chip families to keep — ANY of them, for the same reason as {@link vendors}. */
+  mcus?: string[]
   /** Every one of these must be present — filters narrow, they do not widen. */
   features?: string[]
   /**
@@ -333,8 +346,10 @@ function norm(s: string): string {
 
 export function matchesFilter(board: IndexedBoard, filter: BoardFilter): boolean {
   if (filter.flashableOnly && board.builds.length === 0) return false
-  if (filter.vendor && board.vendor !== filter.vendor) return false
-  if (filter.mcu && board.mcu !== filter.mcu) return false
+  // Empty means "no opinion", not "match nothing" — a facet with nothing ticked
+  // must not hide the catalogue.
+  if (filter.vendors?.length && !filter.vendors.includes(board.vendor)) return false
+  if (filter.mcus?.length && !filter.mcus.includes(board.mcu)) return false
   for (const f of filter.features ?? []) {
     if (!board.features.includes(f)) return false
   }
@@ -356,28 +371,46 @@ export function filterBoards(boards: readonly IndexedBoard[], filter: BoardFilte
   return boards.filter((b) => matchesFilter(b, filter))
 }
 
-/** Distinct vendors present, sorted — the vendor filter's options. */
-export function vendorsOf(boards: readonly IndexedBoard[]): string[] {
-  return [...new Set(boards.map((b) => b.vendor).filter(Boolean))].sort((a, b) => a.localeCompare(b))
-}
-
-/** Distinct chip families present, sorted. */
-export function mcusOf(boards: readonly IndexedBoard[]): string[] {
-  return [...new Set(boards.map((b) => b.mcu).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+/** One choice on a chip facet: the value, and how many boards carry it. */
+export interface FacetOption {
+  value: string
+  count: number
 }
 
 /**
- * Feature chips, commonest first.
+ * Distinct values, COMMONEST FIRST, ties alphabetical.
  *
- * Ordered by how many boards have them so the useful filters — WiFi, BLE — lead,
- * rather than an alphabetical list headed by `Audio Codec`.
+ * One order for every chip facet, because every one of them is now shown a few
+ * at a time with the rest behind a disclosure (#919) — and a collapsed head that
+ * is the first ten alphabetically is a list of curiosities, where a collapsed
+ * head that is the ten commonest is most people's board. It is the same argument
+ * that already ordered the feature chips: alphabetical would lead with `Audio
+ * Codec` and bury WiFi.
+ *
+ * The count travels with the value because it is what makes that order legible:
+ * without "43" beside ST Microelectronics, leading the list is arbitrary.
  */
-export function featuresOf(boards: readonly IndexedBoard[]): string[] {
+function rankOptions(values: Iterable<string>): FacetOption[] {
   const count = new Map<string, number>()
-  for (const b of boards) for (const f of b.features) count.set(f, (count.get(f) ?? 0) + 1)
+  for (const v of values) if (v) count.set(v, (count.get(v) ?? 0) + 1)
   return [...count.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .map(([f]) => f)
+    .map(([value, n]) => ({ value, count: n }))
+}
+
+/** The manufacturer chips — 54 of them, so most are behind "show more". */
+export function vendorOptions(boards: readonly IndexedBoard[]): FacetOption[] {
+  return rankOptions(boards.map((b) => b.vendor))
+}
+
+/** The processor chips. 41 chip families, and the top ten are two thirds of them. */
+export function mcuOptions(boards: readonly IndexedBoard[]): FacetOption[] {
+  return rankOptions(boards.map((b) => b.mcu))
+}
+
+/** The feature chips. */
+export function featureOptions(boards: readonly IndexedBoard[]): FacetOption[] {
+  return rankOptions(boards.flatMap((b) => b.features))
 }
 
 /**

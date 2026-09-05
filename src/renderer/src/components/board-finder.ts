@@ -22,7 +22,13 @@
  * THE RUNTIME FILTER (#902) does ship, because its data supports it and the one
  * thing it cannot say is sayable out loud. See {@link RUNTIME_CAVEAT}.
  */
-import type { BoardBuild, BoardFilter, IndexedBoard } from '../../../shared/board-index'
+import {
+  defaultBuild,
+  newestBuilds,
+  type BoardBuild,
+  type BoardFilter,
+  type IndexedBoard
+} from '../../../shared/board-index'
 import type { FirmwareRuntime } from '../../../shared/firmware-runtime'
 
 // ---------------------------------------------------------------------------
@@ -154,7 +160,7 @@ export function formatBytes(bytes: number): string {
 export function boardFacts(board: IndexedBoard): BoardFact[] {
   const facts: BoardFact[] = [{ label: 'MCU', value: board.mcu || 'unknown' }]
   if (board.port) facts.push({ label: 'Port', value: board.port })
-  if (board.flashOffset) facts.push({ label: 'Flash offset', value: board.flashOffset })
+  if (board.flashOffset) facts.push({ label: FLASH_OFFSET_LABEL, value: board.flashOffset })
   if (board.flash) {
     facts.push({ label: 'Flash', value: formatBytes(board.flash.bytes), source: board.flash.source })
   }
@@ -199,8 +205,8 @@ export function activeFilterChips(
   filter: BoardFilter
 ): { axis: 'vendor' | 'mcu' | 'feature' | 'runtime'; value: string }[] {
   const out: { axis: 'vendor' | 'mcu' | 'feature' | 'runtime'; value: string }[] = []
-  if (filter.vendor) out.push({ axis: 'vendor', value: filter.vendor })
-  if (filter.mcu) out.push({ axis: 'mcu', value: filter.mcu })
+  for (const v of filter.vendors ?? []) out.push({ axis: 'vendor', value: v })
+  for (const m of filter.mcus ?? []) out.push({ axis: 'mcu', value: m })
   for (const f of filter.features ?? []) out.push({ axis: 'feature', value: f })
   for (const r of filter.runtimes ?? []) out.push({ axis: 'runtime', value: r })
   return out
@@ -215,11 +221,16 @@ export function isFiltering(filter: BoardFilter): boolean {
   )
 }
 
-/** Add or remove one feature, so the chips toggle rather than only accumulate. */
-export function toggleFeature(features: readonly string[], feature: string): string[] {
-  return features.includes(feature)
-    ? features.filter((f) => f !== feature)
-    : [...features, feature]
+/**
+ * Add or remove one value, so the chips toggle rather than only accumulate.
+ *
+ * One toggle for all three string facets — manufacturer, processor and feature
+ * (#919). What differs between them is what a SET of ticked values means, and
+ * that lives in `matchesFilter`, not here: OR for the single-valued facets,
+ * AND for features.
+ */
+export function toggleChip(values: readonly string[], value: string): string[] {
+  return values.includes(value) ? values.filter((v) => v !== value) : [...values, value]
 }
 
 /** Same toggle, typed for the runtime chips. */
@@ -230,6 +241,55 @@ export function toggleRuntime(
   return runtimes.includes(runtime)
     ? runtimes.filter((r) => r !== runtime)
     : [...runtimes, runtime]
+}
+
+// ---------------------------------------------------------------------------
+// The hover preview (#919)
+// ---------------------------------------------------------------------------
+
+/** The label {@link boardFacts} gives the address a board's firmware is written
+ *  at — named once, because the preview drops that row by name. */
+const FLASH_OFFSET_LABEL = 'Flash offset'
+
+/** How many rows the preview states before it stops being a preview. */
+export const PEEK_FACT_LIMIT = 4
+
+/**
+ * The facts the hover preview states, out of everything the details page does.
+ *
+ * The same list minus the flash offset, capped. The offset is an address, and
+ * the only question it answers — where does this binary go — is one the flasher
+ * answers for you; on a preview it is four hex digits in the way of the MCU and
+ * the memory, which are what tell two boards apart at a glance. The cap is what
+ * keeps the preview's height roughly known, which is what lets the gallery decide
+ * to open it upward or downward without measuring it first.
+ *
+ * Provenance is deliberately dropped too — a source is for a figure you are about
+ * to rely on, and this is a glance. The details page keeps every one of them.
+ */
+export function peekFacts(board: IndexedBoard): BoardFact[] {
+  return boardFacts(board)
+    .filter((f) => f.label !== FLASH_OFFSET_LABEL)
+    .slice(0, PEEK_FACT_LIMIT)
+    .map(({ label, value }) => ({ label, value }))
+}
+
+/**
+ * The firmware line the hover preview prints, in one string.
+ *
+ * The preview exists to answer "is this the board I want?" without a click, and
+ * the first thing that disqualifies a board is having nothing to flash — so it
+ * is said here rather than left to the details page. Variants are COUNTED rather
+ * than listed: that a board has a choice to make is the useful signal at a
+ * glance, and which one to make is exactly the judgement the details page (and
+ * upstream's own descriptions) exist for.
+ */
+export function firmwareSummary(board: IndexedBoard): string {
+  const chosen = defaultBuild(board)
+  if (!chosen) return 'No published firmware'
+  const variants = newestBuilds(board).length
+  const version = `MicroPython ${chosen.version}`
+  return variants > 1 ? `${version} · ${variants} builds` : version
 }
 
 /**

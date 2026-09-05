@@ -1,14 +1,62 @@
 /*
  * Board Finder (#893, epic #884) — the full-screen board gallery.
  *
- * A sibling of the Parts Catalog (`pcat__`), with one deliberate difference: the
- * catalog paints itself a fixed light "shop" surface, while this is ordinary
- * panel chrome and takes every colour from the theme tokens, so it reads
- * correctly on the parchment skin and the dark one alike. Unique `bfind__` BEM
+ * A sibling of the Parts Catalog (`pcat__`), with its own unique `bfind__` BEM
  * prefix — this CSS is global, so a shared prefix would collide.
- */
+ *
+ * ---------------------------------------------------------------------------
+ * THIS GALLERY IS DARK IN BOTH THEMES, AND THAT IS DELIBERATE (#919).
+ *
+ * It shipped taking every colour from the theme tokens, on the reasoning that
+ * panel chrome follows the skin. That was the wrong call for this one panel, for
+ * a reason visible only from inside its container: the Board Finder opens from a
+ * button in the FLASH DIALOG, and that dialog is already dark in both skins on
+ * purpose — see the note at the top of `FirmwareFlasher.css`, where taking `--text`
+ * from the parchment skin put near-black body copy on a near-black panel. So the
+ * gallery following the skin made it the odd one out inside the very thing that
+ * launches it: a parchment sheet unrolling out of a dark modal.
+ *
+ * It is also what the gallery is FOR. This is 217 product photographs, nearly all
+ * of them shot on white; on parchment they wash together into one beige field,
+ * and on a dark ground each board is its own lit object. The catalogue is the
+ * content here, not the chrome.
+ *
+ * So the colours below are the gallery's OWN — no `var(--panel)`, no `var(--text)`
+ * — and they are literally the Soft Shell DARK skin's values, copied rather than
+ * referenced so the skeuomorph skin cannot repaint them. Structural tokens stay
+ * as tokens (`--radius`, the fonts): those are theme intent, not foreground colour,
+ * and they should follow the app.
+ *
+ * If you are here to "fix" these back to tokens: that is the change this comment
+ * exists to stop. Restyle the palette by all means — but keep it self-contained,
+ * and check it against the flash dialog it opens out of.
+ * ------------------------------------------------------------------------- */
 
 .bfind {
+  /* surfaces — Soft Shell dark (`index.css`, :root[data-theme='dark']) */
+  --bf-shell: #1d201a;
+  --bf-panel: #21251f;
+  --bf-sunk: #171a14;
+  --bf-card: #262a21;
+  --bf-line: #31352b;
+  --bf-line-hi: #4d5245;
+  /* ink */
+  --bf-ink: #eef1ea;
+  --bf-ink2: #9a9d8f;
+  --bf-ink3: #8b8e80;
+  --bf-ink4: #73766a;
+  /* accents */
+  --bf-green: #26a269;
+  --bf-green-ink: #8fe6b6;
+  --bf-green-pill: linear-gradient(145deg, #203f2d, #183324);
+  --bf-gold: #d9a441;
+  --bf-gold-grad: linear-gradient(180deg, #f0dca6, #e7bf62);
+  /* The ink ON the gold gradient is the DARK brass, not `--goldink`: the
+     gradient is identical in both skins, so the dark skin's pale-gold ink would
+     be pale on pale. */
+  --bf-gold-ink: #5a3d0e;
+  --bf-inset: rgba(255, 255, 255, 0.08);
+
   position: fixed;
   inset: 0;
   /* ABOVE the flash dialog's overlay (1100), which is the only thing that opens
@@ -21,14 +69,13 @@
   align-items: stretch;
   justify-content: stretch;
   font-family: var(--font-ui), system-ui, sans-serif;
-  color: var(--head, var(--text));
+  color: var(--bf-ink);
 }
 
 .bfind__backdrop {
   position: absolute;
   inset: 0;
-  /* Theme-neutral: a dim over whatever is behind, in either skin. */
-  background: rgba(15, 20, 18, 0.55);
+  background: rgba(8, 10, 7, 0.62);
   backdrop-filter: blur(2px);
 }
 
@@ -39,10 +86,10 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--panel, var(--bg-elevated));
-  border: 1px solid var(--shellbd, var(--border));
+  background: var(--bf-panel);
+  border: 1px solid var(--bf-line);
   border-radius: 16px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
   overflow: hidden;
 }
 
@@ -90,22 +137,22 @@
   align-items: center;
   gap: 14px;
   padding: 12px 16px;
-  background: var(--shell, var(--bg-sunken));
-  border-bottom: 1px solid var(--shellbd, var(--border));
+  background: var(--bf-shell);
+  border-bottom: 1px solid var(--bf-line);
 }
 
 .bfind__title {
   font-size: 16px;
   font-weight: 800;
   letter-spacing: 0.01em;
-  color: var(--head, var(--text));
+  color: var(--bf-ink);
 }
 
 /* What the catalogue is and how old it is — quiet, but it answers "is this
    stale?" without a click. */
 .bfind__meta {
   font-size: 11px;
-  color: var(--txt3, var(--text-muted));
+  color: var(--bf-ink3);
   font-family: var(--font-mono), monospace;
 }
 
@@ -116,18 +163,18 @@
   padding: 0 10px;
   font-family: var(--font-ui), sans-serif;
   font-size: 13px;
-  color: var(--head, var(--text));
-  background: var(--card, var(--bg-elevated));
-  border: 1px solid var(--shellbd, var(--border));
+  color: var(--bf-ink);
+  background: var(--bf-sunk);
+  border: 1px solid var(--bf-line);
   border-radius: var(--radius);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
   outline: none;
 }
 .bfind__search:focus {
-  border-color: var(--green, var(--accent));
+  border-color: var(--bf-green);
 }
 .bfind__search::placeholder {
-  color: var(--txt4, var(--text-muted));
+  color: var(--bf-ink4);
 }
 
 .bfind__spacer {
@@ -137,23 +184,29 @@
 .bfind__count {
   font-size: 12px;
   font-weight: 600;
-  color: var(--txt2, var(--text-muted));
+  color: var(--bf-ink2);
 }
 
+/* The gallery's close, and — since #919 — the details view's too, so the same
+   control means the same thing in the same corner. */
 .bfind__close {
   width: 30px;
   height: 30px;
   display: grid;
   place-items: center;
   font-size: 15px;
-  color: var(--head, var(--text));
-  background: var(--card, var(--bg-elevated));
-  border: 1px solid var(--shellbd, var(--border));
+  color: var(--bf-ink);
+  background: var(--bf-card);
+  border: 1px solid var(--bf-line);
   border-radius: var(--radius);
   cursor: pointer;
 }
 .bfind__close:hover {
-  border-color: var(--txt4, var(--text-muted));
+  border-color: var(--bf-line-hi);
+}
+.bfind__close:focus-visible {
+  outline: 2px solid var(--bf-green);
+  outline-offset: 2px;
 }
 
 /* --- body ----------------------------------------------------------------- */
@@ -169,8 +222,8 @@
   flex: 0 0 auto;
   overflow-y: auto;
   padding: 14px;
-  background: var(--shell, var(--bg-sunken));
-  border-right: 1px solid var(--shellbd, var(--border));
+  background: var(--bf-shell);
+  border-right: 1px solid var(--bf-line);
 }
 
 .bfind__facet {
@@ -183,24 +236,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--txt3, var(--text-muted));
-}
-
-.bfind__select {
-  width: 100%;
-  height: 30px;
-  padding: 0 8px;
-  font-family: var(--font-ui), sans-serif;
-  font-size: 12px;
-  color: var(--head, var(--text));
-  background: var(--card, var(--bg-elevated));
-  border: 1px solid var(--shellbd, var(--border));
-  border-radius: var(--radius);
-  cursor: pointer;
-  outline: none;
-}
-.bfind__select:focus {
-  border-color: var(--green, var(--accent));
+  color: var(--bf-ink3);
 }
 
 .bfind__chips {
@@ -213,20 +249,48 @@
   font-family: var(--font-ui), sans-serif;
   font-size: 11px;
   font-weight: 600;
-  color: var(--txt2, var(--text-muted));
-  background: var(--card, var(--bg-elevated));
-  border: 1px solid var(--shellbd, var(--border));
+  color: var(--bf-ink2);
+  background: var(--bf-card);
+  border: 1px solid var(--bf-line);
   border-radius: 999px;
   padding: 3px 9px;
   cursor: pointer;
+  text-align: left;
 }
 .bfind__chip:hover {
-  border-color: var(--txt4, var(--text-muted));
+  border-color: var(--bf-line-hi);
+  color: var(--bf-ink);
 }
 .bfind__chip.is-on {
-  color: var(--greentext, var(--accent-ink));
-  background: var(--greenpill, var(--bg-sunken));
-  border-color: var(--green, var(--accent));
+  color: var(--bf-green-ink);
+  background: var(--bf-green-pill);
+  border-color: var(--bf-green);
+}
+.bfind__chip:focus-visible {
+  outline: 2px solid var(--bf-green);
+  outline-offset: 1px;
+}
+
+/* Show more / show less, under the section it belongs to (#919) — a link, not a
+   chip, because it selects nothing and must not look like something you can
+   tick. */
+.bfind__more {
+  margin-top: 7px;
+  padding: 0;
+  font-family: var(--font-ui), sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--bf-green-ink);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.bfind__more:hover {
+  text-decoration: underline;
+}
+.bfind__more:focus-visible {
+  outline: 2px solid var(--bf-green);
+  outline-offset: 2px;
 }
 
 /* The "only boards with published firmware" switch — 3 of the 225 have none. */
@@ -235,11 +299,11 @@
   align-items: center;
   gap: 7px;
   font-size: 12px;
-  color: var(--txt2, var(--text-muted));
+  color: var(--bf-ink2);
   cursor: pointer;
 }
 .bfind__toggle input {
-  accent-color: var(--green, var(--accent));
+  accent-color: var(--bf-green);
 }
 
 .bfind__clear {
@@ -247,15 +311,15 @@
   font-family: var(--font-ui), sans-serif;
   font-size: 11px;
   font-weight: 600;
-  color: var(--head, var(--text));
-  background: var(--card, var(--bg-elevated));
-  border: 1px solid var(--shellbd, var(--border));
+  color: var(--bf-ink);
+  background: var(--bf-card);
+  border: 1px solid var(--bf-line);
   border-radius: var(--radius);
   padding: 5px 8px;
   cursor: pointer;
 }
 .bfind__clear:hover {
-  border-color: var(--txt4, var(--text-muted));
+  border-color: var(--bf-line-hi);
 }
 
 /* --- the grid ------------------------------------------------------------- */
@@ -277,15 +341,15 @@
   margin: 0 0 10px;
   font-size: 13px;
   font-weight: 800;
-  color: var(--head, var(--text));
+  color: var(--bf-ink);
 }
 
 .bfind__shelf-count {
   font-size: 11px;
   font-weight: 700;
-  color: var(--txt3, var(--text-muted));
-  background: var(--card, var(--bg-elevated));
-  border: 1px solid var(--shellbd, var(--border));
+  color: var(--bf-ink3);
+  background: var(--bf-card);
+  border: 1px solid var(--bf-line);
   border-radius: 999px;
   padding: 1px 8px;
 }
@@ -301,20 +365,34 @@
   padding: 40px 8px;
   text-align: center;
   font-size: 13px;
-  color: var(--txt3, var(--text-muted));
+  color: var(--bf-ink3);
 }
 
 /* --- a board card --------------------------------------------------------- */
 
+/* The card's cell. It exists so the hover preview can be the card's SIBLING
+   rather than its child: the card is a button, and a button inside a button is
+   not markup a browser will honour. */
+.bfind__cell {
+  position: relative;
+  display: flex;
+}
+/* A preview covers its neighbours, never the other way round. */
+.bfind__cell.is-peeking {
+  z-index: 3;
+}
+
 .bfind__card {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   text-align: left;
   padding: 0;
   font: inherit;
-  color: var(--head, var(--text));
-  background: var(--card, var(--bg-elevated));
-  border: 1px solid var(--shellbd, var(--border));
+  color: var(--bf-ink);
+  background: var(--bf-card);
+  border: 1px solid var(--bf-line);
   border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
@@ -323,13 +401,13 @@
     transform 0.08s ease;
 }
 .bfind__card:hover {
-  border-color: var(--green, var(--accent));
+  border-color: var(--bf-green);
 }
 .bfind__card:active {
   transform: translateY(1px);
 }
 .bfind__card:focus-visible {
-  outline: 2px solid var(--accent, var(--green));
+  outline: 2px solid var(--bf-green);
   outline-offset: 2px;
 }
 
@@ -338,8 +416,8 @@
   display: grid;
   place-items: center;
   overflow: hidden;
-  background: var(--bg-sunken, var(--shell));
-  border-bottom: 1px solid var(--shellbd, var(--border));
+  background: var(--bf-sunk);
+  border-bottom: 1px solid var(--bf-line);
 }
 .bfind__card-img img {
   width: 100%;
@@ -354,7 +432,7 @@
   font-size: 22px;
   font-weight: 700;
   letter-spacing: 0.04em;
-  color: var(--txt4, var(--text-muted));
+  color: var(--bf-ink4);
 }
 
 .bfind__card-body {
@@ -370,7 +448,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--txt3, var(--text-muted));
+  color: var(--bf-ink3);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -380,13 +458,13 @@
   font-size: 13px;
   font-weight: 700;
   line-height: 1.25;
-  color: var(--head, var(--text));
+  color: var(--bf-ink);
 }
 
 .bfind__card-mcu {
   font-family: var(--font-mono), monospace;
   font-size: 11px;
-  color: var(--txt2, var(--text-muted));
+  color: var(--bf-ink2);
 }
 
 .bfind__card-feats {
@@ -400,9 +478,9 @@
   font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.03em;
-  color: var(--txt2, var(--text-muted));
-  background: var(--bg-sunken, var(--shell));
-  border: 1px solid var(--shellbd, var(--border));
+  color: var(--bf-ink2);
+  background: var(--bf-sunk);
+  border: 1px solid var(--bf-line);
   border-radius: 4px;
   padding: 1px 5px;
 }
@@ -411,7 +489,132 @@
 .bfind__card-nofw {
   font-size: 10px;
   font-weight: 700;
-  color: var(--warn, var(--accent-ink));
+  color: var(--bf-gold);
+}
+
+/* --- the hover preview (#919) --------------------------------------------- */
+
+/* Grows out of the card it covers, 10px proud on each side so it reads as the
+   same card enlarged rather than as a tooltip that happens to be near one. */
+.bfind__peek {
+  position: absolute;
+  left: -10px;
+  right: -10px;
+  top: -10px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bf-card);
+  border: 1px solid var(--bf-green);
+  border-radius: 12px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  transform-origin: 50% 0;
+  animation: bfind-peek 0.16s ease-out both;
+  cursor: pointer;
+}
+/* The bottom row grows UP instead, or it would open into the scroller's edge. */
+.bfind__peek.is-up {
+  top: auto;
+  bottom: -10px;
+  transform-origin: 50% 100%;
+}
+@keyframes bfind-peek {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bfind__peek {
+    animation: none;
+  }
+}
+
+.bfind__peek-img {
+  aspect-ratio: 4 / 3;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--bf-sunk);
+  border-bottom: 1px solid var(--bf-line);
+}
+.bfind__peek-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.bfind__peek-body {
+  padding: 9px 11px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.bfind__peek-name {
+  font-size: 13.5px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--bf-ink);
+}
+
+/* What there is to flash, or that there is nothing — the first thing that
+   settles whether this board is worth opening. */
+.bfind__peek-fw {
+  font-family: var(--font-mono), monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--bf-green-ink);
+}
+.bfind__peek-fw.is-none {
+  color: var(--bf-gold);
+}
+
+.bfind__peek-facts {
+  margin: 2px 0 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  font-size: 10.5px;
+}
+.bfind__peek-facts dt {
+  font-weight: 700;
+  color: var(--bf-ink3);
+}
+.bfind__peek-facts dd {
+  margin: 0;
+  font-family: var(--font-mono), monospace;
+  color: var(--bf-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The disclosure into the full page. A pointer's route to what Enter on the card
+   already does, so it is a convenience and never the only way through. */
+.bfind__peek-open {
+  margin-top: 7px;
+  font-family: var(--font-ui), sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--bf-ink);
+  background: var(--bf-sunk);
+  border: 1px solid var(--bf-line);
+  border-radius: var(--radius);
+  padding: 5px 8px;
+  cursor: pointer;
+}
+.bfind__peek-open:hover {
+  border-color: var(--bf-green);
+  color: var(--bf-green-ink);
+}
+.bfind__peek-open:focus-visible {
+  outline: 2px solid var(--bf-green);
+  outline-offset: 2px;
 }
 
 /* --- a board's details, over the grid ------------------------------------- */
@@ -421,7 +624,7 @@
   inset: 0;
   display: flex;
   flex-direction: column;
-  background: var(--panel, var(--bg-elevated));
+  background: var(--bf-panel);
   animation: bfind-grow 0.18s ease-out both;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -435,23 +638,8 @@
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  background: var(--shell, var(--bg-sunken));
-  border-bottom: 1px solid var(--shellbd, var(--border));
-}
-
-.bfind__back {
-  font-family: var(--font-ui), sans-serif;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--head, var(--text));
-  background: var(--card, var(--bg-elevated));
-  border: 1px solid var(--shellbd, var(--border));
-  border-radius: var(--radius);
-  padding: 5px 11px;
-  cursor: pointer;
-}
-.bfind__back:hover {
-  border-color: var(--txt4, var(--text-muted));
+  background: var(--bf-shell);
+  border-bottom: 1px solid var(--bf-line);
 }
 
 .bfind__det-title {
@@ -465,12 +653,12 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--txt3, var(--text-muted));
+  color: var(--bf-ink3);
 }
 .bfind__det-name {
   font-size: 16px;
   font-weight: 800;
-  color: var(--head, var(--text));
+  color: var(--bf-ink);
 }
 
 /* The primary action — the Soft Shell gold button, as elsewhere in the app. */
@@ -478,11 +666,11 @@
   font-family: var(--font-ui), sans-serif;
   font-size: 13px;
   font-weight: 700;
-  color: var(--goldink, var(--accent-contrast));
-  background: var(--grad-gold, var(--accent));
+  color: var(--bf-gold-ink);
+  background: var(--bf-gold-grad);
   border: none;
   border-radius: var(--radius);
-  box-shadow: inset 0 1px 0 var(--pillinset, transparent);
+  box-shadow: inset 0 1px 0 var(--bf-inset);
   padding: 9px 16px;
   cursor: pointer;
 }
@@ -490,9 +678,9 @@
   filter: brightness(1.05);
 }
 .bfind__flash:disabled {
-  color: var(--txt4, var(--text-muted));
-  background: var(--card, var(--bg-elevated));
-  border: 1px solid var(--shellbd, var(--border));
+  color: var(--bf-ink4);
+  background: var(--bf-card);
+  border: 1px solid var(--bf-line);
   box-shadow: none;
   cursor: not-allowed;
 }
@@ -517,8 +705,8 @@
   display: grid;
   place-items: center;
   overflow: hidden;
-  background: var(--bg-sunken, var(--shell));
-  border: 1px solid var(--shellbd, var(--border));
+  background: var(--bf-sunk);
+  border: 1px solid var(--bf-line);
   border-radius: 12px;
 }
 .bfind__det-img img {
@@ -537,7 +725,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--txt3, var(--text-muted));
+  color: var(--bf-ink3);
 }
 
 /* A dt/dd pair needs a wrapper to carry React's key, and that wrapper must not
@@ -556,12 +744,12 @@
 }
 .bfind__facts dt {
   font-weight: 700;
-  color: var(--txt2, var(--text-muted));
+  color: var(--bf-ink2);
 }
 .bfind__facts dd {
   margin: 0;
   font-family: var(--font-mono), monospace;
-  color: var(--head, var(--text));
+  color: var(--bf-ink);
 }
 
 /* The honest footnote about what upstream does not publish. */
@@ -569,7 +757,7 @@
   margin: 8px 0 0;
   font-size: 11.5px;
   line-height: 1.5;
-  color: var(--txt3, var(--text-muted));
+  color: var(--bf-ink3);
 }
 
 .bfind__variants {
@@ -582,11 +770,11 @@
 .bfind__variants dt {
   font-family: var(--font-mono), monospace;
   font-weight: 700;
-  color: var(--accent-ink, var(--accent));
+  color: var(--bf-gold);
 }
 .bfind__variants dd {
   margin: 0;
-  color: var(--txt2, var(--text-muted));
+  color: var(--bf-ink2);
 }
 
 .bfind__builds {
@@ -604,19 +792,19 @@
   gap: 9px;
   font-size: 12px;
   padding: 6px 10px;
-  background: var(--card, var(--bg-elevated));
-  border: 1px solid var(--shellbd, var(--border));
+  background: var(--bf-card);
+  border: 1px solid var(--bf-line);
   border-radius: var(--radius);
 }
 
 .bfind__build-name {
   font-family: var(--font-mono), monospace;
   font-weight: 700;
-  color: var(--head, var(--text));
+  color: var(--bf-ink);
 }
 .bfind__build-ver {
   font-family: var(--font-mono), monospace;
-  color: var(--txt2, var(--text-muted));
+  color: var(--bf-ink2);
 }
 
 /* The one that a click on the board would actually flash. */
@@ -626,17 +814,17 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--greentext, var(--accent-ink));
+  color: var(--bf-green-ink);
 }
 
 .bfind__link {
   font-size: 12.5px;
-  color: var(--accent-ink, var(--accent));
+  color: var(--bf-gold);
   text-decoration: none;
-  border-bottom: 1px solid var(--shellbd, var(--border));
+  border-bottom: 1px solid var(--bf-line);
 }
 .bfind__link:hover {
-  border-bottom-color: var(--accent, var(--accent-ink));
+  border-bottom-color: var(--bf-gold);
 }
 
 .bfind__feats-big {
@@ -649,10 +837,12 @@
   padding: 3px 8px;
 }
 
-/* --- the runtime facet (#902) --------------------------------------------- */
+/* --- counts and caveats on a facet ---------------------------------------- */
 
-/* The confirmed count, on the chip. Without it a bare "CircuitPython" chip reads
-   as the whole answer rather than as the subset it is. */
+/* The count, on the chip. Without it a bare "CircuitPython" chip reads as the
+   whole answer rather than as the subset it is — and, since #919, it is also
+   what makes the commonest-first order of the manufacturer and processor chips
+   read as an order rather than as a shuffle. */
 .bfind__chip-n {
   margin-left: 5px;
   font-size: 10px;
@@ -666,7 +856,7 @@
   margin: 7px 0 0;
   font-size: 10.5px;
   line-height: 1.45;
-  color: var(--txt3, var(--text-muted));
+  color: var(--bf-ink3);
 }
 
 /* --- boards Snakie carries and upstream does not (#902) ------------------- */
@@ -676,21 +866,21 @@
   font-family: var(--font-mono), monospace;
   font-size: 9.5px;
   font-weight: 700;
-  color: var(--accent-ink, var(--accent));
+  color: var(--bf-gold);
 }
 
 /* The same thing on the details, given its own tinted block so it is read
    before the specification rather than after it. */
 .bfind__sub {
   padding: 10px 12px;
-  background: var(--shell, var(--bg-sunken));
-  border: 1px solid var(--shellbd, var(--border));
-  border-left: 3px solid var(--accent, var(--accent-ink));
+  background: var(--bf-shell);
+  border: 1px solid var(--bf-line);
+  border-left: 3px solid var(--bf-gold);
   border-radius: var(--radius);
 }
 .bfind__sub .bfind__section-name {
   font-family: var(--font-mono), monospace;
-  color: var(--accent-ink, var(--accent));
+  color: var(--bf-gold);
 }
 .bfind__sub .bfind__note {
   margin-top: 4px;
@@ -706,15 +896,15 @@
   font-family: var(--font-ui), sans-serif;
   font-size: 10px;
   font-weight: 600;
-  color: var(--txt3, var(--text-muted));
+  color: var(--bf-ink3);
 }
 
 .bfind__code {
   font-family: var(--font-mono), monospace;
   font-size: 11px;
-  color: var(--head, var(--text));
-  background: var(--shell, var(--bg-sunken));
-  border: 1px solid var(--shellbd, var(--border));
+  color: var(--bf-ink);
+  background: var(--bf-shell);
+  border: 1px solid var(--bf-line);
   border-radius: 4px;
   padding: 1px 5px;
 }
