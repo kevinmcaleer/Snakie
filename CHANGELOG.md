@@ -37,6 +37,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   both was told the wrong one runs. Nothing is labelled at all when no board is
   connected or the connect probe could not name a runtime — a confident wrong
   label about which file runs is worse than no label.
+- **Clicking a `.mpy` now shows what is inside it, instead of mojibake** (#875).
+  A `.mpy` is compiled bytecode, so opening one in the code editor produced a
+  screenful of replacement characters and taught you nothing — not even whether
+  it was the library you thought it was. There is now a read-only Bytecode view
+  that reads the container itself and reports the header (MicroPython or
+  CircuitPython, format version, native architecture, the `.py` it was compiled
+  from), the functions and classes it defines **with their real argument names**,
+  the other names it references, and its string and number constants. It reads
+  Adafruit's CircuitPython `.mpy` files too — that fork writes a different magic
+  byte and is otherwise the same format.
+
+  It is equally explicit about what a `.mpy` does **not** contain, because
+  "where is my source?" is the question anyone opening one actually has: the
+  source text is gone, and so are docstrings, local variable names, and the names
+  of `*args`/`**kwargs`. Only arguments keep their names — which is why the
+  signatures it shows are real ones. If you want the source back, keep the `.py`.
+
+  Device reads for this go over a new bytes channel; the existing text one would
+  have mangled the file on the UTF-8 round trip before anything could read it.
 
 ### Fixed
 

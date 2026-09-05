@@ -264,6 +264,28 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
     return this.runtime.runCaptured(code)
   }
 
+  /**
+   * The same read as bytes (#875). Hex-encoded on the way out for the same
+   * reason the serial device does it: stdout is a text channel, so anything that
+   * is not valid UTF-8 would not survive the trip.
+   */
+  async readFileBytes(path: string): Promise<Buffer> {
+    const code = scratchBlock(
+      [
+        'import sys',
+        'try:\n import ubinascii\nexcept ImportError:\n import binascii as ubinascii',
+        `with open(${pyStr(path)},'rb') as _snk_f:`,
+        '    while True:',
+        '        _snk_b=_snk_f.read(256)',
+        '        if not _snk_b: break',
+        '        sys.stdout.write(ubinascii.hexlify(_snk_b))'
+      ],
+      '_snk_f',
+      '_snk_b'
+    )
+    return Buffer.from((await this.runtime.runCaptured(code)).trim(), 'hex')
+  }
+
   async readFileLine(path: string, prefix: string): Promise<string> {
     const code = scratchBlock(
       [

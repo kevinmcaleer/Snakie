@@ -199,6 +199,14 @@ export function registerDeviceIpc(getWebContents: () => WebContents | undefined)
     wrap(() => getActive().readFileLine(path, prefix))
   )
 
+  // The read counterpart of `device:writeFileBytes` below, for the same reason
+  // in reverse (#875): the `.mpy` viewer needs the file's actual bytes, and
+  // `readFile` above has already decoded them as UTF-8 by the time it returns —
+  // which for bytecode is a lossy, irreversible mangling.
+  ipcMain.handle('device:readFileBytes', (_e, path: string) =>
+    wrap(() => getActive().readFileBytes(path))
+  )
+
   ipcMain.handle('device:writeFile', (_e, path: string, contents: string) =>
     wrap(() => getActive().writeFile(path, contents))
   )

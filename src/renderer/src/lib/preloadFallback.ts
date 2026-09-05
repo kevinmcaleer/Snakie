@@ -117,6 +117,7 @@ if (!w.api) {
       runProgram: P(undefined),
       listDir: P([]),
       readFile: P(''),
+      readFileBytes: P(new Uint8Array()),
       writeFile: P(undefined),
       remove: P(undefined),
       mkdir: P(undefined),

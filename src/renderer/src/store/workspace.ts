@@ -55,6 +55,7 @@ import {
   markRestoreStart,
   markRestoreDone
 } from './session-restore'
+import { isMpyFile } from '../../../shared/mpy-info'
 
 export type FileSource = 'local' | 'device'
 
@@ -297,8 +298,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
   const openFile = useCallback(
     async (source: FileSource, path: string): Promise<void> => {
       const id = makeId(source, path)
-      const content =
-        source === 'local'
+      // A `.mpy` is compiled bytecode, and both `readFile` channels decode UTF-8
+      // (#875) — so reading one here would produce a bufferful of replacement
+      // characters, and saving that back would destroy the file. The Bytecode
+      // view fetches the real bytes itself, so the tab opens with no text.
+      const content = isMpyFile(path)
+        ? ''
+        : source === 'local'
           ? await window.api.fs.readFile(path)
           : await window.api.device.readFile(path)
       dispatch({

@@ -115,6 +115,9 @@ export interface SnakieDevice {
   softReset(): Promise<void>
   listDir(path?: string): Promise<DirEntry[]>
   readFile(path: string): Promise<string>
+  /** The same read WITHOUT the UTF-8 decode, for a file that is not text — a
+   *  `.mpy`, a font, an image (#875). `readFile` above would mangle those. */
+  readFileBytes(path: string): Promise<Buffer>
   /** The first line of `path` starting with `prefix` (`''` if none) — the board
    *  searches, so one line crosses the wire instead of the file (#700). */
   readFileLine(path: string, prefix: string): Promise<string>
