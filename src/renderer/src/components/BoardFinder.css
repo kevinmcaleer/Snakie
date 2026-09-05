@@ -643,3 +643,73 @@
   font-size: 11px;
   padding: 3px 8px;
 }
+
+/* --- the runtime facet (#902) --------------------------------------------- */
+
+/* The confirmed count, on the chip. Without it a bare "CircuitPython" chip reads
+   as the whole answer rather than as the subset it is. */
+.bfind__chip-n {
+  margin-left: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+/* What a facet cannot claim, printed under the facet. */
+.bfind__facet-note {
+  margin: 7px 0 0;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--txt3, var(--text-muted));
+}
+
+/* --- boards Snakie carries and upstream does not (#902) ------------------- */
+
+/* On the card face: this board flashes another board's build. */
+.bfind__card-sub {
+  font-family: var(--font-mono), monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--accent-ink, var(--accent));
+}
+
+/* The same thing on the details, given its own tinted block so it is read
+   before the specification rather than after it. */
+.bfind__sub {
+  padding: 10px 12px;
+  background: var(--shell, var(--bg-sunken));
+  border: 1px solid var(--shellbd, var(--border));
+  border-left: 3px solid var(--accent, var(--accent-ink));
+  border-radius: var(--radius);
+}
+.bfind__sub .bfind__section-name {
+  font-family: var(--font-mono), monospace;
+  color: var(--accent-ink, var(--accent));
+}
+.bfind__sub .bfind__note {
+  margin-top: 4px;
+}
+
+/* --- where a figure came from (#897) -------------------------------------- */
+
+/* Under the value, not beside it: the number is what is being read, and the
+   provenance is what makes it worth reading — but only on a second glance. */
+.bfind__src {
+  display: block;
+  margin-top: 1px;
+  font-family: var(--font-ui), sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--txt3, var(--text-muted));
+}
+
+.bfind__code {
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  color: var(--head, var(--text));
+  background: var(--shell, var(--bg-sunken));
+  border: 1px solid var(--shellbd, var(--border));
+  border-radius: 4px;
+  padding: 1px 5px;
+}

@@ -51,6 +51,13 @@ const board = (over: Partial<IndexedBoard> = {}): IndexedBoard => ({
   image: null,
   thumb: null,
   builds: [build()],
+  flash: null,
+  ram: null,
+  psram: null,
+  runtimes: ['micropython'],
+  circuitPythonBoardId: null,
+  origin: 'micropython',
+  substitute: null,
   ...over
 })
 
