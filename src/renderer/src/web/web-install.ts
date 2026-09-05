@@ -20,6 +20,11 @@ import {
   type MipFetch
 } from '../../../shared/mip-resolve'
 import { writeFailureMessage } from '../../../shared/install-messages'
+import {
+  installPlanMessage,
+  type InstallFileEntry,
+  type InstallFileProgress
+} from '../../../shared/install-file-progress'
 import { webCanFetch, webFetchRefusal } from './web-hosts'
 
 /**
@@ -49,9 +54,9 @@ export interface InstallDevice {
   writeFile(path: string, contents: string): Promise<void>
 }
 
-/** One file to put on the board. */
-export interface InstallFile {
-  path: string
+/** One file to put on the board: where it goes, what to write, and whichever
+ *  dependency brought it (from {@link InstallFileEntry}). */
+export interface InstallFile extends InstallFileEntry {
   contents: string
 }
 
@@ -69,13 +74,16 @@ export interface WriteOutcome {
  *
  * `onStep` matters more than it looks: over the raw REPL each file is a run of
  * hex-chunk round-trips, so a 25-file package spends a long time here and
- * silence reads as a hang.
+ * silence reads as a hang. It reports the same STRUCTURED detail its desktop
+ * twin does (#895) — the file list once, then an index per file — so the web
+ * build's install ticks off in the device-queue dialog exactly as the desktop's
+ * does, from the same renderer code.
  */
 export async function writeFilesToDevice(
   name: string,
   files: readonly InstallFile[],
   device: InstallDevice,
-  onStep: (message: string) => void = () => {}
+  onStep: (message: string, detail?: InstallFileProgress) => void = () => {}
 ): Promise<WriteOutcome> {
   if (files.length === 0) {
     return { ok: false, log: `Couldn't install ${name}: nothing was resolved to write.` }
@@ -86,11 +94,23 @@ export async function writeFilesToDevice(
       // An existing directory is fine — MicroPython raises EEXIST for it.
       await device.mkdir(dir).catch(() => undefined)
     }
+    // Declared BEFORE the first write: a list that grows as it goes cannot say
+    // how much is left, which is the question being asked.
+    onStep(installPlanMessage(files), {
+      files: files.map((f) => ({ path: f.path, dependency: f.dependency }))
+    })
     let done = 0
-    for (const file of files) {
+    for (const [index, file] of files.entries()) {
       current = file.path
-      onStep(`Writing ${++done}/${files.length} — ${file.path}…`)
+      onStep(`Writing ${++done}/${files.length} — ${file.path}…`, {
+        fileIndex: index,
+        fileState: 'running'
+      })
       await device.writeFile(file.path, file.contents)
+      onStep(`Wrote ${done}/${files.length} — ${file.path}`, {
+        fileIndex: index,
+        fileState: 'done'
+      })
     }
     return { ok: true, log: `Wrote ${files.map((f) => f.path).join(', ')}` }
   } catch (err) {

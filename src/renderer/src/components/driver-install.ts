@@ -20,7 +20,12 @@
  * driver it is on.
  */
 import { driverDeviceDirs, driverInstallMethod, driverModuleId } from './part-editor.util'
-import { DeviceOperationCancelled, enqueueDeviceTask } from '../lib/device-queue'
+import {
+  DeviceOperationCancelled,
+  enqueueDeviceTask,
+  type DeviceTaskContext
+} from '../lib/device-queue'
+import { installStepReporter } from '../lib/install-steps'
 import { moduleById } from '../../../shared/modules-catalog'
 import {
   parsePurgeCount,
@@ -83,7 +88,7 @@ export async function installPartDriver(
   return enqueueDeviceTask({
     key: `driver:${d.source}->${d.target}`,
     label: `Installing ${d.label?.trim() || d.source}`,
-    run: () => runDriverInstall(libraryId, partId, d)
+    run: (ctx) => runDriverInstall(libraryId, partId, d, ctx)
   }).catch((err) => ({
     ok: false,
     message: err instanceof Error ? err.message : String(err),
@@ -91,11 +96,19 @@ export async function installPartDriver(
   }))
 }
 
-/** The install sequence itself — always run through the device queue above. */
+/**
+ * The install sequence itself — always run through the device queue above.
+ *
+ * `ctx` is the queue task's, and its only job here is per-file steps (#895):
+ * the `module:` and `mip` routes both end in the shared writer, and a part
+ * whose driver is `module:modulino` is a 25-file install behind a one-line
+ * banner. The `copy` route is a single file and stays the task's own row.
+ */
 async function runDriverInstall(
   libraryId: string,
   partId: string,
-  d: DriverFile
+  d: DriverFile,
+  ctx: DeviceTaskContext
 ): Promise<DriverInstallResult> {
   try {
     const method = driverInstallMethod(d.source)
@@ -107,7 +120,7 @@ async function runDriverInstall(
       if (!moduleById(id)) {
         return { ok: false, message: `Unknown module "${id}" — it is not in the catalog.` }
       }
-      const res = await window.api.modules.install(id)
+      const res = await window.api.modules.install(id, installStepReporter(ctx))
       if (!res.ok) {
         return {
           ok: false,
@@ -118,7 +131,11 @@ async function runDriverInstall(
     }
     if (method === 'mip') {
       const target = d.target.trim()
-      const res = await window.api.packages.install(d.source, target ? { target } : undefined)
+      const res = await window.api.packages.install(
+        d.source,
+        target ? { target } : undefined,
+        installStepReporter(ctx)
+      )
       if (!res.ok) {
         return {
           ok: false,

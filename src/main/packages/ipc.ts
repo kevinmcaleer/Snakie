@@ -6,6 +6,7 @@ import { installNotes, installTarget } from '../../shared/packages/install'
 import { hostInstallNote, resolveFailureMessage } from '../../shared/install-messages'
 import { httpMipFetch, MipResolveError, resolveMipSpec } from '../../shared/mip-resolve'
 import type { InstallOptions, PackageInfo } from '../../shared/packages/types'
+import type { InstallFileEntry } from '../../shared/install-file-progress'
 
 /**
  * IPC for the MicroPython package installer (issue #20, reworked by #776).
@@ -26,7 +27,7 @@ import type { InstallOptions, PackageInfo } from '../../shared/packages/types'
 /** Payload returned by `packages:install` for the renderer to write. */
 export interface InstallPlan {
   /** Every file to write to the device, parents-before-children. */
-  files: { path: string; contents: string }[]
+  files: (InstallFileEntry & { contents: string })[]
   /** Non-fatal notes (e.g. the `.mpy` caveat) to surface in the UI. */
   notes: string[]
 }
@@ -73,7 +74,14 @@ export function registerPackagesIpc(): void {
           index: opts.index?.trim() || undefined
         })
         return {
-          files: resolved.files.map((f) => ({ path: f.path, contents: f.contents })),
+          files: resolved.files.map((f) => ({
+            path: f.path,
+            contents: f.contents,
+            // `resolveMipSpec` lists the root spec first, so a file declared by
+            // anything else came along transitively — named here so the install
+            // can say whose file it is stuck on (#895).
+            dependency: f.package === resolved.packages[0] ? undefined : f.package
+          })),
           // The provenance note the web backend already emits: what was
           // downloaded, WHICH DEPENDENCIES came with it, and where they went.
           // A package install that quietly brings four more packages should say

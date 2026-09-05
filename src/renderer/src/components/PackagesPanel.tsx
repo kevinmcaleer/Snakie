@@ -13,6 +13,7 @@ import {
   type BoardPackage
 } from '../lib/board-packages'
 import { enqueueDeviceTask } from '../lib/device-queue'
+import { installStepReporter } from '../lib/install-steps'
 import { ModulesPanel } from './ModulesPanel'
 import type { InstallProgress, PackageInfo } from '../../../preload/index.d'
 
@@ -319,7 +320,9 @@ function PackagesTab(): JSX.Element {
         const result = await enqueueDeviceTask({
           key: `package:${name}`,
           label: `Installing ${name}`,
-          run: () =>
+          // Per-file steps (#895): a package that pulls dependencies in writes
+          // far more files than its name suggests, and says so as it goes.
+          run: (ctx) =>
             window.api.packages.install(
               name,
               {
@@ -327,7 +330,7 @@ function PackagesTab(): JSX.Element {
                 mpy: convertMpy,
                 index: customIndex.trim() || undefined
               },
-              onProgress
+              installStepReporter(ctx, onProgress)
             )
         })
         setInstalls((prev) => ({

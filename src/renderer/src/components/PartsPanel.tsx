@@ -13,6 +13,7 @@ import { availableToInstall } from '../../../shared/part-registry'
 import type { BundledPartStatus } from '../../../shared/bundled-seed'
 import { moduleById, type ModuleDef } from '../../../shared/modules-catalog'
 import { enqueueDeviceTask } from '../lib/device-queue'
+import { installStepReporter } from '../lib/install-steps'
 import type { SuggestedModule } from '../../../shared/part'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import type {
@@ -922,7 +923,9 @@ function WorksWith({ suggests }: { suggests: SuggestedModule[] }): JSX.Element |
       await enqueueDeviceTask({
         key: `module:${def.id}`,
         label: `Installing ${def.name}`,
-        run: () => window.api.modules.install(def.id)
+        // Per-file steps (#895) — the same install the Modules panel runs, and
+        // "Works with" offers `modulino`, which is the 25-file one.
+        run: (ctx) => window.api.modules.install(def.id, installStepReporter(ctx))
       })
       setDone((n) => n + 1)
     } catch {

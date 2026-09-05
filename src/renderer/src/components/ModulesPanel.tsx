@@ -17,6 +17,7 @@ import {
 } from '../lib/modulesManager'
 import { probeOutdatedModules } from '../lib/moduleFreshness'
 import { enqueueDeviceTask } from '../lib/device-queue'
+import { installStepReporter } from '../lib/install-steps'
 import type { ModuleInstallProgress } from '../../../preload/index.d'
 
 /**
@@ -140,7 +141,9 @@ export function ModulesPanel(): JSX.Element {
       const result = await enqueueDeviceTask({
         key: `module:${def.id}`,
         label: `Installing ${def.name}`,
-        run: () => window.api.modules.install(def.id, onProgress)
+        // The install's own per-file progress becomes this task's steps (#895),
+        // so a 22-file package ticks off instead of sitting on one still row.
+        run: (ctx) => window.api.modules.install(def.id, installStepReporter(ctx, onProgress))
       })
       setInstalls((prev) => ({
         ...prev,

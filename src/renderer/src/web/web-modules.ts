@@ -27,7 +27,13 @@ import { driverSources } from 'virtual:snakie-standard-parts'
 import { MODULE_STUBS } from './web-lib-sources'
 import { MipResolveError, resolveMipSpec } from '../../../shared/mip-resolve'
 import { hostInstallNote, resolveFailureMessage } from '../../../shared/install-messages'
-import { webMipFetch, writeFilesToDevice, type InstallDevice } from './web-install'
+import {
+  webMipFetch,
+  writeFilesToDevice,
+  type InstallDevice,
+  type InstallFile
+} from './web-install'
+import type { InstallFileProgress } from '../../../shared/install-file-progress'
 
 const LIB_DIR = '/lib'
 
@@ -35,13 +41,13 @@ interface InstallPlan {
   id: string
   importName: string
   /** Every file to write, parents-before-children. */
-  files: { path: string; contents: string }[]
+  files: InstallFile[]
   /** The upstream spec these files came from, when there was one. */
   spec?: string
   notes: string[]
 }
 
-interface InstallProgress {
+interface InstallProgress extends InstallFileProgress {
   id: string
   state: 'started' | 'note' | 'running' | 'done' | 'error'
   message?: string
@@ -106,7 +112,12 @@ async function planFor(id: string): Promise<InstallPlan> {
     return {
       id,
       importName: def.importName,
-      files: resolved.files.map((f) => ({ path: f.path, contents: f.contents })),
+      files: resolved.files.map((f) => ({
+        path: f.path,
+        contents: f.contents,
+        // Root spec first, so anything else came along transitively (#895).
+        dependency: f.package === resolved.packages[0] ? undefined : f.package
+      })),
       spec,
       notes: [
         hostInstallNote({
@@ -180,7 +191,7 @@ export function createWebModulesApi(): Record<string, unknown> {
         id,
         plan.files,
         window.api.device as unknown as InstallDevice,
-        (message) => emit({ id, state: 'running', message })
+        (message, detail) => emit({ id, state: 'running', message, ...detail })
       )
       emit({
         id,
