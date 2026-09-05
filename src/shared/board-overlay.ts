@@ -81,6 +81,17 @@ export interface OverlayBoard {
   why: string
   /** The `board-profiles.ts` entry carrying this board's flashing mechanics. */
   profileId?: string
+  /**
+   * A bundled thumbnail filename, for the gallery tile (#942).
+   *
+   * Upstream has no photo of these boards — that is what makes them overlay
+   * entries — so the picture comes from the PART this board is linked to
+   * (`board-part-link.ts`), shrunk into `boards/thumbs/` by
+   * `scripts/build-overlay-thumbs.mjs`. Set it only when that file exists: a
+   * name pointing at nothing is a broken image where the placeholder used to
+   * be, which is strictly worse than the placeholder.
+   */
+  thumb?: string
 }
 
 /**
@@ -133,7 +144,8 @@ export const OVERLAY_BOARDS: OverlayBoard[] = [
       'MicroPython publishes no build under this board’s name. Its 2 MB of PSRAM is only ' +
       'initialised by the SPIRAM variant of the generic ESP32 build, so that is the one ' +
       'to flash — the plain build runs and leaves the PSRAM switched off.',
-    profileId: 'adafruit-feather-esp32-v2'
+    profileId: 'adafruit-feather-esp32-v2',
+    thumb: 'ADAFRUIT_FEATHER_ESP32_V2.jpg'
   },
   {
     // Adafruit 5323 — the 8 MB / NO PSRAM one. Adafruit sells three ESP32-S3
@@ -169,7 +181,8 @@ export const OVERLAY_BOARDS: OverlayBoard[] = [
       'MicroPython publishes no build under this board’s name. This model has no PSRAM, so ' +
       'the STANDARD generic ESP32-S3 build is the right one — the SPIRAM_OCT variant would ' +
       'print a PSRAM initialisation error at every boot. The 4 MB / 2 MB PSRAM Feather is a ' +
-      'different board and takes a different build.'
+      'different board and takes a different build.',
+    thumb: 'ADAFRUIT_FEATHER_ESP32S3.jpg'
   },
   {
     id: 'ADAFRUIT_HUZZAH32_FEATHER',
@@ -281,7 +294,8 @@ export const OVERLAY_BOARDS: OverlayBoard[] = [
       'MicroPython publishes no build under this board’s name. Cytron states it carries the ' +
       'same RP2040, the same 264 KB of RAM and the same 2 MB of flash as a Pico, so the Pico ' +
       'build is the one to flash. The board ships with CircuitPython on it, so flashing ' +
-      'MicroPython replaces what is already there.'
+      'MicroPython replaces what is already there.',
+    thumb: 'CYTRON_MAKER_PI_RP2040.jpg'
   },
   {
     // Pimoroni publishes a MicroPython build for each of the four boards below,
@@ -306,7 +320,8 @@ export const OVERLAY_BOARDS: OverlayBoard[] = [
     why:
       'MicroPython publishes no build under this board’s name. Pimoroni publishes its own, ' +
       'with the board’s RGB LED and Qw/ST libraries included — get it from ' +
-      'github.com/pimoroni/pimoroni-pico/releases.'
+      'github.com/pimoroni/pimoroni-pico/releases.',
+    thumb: 'PIMORONI_TINY2350.jpg'
   },
   {
     id: 'PIMORONI_SERVO2040',
@@ -326,7 +341,8 @@ export const OVERLAY_BOARDS: OverlayBoard[] = [
     why:
       'MicroPython publishes no build under this board’s name. Pimoroni publishes its own, ' +
       'and it is the one that carries the `servo` module this board exists to run — get it ' +
-      'from github.com/pimoroni/pimoroni-pico/releases.'
+      'from github.com/pimoroni/pimoroni-pico/releases.',
+    thumb: 'PIMORONI_SERVO2040.jpg'
   },
   {
     id: 'PIMORONI_MOTOR2040',
@@ -389,7 +405,8 @@ export const OVERLAY_BOARDS: OverlayBoard[] = [
       'MicroPython publishes no build under this board’s name, and no upstream build fits it: ' +
       'this is an RP2350B with 16 MB of flash and 8 MB of PSRAM, where the Pico 2 build is an ' +
       'RP2350A with 4 MB and no PSRAM. Flashing that would run and leave most of the board ' +
-      'switched off. Pimoroni’s own build is at github.com/pimoroni/pico-lipo.'
+      'switched off. Pimoroni’s own build is at github.com/pimoroni/pico-lipo.',
+    thumb: 'PIMORONI_PICOLIPO2.jpg'
   },
   {
     id: 'PIMORONI_PICOLIPO2_XL_W',
@@ -427,7 +444,8 @@ export const OVERLAY_BOARDS: OverlayBoard[] = [
       'MicroPython publishes no build under this board’s name, and no upstream build fits it: ' +
       'an RP2350B with 16 MB of flash, 8 MB of PSRAM and a Raspberry Pi RM2 radio, none of ' +
       'which the Pico 2 build knows about. Pimoroni’s own build is at ' +
-      'github.com/pimoroni/pico-lipo.'
+      'github.com/pimoroni/pico-lipo.',
+    thumb: 'PIMORONI_PICOLIPO2_XL_W.jpg'
   }
 ]
 
@@ -457,12 +475,15 @@ function toIndexedBoard(entry: OverlayBoard, upstream: readonly IndexedBoard[]):
     // Upstream's variant descriptions belong to the donor, not to this board.
     variants: {},
     flashOffset: entry.flashOffset,
-    // No photo: these boards have no entry in micropython.org's media, so the
-    // card draws its initials rather than borrowing the donor's picture — a
-    // generic DevKit photo on an Adafruit card would be a lie in the one place
-    // people look first.
+    // No REMOTE photo: these boards have no entry in micropython.org's media.
+    // The tile is not left blank any more though (#942) — where the board is
+    // linked to a part, that part's own board photo is shrunk into
+    // `boards/thumbs/` and named on the entry. It is a picture OF THIS BOARD,
+    // which is the whole distinction: the DONOR's picture is still refused,
+    // because a generic DevKit photo on an Adafruit card would be a lie in the
+    // one place people look first.
     image: null,
-    thumb: null,
+    thumb: entry.thumb ?? null,
     builds: borrowed,
     flash: entry.flash,
     externalFlash: entry.externalFlash ?? null,

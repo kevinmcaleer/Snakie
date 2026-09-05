@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { newestBuilds, parseBoardIndex, type IndexedBoard } from '../src/shared/board-index'
 import { OVERLAY_BOARDS, overlayEntries, withOverlay } from '../src/shared/board-overlay'
+import { BOARD_PART_LINKS, partLinkForBoard } from '../src/shared/board-part-link'
 import { BOARD_PROFILES } from '../src/shared/board-profiles'
 import { boardFacts, formatBytes } from '../src/renderer/src/components/board-finder'
 import {
@@ -376,5 +377,87 @@ describe('an overlay entry does not invent a filter chip', () => {
         expect(known.has(f), `${e.id} states a feature upstream never uses: ${f}`).toBe(true)
       }
     }
+  })
+})
+
+/**
+ * A picture on the tile, for the boards upstream has no picture of (#942).
+ *
+ * The Tiny 2350's card drew the #931 placeholder while its details page showed
+ * a real photograph — because #934 linked it to a part, and parts carry board
+ * photos. One board, two answers, and the wrong one where people look first.
+ *
+ * The photo the details page shows is the part's, so that is what the tile gets,
+ * shrunk into `boards/thumbs/` at build time rather than read from the parts
+ * library at runtime: part images are the full-resolution article, 28 MB across
+ * the Standard library, and the gallery would be holding all of it open to draw
+ * seven pictures 200px wide.
+ */
+describe('the overlay tiles have a photo now', () => {
+  const all = withOverlay(seed.boards)
+
+  it('names a file that is actually bundled', () => {
+    // A `thumb` pointing at nothing is a broken image where the placeholder
+    // used to be — strictly worse than the placeholder.
+    for (const e of OVERLAY_BOARDS) {
+      if (!e.thumb) continue
+      expect(
+        existsSync(`src/renderer/public/boards/thumbs/${e.thumb}`),
+        `${e.id} names ${e.thumb}, which is not in boards/thumbs/`
+      ).toBe(true)
+    }
+  })
+
+  it('only claims a photo for a board that has a part to take one from', () => {
+    // The picture is the linked PART's. An entry with a thumb and no link would
+    // have got its photo from somewhere unaccounted for.
+    for (const e of OVERLAY_BOARDS) {
+      if (!e.thumb) continue
+      expect(partLinkForBoard(e.id), `${e.id} has a thumb but no linked part`).not.toBeNull()
+    }
+  })
+
+  it('reaches the gallery, so the tile actually draws it', () => {
+    const tiny = all.find((b) => b.id === 'PIMORONI_TINY2350')!
+    expect(tiny.thumb).toBe('PIMORONI_TINY2350.jpg')
+    // The REMOTE photo stays null: upstream has none, and the donor's would be
+    // another board's picture on this board's card.
+    expect(tiny.image).toBeNull()
+  })
+
+  it('leaves a board with no part image on the placeholder', () => {
+    // The Motor 2040's part ships no board photo, so there is nothing to shrink
+    // and #931's drawn board is still the honest answer.
+    const motor = all.find((b) => b.id === 'PIMORONI_MOTOR2040')!
+    expect(motor.thumb).toBeNull()
+  })
+
+  it('names the file after the board, so the generator can be re-run', () => {
+    for (const e of OVERLAY_BOARDS) {
+      if (!e.thumb) continue
+      expect(e.thumb).toBe(`${e.id}.jpg`)
+    }
+  })
+})
+
+describe('the thumbnail generator reads the same tables the app does', () => {
+  /**
+   * `build-overlay-thumbs.mjs` is plain node and cannot import the TypeScript,
+   * so it scans it. That is fine until someone reformats a table and the script
+   * silently finds nothing — and a generator that quietly does nothing is how
+   * the thumbnails would go stale without anybody noticing.
+   */
+  it('finds every overlay board id', async () => {
+    const { overlayIds } = await import('../scripts/build-overlay-thumbs.mjs')
+    const found = overlayIds(readFileSync('src/shared/board-overlay.ts', 'utf8'))
+    expect(found.sort()).toEqual(OVERLAY_BOARDS.map((e) => e.id).sort())
+  })
+
+  it('finds every board→part pairing', async () => {
+    const { linkPairs } = await import('../scripts/build-overlay-thumbs.mjs')
+    const found = linkPairs(readFileSync('src/shared/board-part-link.ts', 'utf8'))
+    expect(found).toEqual(
+      BOARD_PART_LINKS.map((l) => ({ boardId: l.boardId, partId: l.partId }))
+    )
   })
 })

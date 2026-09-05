@@ -8,6 +8,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The boards upstream has no photo of now have one on their card** (#942). The
+  Pimoroni Tiny 2350's tile drew the placeholder from #931 while its details page
+  showed a real photograph of the board — one board, two answers, and the wrong
+  one where people look first. The details page had a picture because #934 linked
+  the board to a part, and parts carry board photos; the tile did not, because an
+  overlay board has no entry in micropython.org's media by definition.
+
+  The tile now gets the same photo, shrunk into the bundled thumbnails at build
+  time by `scripts/build-overlay-thumbs.mjs`. Seven of the eight linked overlay
+  boards gain one; the Motor 2040's part ships no board image, so it keeps the
+  drawn placeholder, which is still the honest answer for it.
+
+  Build time rather than a fallback in the gallery, because the obvious version —
+  "no thumbnail? use the linked part's image" — would have the gallery holding
+  the parts library open to draw its tiles. Part images are the full-resolution
+  article: 28 MB across the Standard library, 180 KB to 1.7 MB each, every one
+  inlined as a data URI. Shrunk here they are ~20 KB, 176 KB for all seven, and
+  they travel the same path as every other board's thumbnail rather than a second
+  one that can rot on its own. The donor board's picture is still refused: a
+  generic DevKit photo on an Adafruit card would be a lie, where the part's photo
+  is a picture of that exact board.
+
+### Fixed
+
 - **The hover preview can no longer open off the edge of the gallery** (#940).
   Hovering a board on the second row opened a preview whose top was clipped off
   the page. The preview decided where to grow *before it existed*: vertically
