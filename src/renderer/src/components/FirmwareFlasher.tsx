@@ -25,6 +25,7 @@ import {
   FIRMWARE_RUNTIME_LABEL,
   findBoardBuilds,
   flashTargetForDownload,
+  catalogBuildForBoard,
   siblingBuildUrl,
   flashTargetForFamily,
   isVendorUf2Family,
@@ -772,14 +773,31 @@ export function FirmwareFlasher({
    * is derivable from the one already selected. Derive it, CONFIRM it resolves,
    * and then it is just another thing Flash can fetch.
    */
+  /**
+   * Every download the selected family offers, so the recommended build can be
+   * derived from ONE of them when the user has selected nothing (#885).
+   */
+  const familyBuildUrls = useMemo(
+    () =>
+      (families.find((f) => f.family === selFamily)?.models ?? []).flatMap((m) =>
+        m.variants.flatMap((v) => v.versions.map((x) => x.url))
+      ),
+    [families, selFamily]
+  )
+
   useEffect(() => {
     const name = suggestedBuild?.name
-    if (!name || !selVersionUrl) {
+    // A starting URL to rewrite. The user's selection when there is one — and
+    // otherwise any build of the same board, because a board with no catalog
+    // entry of its own (the Feather V2) can never make a selection, and it is
+    // exactly that board whose profile names a build worth flashing.
+    const base = selVersionUrl || catalogBuildForBoard(familyBuildUrls, name ?? '')
+    if (!name || !base) {
       setRecommendedUrl(null)
       return undefined
     }
-    const candidate = siblingBuildUrl(selVersionUrl, name)
-    if (!candidate || candidate === selVersionUrl) {
+    const candidate = siblingBuildUrl(base, name)
+    if (!candidate || (selVersionUrl && candidate === selVersionUrl)) {
       setRecommendedUrl(null)
       return undefined
     }
@@ -797,7 +815,7 @@ export function FirmwareFlasher({
     return () => {
       alive = false
     }
-  }, [suggestedBuild?.name, selVersionUrl])
+  }, [suggestedBuild?.name, selVersionUrl, familyBuildUrls])
 
   /** The URL Flash will actually fetch. */
   const flashUrl = recommendedUrl && useRecommended ? recommendedUrl : selVersionUrl
@@ -848,7 +866,9 @@ export function FirmwareFlasher({
   )
 
   // The firmware to flash: a catalog URL (download) or a picked local path.
-  const haveFirmware = usingCatalog ? selVersionUrl.length > 0 : firmwarePath.length > 0
+  // `flashUrl`, not `selVersionUrl`: the recommended build is a real choice on
+  // its own, and for a board absent from the catalog it is the ONLY one (#885).
+  const haveFirmware = usingCatalog ? flashUrl.length > 0 : firmwarePath.length > 0
 
   // A micro:bit in maintenance mode (the MAINTENANCE drive) can't be flashed with
   // MicroPython — doing so can soft-brick it — so detect it and block the flash.
@@ -1197,14 +1217,30 @@ export function FirmwareFlasher({
             {profile?.preferredBuild && (
               <p className="firmware-hint">
                 Best build: <code>{profile.preferredBuild.name}</code>. {profile.preferredBuild.why}
-                {profile.preferredBuild.url && (
-                  <>
-                    {' '}
-                    <a href={profile.preferredBuild.url} target="_blank" rel="noreferrer">
-                      Download it
-                    </a>
-                    , then choose it as a local file.
-                  </>
+                {/* Once the build has been located, say so and stop sending
+                    people away: Flash fetches it. The manual link stays for the
+                    case where it could not be found, but it points at a PAGE —
+                    and for this board that page is headed "ESP32 / WROOM" and
+                    lists the plain build first, which is the opposite of the
+                    advice above it (#885). */}
+                {recommendedUrl ? (
+                  <> Snakie has found it and will download it when you press Flash.</>
+                ) : (
+                  profile.preferredBuild.url && (
+                    <>
+                      {' '}
+                      <a
+                        className="firmware-link"
+                        href={profile.preferredBuild.url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Find it on micropython.org
+                      </a>{' '}
+                      — look for <code>{profile.preferredBuild.name}</code>, not the plain build at
+                      the top of that page — then choose it as a local file.
+                    </>
+                  )
                 )}
               </p>
             )}

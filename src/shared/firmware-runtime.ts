@@ -405,6 +405,41 @@ export function newestStableVersion(
 }
 
 /**
+ * A catalog URL for the same BOARD that `buildName` is a variant of (#885).
+ *
+ * {@link siblingBuildUrl} rewrites one build's URL into another's, but it needs
+ * a URL to start from — and the dialog only had one once the user had picked a
+ * version out of the Family/Model/Version dropdowns. That gate quietly excluded
+ * the very boards `preferredBuild` exists for: an Adafruit ESP32 Feather V2 has
+ * no entry in the catalog at all, so its owner never makes a selection, so the
+ * recommended-build path never ran and they were sent to a download page for a
+ * different board instead.
+ *
+ * This finds a starting point without a selection: the first URL whose board
+ * token matches, searched by FILENAME rather than by family or model, because
+ * the catalog groups several vendors under one model name — "ESP32 / WROOM"
+ * holds both `ESP32_GENERIC` and `SPARKFUN_IOT_REDBOARD_ESP32` — and only the
+ * filename says which board a build is really for. Pass them newest-first, as
+ * the catalog serves them, so the recommendation matches the version on offer.
+ */
+export function catalogBuildForBoard(
+  urls: readonly string[],
+  buildName: string
+): string | null {
+  const name = buildName.trim()
+  const cut = name.lastIndexOf('-')
+  // No variant suffix means there is no "sibling" to look for.
+  if (cut <= 0) return null
+  const base = name.slice(0, cut)
+  for (const url of urls) {
+    const file = url.split('/').pop() ?? ''
+    const m = /^(.+)-(\d{8}-v[^/]+)$/.exec(file)
+    if (m && m[1] === base) return url
+  }
+  return null
+}
+
+/**
  * The URL of a DIFFERENT build of the same firmware release — issue #833.
  *
  * The firmware catalog cannot offer every build. Thonny's `ESP32 / WROOM` entry
