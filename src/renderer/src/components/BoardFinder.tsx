@@ -1,12 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type JSX
-} from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
 import {
   boardsWithoutRam,
   featureOptions,
@@ -21,6 +13,13 @@ import {
   type IndexedBoard
 } from '../../../shared/board-index'
 import { withOverlay } from '../../../shared/board-overlay'
+import {
+  findLinkedPart,
+  partLinkForBoard,
+  type BoardPartLink
+} from '../../../shared/board-part-link'
+import type { PartDefinition } from '../../../shared/part'
+import { PartPreview } from './PartPreview'
 import {
   FIRMWARE_RUNTIMES,
   FIRMWARE_RUNTIME_LABEL,
@@ -771,13 +770,7 @@ function BoardNoPhoto({ board }: { board: IndexedBoard }): JSX.Element {
  * `TINT_COUNT`), so removing it would leave 54 makers distinguished by six
  * colours and nothing else.
  */
-function BoardCard({
-  board,
-  onOpen
-}: {
-  board: IndexedBoard
-  onOpen: () => void
-}): JSX.Element {
+function BoardCard({ board, onOpen }: { board: IndexedBoard; onOpen: () => void }): JSX.Element {
   const src = thumbUrl(board.thumb)
   return (
     <button type="button" className="bfind__card" onClick={onOpen}>
@@ -800,6 +793,40 @@ function BoardCard({
 }
 
 /** A board's full details, over the grid rather than instead of it. */
+/**
+ * The part that IS this board, once it has loaded (#934).
+ *
+ * Most boards have none — `board-part-link.ts` links 11 of the 225 — so the parts
+ * libraries are only read for a board that HAS a link. Opening a details page
+ * must not cost a library read on the overwhelming majority of boards that would
+ * only throw the answer away.
+ *
+ * Null covers "no link", "still loading" and "that library isn't installed"
+ * alike, because the view does the same thing for all three: shows the board on
+ * its own, with no empty frame where the hardware would have been.
+ */
+function useLinkedPart(boardId: string): { link: BoardPartLink; part: PartDefinition } | null {
+  const link = useMemo(() => partLinkForBoard(boardId), [boardId])
+  const [part, setPart] = useState<PartDefinition | null>(null)
+
+  useEffect(() => {
+    setPart(null)
+    if (!link) return
+    let live = true
+    void window.api?.parts
+      ?.listLibraries?.()
+      .then((libs) => {
+        if (live) setPart(findLinkedPart<PartDefinition, (typeof libs)[number]>(libs, link))
+      })
+      .catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [link])
+
+  return link && part ? { link, part } : null
+}
+
 function BoardDetails({
   board,
   onClose,
@@ -810,6 +837,7 @@ function BoardDetails({
   onFlash: () => void
 }): JSX.Element {
   const src = thumbUrl(board.thumb)
+  const hardware = useLinkedPart(board.id)
   const facts = boardFacts(board)
   const variants = variantList(board)
   const builds = newestBuilds(board)
@@ -890,9 +918,9 @@ function BoardDetails({
             </dl>
             {/* Said out loud, because its absence is otherwise read as a bug. */}
             <p className="bfind__note">
-              MicroPython’s board index publishes no flash or RAM sizes, so every figure
-              above names where it came from. A board with none simply has no sourced
-              figure yet — which is also why storage and memory are not filters.
+              MicroPython’s board index publishes no flash or RAM sizes, so every figure above names
+              where it came from. A board with none simply has no sourced figure yet — which is also
+              why storage and memory are not filters.
             </p>
           </section>
 
@@ -952,8 +980,7 @@ function BoardDetails({
             <h4 className="bfind__section-name">Builds</h4>
             {builds.length === 0 ? (
               <p className="bfind__note">
-                MicroPython publishes no firmware for this board, so it cannot be flashed
-                from here.
+                MicroPython publishes no firmware for this board, so it cannot be flashed from here.
               </p>
             ) : (
               <ul className="bfind__builds">
@@ -972,17 +999,37 @@ function BoardDetails({
 
           {board.url && (
             <section className="bfind__section">
-              <a
-                className="bfind__link"
-                href={board.url}
-                target="_blank"
-                rel="noreferrer noopener"
-              >
+              <a className="bfind__link" href={board.url} target="_blank" rel="noreferrer noopener">
                 {board.vendor} product page ↗
               </a>
             </section>
           )}
         </div>
+
+        {/* The hardware, when Snakie holds this board as a PART (#934).
+            Across BOTH columns, below the specification: a 40-pin board's pads
+            and their capability chips need the width, and in the 320px picture
+            column they would be a pinout you cannot read — which is the one
+            thing this section exists to be.
+
+            Absent for most boards, and silently — 11 of the 225 are linked, and
+            a heading over an empty frame reads as something failing to load
+            rather than as a board nobody has drawn yet. */}
+        {hardware && (
+          <section className="bfind__section bfind__hw">
+            <h4 className="bfind__section-name">The board itself</h4>
+            <p className="bfind__note bfind__hw-note">
+              The same board, from Snakie’s parts library — turn it over, and hover a pad to read
+              what it does.
+            </p>
+            <PartPreview
+              part={hardware.part}
+              libraryId={hardware.link.libraryId}
+              pinout
+              className="bfind__ppv"
+            />
+          </section>
+        )}
       </div>
     </div>
   )

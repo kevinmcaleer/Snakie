@@ -1,22 +1,16 @@
-import { type CSSProperties, Suspense, lazy, useEffect, useMemo, useState, type JSX } from 'react'
-import { PartCanvas } from './PartCanvas'
-import { PartSchematicView } from './PartSchematicView'
+import { type CSSProperties, useMemo, type JSX } from 'react'
 import { Markdown } from './Markdown'
-import { partHasRear } from '../../../shared/part'
-import { useCoinFlip } from '../hooks/useCoinFlip'
+import { PartPreview } from './PartPreview'
 import {
   partCodeModule,
   partDetailSections,
   partDocLinks,
   partDriverRows,
   partHelpBody,
-  partMeshRef,
-  partPreviewModes,
   partSpecRows,
   partTagList,
   resolveSuggestedModules,
-  type PartDetailSection,
-  type PartPreviewMode
+  type PartDetailSection
 } from './part-details'
 import type { PartDefinition } from '../../../shared/part'
 import './PartDetailsView.css'
@@ -39,10 +33,6 @@ import './PartDetailsView.css'
  * what order, and whether the 3-D tab can be offered at all — so those rules are
  * unit-tested rather than asserted by eye. Unique `pdt__` BEM prefix.
  */
-
-/** Lazily loaded: three.js + the STL/DAE parsers stay out of the main chunk and
- *  arrive only when someone opens a part that actually has a model. */
-const PartMeshView = lazy(() => import('./PartMeshView').then((m) => ({ default: m.PartMeshView })))
 
 export interface PartDetailsViewProps {
   libraryId: string
@@ -67,25 +57,6 @@ export interface PartDetailsViewProps {
   onClosed?: () => void
 }
 
-const PREVIEW_LABELS: Record<PartPreviewMode, string> = {
-  board: 'Board',
-  schematic: 'Schematic',
-  model: '3-D'
-}
-
-/** The two-headed arrow of a "turn the board over" control. */
-function flipIcon(): JSX.Element {
-  return (
-    <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-      <ellipse cx="8" cy="8" rx="3" ry="6.4" fill="none" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M2.2 4.4A6.6 6.6 0 0 1 8 1.4" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-      <path d="M13.8 11.6A6.6 6.6 0 0 1 8 14.6" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-      <path d="M1.2 2.2l1 2.4 2.4-1" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M14.8 13.8l-1-2.4-2.4 1" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
 export function PartDetailsView({
   libraryId,
   part,
@@ -96,35 +67,6 @@ export function PartDetailsView({
   closing,
   onClosed
 }: PartDetailsViewProps): JSX.Element {
-  // The parts folder is only knowable from the main process, and only the desktop
-  // has one — the web build reports `''`, which resolves every mesh to nothing.
-  const [partsFolder, setPartsFolder] = useState('')
-  useEffect(() => {
-    let live = true
-    void window.api?.parts
-      ?.partsFolder?.()
-      .then((f) => {
-        if (live) setPartsFolder(f ?? '')
-      })
-      .catch(() => undefined)
-    return () => {
-      live = false
-    }
-  }, [])
-
-  const mesh = useMemo(() => partMeshRef(part, { partsFolder, libraryId }), [part, partsFolder, libraryId])
-  const modes = useMemo(() => partPreviewModes(!!mesh), [mesh])
-  const [mode, setMode] = useState<PartPreviewMode>('board')
-  // A different part starts face-up on the board tab…
-  useEffect(() => setMode('board'), [part.id])
-  // …and a mode that is no longer on offer can never be left showing an empty
-  // stage (the 3-D tab exists only while its mesh resolves).
-  useEffect(() => {
-    if (!modes.includes(mode)) setMode('board')
-  }, [modes, mode])
-
-  const { face, flipping, flipTo } = useCoinFlip()
-  const twoSided = partHasRear(part)
   const sections = useMemo(() => partDetailSections(part), [part])
   const subtitle = [part.family, part.manufacturer, part.partNumber].filter(Boolean).join(' · ')
 
@@ -155,7 +97,9 @@ export function PartDetailsView({
           className={`pdt__select${selected ? ' is-on' : ''}`}
           onClick={onToggleSelected}
           aria-pressed={selected}
-          title={selected ? 'Remove this part from the selection' : 'Add this part to the selection'}
+          title={
+            selected ? 'Remove this part from the selection' : 'Add this part to the selection'
+          }
         >
           {selected ? '✓ Selected' : '+ Select'}
         </button>
@@ -172,59 +116,9 @@ export function PartDetailsView({
 
       <div className="pdt__body">
         <div className="pdt__stage-col">
-          <div className="pdt__tabs">
-            <span className="pdt__tablist" role="tablist" aria-label="Preview">
-              {modes.map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  role="tab"
-                  aria-selected={mode === m}
-                  className={`pdt__tab${mode === m ? ' is-active' : ''}`}
-                  onClick={() => setMode(m)}
-                >
-                  {PREVIEW_LABELS[m]}
-                </button>
-              ))}
-            </span>
-            <span className="pdt__tabs-spacer" />
-            {/* Only offered when there IS a back — a single-sided part shouldn't
-                invite you to turn it over and find nothing (#636). */}
-            {mode === 'board' && twoSided && (
-              <button
-                type="button"
-                className="pdt__flip-btn"
-                onClick={() => flipTo(face === 'front' ? 'rear' : 'front')}
-                disabled={flipping}
-                title={face === 'front' ? 'Show the back of the board' : 'Show the front of the board'}
-              >
-                {flipIcon()}
-                <span>{face === 'front' ? 'Flip to back' : 'Flip to front'}</span>
-              </button>
-            )}
-          </div>
-
-          {/* The mat is the STAGE and stays put; only the board turns on it. */}
-          <div className="pdt__stage">
-            {mode === 'board' && (
-              <div className={`pdt__flip${flipping ? ' is-flipping' : ''}`}>
-                <PartCanvas part={part} readOnly side={face} />
-              </div>
-            )}
-            {mode === 'schematic' && <PartSchematicView part={part} />}
-            {mode === 'model' && mesh && (
-              <Suspense fallback={<div className="pdt__stage-note">Loading the 3-D model…</div>}>
-                {/* The stored orientation correction (#741) — the catalog shows
-                    the part the way the Part Editor squared it up. */}
-                <PartMeshView
-                  path={mesh.path}
-                  label={part.name}
-                  rotation={part.meshRotation}
-                  offset={part.meshOffset}
-                />
-              </Suspense>
-            )}
-          </div>
+          {/* The stage itself is shared with the Board Finder (#934), so a board
+              is turned over and read the same way wherever you meet it. */}
+          <PartPreview part={part} libraryId={libraryId} pinout />
         </div>
 
         <div className="pdt__info-col">
@@ -240,7 +134,13 @@ export function PartDetailsView({
 
 /** One panel of the info column. Which panels exist — and their order — is decided
  *  (and tested) by `partDetailSections`; this only says how each one looks. */
-function Section({ id, part }: { id: PartDetailSection; part: PartDefinition }): JSX.Element | null {
+function Section({
+  id,
+  part
+}: {
+  id: PartDetailSection
+  part: PartDefinition
+}): JSX.Element | null {
   switch (id) {
     case 'specs':
       return (

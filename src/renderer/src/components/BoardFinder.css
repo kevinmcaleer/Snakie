@@ -1053,3 +1053,49 @@
   border-radius: 4px;
   padding: 1px 5px;
 }
+
+/* --- the board as a PART (#934) -------------------------------------------
+ * The shared stage from PartPreview.css, staged on the finder's dark panel.
+ * Spans both columns: a 40-pin pinout in the 320px picture column is a pinout
+ * nobody can read, which would defeat the section.
+ * ---------------------------------------------------------------------- */
+
+.bfind__hw {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  margin-bottom: 8px;
+}
+
+.bfind__hw-note {
+  margin-top: -2px;
+  margin-bottom: 10px;
+}
+
+/* The Board Finder is dark in BOTH skins by its own choice (see the `--bf-*`
+   block at the top), so the preview's chrome — which defaults to the Parts
+   Catalog's light page — is restated here in the finder's own tokens.
+   The MAT is not restated: `--bc-mat` is dark everywhere already, and the pin
+   labels are drawn light on it.
+
+   The two role colours are measured against `--bf-card` (#262a21): amber 5.8:1,
+   slate 5.4:1. Their light-page defaults would land at 2.7:1 and 1.9:1 here,
+   which is why they are tokens at all. */
+.bfind__ppv {
+  --ppv-chrome-bg: var(--bf-card);
+  --ppv-chrome-ink: var(--bf-ink);
+  --ppv-chrome-line: var(--bf-line-hi);
+  --ppv-chrome-line-hi: var(--bf-ink4);
+  /* The finder's own gold, and the dark brass ink it uses ON gold — the pale
+     gold would be pale on pale, exactly as `--bf-gold-ink` says. */
+  --ppv-chrome-on: var(--bf-gold);
+  --ppv-chrome-on-ink: var(--bf-gold-ink);
+  --ppv-pwr: #e0904a;
+  --ppv-gnd: #939fab;
+}
+
+/* The stage's border is drawn for a light page; on the finder's panel the mat
+   should sit in the same frame as the photograph above it. */
+.bfind__ppv .ppv__stage {
+  border-color: var(--bf-line);
+  border-radius: 12px;
+}
