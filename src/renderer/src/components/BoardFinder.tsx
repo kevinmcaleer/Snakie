@@ -12,19 +12,28 @@ import {
   filterBoards,
   mcusOf,
   newestBuilds,
+  runtimeCounts,
   vendorsOf,
   defaultBuild,
   type BoardFilter,
   type IndexedBoard
 } from '../../../shared/board-index'
+import { withOverlay } from '../../../shared/board-overlay'
+import {
+  FIRMWARE_RUNTIMES,
+  FIRMWARE_RUNTIME_LABEL,
+  type FirmwareRuntime
+} from '../../../shared/firmware-runtime'
 import { loadBoardIndex, thumbUrl } from '../lib/board-index-source'
 import {
+  RUNTIME_CAVEAT,
   boardFacts,
   boardInitials,
   buildLabel,
   isFiltering,
   shelvesByVendor,
   toggleFeature,
+  toggleRuntime,
   variantList
 } from './board-finder'
 import { requestFlash } from './board-finder-bus'
@@ -43,11 +52,17 @@ import './BoardFinder.css'
  * Clicking a board asks the firmware flasher to open on it with the newest build
  * already chosen — see `board-finder-bus.ts`, which is the whole of that seam.
  *
- * ON THE FILTERS. There is no storage or memory filter, though the issue asks
- * for one: upstream publishes `External Flash` / `External RAM` as booleans and
- * no figure anywhere, so a size control could only have drawn itself by quietly
- * dropping most of the catalogue. They stay as ordinary feature chips, and the
- * board's details state them plainly as present-with-no-published-size.
+ * ON THE FILTERS. Storage and memory are still not filters (#897): there are
+ * sourced sizes now, but 5 boards of 225 have a flash figure, and a size control
+ * at that coverage hides the catalogue rather than narrowing it. They are stated
+ * as facts on the board instead, each naming where it came from. The RUNTIME
+ * filter (#902) does ship — see `RUNTIME_CAVEAT` for the limits it prints under
+ * itself, which are what make it honest enough to offer.
+ *
+ * ON THE BOARDS. The list is upstream's plus `board-overlay.ts` — boards
+ * MicroPython builds no firmware for under any name, which is why the Adafruit
+ * ESP32 Feather V2 that started this epic was unfindable. They carry a `snakie`
+ * origin and say on the card whose build they flash.
  */
 
 export interface BoardFinderProps {
@@ -108,6 +123,7 @@ export function BoardFinder({ onClose, origin, closing, onClosed }: BoardFinderP
   const [vendor, setVendor] = useState('')
   const [mcu, setMcu] = useState('')
   const [features, setFeatures] = useState<string[]>([])
+  const [runtimes, setRuntimes] = useState<FirmwareRuntime[]>([])
   const [flashableOnly, setFlashableOnly] = useState(false)
   const [showAllFeatures, setShowAllFeatures] = useState(false)
   // The board whose details are open, or null for the grid. A DETOUR, as in the
@@ -127,10 +143,13 @@ export function BoardFinder({ onClose, origin, closing, onClosed }: BoardFinderP
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose, selected])
 
-  const all = useMemo(() => boards ?? [], [boards])
+  // The overlay is applied HERE rather than in the loader, so it re-applies to
+  // whichever document won — including one fetched later that may already carry
+  // a board the overlay is standing in for, which `withOverlay` then drops.
+  const all = useMemo(() => (boards ? withOverlay(boards) : []), [boards])
   const filter: BoardFilter = useMemo(
-    () => ({ text, vendor, mcu, features, flashableOnly }),
-    [text, vendor, mcu, features, flashableOnly]
+    () => ({ text, vendor, mcu, features, runtimes, flashableOnly }),
+    [text, vendor, mcu, features, runtimes, flashableOnly]
   )
   const matched = useMemo(() => filterBoards(all, filter), [all, filter])
 
@@ -140,6 +159,9 @@ export function BoardFinder({ onClose, origin, closing, onClosed }: BoardFinderP
   const mcus = useMemo(() => mcusOf(all), [all])
   const allFeatures = useMemo(() => featuresOf(all), [all])
   const shownFeatures = showAllFeatures ? allFeatures : allFeatures.slice(0, FEATURE_CHIP_LIMIT)
+  // Printed on the runtime chips. The number is the point: "CircuitPython 49"
+  // reads as a confirmed subset, where a bare chip would read as the answer.
+  const runtimeTotals = useMemo(() => runtimeCounts(all), [all])
 
   // Shelves are for BROWSING. Once anything is narrowing the catalogue the
   // result set IS the answer, and re-sectioning it by vendor fights the vendor
@@ -152,6 +174,7 @@ export function BoardFinder({ onClose, origin, closing, onClosed }: BoardFinderP
     setVendor('')
     setMcu('')
     setFeatures([])
+    setRuntimes([])
     setFlashableOnly(false)
   }, [])
 
@@ -238,6 +261,31 @@ export function BoardFinder({ onClose, origin, closing, onClosed }: BoardFinderP
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="bfind__facet">
+              <h3 className="bfind__facet-name">Runtime</h3>
+              <div className="bfind__chips">
+                {FIRMWARE_RUNTIMES.map((r) => {
+                  const on = runtimes.includes(r)
+                  return (
+                    <button
+                      key={r}
+                      type="button"
+                      className={`bfind__chip${on ? ' is-on' : ''}`}
+                      aria-pressed={on}
+                      onClick={() => setRuntimes((prev) => toggleRuntime(prev, r))}
+                    >
+                      {FIRMWARE_RUNTIME_LABEL[r]}
+                      <span className="bfind__chip-n">{runtimeTotals[r]}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              {/* The two things a bare "CircuitPython" chip would imply and
+                  cannot support, printed where the chip is rather than in a
+                  tooltip nobody opens. */}
+              <p className="bfind__facet-note">{RUNTIME_CAVEAT}</p>
             </div>
 
             <div className="bfind__facet">
@@ -378,6 +426,12 @@ function BoardCard({
             {extra > 0 && <span className="bfind__feat">+{extra}</span>}
           </span>
         )}
+        {/* Said on the FACE of the card, not buried in the details: picking a
+            board whose firmware is really another board's is the exact mistake
+            this epic exists to stop someone making by accident. */}
+        {board.substitute?.build && (
+          <span className="bfind__card-sub">Flashes {board.substitute.build}</span>
+        )}
         {board.builds.length === 0 && (
           <span className="bfind__card-nofw">No published firmware</span>
         )}
@@ -440,22 +494,55 @@ function BoardDetails({
         </div>
 
         <div>
+          {/* First, above the specification, because it changes what "flash
+              this board" means. */}
+          {board.substitute && (
+            <section className="bfind__section bfind__sub">
+              <h4 className="bfind__section-name">
+                {board.substitute.build
+                  ? `Flashes ${board.substitute.build}`
+                  : 'Firmware comes from elsewhere'}
+              </h4>
+              <p className="bfind__note">{board.substitute.why}</p>
+            </section>
+          )}
+
           <section className="bfind__section">
             <h4 className="bfind__section-name">Specification</h4>
             <dl className="bfind__facts">
               {facts.map((f) => (
                 <div className="bfind__row" key={f.label}>
                   <dt>{f.label}</dt>
-                  <dd>{f.value}</dd>
+                  <dd>
+                    {f.value}
+                    {f.source && <span className="bfind__src">{f.source}</span>}
+                  </dd>
                 </div>
               ))}
             </dl>
             {/* Said out loud, because its absence is otherwise read as a bug. */}
             <p className="bfind__note">
-              Flash and RAM sizes are not published in MicroPython’s board index, so
-              they are not shown or filtered on here.
+              MicroPython’s board index publishes no flash or RAM sizes, so every figure
+              above names where it came from. A board with none simply has no sourced
+              figure yet — which is also why storage and memory are not filters.
             </p>
           </section>
+
+          {board.circuitPythonBoardId && (
+            <section className="bfind__section">
+              <h4 className="bfind__section-name">Also runs CircuitPython</h4>
+              {/* The board id, because it is the thing that matters:
+                  CircuitPython builds are per BOARD, and this exact string is
+                  what its download is filed under and what `boot_out.txt`
+                  prints. Flashing a neighbouring board's `.uf2` is a board that
+                  needs re-flashing before it will talk again. */}
+              <p className="bfind__note">
+                CircuitPython board id{' '}
+                <code className="bfind__code">{board.circuitPythonBoardId}</code>. Choose
+                CircuitPython in the flash dialog to put it on.
+              </p>
+            </section>
+          )}
 
           {board.features.length > 0 && (
             <section className="bfind__section">

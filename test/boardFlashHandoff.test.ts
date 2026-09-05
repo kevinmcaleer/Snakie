@@ -38,6 +38,13 @@ const board = (over: Partial<IndexedBoard> = {}): IndexedBoard => ({
       url: 'https://micropython.org/resources/firmware/ESP32_GENERIC-20260824-v1.29.0.bin'
     }
   ],
+  flash: null,
+  ram: null,
+  psram: null,
+  runtimes: ['micropython'],
+  circuitPythonBoardId: null,
+  origin: 'micropython',
+  substitute: null,
   ...over
 })
 

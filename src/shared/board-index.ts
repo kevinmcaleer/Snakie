@@ -28,16 +28,26 @@
  *      Feather V2 in these 225. Fold the overlay into the fetched document and
  *      that board disappears again.
  *
- * NO FLASH OR RAM SIZE. Upstream does not publish either — `features` has
- * `External Flash` and `External RAM` as booleans and nothing more. So they are
- * absent here, shown as facts where a profile happens to know them, and NOT
- * offered as filters: a filter that silently omits most of the catalogue is
- * worse than no filter.
+ * FLASH AND RAM (#897). Upstream publishes neither — `features` has `External
+ * Flash` and `External RAM` as booleans and nothing more. So every figure here
+ * comes from somewhere else, and every figure therefore carries a {@link
+ * BoardSize.source} naming it. A number with no provenance is not worth
+ * publishing: a wrong flash size sends someone to a board that cannot hold their
+ * program. They are still NOT offered as filters — see `board-finder.ts` for the
+ * coverage that decision turns on.
  *
  * Pure — parsing, filtering and picking, no IO — so all of it unit-tests in node.
  */
+import type { FirmwareRuntime } from './firmware-runtime'
 
-/** The document shape this module understands. A newer one is refused. */
+/**
+ * The document shape this module understands. A newer one is refused.
+ *
+ * Deliberately NOT bumped by #897/#902, which only ADD optional fields: an older
+ * Snakie reading a newer document ignores what it does not know and still gets a
+ * complete picker, whereas a bump would make it refuse the document outright and
+ * fall back to a seed that ages with the install.
+ */
 export const BOARD_INDEX_SCHEMA = 1
 
 /** Where the published index lives, once the repo carrying it exists. */
@@ -56,6 +66,57 @@ export interface BoardBuild {
   date: string
   /** Absolute URL of the binary. */
   url: string
+}
+
+/**
+ * A memory or storage size, with the provenance that makes it publishable (#897).
+ *
+ * `source` is never optional and never empty. Upstream publishes no sizes at
+ * all, so every one of these was put here by somebody — and the reader has to be
+ * able to see by whom before trusting it enough to buy a board on.
+ */
+export interface BoardSize {
+  bytes: number
+  /** Where the figure came from: a URL, a datasheet, or who curated it. */
+  source: string
+  /**
+   * Whose figure this is.
+   *
+   * `chip` means it is the MCU's own — true of every part in that family and
+   * derived from `mcu` alone. That is exactly right for built-in SRAM and
+   * exactly wrong for flash, which lives on the module: every RP2040 has 264 KB
+   * of SRAM, and RP2040 boards ship with anywhere from 2 MB to 16 MB of flash.
+   * `board` means the figure is about this board specifically.
+   */
+  scope: 'board' | 'chip'
+}
+
+/**
+ * Where an entry came from (#902).
+ *
+ * `micropython` — upstream's own `board.json`, which is all 225 of them.
+ * `snakie` — Snakie's overlay in `board-overlay.ts`, for boards MicroPython
+ * builds no firmware under the name of at all. Set by the overlay, never by the
+ * document: the whole point of the overlay is that it stays in the app.
+ */
+export type BoardOrigin = 'micropython' | 'snakie'
+
+/**
+ * What an overlay board flashes, given upstream has no build of its own (#902).
+ *
+ * The Feather V2's answer is `ESP32_GENERIC-SPIRAM` — a build for a board that
+ * is not this one, and the correct thing to flash. That has to be said out loud
+ * on the card rather than quietly substituted, because "this is another board's
+ * firmware" is the kind of thing someone needs to know before they wonder why
+ * their board reports itself as a generic ESP32.
+ */
+export interface BoardSubstitute {
+  /** The upstream board whose build this one borrows, or null when none fits. */
+  boardId: string | null
+  /** The exact upstream build, e.g. `ESP32_GENERIC-SPIRAM`. */
+  build: string | null
+  /** Why that is the right build, in the reader's terms. Shown on the card. */
+  why: string
 }
 
 /** One board. */
@@ -83,6 +144,34 @@ export interface IndexedBoard {
   /** Bundled thumbnail filename, or null where none could be made. */
   thumb: string | null
   builds: BoardBuild[]
+  /** On-board flash, when a sourced figure exists (#897). Usually `board` scope. */
+  flash: BoardSize | null
+  /** Built-in SRAM (#897). Usually `chip` scope — it follows from `mcu`. */
+  ram: BoardSize | null
+  /** External PSRAM/SPIRAM, when the board has any and the size is sourced. */
+  psram: BoardSize | null
+  /**
+   * The runtimes with a published, flashable build for THIS board (#902).
+   *
+   * `micropython` iff `builds` is non-empty — three of the 225 are in upstream's
+   * tree with nothing published. `circuitpython` only where a CircuitPython
+   * board id was CONFIRMED against the published catalogue; its absence means
+   * "not confirmed", which is not the same as "does not exist", and the gallery
+   * says so rather than letting a filter imply otherwise.
+   */
+  runtimes: FirmwareRuntime[]
+  /**
+   * CircuitPython's own per-board key — the string `boot_out.txt` prints and the
+   * one its downloads are filed under (#756). Null when no build was confirmed.
+   *
+   * Never guessed. Flashing another board's `.uf2` leaves a board that needs
+   * re-flashing before it will talk again, so a wrong id here is worse than none.
+   */
+  circuitPythonBoardId: string | null
+  /** Upstream's catalogue, or Snakie's overlay (#902). */
+  origin: BoardOrigin
+  /** For an overlay board: whose firmware it flashes, and why. Null otherwise. */
+  substitute: BoardSubstitute | null
 }
 
 export interface BoardIndex {
@@ -106,6 +195,22 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 const strOrNull = (v: unknown): string | null => (typeof v === 'string' && v ? v : null)
 const strList = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
+
+/**
+ * A size, or null.
+ *
+ * A figure with no `source`, or a non-positive one, is DROPPED rather than shown
+ * unattributed — the rule #897 asks for, enforced at the door so no later layer
+ * has to remember it.
+ */
+function parseSize(raw: unknown): BoardSize | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  const bytes = typeof r.bytes === 'number' && r.bytes > 0 ? r.bytes : 0
+  const source = str(r.source).trim()
+  if (!bytes || !source) return null
+  return { bytes, source, scope: r.scope === 'chip' ? 'chip' : 'board' }
+}
 
 function parseBuild(raw: unknown): BoardBuild | null {
   if (!raw || typeof raw !== 'object') return null
@@ -141,6 +246,10 @@ export function parseBoardIndex(raw: unknown): BoardIndex | null {
     const b = entry as Record<string, unknown>
     const id = str(b.id)
     if (!id) continue
+    const builds = Array.isArray(b.builds)
+      ? b.builds.map(parseBuild).filter((x): x is BoardBuild => x !== null)
+      : []
+    const circuitPythonBoardId = strOrNull(b.circuitPythonBoardId)
     boards.push({
       id,
       port: str(b.port),
@@ -159,9 +268,25 @@ export function parseBoardIndex(raw: unknown): BoardIndex | null {
       flashOffset: strOrNull(b.flashOffset),
       image: strOrNull(b.image),
       thumb: strOrNull(b.thumb),
-      builds: Array.isArray(b.builds)
-        ? b.builds.map(parseBuild).filter((x): x is BoardBuild => x !== null)
-        : []
+      builds,
+      flash: parseSize(b.flash),
+      ram: parseSize(b.ram),
+      psram: parseSize(b.psram),
+      // DERIVED, not read, when the document does not say — which is what a
+      // schema-1 document written before #902 looks like. It is a definition
+      // rather than a guess: this is MicroPython's index, so a board with a
+      // published build here runs MicroPython by construction.
+      runtimes: Array.isArray(b.runtimes)
+        ? (strList(b.runtimes).filter(
+            (r) => r === 'micropython' || r === 'circuitpython'
+          ) as FirmwareRuntime[])
+        : builds.length > 0
+          ? ['micropython']
+          : [],
+      circuitPythonBoardId,
+      // The document never carries these; the overlay is the only producer.
+      origin: 'micropython',
+      substitute: null
     })
   }
   return {
@@ -190,6 +315,13 @@ export interface BoardFilter {
   mcu?: string
   /** Every one of these must be present — filters narrow, they do not widen. */
   features?: string[]
+  /**
+   * Keep only boards with a confirmed build for every runtime listed (#902).
+   *
+   * Narrowing, like `features`: both ticked means "runs both", which is the
+   * question someone switching a class from one to the other actually has.
+   */
+  runtimes?: FirmwareRuntime[]
   /** Hide boards with no published firmware. */
   flashableOnly?: boolean
 }
@@ -205,6 +337,9 @@ export function matchesFilter(board: IndexedBoard, filter: BoardFilter): boolean
   if (filter.mcu && board.mcu !== filter.mcu) return false
   for (const f of filter.features ?? []) {
     if (!board.features.includes(f)) return false
+  }
+  for (const r of filter.runtimes ?? []) {
+    if (!board.runtimes.includes(r)) return false
   }
   const text = filter.text?.trim()
   if (text) {
@@ -243,6 +378,22 @@ export function featuresOf(boards: readonly IndexedBoard[]): string[] {
   return [...count.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .map(([f]) => f)
+}
+
+/**
+ * How many boards each runtime has a confirmed build for.
+ *
+ * The count is the whole reason the runtime facet can be offered honestly: it is
+ * printed beside the chip, so "CircuitPython 49" says plainly that this is 49
+ * confirmed boards out of the catalogue rather than a complete answer. See
+ * `board-finder.ts` for what the gallery does with it.
+ */
+export function runtimeCounts(
+  boards: readonly IndexedBoard[]
+): Record<FirmwareRuntime, number> {
+  const counts: Record<FirmwareRuntime, number> = { micropython: 0, circuitpython: 0 }
+  for (const b of boards) for (const r of b.runtimes) counts[r] += 1
+  return counts
 }
 
 // ---------------------------------------------------------------------------

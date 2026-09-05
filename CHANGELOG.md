@@ -8,6 +8,37 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The boards MicroPython does not build for, and where the numbers come from**
+  (#902, #897). The Board Finder had 15 Adafruit boards and not one Adafruit
+  ESP32 board, because MicroPython publishes no firmware under any of those
+  names — there is no download page for an **ESP32 Feather V2**, and there never
+  was. That is precisely the board this epic exists for: its owner picked "ESP32
+  / WROOM" as the nearest thing and lost a week to 2 MB of PSRAM being switched
+  off. Five such boards now appear in the gallery — the ESP32 Feather V2, the
+  HUZZAH32, the QT Py ESP32-C3 and ESP32-S3, and a **micro:bit v2** where the
+  catalogue previously offered only the nRF51 v1 — each saying on its face which
+  build it flashes and why. Pick the Feather V2 and the flasher gets
+  `ESP32_GENERIC-SPIRAM` at `0x1000`, which is the file that would have saved the
+  week. If MicroPython ever adds one of these for real, the hand-written entry
+  stands down by itself.
+
+  There is also a **Runtime** filter — MicroPython and CircuitPython — with the
+  confirmed count on each chip and, underneath, the two things it cannot claim:
+  this is MicroPython's catalogue, so CircuitPython-only boards are not in it,
+  and a board is marked CircuitPython only where its board id was confirmed
+  against circuitpython.org. 49 boards are confirmed; the rest are unconfirmed
+  rather than unsupported, and the filter says so instead of implying otherwise.
+
+  And boards now state their **flash, RAM and PSRAM** — each naming where the
+  figure came from, because upstream publishes none of them and a number nobody
+  can check is not worth showing. 86 boards have a RAM figure (their chip's
+  SRAM, marked as the chip's rather than the board's) and 10 have a flash figure,
+  from the maker's own documentation. The rest say nothing rather than guessing:
+  an `stm32f4` spans 96 KB to 256 KB of SRAM, and a wrong flash size sends
+  someone to a board that cannot hold their program. Storage and memory still are
+  not filters at that coverage — a size control would hide the catalogue rather
+  than narrow it.
+
 - **A Board Finder, and the firmware picker finally knows every board** (#893).
   The picker showed Thonny's catalogue, which lists no Adafruit boards at all
   and no ESP32 variants — which is how an ESP32 Feather V2 ends up running a
@@ -42,7 +73,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   yes/no and no figure anywhere, so a size filter could only have drawn itself by
   quietly dropping most of the catalogue. They stay as ordinary feature chips, and
   a board's details say plainly that the size is not published rather than leaving
-  you to guess whether the absence means zero.
+  you to guess whether the absence means zero. (#897 later sourced the figures for
+  the boards where they could be sourced — see the entry above.)
 
 - **Minimise the copy dialog to the status bar, and bring it back** (#890). A
   folder copy or a driver install can be put away with **Minimise** — which sits

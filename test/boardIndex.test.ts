@@ -45,6 +45,13 @@ const board = (over: Partial<IndexedBoard> = {}): IndexedBoard => ({
   image: null,
   thumb: null,
   builds: [],
+  flash: null,
+  ram: null,
+  psram: null,
+  runtimes: ['micropython'],
+  circuitPythonBoardId: null,
+  origin: 'micropython',
+  substitute: null,
   ...over
 })
 
@@ -86,6 +93,58 @@ describe('parsing a document', () => {
     expect(parseBoardIndex({ schema: 1, boards: [{ id: 'ESP32_GENERIC' }] })?.boards[0].product).toBe(
       'ESP32_GENERIC'
     )
+  })
+
+  it('drops a size with no source, because an unattributed number is not worth publishing', () => {
+    // #897's rule, enforced at the door. A wrong flash size sends someone to a
+    // board that cannot hold their program, so "8 MB, says who?" is not shippable.
+    const doc = parseBoardIndex({
+      schema: 1,
+      boards: [
+        {
+          id: 'X',
+          flash: { bytes: 8388608 },
+          ram: { bytes: 264 * 1024, source: 'RP2040 datasheet', scope: 'chip' },
+          psram: { bytes: 0, source: 'somewhere' }
+        }
+      ]
+    })
+    expect(doc?.boards[0].flash).toBeNull()
+    expect(doc?.boards[0].psram).toBeNull()
+    expect(doc?.boards[0].ram).toEqual({ bytes: 270336, source: 'RP2040 datasheet', scope: 'chip' })
+  })
+
+  it('treats an unrecognised scope as the board’s, never as the chip’s', () => {
+    // The wrong way round would be worse: "the chip's SRAM" is a caveat, and
+    // silently attaching it to a curated board figure would weaken a good number.
+    const doc = parseBoardIndex({
+      schema: 1,
+      boards: [{ id: 'X', flash: { bytes: 4096, source: 'a page', scope: 'nonsense' } }]
+    })
+    expect(doc?.boards[0].flash?.scope).toBe('board')
+  })
+
+  it('derives runtimes for a document written before the field existed', () => {
+    // Every schema-1 document published before #902 lacks `runtimes`. Defaulting
+    // to nothing would empty the runtime filter for the whole catalogue; the
+    // derivation is a definition, not a guess — this IS MicroPython's index.
+    const doc = parseBoardIndex({
+      schema: 1,
+      boards: [
+        { id: 'HAS', builds: [{ build: 'HAS', url: 'https://e/x.bin' }] },
+        { id: 'NONE', builds: [] }
+      ]
+    })
+    expect(doc?.boards[0].runtimes).toEqual(['micropython'])
+    expect(doc?.boards[1].runtimes).toEqual([])
+  })
+
+  it('keeps only runtimes it understands', () => {
+    const doc = parseBoardIndex({
+      schema: 1,
+      boards: [{ id: 'X', runtimes: ['micropython', 'pythonish', 42] }]
+    })
+    expect(doc?.boards[0].runtimes).toEqual(['micropython'])
   })
 })
 
@@ -135,6 +194,19 @@ describe('filtering', () => {
 
   it('can hide boards with no published firmware', () => {
     expect(filterBoards(boards, { flashableOnly: true }).map((b) => b.id)).toEqual(['D'])
+  })
+
+  it('narrows on runtime, and both ticked means both', () => {
+    const rt = [
+      board({ id: 'MP', runtimes: ['micropython'] }),
+      board({ id: 'BOTH', runtimes: ['micropython', 'circuitpython'] }),
+      board({ id: 'NEITHER', runtimes: [] })
+    ]
+    expect(filterBoards(rt, { runtimes: ['circuitpython'] }).map((b) => b.id)).toEqual(['BOTH'])
+    expect(
+      filterBoards(rt, { runtimes: ['micropython', 'circuitpython'] }).map((b) => b.id)
+    ).toEqual(['BOTH'])
+    expect(filterBoards(rt, { runtimes: ['micropython'] }).map((b) => b.id)).toEqual(['MP', 'BOTH'])
   })
 
   it('an empty filter keeps everything', () => {
@@ -236,11 +308,66 @@ describe('the generated seed that actually ships', () => {
     expect(previews).toEqual([])
   })
 
-  it('publishes no flash or RAM figures, because upstream does not', () => {
-    // If these ever appear, they came from somewhere that has to be named — see
-    // the follow-on issue about sourcing them from manufacturer product pages.
-    const raw = JSON.parse(readFileSync('src/renderer/public/boards/boards.json', 'utf8'))
-    expect(JSON.stringify(raw)).not.toContain('flashBytes')
-    expect(JSON.stringify(raw)).not.toContain('ramBytes')
+  /**
+   * This used to assert that NO flash or RAM figure appeared at all, on the
+   * grounds that upstream publishes none and anything that showed up must have
+   * come from somewhere unnamed. #897 answered that by naming the somewhere, so
+   * the tripwire moves rather than goes: the rule is no longer "no figures", it
+   * is "no figure without a source".
+   */
+  describe('the sizes it publishes, and their provenance (#897)', () => {
+    it('names a source for every figure, and never publishes a bare number', () => {
+      const raw = JSON.parse(readFileSync('src/renderer/public/boards/boards.json', 'utf8'))
+      for (const b of raw.boards) {
+        for (const key of ['flash', 'ram', 'psram'] as const) {
+          const size = b[key]
+          if (size === null || size === undefined) continue
+          expect(typeof size.bytes, `${b.id}.${key}`).toBe('number')
+          expect(size.bytes, `${b.id}.${key}`).toBeGreaterThan(0)
+          expect(String(size.source).trim(), `${b.id}.${key} source`).not.toBe('')
+          expect(['board', 'chip'], `${b.id}.${key} scope`).toContain(size.scope)
+        }
+      }
+    })
+
+    it('marks every MCU-derived RAM figure as the chip’s, not the board’s', () => {
+      // The distinction #897 asks for. "Every RP2040 has 264 KB" is a fact about
+      // the chip; presented as the board's it would imply the module was
+      // measured, and the module is where flash lives.
+      const pico = doc!.boards.find((b) => b.id === 'RPI_PICO')!
+      expect(pico.ram?.scope).toBe('chip')
+      expect(pico.ram?.bytes).toBe(264 * 1024)
+      // …while its flash IS the board's, from Raspberry Pi's own documentation.
+      expect(pico.flash?.scope).toBe('board')
+      expect(pico.flash?.bytes).toBe(2 * 1024 * 1024)
+    })
+
+    it('says nothing about chip families whose SRAM is not fixed', () => {
+      // stm32f4 spans 96 KB to 256 KB; nrf52 spans 64 KB to 256 KB. A plausible
+      // average would never get checked, which is what makes it dangerous.
+      for (const b of doc!.boards) {
+        if (['stm32f4', 'nrf52', 'samd21', 'samd51', 'mimxrt'].includes(b.mcu)) {
+          expect(b.ram, `${b.id} (${b.mcu})`).toBeNull()
+        }
+      }
+    })
+  })
+
+  it('confirms CircuitPython per board rather than per chip (#902)', () => {
+    // Per BOARD is the whole point: `raspberry_pi_pico` and
+    // `raspberry_pi_pico_w` are different files on the same chip, and flashing
+    // one to the other is a board that boots with the wrong pins.
+    const pico = doc!.boards.find((b) => b.id === 'RPI_PICO')!
+    const picoW = doc!.boards.find((b) => b.id === 'RPI_PICO_W')!
+    expect(pico.circuitPythonBoardId).toBe('raspberry_pi_pico')
+    expect(picoW.circuitPythonBoardId).toBe('raspberry_pi_pico_w')
+    expect(pico.runtimes).toContain('circuitpython')
+  })
+
+  it('claims no runtime for a board with nothing published', () => {
+    // Three of the 225 are in upstream's tree with no download page at all.
+    for (const b of doc!.boards) {
+      if (b.builds.length === 0) expect(b.runtimes, b.id).not.toContain('micropython')
+    }
   })
 })
