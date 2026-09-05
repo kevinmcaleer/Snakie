@@ -229,6 +229,19 @@ const device = {
     unwrap(ipcRenderer.invoke('device:df')),
   /** Read a file's contents (UTF-8). */
   readFile: (path: string): Promise<string> => unwrap(ipcRenderer.invoke('device:readFile', path)),
+  /**
+   * Read a file's raw BYTES off the board (#875).
+   *
+   * `readFile` above decodes as UTF-8, which is the right default for the source
+   * files this app mostly moves around and the wrong one for everything else: a
+   * `.mpy` read that way comes back as replacement characters, unrecoverably.
+   * The `.mpy` viewer needs the real bytes, so it asks for them here — the read
+   * mirror of `writeFileBytes` below.
+   */
+  readFileBytes: (path: string): Promise<Uint8Array> =>
+    unwrap<Uint8Array>(ipcRenderer.invoke('device:readFileBytes', path)).then(
+      (bytes) => new Uint8Array(bytes)
+    ),
   readFileLine: (path: string, prefix: string): Promise<string> =>
     unwrap(ipcRenderer.invoke('device:readFileLine', path, prefix)),
   /** Write contents to a file (created/overwritten), chunked. */

@@ -1,0 +1,249 @@
+/* BYTECODE VIEW (#875) — read-only "what's inside this .mpy".
+   Unique BEM prefix `mpyv__` (panel CSS is global, so prefixes must not collide).
+   Every colour is a theme token: this reads on the dark skin AND the skeuomorph
+   parchment one, with no literal colours to go wrong in the other. */
+
+.mpyv {
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+/* --- Centred single-message states (loading / unreadable) ------------------ */
+.mpyv--message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.mpyv__message {
+  max-width: 40ch;
+  margin: 0;
+  text-align: center;
+}
+.mpyv__message--muted {
+  color: var(--text-muted);
+}
+.mpyv__message--error {
+  color: var(--danger);
+}
+
+/* --- Header ---------------------------------------------------------------- */
+.mpyv__head {
+  padding: 1.1rem 1.3rem 0.9rem;
+  border-bottom: var(--border-w) solid var(--border);
+}
+
+.mpyv__title {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.98rem;
+  font-weight: 600;
+  color: var(--accent-ink);
+}
+
+.mpyv__lede {
+  margin: 0.35rem 0 0;
+  max-width: 70ch;
+  color: var(--text-muted);
+}
+
+/* --- Cards ----------------------------------------------------------------- */
+.mpyv__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1.1rem 1.3rem 2rem;
+}
+
+.mpyv__card {
+  padding: 0.85rem 1rem 0.95rem;
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+}
+
+/* The honesty section. Marked by a rule down its leading edge rather than a
+   different fill, so it reads as an aside in either skin. */
+.mpyv__card--absent {
+  border-left: 3px solid var(--accent);
+}
+
+.mpyv__h2 {
+  margin: 0 0 0.6rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.mpyv__count {
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  background: var(--bg-sunken);
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  letter-spacing: 0;
+}
+
+.mpyv__note {
+  margin: 0.7rem 0 0;
+  max-width: 78ch;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.55;
+}
+
+.mpyv__empty {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.mpyv code {
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+}
+
+/* --- File facts ------------------------------------------------------------ */
+.mpyv__facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.28rem 0.9rem;
+  margin: 0;
+}
+
+.mpyv__fact-label {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.mpyv__fact-value {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--text);
+}
+
+/* --- The scope tree -------------------------------------------------------- */
+.mpyv__tree {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Nested scopes sit under their parent behind a hairline, which is the only
+   thing marking "these belong to that" — the file gives us no better label. */
+.mpyv__tree--nested {
+  margin: 0.15rem 0 0.15rem 0.55rem;
+  padding-left: 0.7rem;
+  border-left: var(--border-w) solid var(--border);
+}
+
+.mpyv__node {
+  padding: 0.08rem 0;
+}
+
+.mpyv__sig {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.mpyv__sig-text {
+  font-family: var(--font-mono);
+  font-size: 0.79rem;
+  color: var(--ident);
+}
+
+.mpyv__tag {
+  padding: 0.02rem 0.35rem;
+  border: var(--border-w) solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-sunken);
+  color: var(--text-muted);
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* --- Name chips ------------------------------------------------------------ */
+.mpyv__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mpyv__chip {
+  padding: 0.08rem 0.4rem;
+  border: var(--border-w) solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-sunken);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+/* --- Constants ------------------------------------------------------------- */
+.mpyv__consts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.22rem 0.7rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mpyv__const {
+  display: contents;
+}
+
+.mpyv__const-kind {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  text-align: right;
+}
+
+.mpyv__const-value {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--ident);
+  overflow-wrap: anywhere;
+}
+.mpyv__const-value--str,
+.mpyv__const-value--bytes {
+  color: var(--str);
+}
+.mpyv__const-value--int,
+.mpyv__const-value--float,
+.mpyv__const-value--complex {
+  color: var(--num);
+}
+
+/* --- "Not in this file" ---------------------------------------------------- */
+.mpyv__absent {
+  margin: 0;
+  padding-left: 1.05rem;
+  max-width: 78ch;
+  color: var(--text-muted);
+}
+
+.mpyv__absent li + li {
+  margin-top: 0.35rem;
+}
+
+.mpyv__absent strong {
+  color: var(--text);
+  font-weight: 600;
+}

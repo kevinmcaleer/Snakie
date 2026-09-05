@@ -3,6 +3,7 @@ import { EditorTabs } from './EditorTabs'
 import { FIND_EVENT } from './editorBridge'
 import { ChatIcon } from './ui-icons'
 import { useWorkspace } from '../store/workspace'
+import { isMpyFile } from '../../../shared/mpy-info'
 
 export interface EditorAreaProps {
   /** Whether the AI chat pane is open (drives the Chat toggle's state). */
@@ -20,6 +21,9 @@ const MonacoEditor = lazy(() => import('./MonacoEditor'))
 const DataView = lazy(() => import('./DataView').then((m) => ({ default: m.DataView })))
 // Robot View (#311) — the three.js chunk only loads when a .urdf file is open.
 const RobotView = lazy(() => import('./RobotView'))
+// Bytecode View (#875) — a read-only look inside a compiled `.mpy`, in place of
+// the mojibake Monaco used to show for one.
+const MpyView = lazy(() => import('./MpyView'))
 
 /** Files opened as a table (Data View) rather than in the code editor (#274). */
 const DATA_FILE_RE = /\.(csv|tsv|tab)$/i
@@ -51,6 +55,7 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
   const showData = isDataFile(activeFile?.name)
   const showRobot = isRobotFile(activeFile?.name)
+  const showMpy = isMpyFile(activeFile?.name)
 
   // Open the Find & Replace window. The window itself drives the editor over IPC
   // (issue #146); we only need to open/focus it.
@@ -92,7 +97,7 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
     >
       <div className="editor-header">
         <EditorTabs />
-        {(onToggleChat || (hasFiles && !showData && !showRobot)) && (
+        {(onToggleChat || (hasFiles && !showData && !showRobot && !showMpy)) && (
           <div className="editor-header__actions">
             {/* Chat toggle — moved here from the console header (which was too
                 busy). Sits to the LEFT of Find. Desktop + Code workspace only. */}
@@ -111,7 +116,7 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
                 <span>Chat</span>
               </button>
             )}
-            {hasFiles && !showData && !showRobot && (
+            {hasFiles && !showData && !showRobot && !showMpy && (
               <button
                 type="button"
                 className="btn btn--sm btn--ghost"
@@ -134,6 +139,10 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
         ) : showRobot ? (
           <Suspense fallback={<EditorPlaceholder text="Loading robot view…" />}>
             <RobotView />
+          </Suspense>
+        ) : showMpy ? (
+          <Suspense fallback={<EditorPlaceholder text="Loading bytecode view…" />}>
+            <MpyView />
           </Suspense>
         ) : (
           <Suspense fallback={<EditorPlaceholder text="Loading editor…" />}>
