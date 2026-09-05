@@ -35,8 +35,6 @@ const NEW_FILE_ICON = ToolIcon(
     <rect x="5" y="10" width="6" height="2" />
   </g>
 )
-// folder (open folder)
-const OPEN_FOLDER_ICON = ToolIcon(<path d="M1 3h5l2 2h7v8H1z" fill="currentColor" />)
 // floppy disk (save)
 const SAVE_ICON = ToolIcon(
   <g fill="currentColor">
@@ -85,7 +83,7 @@ const SNAKE_LOGO = (
  * TOP TOOLBAR.
  *
  * Big, easy-to-click action buttons (Run / Stop) plus the file actions
- * (New / Open / Save, grouped as one segmented control). Run executes the
+ * (New / Save, grouped as one segmented control). Run executes the
  * active editor file on the device via MicroPython paste mode (output streams to
  * the existing Shell terminal); Stop sends an interrupt (Ctrl-C).
  *
@@ -93,15 +91,19 @@ const SNAKE_LOGO = (
  * {@link StatusBar} (issue #71); this toolbar still reads {@link useDeviceStatus}
  * only to enable/disable the Run/Stop buttons.
  *
- * Hosts the file actions (New / Open / Save), Run / Stop, and the centred
- * workspace switcher (Code · Electronics · Build). The Board View lives in the
- * Electronics workspace now, so the old pop-out board knob is gone (#…); the old
- * global panel-collapse knobs went in Soft Shell (#592) — each panel owns its own
- * collapse control. Settings + the theme picker live on the activity bar.
+ * Hosts the file actions (New / Save), Run / Stop, and the centred workspace
+ * switcher (Code · Electronics · Build). Open Folder used to sit between New and
+ * Save; it was the same action as the Local Files panel's own folder icon, so it
+ * now lives only there — next to the tree it re-roots (#882) — with File ▸ Open
+ * Folder… (Cmd/Ctrl-O) as the way in when that panel is collapsed or absent. The
+ * Board View lives in the Electronics workspace now, so the old pop-out board
+ * knob is gone (#…); the old global panel-collapse knobs went in Soft Shell
+ * (#592) — each panel owns its own collapse control. Settings + the theme picker
+ * live on the activity bar.
  */
 export function Toolbar(): JSX.Element {
   const status = useDeviceStatus()
-  const { openFiles, activeId, newFile, openFolder, saveFile } = useWorkspace()
+  const { openFiles, activeId, newFile, saveFile } = useWorkspace()
   const { markRun } = useConsole()
   const connected = status.state === 'connected'
   const activeFile = openFiles.find((f) => f.id === activeId)
@@ -196,10 +198,6 @@ export function Toolbar(): JSX.Element {
     }
   }, [running])
 
-  const handleOpenFolder = useCallback(() => {
-    void openFolder().catch(reporter('open folder', { notify: "Couldn't open the folder." }))
-  }, [openFolder])
-
   const handleSave = useCallback(() => {
     if (activeId) void saveFile(activeId).catch(reporter('save file', { notify: "Couldn't save the file." }))
   }, [activeId, saveFile])
@@ -225,15 +223,6 @@ export function Toolbar(): JSX.Element {
             aria-label="New file"
           >
             {NEW_FILE_ICON}
-          </button>
-          <button
-            type="button"
-            className="btn btn--ghost btn--icon toolbar__seg-btn toolbar__seg-btn--open"
-            onClick={handleOpenFolder}
-            title="Open folder"
-            aria-label="Open folder"
-          >
-            {OPEN_FOLDER_ICON}
           </button>
           <button
             type="button"

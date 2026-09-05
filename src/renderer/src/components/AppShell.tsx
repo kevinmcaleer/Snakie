@@ -86,6 +86,7 @@ import {
   type InstallState
 } from '../lib/instrumentsLib'
 import { announceSaved, useWorkspace } from '../store/workspace'
+import { reporter } from '../lib/report-error'
 import { readRobotModel } from '../../../shared/krf'
 import { isUrdfPath } from './urdf-target'
 import { useEditorSettings } from '../store/settings'
@@ -225,7 +226,7 @@ export function AppShell(): JSX.Element {
   // us stream every edit / theme change to that window over IPC so it updates
   // live. `boardOpened` tracks whether the window has been opened this session
   // (so we only stream while it's open); it resets when the user closes it.
-  const { openFiles, activeId, currentFolder, reloadContent } = useWorkspace()
+  const { openFiles, activeId, currentFolder, reloadContent, openFolder } = useWorkspace()
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
   const [boardOpened, setBoardOpened] = useState(false)
 
@@ -1070,6 +1071,24 @@ export function AppShell(): JSX.Element {
     window.addEventListener(HELP_EVENT, handler)
     return () => window.removeEventListener(HELP_EVENT, handler)
   }, [setActivityView, setLeftCollapsed])
+
+  // File ▸ Open Folder… from the app menu, or its Cmd/Ctrl-O accelerator (#882).
+  // The main toolbar's folder icon was a duplicate of the Local Files panel's,
+  // so it went — but the panel can be COLLAPSED (and Electronics/Build have no
+  // files panel at all), which would have left no way in. The menu is always
+  // there, so this is the reachable path; revealing the Files view first means
+  // the folder lands somewhere the user can see, rather than silently behind a
+  // collapsed panel. Both reveal calls are the ones the Help deep-link above
+  // uses, for the same solo-workspace reason.
+  useEffect(() => {
+    const off = window.api.workspace.onOpenFolder(() => {
+      setActivityView('files')
+      setLeftCollapsed('files', false)
+      filesRef.current?.expand()
+      void openFolder().catch(reporter('open folder', { notify: "Couldn't open the folder." }))
+    })
+    return off
+  }, [openFolder, setActivityView, setLeftCollapsed])
 
   // The Parts Library + Part Editor live in the Board Viewer window now (it's the
   // only place that uses parts), so the main window no longer hosts them.

@@ -88,6 +88,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Open Folder now lives next to the files it opens** (#882). The main toolbar
+  and the Local files mini toolbar both carried a folder icon doing exactly the
+  same thing, and the action belongs beside the tree it re-roots — so the main
+  toolbar keeps New file and Save, and the folder icon stays in the Local files
+  panel. That panel can be collapsed, though, and the Electronics and Build
+  workspaces have no files panel at all, so removing the toolbar button on its
+  own would have left a user with nowhere to open a folder from. There is now a
+  **File ▸ Open Folder…** menu item with the usual `Cmd`/`Ctrl`-`O`, which also
+  reveals the Local files panel so the folder you picked appears rather than
+  landing silently behind a collapsed panel.
+
 - **Both file toolbars now sit the same way** (#868). The Device files actions
   shared the title's row and were pushed to one end of it, while the Local files
   actions had a centred row of their own — the same control in two places. Both

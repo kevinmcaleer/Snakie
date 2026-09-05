@@ -203,6 +203,10 @@ if (!w.api) {
         workspaceListeners.add(cb)
         return () => workspaceListeners.delete(cb)
       },
+      // The Open Folder request comes from the DESKTOP app menu (#882); a browser
+      // has no menu bar to fire it, and the web build keeps its own Open Folder
+      // in the Local Files panel.
+      onOpenFolder: unsub,
       setFolder: (folder?: string): void => {
         workspaceFolder = folder && folder.trim() ? folder : undefined
       },
