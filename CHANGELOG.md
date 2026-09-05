@@ -8,6 +8,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Board Finder — a gallery of every board MicroPython builds for** (#893). The
+  firmware picker showed Thonny's catalogue, which carries no Adafruit boards and
+  no ESP32 variants; **Board Finder** in the status bar, beside Flash firmware,
+  opens all 225 boards from 54 vendors as a photo gallery, built like the parts
+  catalog and popped out with the same corner-bracket icon. Filter by
+  manufacturer, processor and features, search across all of it, or hide the
+  three boards that publish no firmware. Open a board and you get upstream's own
+  description of each **variant** — the thing a picker cannot infer, and the
+  thing that gets flashed wrong — plus its builds, its specification and a link
+  to the vendor's page. Clicking through hands the flasher the board with the
+  newest build already chosen.
+
+  The issue also asked to filter by storage and memory, and that is deliberately
+  absent: MicroPython's index publishes `External Flash` and `External RAM` as
+  yes/no and no figure anywhere, so a size filter could only have drawn itself by
+  quietly dropping most of the catalogue. They stay as ordinary feature chips, and
+  a board's details say plainly that the size is not published rather than leaving
+  you to guess whether the absence means zero.
+
 - **Minimise the copy dialog to the status bar, and bring it back** (#890). A
   folder copy or a driver install can be put away with **Minimise** — which sits
   beside Cancel rather than replacing it, because "give me my app back" and

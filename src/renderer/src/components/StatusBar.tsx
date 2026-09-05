@@ -4,6 +4,7 @@ import { useWorkspace } from '../store/workspace'
 import { useConsole } from '../store/console'
 import { useEditorSettings } from '../store/settings'
 import { FirmwareFlasher } from './FirmwareFlasher'
+import { BoardFinder } from './BoardFinder'
 import { CoffeeLink } from './CoffeeLink'
 import { updateButtonView } from './updateButton'
 import { liveWarningVisible } from './instrument-host'
@@ -31,7 +32,7 @@ import {
   firmwareRuntimeForDialect
 } from '../../../shared/firmware-runtime'
 import type { FirmwareCatalog, UpdateStatus } from '../../../preload/index.d'
-import { BulbIcon } from './ui-icons'
+import { BulbIcon, ExpandIcon } from './ui-icons'
 import { SyncIndicator } from './SyncIndicator'
 import './StatusBar.css'
 
@@ -96,6 +97,31 @@ export function StatusBar({
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
 
   const [flasherOpen, setFlasherOpen] = useState(false)
+  // The Board Finder gallery (#893), and where it should grow from. It lives
+  // beside the flasher because this is where a user comes to think about
+  // firmware, and the gallery exists to fix the board picker they find here.
+  const [finderOpen, setFinderOpen] = useState(false)
+  const [finderOrigin, setFinderOrigin] = useState<{ x: number; y: number } | null>(null)
+  // Closing runs the grow backwards, so the gallery has to outlive the click
+  // that dismissed it — unmount on click and there is nothing left to animate.
+  const [finderClosing, setFinderClosing] = useState(false)
+  const dropFinder = useCallback((): void => {
+    setFinderClosing(false)
+    setFinderOpen(false)
+  }, [])
+  const closeFinder = useCallback((): void => {
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (!finderOrigin || still) dropFinder()
+    else setFinderClosing(true)
+  }, [finderOrigin, dropFinder])
+  // Insurance: the unmount hangs off `animationend`, and a closing panel has
+  // pointer events off. If that event never arrives the gallery would be stuck
+  // on screen AND unclickable, so time it out regardless.
+  useEffect(() => {
+    if (!finderClosing) return
+    const t = setTimeout(dropFinder, 450)
+    return () => clearTimeout(t)
+  }, [finderClosing, dropFinder])
   // A newer build than the connected device is running — MicroPython (#173) or
   // CircuitPython (#757) — plus dismissal. The update names its own runtime, so
   // the prompt never tells a CircuitPython user about a MicroPython release.
@@ -581,6 +607,23 @@ export function StatusBar({
               </button>
             </div>
           )}
+          {/* Pop the board catalogue out full-screen — the same corner-bracket
+              icon the Parts Library uses to expand into its catalog (#893). */}
+          <button
+            type="button"
+            className="statusbar__item statusbar__boards"
+            onClick={(e) => {
+              const b = e.currentTarget.getBoundingClientRect()
+              setFinderOrigin({ x: b.left + b.width / 2, y: b.top + b.height / 2 })
+              setFinderClosing(false)
+              setFinderOpen(true)
+            }}
+            title="Board Finder — browse every board MicroPython builds for, and flash one"
+            aria-label="Open the Board Finder"
+          >
+            <ExpandIcon size={13} />
+            <span>Board Finder</span>
+          </button>
           <button
             type="button"
             className="statusbar__item statusbar__flash"
@@ -598,6 +641,15 @@ export function StatusBar({
           </button>
         </div>
       </div>
+
+      {finderOpen && (
+        <BoardFinder
+          origin={finderOrigin}
+          closing={finderClosing}
+          onClosed={dropFinder}
+          onClose={closeFinder}
+        />
+      )}
 
       {flasherOpen && (
         <FirmwareFlasher
