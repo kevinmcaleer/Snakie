@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.51.0] - 2026-09-05
+
 ### Added
 
 - **A Tools menu** (#917, epic #913). Firmware Flasher · Board Finder · Parts
@@ -35,8 +37,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   that does not exist yet is simply lost. Sprite Editor, Find and Settings reuse
   the events they already answer to, which is the one-line case the command
   channel was built for.
-
-### Added
 
 - **A Device menu** (#918, epic #913). Everything you do *to the board* was
   reachable only from the toolbar or the console panel — including Run and Stop,
@@ -70,8 +70,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   inside the panels that use it. On macOS the Help menu held nothing of Snakie's
   at all.
 
-### Added
-
 - **A File menu that does what a File menu does** (#915, epic #913). It was two
   items — `Open Folder…` and Quit. It is now New File (⌘N), Open File… (⌘O),
   Open Folder… (⇧⌘O), Open Recent ▸, Save (⌘S), Save As… (⇧⌘S) and Close Tab
@@ -98,85 +96,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
   The cheatsheet from #920 picked up all seven bindings with no edit, which is
   the property it was built for.
-
-### Fixed
-
-- **Save As no longer leaves two tabs on one file** (#515). After Save As the
-  buffer keeps its `untitled:` id — deliberately, so the tab and its editor stay
-  mounted — while gaining a real path. Opening that same file from the Files tree
-  then matched no id and made a *second* tab for one file, whose saves silently
-  overwrote each other. Opening a file now matches an already-open one by path as
-  well as by id. It was a corner before; #915 put Save As on the menu with a
-  shortcut, which turns it into a normal Tuesday.
-
-### Fixed
-
-- **The boards upstream has no photo of now have one on their card** (#942). The
-  Pimoroni Tiny 2350's tile drew the placeholder from #931 while its details page
-  showed a real photograph of the board — one board, two answers, and the wrong
-  one where people look first. The details page had a picture because #934 linked
-  the board to a part, and parts carry board photos; the tile did not, because an
-  overlay board has no entry in micropython.org's media by definition.
-
-  The tile now gets the same photo, shrunk into the bundled thumbnails at build
-  time by `scripts/build-overlay-thumbs.mjs`. Seven of the eight linked overlay
-  boards gain one; the Motor 2040's part ships no board image, so it keeps the
-  drawn placeholder, which is still the honest answer for it.
-
-  Build time rather than a fallback in the gallery, because the obvious version —
-  "no thumbnail? use the linked part's image" — would have the gallery holding
-  the parts library open to draw its tiles. Part images are the full-resolution
-  article: 28 MB across the Standard library, 180 KB to 1.7 MB each, every one
-  inlined as a data URI. Shrunk here they are ~20 KB, 176 KB for all seven, and
-  they travel the same path as every other board's thumbnail rather than a second
-  one that can rot on its own. The donor board's picture is still refused: a
-  generic DevKit photo on an Adafruit card would be a lie, where the part's photo
-  is a picture of that exact board.
-
-### Fixed
-
-- **The hover preview can no longer open off the edge of the gallery** (#940).
-  Hovering a board on the second row opened a preview whose top was clipped off
-  the page. The preview decided where to grow *before it existed*: vertically
-  from a hand-maintained guess at how far the card hangs past its cell, and
-  horizontally from which column the cell was in. Both were made worse by #938,
-  which made the card taller than the guess knew — and the upward flip had never
-  asked whether there was room *above*, so on the second row it flipped up
-  because there genuinely was no room below, and sailed off the top.
-
-  Nothing is estimated now. The card is measured where it actually landed and
-  moved the smallest distance that brings all four edges back inside the gallery
-  — before the browser paints, so it is never seen in the wrong place first. The
-  overhang constant and the three placement variants are gone with it: one
-  mechanism that cannot fall out of step with the card's real size, instead of
-  three that could. When a card is too big for the gallery to hold at all, the
-  **top and left** edges are the ones that survive, because that is where the
-  photo and the board's name are.
-
-### Changed
-
-- **The hover preview is twice as wide, so the photo is worth looking at**
-  (#938). The Board Finder's preview grew a card into a slightly bigger card,
-  and the picture — the fastest way to recognise a board — stayed small. It is
-  now 2x the width, centred on the cell it grew from, and the photo roughly
-  doubles with it.
-
-  The image box keeps its 4/3 ratio rather than just getting wider, and that is
-  the part that matters: every bundled thumbnail is 320px wide with a median
-  aspect of 1.20, so in a 4/3 box most of them are already *height*-constrained
-  and have width going spare. Widening the box alone would have shown no more
-  image at all. `object-fit: contain` keeps each photo's own ratio whatever the
-  box does.
-
-  Two things had to move with it. The first and last columns have nowhere to put
-  half a card, so they anchor to their own edge and grow inward — measured
-  against the gallery's scroller, which is the box the preview must not hang out
-  of, rather than the window, which knows nothing about the panel's margin. And
-  the estimate that decides whether the bottom row grows *upward* had to grow
-  too: left where it was, a taller preview would have flipped a row too late and
-  opened into the scroller's bottom edge.
-
-### Added
 
 - **Seven more boards MicroPython builds nothing for** (#936, epic #884). #902
   built the overlay and curated five entries, deliberately leaving the rest —
@@ -208,92 +127,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   switched off — the Feather V2 story one chip family across. It gets no donor
   and a card that says why.
 
-### Changed
-
-- **Overlay boards can no longer invent a filter chip** (#936). A board's
-  `features` feed the gallery's facets, so `USB C` where upstream writes `USB-C`
-  fails nothing and silently splits one filter into two — #928 by another route.
-  Every feature string an overlay states is now held to upstream's own
-  vocabulary by a test.
-
-- **A board in the finder shows the board itself: front, back, model and
-  pinout** (#934). The Board Finder knew 225 boards the way MicroPython
-  describes them — a vendor, a chip, and a list of firmware to write. The parts
-  library knew 22 of those boards as hardware — a photograph, a back, sometimes
-  a 3-D model, and every pad with its GPIO, its bus and its signal. Neither knew
-  what the other held, so a Pico's details page could tell you exactly which
-  `.uf2` to flash and not one thing about where GP4 is. A board's page now ends
-  with the board itself, turned over, modelled where there is a model, and read
-  pad by pad: hover a pad and it is ringed, and named underneath in words —
-  `GP4 · Pin 6 · I/O · I2C0 SDA · SPI0 RX · PWM 2A`. The bus number is the part
-  that matters and the part a pinout diagram usually makes you count across the
-  board to find. Because hovering is not available to everyone, the same readout
-  is driven by a pin picker beside it, and announced politely as it changes. The
-  Parts Catalog's own details page gains the readout at the same time, from the
-  same component: the stage is now one implementation shared by both, rather
-  than the two-that-drift the board view has already been.
-
-  **The join is a hand-written table, on purpose.** Matching on vendor and
-  product name was tried first and is not close: it silently paired Pimoroni's
-  `Pico LiPo 2`, an RP2350 board, with upstream's `Pico LiPo`, which is RP2040.
-  Same maker, same product line, one word apart, different chip, different
-  pinout — and a finder that answers "where is GP4" with another board's pad map
-  is worse than one that says nothing, because the wrong answer still looks like
-  an answer to someone holding a soldering iron. So every pairing names both ids
-  outright and carries its reason, and a test holds each one to its chip. That
-  test is what caught the Pico LiPo, and it is the check that stays.
-
-  Eleven of the 22 microcontroller parts clear that bar, including the Feather
-  ESP32 V2 that #902 curated. The other eleven are real boards MicroPython
-  builds nothing under — the Tiny 2350, Servo 2040, Pico LiPo 2, Maker Pi RP2040
-  — and they stay out until each is verified, so 214 of the 225 boards show
-  exactly what they showed before, and none shows a heading over an empty frame.
-
-### Changed
-
-- **A board with no photograph gets a drawn board, not its initials** (#931).
-  Eight of the 225 have no picture — seven of them name one upstream, and those
-  URLs 404, because MicroPython's media repository never published a file at
-  that path. So there is nothing to fetch, and the tile has to draw something.
-  It used to draw the product name's two initials, in a well beside the product
-  name, at three different sizes in three different places. It now draws a
-  board: an outline with headers, mounting holes and a chip in the middle, with
-  the chip marked with the board's MCU. That marking is the point — since #927
-  the resting card names only the maker and the board, so on these eight the
-  chip was stated nowhere until the preview opened, and a chip is exactly where
-  a chip's name belongs. It is line art rather than a plausible green PCB, so
-  that among 217 real product photographs it can only be read as a stand-in; and
-  it is one drawing scaling across the card, the preview and the details rather
-  than three that can drift apart. Screen readers get it as "No photo published"
-  plus the chip, where the initials were hidden from them entirely — rightly,
-  since they said nothing the card did not already print.
-
-- **The Board Finder fills its rows, and marks each manufacturer with a tint**
-  (#927). Every maker had its own shelf — its own heading, its own grid, its own
-  fresh row. With 54 makers and a median of two boards each, that was 54 headings
-  and 54 rows left mostly empty, so a catalogue of 225 boards took far more
-  scrolling than 225 boards should. They now go into one continuous grid, so a
-  row can hold the last two Arduinos and the first five Espressifs, and a maker
-  is marked instead by a soft tint on the ground **between** its cards — a band
-  that runs on across row ends for as long as the maker does and stops mid-row
-  where the next one starts. There are six tints for 54 makers, which is the
-  honest ratio: a tint says *the maker changed here* and is never asked to say
-  *which maker this is*. Every card still prints its manufacturer, so the
-  grouping is never carried by colour alone. A maker's tint comes from its name
-  rather than its position, so adding a board next release does not repaint the
-  gallery; it shifts only where it would otherwise land too close to itself.
-- **A board card at rest shows its photo, its maker and its name, and nothing
-  else** (#927). It also carried the chip, three feature chips with an overflow
-  count, and two firmware notes — a wall of specification that nobody reads while
-  scanning and that made every one of the 225 cards taller than it needed to be.
-  All of it is a beat away on the hover preview (#919), which states the firmware
-  **first**, and on the details page behind a click. Nothing that warns you about
-  a board has been lost on the way to flashing one: a card does not flash
-  anything, and every route from it to the flash button passes a screen that says
-  so. The manufacturer line also got brighter, because it is now the accessible
-  half of the new tints rather than a caption.
-### Added
-
 - **A keyboard shortcut cheatsheet, generated from the bindings themselves**
   (#920). **Help ▸ Keyboard Shortcuts**, or `⌘⇧/` / `Ctrl+Shift+/`, lists every
   key the app binds, grouped by the menu it lives in and printed the way the
@@ -311,56 +144,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it to Toggle Line Comment, and a menu accelerator is caught before the editor
   ever sees the key, so taking it would have silently broken commenting in a
   code editor.
-
-### Fixed
-
-- **The board index recorded picture URLs that 404** (#931). When upstream names
-  an image its media repository does not publish, the generator noticed — that
-  is why those boards have no thumbnail — but wrote the dead URL into the index
-  anyway, waiting for whatever renders it next. It now drops the URL when the
-  fetch comes back "not found", and keeps it when the failure was the network or
-  a machine with no image resizer, where the picture is presumably still there.
-  Seven boards in the shipped index lose a link to nowhere.
-
-- **The Board Finder opened behind the flash dialog** (#893). It was given the
-  Parts Catalog's stacking order, which is right for a gallery opened from a
-  panel with nothing above it — but wrong for one opened from a button inside a
-  modal. It rendered behind the dialog that launched it: invisible, unreachable,
-  and with the dialog still modal in front of it.
-
-### Changed
-
-- **The Board Finder is dark on both skins, and its manufacturers are chips**
-  (#919). Two of its filters were dropdowns, which hold one value at a time and
-  keep the other 53 out of sight: you could look for an Adafruit board or a
-  Pimoroni one, never both, and nothing on screen said what the catalogue was
-  actually made of. Manufacturer and Processor are now chip rows like Features,
-  each chip carrying its own board count, ordered commonest-first with the tail
-  behind **Show more** / **Show less** — ten chips collapsed, which is 135 of the
-  225 boards by maker and 155 by chip family, so most people's board is named
-  before they open anything. Ticking two makers means **either**, not both, which
-  is the opposite of what ticking two features means and deliberately so: a board
-  has exactly one manufacturer, so an "Adafruit AND Pimoroni" filter could only
-  ever return nothing. A board's features are a set, so "WiFi and BLE" is a real
-  question. The gallery also stops following the theme: it is dark now on the
-  parchment skin too. It opens from a button inside the flash dialog, which has
-  been deliberately dark in both skins since #14 — a parchment sheet unrolling
-  out of a dark modal was the odd one out inside its own container — and 217
-  product photographs shot on white read as one beige field on parchment and as
-  217 lit objects on a dark ground.
-- **The full board page closes with an X, in the corner** (#919). It had a
-  "← All boards" button in the top left, which said the same thing as the
-  gallery's own close in a different idiom and a different place. It is now the
-  same control, in the same corner, and Esc still backs out one step.
-- **The flash dialog reads as fewer decisions** (#896). Detect board and Board
-  Finder have moved to sit beside the Board dropdown rather than floating above
-  the label they fill in — the dropdown is the answer, and those two buttons are
-  the ways of supplying it. Family and Model are now side by side, since Family
-  narrows Model and they are one decision made in two steps; stacked, they read
-  as two unrelated questions and made the dialog a row taller for nothing. Both
-  fall back to a single column on a narrow window.
-
-### Added
 
 - **Switch workspace from the menu, and one command channel behind it** (#914,
   #916). **View ▸ Workspace** lists Code, Electronics and Build with a radio tick
@@ -382,6 +165,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   every id has a handler and every handler an id. Open Folder moved onto it and
   its own channel is gone. State travels back the same way, so an item that
   should grey out has somewhere to learn that it should.
+
 - **A preview of the board you are resting on** (#919). Deciding between two
   boards used to mean opening one, reading it, coming back, and opening the
   other. Rest the pointer on a card and it grows into the same card with the rest
@@ -394,6 +178,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   tap that already opened the full page; a keyboard gets the preview on focus,
   with its Details button as the next stop and Enter on the card doing the same
   thing. Nothing in it is reachable only by hovering.
+
 - **Sizes for almost every board, and a memory filter that earns its place**
   (#897). The board index could attribute a flash size for 10 boards of 230 and
   a RAM size for 86, so both were shown as facts and neither was offered as a
@@ -431,6 +216,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Werkzeug's flash changed size in March 2025, the wESP32's changed at revision
   7, and upstream's `FEATHER52` links one Adafruit product while building for
   another.
+
 - **The boards MicroPython does not build for, and where the numbers come from**
   (#902, #897). The Board Finder had 15 Adafruit boards and not one Adafruit
   ESP32 board, because MicroPython publishes no firmware under any of those
@@ -472,8 +258,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   its chip. The index is refreshed daily and is not tied to a Snakie release, so
   a board added upstream shows up without waiting for an update; the full
   catalogue ships with the app, so it works with no network at all.
-
-### Added
 
 - **Board Finder — a gallery of every board MicroPython builds for** (#893). The
   firmware picker showed Thonny's catalogue, which carries no Adafruit boards and
@@ -517,45 +301,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   hazard bar while files are being written, because a tree quietly changing
   under you is worse than a slow one.
 
-### Fixed
-
-- **A library install now ticks off file by file, and names what it is really
-  installing** (#895). Installing the Arduino Modulino library looked like a
-  hang. It was not: it copies 22 files over the raw REPL, plus three dependency
-  packages — `lsm6dsox`, `ltr-381rgb-01` and `HS3003` — that its own
-  `package.json` pulls in transitively. But an install was enqueued as ONE
-  device-queue task whose `run` never declared any steps, so the whole thing was
-  a single motionless row for minutes at a time. That distinction matters more
-  than usual here, because the documented response to a hung install is
-  Disconnect, which mid-write is exactly what #864 exists to stop being
-  destructive. The install now declares its whole file list before the first
-  write — a list that grew as it went could never say how much was left — and
-  ticks each file off as it lands, with the dependency that brought a file named
-  beside it, so a pause on `lsm6dsox.py` reads as what it is rather than as
-  "still stuck on modulino". Every install gets this, not just the Modules
-  panel: the Packages panel, both Driver Install banners, the instruments-library
-  and missing-library banners, and the parts panel's "Works with" installs, on
-  the desktop and in the browser alike, because they all share one writer
-  underneath and the reporting was fixed there.
-
-- **The recommended firmware build is now reachable for the boards that need it**
-  (#885). A board profile can name the build a board actually requires — the
-  Adafruit ESP32 Feather V2 needs `ESP32_GENERIC-SPIRAM`, because only that build
-  turns on its 2 MB of PSRAM — and Snakie could already derive that build's
-  address and download it for you. But the derivation only ran once you had
-  picked a version out of the Family/Model dropdowns, which excluded exactly the
-  boards the recommendation exists for: the Feather V2 has no catalogue entry at
-  all, so its owner never makes a selection, so the recommendation never
-  resolved. What they got instead was a link to a download page headed
-  "ESP32 / WROOM" listing the plain build first — the opposite of the advice
-  printed directly above it. Snakie now finds the build from any release of the
-  same board, so Flash fetches it with nothing selected; where it still cannot,
-  the link says which file to look for and warns against the one at the top of
-  the page. Links in the flash dialog were also rendering in the browser's
-  default blue, which on that permanently dark panel is dark blue on dark grey.
-
-### Added
-
 - **The simulated board's memory is yours to set, with a cog in the console**
   (#901). Picked from the port dropdown, the Simulated device now carries a cog
   that sets the heap its MicroPython interpreter boots with — presets in the
@@ -587,6 +332,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pointless to anyone who has not met the bug. The "Why?" article explains the
   soft-reset model and why an `isconnected()` guard, which is what everyone
   tries first, cannot fix it.
+
 - **`boot.py` is labelled in the device tree, and CircuitPython's file order is
   corrected** (#872). A file listing cannot show the one thing a beginner most
   needs to know: which file the board runs on its own, without being asked. The
@@ -605,6 +351,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   both was told the wrong one runs. Nothing is labelled at all when no board is
   connected or the connect probe could not name a runtime — a confident wrong
   label about which file runs is worse than no label.
+
 - **Clicking a `.mpy` now shows what is inside it, instead of mojibake** (#875).
   A `.mpy` is compiled bytecode, so opening one in the code editor produced a
   screenful of replacement characters and taught you nothing — not even whether
@@ -625,79 +372,229 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Device reads for this go over a new bytes channel; the existing text one would
   have mangled the file on the UTF-8 round trip before anything could read it.
 
-### Fixed
+- **A file-sync indicator in the status bar, with the list behind it** (#863).
+  When file sync is on — or when anything is tagged — a small sync glyph sits in
+  the status bar showing how many of the tagged files are on the board (`2/3`).
+  Hover it (or click, or tab to it) and it lists every tagged file with a tick
+  against the ones that have actually arrived, a cross against any that failed
+  with the reason, and an empty box against the rest. Each row names where the
+  file lands, once a sync has established it — a folder follows the highlighted
+  device folder, a file goes to `/<name>`, and the popup no longer leaves you
+  guessing which. The glyph dims when files are tagged but sync-on-save is off,
+  which is the state that quietly catches people out, and disappears entirely
+  when there is nothing to report. Unplugging the board clears the ticks: the
+  next board may be a different one, and a tick meaning "synced to something I
+  saw earlier" is worse than no tick at all.
 
-- **File sync no longer remembers files you can't see** (#881). A sync tag was an
-  absolute path with no memory of the folder it was made in, so it outlived that
-  folder: open a different project and yesterday's tags were still tagged, still
-  counted in the status bar, and still pushed to the board on every save — for
-  files nowhere in the tree on screen. Tags are now scoped to the open folder.
-  Only what is inside it syncs, whatever the stored list happens to contain, so
-  a list left by an older version or by a crash mid-change can't push an
-  invisible file either. Opening a different folder asks first, and then forgets
-  the tags the new folder can't show, saying in the status bar how many went. The
-  breadcrumb is left alone deliberately: it only ever re-roots UP to a parent,
-  which widens the tree, so nothing that was visible stops being visible and
-  peeking one level up costs you nothing.
-- **A finished flash can go back instead of only closing** (#838). Done was the
-  only way out of a completed run, and it shut the dialog — throwing away the
-  board, the runtime, the firmware version, the port and every advanced option
-  chosen to get there. That is precisely the moment you want them: a flash that
-  failed usually failed for one reason you can now fix, and re-picking all six
-  selections to change one of them is the complaint. A second button sits beside
-  Done — **Try again** after a failure, **Flash another** after a success — and
-  returns to the options with everything still selected. It clears only what the
-  run produced: the log, the progress bar and the outcome banner.
+- **Copy a whole folder to the board from the Files panel** (#848). Highlight a
+  folder on the left and a folder on the device, and **Upload to device** copies
+  the one into the other — recursively, keeping its name and its nesting. A
+  progress dialog shows the file list with a tick against each one as it lands,
+  and closes itself when the copy finishes (staying put if anything failed,
+  because an error nobody saw did not happen). Developer bookkeeping — `.git`,
+  `__pycache__`, `node_modules`, `.venv`, `.DS_Store`, `*.pyc` — is left on the
+  host; a `.git` directory alone would fill a Pico. Every file goes over the
+  bytes channel, so fonts, images and `.mpy` files arrive intact rather than
+  being quietly mangled by a UTF-8 round trip.
 
-### Fixed
+- **Sync works for folders** (#848). The sync checkbox now appears next to
+  folders as well as files; a tagged folder and everything under it is pushed
+  into whichever device folder is highlighted. Tagged FILES keep their existing
+  destination, so nothing anyone already had set up moves.
 
-- **Detect now says when the board is still connected to the REPL** (#845). A
-  serial port can only be open once, so while Snakie holds one for the REPL,
-  esptool cannot open it to ask the board what it is. That failure came back as
-  an empty identity — indistinguishable from a board that is merely not in
-  download mode — so the dialog offered the BOOT/RESET dance, which cannot
-  possibly free a port held by the app asking you to do it, and the real cause
-  was never said out loud. Detect now checks first and, when the REPL has the
-  port, names it and offers **Disconnect and detect** rather than doing it
-  behind your back: dropping the connection stops whatever the board is running,
-  empties the shell and takes the instruments' live feeds with it, which is a
-  fine thing to do on purpose and a bad thing to have happen to you. A board in
-  BOOTSEL is exempt — a drive copy never touches the serial port — and so is the
-  simulated device, which holds no hardware. Connected to one board and flashing
-  a second stays silent, since nothing is in the way.
-- **Two installs offered at once no longer race each other** (#837). A freshly
-  connected board can put several offers on screen together — the instruments
-  library, the missing-library banner, the Board View's driver banner, the
-  Modules and Packages panels — and accepting a second one started it there and
-  then, on top of the first. The individual writes were already safe (#850), but
-  the two operations still took turns at the port, each reporting progress over
-  the other, and the app showed a state no single install was in. Every device
-  file operation now goes through one queue: the first runs, the rest wait their
-  turn, and two offers of the same driver install it once rather than twice.
-  While the board is busy, a modal says what is running and what is queued
-  behind it, so the app cannot look ready for work it would refuse — with a
-  Cancel that hands you straight back to the interface, without waiting for a
-  board that has stopped answering. It waits a moment before appearing, so a
-  quick one-file upload does not flash a dialog up and straight back down, and
-  it stays put on failure. The folder copy's per-file tick list from #848 is now
-  the queue's view of that one operation, so there is one progress dialog rather
-  than two that could disagree about the same board.
+- **The flasher says what it is about to do, in words.** Before the esptool
+  command line, the log now states which firmware file is being written, to
+  which port, at which address, and whether the whole flash is being erased
+  first. Three separate bugs in this area produced the identical symptom — a
+  flash that reports success and leaves a board that will not boot — and every
+  one of them came down to one of those facts differing from what the dialog
+  implied. All three were technically visible in the esptool arguments, and all
+  three went unnoticed, because reading an argv by eye is not a reasonable way
+  to answer "did it erase?".
 
-- **An interrupted install no longer leaves a broken file on the board** (#864).
-  Driver and package installs wrote each file straight to its final name, so
-  stopping part-way — a disconnect, a cancel, an error on any one file — left a
-  truncated file that nothing knew was incomplete. The next import then failed
-  with a `SyntaxError` pointing into a vendor library, which reads as "that
-  library is broken" rather than "the install didn't finish". One real report
-  blamed line 159 of `lsm6dsox.py`, a line that is a perfectly ordinary `raise`
-  in the real file. Every file now arrives under a temporary name, is checked
-  against the size that should have landed, and is only then moved into place —
-  so the file on the board is the old one or the new one, never half of one, and
-  a short write fails loudly at install time instead of days later. The folder
-  copy does the same. Interrupted installs leave a `.snk-part` file behind,
-  which is inert and overwritten by the next attempt.
+- **Snakie fetches the recommended firmware build itself.** Identifying a board
+  could tell you it had PSRAM and that `ESP32_GENERIC-SPIRAM` was the build that
+  uses it — and then leave you to open a browser, find that file, download it,
+  and come back through a file picker. For a file whose address Snakie could
+  already work out.
+
+  When a recommended build exists, it is now offered as a tickbox (on by
+  default) and **Flash downloads it for you**, exactly as it does for a catalog
+  build. The build's address is derived from the release already selected, so it
+  is always the same version — and it is *confirmed to exist* before being
+  offered, because a composed URL is a guess about a naming convention and a 404
+  handed to the flasher would be worse than the manual download it replaces.
+
+  This matters because the firmware catalog cannot offer these builds at all:
+  its `ESP32 / WROOM` entry carries no variants, so the PSRAM build has been
+  unreachable from the dropdowns despite being published alongside the one that
+  is offered.
+
+- **An Autoscroll toggle on the firmware flasher's output.** The log followed
+  the newest line and nothing else, so scrolling back to read while a flash was
+  still running was impossible — every new line yanked you to the bottom again.
+  That is exactly when you want to look: esptool prints the chip it detected,
+  the flash size it found and the settings it chose right at the *top*, and a
+  flash takes half a minute of scrolling after that. Untick **Autoscroll** and
+  the view stays put; tick it again and it jumps back to the newest line
+  straight away, rather than waiting for the next one to arrive.
+
+- **The RCWL-1601 ultrasonic distance sensor is in the Standard parts library.**
+  It is pin- and software-compatible with the HC-SR04 already in the library, so
+  any wiring or code written for that one works unchanged — but it is specified
+  from **3.0 V**, which is the reason to reach for it. A classic HC-SR04 is a 5 V
+  part, and running one from a Pico means powering it off VBUS and putting a
+  voltage divider on Echo, because a 5 V echo pulse into a 3V3 GPIO can damage
+  the pin. That is a step which is easy to skip and expensive to get wrong. The
+  RCWL runs straight off 3V3 with nothing in between, which makes it a much safer
+  part to hand to a workshop or a classroom.
+
+  Slightly smaller too, at 40 × 18 mm against the HC-SR04's 45.5 × 25.5.
+
+- **The Cytron Maker Pi RP2040 is in the Standard parts library.** An RP2040
+  robot controller with two DC motor channels, four servo ports and seven Grove
+  ports, so a Maker Pi build can be wired up in the Electronics workspace and
+  written against in the editor. Pin assignments come from Cytron's own
+  datasheet (Rev 1.2) and their CircuitPython board definition, cross-checked
+  against the RP2040's GPIO function table — including the board's genuine
+  quirk that **Grove 5 and Grove 6 share GP26**.
 
 ### Changed
+
+- **The hover preview is twice as wide, so the photo is worth looking at**
+  (#938). The Board Finder's preview grew a card into a slightly bigger card,
+  and the picture — the fastest way to recognise a board — stayed small. It is
+  now 2x the width, centred on the cell it grew from, and the photo roughly
+  doubles with it.
+
+  The image box keeps its 4/3 ratio rather than just getting wider, and that is
+  the part that matters: every bundled thumbnail is 320px wide with a median
+  aspect of 1.20, so in a 4/3 box most of them are already *height*-constrained
+  and have width going spare. Widening the box alone would have shown no more
+  image at all. `object-fit: contain` keeps each photo's own ratio whatever the
+  box does.
+
+  Two things had to move with it. The first and last columns have nowhere to put
+  half a card, so they anchor to their own edge and grow inward — measured
+  against the gallery's scroller, which is the box the preview must not hang out
+  of, rather than the window, which knows nothing about the panel's margin. And
+  the estimate that decides whether the bottom row grows *upward* had to grow
+  too: left where it was, a taller preview would have flipped a row too late and
+  opened into the scroller's bottom edge.
+
+- **Overlay boards can no longer invent a filter chip** (#936). A board's
+  `features` feed the gallery's facets, so `USB C` where upstream writes `USB-C`
+  fails nothing and silently splits one filter into two — #928 by another route.
+  Every feature string an overlay states is now held to upstream's own
+  vocabulary by a test.
+
+- **A board in the finder shows the board itself: front, back, model and
+  pinout** (#934). The Board Finder knew 225 boards the way MicroPython
+  describes them — a vendor, a chip, and a list of firmware to write. The parts
+  library knew 22 of those boards as hardware — a photograph, a back, sometimes
+  a 3-D model, and every pad with its GPIO, its bus and its signal. Neither knew
+  what the other held, so a Pico's details page could tell you exactly which
+  `.uf2` to flash and not one thing about where GP4 is. A board's page now ends
+  with the board itself, turned over, modelled where there is a model, and read
+  pad by pad: hover a pad and it is ringed, and named underneath in words —
+  `GP4 · Pin 6 · I/O · I2C0 SDA · SPI0 RX · PWM 2A`. The bus number is the part
+  that matters and the part a pinout diagram usually makes you count across the
+  board to find. Because hovering is not available to everyone, the same readout
+  is driven by a pin picker beside it, and announced politely as it changes. The
+  Parts Catalog's own details page gains the readout at the same time, from the
+  same component: the stage is now one implementation shared by both, rather
+  than the two-that-drift the board view has already been.
+
+  **The join is a hand-written table, on purpose.** Matching on vendor and
+  product name was tried first and is not close: it silently paired Pimoroni's
+  `Pico LiPo 2`, an RP2350 board, with upstream's `Pico LiPo`, which is RP2040.
+  Same maker, same product line, one word apart, different chip, different
+  pinout — and a finder that answers "where is GP4" with another board's pad map
+  is worse than one that says nothing, because the wrong answer still looks like
+  an answer to someone holding a soldering iron. So every pairing names both ids
+  outright and carries its reason, and a test holds each one to its chip. That
+  test is what caught the Pico LiPo, and it is the check that stays.
+
+  Eleven of the 22 microcontroller parts clear that bar, including the Feather
+  ESP32 V2 that #902 curated. The other eleven are real boards MicroPython
+  builds nothing under — the Tiny 2350, Servo 2040, Pico LiPo 2, Maker Pi RP2040
+  — and they stay out until each is verified, so 214 of the 225 boards show
+  exactly what they showed before, and none shows a heading over an empty frame.
+
+- **A board with no photograph gets a drawn board, not its initials** (#931).
+  Eight of the 225 have no picture — seven of them name one upstream, and those
+  URLs 404, because MicroPython's media repository never published a file at
+  that path. So there is nothing to fetch, and the tile has to draw something.
+  It used to draw the product name's two initials, in a well beside the product
+  name, at three different sizes in three different places. It now draws a
+  board: an outline with headers, mounting holes and a chip in the middle, with
+  the chip marked with the board's MCU. That marking is the point — since #927
+  the resting card names only the maker and the board, so on these eight the
+  chip was stated nowhere until the preview opened, and a chip is exactly where
+  a chip's name belongs. It is line art rather than a plausible green PCB, so
+  that among 217 real product photographs it can only be read as a stand-in; and
+  it is one drawing scaling across the card, the preview and the details rather
+  than three that can drift apart. Screen readers get it as "No photo published"
+  plus the chip, where the initials were hidden from them entirely — rightly,
+  since they said nothing the card did not already print.
+
+- **The Board Finder fills its rows, and marks each manufacturer with a tint**
+  (#927). Every maker had its own shelf — its own heading, its own grid, its own
+  fresh row. With 54 makers and a median of two boards each, that was 54 headings
+  and 54 rows left mostly empty, so a catalogue of 225 boards took far more
+  scrolling than 225 boards should. They now go into one continuous grid, so a
+  row can hold the last two Arduinos and the first five Espressifs, and a maker
+  is marked instead by a soft tint on the ground **between** its cards — a band
+  that runs on across row ends for as long as the maker does and stops mid-row
+  where the next one starts. There are six tints for 54 makers, which is the
+  honest ratio: a tint says *the maker changed here* and is never asked to say
+  *which maker this is*. Every card still prints its manufacturer, so the
+  grouping is never carried by colour alone. A maker's tint comes from its name
+  rather than its position, so adding a board next release does not repaint the
+  gallery; it shifts only where it would otherwise land too close to itself.
+
+- **A board card at rest shows its photo, its maker and its name, and nothing
+  else** (#927). It also carried the chip, three feature chips with an overflow
+  count, and two firmware notes — a wall of specification that nobody reads while
+  scanning and that made every one of the 225 cards taller than it needed to be.
+  All of it is a beat away on the hover preview (#919), which states the firmware
+  **first**, and on the details page behind a click. Nothing that warns you about
+  a board has been lost on the way to flashing one: a card does not flash
+  anything, and every route from it to the flash button passes a screen that says
+  so. The manufacturer line also got brighter, because it is now the accessible
+  half of the new tints rather than a caption.
+
+- **The Board Finder is dark on both skins, and its manufacturers are chips**
+  (#919). Two of its filters were dropdowns, which hold one value at a time and
+  keep the other 53 out of sight: you could look for an Adafruit board or a
+  Pimoroni one, never both, and nothing on screen said what the catalogue was
+  actually made of. Manufacturer and Processor are now chip rows like Features,
+  each chip carrying its own board count, ordered commonest-first with the tail
+  behind **Show more** / **Show less** — ten chips collapsed, which is 135 of the
+  225 boards by maker and 155 by chip family, so most people's board is named
+  before they open anything. Ticking two makers means **either**, not both, which
+  is the opposite of what ticking two features means and deliberately so: a board
+  has exactly one manufacturer, so an "Adafruit AND Pimoroni" filter could only
+  ever return nothing. A board's features are a set, so "WiFi and BLE" is a real
+  question. The gallery also stops following the theme: it is dark now on the
+  parchment skin too. It opens from a button inside the flash dialog, which has
+  been deliberately dark in both skins since #14 — a parchment sheet unrolling
+  out of a dark modal was the odd one out inside its own container — and 217
+  product photographs shot on white read as one beige field on parchment and as
+  217 lit objects on a dark ground.
+
+- **The full board page closes with an X, in the corner** (#919). It had a
+  "← All boards" button in the top left, which said the same thing as the
+  gallery's own close in a different idiom and a different place. It is now the
+  same control, in the same corner, and Esc still backs out one step.
+
+- **The flash dialog reads as fewer decisions** (#896). Detect board and Board
+  Finder have moved to sit beside the Board dropdown rather than floating above
+  the label they fill in — the dropdown is the answer, and those two buttons are
+  the ways of supplying it. Family and Model are now side by side, since Family
+  narrows Model and they are one decision made in two steps; stacked, they read
+  as two unrelated questions and made the dialog a row taller for nothing. Both
+  fall back to a single column on a narrow window.
 
 - **Open Folder now lives next to the files it opens** (#882). The main toolbar
   and the Local files mini toolbar both carried a folder icon doing exactly the
@@ -729,172 +626,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   defined for the skeuomorph skin; this group is one definition that works in
   both, and each is a labelled `toolbar` for screen readers.
 
-
-### Fixed
-
-- **Two device writes at once no longer produce empty files** (#850). Each
-  individual `exec` was serialised, which keeps the raw-REPL protocol intact,
-  but a file write is `open` → chunks → `close` with the handle held in a single
-  global on the board between the steps. Two writes running together interleaved
-  legally at the exec level and destroyed each other: the second `open` rebound
-  the handle, the first write's chunks went elsewhere, and both files ended up
-  created and blank. The whole sequence now takes an exclusive lock, in the
-  desktop device layer and in the web build's client, which had the identical
-  bug. The Upload button also guards against a second click starting a transfer
-  before the first has registered — the disabled state depends on React state,
-  which lands too late to stop a quick double click.
-
-
-### Added
-
-- **A file-sync indicator in the status bar, with the list behind it** (#863).
-  When file sync is on — or when anything is tagged — a small sync glyph sits in
-  the status bar showing how many of the tagged files are on the board (`2/3`).
-  Hover it (or click, or tab to it) and it lists every tagged file with a tick
-  against the ones that have actually arrived, a cross against any that failed
-  with the reason, and an empty box against the rest. Each row names where the
-  file lands, once a sync has established it — a folder follows the highlighted
-  device folder, a file goes to `/<name>`, and the popup no longer leaves you
-  guessing which. The glyph dims when files are tagged but sync-on-save is off,
-  which is the state that quietly catches people out, and disappears entirely
-  when there is nothing to report. Unplugging the board clears the ticks: the
-  next board may be a different one, and a tick meaning "synced to something I
-  saw earlier" is worse than no tick at all.
-- **Copy a whole folder to the board from the Files panel** (#848). Highlight a
-  folder on the left and a folder on the device, and **Upload to device** copies
-  the one into the other — recursively, keeping its name and its nesting. A
-  progress dialog shows the file list with a tick against each one as it lands,
-  and closes itself when the copy finishes (staying put if anything failed,
-  because an error nobody saw did not happen). Developer bookkeeping — `.git`,
-  `__pycache__`, `node_modules`, `.venv`, `.DS_Store`, `*.pyc` — is left on the
-  host; a `.git` directory alone would fill a Pico. Every file goes over the
-  bytes channel, so fonts, images and `.mpy` files arrive intact rather than
-  being quietly mangled by a UTF-8 round trip.
-- **Sync works for folders** (#848). The sync checkbox now appears next to
-  folders as well as files; a tagged folder and everything under it is pushed
-  into whichever device folder is highlighted. Tagged FILES keep their existing
-  destination, so nothing anyone already had set up moves.
-
-### Fixed
-
-- **The board capability probe no longer leaves its temporaries on the board**
-  (#846). Like every raw-REPL snippet it runs in the board's `__main__`, but it
-  predated the scratch-name discipline and cleaned up nothing — leaving `_ok`,
-  `_u`, `_o` and, because MicroPython's `exec` binds into globals even from
-  inside a function, the compiled `_n` and `_v` test functions holding their
-  code buffers for the whole session (plus `_t` and `_p` on firmware with thumb
-  and PIO). All of them were then listed in the Inspect panel as the user's own
-  variables. Measured on hardware before and after: the board's globals are now
-  identical across a probe, and detection is unchanged.
-
-
-- **Installing a large driver no longer looks like a hang** (#842). Files were
-  streamed to the board in 256-byte chunks, one full raw-REPL round trip each.
-  The Arduino Modulino package is 182KB across 25 files, so that was 714
-  sequential round trips — and since progress was only reported per file, the
-  UI sat perfectly still for minutes at a time. The chunk size is a latency
-  budget rather than a memory one, so it is now 1KB: the same install needs 179
-  round trips instead of 714.
-- **A driver that is installed is no longer reported missing** (#842). The
-  install probe ran one `import` per catalog module in a single batch and kept
-  every one of them resident, so probing `modulino` — whose `__init__` eagerly
-  imports nineteen submodules and three dependency packages — could exhaust the
-  board's memory. `MemoryError` is an `Exception` like any other, so the probe's
-  `except Exception: pass` swallowed it and called the driver absent. Each probe
-  now releases what it imported, submodules included, before the next one runs.
-- **The Flash button is no longer clipped off a narrowed window** (#843). The
-  status bar's right-hand group inherited `flex-shrink: 1`, so it was squeezed
-  while its fixed-width children kept their size and overflowed it — and the
-  bar's `overflow: hidden` quietly cut off the last one. The right-hand group
-  (changed files, line count, saved state, version, coffee, Flash) is now fixed;
-  the status message on the left is what gives way.
-
-
-- **A corrupt firmware download no longer flashes and verifies cleanly, then
-  refuses to boot** (#840). esptool's `Hash of data verified` is a weaker claim
-  than it reads as: it proves the flash matches *the file it was handed*, and
-  says nothing about whether that file is the firmware the vendor built. A
-  download arriving with the right length and the wrong bytes therefore wrote
-  perfectly, verified perfectly, and left a board that answered only
-  `E (579) esp_image: Image hash failed - image is corrupt` — with the evidence
-  already gone. ESP images carry a SHA-256 of themselves; Snakie now runs that
-  same check on the host, before the erase, and refuses a damaged file without
-  touching the board. Confirmed against the real firmware: a copy with one bit
-  flipped and an unchanged length is caught. A damaged download is retried once
-  before anything is written, since this kind of corruption is usually
-  transient; if the second copy is damaged too, the two attempts are themselves
-  the diagnosis — identical hashes mean the bad bytes are being served, and
-  differing hashes mean they are being mangled in transit.
-- **`Image hash failed` no longer sends you round the erase-and-retry loop.**
-  The advice was "leftover partition table, erase and flash again" for every
-  bootloader complaint. That is right for a stale slot and misleading otherwise,
-  so the message now names both real causes and says the file was already
-  verified — the one thing worth ruling out first.
-
-### Added
-
-- **The flasher says what it is about to do, in words.** Before the esptool
-  command line, the log now states which firmware file is being written, to
-  which port, at which address, and whether the whole flash is being erased
-  first. Three separate bugs in this area produced the identical symptom — a
-  flash that reports success and leaves a board that will not boot — and every
-  one of them came down to one of those facts differing from what the dialog
-  implied. All three were technically visible in the esptool arguments, and all
-  three went unnoticed, because reading an argv by eye is not a reasonable way
-  to answer "did it erase?".
-
-
-- **Snakie fetches the recommended firmware build itself.** Identifying a board
-  could tell you it had PSRAM and that `ESP32_GENERIC-SPIRAM` was the build that
-  uses it — and then leave you to open a browser, find that file, download it,
-  and come back through a file picker. For a file whose address Snakie could
-  already work out.
-
-  When a recommended build exists, it is now offered as a tickbox (on by
-  default) and **Flash downloads it for you**, exactly as it does for a catalog
-  build. The build's address is derived from the release already selected, so it
-  is always the same version — and it is *confirmed to exist* before being
-  offered, because a composed URL is a guess about a naming convention and a 404
-  handed to the flasher would be worse than the manual download it replaces.
-
-  This matters because the firmware catalog cannot offer these builds at all:
-  its `ESP32 / WROOM` entry carries no variants, so the PSRAM build has been
-  unreachable from the dropdowns despite being published alongside the one that
-  is offered.
-
-
-- **An Autoscroll toggle on the firmware flasher's output.** The log followed
-  the newest line and nothing else, so scrolling back to read while a flash was
-  still running was impossible — every new line yanked you to the bottom again.
-  That is exactly when you want to look: esptool prints the chip it detected,
-  the flash size it found and the settings it chose right at the *top*, and a
-  flash takes half a minute of scrolling after that. Untick **Autoscroll** and
-  the view stays put; tick it again and it jumps back to the newest line
-  straight away, rather than waiting for the next one to arrive.
-
-
-- **The RCWL-1601 ultrasonic distance sensor is in the Standard parts library.**
-  It is pin- and software-compatible with the HC-SR04 already in the library, so
-  any wiring or code written for that one works unchanged — but it is specified
-  from **3.0 V**, which is the reason to reach for it. A classic HC-SR04 is a 5 V
-  part, and running one from a Pico means powering it off VBUS and putting a
-  voltage divider on Echo, because a 5 V echo pulse into a 3V3 GPIO can damage
-  the pin. That is a step which is easy to skip and expensive to get wrong. The
-  RCWL runs straight off 3V3 with nothing in between, which makes it a much safer
-  part to hand to a workshop or a classroom.
-
-  Slightly smaller too, at 40 × 18 mm against the HC-SR04's 45.5 × 25.5.
-
-- **The Cytron Maker Pi RP2040 is in the Standard parts library.** An RP2040
-  robot controller with two DC motor channels, four servo ports and seven Grove
-  ports, so a Maker Pi build can be wired up in the Electronics workspace and
-  written against in the editor. Pin assignments come from Cytron's own
-  datasheet (Rev 1.2) and their CircuitPython board definition, cross-checked
-  against the RP2040's GPIO function table — including the board's genuine
-  quirk that **Grove 5 and Grove 6 share GP26**.
-
-### Changed
-
 - **The firmware flasher asks for a lot less.** It used to want a board type, a
   flash offset, an erase decision and a firmware source before it would do
   anything — every one of which either follows from knowing the board, or should
@@ -914,7 +645,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   than picking a file off disk — the second assumes you have already been
   somewhere else and come back with the right build.
 
-
 - **Identifying a board now selects it, instead of just describing it.** The
   flash dialog would run its detection, learn that the connected board was an
   ESP32-PICO-V3-02 with PSRAM and 8 MB of flash — and then leave the Board
@@ -929,7 +659,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the choice instead of guessing — two boards on the same chip can want
   different flash offsets, and the wrong one writes cleanly and leaves the board
   dead.
-
 
 - **The flasher can ask the board what it is, and flashes the way Thonny does.**
   (#829) A new **Identify board** button runs `esptool flash-id` against the
@@ -975,6 +704,240 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Save As no longer leaves two tabs on one file** (#515). After Save As the
+  buffer keeps its `untitled:` id — deliberately, so the tab and its editor stay
+  mounted — while gaining a real path. Opening that same file from the Files tree
+  then matched no id and made a *second* tab for one file, whose saves silently
+  overwrote each other. Opening a file now matches an already-open one by path as
+  well as by id. It was a corner before; #915 put Save As on the menu with a
+  shortcut, which turns it into a normal Tuesday.
+
+- **The boards upstream has no photo of now have one on their card** (#942). The
+  Pimoroni Tiny 2350's tile drew the placeholder from #931 while its details page
+  showed a real photograph of the board — one board, two answers, and the wrong
+  one where people look first. The details page had a picture because #934 linked
+  the board to a part, and parts carry board photos; the tile did not, because an
+  overlay board has no entry in micropython.org's media by definition.
+
+  The tile now gets the same photo, shrunk into the bundled thumbnails at build
+  time by `scripts/build-overlay-thumbs.mjs`. Seven of the eight linked overlay
+  boards gain one; the Motor 2040's part ships no board image, so it keeps the
+  drawn placeholder, which is still the honest answer for it.
+
+  Build time rather than a fallback in the gallery, because the obvious version —
+  "no thumbnail? use the linked part's image" — would have the gallery holding
+  the parts library open to draw its tiles. Part images are the full-resolution
+  article: 28 MB across the Standard library, 180 KB to 1.7 MB each, every one
+  inlined as a data URI. Shrunk here they are ~20 KB, 176 KB for all seven, and
+  they travel the same path as every other board's thumbnail rather than a second
+  one that can rot on its own. The donor board's picture is still refused: a
+  generic DevKit photo on an Adafruit card would be a lie, where the part's photo
+  is a picture of that exact board.
+
+- **The hover preview can no longer open off the edge of the gallery** (#940).
+  Hovering a board on the second row opened a preview whose top was clipped off
+  the page. The preview decided where to grow *before it existed*: vertically
+  from a hand-maintained guess at how far the card hangs past its cell, and
+  horizontally from which column the cell was in. Both were made worse by #938,
+  which made the card taller than the guess knew — and the upward flip had never
+  asked whether there was room *above*, so on the second row it flipped up
+  because there genuinely was no room below, and sailed off the top.
+
+  Nothing is estimated now. The card is measured where it actually landed and
+  moved the smallest distance that brings all four edges back inside the gallery
+  — before the browser paints, so it is never seen in the wrong place first. The
+  overhang constant and the three placement variants are gone with it: one
+  mechanism that cannot fall out of step with the card's real size, instead of
+  three that could. When a card is too big for the gallery to hold at all, the
+  **top and left** edges are the ones that survive, because that is where the
+  photo and the board's name are.
+
+- **The board index recorded picture URLs that 404** (#931). When upstream names
+  an image its media repository does not publish, the generator noticed — that
+  is why those boards have no thumbnail — but wrote the dead URL into the index
+  anyway, waiting for whatever renders it next. It now drops the URL when the
+  fetch comes back "not found", and keeps it when the failure was the network or
+  a machine with no image resizer, where the picture is presumably still there.
+  Seven boards in the shipped index lose a link to nowhere.
+
+- **The Board Finder opened behind the flash dialog** (#893). It was given the
+  Parts Catalog's stacking order, which is right for a gallery opened from a
+  panel with nothing above it — but wrong for one opened from a button inside a
+  modal. It rendered behind the dialog that launched it: invisible, unreachable,
+  and with the dialog still modal in front of it.
+
+- **A library install now ticks off file by file, and names what it is really
+  installing** (#895). Installing the Arduino Modulino library looked like a
+  hang. It was not: it copies 22 files over the raw REPL, plus three dependency
+  packages — `lsm6dsox`, `ltr-381rgb-01` and `HS3003` — that its own
+  `package.json` pulls in transitively. But an install was enqueued as ONE
+  device-queue task whose `run` never declared any steps, so the whole thing was
+  a single motionless row for minutes at a time. That distinction matters more
+  than usual here, because the documented response to a hung install is
+  Disconnect, which mid-write is exactly what #864 exists to stop being
+  destructive. The install now declares its whole file list before the first
+  write — a list that grew as it went could never say how much was left — and
+  ticks each file off as it lands, with the dependency that brought a file named
+  beside it, so a pause on `lsm6dsox.py` reads as what it is rather than as
+  "still stuck on modulino". Every install gets this, not just the Modules
+  panel: the Packages panel, both Driver Install banners, the instruments-library
+  and missing-library banners, and the parts panel's "Works with" installs, on
+  the desktop and in the browser alike, because they all share one writer
+  underneath and the reporting was fixed there.
+
+- **The recommended firmware build is now reachable for the boards that need it**
+  (#885). A board profile can name the build a board actually requires — the
+  Adafruit ESP32 Feather V2 needs `ESP32_GENERIC-SPIRAM`, because only that build
+  turns on its 2 MB of PSRAM — and Snakie could already derive that build's
+  address and download it for you. But the derivation only ran once you had
+  picked a version out of the Family/Model dropdowns, which excluded exactly the
+  boards the recommendation exists for: the Feather V2 has no catalogue entry at
+  all, so its owner never makes a selection, so the recommendation never
+  resolved. What they got instead was a link to a download page headed
+  "ESP32 / WROOM" listing the plain build first — the opposite of the advice
+  printed directly above it. Snakie now finds the build from any release of the
+  same board, so Flash fetches it with nothing selected; where it still cannot,
+  the link says which file to look for and warns against the one at the top of
+  the page. Links in the flash dialog were also rendering in the browser's
+  default blue, which on that permanently dark panel is dark blue on dark grey.
+
+- **File sync no longer remembers files you can't see** (#881). A sync tag was an
+  absolute path with no memory of the folder it was made in, so it outlived that
+  folder: open a different project and yesterday's tags were still tagged, still
+  counted in the status bar, and still pushed to the board on every save — for
+  files nowhere in the tree on screen. Tags are now scoped to the open folder.
+  Only what is inside it syncs, whatever the stored list happens to contain, so
+  a list left by an older version or by a crash mid-change can't push an
+  invisible file either. Opening a different folder asks first, and then forgets
+  the tags the new folder can't show, saying in the status bar how many went. The
+  breadcrumb is left alone deliberately: it only ever re-roots UP to a parent,
+  which widens the tree, so nothing that was visible stops being visible and
+  peeking one level up costs you nothing.
+
+- **A finished flash can go back instead of only closing** (#838). Done was the
+  only way out of a completed run, and it shut the dialog — throwing away the
+  board, the runtime, the firmware version, the port and every advanced option
+  chosen to get there. That is precisely the moment you want them: a flash that
+  failed usually failed for one reason you can now fix, and re-picking all six
+  selections to change one of them is the complaint. A second button sits beside
+  Done — **Try again** after a failure, **Flash another** after a success — and
+  returns to the options with everything still selected. It clears only what the
+  run produced: the log, the progress bar and the outcome banner.
+
+- **Detect now says when the board is still connected to the REPL** (#845). A
+  serial port can only be open once, so while Snakie holds one for the REPL,
+  esptool cannot open it to ask the board what it is. That failure came back as
+  an empty identity — indistinguishable from a board that is merely not in
+  download mode — so the dialog offered the BOOT/RESET dance, which cannot
+  possibly free a port held by the app asking you to do it, and the real cause
+  was never said out loud. Detect now checks first and, when the REPL has the
+  port, names it and offers **Disconnect and detect** rather than doing it
+  behind your back: dropping the connection stops whatever the board is running,
+  empties the shell and takes the instruments' live feeds with it, which is a
+  fine thing to do on purpose and a bad thing to have happen to you. A board in
+  BOOTSEL is exempt — a drive copy never touches the serial port — and so is the
+  simulated device, which holds no hardware. Connected to one board and flashing
+  a second stays silent, since nothing is in the way.
+
+- **Two installs offered at once no longer race each other** (#837). A freshly
+  connected board can put several offers on screen together — the instruments
+  library, the missing-library banner, the Board View's driver banner, the
+  Modules and Packages panels — and accepting a second one started it there and
+  then, on top of the first. The individual writes were already safe (#850), but
+  the two operations still took turns at the port, each reporting progress over
+  the other, and the app showed a state no single install was in. Every device
+  file operation now goes through one queue: the first runs, the rest wait their
+  turn, and two offers of the same driver install it once rather than twice.
+  While the board is busy, a modal says what is running and what is queued
+  behind it, so the app cannot look ready for work it would refuse — with a
+  Cancel that hands you straight back to the interface, without waiting for a
+  board that has stopped answering. It waits a moment before appearing, so a
+  quick one-file upload does not flash a dialog up and straight back down, and
+  it stays put on failure. The folder copy's per-file tick list from #848 is now
+  the queue's view of that one operation, so there is one progress dialog rather
+  than two that could disagree about the same board.
+
+- **An interrupted install no longer leaves a broken file on the board** (#864).
+  Driver and package installs wrote each file straight to its final name, so
+  stopping part-way — a disconnect, a cancel, an error on any one file — left a
+  truncated file that nothing knew was incomplete. The next import then failed
+  with a `SyntaxError` pointing into a vendor library, which reads as "that
+  library is broken" rather than "the install didn't finish". One real report
+  blamed line 159 of `lsm6dsox.py`, a line that is a perfectly ordinary `raise`
+  in the real file. Every file now arrives under a temporary name, is checked
+  against the size that should have landed, and is only then moved into place —
+  so the file on the board is the old one or the new one, never half of one, and
+  a short write fails loudly at install time instead of days later. The folder
+  copy does the same. Interrupted installs leave a `.snk-part` file behind,
+  which is inert and overwritten by the next attempt.
+
+- **Two device writes at once no longer produce empty files** (#850). Each
+  individual `exec` was serialised, which keeps the raw-REPL protocol intact,
+  but a file write is `open` → chunks → `close` with the handle held in a single
+  global on the board between the steps. Two writes running together interleaved
+  legally at the exec level and destroyed each other: the second `open` rebound
+  the handle, the first write's chunks went elsewhere, and both files ended up
+  created and blank. The whole sequence now takes an exclusive lock, in the
+  desktop device layer and in the web build's client, which had the identical
+  bug. The Upload button also guards against a second click starting a transfer
+  before the first has registered — the disabled state depends on React state,
+  which lands too late to stop a quick double click.
+
+- **The board capability probe no longer leaves its temporaries on the board**
+  (#846). Like every raw-REPL snippet it runs in the board's `__main__`, but it
+  predated the scratch-name discipline and cleaned up nothing — leaving `_ok`,
+  `_u`, `_o` and, because MicroPython's `exec` binds into globals even from
+  inside a function, the compiled `_n` and `_v` test functions holding their
+  code buffers for the whole session (plus `_t` and `_p` on firmware with thumb
+  and PIO). All of them were then listed in the Inspect panel as the user's own
+  variables. Measured on hardware before and after: the board's globals are now
+  identical across a probe, and detection is unchanged.
+
+- **Installing a large driver no longer looks like a hang** (#842). Files were
+  streamed to the board in 256-byte chunks, one full raw-REPL round trip each.
+  The Arduino Modulino package is 182KB across 25 files, so that was 714
+  sequential round trips — and since progress was only reported per file, the
+  UI sat perfectly still for minutes at a time. The chunk size is a latency
+  budget rather than a memory one, so it is now 1KB: the same install needs 179
+  round trips instead of 714.
+
+- **A driver that is installed is no longer reported missing** (#842). The
+  install probe ran one `import` per catalog module in a single batch and kept
+  every one of them resident, so probing `modulino` — whose `__init__` eagerly
+  imports nineteen submodules and three dependency packages — could exhaust the
+  board's memory. `MemoryError` is an `Exception` like any other, so the probe's
+  `except Exception: pass` swallowed it and called the driver absent. Each probe
+  now releases what it imported, submodules included, before the next one runs.
+
+- **The Flash button is no longer clipped off a narrowed window** (#843). The
+  status bar's right-hand group inherited `flex-shrink: 1`, so it was squeezed
+  while its fixed-width children kept their size and overflowed it — and the
+  bar's `overflow: hidden` quietly cut off the last one. The right-hand group
+  (changed files, line count, saved state, version, coffee, Flash) is now fixed;
+  the status message on the left is what gives way.
+
+- **A corrupt firmware download no longer flashes and verifies cleanly, then
+  refuses to boot** (#840). esptool's `Hash of data verified` is a weaker claim
+  than it reads as: it proves the flash matches *the file it was handed*, and
+  says nothing about whether that file is the firmware the vendor built. A
+  download arriving with the right length and the wrong bytes therefore wrote
+  perfectly, verified perfectly, and left a board that answered only
+  `E (579) esp_image: Image hash failed - image is corrupt` — with the evidence
+  already gone. ESP images carry a SHA-256 of themselves; Snakie now runs that
+  same check on the host, before the erase, and refuses a damaged file without
+  touching the board. Confirmed against the real firmware: a copy with one bit
+  flipped and an unchanged length is caught. A damaged download is retried once
+  before anything is written, since this kind of corruption is usually
+  transient; if the second copy is damaged too, the two attempts are themselves
+  the diagnosis — identical hashes mean the bad bytes are being served, and
+  differing hashes mean they are being mangled in transit.
+
+- **`Image hash failed` no longer sends you round the erase-and-retry loop.**
+  The advice was "leftover partition table, erase and flash again" for every
+  bootloader complaint. That is right for a stale slot and misleading otherwise,
+  so the message now names both real causes and says the file was already
+  verified — the one thing worth ruling out first.
+
 - **"Erase the whole flash first" now actually does, when the firmware comes
   from the catalog.** The checkbox worked when you flashed a file from disk and
   was silently ignored on **Download & Flash** — which is the default source and
@@ -990,7 +953,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
   The download path now carries every option the direct one does, and a test
   holds the two together so they cannot drift apart again.
-
 
 - **The firmware flasher's text is readable on the light theme again.** The
   dialog is deliberately dark whichever theme you are using, but several bits of
@@ -1025,7 +987,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   board then boot-loops on `Image hash failed` / `No bootable app partitions`,
   which reads exactly like a failed flash even though the flash succeeded.
 
-
 - **A board with an unfamiliar USB-serial chip can be flashed again.** (#821)
   An Adafruit ESP32 Feather V2 never appeared in the flasher's **Serial port**
   dropdown, so there was nothing to select and no way to go on — even though the
@@ -1043,7 +1004,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   marked as such, so you can pick it and choose the board type yourself. That
   table will always trail the market, and until now the cost of it trailing was a
   board that could not be flashed at all with nothing on screen to say why.
-
 
 - **A board whose pins are all connectors now appears in the MCU picker.**
   (#818) A `family: Microcontroller` part whose I/O is entirely Grove sockets,
@@ -5992,7 +5952,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.46.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.51.0...HEAD
+[0.51.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.46.0...v0.51.0
 [0.46.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.44.0...v0.46.0
 [0.44.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.42.0...v0.43.0
