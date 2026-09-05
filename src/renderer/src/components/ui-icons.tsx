@@ -117,6 +117,16 @@ export const BulbIcon = ({ size }: { size?: number }): JSX.Element =>
     size
   )
 
+/** Corner brackets — pop a panel out to full screen. The Parts Library's
+ *  toolbar draws the same glyph on its own 16×16 grid (`actionIcon('expand')`
+ *  in {@link file://./PartsPanel.tsx}); the Board Finder reuses it deliberately
+ *  (#893), so "expand this into a gallery" reads the same wherever it appears. */
+export const ExpandIcon = ({ size }: { size?: number }): JSX.Element =>
+  svg(
+    g(<path d="M9.5 4.5H5a.5.5 0 0 0-.5.5v4.5M14.5 4.5H19a.5.5 0 0 1 .5.5v4.5M9.5 19.5H5a.5.5 0 0 1-.5-.5v-4.5M14.5 19.5H19a.5.5 0 0 0 .5-.5v-4.5" />),
+    size
+  )
+
 /** An open folder — "Open…" buttons. */
 export const FolderOpenIcon = ({ size }: { size?: number }): JSX.Element =>
   svg(
