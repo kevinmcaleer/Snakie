@@ -9,7 +9,25 @@ import {
   type MenuCommand,
   type MenuState
 } from '../src/shared/menu-commands'
+import { RECENT_FOLDER_SLOTS } from '../src/shared/menu-commands'
 import { WORKSPACE_IDS, WORKSPACE_INFO } from '../src/shared/workspaces'
+
+/**
+ * A state with every recent slot filled (#915).
+ *
+ * `File ▸ Open Recent` builds one item per FOLDER, so the completeness check
+ * below — every command in the union has exactly one item — only holds when the
+ * renderer has published enough folders to fill the slots. That is the honest
+ * form of the invariant: a slot with no folder has no item ON PURPOSE, and a
+ * menu of eight greyed "empty" rows would be worse than a submenu that says so
+ * once.
+ */
+const fullRecents = (): MenuState =>
+  menuStateFrom({
+    workspace: 'code',
+    hasActiveFile: true,
+    recentFolders: RECENT_FOLDER_SLOTS.map((i) => `/projects/folder-${i}`)
+  })
 
 /**
  * The application menu as data (#914 / #916).
@@ -50,7 +68,10 @@ function click(item: MenuItemConstructorOptions): void {
 }
 
 /** The submenu of the View item labelled `label`. */
-function viewSubmenu(template: MenuItemConstructorOptions[], label: string): MenuItemConstructorOptions[] {
+function viewSubmenu(
+  template: MenuItemConstructorOptions[],
+  label: string
+): MenuItemConstructorOptions[] {
   const view = template.find((m) => m.label === 'View')
   const items = Array.isArray(view?.submenu) ? view.submenu : []
   const found = items.find((m) => m.label === label)
@@ -62,7 +83,7 @@ describe.each([
   { platform: 'Windows/Linux', isMac: false }
 ])('the app menu on $platform (#914)', ({ isMac }) => {
   it('gives every command exactly one menu item, and every item a live command', () => {
-    const { template, fired } = build({ isMac })
+    const { template, fired } = build({ isMac, state: fullRecents() })
     const items = commandItems(template)
     for (const item of items) click(item)
     // Every id in the union reached the menu…
@@ -75,7 +96,14 @@ describe.each([
   it('carries the accelerators the shortcuts epic asks for (#920)', () => {
     const { template } = build({ isMac })
     const byLabel = new Map(commandItems(template).map((m) => [String(m.label), m]))
-    expect(byLabel.get('Open Folder…')?.accelerator).toBe('CmdOrCtrl+O')
+    // File (#915). Open FILE took the plain ⌘O that every editor uses for it,
+    // so Open Folder moved to ⇧⌘O — a deliberate swap, not a drift.
+    expect(byLabel.get('New File')?.accelerator).toBe('CmdOrCtrl+N')
+    expect(byLabel.get('Open File…')?.accelerator).toBe('CmdOrCtrl+O')
+    expect(byLabel.get('Open Folder…')?.accelerator).toBe('CmdOrCtrl+Shift+O')
+    expect(byLabel.get('Save')?.accelerator).toBe('CmdOrCtrl+S')
+    expect(byLabel.get('Save As…')?.accelerator).toBe('CmdOrCtrl+Shift+S')
+    expect(byLabel.get('Close Tab')?.accelerator).toBe('CmdOrCtrl+W')
     expect(byLabel.get('Board View')?.accelerator).toBe('CmdOrCtrl+Shift+B')
     // Cmd/Ctrl 1-2-3 for Code / Electronics / Build. Monaco binds Cmd+S, Cmd+F,
     // Cmd+H and Cmd+Shift+1 — nothing plain-modifier-plus-digit — so these are free.
@@ -105,7 +133,10 @@ describe('View ▸ Workspace (#916)', () => {
 
   it('ticks the workspace the renderer says is showing', () => {
     for (const active of WORKSPACE_IDS) {
-      const { template } = build({ isMac: true, state: menuStateFrom({ workspace: active }) })
+      const { template } = build({
+        isMac: true,
+        state: menuStateFrom({ workspace: active, hasActiveFile: true, recentFolders: [] })
+      })
       const submenu = viewSubmenu(template, 'Workspace')
       const ticked = submenu.filter((m) => m.checked).map((m) => m.label)
       expect(ticked).toEqual([WORKSPACE_INFO[active].label])
@@ -122,7 +153,10 @@ describe('View ▸ Workspace (#916)', () => {
   it('only the radio items carry a tick at all', () => {
     // Electron reads `checked` on checkbox/radio items only, so a plain item
     // claiming one would be a tick that can never appear.
-    const { template } = build({ isMac: true, state: menuStateFrom({ workspace: 'code' }) })
+    const { template } = build({
+      isMac: true,
+      state: menuStateFrom({ workspace: 'code', hasActiveFile: true, recentFolders: [] })
+    })
     for (const item of commandItems(template)) {
       if (item.type === 'radio' || item.type === 'checkbox') {
         expect(typeof item.checked, String(item.label)).toBe('boolean')
@@ -137,7 +171,7 @@ describe('menu state greys items out (#914, for #915–#918)', () => {
   it('an item is enabled unless the renderer explicitly disabled it', () => {
     const { template } = build({
       isMac: false,
-      state: { enabled: { 'file.openFolder': false }, checked: {} }
+      state: { enabled: { 'file.openFolder': false }, checked: {}, recentFolders: [] }
     })
     const items = commandItems(template)
     const openFolder = items.find((m) => m.label === 'Open Folder…')

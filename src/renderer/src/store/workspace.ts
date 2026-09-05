@@ -88,11 +88,51 @@ export function announceSaved(source: FileSource, path: string, content: string)
 /** localStorage key for the last opened working folder (#177), restored on launch. */
 const LAST_FOLDER_KEY = 'snakie.lastFolder'
 
-/** Persist (or clear) the last opened folder. Best-effort — storage may be off. */
+/** localStorage key for the recent-folder list behind `File ▸ Open Recent` (#915). */
+const RECENT_FOLDERS_KEY = 'snakie.recentFolders'
+
+/** How many the list keeps. Matches the menu's slot count — a longer list would
+ *  only ever be truncated on the way to the menu. */
+export const RECENT_FOLDERS_MAX = 8
+
+/** The recent folders, newest first. Never throws: storage may be off, and the
+ *  value may be anything a previous version or another tab left there. */
+export function readRecentFolders(): string[] {
+  try {
+    const raw = JSON.parse(window.localStorage.getItem(RECENT_FOLDERS_KEY) ?? '[]')
+    return Array.isArray(raw)
+      ? raw
+          .filter((f): f is string => typeof f === 'string' && f.length > 0)
+          .slice(0, RECENT_FOLDERS_MAX)
+      : []
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Move `folder` to the front of the recent list.
+ *
+ * Pure, so the MRU rule is testable: reopening a folder promotes it rather than
+ * adding a duplicate, which is the difference between a useful list and eight
+ * copies of the folder someone is working in.
+ */
+export function promoteRecentFolder(list: readonly string[], folder: string): string[] {
+  if (!folder) return [...list]
+  return [folder, ...list.filter((f) => f !== folder)].slice(0, RECENT_FOLDERS_MAX)
+}
+
+/** Persist (or clear) the last opened folder, and keep the recent list. */
 function rememberFolder(folder: string | null): void {
   try {
     if (folder) window.localStorage.setItem(LAST_FOLDER_KEY, folder)
     else window.localStorage.removeItem(LAST_FOLDER_KEY)
+    if (folder) {
+      window.localStorage.setItem(
+        RECENT_FOLDERS_KEY,
+        JSON.stringify(promoteRecentFolder(readRecentFolders(), folder))
+      )
+    }
   } catch {
     // ignore storage failures
   }
@@ -143,6 +183,12 @@ export interface WorkspaceStore {
    */
   reloadContent: (id: string, content: string) => void
   saveFile: (id: string) => Promise<void>
+  /** Write `id` to a NEW path, chosen from a dialog, and follow the buffer
+   *  there (#915). Distinct from {@link saveFile}, which only raises a dialog
+   *  for a buffer that has never had a path. */
+  saveFileAs: (id: string) => Promise<void>
+  /** Raise the file picker and open what it returns (#915). */
+  openFileDialog: () => Promise<void>
   newFile: () => void
   /**
    * Open a NEW untitled tab pre-filled with `content` (named `name`) and make it
@@ -197,8 +243,23 @@ export function baseName(path: string): string {
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case 'open': {
-      // Dedupe by id: if already open, just re-activate (don't clobber edits).
-      const existing = state.openFiles.find((f) => f.id === action.file.id)
+      // Dedupe by id, and then by PATH (#515).
+      //
+      // The id is normally `${source}:${path}`, so the two agree — except after
+      // a Save As, which deliberately keeps the buffer's `untitled:` id to hold
+      // the tab and its editor mounted, while giving it a real path. Opening
+      // that same file from the Files tree then matched no id and made a SECOND
+      // tab for one file, whose saves silently overwrote each other's.
+      //
+      // #915 put Save As on the menu with a shortcut, which turns that from a
+      // corner into a normal Tuesday.
+      const existing =
+        state.openFiles.find((f) => f.id === action.file.id) ??
+        (action.file.path
+          ? state.openFiles.find(
+              (f) => f.path === action.file.path && f.source === action.file.source
+            )
+          : undefined)
       if (existing) return { ...state, activeId: existing.id }
       return {
         ...state,
@@ -295,25 +356,22 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
     currentFolder: null
   })
 
-  const openFile = useCallback(
-    async (source: FileSource, path: string): Promise<void> => {
-      const id = makeId(source, path)
-      // A `.mpy` is compiled bytecode, and both `readFile` channels decode UTF-8
-      // (#875) — so reading one here would produce a bufferful of replacement
-      // characters, and saving that back would destroy the file. The Bytecode
-      // view fetches the real bytes itself, so the tab opens with no text.
-      const content = isMpyFile(path)
-        ? ''
-        : source === 'local'
-          ? await window.api.fs.readFile(path)
-          : await window.api.device.readFile(path)
-      dispatch({
-        type: 'open',
-        file: { id, source, path, name: baseName(path), content, dirty: false }
-      })
-    },
-    []
-  )
+  const openFile = useCallback(async (source: FileSource, path: string): Promise<void> => {
+    const id = makeId(source, path)
+    // A `.mpy` is compiled bytecode, and both `readFile` channels decode UTF-8
+    // (#875) — so reading one here would produce a bufferful of replacement
+    // characters, and saving that back would destroy the file. The Bytecode
+    // view fetches the real bytes itself, so the tab opens with no text.
+    const content = isMpyFile(path)
+      ? ''
+      : source === 'local'
+        ? await window.api.fs.readFile(path)
+        : await window.api.device.readFile(path)
+    dispatch({
+      type: 'open',
+      file: { id, source, path, name: baseName(path), content, dirty: false }
+    })
+  }, [])
 
   const setActive = useCallback((id: string): void => {
     dispatch({ type: 'setActive', id })
@@ -344,7 +402,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
         const chosen = await window.api.fs.saveFileDialog(file.name)
         if (!chosen) return
         await window.api.fs.writeFile(chosen, file.content)
-        dispatch({ type: 'savedAs', id, path: chosen, name: baseName(chosen), content: file.content })
+        dispatch({
+          type: 'savedAs',
+          id,
+          path: chosen,
+          name: baseName(chosen),
+          content: file.content
+        })
         announceSaved('local', chosen, file.content)
         return
       }
@@ -359,6 +423,42 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
     },
     [state.openFiles]
   )
+
+  /**
+   * Save As on a file that already has one (#915).
+   *
+   * `saveFile` raises a dialog only for a buffer with no path at all, which was
+   * the only Save As the app had. The menu item means the other thing: take this
+   * file, write it somewhere else, and carry on editing THERE — so the buffer
+   * follows the new path rather than the old file quietly staying open.
+   *
+   * DEVICE files save to the LOCAL disk. A "save a copy" that could only put the
+   * copy back on the board would be the less useful half of the two, and the
+   * dialog is the local one either way.
+   */
+  const saveFileAs = useCallback(
+    async (id: string): Promise<void> => {
+      const file = state.openFiles.find((f) => f.id === id)
+      if (!file) return
+      const chosen = await window.api.fs.saveFileDialog(file.name)
+      if (!chosen) return
+      await window.api.fs.writeFile(chosen, file.content)
+      dispatch({
+        type: 'savedAs',
+        id,
+        path: chosen,
+        name: baseName(chosen),
+        content: file.content
+      })
+      announceSaved('local', chosen, file.content)
+    },
+    [state.openFiles]
+  )
+
+  const openFileDialog = useCallback(async (): Promise<void> => {
+    const chosen = await window.api.fs.openFileDialog()
+    if (chosen) await openFile('local', chosen)
+  }, [openFile])
 
   const openFolder = useCallback(async (): Promise<void> => {
     const folder = await window.api.fs.openFolderDialog()
@@ -489,9 +589,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
       // immediately, so a quick relaunch / dev HMR reload can't strand it (the
       // old 4 s window did, which wiped the session).
       hydrated.current = true
-      requestAnimationFrame(() =>
-        requestAnimationFrame(() => markRestoreDone(storage))
-      )
+      requestAnimationFrame(() => requestAnimationFrame(() => markRestoreDone(storage)))
     })()
     // NB: deliberately no cleanup that cancels the restore or the guard-clear —
     // a StrictMode unmount/remount (or any remount) must not strand the marker.
@@ -539,6 +637,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
       updateContent,
       reloadContent,
       saveFile,
+      saveFileAs,
+      openFileDialog,
       newFile,
       openBuffer,
       openFolder,
@@ -556,6 +656,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
       updateContent,
       reloadContent,
       saveFile,
+      saveFileAs,
+      openFileDialog,
       newFile,
       openBuffer,
       openFolder,

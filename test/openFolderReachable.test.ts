@@ -88,7 +88,12 @@ describe('the app menu covers a collapsed or absent panel', () => {
     // button that was removed.
     const item = fileSubmenu([]).find((m) => m.label === 'Open Folder…')
     expect(item, 'File ▸ Open Folder…').toBeTruthy()
-    expect(item?.accelerator).toBe('CmdOrCtrl+O')
+    // ⇧⌘O since #915, not ⌘O. Open FILE took the plain accelerator, because
+    // that is what it means in every editor people arrive from, and a folder is
+    // the rarer of the two once a project is open. Deliberate, and asserted
+    // alongside its partner so the pair cannot drift.
+    expect(item?.accelerator).toBe('CmdOrCtrl+Shift+O')
+    expect(fileSubmenu([]).find((m) => m.label === 'Open File…')?.accelerator).toBe('CmdOrCtrl+O')
     expect(item?.enabled).toBe(true)
   })
 
@@ -133,11 +138,29 @@ describe('the wire from the menu to the picker', () => {
 
 describe('the folder lands somewhere the user can see it', () => {
   it('reveals the Files view before raising the picker', () => {
-    const body = openFolderHandler()
-    expect(body).toContain("setActivityView('files')")
+    // The three calls moved into `revealFiles` when #915 gave Open Recent the
+    // same job, so the handler names it and the guarantee is checked where it
+    // now lives — below.
+    expect(openFolderHandler()).toContain('revealFiles()')
+  })
+
+  it('revealing the Files view does all three things it has to', () => {
+    const shell = readFileSync('src/renderer/src/components/AppShell.tsx', 'utf8')
+    const fn = shell.slice(
+      shell.indexOf('const revealFiles = useCallback'),
+      shell.indexOf('const revealFiles = useCallback') + 400
+    )
+    expect(fn).toContain("setActivityView('files')")
     // The solo workspaces gate their sidebar on the STORE flag, so an imperative
     // `expand()` alone is a no-op there (the bug that hid Help deep-links).
-    expect(body).toContain("setLeftCollapsed('files', false)")
-    expect(body).toContain('filesRef.current?.expand()')
+    expect(fn).toContain("setLeftCollapsed('files', false)")
+    expect(fn).toContain('filesRef.current?.expand()')
+  })
+
+  it('Open Recent reveals it too, or the folder opens behind a hidden tree', () => {
+    const shell = readFileSync('src/renderer/src/components/AppShell.tsx', 'utf8')
+    const handler = shell.slice(shell.indexOf('openRecent: (i)'), shell.indexOf('save: () =>'))
+    expect(handler).toContain('revealFiles()')
+    expect(handler).toContain('openFolderPath(folder)')
   })
 })

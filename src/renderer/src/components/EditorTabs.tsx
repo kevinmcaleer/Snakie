@@ -1,3 +1,4 @@
+import { CLOSE_TAB_EVENT } from './editorBridge'
 import { useEffect } from 'react'
 import { useWorkspace } from '../store/workspace'
 import './EditorTabs.css'
@@ -53,8 +54,20 @@ export function EditorTabs(): JSX.Element | null {
       }
     }
 
+    // File ▸ Close Tab (#915) reaches the SAME close as the × and ⌘W, so it
+    // prompts on a dirty buffer like they do. On the desktop this is the only
+    // path that runs: ⌘W is a menu accelerator now, and Electron takes the key
+    // before `keydown` ever reaches here.
+    function onCloseTab(): void {
+      if (activeId) requestClose(activeId)
+    }
+
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    window.addEventListener(CLOSE_TAB_EVENT, onCloseTab)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener(CLOSE_TAB_EVENT, onCloseTab)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openFiles, activeId, setActive, closeFile])
 

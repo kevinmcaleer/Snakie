@@ -1,6 +1,8 @@
 import type { MenuItemConstructorOptions } from 'electron'
 import {
   EMPTY_MENU_STATE,
+  RECENT_FOLDER_SLOTS,
+  recentFolderMenuCommand,
   workspaceMenuCommand,
   type MenuCommand,
   type MenuState
@@ -124,8 +126,32 @@ export function appMenuTemplate(o: MenuTemplateOptions): MenuItemConstructorOpti
   // the accelerator every editor uses for it, so removing the icon removed a
   // duplicate rather than the ability.
   const openFolderItem = commandItem('file.openFolder', 'Open Folder…', o, {
-    accelerator: 'CmdOrCtrl+O'
+    // ⇧⌘O, not ⌘O, since #915. Open FILE took the plain accelerator, because
+    // that is what it means in every editor people arrive from, and a folder is
+    // the rarer of the two once a project is open.
+    accelerator: 'CmdOrCtrl+Shift+O'
   })
+
+  /**
+   * File ▸ Open Recent (#915).
+   *
+   * Built from the renderer's list, so the labels are folders and the ids are
+   * slots. An empty list still shows the submenu, greyed and saying so, rather
+   * than vanishing — a menu whose items come and go is one people stop scanning.
+   */
+  const recents = (o.state ?? EMPTY_MENU_STATE).recentFolders
+  const openRecentItem: MenuItemConstructorOptions = {
+    label: 'Open Recent',
+    enabled: recents.length > 0,
+    submenu:
+      recents.length === 0
+        ? [{ label: 'No recent folders', enabled: false }]
+        : recents
+            .slice(0, RECENT_FOLDER_SLOTS.length)
+            .map((folder, i) =>
+              commandItem(recentFolderMenuCommand(RECENT_FOLDER_SLOTS[i]), folder, o)
+            )
+  }
 
   // Help ▸ Keyboard Shortcuts (#920) — the popup that lists every binding,
   // generated from THIS template (see `shared/shortcuts.ts`). It sits in Help on
@@ -169,7 +195,34 @@ export function appMenuTemplate(o: MenuTemplateOptions): MenuItemConstructorOpti
       : []),
     {
       label: 'File',
-      submenu: [openFolderItem, { type: 'separator' }, isMac ? { role: 'close' } : { role: 'quit' }]
+      submenu: [
+        // New means an UNTITLED BUFFER, which is what ⌘N means in an editor —
+        // not the Files panel's "new file in this folder", which needs a folder
+        // and a name first. The label says "File" so the two read as different
+        // things rather than as one item in two places.
+        commandItem('file.new', 'New File', o, { accelerator: 'CmdOrCtrl+N' }),
+        { type: 'separator' },
+        commandItem('file.openFile', 'Open File…', o, { accelerator: 'CmdOrCtrl+O' }),
+        openFolderItem,
+        openRecentItem,
+        { type: 'separator' },
+        commandItem('file.save', 'Save', o, { accelerator: 'CmdOrCtrl+S' }),
+        commandItem('file.saveAs', 'Save As…', o, { accelerator: 'CmdOrCtrl+Shift+S' }),
+        { type: 'separator' },
+        // Distinct from closing the WINDOW, which is macOS's ⇧⌘W role below.
+        // It goes through the tabs' own dirty prompt rather than around it.
+        commandItem('file.closeTab', 'Close Tab', o, { accelerator: 'CmdOrCtrl+W' }),
+        { type: 'separator' },
+        // macOS keeps Close Window here rather than Quit. It is LABELLED and
+        // re-bound, both deliberately: the role's own key is ⌘W, which Close Tab
+        // now takes, and the role's own label ("Close Window") is invisible to
+        // the cheatsheet, which lists items by label. Naming it costs the
+        // platform's localised string and buys two adjacent items that cannot be
+        // confused for each other.
+        isMac
+          ? { role: 'close', label: 'Close Window', accelerator: 'CmdOrCtrl+Shift+W' }
+          : { role: 'quit' }
+      ]
     },
     {
       label: 'Edit',

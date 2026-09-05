@@ -71,8 +71,19 @@ describe.each([
       `Workspace ▸ ${WORKSPACE_INFO.code.label}`
     )
     expect(view?.shortcuts.map((s) => s.label)).toContain('Board View')
+    // The File menu's own bindings, in menu order (#915). The sheet picked all
+    // six up with no edit to `shortcuts.ts` — which is the property #920 was
+    // built for, so it is worth asserting the whole list rather than a sample.
     expect(sections.find((s) => s.title === 'File')?.shortcuts.map((s) => s.label)).toEqual([
-      'Open Folder…'
+      'New File',
+      'Open File…',
+      'Open Folder…',
+      'Save',
+      'Save As…',
+      'Close Tab',
+      // macOS only: the window close, re-bound to ⇧⌘W because Close Tab took
+      // the role's own ⌘W, and labelled so the sheet can name it.
+      ...(isMac ? ['Close Window'] : [])
     ])
     // Every row belongs to a section — nothing is orphaned by the grouping.
     const grouped = sections.flatMap((s) => s.shortcuts).length

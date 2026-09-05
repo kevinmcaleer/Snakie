@@ -25,22 +25,38 @@ function deps(): {
   switched: WorkspaceId[]
   folders: number
   sheets: number
+  /** Every File command that fired, in order (#915). */
+  fired: string[]
+  /** Which recent slots were asked for. */
+  recents: number[]
   d: Parameters<typeof menuCommandHandlers>[0]
 } {
   const rec = {
     switched: [] as WorkspaceId[],
     folders: 0,
     sheets: 0,
+    fired: [] as string[],
+    recents: [] as number[],
     d: {} as Parameters<typeof menuCommandHandlers>[0]
   }
   rec.d = {
     switchWorkspace: (id: WorkspaceId) => rec.switched.push(id),
     openFolder: () => {
       rec.folders += 1
+      rec.fired.push('openFolder')
     },
     showShortcuts: () => {
       rec.sheets += 1
-    }
+    },
+    newFile: () => rec.fired.push('newFile'),
+    openFile: () => rec.fired.push('openFile'),
+    openRecent: (i: number) => {
+      rec.fired.push('openRecent')
+      rec.recents.push(i)
+    },
+    save: () => rec.fired.push('save'),
+    saveAs: () => rec.fired.push('saveAs'),
+    closeTab: () => rec.fired.push('closeTab')
   }
   return rec
 }
@@ -98,7 +114,18 @@ describe('menu command union ↔ renderer dispatcher (#914)', () => {
     expect(runMenuCommand(workspaceMenuCommand('board'), rec.d)).toBe(true)
     expect(rec.switched).toEqual(['board'])
     // An id from a newer main process, a retired one, or junk: dropped, not run.
-    for (const bad of ['workspace.show.datalab', 'file.saveAs', '', 42, null, undefined, {}]) {
+    // (`file.saveAs` is a real command since #915, so the stand-in for "an id
+    // this build does not have" is a slot past the end of the recent list.)
+    for (const bad of [
+      'workspace.show.datalab',
+      'file.openRecent.99',
+      'device.disconnect',
+      '',
+      42,
+      null,
+      undefined,
+      {}
+    ]) {
       expect(runMenuCommand(bad, rec.d), JSON.stringify(bad)).toBe(false)
     }
     expect(rec.switched).toEqual(['board'])
@@ -108,17 +135,22 @@ describe('menu command union ↔ renderer dispatcher (#914)', () => {
 describe('menu state travelling back to the menu (#914)', () => {
   it('ticks exactly the active workspace', () => {
     for (const active of WORKSPACE_IDS) {
-      const state = menuStateFrom({ workspace: active })
+      const state = menuStateFrom({ workspace: active, hasActiveFile: true, recentFolders: [] })
       for (const id of WORKSPACE_IDS) {
         expect(state.checked[workspaceMenuCommand(id)], `${active}/${id}`).toBe(id === active)
       }
-      // Nothing is greyed out by the workspace alone.
-      expect(state.enabled).toEqual({})
+      // The workspace itself greys nothing out — only the File items carry
+      // enablement, and with a file open they are all usable.
+      expect(state.enabled).toEqual({
+        'file.save': true,
+        'file.saveAs': true,
+        'file.closeTab': true
+      })
     }
   })
 
   it('an unpublished state greys nothing out and ticks nothing', () => {
-    expect(EMPTY_MENU_STATE).toEqual({ enabled: {}, checked: {} })
+    expect(EMPTY_MENU_STATE).toEqual({ enabled: {}, checked: {}, recentFolders: [] })
   })
 
   it('coerceMenuState keeps known ids with boolean values and drops the rest', () => {
@@ -128,13 +160,18 @@ describe('menu state travelling back to the menu (#914)', () => {
     })
     expect(state).toEqual({
       enabled: { 'file.openFolder': false },
-      checked: { 'workspace.show.robot': true }
+      checked: { 'workspace.show.robot': true },
+      recentFolders: []
     })
   })
 
   it('coerceMenuState survives a garbled payload', () => {
     for (const bad of [null, undefined, 42, 'nope', [], { enabled: 3, checked: null }]) {
-      expect(coerceMenuState(bad), JSON.stringify(bad)).toEqual({ enabled: {}, checked: {} })
+      expect(coerceMenuState(bad), JSON.stringify(bad)).toEqual({
+        enabled: {},
+        checked: {},
+        recentFolders: []
+      })
     }
   })
 
@@ -142,11 +179,16 @@ describe('menu state travelling back to the menu (#914)', () => {
   // it. There is no DOM here (the suite runs in `environment: 'node'`), so this
   // reads the source — the same way `openFolderReachable.test.ts` checks a wire
   // whose break would be silent.
-  it('AppShell publishes the active workspace whenever it changes', () => {
+  it('AppShell publishes the menu state whenever any of it changes', () => {
     const shell = readFileSync('src/renderer/src/components/AppShell.tsx', 'utf8')
     expect(shell).toMatch(/menu\.setState\(\s*menuStateFrom\(\{\s*workspace:\s*layout\.active/)
     const at = shell.search(/menu\.setState\(/)
-    // Re-published on every workspace change, or the tick freezes on the first one.
-    expect(shell.slice(at, at + 200)).toContain('[layout.active]')
+    const effect = shell.slice(at, shell.indexOf('])', at) + 2)
+    // Every input re-publishes, or that part of the menu freezes at whatever it
+    // was on first render: the workspace tick (#916), and since #915 the file
+    // that greys Save out and the folders Open Recent lists.
+    for (const dep of ['layout.active', 'activeId', 'recentFolders']) {
+      expect(effect, dep).toContain(dep)
+    }
   })
 })

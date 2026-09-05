@@ -6,6 +6,45 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A File menu that does what a File menu does** (#915, epic #913). It was two
+  items — `Open Folder…` and Quit. It is now New File (⌘N), Open File… (⌘O),
+  Open Folder… (⇧⌘O), Open Recent ▸, Save (⌘S), Save As… (⇧⌘S) and Close Tab
+  (⌘W). Save, Save As and Close Tab grey out with nothing open, because a menu
+  that offers Save with nothing to save teaches people not to trust the rest of
+  it.
+
+  ⌘S is the one worth calling out. It already worked — but only inside the
+  editor, because the binding lived in Monaco. Anywhere else in the app, with the
+  Files tree or the shell or the board focused, it did nothing. As a menu
+  accelerator it works wherever you are.
+
+  Two accelerators moved, deliberately. **Open Folder is now ⇧⌘O**, because Open
+  File took the plain ⌘O that it means in every editor people arrive from. And on
+  macOS **Close Window is ⇧⌘W**, because Close Tab took the ⌘W that the window
+  role would otherwise own — the two now sit next to each other, named, so they
+  cannot be confused.
+
+  Open Recent is a list of folders with fixed slot ids: the labels change every
+  time you open something, the command ids do not, so the channel can still tell
+  a real command from a stale one. Close Tab goes through the tabs' own close,
+  which asks before discarding unsaved edits — a menu item that went round it
+  would discard your work while the × beside it asks.
+
+  The cheatsheet from #920 picked up all seven bindings with no edit, which is
+  the property it was built for.
+
+### Fixed
+
+- **Save As no longer leaves two tabs on one file** (#515). After Save As the
+  buffer keeps its `untitled:` id — deliberately, so the tab and its editor stay
+  mounted — while gaining a real path. Opening that same file from the Files tree
+  then matched no id and made a *second* tab for one file, whose saves silently
+  overwrote each other. Opening a file now matches an already-open one by path as
+  well as by id. It was a corner before; #915 put Save As on the menu with a
+  shortcut, which turns it into a normal Tuesday.
+
 ### Fixed
 
 - **The boards upstream has no photo of now have one on their card** (#942). The
