@@ -8,6 +8,7 @@ import {
   type JSX
 } from 'react'
 import {
+  boardsWithoutRam,
   featureOptions,
   filterBoards,
   mcuOptions,
@@ -27,16 +28,20 @@ import {
 } from '../../../shared/firmware-runtime'
 import { loadBoardIndex, thumbUrl } from '../lib/board-index-source'
 import {
+  MEMORY_CAVEAT,
+  MEMORY_THRESHOLDS,
   RUNTIME_CAVEAT,
   boardFacts,
   boardInitials,
   buildLabel,
   firmwareSummary,
   isFiltering,
+  memoryThresholdLabel,
   peekFacts,
   shelvesByVendor,
   toggleChip,
   toggleRuntime,
+  unsizedNotice,
   variantList
 } from './board-finder'
 import { requestFlash } from './board-finder-bus'
@@ -60,12 +65,14 @@ import './BoardFinder.css'
  * three things that keep that from pouncing, and for how it is reached without a
  * pointer at all.
  *
- * ON THE FILTERS. Storage and memory are still not filters (#897): there are
- * sourced sizes now, but 5 boards of 225 have a flash figure, and a size control
- * at that coverage hides the catalogue rather than narrowing it. They are stated
- * as facts on the board instead, each naming where it came from. The RUNTIME
- * filter (#902) does ship — see `RUNTIME_CAVEAT` for the limits it prints under
- * itself, which are what make it honest enough to offer.
+ * ON THE FILTERS. MEMORY is a filter now (#897): 226 of the 230 boards have a
+ * sourced RAM figure, up from 86, and it is one comparable quantity. The four
+ * without one are COUNTED and named under the control rather than quietly
+ * dropped — see `boardsWithoutRam`. STORAGE still is not, and no longer for want
+ * of numbers: the flash figures are 107 chip-internal and 80 on-module, which
+ * are different quantities to rank against each other. `board-finder.ts` argues
+ * both at length. The RUNTIME filter (#902) ships on the same terms — see
+ * `RUNTIME_CAVEAT` for the limits it prints under itself.
  *
  * ON THE BOARDS. The list is upstream's plus `board-overlay.ts` — boards
  * MicroPython builds no firmware for under any name, which is why the Adafruit
@@ -146,6 +153,9 @@ export function BoardFinder({ onClose, origin, closing, onClosed }: BoardFinderP
   // tested, because it is the opposite of what ticking two features means.
   const [vendors, setVendors] = useState<string[]>([])
   const [mcus, setMcus] = useState<string[]>([])
+  // A size threshold, not a facet: one comparable number rather than a set
+  // of values, so it gets its own control and its own clause (#897).
+  const [minRam, setMinRam] = useState(0)
   const [features, setFeatures] = useState<string[]>([])
   const [runtimes, setRuntimes] = useState<FirmwareRuntime[]>([])
   const [flashableOnly, setFlashableOnly] = useState(false)
@@ -177,10 +187,17 @@ export function BoardFinder({ onClose, origin, closing, onClosed }: BoardFinderP
   // a board the overlay is standing in for, which `withOverlay` then drops.
   const all = useMemo(() => (boards ? withOverlay(boards) : []), [boards])
   const filter: BoardFilter = useMemo(
-    () => ({ text, vendors, mcus, features, runtimes, flashableOnly }),
-    [text, vendors, mcus, features, runtimes, flashableOnly]
+    () => ({ text, vendors, mcus, minRam: minRam || undefined, features, runtimes, flashableOnly }),
+    [text, vendors, mcus, minRam, features, runtimes, flashableOnly]
   )
   const matched = useMemo(() => filterBoards(all, filter), [all, filter])
+  // Boards the memory filter drops for having no figure rather than too small a
+  // one. Counted so the gallery can SAY so — a size control that quietly loses
+  // the undocumented boards is the one thing #897 set out not to build.
+  const unsized = useMemo(
+    () => (minRam ? unsizedNotice(boardsWithoutRam(all, filter).length) : null),
+    [all, filter, minRam]
+  )
 
   // The options come from the WHOLE catalogue, not the current result set: a
   // vendor list that shrinks as you filter cannot be used to change your mind.
@@ -204,6 +221,7 @@ export function BoardFinder({ onClose, origin, closing, onClosed }: BoardFinderP
     setText('')
     setVendors([])
     setMcus([])
+    setMinRam(0)
     setFeatures([])
     setRuntimes([])
     setFlashableOnly(false)
@@ -290,6 +308,27 @@ export function BoardFinder({ onClose, origin, closing, onClosed }: BoardFinderP
               onToggle={(r) => setRuntimes((prev) => toggleRuntime(prev, r as FirmwareRuntime))}
               note={RUNTIME_CAVEAT}
             />
+            <div className="bfind__facet">
+              <h3 className="bfind__facet-name">Memory</h3>
+              <select
+                className="bfind__select"
+                value={minRam || ''}
+                onChange={(e) => setMinRam(Number(e.target.value) || 0)}
+                aria-label="Filter by on-chip RAM"
+              >
+                <option value="">Any amount of RAM</option>
+                {MEMORY_THRESHOLDS.map((bytes) => (
+                  <option key={bytes} value={bytes}>
+                    {memoryThresholdLabel(bytes)}
+                  </option>
+                ))}
+              </select>
+              {/* What the control filters on is the chip's SRAM, which is not
+                  the whole story on a board with PSRAM. Said here rather than
+                  left to be discovered. */}
+              <p className="bfind__facet-note">{MEMORY_CAVEAT}</p>
+              {unsized && <p className="bfind__facet-note is-warn">{unsized}</p>}
+            </div>
 
             <ChipFacet
               name="Features"

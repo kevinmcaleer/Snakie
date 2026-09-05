@@ -1,5 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import {
+  MEMORY_CAVEAT,
+  MEMORY_THRESHOLDS,
   NO_SIZE_PUBLISHED,
   PLAIN_BUILD_LABEL,
   UNKNOWN_VENDOR,
@@ -9,9 +11,11 @@ import {
   buildLabel,
   firmwareSummary,
   isFiltering,
+  memoryThresholdLabel,
   peekFacts,
   shelvesByVendor,
   toggleChip,
+  unsizedNotice,
   variantList
 } from '../src/renderer/src/components/board-finder'
 import {
@@ -19,7 +23,13 @@ import {
   flashRequestFor,
   requestFlash
 } from '../src/renderer/src/components/board-finder-bus'
-import type { BoardBuild, IndexedBoard } from '../src/shared/board-index'
+import {
+  boardsWithoutRam,
+  filterBoards,
+  type BoardBuild,
+  type BoardSize,
+  type IndexedBoard
+} from '../src/shared/board-index'
 
 /**
  * The Board Finder gallery's own decisions (#893) — shelving, the photo-less
@@ -54,6 +64,7 @@ const board = (over: Partial<IndexedBoard> = {}): IndexedBoard => ({
   thumb: null,
   builds: [build()],
   flash: null,
+  externalFlash: null,
   ram: null,
   psram: null,
   runtimes: ['micropython'],
@@ -294,5 +305,86 @@ describe('the flasher hand-off', () => {
     expect(events).toHaveLength(1)
     expect(events[0].type).toBe(FLASH_BOARD_EVENT)
     expect((events[0].detail as { boardId: string }).boardId).toBe('RPI_PICO')
+  })
+})
+
+describe('the memory filter (#897)', () => {
+  const sram = (kb: number): BoardSize => ({
+    bytes: kb * 1024,
+    source: 'a datasheet',
+    scope: 'chip'
+  })
+  const catalogue = [
+    board({ id: 'TRINKET_M0', ram: sram(32) }),
+    board({ id: 'RPI_PICO', ram: sram(264) }),
+    board({ id: 'ESP32_GENERIC', ram: sram(520) }),
+    board({ id: 'TEENSY41', ram: sram(1024) }),
+    // The boards in the real catalogue with no sourced RAM figure at all.
+    board({ id: 'ESP8266_GENERIC', ram: null }),
+    board({ id: 'WIPY', ram: null })
+  ]
+
+  it('keeps the boards at or above the threshold', () => {
+    expect(filterBoards(catalogue, { minRam: 256 * 1024 }).map((b) => b.id)).toEqual([
+      'RPI_PICO',
+      'ESP32_GENERIC',
+      'TEENSY41'
+    ])
+  })
+
+  it('does not quietly keep a board whose RAM nobody published', () => {
+    // Including them would be the more generous answer and the dishonest one:
+    // the filter would be saying "this board has at least 32 KB" about a board
+    // it knows nothing about.
+    expect(filterBoards(catalogue, { minRam: 32 * 1024 }).map((b) => b.id)).not.toContain(
+      'ESP8266_GENERIC'
+    )
+  })
+
+  it('counts the boards it dropped for having no figure, so they can be named', () => {
+    // The trap the whole design exists to avoid: a size control that silently
+    // loses the undocumented boards. The gallery prints this count.
+    const dropped = boardsWithoutRam(catalogue, { minRam: 512 * 1024 })
+    expect(dropped.map((b) => b.id)).toEqual(['ESP8266_GENERIC', 'WIPY'])
+    expect(unsizedNotice(dropped.length)).toBe(
+      '2 boards have no published RAM figure and are not shown.'
+    )
+  })
+
+  it('counts the same boards whatever the threshold is', () => {
+    // The answer is about what is unknown, not about where the threshold sits.
+    for (const bytes of MEMORY_THRESHOLDS) {
+      expect(boardsWithoutRam(catalogue, { minRam: bytes }).length, String(bytes)).toBe(2)
+    }
+  })
+
+  it('still respects the other filters when counting them', () => {
+    expect(
+      boardsWithoutRam(catalogue, { minRam: 512 * 1024, text: 'wipy' }).map((b) => b.id)
+    ).toEqual(['WIPY'])
+  })
+
+  it('says nothing when nothing was dropped', () => {
+    expect(unsizedNotice(0)).toBeNull()
+    expect(unsizedNotice(1)).toBe('1 board has no published RAM figure and is not shown.')
+  })
+
+  it('shows as a removable chip, and counts as filtering', () => {
+    expect(activeFilterChips({ minRam: 256 * 1024 })).toEqual([
+      { axis: 'memory', value: '≥ 256 KB' }
+    ])
+    expect(isFiltering({ minRam: 256 * 1024 })).toBe(true)
+    expect(activeFilterChips({})).toEqual([])
+  })
+
+  it('labels its thresholds the way sizes are written elsewhere', () => {
+    expect(memoryThresholdLabel(256 * 1024)).toBe('≥ 256 KB')
+    expect(memoryThresholdLabel(1024 * 1024)).toBe('≥ 1 MB')
+  })
+
+  it('says out loud that PSRAM is not in the figure', () => {
+    // Without this the control would quietly rank an ESP32 Feather V2 - 520 KB
+    // of SRAM and 2 MB of PSRAM - below a board with a megabyte of plain SRAM.
+    expect(MEMORY_CAVEAT).toMatch(/PSRAM/)
   })
 })

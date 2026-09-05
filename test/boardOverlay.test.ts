@@ -41,6 +41,7 @@ const board = (over: Partial<IndexedBoard> = {}): IndexedBoard => ({
   thumb: null,
   builds: [],
   flash: null,
+  externalFlash: null,
   ram: null,
   psram: null,
   runtimes: [],
@@ -96,7 +97,7 @@ describe('the board that started the epic', () => {
     expect(feather!.psram?.bytes).toBe(2 * 1024 * 1024)
     const facts = boardFacts(feather!)
     expect(facts.find((f) => f.label === 'Flash')?.value).toBe('8 MB')
-    expect(facts.find((f) => f.label === 'PSRAM')?.value).toBe('2 MB')
+    expect(facts.find((f) => f.label === 'External RAM')?.value).toBe('2 MB')
   })
 })
 
@@ -203,8 +204,20 @@ describe('formatting a size', () => {
     expect(formatBytes(8 * 1024 * 1024)).toBe('8 MB')
   })
 
-  it('keeps one decimal for a size that is not round', () => {
+  it('keeps one decimal for a size that is half a megabyte off', () => {
     expect(formatBytes(1.5 * 1024 * 1024)).toBe('1.5 MB')
+    expect(formatBytes(5.5 * 1024 * 1024)).toBe('5.5 MB')
+  })
+
+  it('stays in KB rather than rounding a real difference away', () => {
+    // An STM32H743 has 1056 KB. Printed as "1.0 MB" it would be indistinguishable
+    // from a part with 1024 KB, and 32 KB short — which on a board with a
+    // megabyte of RAM is a noticeable piece of somebody's heap. These sizes are
+    // not rare here: 1056, 1376, 2512 and 4200 KB all occur.
+    expect(formatBytes(1056 * 1024)).toBe('1056 KB')
+    expect(formatBytes(1376 * 1024)).toBe('1376 KB')
+    expect(formatBytes(4200 * 1024)).toBe('4200 KB')
+    expect(formatBytes(1024 * 1024)).toBe('1 MB')
   })
 })
 
@@ -232,8 +245,45 @@ describe('what a board’s details say about its sizes', () => {
         psram: { bytes: 2 * 1024 * 1024, source: 'a page', scope: 'board' }
       })
     )
-    expect(withSize.map((f) => f.label)).not.toContain('External RAM')
+    expect(withSize.find((f) => f.label === 'External RAM')?.value).toBe('2 MB')
     const without = boardFacts(board({ features: ['External RAM'] }))
     expect(without.find((f) => f.label === 'External RAM')?.value).toMatch(/not published/)
+  })
+
+  it('marks a chip-derived FLASH figure as the chip’s, and states the board’s beside it', () => {
+    // An Adafruit Feather M0 Express: 256 KB inside the SAMD21, 2 MB next to it.
+    // Both, labelled, because either alone answers a different question from the
+    // one the reader asked.
+    const facts = boardFacts(
+      board({
+        features: ['External Flash'],
+        flash: { bytes: 256 * 1024, source: 'Microchip SAM D21 datasheet', scope: 'chip' },
+        externalFlash: { bytes: 2 * 1024 * 1024, source: 'adafruit.com/product/3403', scope: 'board' }
+      })
+    )
+    expect(facts.find((f) => f.label === 'Flash')?.value).toBe('256 KB (the chip’s internal flash)')
+    expect(facts.find((f) => f.label === 'External flash')?.value).toBe('2 MB')
+    expect(facts.find((f) => f.label === 'External flash')?.source).toBe('adafruit.com/product/3403')
+  })
+
+  it('still says the external flash size is unknown when only the chip’s is known', () => {
+    // The bug this pairing exists to stop: before `externalFlash`, a chip-scope
+    // flash figure suppressed the note about a SEPARATE flash chip, so a board
+    // with 2 MB of SPI flash beside a 256 KB SAMD21 said "256 KB" and no more.
+    const facts = boardFacts(
+      board({
+        features: ['External Flash'],
+        flash: { bytes: 256 * 1024, source: 'Microchip SAM D21 datasheet', scope: 'chip' }
+      })
+    )
+    expect(facts.find((f) => f.label === 'External flash')?.value).toMatch(/not published/)
+  })
+
+  it('does not claim an external flash chip on a board that has no such feature', () => {
+    const facts = boardFacts(
+      board({ flash: { bytes: 2 * 1024 * 1024, source: 'raspberrypi.com', scope: 'board' } })
+    )
+    expect(facts.find((f) => f.label === 'Flash')?.value).toBe('2 MB')
+    expect(facts.map((f) => f.label)).not.toContain('External flash')
   })
 })

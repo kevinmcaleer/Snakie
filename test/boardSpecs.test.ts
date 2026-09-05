@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest'
 // @ts-ignore — a plain .mjs beside the generator that uses it; the tables
 // are the thing under test, so they are imported rather than re-typed.
 import {
+  BOARD_MCU_PART,
+  CHIP_MEMORY,
   CURATED_BOARDS,
   MCU_SRAM,
+  WITHHELD,
   circuitPythonIdFor,
   circuitPythonIndex,
   runtimesForBoard,
@@ -45,9 +48,10 @@ describe('SRAM derived from the chip', () => {
     }
   })
 
-  it('never derives flash from the chip, because flash is not on the chip', () => {
+  it('never derives flash from the chip FAMILY, because flash is not in the family', () => {
     // The distinction #897 turns on: RP2040 boards ship with 2 MB to 16 MB of
-    // flash and all of them have exactly 264 KB of SRAM.
+    // flash and all of them have exactly 264 KB of SRAM. An exact PART may well
+    // settle the flash — see the CHIP_MEMORY tests below — but `mcu` never does.
     for (const mcu of Object.keys(MCU_SRAM)) {
       const { flash } = specsForBoard(board({ id: 'NOT_CURATED', mcu }))
       expect(flash, mcu).toBeNull()
@@ -81,6 +85,131 @@ describe('curated boards', () => {
         expect(size.source.trim(), `${id}.${key}`).not.toBe('')
       }
     }
+  })
+})
+
+describe('memory the exact chip settles', () => {
+  it('gives a SAMD51 Feather its 512 KB, as the chip’s figure and not the board’s', () => {
+    const { flash, ram } = specsForBoard(board({ mcu: 'samd51' }), { part: 'SAMD51J19A' })
+    expect(flash.bytes).toBe(512 * 1024)
+    expect(flash.scope).toBe('chip')
+    expect(flash.source).toMatch(/Microchip/)
+    // 192, not 200: Microchip prints "192/8" and the 8 KB is backup RAM in its
+    // own power domain. Adding it would be the easiest wrong number in the file.
+    expect(ram.bytes).toBe(192 * 1024)
+  })
+
+  it('falls back to the build’s name when the board’s is too vague to be a part', () => {
+    // The HydraBus calls itself "STM32F4"; its makefile says `STM32F405xx`.
+    const { flash } = specsForBoard(board({ mcu: 'stm32f4' }), {
+      part: 'STM32F4',
+      partAlso: 'STM32F405xx'
+    })
+    expect(flash?.bytes).toBe(1024 * 1024)
+  })
+
+  it('says nothing for a chip name that does not pin the memory down', () => {
+    // nRF52832 is the 512 KB/64 KB QFAA and the 256 KB/32 KB QFAB — a factor of
+    // two apart on both axes — and nRF51822 is worse at three variants. These
+    // are the rows most likely to be "improved" by a plausible number.
+    for (const part of ['nrf52832', 'nrf51822']) {
+      const { flash, ram } = specsForBoard(board({ mcu: 'nrf52' }), { part })
+      expect(flash, part).toBeNull()
+      expect(ram, part).toBeNull()
+    }
+  })
+
+  it('states SRAM alone for a Renesas group that spans several flash sizes', () => {
+    // RA6M5 is 1 MB to 2 MB of flash and 512 KB of SRAM throughout, and upstream
+    // names the group rather than the part.
+    const { flash, ram } = specsForBoard(board({ mcu: 'ra6m5' }), { part: 'RA6M5' })
+    expect(flash).toBeNull()
+    expect(ram.bytes).toBe(512 * 1024)
+  })
+
+  it('lets the board name a part where upstream’s name is too vague', () => {
+    // "STM32F407" spans 512 KB and 1 MB; Olimex says STM32F407ZGT6.
+    expect(BOARD_MCU_PART.OLIMEX_E407.part).toBe('STM32F407ZG')
+    const { flash } = specsForBoard(board({ id: 'OLIMEX_E407', mcu: 'stm32f4' }), {
+      part: 'STM32F407'
+    })
+    expect(flash?.bytes).toBe(1024 * 1024)
+  })
+
+  it('names a source for every figure it states', () => {
+    for (const [part, entry] of Object.entries(CHIP_MEMORY) as [
+      string,
+      { flash?: number; sram?: number; source: string }
+    ][]) {
+      expect(entry.source?.trim(), part).not.toBe('')
+      expect(entry.flash ?? entry.sram, part).toBeGreaterThan(0)
+    }
+  })
+})
+
+describe('what upstream states outright', () => {
+  it('prefers the board’s own build configuration to the chip’s datasheet', () => {
+    // An i.MX RT has no internal flash, so the only true figure is the one the
+    // board file gives, and it must not be shadowed by anything.
+    const { flash } = specsForBoard(board({ mcu: 'mimxrt' }), {
+      part: 'MIMXRT1062',
+      flash: 8 * 1024 * 1024,
+      flashSource: 'MicroPython ports/mimxrt/boards/TEENSY41/mpconfigboard.mk'
+    })
+    expect(flash.bytes).toBe(8 * 1024 * 1024)
+    expect(flash.scope).toBe('board')
+    expect(flash.source).toMatch(/TEENSY41/)
+  })
+
+  it('refuses a size with no source, even when it has a number', () => {
+    // The rule the whole issue turns on, enforced one layer before the parser.
+    const { flash, psram } = specsForBoard(board(), {
+      flash: 4 * 1024 * 1024,
+      externalRam: 2 * 1024 * 1024
+    })
+    expect(flash).toBeNull()
+    expect(psram).toBeNull()
+  })
+})
+
+describe('figures deliberately withheld', () => {
+  it('blanks a figure two sources disagree about, and says why', () => {
+    const spec = specsForBoard(board({ id: 'MACHDYNE_WERKZEUG', mcu: 'rp2040' }), {
+      flash: 1024 * 1024,
+      flashSource: 'Raspberry Pi pico-sdk src/boards/include/boards/machdyne_werkzeug.h'
+    })
+    expect(spec.flash).toBeNull()
+    expect(WITHHELD.MACHDYNE_WERKZEUG.why).toMatch(/4MB/)
+  })
+
+  it('writes down a reason for every one of them', () => {
+    for (const [id, entry] of Object.entries(WITHHELD) as [
+      string,
+      { fields: string[]; why: string }
+    ][]) {
+      expect(entry.fields.length, id).toBeGreaterThan(0)
+      expect(entry.why.trim(), id).not.toBe('')
+    }
+  })
+})
+
+describe('a second flash chip beside the microcontroller', () => {
+  it('is published separately from the chip’s own', () => {
+    // The Feather M0 Express has 256 KB inside the SAMD21 and 2 MB next to it.
+    // Answering "how much flash?" with either alone answers a different question.
+    const spec = specsForBoard(board({ id: 'ADAFRUIT_FEATHER_M0_EXPRESS', mcu: 'samd21' }), {
+      part: 'SAMD21G18A'
+    })
+    expect(spec.flash.bytes).toBe(256 * 1024)
+    expect(spec.flash.scope).toBe('chip')
+    expect(spec.externalFlash.bytes).toBe(2 * 1024 * 1024)
+    expect(spec.externalFlash.scope).toBe('board')
+  })
+
+  it('reads SparkFun’s "4Mb" as four megaBITs, which is what SparkFun fitted', () => {
+    // An AT25SF041. Reading the lower-case b as bytes overstates the board by
+    // eight times, which is the worst mistake available anywhere in this file.
+    expect(CURATED_BOARDS.SPARKFUN_SAMD51_THING_PLUS.externalFlash.bytes).toBe(512 * 1024)
   })
 })
 

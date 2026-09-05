@@ -46,6 +46,7 @@ const board = (over: Partial<IndexedBoard> = {}): IndexedBoard => ({
   thumb: null,
   builds: [],
   flash: null,
+  externalFlash: null,
   ram: null,
   psram: null,
   runtimes: ['micropython'],
@@ -104,12 +105,14 @@ describe('parsing a document', () => {
         {
           id: 'X',
           flash: { bytes: 8388608 },
+          externalFlash: { bytes: 2097152, source: '   ' },
           ram: { bytes: 264 * 1024, source: 'RP2040 datasheet', scope: 'chip' },
           psram: { bytes: 0, source: 'somewhere' }
         }
       ]
     })
     expect(doc?.boards[0].flash).toBeNull()
+    expect(doc?.boards[0].externalFlash).toBeNull()
     expect(doc?.boards[0].psram).toBeNull()
     expect(doc?.boards[0].ram).toEqual({ bytes: 270336, source: 'RP2040 datasheet', scope: 'chip' })
   })
@@ -370,7 +373,7 @@ describe('the generated seed that actually ships', () => {
     it('names a source for every figure, and never publishes a bare number', () => {
       const raw = JSON.parse(readFileSync('src/renderer/public/boards/boards.json', 'utf8'))
       for (const b of raw.boards) {
-        for (const key of ['flash', 'ram', 'psram'] as const) {
+        for (const key of ['flash', 'externalFlash', 'ram', 'psram'] as const) {
           const size = b[key]
           if (size === null || size === undefined) continue
           expect(typeof size.bytes, `${b.id}.${key}`).toBe('number')
@@ -393,12 +396,32 @@ describe('the generated seed that actually ships', () => {
       expect(pico.flash?.bytes).toBe(2 * 1024 * 1024)
     })
 
-    it('says nothing about chip families whose SRAM is not fixed', () => {
-      // stm32f4 spans 96 KB to 256 KB; nrf52 spans 64 KB to 256 KB. A plausible
-      // average would never get checked, which is what makes it dangerous.
+    it('takes RAM from the exact chip, never from the chip family', () => {
+      // This used to be "say nothing about a family whose SRAM varies", which
+      // cost 140 boards a figure. #897's coverage pass resolved the exact part
+      // instead — but the original hazard is unchanged, so the tripwire moves
+      // rather than goes: within a family that varies, the seed must show that
+      // variation. A figure derived from `mcu` alone would be uniform, and this
+      // is what would catch it.
+      for (const mcu of ['stm32f4', 'stm32l4', 'mimxrt']) {
+        const values = new Set(
+          doc!.boards.filter((b) => b.mcu === mcu && b.ram).map((b) => b.ram!.bytes)
+        )
+        expect(values.size, `${mcu} RAM values`).toBeGreaterThan(1)
+      }
+    })
+
+    it('still says nothing where even the exact chip does not settle it', () => {
+      // Espressif publishes no total RAM figure for the ESP8266 at all — the
+      // only quantity in its datasheet is an SDK-dependent "< 50 kB". A number
+      // here would be somebody's guess wearing a source.
+      const esp8266 = doc!.boards.find((b) => b.id === 'ESP8266_GENERIC')!
+      expect(esp8266.ram).toBeNull()
+      // …and no board anywhere carries a size without a source, which is the
+      // rule all of this hangs from.
       for (const b of doc!.boards) {
-        if (['stm32f4', 'nrf52', 'samd21', 'samd51', 'mimxrt'].includes(b.mcu)) {
-          expect(b.ram, `${b.id} (${b.mcu})`).toBeNull()
+        for (const key of ['flash', 'externalFlash', 'ram', 'psram'] as const) {
+          if (b[key]) expect(String(b[key]!.source).trim(), `${b.id}.${key}`).not.toBe('')
         }
       }
     })

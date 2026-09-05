@@ -11,16 +11,38 @@
  * Separate from the component, and DOM-free, so every one of those decisions is
  * a unit test in node rather than an assertion about JSX.
  *
- * WHY THERE IS STILL NO STORAGE OR MEMORY FILTER (#897). There are sourced sizes
- * now, and they are stated on the board — but 5 of 225 boards have a flash
- * figure and 81 have a RAM one, and 81 of those are the CHIP's SRAM rather than
- * the module's. A "≥ 4 MB" control at that coverage is not a filter, it is a way
- * of hiding 220 boards for being undocumented. It becomes one when the coverage
- * does; until then the sizes are facts, each naming its source, and the missing
- * ones say they are missing instead of quietly vanishing from a filtered list.
+ * THE MEMORY FILTER SHIPS AND THE STORAGE FILTER DOES NOT (#897). They were
+ * held back together while the sizes were unsourced; they part company now that
+ * they are not, and for different reasons than coverage.
  *
- * THE RUNTIME FILTER (#902) does ship, because its data supports it and the one
- * thing it cannot say is sayable out loud. See {@link RUNTIME_CAVEAT}.
+ * MEMORY: 226 of the 230 boards have a sourced RAM figure, up from 86, and
+ * every one of them means the same thing — the chip's own SRAM. It is also
+ * worth filtering on, which was not obvious: RAM is NOT a restatement of the
+ * processor facet, because over a hundred of those boards sit in a family whose
+ * members differ. `stm32f4` alone runs from the F401's 96 KB to the F469's
+ * 384 KB, and `mimxrt` from 128 KB to 2 MB. So the control says something the
+ * `Processor` dropdown cannot, about all but four boards. See {@link
+ * MEMORY_CAVEAT} for the one thing it has to say out loud, and
+ * `boardsWithoutRam` for what becomes of those four.
+ *
+ * STORAGE: no. Not for want of numbers any more — 187 of 230 have a flash
+ * figure, up from 10 — but because they are not all the same quantity. 107 are
+ * the flash INSIDE the microcontroller, on parts where that is where a program
+ * goes; 80 are the flash chip on the module, on parts with none inside. Ranking
+ * an STM32H743's 2 MB of internal flash against a Pico's 2 MB of QSPI compares a
+ * program's ROM with a filesystem's disk. Narrow it to the one a filesystem can
+ * actually use — module flash, or a second flash chip beside the MCU — and it
+ * covers 100 of 230, which is thinner than the coverage that stopped this being
+ * offered in the first place. And every one of the ten `ESP32_GENERIC*` entries
+ * is missing from it, which are the most-flashed boards in the catalogue: their
+ * size is a property of whichever module the buyer happens to have.
+ *
+ * So storage stays a fact. What would change that is not more scraping — it is
+ * deciding, per port, which flash a MicroPython filesystem actually lands in,
+ * which is knowledge the index does not carry.
+ *
+ * THE RUNTIME FILTER (#902) ships on the same terms: its data supports it and
+ * the one thing it cannot say is sayable out loud. See {@link RUNTIME_CAVEAT}.
  */
 import {
   defaultBuild,
@@ -122,10 +144,20 @@ export interface BoardFact {
   source?: string
 }
 
-/** Features that are a yes/no upstream publishes but no figure to go with it. */
+/**
+ * Features that are a yes/no upstream publishes, paired with the field that
+ * would give the figure.
+ *
+ * `External Flash` pairs with `externalFlash` and NOT with `flash` — the
+ * distinction #897 turned on once boards started carrying both. An Adafruit
+ * Feather M0 Express has 256 KB inside the SAMD21 and a 2 MB SPI flash chip
+ * beside it; letting the first suppress the note about the second would say the
+ * board has 256 KB of flash and nothing else, which is the misreading the whole
+ * epic exists to stop.
+ */
 const SIZELESS_FEATURES: readonly { feature: string; label: string; sized: keyof IndexedBoard }[] =
   [
-    { feature: 'External Flash', label: 'External flash', sized: 'flash' },
+    { feature: 'External Flash', label: 'External flash', sized: 'externalFlash' },
     { feature: 'External RAM', label: 'External RAM', sized: 'psram' }
   ]
 
@@ -133,25 +165,46 @@ const SIZELESS_FEATURES: readonly { feature: string; label: string; sized: keyof
 export const NO_SIZE_PUBLISHED = 'present — size not published'
 
 /**
- * A byte count as people say it: `264 KB`, `8 MB`, `1.5 MB`.
+ * A byte count as people say it: `264 KB`, `8 MB`, `1.5 MB`, `1056 KB`.
  *
  * Binary units, because that is what these parts are sold in — a "2 MB" flash
- * chip is 2 × 1024 × 1024 bytes — and no trailing `.0`, so the common sizes read
- * as round numbers rather than as measurements.
+ * chip is 2 × 1024 × 1024 bytes.
+ *
+ * MB only where it lands on a whole or a half, and KB otherwise. Rounding to one
+ * decimal instead would print an STM32H743's 1056 KB as "1.0 MB" — the same
+ * string as a part with 1024 KB, and 32 KB adrift, which on a board with 1 MB of
+ * RAM is a real amount of somebody's heap. Sizes like that are common enough in
+ * this catalogue (1056, 1376, 2512, 4200 KB) that the awkward-looking number is
+ * the accurate one.
  */
 export function formatBytes(bytes: number): string {
-  const [unit, size] = bytes >= 1024 * 1024 ? ['MB', 1024 * 1024] : ['KB', 1024]
-  const n = bytes / size
-  return `${Number.isInteger(n) ? n : n.toFixed(1)} ${unit}`
+  const mb = bytes / (1024 * 1024)
+  if (mb >= 1 && Number.isInteger(mb * 2)) {
+    return `${Number.isInteger(mb) ? mb : mb.toFixed(1)} MB`
+  }
+  const kb = bytes / 1024
+  return `${Number.isInteger(kb) ? kb : kb.toFixed(1)} KB`
+}
+
+/**
+ * How a figure that is really the CHIP's is said out loud.
+ *
+ * "The ESP32 has 520 KB" is a fact about every ESP32 board and therefore not
+ * much of a fact about this one — and for flash it is the difference between the
+ * megabyte on an STM32F405's die and the eight megabytes of SPI flash sitting
+ * next to it. The scope goes in the value rather than a tooltip so it is read at
+ * the same moment as the number.
+ */
+const CHIP_SCOPE_NOTE: Record<'flash' | 'ram', string> = {
+  flash: ' (the chip’s internal flash)',
+  ram: ' (the chip’s SRAM)'
 }
 
 /**
  * The facts a board's detail states, in display order.
  *
  * Sizes come first-hand or not at all: each one carries the source that makes it
- * publishable, and a RAM figure that is really the CHIP's says so, because "the
- * ESP32 has 520 KB" is a fact about every ESP32 board and therefore not much of
- * a fact about this one.
+ * publishable.
  *
  * `External flash` / `External RAM` still appear as the booleans upstream
  * publishes, but only where no sourced size has replaced them — otherwise a
@@ -162,17 +215,35 @@ export function boardFacts(board: IndexedBoard): BoardFact[] {
   if (board.port) facts.push({ label: 'Port', value: board.port })
   if (board.flashOffset) facts.push({ label: FLASH_OFFSET_LABEL, value: board.flashOffset })
   if (board.flash) {
-    facts.push({ label: 'Flash', value: formatBytes(board.flash.bytes), source: board.flash.source })
+    facts.push({
+      label: 'Flash',
+      value: `${formatBytes(board.flash.bytes)}${board.flash.scope === 'chip' ? CHIP_SCOPE_NOTE.flash : ''}`,
+      source: board.flash.source
+    })
+  }
+  if (board.externalFlash) {
+    facts.push({
+      label: 'External flash',
+      value: formatBytes(board.externalFlash.bytes),
+      source: board.externalFlash.source
+    })
   }
   if (board.ram) {
     facts.push({
       label: 'RAM',
-      value: `${formatBytes(board.ram.bytes)}${board.ram.scope === 'chip' ? ' (the chip’s SRAM)' : ''}`,
+      value: `${formatBytes(board.ram.bytes)}${board.ram.scope === 'chip' ? CHIP_SCOPE_NOTE.ram : ''}`,
       source: board.ram.source
     })
   }
   if (board.psram) {
-    facts.push({ label: 'PSRAM', value: formatBytes(board.psram.bytes), source: board.psram.source })
+    // "External RAM" rather than "PSRAM": upstream's own word for the feature
+    // this row replaces, and the right one for the boards whose external RAM is
+    // SDRAM rather than SPI PSRAM.
+    facts.push({
+      label: 'External RAM',
+      value: formatBytes(board.psram.bytes),
+      source: board.psram.source
+    })
   }
   for (const { feature, label, sized } of SIZELESS_FEATURES) {
     if (board.features.includes(feature) && !board[sized]) {
@@ -203,10 +274,11 @@ export function variantList(board: IndexedBoard): { variant: string; description
  */
 export function activeFilterChips(
   filter: BoardFilter
-): { axis: 'vendor' | 'mcu' | 'feature' | 'runtime'; value: string }[] {
-  const out: { axis: 'vendor' | 'mcu' | 'feature' | 'runtime'; value: string }[] = []
+): { axis: 'vendor' | 'mcu' | 'feature' | 'runtime' | 'memory'; value: string }[] {
+  const out: { axis: 'vendor' | 'mcu' | 'feature' | 'runtime' | 'memory'; value: string }[] = []
   for (const v of filter.vendors ?? []) out.push({ axis: 'vendor', value: v })
   for (const m of filter.mcus ?? []) out.push({ axis: 'mcu', value: m })
+  if (filter.minRam) out.push({ axis: 'memory', value: memoryThresholdLabel(filter.minRam) })
   for (const f of filter.features ?? []) out.push({ axis: 'feature', value: f })
   for (const r of filter.runtimes ?? []) out.push({ axis: 'runtime', value: r })
   return out
@@ -231,6 +303,59 @@ export function isFiltering(filter: BoardFilter): boolean {
  */
 export function toggleChip(values: readonly string[], value: string): string[] {
   return values.includes(value) ? values.filter((v) => v !== value) : [...values, value]
+}
+
+// ---------------------------------------------------------------------------
+// The memory filter (#897)
+// ---------------------------------------------------------------------------
+
+/**
+ * The steps the memory control offers, in bytes.
+ *
+ * Chosen where the catalogue actually divides rather than at round powers for
+ * their own sake: 32 KB separates the SAMD21 class from everything else, 64 KB
+ * is where the smaller nRF52 sits, 264 KB is an RP2040 and 520 KB an ESP32 or
+ * an RP2350, so 256 KB and 512 KB are the two thresholds people are really
+ * asking about. 1 MB picks out the i.MX RT and STM32H7 boards.
+ */
+export const MEMORY_THRESHOLDS = [
+  32 * 1024,
+  64 * 1024,
+  128 * 1024,
+  256 * 1024,
+  512 * 1024,
+  1024 * 1024
+] as const
+
+/** "≥ 256 KB", for the dropdown and for the removable chip. */
+export function memoryThresholdLabel(bytes: number): string {
+  return `≥ ${formatBytes(bytes)}`
+}
+
+/**
+ * The one thing the memory filter cannot say, said on screen.
+ *
+ * Every figure it filters on is the CHIP's SRAM, so the control is silent about
+ * the external PSRAM that is the whole point of several of these boards — an
+ * ESP32 Feather V2 has 520 KB of SRAM and 2 MB of PSRAM, and this control sees
+ * the first number. Saying so under the control is what makes it honest to
+ * offer, exactly as {@link RUNTIME_CAVEAT} is for the runtime chips.
+ */
+export const MEMORY_CAVEAT =
+  'This is the chip’s own SRAM. Boards with external PSRAM have far more than ' +
+  'this figure shows — it is listed separately on the board.'
+
+/** "3 boards have no published RAM figure and are not shown." */
+export function unsizedNotice(count: number): string | null {
+  if (count <= 0) return null
+  return `${count} board${count === 1 ? '' : 's'} ${count === 1 ? 'has' : 'have'} no published RAM figure and ${count === 1 ? 'is' : 'are'} not shown.`
+}
+
+/** Add or remove one feature, so the chips toggle rather than only accumulate. */
+export function toggleFeature(features: readonly string[], feature: string): string[] {
+  return features.includes(feature)
+    ? features.filter((f) => f !== feature)
+    : [...features, feature]
 }
 
 /** Same toggle, typed for the runtime chips. */
