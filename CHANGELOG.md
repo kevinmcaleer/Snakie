@@ -6,6 +6,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The recommended firmware build is now reachable for the boards that need it**
+  (#885). A board profile can name the build a board actually requires — the
+  Adafruit ESP32 Feather V2 needs `ESP32_GENERIC-SPIRAM`, because only that build
+  turns on its 2 MB of PSRAM — and Snakie could already derive that build's
+  address and download it for you. But the derivation only ran once you had
+  picked a version out of the Family/Model dropdowns, which excluded exactly the
+  boards the recommendation exists for: the Feather V2 has no catalogue entry at
+  all, so its owner never makes a selection, so the recommendation never
+  resolved. What they got instead was a link to a download page headed
+  "ESP32 / WROOM" listing the plain build first — the opposite of the advice
+  printed directly above it. Snakie now finds the build from any release of the
+  same board, so Flash fetches it with nothing selected; where it still cannot,
+  the link says which file to look for and warns against the one at the top of
+  the page. Links in the flash dialog were also rendering in the browser's
+  default blue, which on that permanently dark panel is dark blue on dark grey.
+
 ### Added
 
 - **A finished flash can go back instead of only closing** (#838). Done was the

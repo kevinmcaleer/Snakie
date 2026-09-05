@@ -445,14 +445,37 @@
 /* An inline choice inside a hint line — used when the identified chip is claimed
    by more than one board, so the dialog asks rather than guesses. Styled as a
    link, not a button: it sits mid-sentence. */
-.firmware-link {
+/* Links inside this dialog, whether a real anchor or a button dressed as one.
+ *
+ * NOT `var(--accent)`, and not the browser default. The panel is #1f2430 in
+ * both themes (see the note at the top of this file), so the default link blue
+ * lands as dark blue on dark grey — unreadable, and reported as such. `--accent`
+ * is no better: on the skeuomorph theme it is #b07d1e brass, which clears 4:1
+ * against this panel only just, at 0.72rem type.
+ *
+ * A light blue from the dialog's own palette instead, so it reads as a link and
+ * as text. */
+.firmware-link,
+.firmware-hint a {
   padding: 0;
   border: 0;
   background: none;
   font: inherit;
-  color: var(--accent);
+  color: #8fbfff;
   text-decoration: underline;
   cursor: pointer;
+}
+
+.firmware-hint a:hover,
+.firmware-link:hover {
+  color: #b8d8ff;
+}
+
+.firmware-link:focus-visible,
+.firmware-hint a:focus-visible {
+  outline: 2px solid #8fbfff;
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 .firmware-link:hover {
