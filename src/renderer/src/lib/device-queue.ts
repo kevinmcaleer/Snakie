@@ -64,6 +64,12 @@ export interface DeviceQueueSnapshot {
   busy: boolean
   /** The first failure still on the list; keeps the modal open. */
   error: string | null
+  /**
+   * The user has minimised the dialog to the status bar (#890). Shared state
+   * rather than the dialog's own, because the round trip has two ends: the
+   * dialog puts it away, and the status-bar popup brings it back.
+   */
+  minimised: boolean
 }
 
 /** What a task's `run` is handed so it can report progress and notice a cancel. */
@@ -116,7 +122,7 @@ let entries: Entry[] = []
 let chain: Promise<void> = Promise.resolve()
 const listeners = new Set<() => void>()
 
-let snapshot: DeviceQueueSnapshot = { tasks: [], busy: false, error: null }
+let snapshot: DeviceQueueSnapshot = { tasks: [], busy: false, error: null, minimised: false }
 
 function view(entry: Entry): DeviceTaskView {
   return {
@@ -129,13 +135,40 @@ function view(entry: Entry): DeviceTaskView {
   }
 }
 
+/** The highest task id the user has minimised away, or null. See {@link stayHidden}. */
+let minimisedThroughId: number | null = null
+
 function emit(): void {
-  snapshot = {
-    tasks: entries.map(view),
+  const tasks = entries.map(view)
+  const error = entries.find((e) => e.state === 'error')?.error ?? null
+  const next: DeviceQueueSnapshot = {
+    tasks,
     busy: entries.some((e) => e.state === 'running' || e.state === 'waiting'),
-    error: entries.find((e) => e.state === 'error')?.error ?? null
+    error,
+    minimised: false
   }
+  next.minimised = stayHidden(next, minimisedThroughId)
+  // A lapsed minimise (new work, or a failure) is forgotten outright, so the
+  // next Close starts from a clean slate rather than an id nobody remembers.
+  if (!next.minimised) minimisedThroughId = null
+  snapshot = next
   for (const l of listeners) l()
+}
+
+/**
+ * Put the dialog away while its work carries on (#890). The status-bar
+ * indicator is what reports the board from here, and its maximise control is
+ * what brings this back.
+ */
+export function minimiseDeviceQueue(): void {
+  minimisedThroughId = highestTaskId(snapshot.tasks)
+  emit()
+}
+
+/** Bring the dialog back — the status bar's maximise (#890). */
+export function restoreDeviceQueue(): void {
+  minimisedThroughId = null
+  emit()
 }
 
 /** Settle the caller's promise exactly once, whatever else happens to the entry. */
@@ -266,6 +299,7 @@ export function getDeviceQueueSnapshot(): DeviceQueueSnapshot {
 
 /** Test seam — empty the queue and drop the chain, listeners intact. */
 export function resetDeviceQueueForTest(): void {
+  minimisedThroughId = null
   entries = []
   chain = Promise.resolve()
   emit()
@@ -364,6 +398,11 @@ export function stayHidden(
 ): boolean {
   if (hiddenThroughId === null) return false
   if (snap.error) return false
+  // An empty queue is not "hidden", it is finished. Without this the flag
+  // survives the work it was hiding — `some()` over no tasks is false, so the
+  // snapshot kept reporting `minimised: true` after everything drained, and the
+  // popup grew a maximise button with nothing behind it to restore.
+  if (snap.tasks.length === 0) return false
   return !snap.tasks.some((t) => t.id > hiddenThroughId)
 }
 

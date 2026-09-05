@@ -4,6 +4,7 @@ import {
   cancelDeviceQueue,
   getDeviceQueueSnapshot,
   queueProgress,
+  restoreDeviceQueue,
   subscribeDeviceQueue
 } from '../lib/device-queue'
 import './SyncIndicator.css'
@@ -225,7 +226,23 @@ export function SyncIndicator(): JSX.Element | null {
           aria-label="Files kept in sync with the board"
           style={anchor ? { right: `${anchor.right}px`, bottom: `${anchor.bottom}px` } : undefined}
         >
-          <p className="syncind__summary">{summary}</p>
+          <p className="syncind__summary">
+            {/* Top-left, as asked (#890), and only when the dialog was minimised
+                — offering "maximise" with nothing to restore would be a button
+                that does nothing. */}
+            {queue.minimised && (
+              <button
+                type="button"
+                className="syncind__max"
+                onClick={restoreDeviceQueue}
+                title="Show the copy progress again"
+                aria-label="Show the copy progress again"
+              >
+                <span aria-hidden="true">{'\u2197'}</span>
+              </button>
+            )}
+            {summary}
+          </p>
 
           {busy && (
             <>

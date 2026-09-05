@@ -32,7 +32,8 @@ const task = (id: number, state: DeviceTaskView['state'] = 'running'): DeviceTas
 const snap = (tasks: DeviceTaskView[], error: string | null = null): DeviceQueueSnapshot => ({
   tasks,
   busy: tasks.some((t) => t.state === 'running' || t.state === 'waiting'),
-  error
+  error,
+  minimised: false
 })
 
 describe('pushing the modal aside', () => {
@@ -126,5 +127,114 @@ describe('the device tree hazard bar', () => {
     const reduced = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)', css.indexOf('.devicetree__busy')))
     expect(reduced).toContain('animation: none')
     expect(reduced).not.toContain('display: none')
+  })
+})
+
+/**
+ * Minimise and maximise the copy dialog (#890).
+ *
+ * #889 let the dialog be pushed aside, but the state lived inside the dialog —
+ * so nothing else could bring it back, and "minimise" was really just a
+ * one-way hide. Moving it onto the queue gives the round trip two ends: the
+ * dialog puts it away, the status-bar popup fetches it back.
+ */
+describe('the minimise round trip', () => {
+  it('is queue state, so both ends can reach it', async () => {
+    const q = await import('../src/renderer/src/lib/device-queue')
+    expect(typeof q.minimiseDeviceQueue).toBe('function')
+    expect(typeof q.restoreDeviceQueue).toBe('function')
+    expect(q.getDeviceQueueSnapshot()).toHaveProperty('minimised')
+  })
+
+  it('minimising an empty queue leaves nothing minimised', async () => {
+    const q = await import('../src/renderer/src/lib/device-queue')
+    q.resetDeviceQueueForTest()
+    q.minimiseDeviceQueue()
+    // Nothing to hide, so `highestTaskId` is null and the flag must not stick —
+    // otherwise the NEXT operation would open minimised.
+    expect(q.getDeviceQueueSnapshot().minimised).toBe(false)
+  })
+
+  it('stops being minimised once the work has drained', async () => {
+    // `some()` over an empty list is false, so the flag outlived the tasks it
+    // was hiding — and the popup then offered a maximise with nothing behind it.
+    expect(stayHidden(snap([]), 5)).toBe(false)
+  })
+
+  it('restoring clears it', async () => {
+    const q = await import('../src/renderer/src/lib/device-queue')
+    q.resetDeviceQueueForTest()
+    q.restoreDeviceQueue()
+    expect(q.getDeviceQueueSnapshot().minimised).toBe(false)
+  })
+})
+
+describe('the dialog offers Minimise beside Cancel, not instead of it', () => {
+  const dlg = readFileSync('src/renderer/src/components/TransferProgressDialog.tsx', 'utf8')
+  const queue = readFileSync('src/renderer/src/components/DeviceQueueDialog.tsx', 'utf8')
+
+  it('shows both while work is running', () => {
+    // "I want my app back" and "stop touching my board" are different wishes.
+    // A dialog offering only the second makes the first cost the transfer.
+    expect(dlg).toContain('{minimiseLabel && (')
+    expect(dlg).toContain('Cancel')
+  })
+
+  it('only calls it Minimise where it actually minimises', () => {
+    // A folder copy from the Files panel closes for real; the queue minimises.
+    expect(queue).toContain("minimiseLabel={snap.busy ? 'Minimise' : undefined}")
+  })
+
+  it('minimises rather than dismissing while busy', () => {
+    expect(queue).toContain('if (snap.busy) minimiseDeviceQueue()')
+  })
+
+  it('hides on the queue’s own flag, not a local copy', () => {
+    expect(queue).toContain('if (snap.minimised ||')
+  })
+})
+
+describe('the popup can bring the dialog back', () => {
+  const src = readFileSync('src/renderer/src/components/SyncIndicator.tsx', 'utf8')
+
+  it('offers maximise, top-left, only when there is something to restore', () => {
+    expect(src).toContain('{queue.minimised && (')
+    expect(src).toContain('onClick={restoreDeviceQueue}')
+  })
+
+  it('names the control for a screen reader', () => {
+    expect(src).toMatch(/aria-label="Show the copy progress again"/)
+  })
+})
+
+describe('the popup reads clearly (#890)', () => {
+  const css = readFileSync('src/renderer/src/components/SyncIndicator.css', 'utf8')
+  const popup = css.slice(css.indexOf('.syncind__popup {'), css.indexOf('/* --- Stop'))
+
+  it('uses the app’s dark panel and white ink, not the theme surface', () => {
+    // `--bg-elevated` over a status bar that is itself elevated left almost no
+    // separation, and on the skeuomorph skin put near-black 0.72rem type on
+    // brushed metal. A floating readout wants contrast, not continuity.
+    expect(popup).toContain('background: #1f2430')
+    expect(popup).toContain('color: #f4f6f8')
+  })
+
+  it('takes no foreground from the theme inside the popup', () => {
+    expect(popup).not.toContain('var(--text)')
+    expect(popup).not.toContain('var(--text-muted)')
+    expect(popup).not.toContain('var(--danger)')
+  })
+
+  it('keeps the status-bar GLYPH on theme tokens', () => {
+    // The glyph sits IN the status bar, which is a themed surface — it should
+    // match its surroundings, unlike the popup that floats above them.
+    const btn = css.slice(css.indexOf('.syncind__btn--on'), css.indexOf('.syncind__btn--syncing'))
+    expect(btn).toContain('var(--')
+  })
+
+  it('gives each row state its own strong colour', () => {
+    for (const c of ['#e7bf62', '#6fdc9b', '#ff9b8a']) {
+      expect(css, c).toContain(c)
+    }
   })
 })
