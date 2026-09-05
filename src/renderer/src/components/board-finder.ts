@@ -598,35 +598,55 @@ export const RUNTIME_CAVEAT =
   'CircuitPython is marked only where the board id was confirmed — the rest are ' +
   'unconfirmed, not unsupported.'
 
-// --- where the hover preview grows (#938) ------------------------------------
+// --- keeping the hover preview on screen (#938, #940) -----------------------
 
 /** The edges of a box, as `getBoundingClientRect` gives them. */
-export interface Span {
+export interface Box {
   left: number
   right: number
+  top: number
+  bottom: number
 }
 
-/** Which way the preview's extra width goes. */
-export type PeekSide = 'centre' | 'left' | 'right'
+/** How far the preview must move to sit inside the gallery. */
+export interface PeekNudge {
+  dx: number
+  dy: number
+}
+
+/** Breathing room between the preview and the gallery's edge. */
+export const PEEK_INSET_PX = 8
 
 /**
- * Where to put a preview twice the width of the cell it grew from.
+ * How far to slide the preview so all four of its edges stay on screen.
  *
- * Centred is the default and the one that reads as deliberate — the card grows
- * evenly out of the thing you are pointing at. The first and last columns have
- * nowhere to put half a card, so they anchor to their own edge and grow inward.
+ * This REPLACED a guess (#940). The preview used to decide from an estimated
+ * overhang whether to grow up or down, and horizontally whether to centre or
+ * anchor to a column's edge. Every one of those decisions was made before the
+ * card existed, from a constant that had to be kept in step with the card's real
+ * height by hand — and when #938 made the card taller, it was not. A preview on
+ * the SECOND row would flip upward, because there was no room below, and sail
+ * straight off the top of the gallery, because nothing had ever asked whether
+ * there was room above.
  *
- * Measured against the SCROLLER, not the window: the scroller is the box the
- * preview must not hang out of, and the gallery has a margin around it that the
- * window knows nothing about.
+ * So nothing is estimated now. The card is measured where it actually landed and
+ * moved the smallest distance that brings it back inside.
  *
- * Left wins a tie. A viewport too narrow to hold the doubled card at all is the
- * only case where both tests pass, and pinning it to the left edge at least
- * keeps the start of the card — including the photo — on screen.
+ * WHICH EDGE WINS WHEN IT CANNOT FIT AT ALL. Left and top, deliberately, because
+ * the correction that runs second is the one that survives. A card too big for
+ * the gallery has to lose an edge somewhere, and it should be the bottom-right —
+ * the end of a fact list — rather than the top-left, which carries the photo and
+ * the board's name. That is also the reported bug's own rule: the top of the
+ * card must always be visible.
  */
-export function peekSide(cell: Span, view: Span): PeekSide {
-  const grow = (cell.right - cell.left) / 2
-  if (cell.left - grow < view.left) return 'left'
-  if (cell.right + grow > view.right) return 'right'
-  return 'centre'
+export function peekNudge(peek: Box, view: Box, inset = PEEK_INSET_PX): PeekNudge {
+  let dx = 0
+  if (peek.right + inset > view.right) dx = view.right - inset - peek.right
+  if (peek.left + dx - inset < view.left) dx = view.left + inset - peek.left
+
+  let dy = 0
+  if (peek.bottom + inset > view.bottom) dy = view.bottom - inset - peek.bottom
+  if (peek.top + dy - inset < view.top) dy = view.top + inset - peek.top
+
+  return { dx, dy }
 }

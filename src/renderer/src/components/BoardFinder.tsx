@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type JSX
+} from 'react'
 import {
   boardsWithoutRam,
   featureOptions,
@@ -34,7 +43,8 @@ import {
   buildLabel,
   chipSilkscreen,
   firmwareSummary,
-  peekSide,
+  peekNudge,
+  type PeekNudge,
   isFiltering,
   memoryThresholdLabel,
   noPhotoLabel,
@@ -500,15 +510,6 @@ const PEEK_FEATURE_LIMIT = 6
  */
 const PEEK_DELAY_MS = 400
 
-/** Roughly how far the preview grows past the card. Only the flip decision reads
- *  it, and only to choose a direction, so an estimate is the right precision.
- *
- *  It grew with the card (#938): at twice the width the image box is twice as
- *  tall too, which is most of what hangs below the cell. An estimate that had
- *  not moved would flip a row too late and open the preview into the scroller's
- *  bottom edge. */
-const PEEK_OVERHANG_PX = 320
-
 /**
  * One board in the grid, and its hover preview (#919).
  *
@@ -542,13 +543,6 @@ function BoardCell({
   onOpen: () => void
 }): JSX.Element {
   const [peeking, setPeeking] = useState(false)
-  // Grow UPWARD when there is no room below inside the scroller: the bottom row
-  // is otherwise a preview clipped to the two lines that were already visible.
-  const [up, setUp] = useState(false)
-  // And which way the extra WIDTH goes (#938) — centred on the cell unless the
-  // cell is in the first or last column, where half a card would hang outside
-  // the panel.
-  const [side, setSide] = useState<'centre' | 'left' | 'right'>('centre')
   const cell = useRef<HTMLDivElement>(null)
   const timer = useRef<number | null>(null)
 
@@ -566,22 +560,9 @@ function BoardCell({
     []
   )
 
-  const open = useCallback((): void => {
-    const el = cell.current
-    const scroller = el?.closest('.bfind__gallery')
-    if (el && scroller) {
-      const cellBox = el.getBoundingClientRect()
-      const view = scroller.getBoundingClientRect()
-      setUp(view.bottom - cellBox.bottom < PEEK_OVERHANG_PX)
-      // Which way the extra width goes (#938). Centred is the default and the
-      // one that looks deliberate; the columns at either end of the grid have
-      // nowhere to put half a card, so they grow inward from their own edge
-      // instead. Measured against the SCROLLER rather than the window, because
-      // that is the box the preview must not hang out of.
-      setSide(peekSide(cellBox, view))
-    }
-    setPeeking(true)
-  }, [])
+  // Nothing is decided here any more (#940). Where the preview ends up is
+  // measured from the preview itself, once it exists — see {@link BoardPeek}.
+  const open = useCallback((): void => setPeeking(true), [])
 
   const openDetails = useCallback((): void => {
     cancel()
@@ -612,7 +593,7 @@ function BoardCell({
       }}
     >
       <BoardCard board={board} onOpen={openDetails} />
-      {peeking && <BoardPeek board={board} up={up} side={side} onOpen={openDetails} />}
+      {peeking && <BoardPeek board={board} onOpen={openDetails} />}
     </div>
   )
 }
@@ -625,24 +606,41 @@ function BoardCell({
  */
 function BoardPeek({
   board,
-  up,
-  side,
   onOpen
 }: {
   board: IndexedBoard
-  up: boolean
-  /** Which way the extra width goes (#938) — see {@link BoardCell}. */
-  side: 'centre' | 'left' | 'right'
   onOpen: () => void
 }): JSX.Element {
   const src = thumbUrl(board.thumb)
   const facts = peekFacts(board)
   const extra = board.features.length - PEEK_FEATURE_LIMIT
+
+  // Where the card actually landed, and how far it has to move to stay inside
+  // the gallery (#940). A LAYOUT effect, not a plain one: it runs after the DOM
+  // is there to measure and before the browser paints, so the card is never seen
+  // in the wrong place first.
+  const box = useRef<HTMLDivElement>(null)
+  const [nudge, setNudge] = useState<PeekNudge>({ dx: 0, dy: 0 })
+  useLayoutEffect(() => {
+    const el = box.current
+    const view = el?.closest('.bfind__gallery')
+    if (!el || !view) return
+    setNudge(peekNudge(el.getBoundingClientRect(), view.getBoundingClientRect()))
+  }, [board.id])
+
   return (
     <div
-      className={`bfind__peek${up ? ' is-up' : ''}${
-        side === 'centre' ? '' : side === 'left' ? ' is-wide-left' : ' is-wide-right'
-      }`}
+      ref={box}
+      className="bfind__peek"
+      // The one thing that cannot be known until the card is on screen. It rides
+      // in as custom properties so the transform itself — which the open
+      // animation also uses — stays in CSS.
+      style={
+        {
+          '--bf-peek-dx': `${nudge.dx}px`,
+          '--bf-peek-dy': `${nudge.dy}px`
+        } as CSSProperties
+      }
       role="group"
       aria-label={`More about ${board.vendor} ${board.product}`}
       // The preview covers the card it grew out of, so it has to accept the

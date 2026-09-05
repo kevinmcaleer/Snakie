@@ -6,6 +6,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The hover preview can no longer open off the edge of the gallery** (#940).
+  Hovering a board on the second row opened a preview whose top was clipped off
+  the page. The preview decided where to grow *before it existed*: vertically
+  from a hand-maintained guess at how far the card hangs past its cell, and
+  horizontally from which column the cell was in. Both were made worse by #938,
+  which made the card taller than the guess knew — and the upward flip had never
+  asked whether there was room *above*, so on the second row it flipped up
+  because there genuinely was no room below, and sailed off the top.
+
+  Nothing is estimated now. The card is measured where it actually landed and
+  moved the smallest distance that brings all four edges back inside the gallery
+  — before the browser paints, so it is never seen in the wrong place first. The
+  overhang constant and the three placement variants are gone with it: one
+  mechanism that cannot fall out of step with the card's real size, instead of
+  three that could. When a card is too big for the gallery to hold at all, the
+  **top and left** edges are the ones that survive, because that is where the
+  photo and the board's name are.
+
 ### Changed
 
 - **The hover preview is twice as wide, so the photo is worth looking at**
