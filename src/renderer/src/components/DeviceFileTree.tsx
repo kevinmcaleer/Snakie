@@ -7,6 +7,7 @@ import { useWorkspace } from '../store/workspace'
 import { useSync } from '../store/sync'
 import { usageLabel, usedPct, type DiskUsage } from './disk-usage'
 import { ContextMenu, type ContextMenuItem, type ContextMenuPosition } from './ContextMenu'
+import { iconProps, NewFileIcon, NewFolderIcon, RefreshIcon } from './file-tree-icons'
 import { Placeholder } from './Placeholder'
 import { usePrompt } from './PromptModal'
 import {
@@ -44,69 +45,35 @@ import './DeviceFileTree.css'
  */
 
 /**
- * Inline pixel icons matching the retro toolbar style (16×16, crispEdges),
- * mirroring the `LocalFileTree` header actions so the two file panes stay
- * visually consistent (issue #104).
+ * Refresh / New file / New folder are SHARED with the Local panel — see
+ * {@link file://./file-tree-icons.tsx}. They used to be a second, byte-identical
+ * copy here, which is how two toolbars meant to match stop matching (#868).
+ * Only the two device-specific glyphs are drawn below.
  */
-const iconProps = {
-  viewBox: '0 0 16 16',
-  width: 14,
-  height: 14,
-  shapeRendering: 'crispEdges' as const,
-  'aria-hidden': true,
-  focusable: false
-}
 
-// circular arrows (refresh) — re-read the device's root listing
-const RefreshIcon = (): JSX.Element => (
-  <svg {...iconProps}>
-    <g fill="currentColor">
-      <path d="M3 8a5 5 0 0 1 8.5-3.5L13 3v4H9l1.6-1.6A3 3 0 0 0 5 8z" />
-      <path d="M13 8a5 5 0 0 1-8.5 3.5L3 13V9h4l-1.6 1.6A3 3 0 0 0 11 8z" />
-    </g>
-  </svg>
-)
-
-// page with a `+` (new file)
-const NewFileIcon = (): JSX.Element => (
-  <svg {...iconProps}>
-    <g fill="currentColor">
-      <path d="M3 1h6l4 4v10H3z M9 1v4h4" />
-      <rect x="7" y="8" width="2" height="6" />
-      <rect x="5" y="10" width="6" height="2" />
-    </g>
-  </svg>
-)
-
-// folder with a `+` (new folder)
-const NewFolderIcon = (): JSX.Element => (
-  <svg {...iconProps}>
-    <g fill="currentColor">
-      <path d="M1 3h5l2 2h7v9H1z" />
-      <rect x="7" y="8" width="2" height="5" fill="var(--bg-elevated)" />
-      <rect x="5.5" y="9.5" width="5" height="2" fill="var(--bg-elevated)" />
-    </g>
-  </svg>
-)
-
-// two opposing arrows (sync) — push tagged local files to the device (#178)
+// two opposing arrows (sync) — push tagged local files to the device (#178).
+//
+// Drawn inside x/y 3..13, matching Refresh. The original spanned 1..15 — 14
+// units wide against its neighbours' 10 — which made it read as a bigger icon
+// at an identical 14px, reported as such in #868.
 const SyncIcon = (): JSX.Element => (
   <svg {...iconProps}>
     <g fill="currentColor">
-      <path d="M2 5h9V2l4 4-4 4V7H2z" />
-      <path d="M14 11H5v3l-4-4 4-4v3h9z" />
+      <path d="M3 5h7V3l3 3-3 3V7H3z" />
+      <path d="M13 11H6v2l-3-3 3-3v2h7z" />
     </g>
   </svg>
 )
 
-// checkmark — shown briefly when a sync completes (#178)
+// checkmark — shown briefly when a sync completes (#178). Same 3..13 box as the
+// sync arrows it replaces, so the button does not appear to change size.
 const CheckIcon = (): JSX.Element => (
   <svg {...iconProps}>
     <path
-      d="M2 8l4 4 8-9"
+      d="M3 8l3.5 3.5 6.5-7"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2.5"
+      strokeWidth="2.2"
       strokeLinecap="round"
       strokeLinejoin="round"
     />
@@ -719,7 +686,11 @@ export function DeviceFileTree(): JSX.Element {
         </span>
         {/* Icon-only header actions mirroring the local section (issue #104):
             the file-sync toggle (#178), then Refresh, New file, New folder. */}
-        <div className="devicetree__header-actions btn-seg" role="toolbar" aria-label="Device file actions">
+        <div
+          className="devicetree__header-actions btn-seg btn-seg--full"
+          role="toolbar"
+          aria-label="Device file actions"
+        >
           {/* One sync toggle: turning it ON syncs the tagged files now AND keeps
               them auto-syncing on every save; turning it OFF stops auto-syncing.
               The icon turns into a green tick for a moment when a sync completes. */}

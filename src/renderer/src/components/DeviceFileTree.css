@@ -8,17 +8,29 @@
  */
 
 /*
- * Header row (title + Refresh). At narrow panel widths the Refresh button used
- * to be clipped off the right edge (issue #85): allow the row to wrap and let
- * the title shrink so Refresh always stays reachable.
+ * The header is a COLUMN: title, then the file-operations toolbar on its own
+ * full-width row (#868) — the same shape as the Local panel, whose actions have
+ * always sat that way. Before this the device actions were pushed to one end of
+ * the title row by the base rule's `space-between`, so the two panels' toolbars
+ * disagreed about where a file operation lives. Overrides the base
+ * `.devicetree__header` in index.css, which is a centred row.
+ *
+ * This also retires the wrap that #85 added: the buttons had been clipped off
+ * the right edge at narrow panel widths, which cannot happen once they have a
+ * row to themselves.
  */
 .devicetree__header {
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0.35rem;
 }
 
 .devicetree__title {
   min-width: 0;
-  flex: 1 1 auto;
+  /* `0 0 auto`, not `1 1 auto`: the header is a column now, so a growing title
+     would take the space the toolbar sits in. */
+  flex: 0 0 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -29,10 +41,12 @@
  * local section's `.localtree__header-actions` so the two file panes match
  * (issue #104). The shared `.btn.btn--icon` square-button rule lives in
  * `LocalFileTree.css`.
+ *
+ * Full-width segmented group (`.btn-seg btn-seg--full` in index.css, #865/#868)
+ * — it draws the seams between the buttons and centres them itself, so a `gap`
+ * here would open the group's own background up through the middle of the
+ * control, and a `justify-content` would fight the centring.
  */
-/* Segmented group (`.btn-seg` in index.css, #865) — it draws the seams between
-   the buttons itself, so a `gap` here would open the group's background up
-   through the middle of the control. */
 .devicetree__header-actions {
   display: flex;
   align-items: center;

@@ -1870,6 +1870,16 @@ body {
   overflow: hidden;
 }
 
+/* Full-width variant: the group spans its container and centres its buttons, so
+ * a panel's file operations read as one toolbar strip across the panel rather
+ * than a cluster floating at one end (#868). Declared AFTER `.btn-seg` — equal
+ * specificity, so order is what makes `display: flex` win over `inline-flex`. */
+.btn-seg--full {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+}
+
 .btn-seg .btn,
 :root[data-theme='skeuomorph'] .btn-seg .btn {
   border: none;
@@ -2290,12 +2300,15 @@ body {
   color: var(--text-muted);
 }
 
-.devicetree__header .btn {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.78rem;
-  font-weight: 500;
-  flex: 0 0 auto;
-}
+/* The device header holds nothing but icon buttons now (#868), and this rule
+ * only ever fought `.btn.btn--icon` over their padding — a fight it happened to
+ * lose on file order alone, which is not a thing to leave load-bearing when the
+ * complaint being fixed is "one panel's icons look bigger than the other's".
+ * Removed rather than re-specified: the icon-button rule already sizes them,
+ * identically in both panels.
+ *
+ * .devicetree__header .btn { padding: 0.25rem 0.5rem; … }
+ */
 
 .devicetree__tree {
   flex: 1 1 auto;
