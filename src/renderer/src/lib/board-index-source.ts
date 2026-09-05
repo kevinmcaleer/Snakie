@@ -29,12 +29,32 @@ import {
   type BoardIndex
 } from '../../../shared/board-index'
 
-/** Where the bundled seed is served from, in both builds. */
-export const BUNDLED_INDEX_URL = '/boards/boards.json'
+/**
+ * Where the bundled seed is served from, in both builds.
+ *
+ * RELATIVE, and it has to stay relative (#947). The packaged app loads its
+ * renderer with `loadFile`, so the document is a `file://` URL — and an absolute
+ * path under `file://` resolves against the FILESYSTEM ROOT, not the app:
+ *
+ *     '/boards/boards.json'  →  file:///boards/boards.json          ✗
+ *     'boards/boards.json'   →  file:///…/out/renderer/boards/…     ✓
+ *
+ * Shipped absolute in 0.51.0, where it cost the gallery every one of the 225
+ * upstream boards. It failed quietly rather than loudly: `loadBundledIndex`
+ * catches the miss and returns an empty index, so the finder simply showed the
+ * twelve overlay boards — which are compiled into JS and therefore fine — and
+ * looked like a much smaller catalogue rather than a broken one.
+ *
+ * It cannot be caught by running `npm run dev`, which serves from `/`, so
+ * `boardAssetPaths.test.ts` resolves these against a packaged `file://` base
+ * instead of trusting the shape of the string.
+ */
+export const BUNDLED_INDEX_URL = 'boards/boards.json'
 
-/** A board's bundled thumbnail, or null when it has none. */
+/** A board's bundled thumbnail, or null when it has none. Relative, for the
+ *  reason above — every thumbnail was unreachable in the packaged 0.51.0 too. */
 export function thumbUrl(thumb: string | null): string | null {
-  return thumb ? `/boards/thumbs/${thumb}` : null
+  return thumb ? `boards/thumbs/${thumb}` : null
 }
 
 /** Read the seed. Never throws — a broken seed means an empty gallery, not a crash. */

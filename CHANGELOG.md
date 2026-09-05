@@ -6,6 +6,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The packaged app showed twelve boards instead of 237** (#947). 0.51.0's
+  Board Finder listed only the twelve curated overlay boards. Those are compiled
+  into JavaScript; the 225 from upstream live in `boards.json`, fetched at
+  runtime from an *absolute* path — and the packaged app loads its renderer with
+  `loadFile`, so the document is a `file://` URL, where an absolute path resolves
+  against the **filesystem root** rather than the app bundle. The file was
+  packaged correctly all along; it simply could not be reached by that URL. The
+  thumbnails had the same leading slash, so the twelve boards that did show had
+  no photographs either.
+
+  Both are relative now, which resolves correctly under `file://`, under the dev
+  server, and on the web — including a web build served from a subpath, which the
+  absolute form never handled.
+
+  It failed *quietly*: `loadBundledIndex` catches a miss and returns an empty
+  index by design, so the gallery looked small rather than broken. And it could
+  not be seen in `npm run dev`, which serves from `/`. The new test resolves both
+  URLs against a packaged `file://` base and asserts they land inside the
+  renderer directory — reproducing the failure rather than asserting the shape of
+  a string, since the string is only wrong in the one context that ships.
+
 ## [0.51.0] - 2026-09-05
 
 ### Added
