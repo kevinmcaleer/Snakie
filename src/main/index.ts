@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerDeviceIpc, disposeDevice } from './device/ipc'
 import { registerFsIpc } from './fs/ipc'
+import { registerMpyIpc } from './mpy/ipc'
 import { registerPackagesIpc } from './packages/ipc'
 import { registerModulesIpc } from './modules/ipc'
 import { registerBoardsIpc } from './boards/ipc'
@@ -290,6 +291,7 @@ app.whenReady().then(() => {
   // Register the Parts Library + Part Editor layer (#129 / #130): portable,
   // community-authored parts on disk (<userData>/parts/<lib>/<part>/parts.yml)
   // plus the master community registry (fetch + install + update checks).
+  registerMpyIpc()
   registerPartsIpc()
 
   // Register the Robot Definition layer (#128): read/write robot.yml (the

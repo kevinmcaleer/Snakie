@@ -180,6 +180,11 @@ function TreeNode({
   )
 }
 
+/** Only Python compiles — the item does not appear on anything else (#949). */
+function isPy(name: string): boolean {
+  return name.toLowerCase().endsWith('.py')
+}
+
 /** State backing an open context menu: where it is and what it targets. */
 interface MenuState {
   position: ContextMenuPosition
@@ -207,6 +212,25 @@ export function LocalFileTree(): JSX.Element {
     publishSelection(selectedPath ? { path: selectedPath, isDir: selectedIsDir } : null)
   }, [selectedPath, selectedIsDir, publishSelection])
   const [error, setError] = useState<string | null>(null)
+  /** A one-line "that worked" for an action with no other visible result (#949):
+   *  a compiled `.mpy` lands in the tree, but silently. */
+  const [notice, setNotice] = useState<string | null>(null)
+  /** Whether this build ships the MicroPython compiler. False on the web, which
+   *  has no main process to run it in — so the item says why instead of failing
+   *  when pressed. */
+  const [mpyReady, setMpyReady] = useState(false)
+  useEffect(() => {
+    let live = true
+    void window.api.mpy
+      ?.available?.()
+      .then((r) => {
+        if (live) setMpyReady(!!r?.available)
+      })
+      .catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [])
   const [menu, setMenu] = useState<MenuState | null>(null)
 
   // Bumping this tells every EXPANDED subfolder to re-read its children too, so
@@ -272,7 +296,10 @@ export function LocalFileTree(): JSX.Element {
     const fsx = window.api.fs as unknown as { reopenFolderName?: () => Promise<string | null> }
     if (!fsx.reopenFolderName) return
     let live = true
-    void fsx.reopenFolderName().then((n) => live && setReopenName(n)).catch(() => undefined)
+    void fsx
+      .reopenFolderName()
+      .then((n) => live && setReopenName(n))
+      .catch(() => undefined)
     return () => {
       live = false
     }
@@ -407,6 +434,43 @@ export function LocalFileTree(): JSX.Element {
     [connected]
   )
 
+  /**
+   * Compile a `.py` to `.mpy`, beside it (#949).
+   *
+   * The compiler is WebAssembly in the main process, so this only asks. On
+   * success the tree refreshes — the new file is a sibling and would otherwise
+   * not appear until something else prompted a re-read.
+   *
+   * A NOTE ON WHAT THIS DOES NOT DO. MicroPython imports `foo.py` in preference
+   * to `foo.mpy` (`stat_file_py_or_mpy` in `py/builtinimport.c`), so a board
+   * carrying both goes on running the source and the bytecode is dead weight.
+   * Compiling is therefore only half the job; sending the `.mpy` INSTEAD of the
+   * `.py` is the other half, and it is not this menu item's to do — so the
+   * message says what happened and nothing more.
+   */
+  const compileToMpy = useCallback(
+    (entry: FsEntry): void => {
+      if (entry.isDir) return
+      void (async (): Promise<void> => {
+        setError(null)
+        setNotice(null)
+        const res = await window.api.mpy.compile(entry.path).catch((err: unknown) => ({
+          ok: false as const,
+          error: err instanceof Error ? err.message : String(err)
+        }))
+        if (res.ok) {
+          setNotice(`Compiled ${res.path.split(/[/\\]/).pop()} — ${res.bytes} bytes`)
+          void refresh()
+        } else {
+          // mpy-cross's own complaint, which names the line. Anything vaguer
+          // would send the reader back to guess at their own file.
+          setError(res.error)
+        }
+      })()
+    },
+    [refresh]
+  )
+
   const closeMenu = useCallback((): void => setMenu(null), [])
 
   const handleContextMenu = useCallback(
@@ -428,6 +492,14 @@ export function LocalFileTree(): JSX.Element {
       if (target) {
         if (!target.isDir) {
           items.push({ key: 'open', label: 'Open', onSelect: () => handleOpenFile(target.path) })
+          if (isPy(target.name)) {
+            items.push({
+              key: 'compile-mpy',
+              label: mpyReady ? 'Compile to .mpy' : 'Compile to .mpy (unavailable)',
+              disabled: !mpyReady,
+              onSelect: () => compileToMpy(target)
+            })
+          }
           items.push({
             key: 'upload',
             label: connected ? 'Upload to board' : 'Upload to board (not connected)',
@@ -451,9 +523,11 @@ export function LocalFileTree(): JSX.Element {
       return items
     },
     [
+      compileToMpy,
       connected,
       deletePath,
       handleOpenFile,
+      mpyReady,
       isSynced,
       newFileIn,
       newFolderIn,
@@ -563,7 +637,11 @@ export function LocalFileTree(): JSX.Element {
               re-roots to the parent + the current folder name, truncated with an
               ellipsis to fit instead of wrapping the full ancestor path over lines.
               The full path is on the row's hover title. */}
-          <nav className="localtree__breadcrumb" aria-label="Working folder path" title={root ?? undefined}>
+          <nav
+            className="localtree__breadcrumb"
+            aria-label="Working folder path"
+            title={root ?? undefined}
+          >
             {crumbs.length > 1 && (
               <>
                 <button
@@ -585,6 +663,7 @@ export function LocalFileTree(): JSX.Element {
           </nav>
 
           {error && <div className="localtree__error">{error}</div>}
+          {!error && notice && <div className="localtree__notice">{notice}</div>}
 
           <div
             className="localtree__tree"
@@ -612,6 +691,7 @@ export function LocalFileTree(): JSX.Element {
       ) : (
         <div className="localtree__empty">
           {error && <div className="localtree__error">{error}</div>}
+          {!error && notice && <div className="localtree__notice">{notice}</div>}
           {reopenName && (
             <button
               className="btn btn--primary"
