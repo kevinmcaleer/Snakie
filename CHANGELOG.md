@@ -6,6 +6,87 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.55.0] - 2026-09-06
+
+### Added
+
+- **File sizes in both file trees** (#955). Neither the local nor the device tree
+  showed how big a file was, which hid the one case worth seeing: **a 0-byte file
+  looks exactly like a good one**. This repo has met that — a truncated
+  `lsm6dsox.py` on a board threw a `SyntaxError` at line 159 and cost real
+  diagnosis time, which is what #864's atomic writes exist to prevent.
+
+  Sizes read as `0 B`, `847 B`, `2 KB`, `1.4 MB`, `1 TB` — **plain bytes below a
+  kilobyte**, deliberately. The app's other formatter renders a 213-byte file as
+  `0.2 KB` and an empty one as `0 KB`, which is exactly the reading this exists
+  to replace.
+
+  An unknown size shows **nothing**, never `0 B`. A `stat` can fail — a broken
+  symlink, a file deleted between the listing and the stat — and a zero invented
+  there would manufacture the very problem the column was added to reveal.
+  Folders show nothing too: a folder is not an empty file.
+
+  The device tree had the number all along (`os.ilistdir` returns it); it was
+  simply never displayed. The local listing now stats each file, in parallel, and
+  a failure leaves the size absent rather than failing the listing.
+
+- **The status bar keeps a history** (#953). It shows one line at a time and
+  every message wipes the one before it, so anything you were not looking at was
+  simply gone — including the ones that matter afterwards: which file failed to
+  sync, what the compile said, why an install stopped.
+
+  Click the message to see the recent ones; **Show all** opens the full log,
+  where it can be copied to the clipboard, saved as a text file, or cleared.
+  Settings ▸ Editor carries the three questions worth asking: keep a history at
+  all, how many lines, and clear what is there.
+
+  Newest first on screen, **oldest first in the file** — the thing you just
+  missed is the thing you clicked for, while a saved log is read by other tools
+  and by scrolling down, and those want time running forwards.
+
+  Messages are recorded from the `snakie:status` **event** rather than from
+  `showStatus`, so a plugin posting to the bar directly is kept too, and the
+  listener attaches at module load rather than from a component — the panel that
+  reads the history is opened *after* the message you wanted. The cap is a ring
+  buffer, applied to what is already stored as well as to what arrives, so
+  lowering it in Settings takes effect immediately rather than drifting until
+  enough new messages reconcile the two numbers. Turning history off discards
+  what was kept, because a switch that says "don't keep a history" and leaves the
+  old one on disk is not telling the truth.
+
+- **Right-click a `.py` and compile it to `.mpy`** (#949). MicroPython's own
+  `mpy-cross` turns a source file into the bytecode container a board imports
+  without ever seeing the source — smaller, and faster to import. It is now a
+  context-menu item in the Files tree, writing the `.mpy` beside its `.py`, with
+  the compiler's own diagnostics when it fails: `SyntaxError` with the line, not
+  a shrug.
+
+- **We build the compiler ourselves** (#950). The published
+  `@pybricks/mpy-cross-v6` works, but it is pinned to MicroPython **v1.19**
+  because its Makefile lists every `py/*.c` file **by hand** — ~108 of them,
+  where v1.29 has 133. `scripts/build-mpy-cross.sh` has no such list: it points
+  `PROG` at a `.js` and lets MicroPython's own `py.mk` compute the sources, so
+  the build tracks whatever the pinned tag needs and moving to a new MicroPython
+  is one line. A test asserts the compiler is built from the same release the
+  Board Finder offers firmware for, because a compiler older than the firmware
+  we hand people is exactly the drift worth not having.
+
+  It ships as **WebAssembly**: no per-platform binaries, and no third executable
+  to sign and notarize inside the app bundle. It runs in the main process, which
+  keeps 334 KB of `.wasm` out of the renderer and away from the asset-path
+  problem #947 was. And there is no third-party JavaScript in it either — the
+  published package bakes its filesystem wiring into the artifact with
+  `--pre-js`, where ours passes `preRun`/`print`/`printErr`/`onExit` from our own
+  typed code. What ships is `mpy-cross` and nothing else.
+
+  Three things cost real time and are written down where they bit: `emmake`
+  rewrites `CC=gcc` into `emgcc`, which does not exist; modern Emscripten prunes
+  `wasmBinary` from the incoming module API unless it is declared; and the
+  loader must be named **`.cjs`**, because this package is `"type": "module"` and
+  a `.js` is parsed as ESM, so Emscripten's CommonJS export never runs and
+  `require` hands back an empty object — the same trap that makes the preload
+  `index.cjs`.
+
 ### Changed
 
 - **The docs describe the app that ships** (#962). The README announced
@@ -50,8 +131,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the file from disk, as bytes, all-or-nothing. A text buffer still uploads as it
   stands, unsaved edits and all, which is what that control is for.
 
-### Fixed
-
 - **The gold buttons are readable in dark mode** (#956). The active Electronics
   tab, Breadboard, "+ New part", the Help pill and eleven other gold controls
   painted pale text on a pale gold background.
@@ -73,8 +152,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   text. This clears 4.5 on all three surfaces, and the test computes the ratios
   rather than trusting a comment.
 
-### Fixed
-
 - **The app no longer embosses its own text** (#960). `text-shadow: 0 1px 0
   #fff` under dark text on grey, and the dark-above inverse on the dark skin —
   a letterpress effect on 32 rules across buttons, the toolbar, the status bar,
@@ -93,8 +170,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Four `text-shadow: none` overrides went with it — each was unsetting a rule
   that no longer exists, and an override of nothing reads as a deliberate
   exception to someone later.
-
-### Fixed
 
 - **Sending a binary file to the board no longer corrupts it** (#959). Compiling
   a `.mpy` and uploading it produced *"This does not look like a readable .mpy —
@@ -132,56 +207,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   remain safe by refusal: they reject a `.mpy` spec outright rather than writing
   garbage.
 
-### Added
-
-- **File sizes in both file trees** (#955). Neither the local nor the device tree
-  showed how big a file was, which hid the one case worth seeing: **a 0-byte file
-  looks exactly like a good one**. This repo has met that — a truncated
-  `lsm6dsox.py` on a board threw a `SyntaxError` at line 159 and cost real
-  diagnosis time, which is what #864's atomic writes exist to prevent.
-
-  Sizes read as `0 B`, `847 B`, `2 KB`, `1.4 MB`, `1 TB` — **plain bytes below a
-  kilobyte**, deliberately. The app's other formatter renders a 213-byte file as
-  `0.2 KB` and an empty one as `0 KB`, which is exactly the reading this exists
-  to replace.
-
-  An unknown size shows **nothing**, never `0 B`. A `stat` can fail — a broken
-  symlink, a file deleted between the listing and the stat — and a zero invented
-  there would manufacture the very problem the column was added to reveal.
-  Folders show nothing too: a folder is not an empty file.
-
-  The device tree had the number all along (`os.ilistdir` returns it); it was
-  simply never displayed. The local listing now stats each file, in parallel, and
-  a failure leaves the size absent rather than failing the listing.
-
-### Added
-
-- **The status bar keeps a history** (#953). It shows one line at a time and
-  every message wipes the one before it, so anything you were not looking at was
-  simply gone — including the ones that matter afterwards: which file failed to
-  sync, what the compile said, why an install stopped.
-
-  Click the message to see the recent ones; **Show all** opens the full log,
-  where it can be copied to the clipboard, saved as a text file, or cleared.
-  Settings ▸ Editor carries the three questions worth asking: keep a history at
-  all, how many lines, and clear what is there.
-
-  Newest first on screen, **oldest first in the file** — the thing you just
-  missed is the thing you clicked for, while a saved log is read by other tools
-  and by scrolling down, and those want time running forwards.
-
-  Messages are recorded from the `snakie:status` **event** rather than from
-  `showStatus`, so a plugin posting to the bar directly is kept too, and the
-  listener attaches at module load rather than from a component — the panel that
-  reads the history is opened *after* the message you wanted. The cap is a ring
-  buffer, applied to what is already stored as well as to what arrives, so
-  lowering it in Settings takes effect immediately rather than drifting until
-  enough new messages reconcile the two numbers. Turning history off discards
-  what was kept, because a switch that says "don't keep a history" and leaves the
-  old one on disk is not telling the truth.
-
-### Fixed
-
 - **"Compiled foo.mpy" no longer sticks in the Files panel** (#952). #949's
   success message was rendered inside the Files panel and stayed there until
   something else replaced it. It goes to the status bar now, where syncing
@@ -194,41 +219,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   of them moved to it. The timer is deliberately **shared** — there is one slot,
   so a newer message must cancel the older one's countdown, or the first
   message's clear wipes the second off the screen partway through.
-
-### Added
-
-- **Right-click a `.py` and compile it to `.mpy`** (#949). MicroPython's own
-  `mpy-cross` turns a source file into the bytecode container a board imports
-  without ever seeing the source — smaller, and faster to import. It is now a
-  context-menu item in the Files tree, writing the `.mpy` beside its `.py`, with
-  the compiler's own diagnostics when it fails: `SyntaxError` with the line, not
-  a shrug.
-
-- **We build the compiler ourselves** (#950). The published
-  `@pybricks/mpy-cross-v6` works, but it is pinned to MicroPython **v1.19**
-  because its Makefile lists every `py/*.c` file **by hand** — ~108 of them,
-  where v1.29 has 133. `scripts/build-mpy-cross.sh` has no such list: it points
-  `PROG` at a `.js` and lets MicroPython's own `py.mk` compute the sources, so
-  the build tracks whatever the pinned tag needs and moving to a new MicroPython
-  is one line. A test asserts the compiler is built from the same release the
-  Board Finder offers firmware for, because a compiler older than the firmware
-  we hand people is exactly the drift worth not having.
-
-  It ships as **WebAssembly**: no per-platform binaries, and no third executable
-  to sign and notarize inside the app bundle. It runs in the main process, which
-  keeps 334 KB of `.wasm` out of the renderer and away from the asset-path
-  problem #947 was. And there is no third-party JavaScript in it either — the
-  published package bakes its filesystem wiring into the artifact with
-  `--pre-js`, where ours passes `preRun`/`print`/`printErr`/`onExit` from our own
-  typed code. What ships is `mpy-cross` and nothing else.
-
-  Three things cost real time and are written down where they bit: `emmake`
-  rewrites `CC=gcc` into `emgcc`, which does not exist; modern Emscripten prunes
-  `wasmBinary` from the incoming module API unless it is declared; and the
-  loader must be named **`.cjs`**, because this package is `"type": "module"` and
-  a `.js` is parsed as ESM, so Emscripten's CommonJS export never runs and
-  `require` hands back an empty object — the same trap that makes the preload
-  `index.cjs`.
 
 ## [0.51.1] - 2026-09-05
 
@@ -6201,7 +6191,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.51.1...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.55.0...HEAD
+[0.55.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.51.1...v0.55.0
 [0.51.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.51.0...v0.51.1
 [0.51.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.46.0...v0.51.0
 [0.46.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.44.0...v0.46.0
