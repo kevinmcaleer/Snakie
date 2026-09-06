@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { UpdateStatus } from '../../../preload/index.d'
 import { friendlyUpdateError, RELEASES_URL } from './updateButton'
+import { setUnsavedWorkProbe } from '../lib/unsaved-work'
+import { useWorkspaceOptional } from '../store/workspace'
 import './UpdateNotifier.css'
 
 /**
@@ -20,9 +22,20 @@ import './UpdateNotifier.css'
  * Nothing renders until a status arrives, so in development / unpackaged runs
  * (where the main process never pushes a status) the banner stays hidden.
  */
+/** The browser build applies an update by reloading, not by relaunching (#971). */
+const isWeb = !!import.meta.env.VITE_SNAKIE_WEB
+
 export function UpdateNotifier(): JSX.Element | null {
   const [status, setStatus] = useState<UpdateStatus | null>(null)
   const [dismissed, setDismissed] = useState(false)
+  const workspace = useWorkspaceOptional()
+
+  // Tell the web updater whether a reload would cost the user anything (#971).
+  // Only the web build reloads itself, but registering unconditionally keeps the
+  // seam honest and costs a closure. `openFiles` is a new array on every store
+  // change, so the probe is always reading current state.
+  const openFiles = workspace?.openFiles
+  useEffect(() => setUnsavedWorkProbe(() => !!openFiles?.some((f) => f.dirty)), [openFiles])
 
   useEffect(() => {
     const unsubscribe = window.api.updates.onStatus((next) => {
@@ -67,9 +80,18 @@ export function UpdateNotifier(): JSX.Element | null {
           : 'Downloading update…'
       break
     case 'downloaded':
-      message = status.version
-        ? `Update ready (v${status.version}) — restart to update`
-        : 'Update ready — restart to update'
+      // Same lifecycle state, two different acts. The desktop app relaunches into
+      // a downloaded installer; the web build has nothing to install — the new
+      // code is already served and precached, and applying it is a reload. Saying
+      // "restart" in a browser tab would send the reader looking for a menu item
+      // that isn't there (#971).
+      message = isWeb
+        ? status.version
+          ? `New version available (v${status.version}) — reload to update`
+          : 'New version available — reload to update'
+        : status.version
+          ? `Update ready (v${status.version}) — restart to update`
+          : 'Update ready — restart to update'
       action = (
         <button
           type="button"
@@ -78,7 +100,7 @@ export function UpdateNotifier(): JSX.Element | null {
             void window.api.updates.quitAndInstall()
           }}
         >
-          Restart
+          {isWeb ? 'Reload' : 'Restart'}
         </button>
       )
       break
