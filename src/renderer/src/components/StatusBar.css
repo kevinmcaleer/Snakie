@@ -76,6 +76,22 @@
   text-overflow: ellipsis;
 }
 
+/* The message slot is a BUTTON since #953 — it opens the history — so it sheds
+   the browser's button chrome and keeps the bar's own type and colour. The hover
+   is the only new affordance: something here is now clickable, and nothing else
+   on the bar would say so. */
+.statusbar__plugin--history {
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.statusbar__plugin--history:hover,
+.statusbar__plugin--history:focus-visible {
+  background: var(--bg-sunken);
+}
+
 /* Discovery tip (#434) — a 💡 hint filling the otherwise-empty message area.
  * Fades in/out over ~1s (opacity transition; TIP_FADE_MS in status-tips.ts
  * must match) so rotation is gentle rather than blinky. Linked tips read as

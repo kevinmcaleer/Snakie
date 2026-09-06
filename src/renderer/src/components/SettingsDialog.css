@@ -204,3 +204,52 @@
   color: var(--text-muted);
   text-align: right;
 }
+
+/* --- Status history (#953) ------------------------------------------------
+ * Three controls that no other section needed: a labelled number field and a
+ * destructive button. Their own `settings-shist__` names rather than generic
+ * ones, so a later section adding a "settings-number" cannot restyle these by
+ * accident.
+ * ---------------------------------------------------------------------- */
+
+.settings-shist__label {
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+.settings-shist__number {
+  width: 6rem;
+  padding: 0.2rem 0.4rem;
+  background: var(--bg-sunken);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 0.8rem;
+  /* The value is a count; digits should line up if it ever sits in a column. */
+  font-variant-numeric: tabular-nums;
+}
+.settings-shist__number:disabled {
+  opacity: 0.5;
+}
+
+.settings-shist__clear {
+  align-self: flex-start;
+  margin-top: 0.4rem;
+  padding: 0.25rem 0.7rem;
+  background: var(--bg-sunken);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.settings-shist__clear:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.settings-shist__clear:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
