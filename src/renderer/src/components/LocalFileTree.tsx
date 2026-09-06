@@ -4,6 +4,7 @@ import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace, FILE_SAVED_EVENT, type FileSavedDetail } from '../store/workspace'
 import { forgetTagsPrompt, useSync } from '../store/sync'
 import { useFileSelection } from '../store/file-selection'
+import { rowSize } from '../../../shared/file-size'
 import { showStatus } from '../lib/status-bar'
 import { ContextMenu, type ContextMenuItem, type ContextMenuPosition } from './ContextMenu'
 import { usePrompt } from './PromptModal'
@@ -128,6 +129,10 @@ function TreeNode({
           {entry.isDir ? (expanded ? '▼' : '▶') : '▤'}
         </span>
         <span className="tree-row__name">{entry.name}</span>
+        {/* The size, right-aligned (#955). Absent for folders, and absent when
+            the stat failed — never a fabricated `0 B`, which is the one reading
+            this column exists to make trustworthy. */}
+        {rowSize(entry) && <span className="tree-row__size">{rowSize(entry)}</span>}
         {/* Folders are taggable too (#848) — a whole folder is the unit people
             actually keep in sync, and tagging its files one by one both misses
             new files and is tedious. A tagged folder is pushed into whichever
