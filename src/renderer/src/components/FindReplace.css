@@ -283,14 +283,12 @@
   font-family: 'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif;
   font-weight: 600;
   color: #5a5e66;
-  text-shadow: 0 1px 0 #fff;
 }
 
 :root[data-theme='skeuomorph'] .find-replace__close {
   background: linear-gradient(180deg, #fbfbfd, #cdd1d8);
   border: 1px solid #9498a1;
   color: #5a5e66;
-  text-shadow: 0 1px 0 #fff;
   box-shadow:
     inset 0 1px 0 #fff,
     0 1px 2px rgba(0, 0, 0, 0.22);
@@ -319,7 +317,6 @@
   background: linear-gradient(180deg, #fbfbfd, #cdd1d8);
   border: 1px solid #9498a1;
   color: #4a4e56;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
   box-shadow:
     inset 0 1px 0 #fff,
     0 1px 2px rgba(0, 0, 0, 0.22);
@@ -342,7 +339,6 @@
   background: linear-gradient(180deg, #9fb6cf, #c2d2e2);
   border-color: #6e87a3;
   color: #1d3a5b;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.35);
 }
 
@@ -351,7 +347,6 @@
   background: linear-gradient(180deg, #f3d488, #d6a23f 55%, #bd8526);
   border: 1px solid #9a6b1e;
   color: #4a3410;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.6),
     0 1px 2px rgba(0, 0, 0, 0.3);
@@ -365,7 +360,6 @@
 :root[data-theme='skeuomorph'] .find-replace__option,
 :root[data-theme='skeuomorph'] .find-replace__status {
   color: #5a5e66;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 :root[data-theme='skeuomorph'] .find-replace__count--empty {

@@ -8,6 +8,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The app no longer embosses its own text** (#960). `text-shadow: 0 1px 0
+  #fff` under dark text on grey, and the dark-above inverse on the dark skin —
+  a letterpress effect on 32 rules across buttons, the toolbar, the status bar,
+  panel headers, the activity bar, Find & Replace and the plugin rack. At body
+  size it reads as a blur: every glyph carries a white ghost a pixel below it,
+  which is the opposite of what a shadow is meant to do for contrast.
+
+  **The instrument glows stay.** Forty-one rules use `0 0 6px` in the accent on
+  LED readouts, meters and scope traces — that is those panels' whole look, and
+  nobody is reading a paragraph through it. The distinction drawn is between a
+  shadow *offset under* a glyph and a halo *around* one, which is exactly the
+  difference between the effect that hurt and the effect that was wanted. A test
+  guards it in both directions, so neither the letterpress returns nor a later
+  sweep strips the instruments.
+
+  Four `text-shadow: none` overrides went with it — each was unsetting a rule
+  that no longer exists, and an override of nothing reads as a deliberate
+  exception to someone later.
+
+### Fixed
+
 - **Sending a binary file to the board no longer corrupts it** (#959). Compiling
   a `.mpy` and uploading it produced *"This does not look like a readable .mpy —
   the file is truncated."* The viewer was right: the file on the board really was

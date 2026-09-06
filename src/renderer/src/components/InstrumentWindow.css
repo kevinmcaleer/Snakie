@@ -323,7 +323,6 @@
   letter-spacing: 0.18em;
   /* Lightened from #4a4f57 for contrast on the dark dock (see __title). */
   color: #868c96;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
 }
 /* The icon-only toggles wrap so 13+ instruments stay readable in the narrow dock. */
 .instr-dock__group-row {
