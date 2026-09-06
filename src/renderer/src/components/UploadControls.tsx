@@ -4,7 +4,8 @@ import { IS_WEB } from '../lib/env'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { usePrompt } from './PromptModal'
 import { useFileSelection } from '../store/file-selection'
-import { planUploadOf, runFolderUpload } from '../lib/folder-transfer'
+import { deviceAtomicOps, planUploadOf, runFolderUpload } from '../lib/folder-transfer'
+import { writeAtomically } from '../../../shared/atomic-write'
 import { enqueueDeviceTask } from '../lib/device-queue'
 import { hostBaseName } from '../../../shared/transfer-plan'
 import './UploadControls.css'
@@ -175,7 +176,22 @@ export function UploadControls(): JSX.Element {
       await enqueueDeviceTask({
         key: `write:${dest}`,
         label: `Uploading ${activeFile.name} → ${dest}`,
-        run: () => window.api.device.writeFile(dest, activeFile.content)
+        run: async () => {
+          // A BINARY buffer holds no text — a `.mpy` opens empty on purpose
+          // (#875/#964) — so uploading `content` put a 0-byte file on the board.
+          // Send the file itself instead, as bytes and all-or-nothing, the way
+          // every other copy to the board goes (#959).
+          if (activeFile.binary && activeFile.source === 'local' && activeFile.path) {
+            const bytes = await window.api.fs.readFileBytes(activeFile.path)
+            await writeAtomically(deviceAtomicOps, dest, bytes.length, (tmp) =>
+              window.api.device.writeFileBytes(tmp, bytes)
+            )
+            return
+          }
+          // A text buffer is uploaded as it stands, INCLUDING unsaved edits —
+          // that is the point of this control, and it has always worked that way.
+          await window.api.device.writeFile(dest, activeFile.content)
+        }
       })
       setFeedback({
         kind: 'success',

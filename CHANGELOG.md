@@ -8,6 +8,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Copying a `.mpy` to the board no longer produces a 0-byte file — and ⌘S no
+  longer destroys it** (#964). A `.mpy` opens with no text on purpose: it is
+  bytecode, reading it as UTF-8 would mangle it, and the Bytecode view fetches
+  the real bytes itself (#875). The empty string in the buffer is a placeholder,
+  not the file.
+
+  Three writers treated it as the file. Uploading wrote it to the board, giving
+  the reported 0-byte file. And `saveFile` — which has **no dirty check**, so it
+  writes whether or not anything changed — wrote it back over the `.mpy` **on
+  disk**. #915 made that far easier to reach by moving ⌘S out of the editor onto
+  the menu, where it fires with a Bytecode tab focused: compile with #949, glance
+  at the bytecode, press ⌘S out of habit, and the file was gone.
+
+  The open file now says its buffer is not the file, and the writers respect it —
+  one fact on the file rather than three writers each re-deriving it from the
+  extension, because the writer that forgets to re-derive it is the one that
+  deletes somebody's work. Saving such a file does nothing; uploading it sends
+  the file from disk, as bytes, all-or-nothing. A text buffer still uploads as it
+  stands, unsaved edits and all, which is what that control is for.
+
+### Fixed
+
 - **The gold buttons are readable in dark mode** (#956). The active Electronics
   tab, Breadboard, "+ New part", the Help pill and eleven other gold controls
   painted pale text on a pale gold background.
