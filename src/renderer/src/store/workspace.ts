@@ -149,6 +149,21 @@ export interface OpenFile {
   content: string
   /** True when the buffer has unsaved edits. */
   dirty: boolean
+  /**
+   * The buffer does NOT hold this file's content (#964).
+   *
+   * A `.mpy` opens with no text on purpose: it is bytecode, reading it as UTF-8
+   * would mangle it, and the Bytecode view fetches the real bytes itself (#875).
+   * The empty string in `content` is therefore a placeholder, not the file — and
+   * anything that writes `content` back would replace the file with nothing.
+   *
+   * Three writers did. Uploading gave a 0-byte file on the board, and ⌘S — which
+   * #915 made work outside the editor — destroyed the `.mpy` on disk. So the
+   * fact lives on the file itself rather than being re-derived from the
+   * extension by each writer, because the writer that forgets to re-derive it is
+   * the one that deletes somebody's work.
+   */
+  binary?: boolean
 }
 
 /**
@@ -369,7 +384,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
         : await window.api.device.readFile(path)
     dispatch({
       type: 'open',
-      file: { id, source, path, name: baseName(path), content, dirty: false }
+      file: {
+        id,
+        source,
+        path,
+        name: baseName(path),
+        content,
+        dirty: false,
+        binary: isMpyFile(path)
+      }
     })
   }, [])
 
@@ -395,6 +418,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
     async (id: string): Promise<void> => {
       const file = state.openFiles.find((f) => f.id === id)
       if (!file) return
+      // Nothing to save, and saving would DESTROY it (#964): the buffer is a
+      // placeholder, so writing it back replaces the file with nothing. There is
+      // no dirty check above this — `saveFile` writes whether or not anything
+      // changed — so this is the only thing standing between ⌘S on a Bytecode
+      // tab and an empty file.
+      if (file.binary) return
       if (file.source === 'local' && !file.path) {
         // Untitled local buffer: "Save As" — pick a destination, write it, and
         // promote the buffer to a real saved file (path/name updated, dirty
