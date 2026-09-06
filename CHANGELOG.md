@@ -6,6 +6,37 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **macOS releases no longer fail at random** (#968). Signing died with
+  `security set-key-partition-list … SecKeychainUnlock: The user name or passphrase
+  you entered is not correct` — v0.51.1 and v0.55.0 each needed three attempts.
+  It is a defect in electron-builder's own keychain setup: `importCerts` passes the
+  **.p12's** password to `set-key-partition-list -k`, which wants the **keychain's**.
+  `security` only consults `-k` when it has to unlock the keychain, so the wrong
+  password is invisible while the keychain happens to still be unlocked and fatal
+  once anything has relocked it — a latent bug that shows up as a coin toss.
+
+  `release.yml` now builds and unlocks the signing keychain itself, imports the
+  certificate with the right password in each place, asserts the identity landed,
+  and hands electron-builder the keychain via `CSC_KEYCHAIN`. With `CSC_LINK`
+  absent, electron-builder skips its own keychain code entirely, so the broken path
+  is never taken. Unsigned builds (a fork, secrets unset) are unaffected — the step
+  is a no-op without a certificate. Background in `docs/macos-signing.md`.
+
+  Failures here were also **silent**: the tag pushed, master claimed a release, and
+  no release existed. The identity check now fails in seconds with a clear message
+  rather than twenty minutes in.
+
+- **The Cancel button is readable in the Simulated device memory dialog** (#969).
+  It was near-white at rest and pure white on hover, over the dialog's light card.
+  `ConnectionControl` renders the dialog inline, so it is a DOM descendant of
+  `.conn-control` — and the shell header's chip rules, whose colours are chosen for
+  a dark green bar, reached it through a descendant combinator and painted a modal
+  button as if it sat on the header. Every real header control is a direct child, so
+  those rules are now scoped with `>`; the header is unchanged. The Save button had
+  quietly been picking up the header's green gradient for the same reason.
+
 ## [0.55.0] - 2026-09-06
 
 ### Added

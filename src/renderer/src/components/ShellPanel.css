@@ -117,27 +117,38 @@
 }
 
 /* Clear + the connect/disconnect + device dropdown — subtle green chips on the
-   green header (no alarming red). */
+   green header (no alarming red).
+
+   DIRECT CHILDREN ONLY (`>`), deliberately. These colours are chosen for the
+   dark green header bar: near-white text on a translucent white fill. But
+   `.conn-control` also hosts the Simulated-device memory dialog
+   (ConnectionControl.tsx renders <SimMemoryDialog> as a sibling of the header
+   controls, not through a portal), and a modal's buttons are plain
+   `.btn--ghost` / `.btn--primary` too. With a descendant combinator these rules
+   reached into that dialog and painted its Cancel button #eafff2 — then #fff on
+   hover — over the dialog's parchment card, i.e. invisible (#969). Every real
+   header control is a direct child of `.conn-control`, so `>` keeps the header
+   identical and stops the bleed. */
 .region--shell .shell-actions__clear,
-.region--shell .conn-control .btn--ghost,
+.region--shell .conn-control > .btn--ghost,
 .region--shell .conn-control__select {
   color: #eafff2;
   background: rgba(255, 255, 255, 0.14);
   border-color: rgba(255, 255, 255, 0.24);
 }
 .region--shell .shell-actions__clear:hover,
-.region--shell .conn-control .btn--ghost:hover {
+.region--shell .conn-control > .btn--ghost:hover {
   background: rgba(255, 255, 255, 0.22);
   color: #fff;
 }
-.region--shell .conn-control .btn--danger,
-.region--shell .conn-control .btn--primary {
+.region--shell .conn-control > .btn--danger,
+.region--shell .conn-control > .btn--primary {
   background: linear-gradient(180deg, #3fa06a, #2c7d4e);
   border-color: rgba(0, 0, 0, 0.22);
   color: #fff;
 }
-.region--shell .conn-control .btn--danger:hover,
-.region--shell .conn-control .btn--primary:hover {
+.region--shell .conn-control > .btn--danger:hover,
+.region--shell .conn-control > .btn--primary:hover {
   background: linear-gradient(180deg, #46ac73, #327f52);
 }
 
