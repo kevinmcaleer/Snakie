@@ -4,6 +4,7 @@ import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace, FILE_SAVED_EVENT, type FileSavedDetail } from '../store/workspace'
 import { forgetTagsPrompt, useSync } from '../store/sync'
 import { useFileSelection } from '../store/file-selection'
+import { showStatus } from '../lib/status-bar'
 import { ContextMenu, type ContextMenuItem, type ContextMenuPosition } from './ContextMenu'
 import { usePrompt } from './PromptModal'
 import { iconProps, NewFileIcon, NewFolderIcon, RefreshIcon } from './file-tree-icons'
@@ -212,9 +213,6 @@ export function LocalFileTree(): JSX.Element {
     publishSelection(selectedPath ? { path: selectedPath, isDir: selectedIsDir } : null)
   }, [selectedPath, selectedIsDir, publishSelection])
   const [error, setError] = useState<string | null>(null)
-  /** A one-line "that worked" for an action with no other visible result (#949):
-   *  a compiled `.mpy` lands in the tree, but silently. */
-  const [notice, setNotice] = useState<string | null>(null)
   /** Whether this build ships the MicroPython compiler. False on the web, which
    *  has no main process to run it in — so the item says why instead of failing
    *  when pressed. */
@@ -453,13 +451,20 @@ export function LocalFileTree(): JSX.Element {
       if (entry.isDir) return
       void (async (): Promise<void> => {
         setError(null)
-        setNotice(null)
         const res = await window.api.mpy.compile(entry.path).catch((err: unknown) => ({
           ok: false as const,
           error: err instanceof Error ? err.message : String(err)
         }))
         if (res.ok) {
-          setNotice(`Compiled ${res.path.split(/[/\\]/).pop()} — ${res.bytes} bytes`)
+          // The STATUS BAR, not this panel (#952): a compile is a momentary
+          // action whose only lasting trace is the new file in the tree, and the
+          // bar is where syncing already reports itself, so the two read as the
+          // same kind of event. It also goes away on its own — the in-panel
+          // version sat there until something else replaced it.
+          showStatus(`Compiled ${res.path.split(/[/\\]/).pop()} — ${res.bytes} bytes`, {
+            priority: 4,
+            clearAfterMs: 6000
+          })
           void refresh()
         } else {
           // mpy-cross's own complaint, which names the line. Anything vaguer
@@ -663,7 +668,6 @@ export function LocalFileTree(): JSX.Element {
           </nav>
 
           {error && <div className="localtree__error">{error}</div>}
-          {!error && notice && <div className="localtree__notice">{notice}</div>}
 
           <div
             className="localtree__tree"
@@ -691,7 +695,6 @@ export function LocalFileTree(): JSX.Element {
       ) : (
         <div className="localtree__empty">
           {error && <div className="localtree__error">{error}</div>}
-          {!error && notice && <div className="localtree__notice">{notice}</div>}
           {reopenName && (
             <button
               className="btn btn--primary"

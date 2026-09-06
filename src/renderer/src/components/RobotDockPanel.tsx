@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { showStatus } from '../lib/status-bar'
+import { useEffect, useState } from 'react'
 import { RobotView } from './RobotView'
 import { SyncControl } from './SyncControl'
 import { dirname } from './robot-mesh'
@@ -47,25 +48,11 @@ export function RobotDockPanel({
   // Bumped when another window rewrites the .urdf on disk (#716).
   const [urdfNonce, setUrdfNonce] = useState(0)
 
-  // Show a transient message in the status bar so linking/creating a robot — which
-  // is otherwise invisible — is clear to the user. Auto-clears after a few seconds
-  // (the shared `snakie:status` seam is sticky, so the caller schedules the clear).
-  const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const notify = (text: string): void => {
-    window.dispatchEvent(new CustomEvent('snakie:status', { detail: { text, priority: 4 } }))
-    if (statusTimer.current) clearTimeout(statusTimer.current)
-    statusTimer.current = setTimeout(
-      () => window.dispatchEvent(new CustomEvent('snakie:status', { detail: { text: '' } })),
-      4000
-    )
-  }
-  useEffect(
-    () => () => {
-      if (statusTimer.current != null) clearTimeout(statusTimer.current)
-    },
-    []
-  )
-
+  // Show a transient message in the status bar so linking/creating a robot —
+  // otherwise invisible — is clear to the user. The scheduling lives in
+  // `showStatus` since #952; the slot is sticky, and three copies of that dance
+  // is how three of them end up disagreeing about how long a message lives.
+  const notify = (text: string): void => showStatus(text, { priority: 4, clearAfterMs: 4000 })
   useEffect(() => {
     let live = true
     void (async () => {
@@ -111,12 +98,19 @@ export function RobotDockPanel({
     setFocus(true)
   }
 
-  const nameOf = (p: string): string => p.replace(/[/\\]+$/, '').split(/[/\\]/).pop() ?? p
+  const nameOf = (p: string): string =>
+    p
+      .replace(/[/\\]+$/, '')
+      .split(/[/\\]/)
+      .pop() ?? p
   // Forward slashes, no trailing slash, and a lower-cased Windows drive letter (the
   // file dialog can return `C:\…` while the remembered folder is `c:\…`, which would
   // otherwise defeat the prefix test and silently skip linking).
   const normSlash = (p: string): string =>
-    p.replace(/\\/g, '/').replace(/\/$/, '').replace(/^([a-zA-Z]):/, (_m, d) => `${d.toLowerCase()}:`)
+    p
+      .replace(/\\/g, '/')
+      .replace(/\/$/, '')
+      .replace(/^([a-zA-Z]):/, (_m, d) => `${d.toLowerCase()}:`)
   // The path of `p` relative to project folder `dir`, or null when it's outside it.
   const relInside = (p: string, dir: string): string | null => {
     const np = normSlash(p)
@@ -309,32 +303,34 @@ export function RobotDockPanel({
       )}
       {/* Full-screen in Build: the full pose tool is the single control, so hide
           this row. */}
-      {!embedded && !full && <div className="robotdock__actions">
-        <button
-          type="button"
-          className={`robotdock__btn${hasProjectRobot ? '' : ' robotdock__btn--cta'}`}
-          title="Create a new blank robot (.urdf) and open it in the pose tool"
-          onClick={() => void newRobot()}
-        >
-          ＋ New robot
-        </button>
-        <button
-          type="button"
-          className="robotdock__btn"
-          title="Open an existing robot (.urdf) full-screen"
-          onClick={() => void openRobot()}
-        >
-          <FolderOpenIcon size={13} /> Open…
-        </button>
-        <button
-          type="button"
-          className="robotdock__btn"
-          title="Pop out full-screen (pose tool + assembly)"
-          onClick={popOut}
-        >
-          ⤢ Pop out
-        </button>
-      </div>}
+      {!embedded && !full && (
+        <div className="robotdock__actions">
+          <button
+            type="button"
+            className={`robotdock__btn${hasProjectRobot ? '' : ' robotdock__btn--cta'}`}
+            title="Create a new blank robot (.urdf) and open it in the pose tool"
+            onClick={() => void newRobot()}
+          >
+            ＋ New robot
+          </button>
+          <button
+            type="button"
+            className="robotdock__btn"
+            title="Open an existing robot (.urdf) full-screen"
+            onClick={() => void openRobot()}
+          >
+            <FolderOpenIcon size={13} /> Open…
+          </button>
+          <button
+            type="button"
+            className="robotdock__btn"
+            title="Pop out full-screen (pose tool + assembly)"
+            onClick={popOut}
+          >
+            ⤢ Pop out
+          </button>
+        </div>
+      )}
     </div>
   )
 }

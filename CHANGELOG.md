@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **"Compiled foo.mpy" no longer sticks in the Files panel** (#952). #949's
+  success message was rendered inside the Files panel and stayed there until
+  something else replaced it. It goes to the status bar now, where syncing
+  already reports itself, and clears itself after a few seconds — a compile is a
+  momentary action whose only lasting trace is the new file in the tree.
+
+  The status bar's slot is *sticky*: whoever posts a message schedules its
+  removal. Two callers had already written that dance by hand with their own
+  timers, and this would have been the third, so it is one helper now and both
+  of them moved to it. The timer is deliberately **shared** — there is one slot,
+  so a newer message must cancel the older one's countdown, or the first
+  message's clear wipes the second off the screen partway through.
+
 ### Added
 
 - **Right-click a `.py` and compile it to `.mpy`** (#949). MicroPython's own
