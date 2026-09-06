@@ -383,7 +383,7 @@
   font-family: var(--font-ui), sans-serif;
   font-size: 0.74rem;
   font-weight: 600;
-  color: var(--goldink, #fff);
+  color: var(--ongold);
   background: var(--grad-gold, #2f6b2a);
   border: none;
   border-radius: var(--radius);

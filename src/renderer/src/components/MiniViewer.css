@@ -44,7 +44,7 @@
 }
 .miniviewer__seg-btn.is-active {
   background: var(--grad-gold, var(--accent));
-  color: var(--goldink, var(--accent-contrast));
+  color: var(--ongold);
   font-weight: 700;
 }
 
