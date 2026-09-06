@@ -256,6 +256,31 @@ export function createWebDeviceApi(): Record<string, unknown> {
         )
       ).trim(),
 
+    /**
+     * The byte channel for the SIMULATOR (#959).
+     *
+     * `writeFile` below already hex-encodes and opens `'wb'`, so it was always
+     * byte-exact for whatever it was handed — it just insisted on being handed a
+     * string, and encoding one is where a binary file was lost. This is the same
+     * write with the encode step removed.
+     */
+    writeFileBytes: async (path: string, bytes: Uint8Array) => {
+      const hex = Array.from(bytes)
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('')
+      const code = scratchBlock(
+        [
+          mkParents(path),
+          `_snk_d=bytes.fromhex(${pyStr(hex)})`,
+          `with open(${pyStr(path)},'wb') as _snk_f:`,
+          '    _snk_f.write(_snk_d)'
+        ].filter(Boolean),
+        '_snk_d',
+        '_snk_f'
+      )
+      await capture(code)
+    },
+
     writeFile: async (path: string, contents: string) => {
       const hex = Array.from(enc.encode(contents))
         .map((b) => b.toString(16).padStart(2, '0'))

@@ -42,9 +42,15 @@
  *
  * Deliberately NOT covered (see the module docs / issue #776):
  *   - `.mpy` bytecode installs. `mip` picks a `.mpy` variant when the board's
- *     bytecode version is known; we only ever install SOURCE `.py`, because
- *     Snakie ships no mpy-cross and a `.mpy` fetched as text would corrupt.
- *     A spec that names a `.mpy` fails loudly rather than writing garbage.
+ *     bytecode version is known; we only ever install SOURCE `.py`. A spec that
+ *     names a `.mpy` fails loudly rather than writing garbage, because this
+ *     route fetches with `res.text()` and a `.mpy` read as text is corrupt.
+ *
+ *     Two of the reasons for that have since gone: Snakie ships mpy-cross now
+ *     (#950), and the device layer's byte channel is wired end to end (#959).
+ *     What remains is this fetch, so installing `.mpy` packages is a real
+ *     possibility rather than a closed door — it just needs the download to be
+ *     bytes, and is not this route's job today.
  *   - Anything needing the board to participate — which now means anything
  *     needing its `sys.implementation._mpy` or its own index credentials.
  *     Nothing else does: the board's role in an install is to accept files.

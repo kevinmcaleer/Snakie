@@ -4,8 +4,10 @@ import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace, FILE_SAVED_EVENT, type FileSavedDetail } from '../store/workspace'
 import { forgetTagsPrompt, useSync } from '../store/sync'
 import { useFileSelection } from '../store/file-selection'
-import { rowSize } from '../../../shared/file-size'
+import { formatFileSize, rowSize } from '../../../shared/file-size'
 import { showStatus } from '../lib/status-bar'
+import { writeAtomically } from '../../../shared/atomic-write'
+import { deviceAtomicOps } from '../lib/folder-transfer'
 import { ContextMenu, type ContextMenuItem, type ContextMenuPosition } from './ContextMenu'
 import { usePrompt } from './PromptModal'
 import { iconProps, NewFileIcon, NewFolderIcon, RefreshIcon } from './file-tree-icons'
@@ -426,9 +428,25 @@ export function LocalFileTree(): JSX.Element {
       const name = entry.path.split(/[/\\]/).pop() ?? entry.name
       void (async (): Promise<void> => {
         try {
-          const contents = await window.api.fs.readFile(entry.path)
-          await window.api.device.writeFile(`/${name}`, contents)
+          // BYTES, not text (#959). Reading through the string channel decodes
+          // UTF-8, and every byte sequence that is not valid UTF-8 becomes
+          // U+FFFD — a 213-byte `.mpy` arrives on the board as 243 bytes of
+          // rubble with a header intact enough to look almost right. The device
+          // layer is byte-exact either way, so this costs nothing for text.
+          //
+          // Atomically, for the same reason the folder copy is (#864/#848): a
+          // transfer that stops mid-file otherwise leaves a truncated file under
+          // its real name, which is a `SyntaxError` somewhere nobody will look.
+          const bytes = await window.api.fs.readFileBytes(entry.path)
+          const dest = `/${name}`
+          await writeAtomically(deviceAtomicOps, dest, bytes.length, (tmp) =>
+            window.api.device.writeFileBytes(tmp, bytes)
+          )
           setError(null)
+          showStatus(`Uploaded ${name} — ${formatFileSize(bytes.length) ?? `${bytes.length} B`}`, {
+            priority: 4,
+            clearAfterMs: 6000
+          })
         } catch (err) {
           setError(err instanceof Error ? err.message : String(err))
         }

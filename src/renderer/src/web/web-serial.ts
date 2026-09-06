@@ -261,6 +261,10 @@ export function createWebSerialBackend(): Record<string, unknown> {
     readFileLine: async (p: string, prefix: string) => need().readFileLine(p, prefix),
     readFileBytes: async (p: string) => need().readFileBytes(p),
     writeFile: async (p: string, contents: string) => need().writeFile(p, contents),
+    // `RawReplClient.writeFile` already takes `string | Uint8Array` and is
+    // byte-exact either way, so the byte channel is the same call with the
+    // decode left out — which is the whole point (#959).
+    writeFileBytes: async (p: string, contents: Uint8Array) => need().writeFile(p, contents),
     remove: async (p: string) => need().remove(p),
     mkdir: async (p: string) => need().mkdir(p),
     rename: async (from: string, to: string) => need().rename(from, to),

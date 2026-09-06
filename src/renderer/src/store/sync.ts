@@ -43,6 +43,8 @@ import {
   type ReactNode
 } from 'react'
 import { showStatus } from '../lib/status-bar'
+import { writeAtomically } from '../../../shared/atomic-write'
+import { deviceAtomicOps } from '../lib/folder-transfer'
 import { baseName, FILE_SAVED_EVENT, useWorkspace, type FileSavedDetail } from './workspace'
 import { useFileSelection } from './file-selection'
 import { planUploadOf, runFolderUpload } from '../lib/folder-transfer'
@@ -500,8 +502,15 @@ export function SyncProvider({ children }: { children: ReactNode }): JSX.Element
               const result = await runFolderUpload(plan, () => undefined)
               if (!result.ok) throw new Error(result.error ?? `Could not sync ${baseName(path)}`)
             } else {
-              const content = await window.api.fs.readFile(path)
-              await window.api.device.writeFile(deviceDestForLocal(path), content)
+              // BYTES, not text (#959). The string channel decodes UTF-8, which
+              // turns every invalid sequence into U+FFFD — a tagged `.mpy` or
+              // image would sync to the board as rubble. Atomically too, like
+              // the folder branch above and for #864's reason.
+              const bytes = await window.api.fs.readFileBytes(path)
+              const dest = deviceDestForLocal(path)
+              await writeAtomically(deviceAtomicOps, dest, bytes.length, (tmp) =>
+                window.api.device.writeFileBytes(tmp, bytes)
+              )
             }
             setFileStates((prev) => markFiles(prev, [path], 'done'))
           } catch (err) {
@@ -588,6 +597,10 @@ export function SyncProvider({ children }: { children: ReactNode }): JSX.Element
           markFiles(markKind(prev, detail.path, false), [detail.path], 'syncing')
         )
         try {
+          // TEXT here, correctly (#959): this path syncs an EDITOR BUFFER, and
+          // only text can be in one. A `.mpy` opens in the read-only Bytecode
+          // view, which never routes through the workspace buffer (#875), so a
+          // binary file cannot reach this line to be mangled by it.
           await window.api.device.writeFile(deviceDestForLocal(detail.path), detail.content)
           setFileStates((prev) => markFiles(prev, [detail.path], 'done'))
           settle('done', null, label)

@@ -88,7 +88,14 @@ export async function planUploadOf(localRoot: string, deviceDir: string): Promis
  * have a folder that looks complete and is not.
  */
 /** {@link writeAtomically} over the renderer's device bridge (#864). */
-const deviceAtomicOps: AtomicOps = {
+/**
+ * Writing to the BOARD, for `writeAtomically`.
+ *
+ * Exported since #959: the single-file upload needs the same all-or-nothing
+ * write this folder copy has, and two copies of these four calls would be two
+ * chances to get the rename-then-remove fallback wrong.
+ */
+export const deviceAtomicOps: AtomicOps = {
   stat: (path) => window.api.device.stat(path),
   rename: (from, to) => window.api.device.rename(from, to),
   remove: (path) => window.api.device.remove(path)

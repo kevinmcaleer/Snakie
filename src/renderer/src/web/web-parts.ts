@@ -22,6 +22,14 @@ interface DriverSourceResult {
   error?: string
 }
 
+/** Decode one bundled driver. The plugin inlines them base64 so binary survives. */
+function base64Bytes(b64: string): Uint8Array {
+  const bin = atob(b64)
+  const out = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
+  return out
+}
+
 /** Build the read-only `parts` Api object (merged onto `window.api.parts`). */
 export function createWebPartsApi(): Record<string, unknown> {
   const libraries = standardLibraries as PartLibraryWithParts[]
@@ -35,9 +43,22 @@ export function createWebPartsApi(): Record<string, unknown> {
       partId: string,
       source: string
     ): Promise<DriverSourceResult> => {
-      const contents = (driverSources as Record<string, string>)[`${partId}/${source}`]
-      return contents != null
-        ? { ok: true, contents }
+      // Base64 since #959, so a binary driver survives bundling. Decoded to text
+      // here because that is what this channel promises; the byte channel below
+      // is what the installer actually copies with.
+      const b64 = (driverSources as Record<string, string>)[`${partId}/${source}`]
+      return b64 != null
+        ? { ok: true, contents: new TextDecoder().decode(base64Bytes(b64)) }
+        : { ok: false, error: `No bundled driver "${source}" for ${partId}.` }
+    },
+    readDriverSourceBytes: async (
+      _libraryId: string,
+      partId: string,
+      source: string
+    ): Promise<{ ok: boolean; bytes?: Uint8Array; error?: string }> => {
+      const b64 = (driverSources as Record<string, string>)[`${partId}/${source}`]
+      return b64 != null
+        ? { ok: true, bytes: base64Bytes(b64) }
         : { ok: false, error: `No bundled driver "${source}" for ${partId}.` }
     },
     // #655: the files "beside the part" on the web are whatever the build

@@ -6,6 +6,44 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Sending a binary file to the board no longer corrupts it** (#959). Compiling
+  a `.mpy` and uploading it produced *"This does not look like a readable .mpy —
+  the file is truncated."* The viewer was right: the file on the board really was
+  corrupt.
+
+  **Upload to board** read the file through the string channel, which decodes
+  UTF-8 — so every byte sequence that is not valid UTF-8 became U+FFFD. A real
+  213-byte `.mpy` arrived as 243 bytes with 15 replacement characters. It gets
+  *longer*, not shorter, and the header survives because those bytes happen to be
+  ASCII-safe, which is why the parser read the version and format fine and only
+  then ran off the end of a structure whose offsets meant nothing. Hence
+  "truncated" — the parser's honest description of what it met.
+
+  The device layer was never at fault: it hex-encodes and opens `'wb'`, and both
+  `writeFile` implementations already accepted a buffer. The decode happened in
+  the renderer, before anything reached the wire.
+
+  **Three paths had it**, and the audit found two the report did not: Upload to
+  board, the sync push of a tagged file, and **installing a part's driver** —
+  which matters because parts may ship a `.mpy` (the SAM part's
+  `sam_render.mpy`), and the installer was also checking the *mangled* length
+  against the board's free space. All three now read bytes and write atomically,
+  sharing the folder copy's helper rather than three copies of it.
+
+  A fourth was baked into the **web build**: the bundler inlined driver files as
+  UTF-8 strings, so a binary driver was corrupt before the build shipped. They
+  are base64 now. And `writeFileBytes` was not routed on the web at all — the
+  renderer called it, the router did not forward it, and the upload resolved to
+  nothing, silently. It is wired through both web backends now.
+
+  What is deliberately still text: anything syncing an **editor buffer**, since
+  only text can be in one — a `.mpy` opens in the read-only Bytecode view, which
+  never routes through the workspace buffer (#875). And `mip` package installs
+  remain safe by refusal: they reject a `.mpy` spec outright rather than writing
+  garbage.
+
 ### Added
 
 - **File sizes in both file trees** (#955). Neither the local nor the device tree

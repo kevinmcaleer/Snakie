@@ -37,6 +37,7 @@ import {
   promoteToStandard,
   publishStandardLibrary,
   readDriverSource,
+  readDriverSourceBytes,
   listPartDriverFiles,
   readLibraries,
   resetPartToBundled,
@@ -150,6 +151,14 @@ export function registerPartsIpc(): void {
     'parts:readDriverSource',
     (_e, args: { libraryId: string; partId: string; source: string }) =>
       readDriverSource(args?.libraryId ?? '', args?.partId ?? '', args?.source ?? '')
+  )
+
+  // The BYTE reader (#959) — what the installer uses, so a `.mpy` driver is
+  // copied rather than utf-8 mangled on the way to the board.
+  ipcMain.handle(
+    'parts:readDriverSourceBytes',
+    (_e, args: { libraryId: string; partId: string; source: string }) =>
+      readDriverSourceBytes(args?.libraryId ?? '', args?.partId ?? '', args?.source ?? '')
   )
 
   // #655: the .py/.mpy files shipped beside a part's parts.yml, so the Part

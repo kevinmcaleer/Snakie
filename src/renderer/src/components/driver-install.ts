@@ -19,6 +19,8 @@
  * any future one) get the queue for free, and the board-is-busy modal names the
  * driver it is on.
  */
+import { writeAtomically } from '../../../shared/atomic-write'
+import { deviceAtomicOps } from '../lib/folder-transfer'
 import { driverDeviceDirs, driverInstallMethod, driverModuleId } from './part-editor.util'
 import {
   DeviceOperationCancelled,
@@ -145,14 +147,19 @@ async function runDriverInstall(
       return { ok: true, note: await clearStaleModule(target || d.source) }
     }
     // copy: read the file (bundled file or URL, via main) then write to target.
-    const read = await window.api.parts.readDriverSource(libraryId, partId, d.source)
-    if (!read.ok || read.contents == null) {
+    // BYTES (#959): a part may ship a `.mpy` driver — `listPartDriverFiles`
+    // offers them and the SAM part's `sam_render.mpy` is one — and the utf-8
+    // reader turns every invalid sequence into U+FFFD, so what lands on the
+    // board is rubble. Reading bytes also makes the space check below honest:
+    // it was measuring the length of the MANGLED text.
+    const read = await window.api.parts.readDriverSourceBytes(libraryId, partId, d.source)
+    if (!read.ok || read.bytes == null) {
       return { ok: false, message: read.error || 'Could not read driver file.' }
     }
     // Pre-flight space check: if the file clearly won't fit, say so UP FRONT with the
     // exact numbers, rather than failing mid-write with a raw OSError 28. (Skipped when
     // the board can't report free space; the write's own catch still handles it.)
-    const size = new TextEncoder().encode(read.contents).length
+    const size = read.bytes.length
     const space = await window.api.device.df().catch(() => null)
     if (space && size > space.free) {
       const kb = (n: number): string => `${Math.max(1, Math.round(n / 1024))} KB`
@@ -166,7 +173,9 @@ async function runDriverInstall(
     for (const dir of driverDeviceDirs(d.target)) {
       await window.api.device.mkdir(dir).catch(() => undefined)
     }
-    await window.api.device.writeFile(d.target.trim(), read.contents)
+    await writeAtomically(deviceAtomicOps, d.target.trim(), read.bytes.length, (tmp) =>
+      window.api.device.writeFileBytes(tmp, read.bytes as Uint8Array)
+    )
     return { ok: true, note: await clearStaleModule(d.target) }
   } catch (err) {
     const raw = err instanceof Error ? err.message : String(err)

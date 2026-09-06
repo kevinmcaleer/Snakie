@@ -70,6 +70,12 @@ export function standardPartsPlugin(): Plugin {
       const emitted: EmittedImage[] = []
       // Driver file contents keyed `<partId>/<source>`, served by the web
       // readDriverSource so the "install driver" banner works (e.g. sg90 → servo.py).
+      //
+      // BASE64, not utf-8 (#959). A part may ship a `.mpy` driver — the SAM
+      // part's `sam_render.mpy` is one — and reading it as text here corrupts it
+      // before the web build even ships, which is the same mistake as the
+      // runtime one but baked into the bundle. Base64 carries any bytes; the web
+      // reader decodes it, to text or to bytes, depending on what is asked for.
       const driverSources: Record<string, string> = {}
 
       for (const partId of partDirs) {
@@ -100,7 +106,9 @@ export function standardPartsPlugin(): Plugin {
             const src = d?.source
             if (typeof src === 'string' && !src.includes(':') && !src.startsWith('http')) {
               try {
-                driverSources[`${partId}/${src}`] = readFileSync(join(partDir, src), 'utf-8')
+                driverSources[`${partId}/${src}`] = readFileSync(join(partDir, src)).toString(
+                  'base64'
+                )
               } catch {
                 /* unreadable driver — install will report it can't be read */
               }

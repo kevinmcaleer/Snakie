@@ -949,6 +949,41 @@ export async function readDriverSource(
 }
 
 /**
+ * A driver's file as BYTES (#959).
+ *
+ * Parts may ship a `.mpy` driver — `listPartDriverFiles` offers them, and the
+ * SAM part's `sam_render.mpy` is one — and reading those through the utf-8
+ * function above turns every invalid sequence into U+FFFD, so the accelerator
+ * installed on the board is rubble. The text reader stays for anything that
+ * genuinely wants a string; anything being COPIED should use this.
+ */
+export async function readDriverSourceBytes(
+  libraryId: string,
+  partId: string,
+  source: string
+): Promise<{ ok: boolean; bytes?: Uint8Array; error?: string }> {
+  const src = String(source ?? '').trim()
+  if (!src) return { ok: false, error: 'Driver source is empty.' }
+  try {
+    if (/^https?:\/\//i.test(src)) {
+      const res = await fetch(src, { signal: AbortSignal.timeout(15_000) })
+      if (!res.ok) return { ok: false, error: `Fetch ${src} → HTTP ${res.status}` }
+      return { ok: true, bytes: new Uint8Array(await res.arrayBuffer()) }
+    }
+    const libId = sanitiseId(libraryId)
+    const pId = sanitiseId(partId)
+    if (!libId || !pId) return { ok: false, error: 'Unknown part for driver source.' }
+    const partDir = join(partsDir(), libId, pId)
+    if (!isContainedFile(partDir, src)) {
+      return { ok: false, error: `Unsafe driver path: ${src}` }
+    }
+    return { ok: true, bytes: new Uint8Array(await fsp.readFile(join(partDir, src))) }
+  } catch (err) {
+    return { ok: false, error: (err as Error).message }
+  }
+}
+
+/**
  * The driver-candidate files shipped inside a part's folder (#655): the `.py` /
  * `.mpy` basenames beside `parts.yml`, sorted. Lets the Part Editor OFFER what
  * actually ships instead of a free-typed filename, and warn when a bundled
