@@ -56,19 +56,38 @@ Re-run it after updating to a new version, or pass `--uninstall` to remove it.
 ### Device & REPL
 
 - 🔌 Connect to a MicroPython device over serial (raw-REPL protocol)
-- ▶️ **Run** and **Stop** — Stop also **soft-resets** the board when nothing's
-  running
+- ▶️ **Run** (⌘R) and **Stop** (⌘.) — Stop also **soft-resets** the board when
+  nothing's running
 - 🐚 Interactive shell (REPL) with a live serial **Plotter** alongside the console
 - 🗂️ Browse / create / rename / delete files locally and on the device
-  (Thonny-style)
-- 📦 Install MicroPython packages (`mip`) and 📡 flash firmware (built-in board
-  catalog)
+  (Thonny-style), each tree showing **file sizes** — so an empty file is visible
+- ⚙️ **Compile `.py` to `.mpy`** from the file tree's context menu, using
+  MicroPython's own `mpy-cross` built to WebAssembly from the same release the
+  firmware catalogue offers
+- 📦 Install MicroPython packages (`mip`)
+
+### Board Finder & firmware
+
+- 🔎 A **Board Finder** covering **237 boards** — all 225 MicroPython publishes a
+  `board.json` for, plus 12 it builds nothing for but that people actually own
+  (the Adafruit ESP32 Feather V2, Pimoroni's Tiny 2350 and Servo 2040, the
+  micro:bit v2 …), each with the build it really flashes and why
+- 📇 Filter by maker, chip, runtime and features; every board carries its flash,
+  RAM and PSRAM **with the page each figure was read from**, because MicroPython's
+  index publishes no sizes
+- 🔬 Eighteen of them open with their **own hardware**: the board photographed,
+  turned over where there is a back, its 3-D model where there is one, and every
+  pad readable by name — `GP4 · Pin 6 · I/O · I2C0 SDA · SPI0 RX · PWM 2A`
+- 📡 A **firmware flasher** that offers the *right* build — including the variants
+  that are easy to miss, like the SPIRAM build a Feather V2 needs to see its PSRAM
 
 ### Board View & Instruments
 
 - 🔭 A live **Board View** window that parses your code for pin usage and draws the
-  **actual board** — Raspberry Pi Pico 2 W, ESP32, Pimoroni Pico Plus 2 / Tiny 2040
-  / Tiny 2350, plus your own board definitions
+  **actual board** — any microcontroller in the Parts Library (Pico / Pico W /
+  Pico 2 W, ESP32 and ESP32-S3 Feathers, XIAO RP2040 / RP2350, Pimoroni's Tiny
+  2350, Servo 2040 and Pico LiPo 2, Arduino Nano ESP32 …), plus your own board
+  definitions
 - 🕸️ A **node graph** of every connection by type (input / output / PWM / I²C / SPI
   / PIO / ADC) with live pin values, **zoom / rotate / export** (SVG · PNG · PDF),
   and a visual **Board Creator** for custom boards
@@ -93,6 +112,15 @@ Re-run it after updating to a new version, or pass `--uninstall` to remove it.
 
 ### Workflow
 
+- ⌨️ **Application menus** — File (New, Open File/Folder, Open Recent, Save,
+  Save As, Close Tab), Device (Connect, Run, Stop, Soft Reset, Sync), Tools
+  (Firmware Flasher, Board Finder, Parts Catalog, Sprite Editor, Find & Replace,
+  Settings) and View ▸ Workspace — so nothing is reachable only by knowing which
+  panel hides the button
+- 🔑 A **keyboard shortcut sheet** (Help ▸ Keyboard Shortcuts) generated from the
+  menu itself, so it cannot drift from the real bindings
+- 🧾 A **status history** — the bar keeps what it said; click it for the recent
+  messages, or open the full log to copy, save or clear it
 - 🌳 Built-in version control (Git, VS Code-style)
 - 🤖 Integrated LLM chat pane
 - 🔔 In-app update notifications when a new version is ready
@@ -180,19 +208,25 @@ Notes on arch coverage:
 
 ## Status
 
-🚀 **v0.13.0 released** — signed + notarized macOS builds alongside Windows and
-Linux. On top of the original editor / REPL / device tooling, recent releases added
-the **Skeuomorph** redesign, the **Board View** (node-graph pinout, multi-board +
-custom boards, viewport + export, Board Creator), the **Oscilloscope / Multimeter /
-Plotter** instruments, and the **MicroPython instruments telemetry library** that
-feeds them live from a running program. See
-[`CHANGELOG.md`](CHANGELOG.md) for the full history and
-[`docs/`](docs/) for the design + plugin + board + instruments guides.
+🚀 **Released and updating.** Grab the current build from
+[Releases](https://github.com/kevinmcaleer/Snakie/releases/latest); macOS builds
+are signed and notarized, and the in-app updater takes it from there.
 
-> ⚠️ Many features are build-, type- and unit-test-verified but the **on-device**
-> paths (live values, the instruments, firmware flashing, package install) need a
-> real MicroPython board to fully validate. The LLM chat needs an Anthropic API
-> key; the package installer needs network access.
+The foundations — the editor, the REPL, the device tooling, the Skeuomorph
+redesign, the Board View and the Oscilloscope / Multimeter / Plotter instruments
+— have been in for a while. More recently: the **Board Finder** and a firmware
+catalogue that knows the sizes and the variants, a **Parts Library** of 59
+standard parts with a visual Part Editor, **application menus** with a generated
+shortcut sheet, and `.py` → `.mpy` compilation with MicroPython's own compiler
+built to WebAssembly.
+
+See [`CHANGELOG.md`](CHANGELOG.md) for the full history and [`docs/`](docs/) for
+the design, plugin, board, parts and instruments guides.
+
+> ⚠️ Much is verified by build, type-check and ~6,700 unit tests, but the
+> **on-device** paths — live instrument values, firmware flashing, package
+> install — need a real MicroPython board to validate fully. The LLM chat needs
+> an Anthropic API key; the package installer needs network access.
 
 ## License
 
