@@ -24,6 +24,11 @@ asarUnpack:
 # into the packaged app's resources/ dir. PluginHost resolves them from
 # process.resourcesPath when app.isPackaged, and from the repo root in dev.
 extraResources:
+  # The mpy-cross WebAssembly compiler (#949/#950). Read by path at runtime from
+  # `process.resourcesPath`, so it must be a real file outside the asar — the
+  # same reason the MicroPython runtime is unpacked above.
+  - from: resources/mpy-cross
+    to: mpy-cross
   - from: python
     to: python
     filter:

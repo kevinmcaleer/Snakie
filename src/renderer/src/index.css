@@ -2257,11 +2257,24 @@ body {
 }
 
 .localtree__error,
+.localtree__notice,
 .tree-error {
-  color: var(--danger);
   font-size: 0.75rem;
   padding: 0.25rem 0.6rem;
   word-break: break-word;
+}
+
+.localtree__error,
+.tree-error {
+  color: var(--danger);
+}
+
+/* The quiet counterpart (#949): an action worked and its only other trace is a
+   new file somewhere in the tree. It shares the error's slot, so the two can
+   never both be on screen arguing about what just happened — and takes the
+   accent rather than a hardcoded green, which the skeuomorph skin would lose. */
+.localtree__notice {
+  color: var(--accent);
 }
 
 /* Device filesystem browser (issue #7) — mirrors the local tree styling. */

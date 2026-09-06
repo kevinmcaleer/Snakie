@@ -28,5 +28,13 @@ module.exports = {
     '@typescript-eslint/ban-ts-comment': 'off',
     '@typescript-eslint/explicit-function-return-type': 'off'
   },
-  ignorePatterns: ['out', 'dist', 'node_modules', '*.d.ts']
+  ignorePatterns: [
+    'out',
+    'dist',
+    'node_modules',
+    '*.d.ts',
+    // Emscripten's own output (#950) — generated, minified, and not ours to
+    // restyle. What we ship from it is checked by mpyCompile.test.ts instead.
+    'resources/mpy-cross/**'
+  ]
 }

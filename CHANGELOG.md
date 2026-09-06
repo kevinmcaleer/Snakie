@@ -6,6 +6,41 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Right-click a `.py` and compile it to `.mpy`** (#949). MicroPython's own
+  `mpy-cross` turns a source file into the bytecode container a board imports
+  without ever seeing the source — smaller, and faster to import. It is now a
+  context-menu item in the Files tree, writing the `.mpy` beside its `.py`, with
+  the compiler's own diagnostics when it fails: `SyntaxError` with the line, not
+  a shrug.
+
+- **We build the compiler ourselves** (#950). The published
+  `@pybricks/mpy-cross-v6` works, but it is pinned to MicroPython **v1.19**
+  because its Makefile lists every `py/*.c` file **by hand** — ~108 of them,
+  where v1.29 has 133. `scripts/build-mpy-cross.sh` has no such list: it points
+  `PROG` at a `.js` and lets MicroPython's own `py.mk` compute the sources, so
+  the build tracks whatever the pinned tag needs and moving to a new MicroPython
+  is one line. A test asserts the compiler is built from the same release the
+  Board Finder offers firmware for, because a compiler older than the firmware
+  we hand people is exactly the drift worth not having.
+
+  It ships as **WebAssembly**: no per-platform binaries, and no third executable
+  to sign and notarize inside the app bundle. It runs in the main process, which
+  keeps 334 KB of `.wasm` out of the renderer and away from the asset-path
+  problem #947 was. And there is no third-party JavaScript in it either — the
+  published package bakes its filesystem wiring into the artifact with
+  `--pre-js`, where ours passes `preRun`/`print`/`printErr`/`onExit` from our own
+  typed code. What ships is `mpy-cross` and nothing else.
+
+  Three things cost real time and are written down where they bit: `emmake`
+  rewrites `CC=gcc` into `emgcc`, which does not exist; modern Emscripten prunes
+  `wasmBinary` from the incoming module API unless it is declared; and the
+  loader must be named **`.cjs`**, because this package is `"type": "module"` and
+  a `.js` is parsed as ESM, so Emscripten's CommonJS export never runs and
+  `require` hands back an empty object — the same trap that makes the preload
+  `index.cjs`.
+
 ## [0.51.1] - 2026-09-05
 
 ### Fixed

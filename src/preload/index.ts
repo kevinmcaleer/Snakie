@@ -904,6 +904,21 @@ const plugins = {
  * `saveUserBoard`/`deleteUserBoard` persist boards authored in the Board Creator
  * (issue #94).
  */
+/**
+ * Compiling `.py` to `.mpy` (#949). The compiler is WebAssembly running in the
+ * MAIN process — see `main/mpy/compile.ts` for why it lives there.
+ */
+const mpy = {
+  /** Can this build compile at all, and from which MicroPython? */
+  available: (): Promise<{ available: boolean; micropython: string | null }> =>
+    ipcRenderer.invoke('mpy:available'),
+  /** Compile one file, writing the `.mpy` beside it. */
+  compile: (
+    path: string
+  ): Promise<{ ok: true; path: string; bytes: number } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('mpy:compile', path)
+}
+
 const board = {
   /** Open (or focus) the floating Board View window. */
   open: (): Promise<void> => ipcRenderer.invoke('board:open'),
@@ -1408,6 +1423,7 @@ const boards = {
 
 const api = {
   boards,
+  mpy,
   /** Example round-trip channel used to prove the bridge works. */
   ping: (): Promise<string> => ipcRenderer.invoke('ping'),
   /** The application version (from package.json), shown in the status bar. */
