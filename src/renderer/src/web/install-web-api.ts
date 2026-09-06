@@ -16,6 +16,7 @@ import { createWebDeviceRouter } from './web-device-router'
 import { createWebFsApi, opfsFallbackAvailable } from './web-fs'
 import { createWebMpyApi, type WebMpyFs } from './web-mpy'
 import { createWebRobotApi, type WebRobotFs } from './web-robot'
+import { createWebUpdatesApi } from './web-updates'
 import { createWebPartsApi } from './web-parts'
 import { INSTRUMENTS_PY, SNAKIE_PY } from './web-lib-sources'
 import { createWebFeedbackApi, captureTabScreenshot } from './web-feedback'
@@ -96,6 +97,13 @@ export function installWebApi(kind: WebWindowKind = 'main'): boolean {
   w.api.openExternal = (async (url: string) => {
     window.open(url, '_blank', 'noopener,noreferrer')
   }) as unknown as Window['api']['openExternal']
+  // Keep the page on the deployed build (#971). This also REGISTERS the service
+  // worker: vite-plugin-pwa no longer injects a registration script, because the
+  // one it injected had no update handling and its presence disabled
+  // `registerType: 'autoUpdate'` outright. Main window only — the worker's scope
+  // is the whole origin, so the pop-out windows are covered by this one
+  // registration and would only duplicate it.
+  w.api.updates = createWebUpdatesApi(version) as unknown as Window['api']['updates']
   // The device namespace multiplexes the WASM simulator + real Web Serial boards.
   w.api.device = createWebDeviceRouter() as unknown as Window['api']['device']
   // Serve the bundled MicroPython library sources so the "Install library" banner

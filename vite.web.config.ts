@@ -96,13 +96,46 @@ export default defineConfig({
     // PWA (#464): installable to the ChromeOS shelf + offline via a Workbox
     // precache of the built app shell (incl. the MicroPython WASM). Web build
     // only — the plugin lives here, so the Electron build is untouched.
-    // `injectRegister: 'script'` emits an external registerSW.js (no inline
-    // script) so it passes the strict web CSP (`script-src 'self' …`).
+    // The registration is NOT injected by the plugin; `web-updates.ts` does it,
+    // which keeps it out of an inline script the strict CSP would reject
+    // (`script-src 'self' …`) just as the old `injectRegister: 'script'` did —
+    // see the note on `injectRegister` below for why that value had to go.
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'script',
+      // WE register the worker, from `web-updates.ts` (#971). The plugin's own
+      // injected script is a bare `navigator.serviceWorker.register(…)` with no
+      // update handling at all — and `injectRegister: 'script'`, which we used to
+      // set to keep the registration out of an inline script the strict CSP would
+      // reject, ALSO silently disables `registerType: 'autoUpdate'`:
+      //
+      //   // vite-plugin-pwa/dist/index.js
+      //   if ((injectRegister === "auto" || injectRegister == null) && registerType === "autoUpdate") {
+      //     workbox.skipWaiting = true
+      //     workbox.clientsClaim = true
+      //   }
+      //
+      // So the config read as if it auto-updated while the build shipped a worker
+      // that waited forever — see the skipWaiting/clientsClaim note below.
+      // Registering from app code satisfies the CSP just as well (our bundle IS
+      // `'self'`) and lets us react to an update instead of only publishing one.
+      injectRegister: null,
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       workbox: {
+        // BOTH SET EXPLICITLY, not left to the plugin to infer (#971). Without
+        // them Workbox emits a worker that calls `skipWaiting()` only when the
+        // page posts it a `SKIP_WAITING` message — which nothing did — and never
+        // calls `clients.claim()`. A new deploy therefore installed and then sat
+        // in `waiting` until every tab of the origin closed, while each
+        // navigation kept being answered from the OLD precache. That is the
+        // "app.snakie.org needs a hard reload" bug: a hard reload was the one
+        // thing that bypassed the worker.
+        //
+        // `clientsClaim` matters as much as `skipWaiting`: activating without
+        // claiming leaves the open page on the previous worker, whose precache
+        // the new one has already cleaned up — the classic post-deploy failure
+        // to lazy-load a chunk.
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,svg,png,woff,woff2,wasm}'],
         // The MicroPython WASM + Monaco chunks are large; precache them so the
         // classroom app truly works offline after the first visit.
@@ -136,6 +169,21 @@ export default defineConfig({
         ]
       }
     }),
+    {
+      // A version stamp the running page can check itself against (#971).
+      // The service worker is the primary "you are stale" signal; this is the
+      // fallback for contexts that have no worker (Safari private browsing, a
+      // blocked-storage profile) and what lets the notice name the new version.
+      // Written by the build so it cannot drift from what actually shipped.
+      name: 'snakie-web-version-stamp',
+      generateBundle(): void {
+        this.emitFile({
+          type: 'asset',
+          fileName: 'version.json',
+          source: JSON.stringify({ version: pkgVersion, builtAt: new Date().toISOString() }, null, 2)
+        })
+      }
+    },
     {
       // Relax the renderer CSP for the WEB build ONLY (Electron keeps its strict
       // one): `'wasm-unsafe-eval'` lets the MicroPython WASM instantiate, and

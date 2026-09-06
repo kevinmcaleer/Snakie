@@ -8,6 +8,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+
 - **Compile to `.mpy` in the browser** (#970). On app.snakie.org the file tree's
   context menu read **"Compile to .mpy (unavailable)"**, greyed out. Nothing was
   stopping it: `mpy-cross` is already WebAssembly, and a browser tab runs
@@ -40,6 +41,43 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   mangle every byte above 0x7F.
 
 ### Fixed
+
+
+- **The browser build picks up a new deploy on its own** (#971). app.snakie.org
+  could keep serving an older build until you hard-reloaded the tab. Not HTTP
+  caching — the **service worker** (#464), and two halves of one mistake.
+
+  `registerType: 'autoUpdate'` was silently inert. vite-plugin-pwa only turns it
+  into `skipWaiting` + `clientsClaim` when `injectRegister` is `'auto'` or absent,
+  and we set `'script'` — chosen so the registration wasn't an inline script the
+  strict CSP rejects. So Workbox shipped a worker that calls `skipWaiting()` only
+  when the page posts it a `SKIP_WAITING` message, and never calls
+  `clients.claim()`. Nothing ever posted that message, because the registration the
+  plugin injected was a bare `navigator.serviceWorker.register(…)` with no update
+  handling at all.
+
+  A new deploy therefore installed and then sat in `waiting` until every tab of the
+  origin closed — which, for the tab you keep the IDE open in, is never — while
+  each navigation kept being answered from the **old** precache. A hard reload
+  worked because it is the one thing that bypasses the worker. The config read as
+  if it auto-updated; the build disagreed, with no warning.
+
+  Both flags are now set **explicitly**, so the behaviour can't hinge on a plugin
+  inference again, and the app registers the worker itself — our bundle is
+  `'self'`, so the CSP reason for `injectRegister: 'script'` still holds without
+  its side effect.
+
+  When a new build lands the page **reloads itself** — but only when nothing is
+  unsaved. Snakie is an editor, and reloading over an unsaved buffer would be a
+  worse bug than the stale build. With work in progress it says so instead, through
+  the same notifier the desktop app uses, and waits for you; the notice says
+  *reload*, not *restart*, because a browser tab has no restart. The check assumes
+  there IS unsaved work until the UI says otherwise — a needless prompt is an
+  annoyance, a discarded buffer is not.
+
+  A `version.json` stamp ships beside the bundle and is fetched `no-store`, so the
+  staleness check can't itself be answered from a cache. It names the new version
+  in the notice, and covers contexts with no service worker at all.
 
 - **macOS releases no longer fail at random** (#968). Signing died with
   `security set-key-partition-list … SecKeychainUnlock: The user name or passphrase
