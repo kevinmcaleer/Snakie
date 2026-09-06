@@ -2,10 +2,19 @@ import { app } from 'electron'
 import { createRequire } from 'module'
 import { existsSync, readFileSync } from 'fs'
 import { writeFile } from 'fs/promises'
-import { basename, dirname, extname, join } from 'path'
+import { basename, join } from 'path'
+import {
+  compileErrorMessage,
+  compileWithFactory,
+  isCompilable,
+  mpyPathFor,
+  type CompileOutput,
+  type CompileResult,
+  type MpyCrossFactory
+} from '../../shared/mpy-compile'
 
 /**
- * COMPILING `.py` TO `.mpy` (#949).
+ * COMPILING `.py` TO `.mpy` — the DESKTOP half (#949).
  * =============================================================================
  *
  * `mpy-cross` is MicroPython's own cross-compiler, built here to WebAssembly by
@@ -15,37 +24,23 @@ import { basename, dirname, extname, join } from 'path'
  *
  * IT RUNS IN MAIN, not the renderer. The output is a file written next to its
  * source, which is main's job anyway; keeping it here also keeps a 334 KB
- * `.wasm` out of the renderer bundle and away from the asset-URL problem that
- * #947 was. The web build has no main process, so `mpy.available` reports false
- * there and the menu item says why rather than failing when pressed.
+ * `.wasm` out of the Electron renderer bundle and away from the asset-URL
+ * problem that #947 was. The WEB build has no main process, so it runs the
+ * same compiler in a worker on the page instead — see
+ * `renderer/src/web/web-mpy.ts` (#970).
  *
  * THE LOADER IS `.cjs` ON PURPOSE. Emscripten's export line is guarded by
  * `typeof module === 'object'`; this package.json is `"type": "module"`, so a
  * `.js` would be parsed as ESM, that branch would never run, and `require()`
  * would hand back an empty object. Exactly why the preload is `index.cjs`.
+ * (The browser gets its own `mpy-cross.mjs` from the same build, for the
+ * mirror-image reason.)
  *
- * ALL THE GLUE IS HERE. The published `@pybricks/mpy-cross-v6` bakes its
- * filesystem and callback wiring into the artifact with `--pre-js`; ours does
- * not, because Emscripten will take `preRun`, `print`, `printErr` and `onExit`
- * on the Module object. So the thing we ship is mpy-cross, and every line of
- * plumbing around it is in this file where it can be read and typed.
+ * ONLY THE TWO ENDS ARE HERE. Loading the module, reading the source and
+ * writing the `.mpy` are node's; the run in between — Emscripten's in-memory
+ * filesystem, the callbacks, the error wording — is `shared/mpy-compile.ts`,
+ * which the web worker drives identically.
  */
-
-/** The Emscripten module factory, as much of it as we use. */
-type MpyCrossModule = {
-  FS: {
-    writeFile(path: string, data: string): void
-    readFile(path: string, opts: { encoding: 'binary' }): Uint8Array
-  }
-}
-type MpyCrossFactory = (opts: {
-  arguments: string[]
-  wasmBinary: Uint8Array
-  print(line: string): void
-  printErr(line: string): void
-  preRun: Array<(m: MpyCrossModule) => void>
-  onExit(status: number): void
-}) => unknown
 
 const require_ = createRequire(import.meta.url)
 
@@ -78,15 +73,8 @@ export function mpyCrossVersion(): string | null {
   }
 }
 
-/** What one compile produced. */
-export interface CompileOutput {
-  /** mpy-cross's exit code — 0 on success. */
-  status: number
-  /** The bytecode, on success. */
-  mpy: Uint8Array | null
-  /** Everything it said on stderr, joined. Its diagnostics are here. */
-  stderr: string
-}
+export type { CompileOutput, CompileResult }
+export { isCompilable, mpyPathFor }
 
 /**
  * Run the compiler over one source string.
@@ -99,55 +87,8 @@ export function compileSource(name: string, source: string): Promise<CompileOutp
   const dir = artifactDir()
   const factory = require_(join(dir, 'mpy-cross.cjs')) as MpyCrossFactory
   const wasmBinary = readFileSync(join(dir, 'mpy-cross.wasm'))
-
-  return new Promise<CompileOutput>((resolve, reject) => {
-    const stderr: string[] = []
-    let mod: MpyCrossModule | null = null
-    const out = name.replace(/\.py$/i, '.mpy')
-    try {
-      factory({
-        arguments: [name],
-        wasmBinary,
-        print: () => {},
-        printErr: (line) => stderr.push(line),
-        // Emscripten hands the module to the callback as an ARGUMENT; `this` is
-        // not it, which is a half-hour nobody else needs to spend.
-        preRun: [
-          (m) => {
-            mod = m
-            m.FS.writeFile(name, source)
-          }
-        ],
-        onExit: (status) => {
-          let mpy: Uint8Array | null = null
-          if (status === 0 && mod) {
-            try {
-              mpy = mod.FS.readFile(out, { encoding: 'binary' })
-            } catch {
-              // Exited clean but wrote nothing: treat as a failure with whatever
-              // it said, rather than reporting success and writing an empty file.
-            }
-          }
-          resolve({ status, mpy, stderr: stderr.join('\n') })
-        }
-      })
-    } catch (err) {
-      reject(err instanceof Error ? err : new Error(String(err)))
-    }
-  })
+  return compileWithFactory(factory, wasmBinary, name, source)
 }
-
-/** The `.mpy` a `.py` compiles to: same folder, same stem. */
-export function mpyPathFor(pyPath: string): string {
-  return join(dirname(pyPath), basename(pyPath).replace(/\.py$/i, '') + '.mpy')
-}
-
-/** Is this a file we can compile at all? */
-export function isCompilable(path: string): boolean {
-  return extname(path).toLowerCase() === '.py'
-}
-
-export type CompileResult = { ok: true; path: string; bytes: number } | { ok: false; error: string }
 
 /**
  * Compile `pyPath`, writing the `.mpy` beside it.
@@ -169,12 +110,7 @@ export async function compileFile(pyPath: string): Promise<CompileResult> {
   }
 
   const result = await compileSource(basename(pyPath), source)
-  if (result.status !== 0 || !result.mpy) {
-    // mpy-cross prints a CPython-style traceback; the last line is the actual
-    // complaint and the only part worth putting in front of someone.
-    const lines = result.stderr.split('\n').filter((l) => l.trim())
-    return { ok: false, error: lines[lines.length - 1] ?? `mpy-cross exited ${result.status}` }
-  }
+  if (result.status !== 0 || !result.mpy) return { ok: false, error: compileErrorMessage(result) }
 
   const out = mpyPathFor(pyPath)
   await writeFile(out, result.mpy)

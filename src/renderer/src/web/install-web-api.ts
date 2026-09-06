@@ -14,6 +14,7 @@
  */
 import { createWebDeviceRouter } from './web-device-router'
 import { createWebFsApi, opfsFallbackAvailable } from './web-fs'
+import { createWebMpyApi, type WebMpyFs } from './web-mpy'
 import { createWebRobotApi, type WebRobotFs } from './web-robot'
 import { createWebPartsApi } from './web-parts'
 import { INSTRUMENTS_PY, SNAKIE_PY } from './web-lib-sources'
@@ -120,6 +121,12 @@ export function installWebApi(kind: WebWindowKind = 'main'): boolean {
     const fs = createWebFsApi()
     w.api.fs = fs as unknown as Window['api']['fs']
     w.api.robot = createWebRobotApi(fs as unknown as WebRobotFs) as unknown as Window['api']['robot']
+    // "Compile to .mpy" (#970). mpy-cross is WebAssembly, so the browser can run
+    // it as well as the main process can — it was only ever wired to one of
+    // them. Gated with the fs backend on purpose: a compile reads a `.py` from
+    // the local file tree and writes the `.mpy` beside it, and without a folder
+    // there is neither. Elsewhere the menu item keeps saying "(unavailable)".
+    w.api.mpy = createWebMpyApi(fs as unknown as WebMpyFs) as unknown as Window['api']['mpy']
   }
   // Board View popup (the desktop's floating BrowserWindow, as a browser window):
   // each side gets its half of the BroadcastChannel relay. AFTER the robot api

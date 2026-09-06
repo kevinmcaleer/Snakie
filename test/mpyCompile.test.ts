@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { parseMpy } from '../src/shared/mpy-info'
+import { compileWithFactory, type CompileOutput, type MpyCrossFactory } from '../src/shared/mpy-compile'
 
 /**
  * Compiling `.py` to `.mpy` with our own compiler (#949, built by #950).
@@ -16,45 +17,27 @@ import { parseMpy } from '../src/shared/mpy-info'
  * would meet as an unreadable file, and it fails here first.
  *
  * `main/mpy/compile.ts` itself imports `electron`, which is not available in a
- * node test run, so the WASM is driven here exactly as that module drives it.
- * The wiring is the thing under test either way: Emscripten hands the module to
- * `preRun` as an ARGUMENT rather than as `this`, and its in-memory filesystem
- * starts EMPTY, so a path with a directory in it fails to write. Both cost real
- * time to discover and are easy to undo by accident.
+ * node test run — but since #970 the part worth testing is not in it: the run
+ * itself lives in `shared/mpy-compile.ts`, which both the desktop app and the
+ * browser call, so this drives the SHIPPING code rather than a copy of it. Only
+ * the loader is local here. The wiring is the thing under test either way:
+ * Emscripten hands the module to `preRun` as an ARGUMENT rather than as `this`,
+ * and its in-memory filesystem starts EMPTY, so a path with a directory in it
+ * fails to write. Both cost real time to discover and are easy to undo by
+ * accident.
+ *
+ * The BROWSER half of the same compiler — its ES-module loader, and the proof
+ * that both loaders emit identical bytecode — is `mpyCompileWeb.test.ts`.
  */
 
 const DIR = 'resources/mpy-cross'
 const require_ = createRequire(import.meta.url)
 
-interface Mod {
-  FS: {
-    writeFile(p: string, d: string): void
-    readFile(p: string, o: { encoding: 'binary' }): Uint8Array
-  }
-}
-
-/** Drive the bundled compiler over one source string. */
-function compile(name: string, source: string): Promise<{ status: number; mpy: Uint8Array | null; stderr: string }> {
-  const factory = require_(join(process.cwd(), DIR, 'mpy-cross.cjs')) as (o: unknown) => unknown
+/** Drive the bundled compiler over one source string, the way main does. */
+function compile(name: string, source: string): Promise<CompileOutput> {
+  const factory = require_(join(process.cwd(), DIR, 'mpy-cross.cjs')) as MpyCrossFactory
   const wasmBinary = readFileSync(join(DIR, 'mpy-cross.wasm'))
-  return new Promise((resolve) => {
-    const stderr: string[] = []
-    let mod: Mod | null = null
-    factory({
-      arguments: [name],
-      wasmBinary,
-      print: () => {},
-      printErr: (l: string) => stderr.push(l),
-      preRun: [(m: Mod) => { mod = m; m.FS.writeFile(name, source) }],
-      onExit: (status: number) => {
-        let mpy: Uint8Array | null = null
-        try {
-          if (status === 0 && mod) mpy = mod.FS.readFile(name.replace(/\.py$/, '.mpy'), { encoding: 'binary' })
-        } catch { /* exited clean but wrote nothing */ }
-        resolve({ status, mpy, stderr: stderr.join('\n') })
-      }
-    })
-  })
+  return compileWithFactory(factory, wasmBinary, name, source)
 }
 
 describe('the compiler ships with the app', () => {
@@ -150,7 +133,9 @@ describe('it actually compiles', () => {
 })
 
 describe('the two Emscripten traps stay fixed', () => {
-  const src = readFileSync('src/main/mpy/compile.ts', 'utf8')
+  // Both traps live in the shared core since #970, so fixing them once fixes
+  // them for the desktop app and the browser alike.
+  const src = readFileSync('src/shared/mpy-compile.ts', 'utf8')
 
   it('takes the module from preRun’s ARGUMENT, not from `this`', () => {
     // `callRuntimeCallbacks` invokes `callback(Module)`. Using `this` throws
@@ -161,7 +146,9 @@ describe('the two Emscripten traps stay fixed', () => {
 
   it('writes a BARE filename, because the in-memory filesystem starts empty', () => {
     // `dir/foo.py` fails on the missing directory rather than compiling.
-    expect(src).toContain('compileSource(basename(pyPath)')
+    expect(readFileSync('src/main/mpy/compile.ts', 'utf8')).toContain(
+      'compileSource(basename(pyPath)'
+    )
   })
 })
 
@@ -173,7 +160,9 @@ describe('what the menu item will and will not claim', () => {
   })
 
   it('says it is unavailable rather than failing when pressed', () => {
-    // The web build has no main process and so no compiler.
+    // Both platforms can compile since #970, so this is now the honest report of
+    // a build without the artifact, or a browser with no filesystem to write
+    // the `.mpy` into — never a silent failure on the press.
     expect(tree).toContain("'Compile to .mpy (unavailable)'")
     expect(tree).toContain('disabled: !mpyReady')
   })

@@ -6,6 +6,39 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Compile to `.mpy` in the browser** (#970). On app.snakie.org the file tree's
+  context menu read **"Compile to .mpy (unavailable)"**, greyed out. Nothing was
+  stopping it: `mpy-cross` is already WebAssembly, and a browser tab runs
+  WebAssembly perfectly well — it had simply only ever been wired to the desktop
+  app's main process. It now works in both, from the same menu item.
+
+  The compiler is built **twice from the same objects** and ships **one
+  `.wasm`**: a CommonJS loader for node (`.cjs`, because this package is
+  `"type": "module"` and a `.js` would parse as ESM and hand `require()` an
+  empty object) and an ES module for the browser (`-sENVIRONMENT=web,worker`,
+  which also links Emscripten's `require("node:fs")` branches out entirely). A
+  test compiles the same source through **both** loaders and fails if the
+  bytecode differs by a byte — a student's `.mpy` must not depend on which app
+  they used.
+
+  It runs **in a worker**. A compile is short, but it is a synchronous WASM run
+  with no yield the browser could paint between; the simulator learned that the
+  expensive way. The `.wasm` is a static asset of the web bundle, fetched once
+  and handed in as `wasmBinary` (so nothing has to guess at a hashed asset
+  path), and it is precached by the service worker — so compiling works offline
+  after the first visit.
+
+  Only the two ends differ between the platforms now: **where the module is
+  loaded from, and where the file comes from and goes**. The run in between —
+  Emscripten's in-memory filesystem, the callbacks, the wording of a syntax
+  error — is one shared module both call, so a fix to it reaches both. On the
+  web the file ends are the web filesystem (a real folder via the File System
+  Access API, or the OPFS `Projects/` folder on an iPad), and the `.mpy` goes
+  out through the **bytes** channel, never the text one, which would UTF-8
+  mangle every byte above 0x7F.
+
 ### Fixed
 
 - **macOS releases no longer fail at random** (#968). Signing died with
