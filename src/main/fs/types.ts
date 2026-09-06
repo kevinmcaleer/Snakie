@@ -14,6 +14,17 @@ export interface FsEntry {
   path: string
   /** True when the entry is a directory. */
   isDir: boolean
+  /**
+   * Size in bytes, for files (#955).
+   *
+   * OPTIONAL, and absent rather than zero when it could not be read — a broken
+   * symlink, or a file deleted between the listing and the stat. The column
+   * exists to make a genuinely empty file visible, so a `0` invented from a
+   * failed stat would manufacture the exact problem it is there to reveal.
+   *
+   * Absent for directories too: a folder is not an empty file.
+   */
+  size?: number
 }
 
 /** Result of `fs.stat`, mirroring the essentials of Node's `fs.Stats`. */

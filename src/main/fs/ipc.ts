@@ -20,11 +20,24 @@ async function wrap<T>(fn: () => Promise<T>): Promise<IpcResult<T>> {
 /** Read a directory and return its entries, directories first then files. */
 async function readDir(path: string): Promise<FsEntry[]> {
   const dirents = await fs.readdir(path, { withFileTypes: true })
-  const entries: FsEntry[] = dirents.map((d) => ({
-    name: d.name,
-    path: join(path, d.name),
-    isDir: d.isDirectory()
-  }))
+  // `readdir` knows the TYPE but not the size, so each file costs a stat (#955).
+  // In parallel, and a failure leaves `size` ABSENT rather than 0 — a listing is
+  // worth showing without a size, and a zero invented from a failed stat would
+  // read as "this file is empty", which is the one thing the column is for.
+  const entries: FsEntry[] = await Promise.all(
+    dirents.map(async (d) => {
+      const full = join(path, d.name)
+      const entry: FsEntry = { name: d.name, path: full, isDir: d.isDirectory() }
+      if (!entry.isDir) {
+        try {
+          entry.size = (await fs.stat(full)).size
+        } catch {
+          // Gone, or unreadable, between the listing and now.
+        }
+      }
+      return entry
+    })
+  )
   entries.sort((a, b) => {
     if (a.isDir !== b.isDir) return a.isDir ? -1 : 1
     return a.name.localeCompare(b.name)

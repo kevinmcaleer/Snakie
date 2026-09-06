@@ -8,6 +8,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **File sizes in both file trees** (#955). Neither the local nor the device tree
+  showed how big a file was, which hid the one case worth seeing: **a 0-byte file
+  looks exactly like a good one**. This repo has met that — a truncated
+  `lsm6dsox.py` on a board threw a `SyntaxError` at line 159 and cost real
+  diagnosis time, which is what #864's atomic writes exist to prevent.
+
+  Sizes read as `0 B`, `847 B`, `2 KB`, `1.4 MB`, `1 TB` — **plain bytes below a
+  kilobyte**, deliberately. The app's other formatter renders a 213-byte file as
+  `0.2 KB` and an empty one as `0 KB`, which is exactly the reading this exists
+  to replace.
+
+  An unknown size shows **nothing**, never `0 B`. A `stat` can fail — a broken
+  symlink, a file deleted between the listing and the stat — and a zero invented
+  there would manufacture the very problem the column was added to reveal.
+  Folders show nothing too: a folder is not an empty file.
+
+  The device tree had the number all along (`os.ilistdir` returns it); it was
+  simply never displayed. The local listing now stats each file, in parallel, and
+  a failure leaves the size absent rather than failing the listing.
+
+### Added
+
 - **The status bar keeps a history** (#953). It shows one line at a time and
   every message wipes the one before it, so anything you were not looking at was
   simply gone — including the ones that matter afterwards: which file failed to

@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState,
-  useSyncExternalStore
-} from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { rowSize } from '../../../shared/file-size'
 import type { DirEntry } from '../../../preload/index.d'
 import { useFileSelection } from '../store/file-selection'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
@@ -170,6 +169,9 @@ function DeviceRow({
         {entry.isDir ? (expanded ? '▼' : '▶') : '▤'}
       </span>
       <span className="tree-row__name">{entry.name}</span>
+      {/* The size (#955). The device listing has carried it all along —
+          `os.ilistdir` returns it — it was simply never shown. */}
+      {rowSize(entry) && <span className="tree-row__size">{rowSize(entry)}</span>}
       {/* Which files the board runs by itself (#755, #872). Two stages: the
           setup file (`boot.py`) and then the program — and CircuitPython tries
           code.py before main.py, so a board carrying both runs only the first
@@ -521,10 +523,7 @@ export function DeviceFileTree(): JSX.Element {
     (paths: string[]): void => {
       const roots = pruneNested(paths)
       if (roots.length === 0) return
-      const label =
-        roots.length === 1
-          ? `"${roots[0].split('/').pop()}"`
-          : `${roots.length} items`
+      const label = roots.length === 1 ? `"${roots[0].split('/').pop()}"` : `${roots.length} items`
       if (!window.confirm(`Delete ${label} from the device? This cannot be undone.`)) return
       void (async (): Promise<void> => {
         setBusy(true)
@@ -670,7 +669,16 @@ export function DeviceFileTree(): JSX.Element {
       }
       return items
     },
-    [deleteMany, deletePath, downloadToComputer, handleOpenFile, newFileIn, newFolderIn, renamePath, selection]
+    [
+      deleteMany,
+      deletePath,
+      downloadToComputer,
+      handleOpenFile,
+      newFileIn,
+      newFolderIn,
+      renamePath,
+      selection
+    ]
   )
 
   if (!connected) {
@@ -815,15 +823,20 @@ export function DeviceFileTree(): JSX.Element {
         )}
       </div>
 
-      {menu && (
-        <ContextMenu position={menu.position} items={menuItems(menu)} onClose={closeMenu} />
-      )}
+      {menu && <ContextMenu position={menu.position} items={menuItems(menu)} onClose={closeMenu} />}
 
       {/* Flash-usage gauge (#211): a slim used/total bar pinned at the bottom.
           Only shown when the board reported `statvfs` (else `disk` is null). */}
       {disk && disk.total > 0 && (
         <div className="devicetree__disk" title={`${usageLabel(disk)} used of flash`}>
-          <div className="devicetree__disk-bar" role="progressbar" aria-label="Device flash used" aria-valuenow={usedPct(disk)} aria-valuemin={0} aria-valuemax={100}>
+          <div
+            className="devicetree__disk-bar"
+            role="progressbar"
+            aria-label="Device flash used"
+            aria-valuenow={usedPct(disk)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
             <div
               className={`devicetree__disk-fill${usedPct(disk) >= 90 ? ' is-full' : usedPct(disk) >= 75 ? ' is-high' : ''}`}
               style={{ width: `${usedPct(disk)}%` }}

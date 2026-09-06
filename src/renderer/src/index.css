@@ -2354,6 +2354,36 @@ body {
 .tree-row__name {
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Takes the slack, so the size below keeps its place at the right rather than
+     being pushed off by a long filename. */
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The file size (#955), right-aligned at the end of the row.
+ *
+ * `margin-left: auto` rather than a fixed column: these are trees, not tables,
+ * and every row is indented differently — a fixed column would either clip the
+ * deepest names or leave a gap at the shallowest.
+ *
+ * Quiet by default and NEVER hidden: it is scanned, not read, and the one
+ * reading that matters (`0 B`) has to survive being glanced at. Tabular figures
+ * so the numbers line up down the column despite the ragged left edge. */
+.tree-row__size {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding-left: 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* On the row you are pointing at or have selected, it comes up with everything
+   else rather than staying muted against a changed background. */
+.tree-row:hover .tree-row__size,
+.tree-row.is-selected .tree-row__size {
+  color: inherit;
 }
 
 /* --------------------------------------------------------------------------
