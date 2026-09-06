@@ -42,6 +42,7 @@ import {
   useState,
   type ReactNode
 } from 'react'
+import { showStatus } from '../lib/status-bar'
 import { baseName, FILE_SAVED_EVENT, useWorkspace, type FileSavedDetail } from './workspace'
 import { useFileSelection } from './file-selection'
 import { planUploadOf, runFolderUpload } from '../lib/folder-transfer'
@@ -81,28 +82,13 @@ const ERROR_LINGER_MS = 4000
  * In-progress messages (`Syncing …`) are dispatched with no linger so the next
  * message replaces them; terminal messages auto-clear after `lingerMs`.
  */
-const SYNC_STATUS_EVENT = 'snakie:status'
-let syncStatusClearTimer: ReturnType<typeof setTimeout> | null = null
-
+/**
+ * Surface a short, transient SYNC message in the status bar (see `showStatus`).
+ * In-progress messages (`Syncing …`) carry no linger so the next message
+ * replaces them; terminal ones auto-clear.
+ */
 function emitSyncStatus(text: string, lingerMs?: number): void {
-  try {
-    window.dispatchEvent(new CustomEvent(SYNC_STATUS_EVENT, { detail: { text, priority: 2 } }))
-  } catch {
-    return
-  }
-  if (syncStatusClearTimer) {
-    clearTimeout(syncStatusClearTimer)
-    syncStatusClearTimer = null
-  }
-  if (lingerMs && text) {
-    syncStatusClearTimer = setTimeout(() => {
-      try {
-        window.dispatchEvent(new CustomEvent(SYNC_STATUS_EVENT, { detail: { text: '' } }))
-      } catch {
-        // ignore — the slot will be overwritten by the next message anyway
-      }
-    }, lingerMs)
-  }
+  showStatus(text, { priority: 2, clearAfterMs: lingerMs })
 }
 
 /** Coarse status backing the toolbar indicator. */
@@ -486,8 +472,7 @@ export function SyncProvider({ children }: { children: ReactNode }): JSX.Element
   const pushPaths = useCallback(
     async (paths: string[]): Promise<void> => {
       if (paths.length === 0) return
-      const label =
-        paths.length === 1 ? baseName(paths[0]) : `${paths.length} files`
+      const label = paths.length === 1 ? baseName(paths[0]) : `${paths.length} files`
       if (lingerTimer.current) clearTimeout(lingerTimer.current)
       setStatus('syncing')
       setError(null)
@@ -599,7 +584,9 @@ export function SyncProvider({ children }: { children: ReactNode }): JSX.Element
         emitSyncStatus(`Syncing ${label}…`)
         // Only a FILE can be saved from an editor buffer, so this path knows the
         // kind without asking the disk (#863).
-        setFileStates((prev) => markFiles(markKind(prev, detail.path, false), [detail.path], 'syncing'))
+        setFileStates((prev) =>
+          markFiles(markKind(prev, detail.path, false), [detail.path], 'syncing')
+        )
         try {
           await window.api.device.writeFile(deviceDestForLocal(detail.path), detail.content)
           setFileStates((prev) => markFiles(prev, [detail.path], 'done'))
