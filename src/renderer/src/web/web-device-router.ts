@@ -77,6 +77,11 @@ export function createWebDeviceRouter(): Record<string, unknown> {
     readFileLine: async (p: string, prefix: string) => call(active, 'readFileLine', p, prefix),
     readFileBytes: async (p: string) => call(active, 'readFileBytes', p),
     writeFile: async (p: string, contents: string) => call(active, 'writeFile', p, contents),
+    // The byte channel (#959). Its absence here is why uploading a `.mpy` on the
+    // web silently did nothing: the renderer called it, the router did not
+    // forward it, and the call resolved to nothing at all.
+    writeFileBytes: async (p: string, contents: Uint8Array) =>
+      call(active, 'writeFileBytes', p, contents),
     remove: async (p: string) => call(active, 'remove', p),
     mkdir: async (p: string) => call(active, 'mkdir', p),
     rename: async (from: string, to: string) => call(active, 'rename', from, to),

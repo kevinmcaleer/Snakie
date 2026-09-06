@@ -1218,6 +1218,19 @@ const parts = {
     source: string
   ): Promise<DriverSourceResult> =>
     ipcRenderer.invoke('parts:readDriverSource', { libraryId, partId, source }),
+  /** The same file as BYTES (#959) — what the installer copies, so a `.mpy`
+   *  driver survives the trip to the board. */
+  readDriverSourceBytes: (
+    libraryId: string,
+    partId: string,
+    source: string
+  ): Promise<{ ok: boolean; bytes?: Uint8Array; error?: string }> =>
+    ipcRenderer
+      .invoke('parts:readDriverSourceBytes', { libraryId, partId, source })
+      .then((r: { ok: boolean; bytes?: ArrayBufferLike; error?: string }) => ({
+        ...r,
+        bytes: r.bytes ? new Uint8Array(r.bytes) : undefined
+      })),
   /**
    * The `.py`/`.mpy` files shipped beside a part's `parts.yml` (#655) — what the
    * Part Editor's Drivers section offers as copy sources, and checks bundled
