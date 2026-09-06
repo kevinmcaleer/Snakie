@@ -6,6 +6,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The docs describe the app that ships** (#962). The README announced
+  "v0.13.0 released" at v0.54.x, and `docs/micropython-boards.md` claimed 219
+  boards from a July snapshot while the shipped index held 225 from MicroPython
+  v1.29.0. Nothing from this run of releases appeared anywhere: not the Board
+  Finder, not the File / Device / Tools menus, not the shortcut sheet, not
+  `.py` → `.mpy`, not the status history, not file sizes.
+
+  The board catalogue is **generated** now, by `scripts/build-boards-doc.mjs`
+  from the same index the app ships, and a test holds its total, its MicroPython
+  release and every one of its rows to that source. It drifted because it had to
+  be retyped, and a reference that is quietly wrong is worse than none — the
+  reader trusts it.
+
+  The README's Status section no longer names a version at all. A number there
+  has to be maintained to stay true, and Releases already has it; what belongs in
+  a README is what the app does.
+
+  **No screenshots were audited: the repository contains none.** Any that exist
+  live outside it, and are still worth a pass against the current UI.
+
 ### Fixed
 
 - **Copying a `.mpy` to the board no longer produces a 0-byte file — and ⌘S no

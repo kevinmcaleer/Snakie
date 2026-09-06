@@ -2,7 +2,8 @@
 
 The **Board View** is a separate, always-on-top window that visualises the pin
 wiring of the Python file you're editing. Open it from the toolbar's **board**
-button; it streams live, so the picture updates as you type.
+button or from **View ▸ Board View** (⇧⌘B); it streams live, so the picture
+updates as you type.
 
 It works by parsing your MicroPython source for the common `machine` constructors
 (`Pin`, `PWM`, `I2C`, `SPI`, `StateMachine`) and drawing a coloured wire from
