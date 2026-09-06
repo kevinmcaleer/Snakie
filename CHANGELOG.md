@@ -6,8 +6,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Added
+## [0.56.0] - 2026-09-06
 
+### Added
 
 - **Compile to `.mpy` in the browser** (#970). On app.snakie.org the file tree's
   context menu read **"Compile to .mpy (unavailable)"**, greyed out. Nothing was
@@ -6293,7 +6294,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.55.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.56.0...HEAD
+[0.56.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.55.0...v0.56.0
 [0.55.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.51.1...v0.55.0
 [0.51.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.51.0...v0.51.1
 [0.51.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.46.0...v0.51.0
