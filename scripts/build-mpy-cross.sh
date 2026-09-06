@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# BUILD mpy-cross TO WEBASSEMBLY (#950, enabling #949).
+# BUILD mpy-cross TO WEBASSEMBLY (#950, enabling #949; the web half is #970).
 # =============================================================================
 #
 # `mpy-cross` is MicroPython's own cross-compiler: it turns `foo.py` into the
 # `foo.mpy` bytecode container a board imports without ever seeing the source.
 # We ship it as WebAssembly rather than a native binary for three reasons — no
 # per-platform builds, no third executable to sign and notarize inside the app
-# bundle, and it will run in the web build the day we want it there.
+# bundle, and it runs in the web build (#970) as well as the desktop one.
 #
 # THE LIST NOBODY MAINTAINS. The obvious way to do this — and the way the
 # published `@pybricks/mpy-cross-v6` package does it — is a Makefile that names
@@ -19,14 +19,27 @@
 #
 # NO THIRD-PARTY GLUE EITHER. pybricks bakes its filesystem/callback wiring into
 # the artifact with `--pre-js`. We pass `preRun` / `print` / `printErr` /
-# `onExit` on the Module object from `src/main/mpy/compile.ts` instead, so what
+# `onExit` on the Module object from `src/shared/mpy-compile.ts` instead, so what
 # ships here is mpy-cross and nothing else.
 #
-# THE LOADER IS `.cjs`, NOT `.js`. Emscripten emits a CommonJS file whose export
-# line is guarded by `typeof module === "object"`. This package.json is
-# `"type": "module"`, so a `.js` here is parsed as ESM, that branch never runs,
-# and `require()` hands back an empty object — the same reason the preload has to
-# be `index.cjs` (see CLAUDE.md). Renaming it on the way out is the whole fix.
+# TWO LOADERS, ONE `.wasm`. Emscripten's JS glue is per-environment; the
+# WebAssembly is not. So this links the SAME objects twice and ships one binary:
+#
+#   mpy-cross.cjs  node/Electron main. `.cjs`, NOT `.js`: Emscripten's export
+#                  line is guarded by `typeof module === "object"`, this
+#                  package.json is `"type": "module"`, so a `.js` here is parsed
+#                  as ESM, that branch never runs, and `require()` hands back an
+#                  empty object — the same reason the preload has to be
+#                  `index.cjs` (see CLAUDE.md). Renaming it on the way out is
+#                  the whole fix.
+#   mpy-cross.mjs  the browser. `-sENVIRONMENT=web,worker` drops the node
+#                  branches (a `require("node:fs")` a bundler would otherwise
+#                  have to reason about) and `.mjs` makes emcc emit
+#                  `export default`, so Vite can import the factory into the
+#                  compile worker like any other module.
+#
+# Both links write the same `mpy-cross.wasm`, and both callers hand it in as
+# `wasmBinary`, so neither loader ever fetches it by path.
 #
 # Requires Docker. Takes a couple of minutes. Run it when moving to a new
 # MicroPython release, and commit what it writes:
@@ -56,6 +69,15 @@ git clone -q --depth 1 --branch "$MICROPYTHON_TAG" \
 echo "→ building with $EMSDK_IMAGE"
 docker run --rm -v "$WORK/micropython:/src" -w /src/mpy-cross "$EMSDK_IMAGE" bash -c '
   set -e
+  # The flags both loaders share. The second `make` relinks the objects the
+  # first one compiled, so it costs seconds, not another full build.
+  COMMON="-Oz \
+    -s MODULARIZE=1 \
+    -s EXPORT_NAME=MpyCross \
+    -s EXIT_RUNTIME=1 \
+    -s ALLOW_MEMORY_GROWTH=1 \
+    -sINCOMING_MODULE_JS_API=wasmBinary,arguments,preRun,print,printErr,onExit \
+    -sEXPORTED_RUNTIME_METHODS=FS"
   # CC=emcc directly, NOT `emmake make`: emmake rewrites `gcc` to `emgcc`, which
   # is not a program that exists, and the qstr generation dies on it.
   make -j"$(nproc)" \
@@ -63,17 +85,21 @@ docker run --rm -v "$WORK/micropython:/src" -w /src/mpy-cross "$EMSDK_IMAGE" bas
     PROG=mpy-cross.js \
     COPT=-Oz \
     LDFLAGS_ARCH= STRIP= SIZE=true CWARN=-Wall \
-    LDFLAGS_EXTRA="-Oz \
-      -s MODULARIZE=1 \
-      -s EXPORT_NAME=MpyCross \
-      -s EXIT_RUNTIME=1 \
-      -s ALLOW_MEMORY_GROWTH=1 \
-      -sINCOMING_MODULE_JS_API=wasmBinary,arguments,preRun,print,printErr,onExit \
-      -sEXPORTED_RUNTIME_METHODS=FS"
+    LDFLAGS_EXTRA="$COMMON"
+  # The browser loader. `.mjs` is what tells emcc to emit an ES module
+  # (`export default`), and `ENVIRONMENT=web,worker` keeps the node filesystem
+  # branches — `require("node:fs")` included — out of the bundle entirely.
+  make -j"$(nproc)" \
+    CC=emcc LD=emcc AR=emar \
+    PROG=mpy-cross.mjs \
+    COPT=-Oz \
+    LDFLAGS_ARCH= STRIP= SIZE=true CWARN=-Wall \
+    LDFLAGS_EXTRA="$COMMON -sENVIRONMENT=web,worker -sEXPORT_ES6=1"
 ' >/dev/null
 
 mkdir -p "$OUT"
 cp "$WORK/micropython/mpy-cross/build/mpy-cross.js"   "$OUT/mpy-cross.cjs"
+cp "$WORK/micropython/mpy-cross/build/mpy-cross.mjs"  "$OUT/mpy-cross.mjs"
 cp "$WORK/micropython/mpy-cross/build/mpy-cross.wasm" "$OUT/mpy-cross.wasm"
 
 # Record what produced these, so the committed binaries are traceable to a tag

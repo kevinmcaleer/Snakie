@@ -220,9 +220,11 @@ export function LocalFileTree(): JSX.Element {
     publishSelection(selectedPath ? { path: selectedPath, isDir: selectedIsDir } : null)
   }, [selectedPath, selectedIsDir, publishSelection])
   const [error, setError] = useState<string | null>(null)
-  /** Whether this build ships the MicroPython compiler. False on the web, which
-   *  has no main process to run it in — so the item says why instead of failing
-   *  when pressed. */
+  /** Whether this build can compile at all. True in the desktop app (the
+   *  compiler runs in main) and in the browser since #970 (the same WebAssembly,
+   *  in a worker on the page). Where it is genuinely absent — a build without the
+   *  artifact, or a browser with no filesystem backend to write the `.mpy` into —
+   *  the item says why instead of failing when pressed. */
   const [mpyReady, setMpyReady] = useState(false)
   useEffect(() => {
     let live = true

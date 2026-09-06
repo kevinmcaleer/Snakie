@@ -906,7 +906,9 @@ const plugins = {
  */
 /**
  * Compiling `.py` to `.mpy` (#949). The compiler is WebAssembly running in the
- * MAIN process — see `main/mpy/compile.ts` for why it lives there.
+ * MAIN process — see `main/mpy/compile.ts` for why it lives there. The web build
+ * answers the same two calls without any of this, from a worker on the page
+ * (`renderer/src/web/web-mpy.ts`, #970).
  */
 const mpy = {
   /** Can this build compile at all, and from which MicroPython? */
