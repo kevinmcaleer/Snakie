@@ -96,7 +96,7 @@
 }
 
 .boardgraph__viewtab.is-active {
-  color: var(--goldink, #fff);
+  color: var(--ongold);
   font-weight: 700;
   background: var(--grad-gold, #2f5f8c);
   box-shadow: inset 0 1px 0 var(--pillinset, rgba(255, 255, 255, 0.4));
@@ -372,7 +372,7 @@
   font-family: var(--font-ui), inherit;
   font-size: 12.5px;
   font-weight: 700;
-  color: var(--goldink, #6b4e17);
+  color: var(--ongold);
   background: var(--grad-gold, #e6ab30);
   border: none;
   border-radius: 999px;
@@ -400,7 +400,7 @@
   font-size: 10.5px;
   font-weight: 700;
   line-height: 1;
-  color: var(--goldink, #6b4e17);
+  color: var(--ongold);
   background: rgba(255, 255, 255, 0.5);
   border-radius: 999px;
 }
@@ -994,7 +994,7 @@
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.04em;
-  color: var(--goldink, #4a3a12);
+  color: var(--ongold);
   background: var(--gold, #e8b34a);
   border: 1px solid #c79a3a;
   border-radius: 4px;
@@ -1010,7 +1010,7 @@
   font-size: 8.5px;
   font-weight: 700;
   letter-spacing: 0.06em;
-  color: var(--goldink, #4a3a12);
+  color: var(--ongold);
   background: var(--gold, #e8b34a);
   border-radius: 3px;
   padding: 1px 4px;

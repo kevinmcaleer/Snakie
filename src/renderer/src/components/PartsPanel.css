@@ -47,7 +47,7 @@
 .pl__btn--primary {
   background: var(--grad-gold, #2f6b2a);
   border: none;
-  color: var(--goldink, #fff);
+  color: var(--ongold);
   box-shadow: inset 0 1px 0 var(--pillinset, rgba(255, 255, 255, 0.5));
 }
 
@@ -278,7 +278,7 @@
 }
 
 .pl__badge--update {
-  color: var(--goldink, #5a3d0e);
+  color: var(--ongold);
   background: var(--grad-gold, #e6ab30);
   border-color: transparent;
 }
@@ -539,7 +539,7 @@
 }
 
 .pl__seg-btn.is-active {
-  color: var(--goldink, #fff);
+  color: var(--ongold);
   background: var(--grad-gold, var(--accent, #2f6b2a));
 }
 

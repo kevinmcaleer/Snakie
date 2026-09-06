@@ -11,6 +11,29 @@
  * textures tokens can't express (mirrored skeuomorph ⇄ dark).
  * ------------------------------------------------------------------------- */
 :root {
+  /**
+   * The ink that goes ON the gold gradient (#956).
+   *
+   * `--grad-gold` is IDENTICAL in both skins, so the text on it cannot come from
+   * a token that flips: `--goldink` is pale gold on the dark skin, which painted
+   * #f0dca6 on a gradient whose top stop IS #f0dca6 — a contrast ratio of 1.00,
+   * i.e. invisible. That is why the active Electronics tab, "+ New part" and the
+   * Help pill were unreadable in dark mode and fine in skeuomorph.
+   *
+   * Defined HERE, in the shared block, rather than twice: a value that must not
+   * differ between skins should not be somewhere it could.
+   *
+   * Dark brass, a shade deeper than the Board Finder's own `--bf-gold-ink`
+   * (#5a3d0e). That one clears AA comfortably on the GRADIENT but lands at
+   * 4.43:1 on the solid `--gold` (#d9a441), which is also identical across
+   * skins and also carries text. This value clears 4.5 on all three surfaces —
+   * 8.85:1, 6.87:1 and 5.33:1 — and the test computes those rather than
+   * trusting this comment.
+   *
+   * NOT to be confused with `--goldink`, which is gold-COLOURED ink for text on
+   * the dark chrome, and is correct wherever it pairs with `--goldbg`.
+   */
+  --ongold: #4a3209;
   /* Base/shared chrome metrics — overridden per skin below where they differ. */
   --radius: 8px;
   --border-w: 1px;

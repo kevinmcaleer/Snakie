@@ -24,7 +24,7 @@
 .robotdock .robotdock__btn--cta:hover,
 :root[data-theme='skeuomorph'] .robotdock .robotdock__btn--cta,
 :root[data-theme='skeuomorph'] .robotdock .robotdock__btn--cta:hover {
-  color: var(--goldink, #191a1d);
+  color: var(--ongold);
   background: var(--grad-gold, var(--accent, #c8a24a));
   border: 1px solid var(--gold, var(--accent, #c8a24a));
   font-weight: 700;

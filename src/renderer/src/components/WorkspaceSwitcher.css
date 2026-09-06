@@ -45,10 +45,10 @@
 
 .ws-switcher__btn.is-active {
   background: var(--grad-gold, var(--accent));
-  color: var(--goldink, var(--accent-contrast));
+  color: var(--ongold);
   font-weight: 750;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
 }
 .ws-switcher__btn.is-active:hover {
-  color: var(--goldink, var(--accent-contrast));
+  color: var(--ongold);
 }

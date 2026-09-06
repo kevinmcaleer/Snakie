@@ -8,6 +8,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The gold buttons are readable in dark mode** (#956). The active Electronics
+  tab, Breadboard, "+ New part", the Help pill and eleven other gold controls
+  painted pale text on a pale gold background.
+
+  One token, misused. `--goldink` means gold-*coloured* ink, for text on the
+  dark chrome — but it reads like "the ink for gold", so it was used for both.
+  The gold *surfaces* do not flip with the skin: `--grad-gold` and `--gold` are
+  byte-identical in both. So on the dark skin it painted `#f0dca6` on a gradient
+  whose top stop **is** `#f0dca6` — a contrast ratio of **1.00**, which is why
+  these read perfectly in skeuomorph and not at all in dark.
+
+  There is now `--ongold` for text on those surfaces, defined once in the shared
+  `:root` because a value that must not differ between skins should not live
+  somewhere it could. Thirteen rules moved to it; the rest kept `--goldink`,
+  which was never wrong where it pairs with `--goldbg` or sits on a dark panel.
+
+  The ink is a shade deeper than the Board Finder's own local answer to this: at
+  4.43:1 that one cleared the gradient but not the solid gold, which also carries
+  text. This clears 4.5 on all three surfaces, and the test computes the ratios
+  rather than trusting a comment.
+
+### Fixed
+
 - **The app no longer embosses its own text** (#960). `text-shadow: 0 1px 0
   #fff` under dark text on grey, and the dark-above inverse on the dark skin —
   a letterpress effect on 32 rules across buttons, the toolbar, the status bar,
