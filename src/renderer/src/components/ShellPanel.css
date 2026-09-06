@@ -154,7 +154,6 @@
 :root[data-theme='skeuomorph'] .shell-actions .shell-toggle__btn {
   background: var(--panel2);
   color: var(--txt3);
-  text-shadow: none;
 }
 
 :root[data-theme='skeuomorph'] .shell-actions .shell-toggle__btn:hover {

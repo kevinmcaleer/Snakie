@@ -160,7 +160,6 @@
   color: #33301f;
   white-space: pre;
   /* Faint ink-ribbon inconsistency + the dotty impression. */
-  text-shadow: 0.4px 0 rgba(0, 0, 0, 0.18);
   letter-spacing: 0.02em;
 }
 
