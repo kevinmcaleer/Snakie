@@ -1,3 +1,5 @@
+import { useStatusHistory } from '../store/status-history'
+import { HISTORY_LIMIT_MAX, HISTORY_LIMIT_MIN } from '../../../shared/status-history'
 import { useEffect, useState } from 'react'
 import {
   useEditorSettings,
@@ -48,7 +50,11 @@ const TABS: { id: SettingsTab; label: string }[] = [
 /** The app-wide skins (moved here from the toolbar toggle). "Light" is the
  *  textured default skin (id `skeuomorph`); the other is the dark theme. */
 const THEME_OPTIONS: { value: Theme; label: string; hint: string }[] = [
-  { value: 'skeuomorph', label: 'Light', hint: 'The bright default skin — brushed metal, felt and cream paper' },
+  {
+    value: 'skeuomorph',
+    label: 'Light',
+    hint: 'The bright default skin — brushed metal, felt and cream paper'
+  },
   { value: 'dark', label: 'Dark', hint: 'A dark, lights-out theme' }
 ]
 
@@ -143,7 +149,11 @@ export function SettingsDialog({
 const BREADBOARD_BG_OPTIONS: { value: BreadboardBg; label: string; hint: string }[] = [
   { value: 'dark', label: 'Dark', hint: 'The default dark workbench mat' },
   { value: 'blueprint', label: 'Blueprint', hint: 'A classic blue blueprint with a light grid' },
-  { value: 'white', label: 'White', hint: 'A plain white sheet — best for printing and screenshots' }
+  {
+    value: 'white',
+    label: 'White',
+    hint: 'A plain white sheet — best for printing and screenshots'
+  }
 ]
 
 /** The Appearance tab: the app-wide skin + the Board View breadboard background. */
@@ -181,9 +191,7 @@ function AppearanceTab({
 
       <section className="settings-section">
         <h3 className="settings-section__title">Breadboard background</h3>
-        <p className="settings-section__hint">
-          The backdrop behind the Board View wiring canvas.
-        </p>
+        <p className="settings-section__hint">The backdrop behind the Board View wiring canvas.</p>
         <div className="settings-segment" role="radiogroup" aria-label="Breadboard background">
           {BREADBOARD_BG_OPTIONS.map((opt) => (
             <button
@@ -326,9 +334,9 @@ function EditorTab(): JSX.Element {
         <h3 className="settings-section__title">Refactoring hints</h3>
         <p className="settings-section__hint">
           Snakie always points out the MicroPython ones — a tick counter that will wrap, an
-          interrupt handler that allocates — because those are bugs waiting to happen. Turn this
-          on to also see the style suggestions: guard clauses, simpler loops, names for magic
-          numbers. Right-click → Refactor… offers everything either way.
+          interrupt handler that allocates — because those are bugs waiting to happen. Turn this on
+          to also see the style suggestions: guard clauses, simpler loops, names for magic numbers.
+          Right-click → Refactor… offers everything either way.
         </p>
         <label className="settings-check">
           <input
@@ -354,8 +362,8 @@ function EditorTab(): JSX.Element {
       <section className="settings-section">
         <h3 className="settings-section__title">Firmware updates</h3>
         <p className="settings-section__hint">
-          Check whether a newer MicroPython is available for the connected device and prompt you from
-          the Flash-firmware button.
+          Check whether a newer MicroPython is available for the connected device and prompt you
+          from the Flash-firmware button.
         </p>
         <label className="settings-check">
           <input
@@ -366,6 +374,71 @@ function EditorTab(): JSX.Element {
           <span>Check for newer MicroPython firmware</span>
         </label>
       </section>
+
+      <StatusHistorySettings />
     </>
+  )
+}
+
+/**
+ * What the status bar keeps (#953).
+ *
+ * The bar shows one line and each message wipes the last, so the history is
+ * where a message goes to still exist. Three controls, because those are the
+ * three questions: keep any at all, how many, and get rid of what is there.
+ */
+function StatusHistorySettings(): JSX.Element {
+  const { entries, limit, enabled, clear, setLimit, setEnabled } = useStatusHistory()
+  return (
+    <section className="settings-section">
+      <div className="settings-section__row">
+        <h3 className="settings-section__title">Status history</h3>
+        <span className="settings-value">
+          {entries.length} {entries.length === 1 ? 'message' : 'messages'}
+        </span>
+      </div>
+      <p className="settings-section__hint">
+        The status bar shows one message at a time. Click it to see the ones before it.
+      </p>
+      <label className="settings-check">
+        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+        <span>Keep a history of status messages</span>
+      </label>
+      <div className="settings-section__row">
+        <label className="settings-shist__label" htmlFor="status-history-limit">
+          Keep the most recent
+        </label>
+        <input
+          id="status-history-limit"
+          // UNCONTROLLED, committed on blur or Enter. A controlled field would
+          // apply every keystroke, and typing "500" over "200" passes through
+          // "5" — which trims the log to its floor one character into an edit.
+          // `key` re-seeds the field if the limit changes from elsewhere.
+          key={limit}
+          type="number"
+          className="settings-shist__number"
+          min={HISTORY_LIMIT_MIN}
+          max={HISTORY_LIMIT_MAX}
+          step={10}
+          defaultValue={limit}
+          disabled={!enabled}
+          onBlur={(e) => setLimit(Number(e.target.value))}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+          }}
+        />
+      </div>
+      <p className="settings-section__hint">
+        Older messages are dropped past this. Turning the history off clears what is stored.
+      </p>
+      <button
+        type="button"
+        className="settings-shist__clear"
+        onClick={clear}
+        disabled={entries.length === 0}
+      >
+        Clear history now
+      </button>
+    </section>
   )
 }

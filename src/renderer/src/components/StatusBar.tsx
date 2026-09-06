@@ -4,6 +4,7 @@ import { useWorkspace } from '../store/workspace'
 import { useConsole } from '../store/console'
 import { useEditorSettings } from '../store/settings'
 import { FirmwareFlasher } from './FirmwareFlasher'
+import { StatusHistoryPopup, StatusHistoryView } from './StatusHistory'
 import { onOpenTool } from './tools-bus'
 import { CoffeeLink } from './CoffeeLink'
 import { updateButtonView } from './updateButton'
@@ -97,6 +98,11 @@ export function StatusBar({
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
 
   const [flasherOpen, setFlasherOpen] = useState(false)
+  // The status history (#953): the popup over the bar, and the full log. The bar
+  // shows one line and each message wipes the last, so what you did not happen
+  // to be looking at is otherwise gone.
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyFull, setHistoryFull] = useState(false)
   // Tools ▸ Firmware Flasher (#917). The status bar owns the dialog, so it opens
   // it; the menu only asks. It does NOT own the Board Finder — that stays inside
   // the dialog (#896) and, since #917, in the app frame for the standalone case.
@@ -455,12 +461,16 @@ export function StatusBar({
               {pluginMsg.text}
             </button>
           ) : (
-            <span
-              className="statusbar__item statusbar__plugin"
-              title={pluginMsg.tooltip ?? undefined}
+            // Clickable since #953: the bar keeps a history now, and the message
+            // itself is the obvious thing to click to see the ones before it.
+            <button
+              type="button"
+              className="statusbar__item statusbar__plugin statusbar__plugin--history"
+              title={pluginMsg.tooltip ?? 'Show recent messages'}
+              onClick={() => setHistoryOpen((v) => !v)}
             >
               {pluginMsg.text}
-            </span>
+            </button>
           ))}
 
         {/* Discovery tip (#434) — only rendered while the bar is otherwise
@@ -606,6 +616,17 @@ export function StatusBar({
         </div>
       </div>
 
+
+      {historyOpen && !historyFull && (
+        <StatusHistoryPopup
+          onClose={() => setHistoryOpen(false)}
+          onExpand={() => {
+            setHistoryOpen(false)
+            setHistoryFull(true)
+          }}
+        />
+      )}
+      {historyFull && <StatusHistoryView onClose={() => setHistoryFull(false)} />}
 
       {flasherOpen && (
         <FirmwareFlasher

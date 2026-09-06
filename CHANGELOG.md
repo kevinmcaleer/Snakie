@@ -6,6 +6,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The status bar keeps a history** (#953). It shows one line at a time and
+  every message wipes the one before it, so anything you were not looking at was
+  simply gone — including the ones that matter afterwards: which file failed to
+  sync, what the compile said, why an install stopped.
+
+  Click the message to see the recent ones; **Show all** opens the full log,
+  where it can be copied to the clipboard, saved as a text file, or cleared.
+  Settings ▸ Editor carries the three questions worth asking: keep a history at
+  all, how many lines, and clear what is there.
+
+  Newest first on screen, **oldest first in the file** — the thing you just
+  missed is the thing you clicked for, while a saved log is read by other tools
+  and by scrolling down, and those want time running forwards.
+
+  Messages are recorded from the `snakie:status` **event** rather than from
+  `showStatus`, so a plugin posting to the bar directly is kept too, and the
+  listener attaches at module load rather than from a component — the panel that
+  reads the history is opened *after* the message you wanted. The cap is a ring
+  buffer, applied to what is already stored as well as to what arrives, so
+  lowering it in Settings takes effect immediately rather than drifting until
+  enough new messages reconcile the two numbers. Turning history off discards
+  what was kept, because a switch that says "don't keep a history" and leaves the
+  old one on disk is not telling the truth.
+
 ### Fixed
 
 - **"Compiled foo.mpy" no longer sticks in the Files panel** (#952). #949's
