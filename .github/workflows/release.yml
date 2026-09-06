@@ -70,23 +70,112 @@ jobs:
       # arches (universal serialport prebuild); each Linux job is pinned to its
       # native arch to avoid cross-arch native rebuild failures.
       #
-      # The build is split into a macOS step (with the signing + notarization env
-      # from secrets) and a Windows/Linux step with NO signing env at all. This
-      # avoids two traps:
-      #   1. CSC_LINK leaking to Windows makes electron-builder sign the .exe with
-      #      the macOS Developer ID cert (wrong);
-      #   2. setting CSC_LINK to an *empty string* on Windows FAILS the build
-      #      ("Env WIN_CSC_LINK ... not a file") — the var must be ABSENT, not
-      #      empty. A per-key `… || ''` env can't omit a key, hence two steps.
+      # The build is split into a macOS step (with the notarization env from
+      # secrets) and a Windows/Linux step with no signing env at all.
+      #
+      # It used to be split because CSC_LINK had to reach macOS and be ABSENT on
+      # Windows — present, it signed the .exe with the macOS Developer ID cert;
+      # empty, it failed the build outright ("Env WIN_CSC_LINK … not a file"), and a
+      # per-key `… || ''` cannot omit a key. Since #968 the cert never goes through
+      # the environment at all (see the keychain step below), so that trap is gone —
+      # but APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD are still macOS-only, and the
+      # split keeps them there.
+      #
       # Do NOT add CSC_IDENTITY_AUTO_DISCOVERY=false: it *disables* macOS code
       # signing outright (electron-builder logs "skipped … code signing"), which
-      # previously shipped signed builds unsigned. See docs/macos-signing.md.
+      # previously shipped signed builds unsigned — and since #968 auto-discovery is
+      # precisely how the identity is found in the keychain we prepare.
+      # See docs/macos-signing.md.
+      # --- The signing keychain, built by us and not by electron-builder (#968) --
+      #
+      # macOS releases failed INTERMITTENTLY — v0.51.1 and v0.55.0 each needed three
+      # attempts — always on the same command, with:
+      #
+      #   security set-key-partition-list … SecKeychainUnlock:
+      #     The user name or passphrase you entered is not correct.
+      #
+      # Not the credentials (those would fail every time) and not the runner image
+      # (byte-identical across the passing and failing runs of one release). It is a
+      # bug in electron-builder's own keychain setup —
+      # app-builder-lib/out/codeSign/macCodeSign.js, `importCerts`:
+      #
+      #   security import                 … -P <p12 password>
+      #   security set-key-partition-list … -k <p12 password>    ← wants the KEYCHAIN's
+      #
+      # `-k` is the password `security` falls back to when it has to unlock the
+      # keychain itself, so the wrong one is harmless *while the keychain happens to
+      # still be unlocked* by createKeychain's earlier `unlock-keychain`, and fatal
+      # the moment anything has relocked it. That is the whole shape of the flake:
+      # a latent defect that only bites when lock state goes the wrong way. What
+      # relocks it on the runner is NOT established — the error message is the only
+      # evidence, and it names the unlock, not the cause. The fix does not depend on
+      # knowing: passing the keychain's real password makes the command correct
+      # whether it is locked or not.
+      #
+      # macPackager.js:26 — when CSC_LINK is ABSENT, electron-builder skips
+      # createKeychain entirely and signs against `process.env.CSC_KEYCHAIN`. So we
+      # import the cert once, in a fixed order, with the right password, and hand it
+      # a keychain that is already set up. The buggy path is never taken.
+      #
+      # With no cert (a fork, or secrets unset) this is a no-op: CSC_KEYCHAIN stays
+      # unset and the build below runs unsigned, exactly as it did before.
+      - name: Prepare signing keychain — macOS
+        if: matrix.os == 'macos-latest'
+        env:
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MAC_CSC_LINK:-}" ]; then
+            echo "No signing certificate — building unsigned."
+            exit 0
+          fi
+
+          KEYCHAIN="$RUNNER_TEMP/snakie-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+          CERT="$RUNNER_TEMP/certificate.p12"
+          printf '%s' "$MAC_CSC_LINK" | base64 --decode > "$CERT"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          # No flags = no lock on sleep and no lock on timeout. The default is a
+          # five-minute idle lock, and notarizing four artifacts takes far longer.
+          security set-keychain-settings "$KEYCHAIN"
+
+          # Prepend to the user search list — codesign only looks at keychains on it
+          # — KEEPING the existing entries so nothing else on the runner breaks.
+          # Done BEFORE the unlock, because `list-keychains -s` resets lock state;
+          # doing it after is what leaves electron-builder signing into a locked
+          # keychain.
+          security list-keychains -d user -s "$KEYCHAIN" \
+            $(security list-keychains -d user | sed -e 's/[" ]//g')
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+
+          # -P is the .p12's password; -k below is the KEYCHAIN's. Conflating the
+          # two is the whole bug. Without the partition list, codesign blocks on a
+          # UI authorisation prompt that no one is there to answer.
+          security import "$CERT" -k "$KEYCHAIN" -P "$MAC_CSC_KEY_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          rm -f "$CERT"
+
+          # Fail here, loudly, if the identity did not land — rather than 20 minutes
+          # later inside electron-builder, or worse, as a silently unsigned build.
+          # `-v` needs the chain to validate: Developer ID Certification Authority
+          # is in macOS's SystemRootCertificates, so this does not need
+          # electron-builder's bundled root_certs.keychain (which carries WWDR, the
+          # App Store / development intermediate, not the Developer ID one).
+          security find-identity -v -p codesigning "$KEYCHAIN"
+          security find-identity -v -p codesigning "$KEYCHAIN" | grep -q "Developer ID Application"
+          echo "CSC_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+
       - name: Build installers — macOS (signed + notarized)
         if: matrix.os == 'macos-latest'
         run: npm run dist -- ${{ matrix.platform_flag }} --publish never
         env:
-          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          # No CSC_LINK / CSC_KEY_PASSWORD: their presence is what makes
+          # electron-builder build its own keychain. CSC_KEYCHAIN is exported by the
+          # step above (empty when there is no cert, which signs nothing).
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}

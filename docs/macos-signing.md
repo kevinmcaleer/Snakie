@@ -32,11 +32,60 @@ Settings → Secrets and variables → Actions → **New repository secret**:
 | `APPLE_APP_SPECIFIC_PASSWORD` | app-specific password for that Apple ID | appleid.apple.com → App-Specific Passwords |
 | `APPLE_TEAM_ID` | your 10-char Team ID | Apple Developer → Membership |
 
-That's it — `release.yml` passes these to electron-builder
-(`CSC_LINK`/`CSC_KEY_PASSWORD` for signing; `APPLE_ID`/
-`APPLE_APP_SPECIFIC_PASSWORD`/`APPLE_TEAM_ID` for notarization via
-`mac.notarize: true` in `electron-builder.yml`). The entitlements live in
-`build/entitlements.mac.plist`.
+That's it — `release.yml` takes it from there. The notarization secrets
+(`APPLE_ID`/`APPLE_APP_SPECIFIC_PASSWORD`/`APPLE_TEAM_ID`) go straight to
+electron-builder as env, for `mac.notarize` in `electron-builder.yml`. The
+entitlements live in `build/entitlements.mac.plist`.
+
+The **certificate** does not: it goes into a keychain the workflow builds itself,
+in the *Prepare signing keychain* step, which then exports `CSC_KEYCHAIN`. That is
+deliberate, and worth knowing before you change it.
+
+## Why the workflow builds its own keychain (#968)
+
+Left to itself, electron-builder creates a temp keychain and imports the cert —
+and macOS releases then failed **intermittently**. v0.51.1 and v0.55.0 each needed
+three attempts, always dying on the same command:
+
+```
+security set-key-partition-list … SecKeychainUnlock:
+  The user name or passphrase you entered is not correct.
+```
+
+Not the credentials (they would fail every time) and not the runner image (identical
+across the passing and failing runs of a single release). It is a defect in
+`app-builder-lib/out/codeSign/macCodeSign.js`, `importCerts`:
+
+```js
+security import                 … -P <p12 password>
+security set-key-partition-list … -k <p12 password>   // wants the KEYCHAIN's password
+```
+
+`-k` is the password `security` falls back to when it has to unlock the keychain
+itself. So the wrong one is invisible while the keychain is still unlocked from
+`createKeychain`'s earlier `unlock-keychain`, and fatal once anything has relocked
+it. What does the relocking on a hosted runner was never established — but it does
+not need to be, because passing the keychain's *real* password is correct either
+way.
+
+`macPackager.js` only calls `createKeychain` when `CSC_LINK` is set; with it absent
+it signs against `process.env.CSC_KEYCHAIN` instead. So the workflow imports the
+cert once, in a fixed order, with the right password, and hands electron-builder a
+keychain that is already correct. The buggy path is never entered.
+
+Consequences to keep in mind:
+
+- **`CSC_LINK` / `CSC_KEY_PASSWORD` must NOT be set on the build step.** Setting
+  either puts electron-builder back on its own keychain path — the bug returns
+  silently, as a flake.
+- `CSC_IDENTITY_AUTO_DISCOVERY=false` stays off, as before: it disables signing
+  outright, and auto-discovery is now exactly how the identity is found.
+- With no cert (a fork, secrets unset) the step is a no-op, `CSC_KEYCHAIN` stays
+  unset, and the build is unsigned — as it was before.
+- The identity is asserted at the end of the step, so a broken cert fails in
+  seconds with a clear message instead of twenty minutes later. `-v` requires the
+  chain to validate; *Developer ID Certification Authority* ships in macOS's
+  `SystemRootCertificates.keychain`, so nothing extra is imported for it.
 
 ## Verifying a release is signed & notarized
 
