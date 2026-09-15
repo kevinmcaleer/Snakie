@@ -36,6 +36,15 @@ export const SNAKIE_LIB_PATH = '/lib/snakie.py'
 export const SNAKIE_ROOT_PATH = '/snakie.py'
 
 /**
+ * The `turtle.py` Logo-style turtle-graphics library (issue #1003) installs the
+ * same way, as its own independent file — it has no umbrella and isn't
+ * required by `instruments.py`, so it gets its own install/probe cycle rather
+ * than riding along with the instruments-library install.
+ */
+export const TURTLE_LIB_PATH = '/lib/turtle.py'
+export const TURTLE_ROOT_PATH = '/turtle.py'
+
+/**
  * Install detection, cached per connection so we don't re-poll the raw REPL on
  * every dock open:
  *  - `'unknown'`   — not probed yet (or reset on disconnect); a probe is due.

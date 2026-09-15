@@ -83,6 +83,25 @@ function readSnakieUmbrellaSource(): string {
   }
 }
 
+/**
+ * The bundled `turtle.py` Logo-style turtle graphics library (issue #1003).
+ * Resolved like {@link readInstrumentsLibrarySource} so the renderer can offer
+ * the same one-click "install onto the board" flow for it.
+ */
+function readTurtleLibrarySource(): string {
+  const packaged = join(process.resourcesPath, 'micropython', 'turtle.py')
+  const path =
+    app.isPackaged && existsSync(packaged)
+      ? packaged
+      : join(__dirname, '..', '..', 'micropython', 'turtle.py')
+  try {
+    return readFileSync(path, 'utf-8')
+  } catch (err) {
+    console.error('[turtle] could not read the bundled library at', path, err)
+    return ''
+  }
+}
+
 function createWindow(): void {
   // Create the browser window with secure defaults.
   const window = new BrowserWindow({
@@ -167,6 +186,8 @@ app.whenReady().then(() => {
   // throws (returns '' on failure — the renderer treats that as "unavailable").
   ipcMain.handle('instruments:librarySource', () => readInstrumentsLibrarySource())
   ipcMain.handle('instruments:umbrellaSource', () => readSnakieUmbrellaSource())
+  // Same one-click install flow, for the turtle graphics library (issue #1003).
+  ipcMain.handle('instruments:turtleSource', () => readTurtleLibrarySource())
 
   // Open an external URL in the user's default browser (used by clickable
   // plugin status-bar links). Only http(s) URLs are honoured.

@@ -21,6 +21,11 @@ for _ in range(4):
     right(90)
 ```
 
+If running this gives `ImportError: no module named 'turtle'`, the library
+isn't on your board yet — connect it and Snakie offers a one-click **Download
+& install** banner at the top of the window (the same way it offers to
+install the instruments library). It installs `/lib/turtle.py`.
+
 There is no separate REPL or parser — `forward(10)` is an ordinary Python
 call, so loops, variables and functions all work as normal. Import from
 `turtle` (or `import turtle as t` and call `t.forward(10)`) to draw with the

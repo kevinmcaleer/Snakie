@@ -1022,6 +1022,9 @@ const instruments = {
   /** The bundled `snakie.py` hardware-umbrella source, installed to `/lib/snakie.py`
    *  alongside `instruments.py` so `from snakie import Servo, …` works on the board. */
   umbrellaSource: (): Promise<string> => ipcRenderer.invoke('instruments:umbrellaSource'),
+  /** The bundled `turtle.py` turtle-graphics library source, installed to
+   *  `/lib/turtle.py` (issue #1003) — same one-click install flow as above. */
+  turtleSource: (): Promise<string> => ipcRenderer.invoke('instruments:turtleSource'),
 
   // --- Detached instrument OS windows (#205) ---
   /** Open (or focus) a true OS window rendering one undocked instrument. */

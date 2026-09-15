@@ -96,6 +96,8 @@ import {
   INSTRUMENTS_LIB_DIR,
   SNAKIE_LIB_PATH,
   SNAKIE_ROOT_PATH,
+  TURTLE_LIB_PATH,
+  TURTLE_ROOT_PATH,
   classifyPresentCopy,
   parseLibVersion,
   shouldShowBanner,
@@ -846,6 +848,122 @@ export function AppShell(): JSX.Element {
     dismissed: libDismissed
   })
 
+  // --- Offer to install the turtle graphics library (#1003) ------------------
+  // Same one-click install flow as the instruments library above, for the
+  // independent `turtle.py` module — it has no umbrella and isn't required by
+  // `instruments.py`, so it gets its own probe/install/banner rather than
+  // riding along with the instruments-library install (a program can `import
+  // instruments` without ever touching turtle graphics, and vice versa).
+  const [turtleLibState, setTurtleLibState] = useState<InstallState>('unknown')
+  const [turtleLibDismissed, setTurtleLibDismissed] = useState(false)
+  const [turtleLibInstalling, setTurtleLibInstalling] = useState(false)
+  const [turtleLibError, setTurtleLibError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setTurtleLibState('unknown')
+  }, [deviceStatus.state, deviceStatus.path])
+
+  useEffect(() => {
+    setTurtleLibDismissed(false)
+    setTurtleLibError(null)
+  }, [deviceStatus.state, deviceStatus.path])
+
+  useEffect(() => {
+    if (!connected || turtleLibState !== 'unknown') return
+    let active = true
+    const probe = (path: string): Promise<boolean> =>
+      window.api.device
+        .stat(path)
+        .then(() => true)
+        .catch(() => false)
+    void (async (): Promise<void> => {
+      const [libFound, rootFound] = await Promise.all([
+        probe(TURTLE_LIB_PATH),
+        probe(TURTLE_ROOT_PATH)
+      ])
+      if (!active) return
+      if (!libFound && !rootFound) {
+        setTurtleLibState('absent')
+        return
+      }
+      // Prefer the root copy when present — see the matching instruments-library
+      // comment above: `''` sits before `/lib` on sys.path, so a root copy shadows
+      // `/lib` and is the one actually imported.
+      const path = rootFound ? TURTLE_ROOT_PATH : TURTLE_LIB_PATH
+      const [boardSrc, bundledSrc] = await Promise.all([
+        window.api.device.readFileLine(path, '__version__').catch(() => null),
+        window.api.instruments.turtleSource().catch(() => null)
+      ])
+      if (!active) return
+      const state = classifyPresentCopy(boardSrc, bundledSrc)
+      if (state === null) {
+        console.warn(
+          '[turtle] could not read the bundled library to compare versions — leaving the board unchanged; re-open the dock or reconnect to retry'
+        )
+        return
+      }
+      console.info('[turtle] library version check', {
+        path,
+        boardVersion: parseLibVersion(boardSrc),
+        bundledVersion: parseLibVersion(bundledSrc),
+        state
+      })
+      setTurtleLibState(state)
+    })()
+    return () => {
+      active = false
+    }
+  }, [connected, turtleLibState])
+
+  const installTurtleLib = useCallback((): void => {
+    if (turtleLibInstalling) return
+    setTurtleLibInstalling(true)
+    setTurtleLibError(null)
+    void (async (): Promise<void> => {
+      try {
+        // Queued alongside the instruments-library install (#837) so a freshly
+        // connected board offering both doesn't start two writes at once.
+        await enqueueDeviceTask({
+          key: 'turtle-lib',
+          label: 'Installing the turtle graphics library',
+          run: async (ctx): Promise<void> => {
+            const source = await window.api.instruments.turtleSource()
+            if (!source) throw new Error('library source unavailable')
+            const rootShadow = await window.api.device
+              .stat(TURTLE_ROOT_PATH)
+              .then(() => true)
+              .catch(() => false)
+            const writes = [
+              { path: TURTLE_LIB_PATH, contents: source },
+              ...(rootShadow ? [{ path: TURTLE_ROOT_PATH, contents: source }] : [])
+            ]
+            ctx.setSteps(writes.map((w) => installStepLabel(w.path)))
+            await window.api.device.mkdir(INSTRUMENTS_LIB_DIR).catch(() => undefined)
+            for (const [index, write] of writes.entries()) {
+              ctx.step(index, 'running')
+              await window.api.device.writeFile(write.path, write.contents)
+              ctx.step(index, 'done')
+            }
+          }
+        })
+        setTurtleLibState('present')
+        window.api.modules.notifyChanged()
+      } catch (err) {
+        setTurtleLibError(err instanceof Error ? err.message : String(err))
+      } finally {
+        setTurtleLibInstalling(false)
+      }
+    })()
+  }, [turtleLibInstalling])
+
+  const dismissTurtleLibBanner = useCallback((): void => setTurtleLibDismissed(true), [])
+
+  const showTurtleLibBanner = shouldShowBanner({
+    connected,
+    installState: turtleLibState,
+    dismissed: turtleLibDismissed
+  })
+
   // --- Parts import check (#166) ---------------------------------------------
   // The project's placed parts may link MicroPython libraries. When the board
   // connects or a .py file opens, flag any required module the file doesn't import
@@ -1347,6 +1465,20 @@ export function AppShell(): JSX.Element {
             outdated={libState === 'outdated'}
             onInstall={installInstrumentsLib}
             onDismiss={dismissLibBanner}
+          />
+        )}
+        {/* #1003: the turtle graphics library is a separate optional install — a
+            program can `import instruments` without ever using `turtle`. */}
+        {showTurtleLibBanner && (
+          <InstrumentLibBanner
+            installing={turtleLibInstalling}
+            error={turtleLibError}
+            outdated={turtleLibState === 'outdated'}
+            onInstall={installTurtleLib}
+            onDismiss={dismissTurtleLibBanner}
+            libraryName="turtle"
+            detail="Install it to draw with forward()/right()/etc from your program."
+            updateDetail="Update your board to get the latest turtle graphics fixes."
           />
         )}
         {/* #166: the project's parts need libraries this file doesn't import / the

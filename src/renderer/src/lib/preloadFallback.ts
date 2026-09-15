@@ -242,6 +242,7 @@ if (!w.api) {
       onOpen: unsub,
       librarySource: P(''),
       umbrellaSource: P(''),
+      turtleSource: P(''),
       openWindow: P(undefined),
       closeWindow: noop,
       requestWindowPayload: P(null),
