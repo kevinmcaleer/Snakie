@@ -18,7 +18,8 @@ const LIB = join(__dirname, '..', 'micropython', 'turtle.py')
 
 /** version → sha256 of the file that shipped as that version. */
 const SHA_BY_VERSION: Record<string, string> = {
-  '0.1.0': '4fcc2e370ea8206478259be8a866bf7e3246b7a33d30440cba4d7db6f1b4644b'
+  '0.1.0': '4fcc2e370ea8206478259be8a866bf7e3246b7a33d30440cba4d7db6f1b4644b',
+  '0.1.1': '048b1092c6b45284b2958aaa9d2e928faead81ca7ec39500ef990dd0f05d6a4d'
 }
 
 describe('turtle.py version discipline', () => {
