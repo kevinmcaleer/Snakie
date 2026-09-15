@@ -10,7 +10,12 @@ import {
   type BlocklyThemeInput
 } from '../lib/blocks/theme'
 import { generateProgram, type GeneratedProgram } from '../lib/blocks/generator'
-import { blocksInCategory, installBlockDefinitions } from '../lib/blocks/registry'
+import { ledPinToken, setBoardPins } from '../lib/blocks/board-pins'
+import { applyPinWarnings } from '../lib/blocks/pin-conflicts'
+import { loadSelectedBoard, watchSelectedBoard } from './board-pin-source'
+import { blockDefinition, blocksInCategory, installBlockDefinitions } from '../lib/blocks/registry'
+import { installCorePalette } from '../lib/blocks/palette'
+import { dispatchOpenHelp } from './editorBridge'
 import { ensureBlocklyLocale } from '../lib/blocks/locale'
 import { unknownBlockTypes } from '../lib/blocks/workspace-check'
 import type { BlocksWorkspace } from '../../../shared/blocks-doc'
@@ -84,6 +89,18 @@ export interface BlocksCanvasProps {
 
 // Blockly's message table is a precondition of `inject` — see `locale.ts`.
 ensureBlocklyLocale()
+// The core palette (#1011) registers at module load, before any canvas exists,
+// which is what lets the toolbox below be built from the registry.
+installCorePalette()
+// And its definitions go into Blockly IMMEDIATELY, not at inject time. The
+// `blocked` check below asks Blockly whether it knows each block type in the
+// file, and it runs during render — before any effect. Installing only at
+// inject made every palette block look like a block from a newer Snakie, so a
+// perfectly good file met the "these blocks need a newer Snakie" notice and the
+// canvas never mounted at all. The inject-time call stays for blocks a part or
+// plugin registers later (#1017).
+installBlockDefinitions()
+installBlockHelpMenu()
 
 export function BlocksCanvas({
   fileId,
@@ -179,6 +196,10 @@ export function BlocksCanvas({
       if (debounceRef.current) clearTimeout(debounceRef.current)
       debounceRef.current = setTimeout(() => {
         const program = { ...generateProgram(ws), workspace: json }
+        // Two blocks on one pin, a pin this board hasn't got, a pin that can't
+        // do the job (#1012). The canvas is the only place that sees the whole
+        // program at once, so it is where this is caught.
+        applyPinWarnings(ws)
         onGenerateRef.current?.(program)
         onEditRef.current(program)
       }, REGENERATE_DEBOUNCE_MS)
@@ -193,6 +214,28 @@ export function BlocksCanvas({
       lastLoadedRef.current = ''
     }
   }, [peek, blocked])
+
+  // The pin dropdowns offer THIS board's pins (#1012). Loaded here rather than
+  // by the blocks themselves because a Blockly field's option list is produced
+  // inside Blockly's own event handling, with no React anywhere near it — so the
+  // canvas pushes and `board-pins.ts` holds.
+  useEffect(() => {
+    const apply = (): void => {
+      void loadSelectedBoard().then((board) => {
+        setBoardPins(
+          board.pins.map((p) => ({ gpio: p.gpio, label: p.label, capabilities: p.capabilities })),
+          ledPinToken(board.ledLabel)
+        )
+        // The warnings on screen were computed against the OLD board's pins, so
+        // a board swap has to re-run them or a stale "this board has no GP22"
+        // outlives the board that didn't.
+        const ws = wsRef.current
+        if (ws) applyPinWarnings(ws)
+      })
+    }
+    apply()
+    return watchSelectedBoard(apply)
+  }, [])
 
   // Follow the app's skin. Same MutationObserver pattern as `Terminal.tsx` and
   // `RobotView.tsx`: `data-theme` on the document root is the single source of
@@ -243,6 +286,7 @@ export function BlocksCanvas({
       // would dirty a file whose stored code merely predates this generator,
       // for the crime of being opened.
       onGenerateRef.current?.({ ...generateProgram(ws), workspace: loaded })
+      applyPinWarnings(ws)
     } catch {
       // Belt and braces behind the `blocked` check above: a type can be
       // registered and still fail to deserialise (a malformed field, a shape
@@ -335,6 +379,39 @@ function BlocksUnreadable({
       )}
     </div>
   )
+}
+
+/**
+ * A block's right-click **Help**, opening the in-app help article (#1011).
+ *
+ * Blockly's own Help item opens `helpUrl` in a browser, which for a child on a
+ * school network — or on a Chromebook with no connection at all (epic #267) —
+ * opens nothing. The help library is already in the app, already offline, and
+ * already written for exactly these topics, so the menu item goes there instead.
+ *
+ * Registered once at module load. `preconditionFn` hides it for a block with no
+ * article rather than showing an item that does nothing.
+ */
+function installBlockHelpMenu(): void {
+  const id = 'snakieBlockHelp'
+  if (Blockly.ContextMenuRegistry.registry.getItem(id)) return
+  // Blockly's OWN Help item comes first, and it opens `helpUrl` — which every
+  // stock block has — in a browser. Left in place the menu offers two things
+  // called "Help" that go to different places, one of which is a web page a
+  // classroom may not be able to reach. There is one Help here, and it is ours.
+  Blockly.ContextMenuRegistry.registry.unregister('blockHelp')
+  Blockly.ContextMenuRegistry.registry.register({
+    id,
+    scopeType: Blockly.ContextMenuRegistry.ScopeType.BLOCK,
+    weight: 100,
+    displayText: 'Help',
+    preconditionFn: (scope) =>
+      scope.block && blockDefinition(scope.block.type)?.help ? 'enabled' : 'hidden',
+    callback: (scope) => {
+      const article = scope.block && blockDefinition(scope.block.type)?.help
+      if (article) dispatchOpenHelp(article)
+    }
+  })
 }
 
 /**

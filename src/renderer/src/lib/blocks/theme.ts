@@ -129,6 +129,11 @@ export const BLOCK_CATEGORIES = [
   { id: 'turtle', name: 'Turtle', token: 'green' },
   { id: 'hardware', name: 'Hardware', token: 'pinGpio' },
   { id: 'instruments', name: 'Instruments', token: 'num' },
+  // Wait gets a category of its own rather than a corner of Control (#1011).
+  // It is the single most-used block in any hardware lesson — every blink,
+  // every debounce, every "now do the next thing" — and a beginner should not
+  // have to know that waiting is a kind of control flow to find it.
+  { id: 'wait', name: 'Wait', token: 'gold' },
   { id: 'control', name: 'Control', token: 'gold' },
   { id: 'logic', name: 'Logic', token: 'kw' },
   { id: 'math', name: 'Maths', token: 'num' },
@@ -166,9 +171,40 @@ export interface SoftShellThemeSpec {
   startHats: boolean
 }
 
+/**
+ * Blockly's OWN block-style names, mapped onto our categories.
+ *
+ * The core palette (#1011) uses Blockly's stock `controls_if`,
+ * `math_arithmetic` and friends, which carry style names from its classic
+ * theme. Without these aliases they would fall back to Blockly's bright primary
+ * palette and a canvas full of them would look like a different application
+ * embedded in ours.
+ */
+const STOCK_STYLE_ALIASES: Record<string, BlockCategoryId> = {
+  loop_blocks: 'control',
+  logic_blocks: 'logic',
+  math_blocks: 'math',
+  text_blocks: 'text',
+  list_blocks: 'lists',
+  colour_blocks: 'math',
+  variable_blocks: 'variables',
+  variable_dynamic_blocks: 'variables',
+  procedure_blocks: 'functions',
+  hat_blocks: 'control'
+}
+
 export function buildSoftShellTheme(tokens: ThemeTokens): SoftShellThemeSpec {
   const blockStyles: SoftShellThemeSpec['blockStyles'] = {}
   const categoryStyles: SoftShellThemeSpec['categoryStyles'] = {}
+  const shades = (colour: string): SoftShellThemeSpec['blockStyles'][string] => ({
+    colourPrimary: colour,
+    // Blockly wants three shades per block (body, shadow/inline field, edge).
+    // Deriving them keeps the palette one colour per category rather than
+    // thirty-three hand-picked hexes that drift apart the first time the
+    // design changes.
+    colourSecondary: mixHex(colour, tokens.card, 0.45),
+    colourTertiary: mixHex(colour, tokens.gutter, 0.35)
+  })
 
   for (const category of BLOCK_CATEGORIES) {
     const colour = tokens[category.token]
@@ -182,6 +218,12 @@ export function buildSoftShellTheme(tokens: ThemeTokens): SoftShellThemeSpec {
       colourSecondary: mixHex(colour, tokens.card, 0.45),
       colourTertiary: mixHex(colour, tokens.gutter, 0.35)
     }
+  }
+
+  // The stock names, pointed at the same colours as the categories they map to.
+  for (const [stockStyle, category] of Object.entries(STOCK_STYLE_ALIASES)) {
+    const entry = BLOCK_CATEGORIES.find((c) => c.id === category)
+    if (entry) blockStyles[stockStyle] = shades(tokens[entry.token])
   }
 
   return {

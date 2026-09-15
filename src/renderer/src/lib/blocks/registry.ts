@@ -43,12 +43,37 @@ export interface BlockDefinition {
    * The Blockly JSON definition (`message0`, `args0`, `previousStatement`, …).
    * `style` is filled in from `category` when absent, so a block can't end up a
    * different colour from the category it sits in.
+   *
+   * ABSENT means Blockly already defines this type — the core palette (#1011)
+   * uses Blockly's own `controls_if`, `math_arithmetic` and friends, which come
+   * with mutators (the gear icon that adds an `else if`) that would be a poor
+   * use of anyone's time to rebuild. Those entries contribute the MicroPython
+   * emitter and the toolbox slot, and nothing else.
    */
-  json: Record<string, unknown>
+  json?: Record<string, unknown>
   /** What this block needs in scope, whenever it emits. */
   imports?: readonly PyImport[]
   /** Emit the code. */
   code: BlockEmitter
+  /**
+   * This block claims a pin (#1012) — which field holds it, what the block does
+   * with it, and what the pin has to be able to do.
+   *
+   * Declared HERE rather than inferred from the block's fields, because "is this
+   * a pin?" and "does it need an ADC?" are facts about the block's meaning that
+   * only the block knows. The canvas uses these to flag two blocks fighting over
+   * one pin, a pin the board doesn't have, and a pin that can't do the job.
+   */
+  pin?: { field: string; role: string; needs?: string }
+  /**
+   * The in-app help article this block's Help menu item opens, e.g. `ref-flow`.
+   *
+   * IN-APP, not a URL. Blockly's own `helpUrl` opens a web page, and a child on
+   * a school network — or on a Chromebook with no connection (epic #267) — gets
+   * nothing. The help library is already in the app, already offline, and
+   * already written for exactly these topics.
+   */
+  help?: string
   /**
    * Toolbox entry overrides — shadow blocks for the number inputs, mostly, so a
    * block dragged out of the flyout already has sensible values in it rather
@@ -95,11 +120,12 @@ export function blockDefinition(type: string): BlockDefinition | undefined {
  * disagree if each were written out by hand.
  */
 export function installBlockDefinitions(): void {
-  const defs = registeredBlocks().map((def) => ({
-    type: def.type,
-    style: `${def.category}_blocks`,
-    ...def.json
-  }))
+  const defs = registeredBlocks()
+    // A registration with no `json` is a block Blockly already defines.
+    // Redefining it from an empty object would replace `controls_if` with a
+    // block that has no inputs, which is a far worse failure than not trying.
+    .filter((def) => def.json && Object.keys(def.json).length > 0)
+    .map((def) => ({ type: def.type, style: `${def.category}_blocks`, ...def.json }))
   if (defs.length > 0) Blockly.defineBlocksWithJsonArray(defs)
 }
 
