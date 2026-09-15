@@ -8,6 +8,45 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Blocks write real MicroPython, and you watch them do it** (#1010, epic
+  #1007, phase 1). The generator: blocks in, honest Snakie MicroPython out —
+  the code a person would have written, not a transcription of a block tree.
+
+  Blockly ships a Python generator and it targets CPython: it knows nothing
+  about `machine`, `snakie` or `instruments`, and it emits scaffolding a learner
+  would have to un-learn on the way to text. Generated code a child has to grow
+  out of defeats the whole point, so the generator is ours.
+
+  Every program comes out in three sections. **Imports** are collected from the
+  blocks that need them, deduplicated and grouped — standard library, then the
+  hardware modules, then `snakie`, then part and plugin drivers — so two LED
+  blocks produce one import and the top of the file looks like a file a person
+  wrote. **Setup** hoists every constructed object out of whatever loop uses it
+  and builds it once; that is not tidiness, it is the difference between
+  configuring a pin once and re-configuring it thousands of times a second.
+  Then the program itself, `ruff`-shaped: four-space indent, no trailing
+  whitespace, one newline at the end.
+
+  Names a child typed survive the trip: `my score` becomes `my_score`, `3 cats`
+  becomes `n3_cats`, and a variable called `class` or `print` gets the trailing
+  underscore PEP 8 uses rather than quietly shadowing something load-bearing. A
+  variable named after an imported module loses, so the module stays reachable.
+
+  The **Python mirror** beside the canvas is now Monaco, in the same theme, the
+  same font and the same ruled paper as the editor — so graduating to Python
+  (#1016) changes which pane is big, not what the code looks like. It is
+  read-only as an affordance rather than a locked box: typing is caught and
+  answered with the offer to graduate, instead of a keystroke that does nothing.
+
+  Also shipping now, because it cannot be rebuilt later: a **block-to-line
+  source map**, produced while the block tree is still in hand. #1015 turns it
+  into tracebacks that highlight the failing block and #1016 into hover-linked
+  highlighting.
+
+  Still no palette — the categories are there and the blocks that fill them
+  arrive next (#1011–#1014). A block registry means a palette lights up the
+  toolbox and the generator together, with no way for the two to disagree.
+
 - **A Blocks workspace, and a real block canvas** (#1009, epic #1007, phase 1).
   A fourth segment in the toolbar switcher — **Blocks · Code · Electronics ·
   Build** — and Blockly behind it, in Snakie's clothes.

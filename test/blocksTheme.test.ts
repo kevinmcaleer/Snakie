@@ -8,7 +8,6 @@ import {
   readThemeTokens,
   softShellWorkspaceOptions
 } from '../src/renderer/src/lib/blocks/theme'
-import { highlightPython, highlightPythonLine } from '../src/renderer/src/lib/blocks/python-highlight'
 
 /**
  * The Soft Shell Blockly theme (#1009). Blockly paints SVG fills, so the theme
@@ -98,68 +97,5 @@ describe('softShellWorkspaceOptions (#1009)', () => {
     expect(o.sounds).toBe(false)
     expect(o.trashcan).toBe(true)
     expect(o.zoom?.controls).toBe(true)
-  })
-})
-
-/**
- * The Python mirror's colouring (#1009). Not a Python highlighter — a
- * highlighter for the Python WE GENERATE, which is a much smaller language.
- */
-describe('highlightPythonLine (#1009)', () => {
-  const kinds = (line: string): string => highlightPythonLine(line).map((t) => t.kind).join(' ')
-  const text = (line: string, kind: string): string[] =>
-    highlightPythonLine(line).filter((t) => t.kind === kind).map((t) => t.text)
-
-  it('colours an import the way the editor does', () => {
-    expect(text('from snakie import Led', 'kw')).toEqual(['from', 'import'])
-    expect(text('from snakie import Led', 'ident')).toEqual(['snakie', 'Led'])
-  })
-
-  it('finds strings, numbers and comments', () => {
-    expect(text('led = Led(15)  # pin 15', 'num')).toEqual(['15'])
-    expect(text('led = Led(15)  # pin 15', 'com')).toEqual(['# pin 15'])
-    expect(text('print("hello")', 'str')).toEqual(['"hello"'])
-    expect(text("print('a' + \"b\")", 'str')).toEqual(["'a'", '"b"'])
-  })
-
-  it('does not mistake a # inside a string for a comment', () => {
-    expect(text('print("# not a comment")', 'str')).toEqual(['"# not a comment"'])
-    expect(kinds('print("# not a comment")')).not.toContain('com')
-  })
-
-  it('handles an escaped quote', () => {
-    expect(text('print("a\\"b")', 'str')).toEqual(['"a\\"b"'])
-  })
-
-  it('colours an unterminated string to the end of the line, like every editor', () => {
-    expect(text('x = "oops', 'str')).toEqual(['"oops'])
-  })
-
-  it('reads floats and hex as one number', () => {
-    expect(text('time.sleep(0.5)', 'num')).toEqual(['0.5'])
-    expect(text('x = 0xff', 'num')).toEqual(['0xff'])
-  })
-
-  it('never drops a character — the line is always reconstructable', () => {
-    for (const line of [
-      'from snakie import Led',
-      '    led.toggle()  # blink',
-      'if x >= 3 and y != "a":',
-      '',
-      '        ',
-      'π = "café"'
-    ]) {
-      expect(highlightPythonLine(line).map((t) => t.text).join('')).toBe(line)
-    }
-  })
-})
-
-describe('highlightPython (#1009)', () => {
-  it('is one entry per line, so #1016 has something to address', () => {
-    expect(highlightPython('a = 1\nb = 2')).toHaveLength(2)
-  })
-
-  it('an empty program is no lines, not one blank one', () => {
-    expect(highlightPython('')).toEqual([])
   })
 })
