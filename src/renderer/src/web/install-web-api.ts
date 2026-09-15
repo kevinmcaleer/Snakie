@@ -114,6 +114,17 @@ export function installWebApi(kind: WebWindowKind = 'main'): boolean {
   instruments.librarySource = async (): Promise<string> => INSTRUMENTS_PY
   instruments.umbrellaSource = async (): Promise<string> => SNAKIE_PY
   instruments.turtleSource = async (): Promise<string> => TURTLE_PY
+  // The Turtle instrument's last-drawn picture (#1003), held here in the EDITOR
+  // window's closure — an instrument popup runs on this same `window.api` object
+  // via the opener bridge (see web-instruments.ts), so this one variable is
+  // already shared between the docked instrument and its detached popup with no
+  // extra plumbing: whichever mounts next picks up exactly where the other left
+  // off. Mirrors the desktop's main-process buffer (`src/main/index.ts`).
+  let turtleStateSnapshot: unknown = null
+  instruments.turtleStateGet = async (): Promise<unknown> => turtleStateSnapshot
+  instruments.turtleStateSet = async (state: unknown): Promise<void> => {
+    turtleStateSnapshot = state
+  }
   w.api.instruments = instruments as unknown as Window['api']['instruments']
   // Serve the bundled Standard Parts library (read-only) so the board view can
   // resolve a placed part's shapes/pins — otherwise a wired servo shows only its

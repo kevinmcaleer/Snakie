@@ -1025,6 +1025,13 @@ const instruments = {
   /** The bundled `turtle.py` turtle-graphics library source, installed to
    *  `/lib/turtle.py` (issue #1003) — same one-click install flow as above. */
   turtleSource: (): Promise<string> => ipcRenderer.invoke('instruments:turtleSource'),
+  /** The Turtle instrument's last-drawn picture, buffered in the main process so
+   *  it survives crossing between the docked instrument and its detached OS
+   *  window — `null` when nothing has been drawn (or persisted) yet. */
+  turtleStateGet: (): Promise<unknown> => ipcRenderer.invoke('instruments:turtleStateGet'),
+  /** Persist the Turtle instrument's current picture (fire-and-forget). */
+  turtleStateSet: (state: unknown): Promise<void> =>
+    ipcRenderer.invoke('instruments:turtleStateSet', state),
 
   // --- Detached instrument OS windows (#205) ---
   /** Open (or focus) a true OS window rendering one undocked instrument. */
