@@ -53,7 +53,7 @@ class ForwardOutput(FreshTurtle):
         self.assertEqual(
             lines,
             [
-                "SNK TURT LINE 0 0 0 10 black 2",
+                "SNK TURT LINE 0 0 0 10 white 2",
                 "SNK TURT POS 0 10 0",
             ],
         )
@@ -68,7 +68,7 @@ class ForwardOutput(FreshTurtle):
         self.assertEqual(
             lines,
             [
-                "SNK TURT LINE 0 0 0 -10 black 2",
+                "SNK TURT LINE 0 0 0 -10 white 2",
                 "SNK TURT POS 0 -10 0",
             ],
         )
@@ -91,7 +91,7 @@ class HeadingOutput(FreshTurtle):
         self.assertEqual(
             lines,
             [
-                "SNK TURT LINE 0 0 10 0 black 2",
+                "SNK TURT LINE 0 0 10 0 white 2",
                 "SNK TURT POS 10 0 90",
             ],
         )
@@ -139,7 +139,7 @@ class PositionOutput(FreshTurtle):
         self.assertEqual(
             lines,
             [
-                "SNK TURT LINE 0 0 5 5 black 2",
+                "SNK TURT LINE 0 0 5 5 white 2",
                 "SNK TURT POS 5 5 0",
             ],
         )
@@ -156,7 +156,7 @@ class PositionOutput(FreshTurtle):
         self.assertEqual(
             lines,
             [
-                "SNK TURT LINE 5 5 0 0 black 2",
+                "SNK TURT LINE 5 5 0 0 white 2",
                 "SNK TURT POS 0 0 90",
                 "SNK TURT POS 0 0 0",
             ],

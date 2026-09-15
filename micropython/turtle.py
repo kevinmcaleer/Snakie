@@ -46,9 +46,12 @@ SENTINEL = "SNK"
 # Library version. Bump this on ANY change to this file — mirrors
 # `instruments.py`'s convention so a future "board library outdated" check can
 # reuse the same comparison.
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
-_DEFAULT_COLOUR = "black"
+# White, not black: the Turtle instrument draws on a dark phosphor screen (like
+# every other Snakie instrument), so a "black" default pen — sensible on paper,
+# which is what CPython turtle defaults to — would be invisible.
+_DEFAULT_COLOUR = "white"
 _DEFAULT_WIDTH = 2
 
 
