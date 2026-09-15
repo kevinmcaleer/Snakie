@@ -132,6 +132,10 @@ export class MicroPythonGenerator extends Blockly.CodeGenerator {
   private taken = new Set<string>()
   /** Blockly variable id -> the Python identifier it settled on this pass. */
   private variableNames = new Map<string, string>()
+  /** `def` blocks, in first-defined order: block id -> the whole definition. */
+  private functions = new Map<string, string>()
+  /** Blockly procedure name -> the Python identifier it settled on this pass. */
+  private functionNames = new Map<string, string>()
   private workspaceRef: Blockly.Workspace | null = null
 
   constructor() {
@@ -196,11 +200,49 @@ export class MicroPythonGenerator extends Blockly.CodeGenerator {
     return names
   }
 
+  /**
+   * The Python identifier for a procedure, stable for this pass.
+   *
+   * Keyed on the name Blockly holds, because that IS a procedure's identity here
+   * — Blockly enforces uniqueness on it and renames every caller when it
+   * changes, so two `def`s can never collide except through sanitising, which
+   * {@link toPythonIdentifier} resolves by counting up.
+   */
+  functionName(raw: string): string {
+    const known = this.functionNames.get(raw)
+    if (known) return known
+    const name = toPythonIdentifier(raw, this.reservedNames())
+    this.taken.add(name)
+    this.functionNames.set(raw, name)
+    return name
+  }
+
+  /**
+   * Record a `def`, to be emitted in its own section above the program.
+   *
+   * A definition block sits on the canvas wherever the learner dropped it —
+   * often below the code that calls it, because that is where there was room.
+   * Emitted in place, the call would run before the `def` and die with a
+   * `NameError` that has nothing to do with anything they did wrong. So
+   * definitions are collected and hoisted, which is also where a Python
+   * programmer would have put them.
+   */
+  defineFunction(blockId: string, code: string): void {
+    this.functions.set(blockId, code)
+  }
+
+  /** The collected `def`s, in first-defined order. @internal */
+  functionCode(): readonly string[] {
+    return [...this.functions.values()]
+  }
+
   /** Reset for a fresh pass. Called by {@link generateProgram}. */
   override init(workspace: Blockly.Workspace): void {
     this.imports = new ImportManager()
     this.setupBindings = new Map()
     this.variableNames = new Map()
+    this.functions = new Map()
+    this.functionNames = new Map()
     this.taken = new Set()
     this.workspaceRef = workspace
   }
@@ -265,9 +307,16 @@ export function generateProgram(workspace: Blockly.Workspace): GeneratedProgram 
     .map((b) => `${MARK}${b.blockId ?? ''}${MARK}${b.name} = ${b.expr}\n`)
     .join('')
 
-  const sections = [gen.imports.empty ? '' : `${gen.imports.render()}\n`, setup, body].filter(
-    (s) => s !== ''
-  )
+  // Functions ABOVE setup and the program: a `def` has to exist before anything
+  // runs it, and putting them first is also where a Python programmer looks.
+  const functions = gen.functionCode().join('\n')
+
+  const sections = [
+    gen.imports.empty ? '' : `${gen.imports.render()}\n`,
+    functions,
+    setup,
+    body
+  ].filter((s) => s !== '')
   return { ...assemble(sections), missing }
 }
 

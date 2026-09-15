@@ -8,6 +8,45 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The core block palette** (#1011, epic #1007, phase 2). The Scratch-shaped
+  fundamentals, generating MicroPython: control, wait, logic, maths, text,
+  lists, variables and functions. The toolbox has blocks in it.
+
+  Most of the blocks are Blockly's own — `if` with the gear that adds an
+  `else if`, `for each` binding a variable over a list, procedure blocks that
+  rename every caller when you rename the definition. The work is the other
+  half: what each one generates, what it says, and which of Blockly's eighty-odd
+  blocks a ten-year-old should be shown at all.
+
+  **Wait gets a category to itself**, not a corner of Control. It is the single
+  most-used block in any hardware lesson, and a beginner should not have to know
+  that waiting is a kind of control flow to find it. Two blocks rather than one
+  with a unit dropdown, because `time.sleep(0.5)` and `time.sleep_ms(500)` are
+  different functions and the whole point is that the generated code is the code
+  they will later write.
+
+  Three more blocks nobody ships: **forever** (the Scratch block, generating
+  `while True:`), and **map a number from one range to another** — the one that
+  turns a dial reading of 0–65535 into a servo angle of 0–180, without which that
+  lesson is a line of arithmetic the teacher types for them. It generates the
+  arithmetic inline, because reading it is the lesson.
+
+  **Join makes an f-string**, not the `str(x) + " " + str(y)` Blockly's own Python
+  generator emits — which is the exact pattern Snakie's refactor hints already
+  tell people to stop writing. **List positions stay 1-based on the block and
+  become `- 1` in the code**, visibly, so a learner meets the off-by-one with the
+  block that caused it still on screen beside it.
+
+  Every block's right-click **Help** opens the in-app help article rather than a
+  web page: the help library is already in the app, already offline, and already
+  written for these topics — which matters on a school network and matters more
+  on a Chromebook with no connection.
+
+  What was left out matters as much: trigonometry, `atan2`, mathematical
+  constants, prime tests, list sorting and splitting, substring and case
+  conversion, the ternary `if`, and `text_prompt` (which asks for typed input on
+  a device with no keyboard). A palette is a curriculum.
+
 - **Blocks write real MicroPython, and you watch them do it** (#1010, epic
   #1007, phase 1). The generator: blocks in, honest Snakie MicroPython out —
   the code a person would have written, not a transcription of a block tree.
