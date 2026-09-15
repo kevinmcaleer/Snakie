@@ -9,6 +9,7 @@
   "type": "module",
   "scripts": {
     "dev": "electron-vite dev",
+    "dev:safe": "ELECTRON_DISABLE_SANDBOX=1 electron-vite dev",
     "build": "electron-vite build",
     "dev:web": "vite --config vite.web.config.ts",
     "build:web": "vite build --config vite.web.config.ts",

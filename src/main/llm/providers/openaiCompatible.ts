@@ -17,6 +17,7 @@ import {
   sanitizeCompletion
 } from './context'
 import { getCopilotToken } from './copilotAuth'
+import { getProviderConfig } from './providerConfig'
 import type { CompleteArgs, Provider, ProviderInfo, StreamChatArgs } from './types'
 
 /** Upper bound on inline-completion output tokens — small + fast (issue #82). */
@@ -65,7 +66,7 @@ export function parseOpenAiSsePayload(payload: string): string | null {
  * Stream a chat completion against an OpenAI-style `/chat/completions` endpoint.
  * Returns the assembled text once `[DONE]` (or the stream end) is reached.
  */
-async function streamOpenAiCompatible(
+export async function streamOpenAiCompatible(
   config: OpenAiCompatibleConfig,
   args: StreamChatArgs
 ): Promise<string> {
@@ -81,8 +82,6 @@ async function streamOpenAiCompatible(
     ]
   }
 
-  // o-series / reasoning models take `reasoning_effort` (low/medium/high) rather
-  // than the Anthropic-style output_config. Only send it for declared models.
   if (effort && config.reasoningModels?.includes(model)) {
     body.reasoning_effort = effort
   }
@@ -110,12 +109,10 @@ async function streamOpenAiCompatible(
 }
 
 /**
- * One-shot inline completion (issue #82) against the non-streaming
- * `/chat/completions` endpoint. The FIM prefix/suffix go in the user turn and a
- * strict system prompt keeps the reply to raw insertion text. Returns the
- * sanitized `choices[0].message.content`.
+ * One-shot (non-streaming) completion against an OpenAI-style endpoint.
+ * Returns the assembled text directly — used for inline code completions.
  */
-async function completeOpenAiCompatible(
+export async function completeOpenAiCompatible(
   config: OpenAiCompatibleConfig,
   args: CompleteArgs
 ): Promise<string> {
@@ -157,7 +154,6 @@ async function completeOpenAiCompatible(
   return sanitizeCompletion(text)
 }
 
-/** Read the SSE body, accumulating `choices[0].delta.content` until `[DONE]`. */
 async function consumeSse(
   body: ReadableStream<Uint8Array>,
   onDelta: (text: string) => void
@@ -167,10 +163,7 @@ async function consumeSse(
   let buffer = ''
   let full = ''
 
-  // Process complete SSE events as they arrive. Events are separated by a blank
-  // line; each event has one or more `data:` lines.
   const flushEvent = (raw: string): boolean => {
-    // Returns true when a `[DONE]` sentinel was seen (caller should stop).
     for (const line of raw.split(/\r?\n/)) {
       const trimmed = line.trim()
       if (!trimmed.startsWith('data:')) continue
@@ -199,12 +192,10 @@ async function consumeSse(
       }
     }
   }
-  // Flush any trailing event without a final blank-line separator.
   if (buffer.trim()) flushEvent(buffer)
   return full
 }
 
-/** Best-effort read of an error response body for a friendlier message. */
 async function safeErrorText(res: Response): Promise<string> {
   try {
     const text = await res.text()
@@ -219,7 +210,10 @@ async function safeErrorText(res: Response): Promise<string> {
   }
 }
 
-/** Build a {@link Provider} from an OpenAI-compatible config. */
+/**
+ * Factory: wrap an {@link OpenAiCompatibleConfig} into a full {@link Provider}
+ * with `streamChat` and `complete` methods wired to the OpenAI SSE wire format.
+ */
 export function makeOpenAiCompatibleProvider(config: OpenAiCompatibleConfig): Provider {
   return {
     info: config.info,
@@ -230,7 +224,6 @@ export function makeOpenAiCompatibleProvider(config: OpenAiCompatibleConfig): Pr
 
 // ── Concrete providers ────────────────────────────────────────────────────
 
-/** OpenAI (gpt-4o / gpt-4o-mini / o4-mini). Reasoning effort for the o-series. */
 export const openaiProvider = makeOpenAiCompatibleProvider({
   info: {
     id: 'openai',
@@ -250,7 +243,6 @@ export const openaiProvider = makeOpenAiCompatibleProvider({
   reasoningModels: ['o4-mini']
 })
 
-/** Grok / xAI (grok-2-latest / grok-2). */
 export const grokProvider = makeOpenAiCompatibleProvider({
   info: {
     id: 'grok',
@@ -267,15 +259,6 @@ export const grokProvider = makeOpenAiCompatibleProvider({
   baseURL: 'https://api.x.ai/v1'
 })
 
-/**
- * GitHub Copilot (OpenAI-compatible). The user signs in with their GitHub
- * account via the OAuth **device flow** (see `copilotAuth.ts`); the resulting
- * GitHub token is exchanged by {@link getCopilotToken} for the short-lived
- * Copilot token the chat endpoint actually requires (cached until just before
- * expiry), with the integration/editor headers. A plain personal access token
- * can't reach the Copilot endpoint, which is why sign-in is used instead. Still
- * flagged experimental: it can only be verified against a real Copilot account.
- */
 export const copilotProvider = makeOpenAiCompatibleProvider({
   info: {
     id: 'copilot',
@@ -298,3 +281,44 @@ export const copilotProvider = makeOpenAiCompatibleProvider({
   },
   resolveBearer: getCopilotToken
 })
+
+// ── Local LLM (OpenAI-compatible) ─────────────────────────────────────────
+
+/** Stable id for the local/self-hosted LLM provider. */
+const LOCAL_ID = 'local'
+
+/**
+ * Provider info for the local LLM backend. `customModel: true` tells the
+ * renderer to render a free-text model input instead of a fixed dropdown,
+ * because the available models depend on whatever the user's local server is
+ * running.
+ */
+export const LOCAL_INFO: ProviderInfo = {
+  id: LOCAL_ID,
+  label: 'Local LLM',
+  models: [{ id: 'custom', label: 'Custom' }],
+  defaultModel: 'custom',
+  defaultCompletionModel: 'custom',
+  customModel: true,
+  keyHint: 'API key (optional — leave blank for no auth)'
+}
+
+/**
+ * Local LLM provider. Reads its base URL from the per-provider config store on
+ * each request (defaults to `http://localhost:11434/v1` for Ollama). When the
+ * local server is not running, the fetch will fail with a connection-refused
+ * error surfaced to the user as a chat error message.
+ */
+export const localProvider: Provider = {
+  info: LOCAL_INFO,
+  async streamChat(args: StreamChatArgs): Promise<string> {
+    const config = await getProviderConfig(LOCAL_ID)
+    const baseURL = config.baseURL || 'http://localhost:11434/v1'
+    return streamOpenAiCompatible({ info: LOCAL_INFO, baseURL }, args)
+  },
+  async complete(args: CompleteArgs): Promise<string> {
+    const config = await getProviderConfig(LOCAL_ID)
+    const baseURL = config.baseURL || 'http://localhost:11434/v1'
+    return completeOpenAiCompatible({ info: LOCAL_INFO, baseURL }, args)
+  }
+}
