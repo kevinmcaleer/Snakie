@@ -1,3 +1,5 @@
+import { readdirSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, it, expect, beforeAll } from 'vitest'
 import * as Blockly from 'blockly/core'
 import { generateProgram, type GeneratedProgram } from '../src/renderer/src/lib/blocks/generator'
@@ -78,17 +80,20 @@ describe('the palette covers what the issue asks for (#1011)', () => {
   })
 
   it('points help at articles the help library actually has', () => {
-    // A help URL to a page that does not exist is worse than none: the child
-    // clicks it once, gets nothing, and never clicks it again.
-    const known = new Set([
-      'ref-flow',
-      'ref-functions',
-      'ref-print',
-      'ref-timing',
-      'ref-types',
-      'ref-builtins'
-    ])
-    for (const def of registeredBlocks()) expect(known.has(def.help as string)).toBe(true)
+    // Checked against the REAL library on disk, not a list copied into this
+    // test: a copy goes stale the first time a palette adds a block, and the
+    // failure it then reports is about the copy rather than about the app. A
+    // help link to an article that does not exist is worse than no link at all
+    // — the child clicks it once, gets nothing, and never clicks again.
+    const dir = resolve(__dirname, '../src/renderer/src/components/help')
+    const articles = new Set(
+      readdirSync(dir)
+        .filter((f) => f.endsWith('.md'))
+        .map((f) => f.replace(/\.md$/, ''))
+    )
+    for (const def of registeredBlocks()) {
+      expect(articles.has(def.help as string), `${def.type} -> ${def.help}`).toBe(true)
+    }
   })
 
   it('leaves the blocks it deliberately trimmed unreachable', () => {

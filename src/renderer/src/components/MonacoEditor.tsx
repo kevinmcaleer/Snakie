@@ -43,7 +43,8 @@ import {
   registerFormatCodeActions,
   setFormatDiagnostics
 } from './format-code-actions'
-import { validateBusPins, boardPinsFromPart, type BoardPinInfo } from './board-pin-check'
+import { validateBusPins, type BoardPinInfo } from './board-pin-check'
+import { loadSelectedBoard, watchSelectedBoard } from './board-pin-source'
 import {
   applyBoardPinDiagnostics,
   clearBoardPinDiagnostics,
@@ -52,9 +53,6 @@ import {
 import { clearRefactorCache, registerRefactorCodeActions, tidyFile } from './refactor-code-actions'
 import { refactorHints, rulesCoveredByLinter } from './refactor-hints'
 import { getCachedCapabilities } from '../lib/board-capabilities'
-import { boardPartFor } from './part-editor.util'
-import { DEFAULT_BOARD_ID } from './board-defs'
-import { PARTS_CHANGED_EVENT } from './PartsPanel'
 import {
   attachSpriteThumbnails,
   type SpriteThumbScope,
@@ -125,10 +123,7 @@ function applyDiagnostics(model: monaco.editor.ITextModel, diagnostics: Diagnost
  * marker owner, and record the diagnostics-with-fixes for the format code-action
  * provider. Clears both when there are no diagnostics.
  */
-function applyFormatDiagnostics(
-  model: monaco.editor.ITextModel,
-  diagnostics: Diagnostic[]
-): void {
+function applyFormatDiagnostics(model: monaco.editor.ITextModel, diagnostics: Diagnostic[]): void {
   const markers = diagnostics.map((d) => diagnosticToMarker(model, d))
   monaco.editor.setModelMarkers(model, FORMAT_MARKER_OWNER, markers)
   setFormatDiagnostics(model.uri.toString(), diagnostics)
@@ -288,7 +283,8 @@ export function MonacoEditor(): JSX.Element {
       const id = activeIdRef.current
       // Surface failures like the Toolbar save button does — a silent unhandled
       // rejection left the user thinking the file saved (#514).
-      if (id) saveFileRef.current(id).catch(reporter('save file', { notify: "Couldn't save the file." }))
+      if (id)
+        saveFileRef.current(id).catch(reporter('save file', { notify: "Couldn't save the file." }))
     })
 
     // Ctrl/Cmd-F + Ctrl/Cmd-H -> the custom Find & Replace panel (issue #92).
@@ -430,10 +426,7 @@ export function MonacoEditor(): JSX.Element {
 
     let model = models.current.get(activeFile.id)
     if (!model || model.isDisposed()) {
-      model = monaco.editor.createModel(
-        activeFile.content,
-        languageForName(activeFile.name)
-      )
+      model = monaco.editor.createModel(activeFile.content, languageForName(activeFile.name))
       models.current.set(activeFile.id, model)
     } else if (model.getValue() !== activeFile.content) {
       // External update (e.g. reload/save round-trip) — sync without clobbering
@@ -553,34 +546,24 @@ export function MonacoEditor(): JSX.Element {
   // bus numbers) for the board-aware bus check, and refresh when the user picks a
   // different board or the parts libraries change.
   useEffect(() => {
+    // Cleared by the cleanup below so a load in flight when the editor unmounts
+    // doesn't write into a ref nobody reads any more.
     let alive = true
     const load = (): void => {
-      let boardId = DEFAULT_BOARD_ID
-      try {
-        boardId = window.localStorage.getItem('snakie.board.id') || DEFAULT_BOARD_ID
-      } catch {
-        // fall back to the default board id
-      }
-      window.api?.parts
-        ?.listLibraries?.()
-        .then((libs) => {
-          if (!alive) return
-          boardPinsRef.current = boardPinsFromPart(boardPartFor(libs, boardId))
-          setBoardPinsVersion((v) => v + 1)
-        })
-        .catch(() => {
-          if (!alive) return
-          boardPinsRef.current = []
-          setBoardPinsVersion((v) => v + 1)
-        })
+      // `board-pin-source.ts` owns "which board, and what are its pins?" — the
+      // block canvas asks the same question for its pin dropdowns (#1012), and
+      // two copies would drift the first time board selection changed.
+      void loadSelectedBoard().then((board) => {
+        if (!alive) return
+        boardPinsRef.current = board.pins
+        setBoardPinsVersion((v) => v + 1)
+      })
     }
     load()
-    const offSelect = window.api?.board?.onSelectBoard?.(() => load())
-    window.addEventListener(PARTS_CHANGED_EVENT, load)
+    const stop = watchSelectedBoard(load)
     return () => {
       alive = false
-      offSelect?.()
-      window.removeEventListener(PARTS_CHANGED_EVENT, load)
+      stop()
     }
   }, [])
 
@@ -611,7 +594,14 @@ export function MonacoEditor(): JSX.Element {
       }
     }, LINT_DEBOUNCE_MS)
     return () => clearTimeout(timer)
-  }, [activeFile, activeFile?.id, activeFile?.content, activeFile?.name, lintingEnabled, boardPinsVersion])
+  }, [
+    activeFile,
+    activeFile?.id,
+    activeFile?.content,
+    activeFile?.name,
+    lintingEnabled,
+    boardPinsVersion
+  ])
 
   // Reactive JSON/YAML validation (issue #93): when the active file is a
   // `.json`/`.yml`/`.yaml` file, debounce then run the pure `validateFormat`,
@@ -690,7 +680,14 @@ export function MonacoEditor(): JSX.Element {
     }, LINT_DEBOUNCE_MS)
 
     return () => clearTimeout(timer)
-  }, [activeFile, activeFile?.id, activeFile?.content, activeFile?.name, lintingEnabled, styleHints])
+  }, [
+    activeFile,
+    activeFile?.id,
+    activeFile?.content,
+    activeFile?.name,
+    lintingEnabled,
+    styleHints
+  ])
 
   // With no active file open there is nothing to lint, so the Problems panel
   // should be empty (e.g. after closing the last tab).

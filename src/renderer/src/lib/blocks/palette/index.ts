@@ -5,7 +5,9 @@
 import 'blockly/blocks'
 import { defineBlocks } from '../registry'
 import { installBlockMessages } from './messages'
+import { installPinField } from '../pin-field'
 import { CONTROL_BLOCKS } from './control'
+import { HARDWARE_BLOCKS } from './hardware'
 import { FUNCTION_BLOCKS } from './functions'
 import { LIST_BLOCKS } from './lists'
 import { LOGIC_BLOCKS } from './logic'
@@ -47,7 +49,12 @@ import { WAIT_BLOCKS } from './wait'
  */
 export function installCorePalette(): void {
   installBlockMessages()
+  // The pin dropdowns are a custom field type, and a JSON definition naming a
+  // field type Blockly has never heard of throws while the block is built — so
+  // this has to be registered before the definitions below are installed.
+  installPinField()
   defineBlocks([
+    ...HARDWARE_BLOCKS,
     ...WAIT_BLOCKS,
     ...CONTROL_BLOCKS,
     ...LOGIC_BLOCKS,

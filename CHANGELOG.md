@@ -8,6 +8,55 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The hardware block palette** (#1012, epic #1007, phase 2). Twelve blocks that
+  make a real pin do a real thing: LEDs on and off and toggling, the onboard LED,
+  raw digital write and read, a button block that already knows about pull-ups,
+  PWM brightness and frequency, an analogue read, a servo, and a buzzer that plays
+  a note and one that shuts it up. This is the row of blocks a first lesson is
+  built out of.
+
+  **The pin is a dropdown of the pins this board actually has**, not a number
+  field. A number field is how a child ends up typing 27 for an analogue reading,
+  getting nothing, and having no way to find out that GP27 has no ADC on their
+  board. The options come from the selected board's part definition — which
+  already carries per-pin capabilities — so the analogue block offers only
+  ADC-capable pins and the servo and brightness blocks only PWM-capable ones. A
+  Pico offers the 26 pins on its header, not 29 GPIO numbers three of which are
+  soldered to things inside.
+
+  **It never silently rewires a saved program.** Blockly's dropdown normally
+  refuses any value outside its current options, which would mean opening a file
+  written for another board quietly resets each block to whichever pin happens to
+  be first in the list. The pin field keeps whatever the file said, shows it, and
+  lets the warning pass below be the thing that says something is wrong.
+
+  **Two blocks on one pin get a warning badge, not an error.** A servo on GP15 and
+  a buzzer on GP15 both generate correct Python, both grab the same PWM slice, the
+  servo twitches, and nothing on screen says why. The canvas is the only place
+  that can see the whole program at once, so it is where this is caught: *"GP15 is
+  also used by the buzzer and servo."* — named, not counted, because a learner
+  needs to know where to look. A warning rather than an error because sharing a
+  pin is sometimes exactly right, and a hard error would be the app telling a
+  child their circuit is wrong when the truth is the app cannot tell. The same
+  pass flags a pin this board does not have, and a pin that cannot do the job
+  (*"GP15 can't do adc on this board."*). Move the servo off GP15 and the badge
+  goes — a warning that outlives its cause teaches people to ignore warnings.
+
+  **The generated code is the code a lesson teaches**, pinned from three
+  directions at once and tested in all three: it matches `instruments.py`'s real
+  API (`Led` takes a `Pin` object and has `.set()`; `Buzzer` wraps a `PWM`), it is
+  readable by `parse-pins.ts` so the **Board View draws the wiring with no
+  changes**, and the servo block writes `Servo(PWM(Pin(0)), pin=0)` — the `PWM`
+  for the wiring visualiser and the `pin=` for Robot View telemetry, because
+  either one alone loses half the picture. The onboard-LED block writes `25` on a
+  Pico and `"LED"` on a Pico W, where the LED hangs off the wireless chip and has
+  no GPIO number at all.
+
+  Which board is selected, and what its pins can do, moved out of
+  `MonacoEditor.tsx` into a module both it and the canvas read, rather than two
+  copies of the answer that drift the first time anything about board selection
+  changes.
+
 - **The core block palette** (#1011, epic #1007, phase 2). The Scratch-shaped
   fundamentals, generating MicroPython: control, wait, logic, maths, text,
   lists, variables and functions. The toolbox has blocks in it.

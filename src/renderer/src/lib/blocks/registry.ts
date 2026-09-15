@@ -56,6 +56,16 @@ export interface BlockDefinition {
   /** Emit the code. */
   code: BlockEmitter
   /**
+   * This block claims a pin (#1012) — which field holds it, what the block does
+   * with it, and what the pin has to be able to do.
+   *
+   * Declared HERE rather than inferred from the block's fields, because "is this
+   * a pin?" and "does it need an ADC?" are facts about the block's meaning that
+   * only the block knows. The canvas uses these to flag two blocks fighting over
+   * one pin, a pin the board doesn't have, and a pin that can't do the job.
+   */
+  pin?: { field: string; role: string; needs?: string }
+  /**
    * The in-app help article this block's Help menu item opens, e.g. `ref-flow`.
    *
    * IN-APP, not a URL. Blockly's own `helpUrl` opens a web page, and a child on

@@ -10,6 +10,9 @@ import {
   type BlocklyThemeInput
 } from '../lib/blocks/theme'
 import { generateProgram, type GeneratedProgram } from '../lib/blocks/generator'
+import { ledPinToken, setBoardPins } from '../lib/blocks/board-pins'
+import { applyPinWarnings } from '../lib/blocks/pin-conflicts'
+import { loadSelectedBoard, watchSelectedBoard } from './board-pin-source'
 import { blockDefinition, blocksInCategory, installBlockDefinitions } from '../lib/blocks/registry'
 import { installCorePalette } from '../lib/blocks/palette'
 import { dispatchOpenHelp } from './editorBridge'
@@ -193,6 +196,10 @@ export function BlocksCanvas({
       if (debounceRef.current) clearTimeout(debounceRef.current)
       debounceRef.current = setTimeout(() => {
         const program = { ...generateProgram(ws), workspace: json }
+        // Two blocks on one pin, a pin this board hasn't got, a pin that can't
+        // do the job (#1012). The canvas is the only place that sees the whole
+        // program at once, so it is where this is caught.
+        applyPinWarnings(ws)
         onGenerateRef.current?.(program)
         onEditRef.current(program)
       }, REGENERATE_DEBOUNCE_MS)
@@ -207,6 +214,28 @@ export function BlocksCanvas({
       lastLoadedRef.current = ''
     }
   }, [peek, blocked])
+
+  // The pin dropdowns offer THIS board's pins (#1012). Loaded here rather than
+  // by the blocks themselves because a Blockly field's option list is produced
+  // inside Blockly's own event handling, with no React anywhere near it — so the
+  // canvas pushes and `board-pins.ts` holds.
+  useEffect(() => {
+    const apply = (): void => {
+      void loadSelectedBoard().then((board) => {
+        setBoardPins(
+          board.pins.map((p) => ({ gpio: p.gpio, label: p.label, capabilities: p.capabilities })),
+          ledPinToken(board.ledLabel)
+        )
+        // The warnings on screen were computed against the OLD board's pins, so
+        // a board swap has to re-run them or a stale "this board has no GP22"
+        // outlives the board that didn't.
+        const ws = wsRef.current
+        if (ws) applyPinWarnings(ws)
+      })
+    }
+    apply()
+    return watchSelectedBoard(apply)
+  }, [])
 
   // Follow the app's skin. Same MutationObserver pattern as `Terminal.tsx` and
   // `RobotView.tsx`: `data-theme` on the document root is the single source of
@@ -257,6 +286,7 @@ export function BlocksCanvas({
       // would dirty a file whose stored code merely predates this generator,
       // for the crime of being opened.
       onGenerateRef.current?.({ ...generateProgram(ws), workspace: loaded })
+      applyPinWarnings(ws)
     } catch {
       // Belt and braces behind the `blocked` check above: a type can be
       // registered and still fail to deserialise (a malformed field, a shape
