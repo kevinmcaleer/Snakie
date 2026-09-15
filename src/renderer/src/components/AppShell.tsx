@@ -346,14 +346,19 @@ export function AppShell(): JSX.Element {
   // the code editor + console — no code, no board view.
   const robotMain = layout.active === 'robot'
   // The instrument dock (mini-viewer peek + instruments + reopen rail) belongs to
-  // the CODE workspace only. Electronics fills the area with the Board View and
-  // Build with the URDF editor — both are self-contained, so neither shows the
-  // dock or the mini Board/3-D viewer.
-  const dockWorkspace = layout.active === 'code'
+  // the workspaces that have a FILE OPEN AND RUNNING — Code, and now Blocks
+  // (#1009): the instruments read the active file's source, and blocks generate
+  // source, so a turtle drawn by blocks needs the same dock a turtle drawn in
+  // Monaco does. Electronics fills the area with the Board View and Build with
+  // the URDF editor — both are self-contained, so neither shows the dock or the
+  // mini Board/3-D viewer.
+  const dockWorkspace = layout.active === 'code' || layout.active === 'blocks'
   // Electronics + Build are "solo" workspaces: a single main surface (the Board
   // View / the URDF 3-D editor) fills the area with NO code editor, console or
   // instrument dock — a dedicated non-RRP layout, so a persisted flag can never
-  // resurface the code panels. Only Code uses the resizable panel group.
+  // resurface the code panels. Code and Blocks use the resizable panel group;
+  // Blocks is Code's shape with a different emphasis, not a solo surface —
+  // that's the point of the fourth segment (#1009).
   const soloWorkspace = robotMain || layout.active === 'board'
   // A solo workspace hides the sidebar by default. ONLY a lesson (the Learn
   // tutorials or the Help library) shows there — opened from the activity bar, by

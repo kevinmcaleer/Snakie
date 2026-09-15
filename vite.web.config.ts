@@ -4,12 +4,15 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { standardPartsPlugin } from './vite-plugin-standard-parts'
+import { blocklyMediaPlugin } from './vite-plugin-blockly-media'
 import { webConnectSrc } from './src/renderer/src/web/web-hosts'
 
 // The desktop app reads its version from Electron's `app.getVersion()`; the web
 // build has no Electron, so inject package.json's version at build time and serve
 // it from the web `appVersion()` (install-web-api.ts) so the status bar shows it.
-const pkgVersion = (JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8')) as { version: string }).version
+const pkgVersion = (
+  JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8')) as { version: string }
+).version
 
 /**
  * STANDALONE WEB BUILD of the Snakie renderer — epic #267 (Snakie for Web), Phase W0.
@@ -40,7 +43,9 @@ export default defineConfig({
     // Shared feedback app key (same CI secret as the desktop builds) so the web
     // app can post bug reports. Post-only + rate-limited + Cloudflare-fronted on
     // the server, so shipping it in the bundle is an accepted trade-off (#513).
-    'import.meta.env.VITE_SNAKIE_FEEDBACK_KEY': JSON.stringify(process.env.SNAKIE_FEEDBACK_KEY || '')
+    'import.meta.env.VITE_SNAKIE_FEEDBACK_KEY': JSON.stringify(
+      process.env.SNAKIE_FEEDBACK_KEY || ''
+    )
   },
   // The sim runs in a module Worker that imports the WASM, so worker bundles need
   // ES format (the default 'iife' can't code-split the dynamic WASM import).
@@ -93,6 +98,10 @@ export default defineConfig({
   plugins: [
     react(),
     standardPartsPlugin(),
+    // Blockly's trashcan/zoom sprites, served locally rather than from its
+    // default CDN — the app's CSP refuses the CDN, and a classroom is often
+    // offline (#1009).
+    blocklyMediaPlugin(),
     // PWA (#464): installable to the ChromeOS shelf + offline via a Workbox
     // precache of the built app shell (incl. the MicroPython WASM). Web build
     // only — the plugin lives here, so the Electron build is untouched.
@@ -146,11 +155,7 @@ export default defineConfig({
         // instrument window (#781) or a 760px console (#810). They are precached
         // in their own right, so exclude them and let the precache (or the
         // network) serve them.
-        navigateFallbackDenylist: [
-          /^\/board\.html/,
-          /^\/instrument\.html/,
-          /^\/console\.html/
-        ]
+        navigateFallbackDenylist: [/^\/board\.html/, /^\/instrument\.html/, /^\/console\.html/]
       },
       manifest: {
         name: 'Snakie — MicroPython IDE',
@@ -180,7 +185,11 @@ export default defineConfig({
         this.emitFile({
           type: 'asset',
           fileName: 'version.json',
-          source: JSON.stringify({ version: pkgVersion, builtAt: new Date().toISOString() }, null, 2)
+          source: JSON.stringify(
+            { version: pkgVersion, builtAt: new Date().toISOString() },
+            null,
+            2
+          )
         })
       }
     },

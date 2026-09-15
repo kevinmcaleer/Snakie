@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { blocksFacts } from '../src/renderer/src/store/workspace'
-import { BlocksCanvasView, countBlocks } from '../src/renderer/src/components/BlocksCanvas'
+import { BlocksConflictNotice } from '../src/renderer/src/components/BlocksSplit'
 import { parseBlocksFooter, writeBlocksFooter } from '../src/shared/blocks-doc'
 
 const WS = {
@@ -74,55 +74,23 @@ describe('session restore round-trips a blocks file (#1008)', () => {
   })
 })
 
-describe('countBlocks (#1008)', () => {
-  it('counts a next-chain', () => {
-    expect(countBlocks(WS)).toBe(2)
-  })
+describe('BlocksConflictNotice (#1008)', () => {
+  const render = (): string =>
+    renderToStaticMarkup(<BlocksConflictNotice name="square.py" onKeepPython={() => {}} />)
 
-  it('counts nested inputs and shadows', () => {
-    expect(
-      countBlocks({ type: 'a', inputs: { X: { shadow: { type: 'b' } }, Y: { block: { type: 'c' } } } })
-    ).toBe(3)
-  })
-
-  it('ignores JSON that isn\'t blocks', () => {
-    expect(countBlocks({ variables: [{ name: 'n', id: 'x' }] })).toBe(0)
-    expect(countBlocks(null)).toBe(0)
-  })
-})
-
-describe('BlocksCanvasView (#1008)', () => {
-  const doc = parseBlocksFooter(BLOCKS_FILE)!
-
-  it('says how many blocks the file really holds', () => {
-    const out = renderToStaticMarkup(
-      <BlocksCanvasView name="square.py" doc={doc} conflict={false} />
-    )
-    expect(out).toContain('2 blocks saved in this file')
-    expect(out).not.toContain('role="alert"')
-  })
-
-  it('offers the conflict choice, and says nothing has been changed', () => {
-    const out = renderToStaticMarkup(
-      <BlocksCanvasView name="square.py" doc={doc} conflict onKeepPython={() => {}} />
-    )
+  it('offers the choice, and says nothing has been changed', () => {
+    const out = render()
     expect(out).toContain('role="alert"')
     expect(out).toContain('Nothing has been changed')
     expect(out).toContain('Keep the Python, drop the blocks')
+    expect(out).toContain('square.py')
   })
 
   it('does not offer a "keep the blocks" button it cannot honour yet', () => {
     // #1010 brings the generator; until then the alternative is described, not
     // offered — a button that silently does nothing is worse than the gap.
-    const out = renderToStaticMarkup(
-      <BlocksCanvasView name="square.py" doc={doc} conflict onKeepPython={() => {}} />
-    )
+    const out = render()
     expect(out.match(/<button/g)).toHaveLength(1)
     expect(out).toContain('arrives with the generator')
-  })
-
-  it('degrades when nothing readable is open', () => {
-    const out = renderToStaticMarkup(<BlocksCanvasView name={null} doc={null} conflict={false} />)
-    expect(out).toContain('No blocks file is open')
   })
 })

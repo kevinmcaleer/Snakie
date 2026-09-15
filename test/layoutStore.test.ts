@@ -20,7 +20,7 @@ const storage = (entries: Record<string, string> = {}): StorageLike => ({
 
 describe('workspace presets (epic #259; +Robot mode #320)', () => {
   it('defines the workspaces with valid geometry', () => {
-    expect(WORKSPACE_IDS).toEqual(['code', 'board', 'robot'])
+    expect(WORKSPACE_IDS).toEqual(['blocks', 'code', 'board', 'robot'])
     for (const id of WORKSPACE_IDS) {
       const p = WORKSPACE_PRESETS[id]
       expect(p.horizontal).toHaveLength(4)
@@ -258,7 +258,7 @@ describe('horizontal slot mapping — elided board/chat panels (#528)', () => {
 describe('loadLayoutState (corruption-safe, versioned)', () => {
   it('returns factory defaults with no stored state', () => {
     const s = loadLayoutState(storage())
-    expect(s.version).toBe(4)
+    expect(s.version).toBe(5)
     expect(s.active).toBe('code')
   })
 
@@ -279,7 +279,7 @@ describe('loadLayoutState (corruption-safe, versioned)', () => {
       }
     }
     const s = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(v1) }))
-    expect(s.version).toBe(4)
+    expect(s.version).toBe(5)
     expect(s.active).toBe('robot')
     // Code sizes reset to the corrected preset; the active view carries over.
     expect(s.workspaces.code.horizontal).toEqual(WORKSPACE_PRESETS.code.horizontal)
@@ -300,7 +300,7 @@ describe('loadLayoutState (corruption-safe, versioned)', () => {
       }
     }
     const s = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(v2) }))
-    expect(s.version).toBe(4)
+    expect(s.version).toBe(5)
     expect(s.workspaces.code.horizontal).toEqual(WORKSPACE_PRESETS.code.horizontal)
     expect(s.workspaces.code.vertical).toEqual(WORKSPACE_PRESETS.code.vertical)
     expect(WORKSPACE_PRESETS.code.horizontal).toEqual([20, 80, 0, 0])
@@ -325,7 +325,7 @@ describe('loadLayoutState (corruption-safe, versioned)', () => {
       }
     }
     const s = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(v3) }))
-    expect(s.version).toBe(4)
+    expect(s.version).toBe(5)
     expect(s.workspaces.robot.filesCollapsed).toBe(true)
     expect(s.workspaces.board.filesCollapsed).toBe(true)
     // Only that one flag is touched — Code (whose sidebar is open by design) and

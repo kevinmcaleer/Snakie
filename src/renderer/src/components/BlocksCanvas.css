@@ -1,64 +1,108 @@
-/* Block canvas placeholder (#1008). The real canvas — and its Soft Shell
-   theming — lands in #1009; this only has to read as part of the app while it
-   holds the route and the hand-edit conflict. */
-.blocks-canvas {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+/* The Blockly host (#1009). Blockly sizes itself from this element and injects
+   its own SVG into it, so it needs a real box with no padding of its own. */
+.blocks-canvas__host {
+  width: 100%;
   height: 100%;
-  overflow: auto;
-  padding: 16px;
+  min-width: 0;
   background: var(--editor);
-  color: var(--text);
+}
+
+/* Blockly's own chrome, pulled onto the Soft Shell fonts. The COLOURS come from
+   the theme object (Blockly paints SVG fills, which a CSS variable can't reach)
+   — this is only the type, which CSS can. */
+.blocks-canvas__host .blocklyText {
   font-family: var(--font-ui);
 }
 
-.blocks-canvas__placeholder {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  text-align: center;
+.blocks-canvas__host .blocklyFlyoutLabelText,
+.blocks-canvas__host .blocklyTreeLabel {
+  font-family: var(--font-ui);
+  font-weight: 700;
 }
 
-.blocks-canvas__note {
-  margin: 0;
+/* Code fields — a raw-Python block (#1018), a pin name — are code, so they get
+   the mono face even inside a block. */
+.blocks-canvas__host .blocklyHtmlInput,
+.blocks-canvas__host .blocklyFieldCode .blocklyText {
+  font-family: var(--font-mono);
+}
+
+/* The peek strip: the `Python` emphasis collapses the canvas to this rather than
+   hiding it, because a learner who cannot see where their blocks went has lost
+   their program. */
+.blocks-peek {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-width: 22px;
+  padding: 0;
+  border: none;
+  border-right: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--txt2);
+  cursor: pointer;
+}
+
+.blocks-peek:hover {
+  background: var(--card);
+  color: var(--head);
+}
+
+.blocks-peek__label {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  writing-mode: vertical-rl;
+}
+
+/* "These blocks need a newer Snakie" (#1009). Rendered INSTEAD of the canvas,
+   because the safety here is structural: with no Blockly mounted there is no
+   change listener, and therefore no path from this screen to that file. */
+.blocks-unreadable {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  overflow: auto;
+  padding: 24px;
+  background: var(--editor);
+  color: var(--head);
+  font-family: var(--font-ui);
   font-size: 13px;
 }
 
-.blocks-canvas__hint {
+.blocks-unreadable p {
   margin: 0;
-  color: var(--text-muted);
+  max-width: 52ch;
+}
+
+.blocks-unreadable__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.blocks-unreadable__types {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--txt2);
+}
+
+.blocks-unreadable__types code {
+  font-family: var(--font-mono);
   font-size: 12px;
 }
 
-/* The conflict is the one thing on this screen that must not be missed: a
-   silent regeneration here would delete the edit the user came back for. */
-.blocks-canvas__conflict {
+.blocks-unreadable__hint {
+  color: var(--txt2);
+  font-size: 12px;
+}
+
+.blocks-unreadable__actions {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
-  border: 1px solid var(--accent);
-  border-radius: 8px;
-  background: var(--card);
-  font-size: 13px;
-}
-
-.blocks-canvas__conflict p {
-  margin: 0;
-}
-
-.blocks-canvas__conflict-title {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.blocks-canvas__actions {
-  display: flex;
-  flex-wrap: wrap;
   gap: 8px;
 }

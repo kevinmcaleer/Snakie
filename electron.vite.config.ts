@@ -1,6 +1,7 @@
 import { resolve } from 'path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
+import { blocklyMediaPlugin } from './vite-plugin-blockly-media'
 
 export default defineConfig({
   main: {
@@ -89,6 +90,9 @@ export default defineConfig({
         }
       }
     },
-    plugins: [react()]
+    // Blockly's trashcan/zoom sprites, served locally rather than from its
+    // default CDN — the app's CSP refuses the CDN, and a classroom is often
+    // offline (#1009).
+    plugins: [react(), blocklyMediaPlugin()]
   }
 })

@@ -161,3 +161,37 @@
   background: var(--shellbd, var(--border));
   color: var(--head, var(--text));
 }
+
+/* The Blocks · Split · Python emphasis control (#1009). It lives in the editor
+   header beside Chat and Find — a LOCAL override of the workspace emphasis, so
+   the toolbar still holds exactly one global mode control. */
+.blocks-viewmode {
+  display: inline-flex;
+  gap: 1px;
+  padding: 1px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel2, var(--panel));
+}
+
+.blocks-viewmode__btn {
+  padding: 2px 9px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--txt2);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.blocks-viewmode__btn:hover {
+  color: var(--head);
+}
+
+.blocks-viewmode__btn.is-active {
+  background: var(--card);
+  color: var(--head);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 18%);
+}
