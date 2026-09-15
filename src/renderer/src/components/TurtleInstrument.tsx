@@ -166,7 +166,12 @@ export function TurtleInstrument({
       ro.disconnect()
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
     }
-  }, [])
+    // `started` gates whether the `<canvas>` is even mounted (it sits behind the
+    // "no drawing yet" InstrumentRequirement until the first reading arrives), so
+    // this must re-run once that flips — otherwise `canvasRef.current` is null on
+    // the initial (empty-deps) run, the effect no-ops forever, and the canvas
+    // never gets its resize/draw/rAF loop wired up even after it mounts.
+  }, [started])
 
   return (
     <InstrumentWindow
