@@ -7,7 +7,7 @@
 > (current `package.json` is `0.56.0`).
 
 Twelve sub-issues (#1008–#1019), built in order. This document is the
-architecture, the phased roadmap, the three design decisions the epic turns on,
+architecture, the phased roadmap, the design decisions the epic turns on,
 per-issue plans grounded in real files, cross-cutting concerns, and the open
 questions for the owner.
 
@@ -48,7 +48,7 @@ next to them, presses **Graduate to Python**, and keeps going in Monaco.
   that has to be exported before it is useful.
 - **We generate the code we would teach.** Blocks target `snakie` /
   `instruments` / `turtle`, not raw `machine` incantations, so nothing the
-  learner reads in the preview pane has to be un-learned later.
+  learner reads in the mirror pane has to be un-learned later.
 - **Monaco stays the centre of gravity.** Blocks are the way in, not the
   destination.
 
@@ -56,8 +56,8 @@ next to them, presses **Graduate to Python**, and keeps going in Monaco.
 keystone: it ships no Blockly at all, but every later issue consumes it. It
 lands first, pure and unit-tested. #1010 (the generator) is the second spine —
 its **block↔line source map** is a prerequisite for both #1015's tracebacks and
-#1016's side-by-side teaching mode, so it ships *with* the generator rather than
-being retrofitted once the shape is wrong.
+#1016's linked block↔code highlighting, so it ships *with* the generator rather
+than being retrofitted once the shape is wrong.
 
 **Engine choice: Blockly (Google, Apache-2.0).** Mature, themeable, keyboard-
 navigable, and the thing Scratch itself is built on, so the muscle memory
@@ -68,7 +68,7 @@ knows nothing about `machine`, `snakie` or `instruments`.
 
 ---
 
-## 2. The three decisions
+## 2. The design decisions
 
 ### 2.1 Where the switcher goes
 
@@ -102,9 +102,76 @@ asymmetry. So:
   reinterprets an open file.
 
 That gives the global, unambiguous switch that was asked for, without a control
-that lies when you press it on the wrong file.
+that lies when you press it on the wrong file. It is *not*, however, a choice
+between seeing blocks and seeing Python — see §2.2.
 
-### 2.2 The file format
+### 2.2 The split — the switcher is either/or, the *view* is both
+
+The workspace switcher is a **layout** control, so it can only ever be one thing
+at a time. But blocks and Python have to be on screen **together** — that is the
+entire teaching mechanism, and a learner who has to switch away to see the code
+will simply never look.
+
+So the split lives *inside* the view, and the switcher decides **which side is
+big**, never which side exists.
+
+**Every blocks file is a split view, in every workspace:**
+
+| Workspace | a blocks file shows | a plain `.py` shows |
+| --- | --- | --- |
+| **Blocks** | **blocks-primary** — canvas large, Python mirror beside it | Monaco (nothing to split) |
+| **Code** | **Python-primary** — code large, blocks collapsed to a peek strip | Monaco |
+
+It is the *same mounted component* in both: the workspace changes the split
+ratio and which pane holds focus, nothing more. That is exactly the "restyle the
+same tree, remount nothing" property `store/layout.ts` already guarantees for
+workspace switching (the editor, the xterm scrollback and the instruments all
+survive it today).
+
+Which means pressing **Code** on a blocks file finally *does* something
+meaningful — "make the Python the big one" — without converting anything, and
+pressing **Blocks** brings the canvas back with that workspace's other geometry
+(files panel, console height) in tow. The global switcher keeps its single,
+honest job: it sets emphasis, not content.
+
+**A local view-mode control** — `Blocks · Split · Python` — sits in the editor
+header and overrides the emphasis per file, for when the workspace default is
+wrong: full-width canvas to untangle a big program, full-width Python to read it
+properly. The editor header already hosts the per-view controls (Chat, Find in
+`EditorArea.tsx`), so that is where it belongs — and keeping it *out* of the
+toolbar preserves the one global switcher as the app's only mode control.
+
+**Mechanically it is a panel split, not a new framework.** The centre column is
+already a `react-resizable-panels` group (`vertical = [editor, shell]`); the
+editor slot becomes a nested horizontal group `[canvas, python]`, and
+`WorkspaceLayout` grows one ratio field beside its existing `horizontal` /
+`vertical` arrays. On a narrow window (epic #903) the split degrades to a tab
+pair rather than two unusable columns.
+
+**The Python side is a mirror, not a second editor.** Blocks are the source of
+truth; the Python is regenerated (debounced) on every workspace change, with
+hover-linked highlighting and synchronised scrolling in both directions
+(#1016) — hover a block, its lines light up; click a line, its block is
+selected.
+
+So the mirror is **read-only** — but as an *affordance*, not a locked box.
+Typing into it is caught and answered with the graduation offer (#1016):
+
+> Editing the Python means leaving the blocks behind. **Graduate this file to
+> Python?**
+
+Yes → the file becomes a plain `.py` in Monaco with the blocks saved beside it.
+No → nothing is lost and nothing is typed. That turns the single commonest
+accident in a split view into the milestone this whole epic is built around,
+instead of either a dead keypress or a silently clobbered edit.
+
+This read-only rule is the honest default, not a permanent ceiling: it is the
+one constraint #1019's decompiler would relax. If that spike succeeds, the
+mirror becomes editable for the subset our generator emits and round-trips
+through the blocks, with anything outside the subset landing as raw-Python
+blocks (#1018).
+
+### 2.3 The file format
 
 **Decision: a blocks program *is* a `.py` file**, with the Blockly workspace
 serialised into a trailing comment footer.
@@ -142,7 +209,7 @@ not free. If it proves to matter on constrained boards, "strip blocks data on
 upload" becomes a setting — deliberately *not* the default, because a file on
 the board that differs from the file on disk is a worse surprise than a few KB.
 
-### 2.3 Unknown imports — three layers, and the third can never fail
+### 2.4 Unknown imports — three layers, and the third can never fail
 
 A hand-maintained palette can only cover the parts we thought of. The parts
 library is in the hundreds and grows via a skill; hand-written blocks would be
@@ -226,9 +293,9 @@ so the readout is on screen before the program is even run.
           │ code         │ source map
           ▼              ▼
   ┌──────────────┐  ┌─────────────────┐           ┌──────────────────────────────┐
-  │ Python       │  │ traceback →     │           │ Toolbar handleRun            │
-  │ preview pane │  │ block highlight │◀──────────│   device.runProgram (#612)   │
-  │ (#1010/#1016)│  │ (#1015)         │  stderr   │   auto-connect / WASM sim    │
+  │ Python mirror│  │ traceback →     │           │ Toolbar handleRun            │
+  │ read-only +  │  │ block highlight │◀──────────│   device.runProgram (#612)   │
+  │ linked #1016 │  │ (#1015)         │  stderr   │   auto-connect / WASM sim    │
   └──────────────┘  └─────────────────┘           └───────────┬──────────────────┘
                                                               │ generated source
   ┌────────────────────────────────┐                          ▼
@@ -272,8 +339,9 @@ the first lesson around it.
 ### Phase 3 — Run it, teach it (#1015, #1016)
 
 Run/Stop from the canvas with tracebacks that highlight the offending block, and
-then the graduation path — eject to Python, side-by-side teaching mode, a blocks
-lesson track. **#1016 is the epic's actual point.** Without it we have built a
+then the graduation path — the two panes of §2.2's split wired to each other
+(hover a block, its lines light up; click a line, its block is selected), eject
+to Python, a blocks lesson track. **#1016 is the epic's actual point.** Without it we have built a
 nicer Scratch; with it we have built the bridge nobody else has.
 
 ### Phase 4 — Extensibility (#1017, #1018)
@@ -311,7 +379,7 @@ per-instrument accents already in `instruments-registry.ts`, in both the
 #859's two-skin rule).
 
 **Fonts.** Plus Jakarta Sans (`--font-ui`) on block text, IBM Plex Mono
-(`--font-mono`) inside code fields and the preview pane.
+(`--font-mono`) inside code fields and the Python mirror.
 
 **`window.prompt` does not exist in the Electron renderer.** Blockly's stock
 variable-rename and text prompts call it. They must be overridden to route
@@ -358,9 +426,14 @@ Phase 1 alone is one. Docs- and plan-only changes (including this file) are
    proposed here hides it, on the grounds that a first-hour learner has enough
    to look at. But "blocks follow your circuit" (#1017) is much more legible
    when the circuit is on screen. A toggle, or a two-preset split?
-4. **Strip the blocks footer on device upload?** Proposed default: no (§2.2).
+4. **Strip the blocks footer on device upload?** Proposed default: no (§2.3).
    Worth confirming against the smallest board we care about.
-5. **Is `.py` the right extension for a blocks file, or do we want a distinct
+5. **Does the `Blocks · Split · Python` view-mode control stick per file, per
+   workspace, or globally?** Per file is the most obedient and the most
+   forgettable; global is the most predictable and the most annoying. Proposal:
+   per file, seeded from the workspace default, which is what a learner and a
+   teacher both expect — but it is a judgement call, not a derivation.
+6. **Is `.py` the right extension for a blocks file, or do we want a distinct
    one** (e.g. `.blocks.py`) so the file tree can sort and badge them without
    reading every file? Reading a footer is cheap; a distinct extension is
    cheaper and more legible, but slightly less "it's just Python".
