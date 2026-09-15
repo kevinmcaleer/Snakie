@@ -18,7 +18,7 @@ import { createWebMpyApi, type WebMpyFs } from './web-mpy'
 import { createWebRobotApi, type WebRobotFs } from './web-robot'
 import { createWebUpdatesApi } from './web-updates'
 import { createWebPartsApi } from './web-parts'
-import { INSTRUMENTS_PY, SNAKIE_PY } from './web-lib-sources'
+import { INSTRUMENTS_PY, SNAKIE_PY, TURTLE_PY } from './web-lib-sources'
 import { createWebFeedbackApi, captureTabScreenshot } from './web-feedback'
 import { createWebModulesApi } from './web-modules'
 import { createWebPackagesApi } from './web-packages'
@@ -113,6 +113,7 @@ export function installWebApi(kind: WebWindowKind = 'main'): boolean {
   const instruments = (w.api.instruments ?? {}) as Record<string, unknown>
   instruments.librarySource = async (): Promise<string> => INSTRUMENTS_PY
   instruments.umbrellaSource = async (): Promise<string> => SNAKIE_PY
+  instruments.turtleSource = async (): Promise<string> => TURTLE_PY
   w.api.instruments = instruments as unknown as Window['api']['instruments']
   // Serve the bundled Standard Parts library (read-only) so the board view can
   // resolve a placed part's shapes/pins — otherwise a wired servo shows only its

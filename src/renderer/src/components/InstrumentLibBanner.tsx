@@ -22,7 +22,10 @@ export function InstrumentLibBanner({
   error,
   outdated = false,
   onInstall,
-  onDismiss
+  onDismiss,
+  libraryName = 'instrument',
+  detail,
+  updateDetail
 }: {
   /** True while the library is being written to the board (disables the key). */
   installing: boolean
@@ -37,13 +40,24 @@ export function InstrumentLibBanner({
   onInstall: () => void
   /** Dismiss the banner for this open-session (re-shows on reopen). */
   onDismiss: () => void
+  /**
+   * Which bundled library this banner is for, used in the summary line ("The
+   * Snakie `<libraryName>` library isn't on your board"). Defaults to the
+   * original `instruments.py` copy so the existing call site is unaffected;
+   * pass e.g. `"turtle"` to reuse this banner for `turtle.py` (#1003).
+   */
+  libraryName?: string
+  /** Detail line shown when the library is ABSENT. Defaults to the instrument-library copy. */
+  detail?: string
+  /** Detail line shown when the library is OUTDATED. Defaults to the instrument-library copy. */
+  updateDetail?: string
 }): JSX.Element {
   const verb = outdated ? 'update' : 'install'
   const summary = error
-    ? `Couldn’t ${verb} the instrument library: ${error}`
+    ? `Couldn’t ${verb} the ${libraryName} library: ${error}`
     : outdated
-      ? 'A newer Snakie instrument library is available'
-      : 'The Snakie instrument library isn’t on your board'
+      ? `A newer Snakie ${libraryName} library is available`
+      : `The Snakie ${libraryName} library isn’t on your board`
 
   return (
     <Notice
@@ -51,8 +65,9 @@ export function InstrumentLibBanner({
       summary={summary}
       detail={
         outdated
-          ? 'Update your board to get the latest instruments (buzzer, scanners, …) and fixes.'
-          : 'Install it to stream live scope / meter / plotter readings from your program.'
+          ? (updateDetail ??
+            'Update your board to get the latest instruments (buzzer, scanners, …) and fixes.')
+          : (detail ?? 'Install it to stream live scope / meter / plotter readings from your program.')
       }
       action={{
         label: installing

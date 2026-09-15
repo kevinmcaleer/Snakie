@@ -186,7 +186,8 @@ export function TurtleInstrument({
           <InstrumentRequirement
             title="No turtle drawing yet"
             lines={[
-              'The canvas draws anything your program moves with the turtle module — plain MicroPython function calls, no separate Logo language.'
+              'The canvas draws anything your program moves with the turtle module — plain MicroPython function calls, no separate Logo language.',
+              'Getting "no module named turtle"? The library isn\'t on your board yet — connect it and Snakie offers a one-click install at the top of the window.'
             ]}
             code={'from turtle import forward, right\n\nfor _ in range(4):\n    forward(50)\n    right(90)'}
             helpId={`inst-${def.id}`}

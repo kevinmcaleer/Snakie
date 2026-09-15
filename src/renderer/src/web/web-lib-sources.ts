@@ -19,12 +19,16 @@
  */
 import instrumentsPy from '../../../../micropython/instruments.py?raw'
 import snakiePy from '../../../../micropython/snakie.py?raw'
+import turtlePy from '../../../../micropython/turtle.py?raw'
 
 /** The `instruments` library (Servo/Buzzer/Led/… + the control loop). */
 export const INSTRUMENTS_PY: string = instrumentsPy
 
 /** The `snakie` hardware umbrella that re-exports the classes (shadow-proof imports). */
 export const SNAKIE_PY: string = snakiePy
+
+/** The `turtle` Logo-style turtle-graphics library (issue #1003). */
+export const TURTLE_PY: string = turtlePy
 
 /**
  * Bundled module STUBS (`micropython/modules/*.py`) — the desktop packages this

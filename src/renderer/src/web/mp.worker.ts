@@ -19,7 +19,7 @@ import type { MicroPythonInstance } from '@micropython/micropython-webassembly-p
 import mpWasmUrl from '@micropython/micropython-webassembly-pyscript/micropython.wasm?url'
 import { delScratch } from '../../../shared/device-scratch'
 import { SIM_MACHINE_PY } from '../../../shared/sim-machine'
-import { INSTRUMENTS_PY, SNAKIE_PY } from './web-lib-sources'
+import { INSTRUMENTS_PY, SNAKIE_PY, TURTLE_PY } from './web-lib-sources'
 
 type InMsg =
   | { type: 'init'; heapBytes?: number }
@@ -56,13 +56,15 @@ const writeVfsFile = (mpi: MicroPythonInstance, path: string, source: string): v
 }
 
 /**
- * Seed `/lib/instruments.py` + `/lib/snakie.py` so `import instruments` /
- * `from snakie import Servo` work with no install step. The RAM VFS resets on a
- * worker reboot (Stop), so this re-runs on every init — exactly like a reconnect.
+ * Seed `/lib/instruments.py` + `/lib/snakie.py` + `/lib/turtle.py` so
+ * `import instruments` / `from snakie import Servo` / `from turtle import
+ * forward` all work with no install step. The RAM VFS resets on a worker
+ * reboot (Stop), so this re-runs on every init — exactly like a reconnect.
  */
 const installLibrary = (mpi: MicroPythonInstance): void => {
   writeVfsFile(mpi, '/lib/instruments.py', INSTRUMENTS_PY)
   writeVfsFile(mpi, '/lib/snakie.py', SNAKIE_PY)
+  writeVfsFile(mpi, '/lib/turtle.py', TURTLE_PY)
 }
 let mp: MicroPythonInstance | null = null
 let pending: number[] = []
