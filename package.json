@@ -46,6 +46,7 @@
     "dompurify": "^3.4.11",
     "electron-updater": "^6.8.3",
     "esptool-js": "^0.6.0",
+    "fflate": "^0.8.3",
     "gifenc": "^1.0.3",
     "marked": "^18.0.5",
     "monaco-editor": "^0.52.2",

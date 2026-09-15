@@ -1,0 +1,64 @@
+/* Block canvas placeholder (#1008). The real canvas — and its Soft Shell
+   theming — lands in #1009; this only has to read as part of the app while it
+   holds the route and the hand-edit conflict. */
+.blocks-canvas {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  overflow: auto;
+  padding: 16px;
+  background: var(--editor);
+  color: var(--text);
+  font-family: var(--font-ui);
+}
+
+.blocks-canvas__placeholder {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.blocks-canvas__note {
+  margin: 0;
+  font-size: 13px;
+}
+
+.blocks-canvas__hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* The conflict is the one thing on this screen that must not be missed: a
+   silent regeneration here would delete the edit the user came back for. */
+.blocks-canvas__conflict {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--card);
+  font-size: 13px;
+}
+
+.blocks-canvas__conflict p {
+  margin: 0;
+}
+
+.blocks-canvas__conflict-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.blocks-canvas__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

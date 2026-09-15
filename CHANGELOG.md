@@ -8,6 +8,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Blocks file format** (#1008, epic #1007, phase 1). The foundation for the
+  block editor: a blocks program **is a `.py` file**, with the Blockly workspace
+  deflated into a trailing comment footer under the MicroPython it generated.
+  One file — it runs on the board unmodified, and it survives email, USB sticks,
+  a school network share, git and copy-paste, which all matter far more in a
+  classroom than elegance. A sidecar `.blocks.json` loses on every one of those
+  counts, because one of the two files always gets left behind.
+
+  Snakie re-opens such a file on the block canvas (a placeholder until #1009)
+  and marks its tab with a block glyph; anything else sees a perfectly ordinary
+  Python program. A footer this build cannot read — corrupt, truncated, or
+  written by a newer Snakie — is not an error: the file simply opens in Monaco
+  with every byte intact, which is the one outcome that cannot lose work.
+
+  **Hand-edited Python is a detected conflict, never a silent overwrite.** The
+  footer records a fingerprint of the code it was written with, so a file whose
+  Python has been edited underneath it opens with a choice rather than a
+  regeneration over the top of somebody's edit. The fingerprint ignores line
+  endings and trailing whitespace, so a git checkout with CRLF, or an editor
+  that trims on save, is not mistaken for a hand-edit.
+
+  No block canvas yet — that is #1009, and the MicroPython generator is #1010.
+
 - **Turtle graphics** (#1003, phase 1). Logo-style turtle drawing as plain
   MicroPython functions — `forward(10)`, `right(90)`, `penup()`, `goto(x, y)`
   — no separate Logo language or REPL: real Python calls against the

@@ -320,3 +320,18 @@ export const CylinderIcon = ({ size }: { size?: number }): JSX.Element =>
     ),
     size
   )
+
+/** Two interlocking puzzle-ish blocks — a blocks program (#1008, epic #1007).
+ *  Deliberately not a puzzle PIECE: Blockly's own notch-and-tab silhouette is
+ *  what a learner recognises from Scratch, and it reads at 12px where a jigsaw
+ *  does not. */
+export const BlocksIcon = ({ size }: { size?: number }): JSX.Element =>
+  svg(
+    g(
+      <>
+        <path d="M4 6h4.5l1 1.4h3L13.5 6H18a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1Z" />
+        <path d="M6 11h3.5l1 1.4h3l1-1.4H17a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1Z" />
+      </>
+    ),
+    size
+  )
