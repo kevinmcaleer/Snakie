@@ -1,5 +1,6 @@
 import { CLOSE_TAB_EVENT } from './editorBridge'
 import { useEffect } from 'react'
+import { BlocksIcon } from './ui-icons'
 import { useWorkspace } from '../store/workspace'
 import './EditorTabs.css'
 
@@ -113,6 +114,16 @@ export function EditorTabs(): JSX.Element | null {
             }
           >
             {file.dirty && <span className="editor-tab__dirty" aria-hidden="true" />}
+            {/* A blocks program looks like any other `.py` in the tree and in
+                the strip, because it IS one (#1008) — the glyph is the only
+                thing that says this tab opens on the canvas rather than in
+                Monaco. `title` carries it for screen readers; the tab's own
+                label stays the filename. */}
+            {file.isBlocks && (
+              <span className="editor-tab__glyph" title="Blocks program">
+                <BlocksIcon size={13} />
+              </span>
+            )}
             {/* Device files are bracketed — [name] — to distinguish them from
                 local files at a glance in the tab strip (#178 follow-up). */}
             <span className="editor-tab__label">

@@ -104,6 +104,19 @@
   background: var(--gold, var(--accent));
 }
 
+/* Blocks-program glyph (#1008). Muted rather than accent-coloured: it labels
+   the tab, it doesn't compete with the gold dirty dot next to it. */
+.editor-tab__glyph {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+}
+
+.editor-tab--active .editor-tab__glyph {
+  color: var(--accent-ink, var(--accent));
+}
+
 .editor-tab__close {
   flex: 0 0 auto;
   display: inline-flex;

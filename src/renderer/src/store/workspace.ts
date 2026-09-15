@@ -11,6 +11,10 @@
  *     name: string                  // base name for tab labels
  *     content: string
  *     dirty: boolean                // unsaved edits pending
+ *     isBlocks?: boolean            // a blocks program (#1008): the `.py` carries
+ *                                   // a `snakie-blocks` footer we can read
+ *     blocksConflict?: boolean      // its Python was hand-edited under an
+ *                                   // unchanged footer — ask, never overwrite
  *   }
  *
  *   openFiles: OpenFile[]
@@ -23,6 +27,9 @@
  *   setActive(id): void
  *   closeFile(id): void
  *   updateContent(id, content): void        // marks dirty=true
+ *   updateBlocks(id, code, workspace): void // the ONLY writer of a blocks buffer:
+ *                                           // code + footer serialised together
+ *   graduateToPython(id): void              // drop the footer, keep the Python
  *   saveFile(id): Promise<void>             // writes back (fs/device); clears dirty.
  *                                           // untitled local buffer -> Save As dialog
  *   newFile(): void                          // untitled local buffer
@@ -56,6 +63,13 @@ import {
   markRestoreDone
 } from './session-restore'
 import { isMpyFile } from '../../../shared/mpy-info'
+import {
+  hasBlocksFooter,
+  parseBlocksFooter,
+  stripBlocksFooter,
+  writeBlocksFooter,
+  type BlocksWorkspace
+} from '../../../shared/blocks-doc'
 
 export type FileSource = 'local' | 'device'
 
@@ -164,6 +178,45 @@ export interface OpenFile {
    * the one that deletes somebody's work.
    */
   binary?: boolean
+  /**
+   * This is a BLOCKS PROGRAM (#1008, epic #1007): an ordinary `.py` that also
+   * carries a `snakie-blocks` footer this build can read, so it opens on the
+   * block canvas instead of in Monaco.
+   *
+   * Derived ONCE, at open time, from the footer — not from the extension, because
+   * there isn't one to derive it from (a blocks file is a `.py` on purpose), and
+   * not re-derived per render, because the tab strip and the editor router both
+   * ask and neither should be inflating a payload to answer.
+   */
+  isBlocks?: boolean
+  /**
+   * The Python above the footer no longer matches the fingerprint the footer
+   * recorded — somebody hand-edited the code (#1008).
+   *
+   * Carried on the file rather than resolved at open time because the choice is
+   * the user's: keep the code and drop the blocks, or rebuild the code from the
+   * blocks. Whichever they pick, nothing is overwritten until they pick it —
+   * silently regenerating would delete the edit they came back for.
+   */
+  blocksConflict?: boolean
+}
+
+/**
+ * Derive the blocks facts for a freshly-read buffer (#1008).
+ *
+ * `hasBlocksFooter` first so an ordinary `.py` — which is nearly every file —
+ * costs one `indexOf` rather than a base64 decode and an inflate.
+ *
+ * Exported because it is the contract, not an implementation detail: every path
+ * that puts text into a buffer (open, reload, generated buffer) must derive the
+ * same two facts the same way, and a test has to be able to hold it to that.
+ */
+export function blocksFacts(content: string): Pick<OpenFile, 'isBlocks' | 'blocksConflict'> {
+  if (!hasBlocksFooter(content)) return { isBlocks: false }
+  const doc = parseBlocksFooter(content)
+  // A footer we can't actually read is a plain `.py` — see `blocks-doc.ts`.
+  if (!doc) return { isBlocks: false }
+  return { isBlocks: true, blocksConflict: !doc.codeMatches }
 }
 
 /**
@@ -190,6 +243,26 @@ export interface WorkspaceStore {
   setActive: (id: string) => void
   closeFile: (id: string) => void
   updateContent: (id: string, content: string) => void
+  /**
+   * The block canvas changed: re-serialise the generated code AND the workspace
+   * into the buffer as ONE write (#1008).
+   *
+   * This is the only way a blocks buffer is ever written, and that is the whole
+   * guarantee: a caller cannot save a `.py` whose footer says something else,
+   * because it never gets to hand over just one of the two. Marks the buffer
+   * dirty and clears any hand-edit conflict — editing the blocks IS choosing
+   * the blocks.
+   */
+  updateBlocks: (id: string, code: string, workspace: BlocksWorkspace) => void
+  /**
+   * Drop the footer and keep the Python — the file becomes an ordinary `.py`
+   * and the tab moves to Monaco (#1008).
+   *
+   * Two callers, one operation: resolving a hand-edit conflict in favour of the
+   * code, and **Graduate to Python** (#1016), which is the same act done on
+   * purpose. Leaves the buffer dirty so nothing is lost until the user saves.
+   */
+  graduateToPython: (id: string) => void
   /**
    * Adopt EXTERNALLY-changed file content into a CLEAN open buffer without
    * marking it dirty (#716: the placement bridge rewrites the project `.urdf`
@@ -237,6 +310,8 @@ type Action =
   | { type: 'setActive'; id: string }
   | { type: 'close'; id: string }
   | { type: 'updateContent'; id: string; content: string }
+  | { type: 'updateBlocks'; id: string; code: string; workspace: BlocksWorkspace }
+  | { type: 'graduateToPython'; id: string }
   | { type: 'reloadContent'; id: string; content: string }
   | { type: 'markSaved'; id: string; content: string }
   | { type: 'savedAs'; id: string; path: string; name: string; content: string }
@@ -309,6 +384,39 @@ function reducer(state: State, action: Action): State {
           f.id === action.id ? { ...f, content: action.content, dirty: true } : f
         )
       }
+    case 'updateBlocks':
+      // Code and footer are serialised together or not at all — they cannot
+      // drift apart because no caller is ever handed the chance to write one
+      // without the other.
+      return {
+        ...state,
+        openFiles: state.openFiles.map((f) =>
+          f.id === action.id
+            ? {
+                ...f,
+                content: writeBlocksFooter(action.code, action.workspace),
+                dirty: true,
+                isBlocks: true,
+                blocksConflict: false
+              }
+            : f
+        )
+      }
+    case 'graduateToPython':
+      return {
+        ...state,
+        openFiles: state.openFiles.map((f) =>
+          f.id === action.id && f.isBlocks
+            ? {
+                ...f,
+                content: stripBlocksFooter(f.content),
+                dirty: true,
+                isBlocks: false,
+                blocksConflict: false
+              }
+            : f
+        )
+      }
     case 'reloadContent':
       // An external writer changed the file on disk and the buffer is CLEAN —
       // adopt the new text, still clean. A dirty buffer is the user's and is
@@ -317,7 +425,11 @@ function reducer(state: State, action: Action): State {
       return {
         ...state,
         openFiles: state.openFiles.map((f) =>
-          f.id === action.id && !f.dirty ? { ...f, content: action.content, dirty: false } : f
+          f.id === action.id && !f.dirty
+            ? // Re-derive the blocks facts: the text is new, so whether it is a
+              // blocks file — and whether its footer still matches — is too.
+              { ...f, content: action.content, dirty: false, ...blocksFacts(action.content) }
+            : f
         )
       }
     case 'markSaved':
@@ -391,7 +503,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
         name: baseName(path),
         content,
         dirty: false,
-        binary: isMpyFile(path)
+        binary: isMpyFile(path),
+        ...blocksFacts(content)
       }
     })
   }, [])
@@ -406,6 +519,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
 
   const updateContent = useCallback((id: string, content: string): void => {
     dispatch({ type: 'updateContent', id, content })
+  }, [])
+
+  const updateBlocks = useCallback((id: string, code: string, workspace: BlocksWorkspace): void => {
+    dispatch({ type: 'updateBlocks', id, code, workspace })
+  }, [])
+
+  const graduateToPython = useCallback((id: string): void => {
+    dispatch({ type: 'graduateToPython', id })
   }, [])
 
   const reloadContent = useCallback((id: string, content: string): void => {
@@ -650,7 +771,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
     const id = `local:untitled-${untitledCounter}`
     dispatch({
       type: 'add',
-      file: { id, source: 'local', path: '', name, content, dirty: false }
+      file: { id, source: 'local', path: '', name, content, dirty: false, ...blocksFacts(content) }
     })
   }, [])
 
@@ -664,6 +785,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
       setActive,
       closeFile,
       updateContent,
+      updateBlocks,
+      graduateToPython,
       reloadContent,
       saveFile,
       saveFileAs,
@@ -683,6 +806,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
       setActive,
       closeFile,
       updateContent,
+      updateBlocks,
+      graduateToPython,
       reloadContent,
       saveFile,
       saveFileAs,

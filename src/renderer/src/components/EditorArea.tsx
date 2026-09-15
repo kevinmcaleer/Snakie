@@ -24,6 +24,11 @@ const RobotView = lazy(() => import('./RobotView'))
 // Bytecode View (#875) — a read-only look inside a compiled `.mpy`, in place of
 // the mojibake Monaco used to show for one.
 const MpyView = lazy(() => import('./MpyView'))
+// Block canvas (#1008, epic #1007) — a `.py` carrying a `snakie-blocks` footer
+// opens here rather than in Monaco. Code-split like the rest, which is what
+// keeps Blockly's multi-MB chunk (#1009) off the initial load for the many
+// users who never open a blocks file.
+const BlocksCanvas = lazy(() => import('./BlocksCanvas'))
 
 /** Files opened as a table (Data View) rather than in the code editor (#274). */
 const DATA_FILE_RE = /\.(csv|tsv|tab)$/i
@@ -56,6 +61,10 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
   const showData = isDataFile(activeFile?.name)
   const showRobot = isRobotFile(activeFile?.name)
   const showMpy = isMpyFile(activeFile?.name)
+  // The one router entry that is NOT an extension test (#1008): a blocks file is
+  // a `.py` on purpose, so the fact comes from the footer, read once at open
+  // time and carried on the file.
+  const showBlocks = activeFile?.isBlocks === true
 
   // Open the Find & Replace window. The window itself drives the editor over IPC
   // (issue #146); we only need to open/focus it.
@@ -97,7 +106,7 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
     >
       <div className="editor-header">
         <EditorTabs />
-        {(onToggleChat || (hasFiles && !showData && !showRobot && !showMpy)) && (
+        {(onToggleChat || (hasFiles && !showData && !showRobot && !showMpy && !showBlocks)) && (
           <div className="editor-header__actions">
             {/* Chat toggle — moved here from the console header (which was too
                 busy). Sits to the LEFT of Find. Desktop + Code workspace only. */}
@@ -116,7 +125,7 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
                 <span>Chat</span>
               </button>
             )}
-            {hasFiles && !showData && !showRobot && !showMpy && (
+            {hasFiles && !showData && !showRobot && !showMpy && !showBlocks && (
               <button
                 type="button"
                 className="btn btn--sm btn--ghost"
@@ -139,6 +148,10 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
         ) : showRobot ? (
           <Suspense fallback={<EditorPlaceholder text="Loading robot view…" />}>
             <RobotView />
+          </Suspense>
+        ) : showBlocks ? (
+          <Suspense fallback={<EditorPlaceholder text="Loading blocks…" />}>
+            <BlocksCanvas />
           </Suspense>
         ) : showMpy ? (
           <Suspense fallback={<EditorPlaceholder text="Loading bytecode view…" />}>
