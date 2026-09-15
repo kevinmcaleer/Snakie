@@ -26,6 +26,11 @@
  *   SNK WIFI  <ssid> <rssi> <ch> <sec>        → one Wi-Fi network (one line each)
  *   SNK BT    <name> <mac> <rssi>             → one Bluetooth device (one line each)
  *   SNK READY <caps ...>                      → the background service is alive
+ *   SNK TURT  POS <x> <y> <heading>           → turtle position/heading (compass, 0=north cw)
+ *   SNK TURT  LINE <x1> <y1> <x2> <y2> <colour> <width> → a drawn turtle segment
+ *   SNK TURT  PEN <0|1>                       → turtle pen up(0)/down(1)
+ *   SNK TURT  VIS <0|1>                       → turtle sprite hidden(0)/shown(1)
+ *   SNK TURT  CLEAR                           → wipe the turtle canvas
  *
  * `<ch>` is a user label (e.g. `pwm`, `adc0`, a variable name) used to match a
  * reading to an open instrument.
@@ -216,6 +221,31 @@ export interface ReadyTelemetry {
   /** Capability tokens the program services (e.g. `scan:wifi`, `teleop`). */
   caps: string[]
 }
+/**
+ * A turtle-graphics reading (`SNK TURT ...`), emitted by `micropython/turtle.py`.
+ * `event` distinguishes the five sub-messages: a position/heading update (`pos`,
+ * sent on every move — pen up or down), a drawn segment (`line`, sent only when
+ * the pen was down), a pen state change (`pen`), a sprite-visibility toggle
+ * (`vis`), or a canvas wipe (`clear`). Heading is COMPASS convention (0 =
+ * north/up, degrees increase clockwise) and the origin is canvas-centre with
+ * y increasing UP — both deliberate deviations from CPython's `turtle` module
+ * (see `micropython/turtle.py`'s module docstring).
+ */
+export type TurtleTelemetry =
+  | { kind: 'turtle'; event: 'pos'; x: number; y: number; heading: number }
+  | {
+      kind: 'turtle'
+      event: 'line'
+      x1: number
+      y1: number
+      x2: number
+      y2: number
+      colour: string
+      width: number
+    }
+  | { kind: 'turtle'; event: 'pen'; down: boolean }
+  | { kind: 'turtle'; event: 'vis'; visible: boolean }
+  | { kind: 'turtle'; event: 'clear' }
 
 export type Telemetry =
   | ScopeTelemetry
@@ -236,6 +266,7 @@ export type Telemetry =
   | WifiTelemetry
   | BluetoothTelemetry
   | ReadyTelemetry
+  | TurtleTelemetry
 
 /**
  * Is `line` an instruments-telemetry line? True when its first whitespace token
@@ -461,6 +492,46 @@ export function parseTelemetry(line: string): Telemetry | null {
   if (kind === 'READY') {
     // SNK READY <caps...> — a presence/readiness heartbeat (caps may be empty).
     return { kind: 'ready', caps: parts.slice(2) }
+  }
+
+  if (kind === 'TURT') {
+    // SNK TURT POS <x> <y> <heading>
+    // SNK TURT LINE <x1> <y1> <x2> <y2> <colour> <width>
+    // SNK TURT PEN <0|1>
+    // SNK TURT VIS <0|1>
+    // SNK TURT CLEAR
+    const event = parts[2]
+    if (event === 'POS') {
+      const x = Number(parts[3])
+      const y = Number(parts[4])
+      const heading = Number(parts[5])
+      if (![x, y, heading].every(Number.isFinite)) return null
+      return { kind: 'turtle', event: 'pos', x, y, heading }
+    }
+    if (event === 'LINE') {
+      const x1 = Number(parts[3])
+      const y1 = Number(parts[4])
+      const x2 = Number(parts[5])
+      const y2 = Number(parts[6])
+      const colour = parts[7]
+      const width = Number(parts[8])
+      if (![x1, y1, x2, y2, width].every(Number.isFinite) || !colour) return null
+      return { kind: 'turtle', event: 'line', x1, y1, x2, y2, colour: colour.replace(/_/g, ' '), width }
+    }
+    if (event === 'PEN') {
+      const raw = parts[3]
+      if (raw !== '0' && raw !== '1') return null
+      return { kind: 'turtle', event: 'pen', down: raw === '1' }
+    }
+    if (event === 'VIS') {
+      const raw = parts[3]
+      if (raw !== '0' && raw !== '1') return null
+      return { kind: 'turtle', event: 'vis', visible: raw === '1' }
+    }
+    if (event === 'CLEAR') {
+      return { kind: 'turtle', event: 'clear' }
+    }
+    return null
   }
 
   // Unknown SNK sub-command — ignore it (still hidden from the console because

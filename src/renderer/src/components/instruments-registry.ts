@@ -355,6 +355,18 @@ export const INSTRUMENTS: InstrumentDef[] = [
     hints: ['bluetooth', 'ble', 'ubluetooth', 'aioble']
   },
   {
+    id: 'turtle',
+    name: 'Turtle',
+    accent: '#6fce7f',
+    border: 'rgba(111,206,127,.5)',
+    // a turtle: a domed shell with a head and four short legs
+    icon: 'M12 6 a6 6 0 0 1 6 6 a6 6 0 0 1 -6 6 a6 6 0 0 1 -6 -6 a6 6 0 0 1 6 -6 Z M12 4 v2 M6 8 l1.6 1.2 M18 8 l-1.6 1.2 M6 16 l1.6 -1.2 M18 16 l-1.6 -1.2',
+    group: 'output',
+    kind: 'singleton',
+    description: 'Draw with Logo-style turtle graphics — forward/right as plain MicroPython.',
+    hints: ['turtle', 'forward(', 'fd(', 'penup', 'pendown']
+  },
+  {
     id: 'i2c-detect',
     name: 'I²C detect',
     accent: '#8fe0b8',

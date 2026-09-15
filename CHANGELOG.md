@@ -6,6 +6,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Turtle graphics** (#1003, phase 1). Logo-style turtle drawing as plain
+  MicroPython functions — `forward(10)`, `right(90)`, `penup()`, `goto(x, y)`
+  — no separate Logo language or REPL: real Python calls against the
+  MicroPython module `micropython/turtle.py`, so loops/variables/functions
+  work immediately (wrap four `forward`+`right` pairs in a `for` loop and
+  you've drawn a square).
+
+  Heading and coordinates deliberately differ from CPython's `turtle` module:
+  heading `0` points up and increases **clockwise** (`right(90)` faces east,
+  like turning right in real life), and the origin is canvas-centre with
+  **y increasing up** — chosen to match how you'd steer a real robot, since
+  the same turtle code is meant to later drive one.
+
+  A new **Turtle** dock instrument draws the picture: the module prints one
+  `SNK TURT ...` telemetry line per state change (mirroring the existing
+  `instruments.py` protocol), so a running program draws live without
+  interrupting the REPL, on real hardware and in the browser simulator alike.
+
 ## [0.56.0] - 2026-09-06
 
 ### Added

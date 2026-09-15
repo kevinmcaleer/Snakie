@@ -374,6 +374,74 @@ describe('instrument-telemetry parseTelemetry — scan result sets', () => {
   })
 })
 
+describe('instrument-telemetry parseTelemetry — TURT', () => {
+  it('parses a position/heading update', () => {
+    expect(parseTelemetry('SNK TURT POS 0 10 0')).toEqual({
+      kind: 'turtle',
+      event: 'pos',
+      x: 0,
+      y: 10,
+      heading: 0
+    })
+  })
+
+  it('parses a drawn line segment', () => {
+    expect(parseTelemetry('SNK TURT LINE 0 0 0 10 black 2')).toEqual({
+      kind: 'turtle',
+      event: 'line',
+      x1: 0,
+      y1: 0,
+      x2: 0,
+      y2: 10,
+      colour: 'black',
+      width: 2
+    })
+  })
+
+  it('decodes an underscore-encoded multi-word colour', () => {
+    expect(parseTelemetry('SNK TURT LINE 0 0 1 1 light_green 5')).toMatchObject({
+      colour: 'light green'
+    })
+  })
+
+  it('parses a pen-up event', () => {
+    expect(parseTelemetry('SNK TURT PEN 0')).toEqual({ kind: 'turtle', event: 'pen', down: false })
+  })
+
+  it('parses a pen-down event', () => {
+    expect(parseTelemetry('SNK TURT PEN 1')).toEqual({ kind: 'turtle', event: 'pen', down: true })
+  })
+
+  it('parses a hide/show event', () => {
+    expect(parseTelemetry('SNK TURT VIS 0')).toEqual({
+      kind: 'turtle',
+      event: 'vis',
+      visible: false
+    })
+    expect(parseTelemetry('SNK TURT VIS 1')).toEqual({
+      kind: 'turtle',
+      event: 'vis',
+      visible: true
+    })
+  })
+
+  it('parses a clear event', () => {
+    expect(parseTelemetry('SNK TURT CLEAR')).toEqual({ kind: 'turtle', event: 'clear' })
+  })
+
+  it('returns null for a malformed POS line', () => {
+    expect(parseTelemetry('SNK TURT POS 0 x 0')).toBeNull()
+  })
+
+  it('returns null for a malformed LINE line', () => {
+    expect(parseTelemetry('SNK TURT LINE 0 0 0')).toBeNull()
+  })
+
+  it('returns null for an unknown TURT sub-event', () => {
+    expect(parseTelemetry('SNK TURT WOBBLE')).toBeNull()
+  })
+})
+
 describe('instrument-telemetry parseTelemetry — non-telemetry / unknown', () => {
   it('returns null for a plain numeric print', () => {
     expect(parseTelemetry('12.5')).toBeNull()
