@@ -70,14 +70,24 @@ export function dispatchOpenHelp(articleId: string): void {
 export const REVEAL_INSTRUMENT_EVENT = 'snakie:reveal-instrument'
 
 export interface RevealInstrumentDetail {
-  /** The instrument id, e.g. `turtle`. */
-  id: string
+  /**
+   * The instrument ids, e.g. `['turtle']`.
+   *
+   * A LIST, not one id, and that is not future-proofing. The dock's visibility
+   * is a single stored object written whole: four separate events fire in one
+   * synchronous burst, each reads the same pre-render state, and each overwrites
+   * the last — so opening a program that drives four instruments revealed one of
+   * them. The caller already knows the whole set; sending it as one event is
+   * what lets the shell write it once.
+   */
+  ids: readonly string[]
 }
 
-/** Ask the shell to show `id` in the instrument dock, opening the dock if needed. */
-export function dispatchRevealInstrument(id: string): void {
+/** Ask the shell to show these instruments in the dock, opening the dock if needed. */
+export function dispatchRevealInstruments(ids: readonly string[]): void {
+  if (ids.length === 0) return
   window.dispatchEvent(
-    new CustomEvent<RevealInstrumentDetail>(REVEAL_INSTRUMENT_EVENT, { detail: { id } })
+    new CustomEvent<RevealInstrumentDetail>(REVEAL_INSTRUMENT_EVENT, { detail: { ids } })
   )
 }
 

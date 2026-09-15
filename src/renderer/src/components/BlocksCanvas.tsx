@@ -15,7 +15,7 @@ import { applyPinWarnings } from '../lib/blocks/pin-conflicts'
 import { loadSelectedBoard, watchSelectedBoard } from './board-pin-source'
 import { blockDefinition, blocksInCategory, installBlockDefinitions } from '../lib/blocks/registry'
 import { installCorePalette } from '../lib/blocks/palette'
-import { dispatchOpenHelp, dispatchRevealInstrument } from './editorBridge'
+import { dispatchOpenHelp, dispatchRevealInstruments } from './editorBridge'
 import { ensureBlocklyLocale } from '../lib/blocks/locale'
 import { unknownBlockTypes } from '../lib/blocks/workspace-check'
 import type { BlocksWorkspace } from '../../../shared/blocks-doc'
@@ -299,7 +299,7 @@ export function BlocksCanvas({
       // when a child saves their square, opens it the next day and presses Run.
       // Once per load rather than per block: the load fires a create event per
       // block, and revealing eighteen times would scroll the dock eighteen times.
-      for (const id of instrumentsUsedBy(ws)) dispatchRevealInstrument(id)
+      dispatchRevealInstruments(instrumentsUsedBy(ws))
     } catch {
       // Belt and braces behind the `blocked` check above: a type can be
       // registered and still fail to deserialise (a malformed field, a shape
@@ -474,7 +474,7 @@ function revealInstrumentFor(ws: Blockly.Workspace, event: Blockly.Events.Abstra
   for (const block of [created, ...created.getDescendants(false)]) {
     const instrument = blockDefinition(block.type)?.instrument
     if (instrument) {
-      dispatchRevealInstrument(instrument)
+      dispatchRevealInstruments([instrument])
       return
     }
   }

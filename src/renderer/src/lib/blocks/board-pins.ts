@@ -25,6 +25,8 @@
  * Pure apart from the cache, so the filtering and the fallback are unit-tested.
  */
 
+import { pyString } from './py'
+
 /** One pin a block may target. */
 export interface BlockPin {
   /** The GPIO number — what the generated code passes to `Pin(...)`. */
@@ -125,5 +127,5 @@ export function ledPinToken(ledLabel: string | null | undefined): string | null 
   if (/^[0-9]+$/.test(raw)) return raw
   // `GP25` is a label for a numbered pin, so the number is what Python wants.
   const gp = /^GP([0-9]+)$/i.exec(raw)
-  return gp ? gp[1] : JSON.stringify(raw)
+  return gp ? gp[1] : pyString(raw)
 }

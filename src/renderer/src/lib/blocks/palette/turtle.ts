@@ -1,6 +1,7 @@
 import { Order } from '../generator'
 import type { BlockDefinition } from '../registry'
 import { DEFAULT_PEN_COLOUR, FIELD_COLOUR_TYPE } from '../colour-field'
+import { pyString } from '../py'
 
 /**
  * TURTLE GRAPHICS (#1013, epic #1007).
@@ -247,11 +248,11 @@ export const TURTLE_BLOCKS: BlockDefinition[] = [
       tooltip: 'Choose the colour of the lines the turtle draws from now on.'
     },
     imports: NEEDS_TURTLE,
-    // The colour is a NAME in the code (`"red"`, not `"#ff0000"`) — see
-    // `colour-field.ts`. `JSON.stringify` rather than hand-quoting so a colour
-    // with an apostrophe in it could never break the line.
+    // The colour is a NAME in the code (`'red'`, not `'#ff0000'`) — see
+    // `colour-field.ts`. Through `pyString` rather than hand-quoting, so the
+    // whole generated file quotes its strings one way.
     code: (block) =>
-      `turtle.pencolor(${JSON.stringify(String(block.getFieldValue('COLOUR') ?? DEFAULT_PEN_COLOUR))})\n`
+      `turtle.pencolor(${pyString(String(block.getFieldValue('COLOUR') ?? DEFAULT_PEN_COLOUR))})\n`
   },
   callWithNumber(
     'snakie_turtle_pensize',

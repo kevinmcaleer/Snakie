@@ -1,4 +1,5 @@
 import { Order } from '../generator'
+import { pyString } from '../py'
 import type { BlockDefinition } from '../registry'
 
 /**
@@ -73,10 +74,6 @@ export const TEXT_BLOCKS: BlockDefinition[] = [
  * Escapes the quote and the backslash, and nothing else: the field holds text a
  * child typed, so a newline in it is a newline they meant.
  */
-function pyString(value: string): string {
-  return `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n')}'`
-}
-
 /**
  * One piece of an f-string.
  *

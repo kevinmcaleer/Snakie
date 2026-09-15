@@ -38,7 +38,11 @@ import type * as Blockly from 'blockly/core'
  */
 
 /** A pin dropdown filtered to the pins that can do this job. */
-const pinField = (name: string, capability?: string, pin?: number): Record<string, unknown> => ({
+export const pinField = (
+  name: string,
+  capability?: string,
+  pin?: number
+): Record<string, unknown> => ({
   type: FIELD_PIN_TYPE,
   name,
   ...(capability ? { capability } : {}),
@@ -46,7 +50,7 @@ const pinField = (name: string, capability?: string, pin?: number): Record<strin
 })
 
 /** The pin a block's field holds, as the generated code writes it. */
-const pinOf = (block: Blockly.Block, name = 'PIN'): string => String(block.getFieldValue(name) ?? 0)
+export const pinOf = (block: Blockly.Block, name = 'PIN'): string => String(block.getFieldValue(name) ?? 0)
 
 export const HARDWARE_BLOCKS: BlockDefinition[] = [
   // ---------------------------------------------------------------- digital out
@@ -296,12 +300,7 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
       { module: 'snakie', name: 'Pin' }
     ],
     code: (block, gen) => {
-      const name = gen.setup(
-        `adc:${pinOf(block)}`,
-        `adc_${pinOf(block)}`,
-        `ADC(Pin(${pinOf(block)}))`,
-        block
-      )
+      const name = adc(gen, pinOf(block), block)
       if (block.getFieldValue('UNIT') === 'RAW') {
         return [`${name}.read_u16()`, Order.FUNCTION_CALL]
       }
@@ -432,8 +431,19 @@ function inputPin(
   return gen.setup(`pin-in:${pin}:${pull}`, `pin_${pin}`, `Pin(${pin}, Pin.IN${suffix})`, block)
 }
 
-/** `pwm_15 = PWM(Pin(15))`. */
-function pwm(gen: MicroPythonGenerator, pin: string, block: Blockly.Block): string {
+/**
+ * `adc_26 = ADC(Pin(26))`.
+ *
+ * Exported so #1014's `read_adc` block shares the SAME object as this palette's
+ * analogue-read block: one key, one construction, whichever of the two a learner
+ * reaches for — and two `ADC`s on one pin is a real bug, not a tidiness point.
+ */
+export function adc(gen: MicroPythonGenerator, pin: string, block: Blockly.Block): string {
+  return gen.setup(`adc:${pin}`, `adc_${pin}`, `ADC(Pin(${pin}))`, block)
+}
+
+/** `pwm_15 = PWM(Pin(15))`. Exported for #1014's `read_pwm`, as `adc` above. */
+export function pwm(gen: MicroPythonGenerator, pin: string, block: Blockly.Block): string {
   return gen.setup(`pwm:${pin}`, `pwm_${pin}`, `PWM(Pin(${pin}))`, block)
 }
 

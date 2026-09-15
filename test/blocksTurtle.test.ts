@@ -111,10 +111,10 @@ describe('pen (#1013)', () => {
 
   it('writes the colour as a NAME, not a hex string', () => {
     // The whole argument for a named palette: this line is one a learner can
-    // read, remember and later type. `pencolor("#c83c3c")` is not.
+    // read, remember and later type. `pencolor('#c83c3c')` is not.
     expect(
       lines([{ type: 'snakie_turtle_pencolour', id: 'c', fields: { COLOUR: 'hotpink' } }])
-    ).toContain('turtle.pencolor("hotpink")')
+    ).toContain("turtle.pencolor('hotpink')")
   })
 
   it('keeps a colour the palette does not offer', () => {
@@ -123,12 +123,12 @@ describe('pen (#1013)', () => {
     // rewired to a different colour.
     expect(
       lines([{ type: 'snakie_turtle_pencolour', id: 'c', fields: { COLOUR: 'turquoise' } }])
-    ).toContain('turtle.pencolor("turquoise")')
+    ).toContain("turtle.pencolor('turquoise')")
   })
 
   it('defaults to the library default colour', () => {
     expect(lines([{ type: 'snakie_turtle_pencolour', id: 'c' }])).toContain(
-      `turtle.pencolor("${DEFAULT_PEN_COLOUR}")`
+      `turtle.pencolor('${DEFAULT_PEN_COLOUR}')`
     )
   })
 

@@ -9,6 +9,7 @@ import { installPinField } from '../pin-field'
 import { installColourField } from '../colour-field'
 import { CONTROL_BLOCKS } from './control'
 import { HARDWARE_BLOCKS } from './hardware'
+import { instrumentBlocks } from './instruments'
 import { FUNCTION_BLOCKS } from './functions'
 import { LIST_BLOCKS } from './lists'
 import { LOGIC_BLOCKS } from './logic'
@@ -60,6 +61,9 @@ export function installCorePalette(): void {
   defineBlocks([
     ...TURTLE_BLOCKS,
     ...HARDWARE_BLOCKS,
+    // Derived from `instruments-registry.ts` rather than listed (#1014): an
+    // instrument that declares a block gets one, with no edit here.
+    ...instrumentBlocks(),
     ...WAIT_BLOCKS,
     ...CONTROL_BLOCKS,
     ...LOGIC_BLOCKS,
