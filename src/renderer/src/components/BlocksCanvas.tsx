@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import * as Blockly from 'blockly/core'
-import * as BlocklyEn from 'blockly/msg/en'
 import { usePrompt } from './PromptModal'
 import {
   BLOCK_CATEGORIES,
@@ -10,6 +9,9 @@ import {
   softShellWorkspaceOptions,
   type BlocklyThemeInput
 } from '../lib/blocks/theme'
+import { generateProgram, type GeneratedProgram } from '../lib/blocks/generator'
+import { blocksInCategory, installBlockDefinitions } from '../lib/blocks/registry'
+import { ensureBlocklyLocale } from '../lib/blocks/locale'
 import { unknownBlockTypes } from '../lib/blocks/workspace-check'
 import type { BlocksWorkspace } from '../../../shared/blocks-doc'
 import './BlocksCanvas.css'
@@ -28,26 +30,50 @@ import './BlocksCanvas.css'
  * standard for a tool aimed at schools (epic #188).
  *
  * WHAT THIS COMPONENT OWNS. Injection, theming, resize, serialisation in and
- * out, and the `window.prompt` bridge. It does NOT own the toolbox CONTENTS —
- * the categories exist here (from the theme's one list, so a category can never
- * have a colour but no home) and the blocks that go in them arrive over #1011 →
- * #1014, #1017 and #1018. An empty category is honest at this stage; a category
- * list invented twice would not be.
+ * out, the `window.prompt` bridge, and — since #1010 — running the generator:
+ * it holds the live workspace, so generating here costs one walk rather than a
+ * second deserialisation somewhere else, and the source map comes out addressing
+ * the block ids that are actually on screen.
+ *
+ * It does NOT own the toolbox CONTENTS. The categories come from the theme's one
+ * list (so a category can never have a colour but no home) and their blocks from
+ * the registry (`registry.ts`), which the palettes — #1011–#1014, #1017, #1018 —
+ * fill without touching this file.
  *
  * THE UNCONTROLLED SEAM. Blockly owns the DOM and its own undo stack, so this
  * is deliberately NOT a controlled component. The file's JSON is loaded once per
  * document, and after that the canvas is the source of truth until the user
- * opens something else — `lastLoadedRef` is what stops an `onChange` echoing
- * back through the store and re-loading the workspace under the user's cursor,
- * which resets the scroll position and eats the undo history.
+ * opens something else — `lastLoadedRef` is what stops an edit echoing back
+ * through the store and re-loading the workspace under the user's cursor, which
+ * resets the scroll position and eats the undo history.
+ *
+ * DISPLAY AND WRITE ARE DIFFERENT EVENTS, which is why there are two callbacks.
+ * Opening a file has to SHOW its Python immediately, but must not write anything
+ * — a file whose stored code came from an older generator would otherwise be
+ * marked dirty for the crime of being opened, which is the bug #1009 already
+ * had to fix once. So `onGenerate` fires whenever there is fresh code to look
+ * at, and `onEdit` only when the learner actually changed something.
  */
+/** A generated program, plus the workspace it came from — the pair a caller
+ *  needs to write the file, since `blocks-doc.ts` only ever takes both. */
+export interface BlocksProgram extends GeneratedProgram {
+  workspace: BlocksWorkspace
+}
+
+/** How long the canvas waits after the last change before regenerating (ms).
+ *  Short enough that the mirror feels live while you drag; long enough that one
+ *  gesture is one regeneration. */
+const REGENERATE_DEBOUNCE_MS = 120
+
 export interface BlocksCanvasProps {
   /** Identity of the document on screen — a change here means "load this". */
   fileId: string
   /** The file's serialised workspace. */
   workspace: BlocksWorkspace
-  /** The user moved blocks: the new workspace JSON. Debounced by the caller. */
-  onChange: (workspace: BlocksWorkspace) => void
+  /** Fresh code to LOOK at — after a load, and after every edit. Never a write. */
+  onGenerate?: (program: BlocksProgram) => void
+  /** The learner changed something: write this code and workspace to the file. */
+  onEdit: (program: BlocksProgram) => void
   /** Collapsed to a peek strip by the `Python` view mode — skip the injection. */
   peek?: boolean
   /** Click handler for the peek strip (restores the split). */
@@ -56,20 +82,14 @@ export interface BlocksCanvasProps {
   onGraduate?: () => void
 }
 
-// `blockly/core` ships with an EMPTY message table — the locale packs are
-// separate, and `blockly` (the umbrella entry point) is what normally pulls
-// `msg/en` in along with the stock block set we deliberately don't want. Without
-// this, `inject` dies inside its own `setInitialAriaContext` reading
-// `Msg.WORKSPACE_ARIA_LABEL.replace(…)` off `undefined`: the canvas never
-// appears and the first thing a learner sees is a blank pane. Module scope, not
-// an effect — it must be true before the first `inject`, and it is global to
-// Blockly either way.
-Blockly.setLocale(BlocklyEn as unknown as Record<string, string>)
+// Blockly's message table is a precondition of `inject` — see `locale.ts`.
+ensureBlocklyLocale()
 
 export function BlocksCanvas({
   fileId,
   workspace,
-  onChange,
+  onGenerate,
+  onEdit,
   peek = false,
   onExpand,
   onGraduate
@@ -95,8 +115,12 @@ export function BlocksCanvas({
   const loadingRef = useRef(false)
   /** A load that failed anyway — never write this canvas back to the file. */
   const writeBlockedRef = useRef(false)
-  const onChangeRef = useRef(onChange)
-  onChangeRef.current = onChange
+  const onGenerateRef = useRef(onGenerate)
+  onGenerateRef.current = onGenerate
+  const onEditRef = useRef(onEdit)
+  onEditRef.current = onEdit
+  /** Pending regeneration, so a drag doesn't generate once per mouse move. */
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const prompt = usePrompt()
 
@@ -117,6 +141,11 @@ export function BlocksCanvas({
   useEffect(() => {
     const host = hostRef.current
     if (!host || peek || blocked) return
+
+    // Blockly has to know the registered blocks' shapes before a workspace can
+    // hold one. Here rather than at module load, so a block a part or plugin
+    // registers later (#1017) is installed by the next canvas that opens.
+    installBlockDefinitions()
 
     const tokens = readThemeTokens(document.documentElement)
     const ws = Blockly.inject(host, {
@@ -144,11 +173,20 @@ export function BlocksCanvas({
       // in is the one test that can't be fooled by when an event shows up.
       if (serialised === lastLoadedRef.current) return
       lastLoadedRef.current = serialised
-      onChangeRef.current(json)
+      // Debounced: Blockly fires an event per drag frame, and generating (and
+      // writing) forty times while a block is in the air would churn the mirror,
+      // the source map and the undo-relevant buffer for one gesture.
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      debounceRef.current = setTimeout(() => {
+        const program = { ...generateProgram(ws), workspace: json }
+        onGenerateRef.current?.(program)
+        onEditRef.current(program)
+      }, REGENERATE_DEBOUNCE_MS)
     }
     ws.addChangeListener(listener)
 
     return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
       ws.removeChangeListener(listener)
       ws.dispose()
       wsRef.current = null
@@ -199,9 +237,12 @@ export function BlocksCanvas({
       // re-serialise of an untouched workspace differs from the file's own
       // bytes. Recording the normalised form is what makes the listener's
       // "nothing actually changed" comparison mean anything.
-      lastLoadedRef.current = JSON.stringify(
-        Blockly.serialization.workspaces.save(ws) as BlocksWorkspace
-      )
+      const loaded = Blockly.serialization.workspaces.save(ws) as BlocksWorkspace
+      lastLoadedRef.current = JSON.stringify(loaded)
+      // Show the Python at once — but through `onGenerate` only. Writing here
+      // would dirty a file whose stored code merely predates this generator,
+      // for the crime of being opened.
+      onGenerateRef.current?.({ ...generateProgram(ws), workspace: loaded })
     } catch {
       // Belt and braces behind the `blocked` check above: a type can be
       // registered and still fail to deserialise (a malformed field, a shape
@@ -297,11 +338,13 @@ function BlocksUnreadable({
 }
 
 /**
- * The toolbox skeleton: one category per entry in {@link BLOCK_CATEGORIES}.
+ * The toolbox: one category per entry in {@link BLOCK_CATEGORIES}, filled from
+ * the block registry.
  *
- * Contents arrive with the palette issues (#1011–#1014, #1017, #1018). Built
- * from the theme's list rather than a second one here, so a category can never
- * end up with a colour and no home, or a home and no colour.
+ * Every category is shown even when it is empty, which is the state through most
+ * of Phase 1. An empty `Turtle` says "turtle blocks go here and aren't built
+ * yet"; hiding it would say "Snakie doesn't do turtles", which is the wrong
+ * thing to tell someone who came here to draw one.
  */
 function buildToolbox(): Blockly.utils.toolbox.ToolboxDefinition {
   return {
@@ -310,7 +353,13 @@ function buildToolbox(): Blockly.utils.toolbox.ToolboxDefinition {
       kind: 'category',
       name: c.name,
       categorystyle: categoryStyleName(c.id),
-      contents: []
+      contents: blocksInCategory(c.id).map((def) => ({
+        kind: 'block',
+        type: def.type,
+        // A block dragged out of the flyout arrives with sensible values in its
+        // sockets rather than holes a beginner has to discover how to fill.
+        ...(def.toolbox ?? {})
+      }))
     }))
   }
 }

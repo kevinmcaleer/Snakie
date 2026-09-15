@@ -5,10 +5,10 @@ import {
   PanelResizeHandle,
   type ImperativePanelGroupHandle
 } from 'react-resizable-panels'
-import { PythonMirror } from './PythonMirror'
 import { useWorkspaceLayout } from '../store/layout'
 import { useWorkspace } from '../store/workspace'
-import { parseBlocksFooter, type BlocksWorkspace } from '../../../shared/blocks-doc'
+import { parseBlocksFooter } from '../../../shared/blocks-doc'
+import type { BlocksProgram } from './BlocksCanvas'
 import { resolveBlocksView, type BlocksPane } from '../lib/blocks/split'
 import type { BlocksViewMode } from '../store/layout'
 import './BlocksSplit.css'
@@ -17,6 +17,10 @@ import './BlocksSplit.css'
 // RobotView are — a user who never opens a blocks file never downloads it,
 // which matters most on the web build over a school's connection.
 const BlocksCanvas = lazy(() => import('./BlocksCanvas'))
+// The mirror is Monaco (#1010), which is the biggest chunk in the app. Split for
+// the same reason, and so this module stays importable outside a browser — the
+// conflict notice below is rendered in a plain-node test.
+const PythonMirror = lazy(() => import('./PythonMirror'))
 
 /**
  * THE BLOCKS SPLIT (#1009, epic #1007).
@@ -94,16 +98,29 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   // between the two — keep it in step with the emphasis the user last chose.
   useEffect(() => setPane(view.pane), [view.pane])
 
-  const handleChange = useCallback(
-    (workspace: BlocksWorkspace): void => {
+  /**
+   * Fresh code to LOOK at. Held here rather than read from the file, so the
+   * mirror shows what the blocks say RIGHT NOW — including while a change is
+   * still only in the canvas and hasn't been written yet.
+   */
+  const [generated, setGenerated] = useState<BlocksProgram | null>(null)
+
+  // A different file means the previous file's Python must not linger in the
+  // mirror for the frame before the new one generates.
+  useEffect(() => setGenerated(null), [file?.id])
+
+  const handleEdit = useCallback(
+    (program: BlocksProgram): void => {
       if (!file) return
-      // Code and footer are re-serialised together by the store. #1010 replaces
-      // `doc.code` here with the generator's output; until then the Python the
-      // file already carries is preserved rather than invented, so saving a file
-      // you only scrolled cannot rewrite its code.
-      updateBlocks(file.id, doc?.code ?? '', workspace)
+      // A program the generator could not finish must never be written: it is
+      // the learner's file minus whatever the missing blocks contributed, and
+      // saving it would replace their program with a version that lost a step.
+      if (program.missing.length > 0) return
+      // Code and workspace go to the store TOGETHER — `updateBlocks` is the only
+      // writer of a blocks buffer for exactly this reason (#1008).
+      updateBlocks(file.id, program.code, program.workspace)
     },
-    [file, doc?.code, updateBlocks]
+    [file, updateBlocks]
   )
 
   if (!file || !doc) {
@@ -119,18 +136,24 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
       <BlocksCanvas
         fileId={file.id}
         workspace={doc.workspace}
-        onChange={handleChange}
+        onGenerate={setGenerated}
+        onEdit={handleEdit}
         peek={view.peek}
         onExpand={() => onModeChange('split')}
         onGraduate={() => graduateToPython(file.id)}
       />
     </Suspense>
   )
+  // The generator's output when there is any, the file's stored code until then
+  // — so the pane is never blank for the frame between opening and generating.
+  const mirrored = generated?.code ?? doc.code
   const python = (
-    <PythonMirror
-      code={doc.code}
-      onEditAttempt={() => requestGraduate(file.name, () => graduateToPython(file.id))}
-    />
+    <Suspense fallback={<div className="blocks-split__loading">Loading the Python…</div>}>
+      <PythonMirror
+        code={mirrored}
+        onEditAttempt={() => requestGraduate(file.name, () => graduateToPython(file.id))}
+      />
+    </Suspense>
   )
 
   return (
