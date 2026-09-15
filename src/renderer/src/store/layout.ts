@@ -75,6 +75,50 @@ export interface WorkspaceLayout {
   horizontal: [number, number, number, number]
   /** vertical = [editor, shell]. */
   vertical: [number, number]
+  /**
+   * The Blocks split (#1009, epic #1007): `[canvas, python]` shares of the
+   * EDITOR slot when a blocks file is open.
+   *
+   * Per workspace, like every other ratio here, because that is the whole point
+   * of the fourth segment: Blocks makes the canvas big and Code makes the Python
+   * big, on the same file, with nothing remounted. It is the last DRAGGED ratio
+   * — the `Blocks · Split · Python` control sets it from
+   * {@link BLOCKS_VIEW_RATIOS}, and dragging the handle fine-tunes it from there.
+   */
+  blocksSplit: [number, number]
+}
+
+/**
+ * The three emphases of the `Blocks · Split · Python` control (#1009).
+ *
+ * Not three layouts — ONE split at three ratios, because the teaching mechanism
+ * is that both sides are always on screen. `python` is the exception and even it
+ * keeps the canvas reachable, as a peek strip rather than a hidden pane: a
+ * learner who cannot see where the blocks went has lost their program.
+ */
+export type BlocksViewMode = 'blocks' | 'split' | 'python'
+
+/** `[canvas, python]` shares each emphasis applies. */
+export const BLOCKS_VIEW_RATIOS: Record<BlocksViewMode, [number, number]> = {
+  blocks: [64, 36],
+  split: [50, 50],
+  python: [0, 100]
+}
+
+/**
+ * Which emphasis a blocks file starts in, given the workspace showing it.
+ *
+ * Epic #1007 §8 Q5's proposal: per file, seeded from the workspace default. So
+ * Blocks opens blocks-primary, Code opens Python-primary — which is what makes
+ * pressing **Code** on a blocks file mean something — and a file the user has
+ * set by hand keeps their choice while they have it open.
+ *
+ * The solo workspaces (Electronics/Build) never show the editor at all, so their
+ * answer only matters if someone switches away with a blocks file open; blocks
+ * is the friendlier place to land.
+ */
+export function defaultBlocksViewMode(workspace: WorkspaceId): BlocksViewMode {
+  return workspace === 'code' ? 'python' : 'blocks'
 }
 
 /** The persisted envelope. Bump `version` on breaking shape changes.
@@ -85,9 +129,14 @@ export interface WorkspaceLayout {
  *  v4 (#…): the "sticky lesson" used to REWRITE Electronics/Build's own panel
  *  state on every switch, so a `filesCollapsed:false` stored for them is residue
  *  of that bug rather than a choice the user could make stick — collapse it once
- *  on load. */
+ *  on load.
+ *  v5 (#1009): a fourth workspace (`blocks`) and a `blocksSplit` ratio on every
+ *  workspace. A stored v4 envelope has neither — the missing workspace falls back
+ *  to its preset and the missing ratio to each workspace's, both handled
+ *  field-by-field by {@link sanitiseWorkspace}, so nothing the user arranged is
+ *  disturbed. */
 export interface LayoutState {
-  version: 4
+  version: 5
   active: WorkspaceId
   workspaces: Record<WorkspaceId, WorkspaceLayout>
 }
@@ -97,6 +146,25 @@ export const LAYOUT_STORAGE_KEY = 'snakie.layout.workspaces'
 
 /** The curated presets — each workspace's factory geometry (Phase 1). */
 export const WORKSPACE_PRESETS: Record<WorkspaceId, WorkspaceLayout> = {
+  // Blocks (#1009, epic #1007): Code's shape with the emphasis moved. Files open
+  // (a learner needs to find their projects), editor + console, NO board pane —
+  // a first-hour learner has enough to look at, and "blocks follow your circuit"
+  // (#1017) is the argument for bringing it back later, not now. The centre is
+  // the canvas/Python split with the CANVAS big.
+  blocks: {
+    activityView: 'files',
+    filesCollapsed: false,
+    centreCollapsed: false,
+    shellCollapsed: false,
+    rightCollapsed: true,
+    dockOpen: false,
+    boardPaneOpen: false,
+    horizontal: [20, 80, 0, 0],
+    // A shorter console than Code's: the canvas needs the height, and the
+    // console here is for a traceback (#1015), not a working REPL.
+    vertical: [68, 32],
+    blocksSplit: [...BLOCKS_VIEW_RATIOS.blocks]
+  },
   // Today's default layout, unchanged: files open, editor + console, no dock.
   code: {
     activityView: 'files',
@@ -110,7 +178,10 @@ export const WORKSPACE_PRESETS: Record<WorkspaceId, WorkspaceLayout> = {
     // roomy ~45% so a couple of REPL lines are clearly visible by default, so the
     // user recognises the console for what it is (#…).
     horizontal: [20, 80, 0, 0],
-    vertical: [55, 45]
+    vertical: [55, 45],
+    // Python-primary: the canvas collapses to a peek strip, which is what
+    // pressing Code on a blocks file means.
+    blocksSplit: [...BLOCKS_VIEW_RATIOS.python]
   },
   // Electronics: the Board View fills the whole main area — CODE AND CONSOLE ARE
   // HIDDEN (the centre column collapses to 0, editor still mounted behind it), so
@@ -124,7 +195,8 @@ export const WORKSPACE_PRESETS: Record<WorkspaceId, WorkspaceLayout> = {
     dockOpen: false,
     boardPaneOpen: true,
     horizontal: [0, 0, 100, 0],
-    vertical: [65, 35]
+    vertical: [65, 35],
+    blocksSplit: [...BLOCKS_VIEW_RATIOS.blocks]
   },
   // Build (#320): the URDF/3-D editor FULL SCREEN — no code, no board view. The
   // centre column hosts the full-screen Robot pose tool (files collapsed, board
@@ -139,7 +211,8 @@ export const WORKSPACE_PRESETS: Record<WorkspaceId, WorkspaceLayout> = {
     dockOpen: false,
     boardPaneOpen: false,
     horizontal: [0, 100, 0, 0],
-    vertical: [65, 35]
+    vertical: [65, 35],
+    blocksSplit: [...BLOCKS_VIEW_RATIOS.blocks]
   }
 }
 
@@ -214,18 +287,25 @@ function sanitiseWorkspace(raw: unknown, preset: WorkspaceLayout): WorkspaceLayo
     activityView: VIEWS.includes(r.activityView as ActivityView)
       ? (r.activityView as ActivityView)
       : preset.activityView,
-    filesCollapsed: typeof r.filesCollapsed === 'boolean' ? r.filesCollapsed : preset.filesCollapsed,
+    filesCollapsed:
+      typeof r.filesCollapsed === 'boolean' ? r.filesCollapsed : preset.filesCollapsed,
     centreCollapsed:
       typeof r.centreCollapsed === 'boolean' ? r.centreCollapsed : preset.centreCollapsed,
-    shellCollapsed: typeof r.shellCollapsed === 'boolean' ? r.shellCollapsed : preset.shellCollapsed,
-    rightCollapsed: typeof r.rightCollapsed === 'boolean' ? r.rightCollapsed : preset.rightCollapsed,
+    shellCollapsed:
+      typeof r.shellCollapsed === 'boolean' ? r.shellCollapsed : preset.shellCollapsed,
+    rightCollapsed:
+      typeof r.rightCollapsed === 'boolean' ? r.rightCollapsed : preset.rightCollapsed,
     dockOpen: typeof r.dockOpen === 'boolean' ? r.dockOpen : preset.dockOpen,
-    boardPaneOpen:
-      typeof r.boardPaneOpen === 'boolean' ? r.boardPaneOpen : preset.boardPaneOpen,
+    boardPaneOpen: typeof r.boardPaneOpen === 'boolean' ? r.boardPaneOpen : preset.boardPaneOpen,
     horizontal: validSizes(r.horizontal, 4)
       ? (r.horizontal as [number, number, number, number])
       : [...preset.horizontal],
-    vertical: validSizes(r.vertical, 2) ? (r.vertical as [number, number]) : [...preset.vertical]
+    vertical: validSizes(r.vertical, 2) ? (r.vertical as [number, number]) : [...preset.vertical],
+    // Absent in every pre-v5 envelope, so the preset is the normal answer here
+    // rather than the corruption case.
+    blocksSplit: validSizes(r.blocksSplit, 2)
+      ? (r.blocksSplit as [number, number])
+      : [...preset.blocksSplit]
   }
   // A closed board pane always sits at 0 width — fold any stray share back into
   // the centre so the sizes stay consistent with what's rendered.
@@ -268,12 +348,7 @@ export function recordedHorizontal(
 ): [number, number, number, number] | null {
   const n = 2 + (boardOn ? 1 : 0) + (chatOn ? 1 : 0)
   if (!validSizes(sizes, n)) return null
-  return [
-    sizes[0],
-    sizes[1],
-    boardOn ? sizes[2] : 0,
-    chatOn ? sizes[boardOn ? 3 : 2] : 0
-  ]
+  return [sizes[0], sizes[1], boardOn ? sizes[2] : 0, chatOn ? sizes[boardOn ? 3 : 2] : 0]
 }
 
 /** A fresh factory-default state (every workspace at its preset). */
@@ -283,10 +358,11 @@ export function defaultLayoutState(): LayoutState {
     workspaces[id] = {
       ...WORKSPACE_PRESETS[id],
       horizontal: [...WORKSPACE_PRESETS[id].horizontal],
-      vertical: [...WORKSPACE_PRESETS[id].vertical]
+      vertical: [...WORKSPACE_PRESETS[id].vertical],
+      blocksSplit: [...WORKSPACE_PRESETS[id].blocksSplit]
     }
   }
-  return { version: 4, active: 'code', workspaces }
+  return { version: 5, active: 'code', workspaces }
 }
 
 /** Storage surface the loader reads (injectable for tests). */
@@ -334,7 +410,8 @@ export function loadLayoutState(storage: StorageLike): LayoutState {
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<LayoutState>
       const ver = (parsed as { version?: number } | null)?.version
-      if (parsed && (ver === 1 || ver === 2 || ver === 3 || ver === 4) && parsed.workspaces) {
+      const known = typeof ver === 'number' && ver >= 1 && ver <= 5
+      if (parsed && known && parsed.workspaces) {
         const state = defaultLayoutState()
         // Any retired active workspace (`lab`/`data`/`datalab` — Data Lab was
         // never surfaced and is retired in Soft Shell, #581) coerces to `code`
@@ -425,6 +502,9 @@ function ensureUsableConsole(state: LayoutState): void {
 // The store (context + provider)
 // ---------------------------------------------------------------------------
 
+/** A panel group whose sizes this store remembers per workspace. */
+export type SizeGroup = 'horizontal' | 'vertical' | 'blocksSplit'
+
 export interface LayoutStore {
   /** The active workspace id. */
   active: WorkspaceId
@@ -436,7 +516,7 @@ export interface LayoutStore {
    *  URDF fills the editor. NOT persisted; cleared on workspace switch. */
   focus: boolean
   /** Latest sizes for a group (live ref-backed; safe to call every render). */
-  getSizes: (group: 'horizontal' | 'vertical') => number[]
+  getSizes: (group: SizeGroup) => number[]
   /** Show a workspace. Pass `{ carryLesson: true }` only when a LESSON asked for
    *  the switch — an open Learn/Help panel then follows the user into the target
    *  (a plain switch leaves the target's own panel state alone). */
@@ -448,8 +528,18 @@ export interface LayoutStore {
   setDockOpen: (open: boolean) => void
   /** Enter/leave transient editor-focus mode. */
   setFocus: (focus: boolean) => void
+  /**
+   * Apply a `[canvas, python]` ratio to the Blocks split and make the mounted
+   * panel group adopt it (#1009).
+   *
+   * Distinct from {@link recordSizes}, which only REMEMBERS what a drag already
+   * did: this one has to move panels that are on screen, so it bumps
+   * {@link applyNonce} — the same signal the workspace switch uses, for the same
+   * reason (restyle the mounted tree, remount nothing).
+   */
+  setBlocksSplit: (sizes: [number, number]) => void
   /** Record a live panel-group layout (called from onLayout every drag frame). */
-  recordSizes: (group: 'horizontal' | 'vertical', sizes: number[]) => void
+  recordSizes: (group: SizeGroup, sizes: number[]) => void
   /** A board id the Electronics view should swap to (from the mini board view when
    *  the swap would drop wires — the confirm belongs in the wiring context). Held
    *  until the Board View consumes it. Transient; never persisted. */
@@ -514,13 +604,26 @@ export function LayoutProvider({
     [persist]
   )
 
-  const getSizes = useCallback((group: 'horizontal' | 'vertical'): number[] => {
+  const getSizes = useCallback((group: SizeGroup): number[] => {
     const s = stateRef.current as LayoutState
     return [...s.workspaces[s.active][group]]
   }, [])
 
+  const setBlocksSplit = useCallback(
+    (sizes: [number, number]): void => {
+      if (!validSizes(sizes, 2)) return
+      const s = stateRef.current as LayoutState
+      s.workspaces[s.active].blocksSplit = [...sizes]
+      persist()
+      // The split is MOUNTED when this runs (the control lives above it), so
+      // remembering the ratio is not enough — the group has to move.
+      setApplyNonce((n) => n + 1)
+    },
+    [persist]
+  )
+
   const recordSizes = useCallback(
-    (group: 'horizontal' | 'vertical', sizes: number[]): void => {
+    (group: SizeGroup, sizes: number[]): void => {
       const s = stateRef.current as LayoutState
       const ws = s.workspaces[s.active]
       if (group === 'horizontal') {
@@ -532,6 +635,8 @@ export function LayoutProvider({
         ws.horizontal = mapped
       } else if (group === 'vertical' && validSizes(sizes, 2)) {
         ws.vertical = sizes as [number, number]
+      } else if (group === 'blocksSplit' && validSizes(sizes, 2)) {
+        ws.blocksSplit = sizes as [number, number]
       } else {
         return
       }
@@ -631,6 +736,7 @@ export function LayoutProvider({
       applyNonce,
       focus,
       getSizes,
+      setBlocksSplit,
       switchWorkspace,
       resetActive,
       setActivityView,
@@ -648,6 +754,7 @@ export function LayoutProvider({
       applyNonce,
       focus,
       getSizes,
+      setBlocksSplit,
       switchWorkspace,
       resetActive,
       setActivityView,

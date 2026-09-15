@@ -74,9 +74,15 @@ function commandItem(
  * `type: 'radio'` with the active one ticked from {@link MenuState}: the switch
  * can happen in either place, and the tick follows.
  *
- * Cmd/Ctrl 1-2-3 (#920 asks for exactly these). Monaco binds Cmd+S, Cmd+F,
+ * Cmd/Ctrl 1-2-3-4 (#920 asks for exactly these). Monaco binds Cmd+S, Cmd+F,
  * Cmd+H and Cmd+Shift+1 — but nothing that is a plain modifier plus a digit —
  * so the accelerators are free. Numbering stops at 9 because there is no Cmd+10.
+ *
+ * The number is the POSITION, not a per-workspace constant, so adding Blocks at
+ * the front of the switcher (#1009) shifted Code from ⌘1 to ⌘2. Deliberate: a
+ * View menu whose first item isn't ⌘1 is its own small bug, and pinning the
+ * digits to ids instead would mean the menu and the switcher disagreed about
+ * their own order the first time either one changed.
  */
 export function workspaceSubmenu(o: MenuTemplateOptions): MenuItemConstructorOptions[] {
   return WORKSPACE_IDS.map((id, i) =>

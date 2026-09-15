@@ -1,8 +1,9 @@
-import { lazy, Suspense, useCallback, useEffect } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { EditorTabs } from './EditorTabs'
 import { FIND_EVENT } from './editorBridge'
 import { ChatIcon } from './ui-icons'
 import { useWorkspace } from '../store/workspace'
+import { defaultBlocksViewMode, useWorkspaceLayout, type BlocksViewMode } from '../store/layout'
 import { isMpyFile } from '../../../shared/mpy-info'
 
 export interface EditorAreaProps {
@@ -24,11 +25,12 @@ const RobotView = lazy(() => import('./RobotView'))
 // Bytecode View (#875) — a read-only look inside a compiled `.mpy`, in place of
 // the mojibake Monaco used to show for one.
 const MpyView = lazy(() => import('./MpyView'))
-// Block canvas (#1008, epic #1007) — a `.py` carrying a `snakie-blocks` footer
-// opens here rather than in Monaco. Code-split like the rest, which is what
-// keeps Blockly's multi-MB chunk (#1009) off the initial load for the many
-// users who never open a blocks file.
-const BlocksCanvas = lazy(() => import('./BlocksCanvas'))
+// Blocks split (#1008/#1009, epic #1007) — a `.py` carrying a `snakie-blocks`
+// footer opens here rather than in Monaco: the canvas AND the Python it
+// generates, side by side. Code-split like the rest, which is what keeps
+// Blockly's multi-MB chunk off the initial load for the many users who never
+// open a blocks file.
+const BlocksSplit = lazy(() => import('./BlocksSplit'))
 
 /** Files opened as a table (Data View) rather than in the code editor (#274). */
 const DATA_FILE_RE = /\.(csv|tsv|tab)$/i
@@ -56,6 +58,7 @@ function isRobotFile(name: string | undefined): boolean {
  */
 export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps = {}): JSX.Element {
   const { openFiles, activeId } = useWorkspace()
+  const layout = useWorkspaceLayout()
   const hasFiles = openFiles.length > 0
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
   const showData = isDataFile(activeFile?.name)
@@ -65,6 +68,21 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
   // a `.py` on purpose, so the fact comes from the footer, read once at open
   // time and carried on the file.
   const showBlocks = activeFile?.isBlocks === true
+
+  // The blocks emphasis is PER FILE, seeded from the workspace default (epic
+  // #1007 §8 Q5): Blocks opens blocks-primary, Code opens Python-primary, and a
+  // file the user has set by hand keeps their choice while it is open. Held here
+  // rather than in the layout store because it belongs to the document, and not
+  // persisted because it is a reading position, not a preference.
+  const [modes, setModes] = useState<Record<string, BlocksViewMode>>({})
+  const blocksMode = (activeId && modes[activeId]) || defaultBlocksViewMode(layout.active)
+  const setBlocksMode = useCallback(
+    (mode: BlocksViewMode): void => {
+      if (!activeId) return
+      setModes((m) => ({ ...m, [activeId]: mode }))
+    },
+    [activeId]
+  )
 
   // Open the Find & Replace window. The window itself drives the editor over IPC
   // (issue #146); we only need to open/focus it.
@@ -106,6 +124,28 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
     >
       <div className="editor-header">
         <EditorTabs />
+        {showBlocks && (
+          <div className="editor-header__actions">
+            {/* The LOCAL mode control. It overrides the workspace emphasis for
+                this file; it lives here, beside Chat and Find, rather than in
+                the toolbar — the toolbar keeps exactly one global mode control
+                (the workspace switcher) and this is not it. */}
+            <div className="blocks-viewmode" role="group" aria-label="Blocks view">
+              {BLOCKS_VIEW_LABELS.map(({ id, label, hint }) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={`blocks-viewmode__btn${blocksMode === id ? ' is-active' : ''}`}
+                  aria-pressed={blocksMode === id}
+                  title={hint}
+                  onClick={() => setBlocksMode(id)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {(onToggleChat || (hasFiles && !showData && !showRobot && !showMpy && !showBlocks)) && (
           <div className="editor-header__actions">
             {/* Chat toggle — moved here from the console header (which was too
@@ -151,7 +191,7 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
           </Suspense>
         ) : showBlocks ? (
           <Suspense fallback={<EditorPlaceholder text="Loading blocks…" />}>
-            <BlocksCanvas />
+            <BlocksSplit mode={blocksMode} onModeChange={setBlocksMode} />
           </Suspense>
         ) : showMpy ? (
           <Suspense fallback={<EditorPlaceholder text="Loading bytecode view…" />}>
@@ -166,6 +206,13 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
     </section>
   )
 }
+
+/** The three emphases, in the order the header shows them. */
+const BLOCKS_VIEW_LABELS: readonly { id: BlocksViewMode; label: string; hint: string }[] = [
+  { id: 'blocks', label: 'Blocks', hint: 'Make the block canvas the big one' },
+  { id: 'split', label: 'Split', hint: 'Blocks and Python, half and half' },
+  { id: 'python', label: 'Python', hint: 'Make the Python the big one' }
+]
 
 function EditorPlaceholder({ text }: { text: string }): JSX.Element {
   return (

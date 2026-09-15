@@ -1,0 +1,108 @@
+/* The blocks split (#1009, epic #1007): canvas and Python side by side, with the
+   workspace deciding only which side is big. */
+.blocks-split {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  background: var(--editor);
+}
+
+.blocks-split__group {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.blocks-split--empty,
+.blocks-split__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--txt4);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.blocks-split__note {
+  margin: 0;
+}
+
+/* Narrow layout (epic #903): one pane at a time with a tab pair, because two
+   180px columns are not "both on screen", they are two things you can't use. */
+.blocks-split__narrow {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.blocks-split__tabs {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.blocks-split__tab {
+  padding: 3px 12px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--txt2);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.blocks-split__tab.is-active {
+  border-color: var(--line);
+  background: var(--card);
+  color: var(--head);
+}
+
+/* Both panes stay MOUNTED — unmounting the canvas disposes Blockly and takes the
+   undo history with it every time someone glances at the code. */
+.blocks-split__pane {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* The conflict is the one thing on this screen that must not be missed: a silent
+   regeneration here would delete the edit the user came back for. */
+.blocks-split__conflict {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--gold);
+  background: var(--card);
+  color: var(--head);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.blocks-split__conflict p {
+  margin: 0;
+}
+
+.blocks-split__conflict-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.blocks-split__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.blocks-split__hint {
+  color: var(--txt2);
+  font-size: 12px;
+}

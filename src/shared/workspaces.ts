@@ -11,11 +11,17 @@
  * no chance of the menu and the switcher disagreeing about what exists.
  */
 
-/** The named workspaces. Order = the switcher's display order (Code · Electronics
- *  · Build). Soft Shell (#581, epic #573) retired the never-surfaced Data Lab —
- *  its instrument bench lives on in the Code/Build docks. Stale `lab`/`data`/
- *  `datalab` persisted state coerces to `code` in `loadLayoutState`. */
-export const WORKSPACE_IDS = ['code', 'board', 'robot'] as const
+/** The named workspaces. Order = the switcher's display order (Blocks · Code ·
+ *  Electronics · Build). Soft Shell (#581, epic #573) retired the never-surfaced
+ *  Data Lab — its instrument bench lives on in the Code/Build docks. Stale
+ *  `lab`/`data`/`datalab` persisted state coerces to `code` in `loadLayoutState`.
+ *
+ *  `blocks` (#1009, epic #1007) leads because it is the ON-RAMP: the first
+ *  segment is where a learner who has never opened the app starts, and the whole
+ *  epic is the argument that blocks are the way in. It is a LAYOUT, not a mode —
+ *  it decides which side of a blocks file is big, and never converts anything
+ *  (see `blocks-doc.ts`: a blocks file opens in the canvas from any workspace). */
+export const WORKSPACE_IDS = ['blocks', 'code', 'board', 'robot'] as const
 export type WorkspaceId = (typeof WORKSPACE_IDS)[number]
 
 /** Display labels + a one-line description for the switcher tooltips. */
@@ -23,6 +29,10 @@ export type WorkspaceId = (typeof WORKSPACE_IDS)[number]
 // Code / Electronics / Build. "Electronics" surfaces the Board View; "Build"
 // (was "Robot") won't collide with the upcoming electronics simulator.
 export const WORKSPACE_INFO: Record<WorkspaceId, { label: string; hint: string }> = {
+  blocks: {
+    label: 'Blocks',
+    hint: 'Blocks-first: drag blocks, read the Python they write beside them'
+  },
   code: { label: 'Code', hint: 'Editor-first: files, editor and console' },
   board: {
     label: 'Electronics',

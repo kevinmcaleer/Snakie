@@ -107,11 +107,15 @@ describe.each([
     expect(byLabel.get('Save As…')?.accelerator).toBe('CmdOrCtrl+Shift+S')
     expect(byLabel.get('Close Tab')?.accelerator).toBe('CmdOrCtrl+W')
     expect(byLabel.get('Board View')?.accelerator).toBe('CmdOrCtrl+Shift+B')
-    // Cmd/Ctrl 1-2-3 for Code / Electronics / Build. Monaco binds Cmd+S, Cmd+F,
-    // Cmd+H and Cmd+Shift+1 — nothing plain-modifier-plus-digit — so these are free.
-    expect(byLabel.get('Code')?.accelerator).toBe('CmdOrCtrl+1')
-    expect(byLabel.get('Electronics')?.accelerator).toBe('CmdOrCtrl+2')
-    expect(byLabel.get('Build')?.accelerator).toBe('CmdOrCtrl+3')
+    // Cmd/Ctrl 1-2-3-4 for Blocks / Code / Electronics / Build. Monaco binds
+    // Cmd+S, Cmd+F, Cmd+H and Cmd+Shift+1 — nothing plain-modifier-plus-digit —
+    // so these are free. The digit is the switcher POSITION, so adding Blocks at
+    // the front (#1009) moved Code to ⌘2 rather than leaving a ⌘1 that skipped
+    // the first item.
+    expect(byLabel.get('Blocks')?.accelerator).toBe('CmdOrCtrl+1')
+    expect(byLabel.get('Code')?.accelerator).toBe('CmdOrCtrl+2')
+    expect(byLabel.get('Electronics')?.accelerator).toBe('CmdOrCtrl+3')
+    expect(byLabel.get('Build')?.accelerator).toBe('CmdOrCtrl+4')
   })
 })
 

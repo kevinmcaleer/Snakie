@@ -1,0 +1,113 @@
+/* The Python half of the blocks split (#1009). Reads as the editor's paper, not
+   as a panel, so the two halves look like one document. */
+.pymirror {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  background: var(--editor);
+  color: var(--ident);
+}
+
+.pymirror__header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.pymirror__title {
+  color: var(--txt2);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Says why you can't type here before you try, which is the whole reason the
+   badge exists rather than just a disabled cursor. */
+.pymirror__badge {
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--txt4);
+  font-family: var(--font-ui);
+  font-size: 10px;
+}
+
+.pymirror__body {
+  flex: 1 1 auto;
+  overflow: auto;
+  outline: none;
+}
+
+.pymirror__body:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--gold);
+}
+
+.pymirror__empty {
+  margin: 0;
+  padding: 16px 12px;
+  color: var(--txt4);
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+
+.pymirror__lines {
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+  counter-reset: pyline;
+}
+
+/* One element per line — #1015's tracebacks and #1016's linked highlighting
+   both address a line, so a line has to be a thing. */
+.pymirror__line {
+  display: flex;
+  gap: 10px;
+  padding: 0 10px;
+  counter-increment: pyline;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre;
+}
+
+.pymirror__line::before {
+  flex: 0 0 auto;
+  min-width: 2ch;
+  color: var(--txt5);
+  content: counter(pyline);
+  text-align: right;
+  user-select: none;
+}
+
+.pymirror__code {
+  min-width: 0;
+}
+
+/* Syntax tokens — the same custom properties Monaco's Soft Shell theme uses, so
+   a line of code is the same colour in the mirror and in the editor. */
+.pytok--kw {
+  color: var(--kw);
+}
+.pytok--str {
+  color: var(--str);
+}
+.pytok--num {
+  color: var(--num);
+}
+.pytok--com {
+  color: var(--com);
+  font-style: italic;
+}
+.pytok--ident {
+  color: var(--ident);
+}
+.pytok--op {
+  color: var(--txt2);
+}

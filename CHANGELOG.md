@@ -8,6 +8,43 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A Blocks workspace, and a real block canvas** (#1009, epic #1007, phase 1).
+  A fourth segment in the toolbar switcher — **Blocks · Code · Electronics ·
+  Build** — and Blockly behind it, in Snakie's clothes.
+
+  The switcher never *converts* anything, because it can't: blocks → code is
+  generation and code → blocks is decompilation. So it decides which side is
+  **big**. A blocks file is a split view in every workspace — canvas-primary in
+  Blocks, Python-primary in Code with the canvas collapsed to a clickable peek
+  strip — and both render the same mounted component, so pressing **Code** on a
+  blocks file finally means something without remounting anything. A local
+  `Blocks · Split · Python` control in the editor header overrides the emphasis
+  per file; the toolbar keeps exactly one global mode control. Below 720px the
+  split becomes a tab pair rather than two unusable columns.
+
+  The Python beside the canvas is a **mirror, not a second editor**: read-only,
+  syntax-coloured from the same tokens Monaco uses, one element per line. Typing
+  into it is caught and answered with the offer to graduate the file to Python,
+  so the commonest accident in a split view becomes a milestone.
+
+  Blockly wears **Soft Shell** in both skins, built from the app's own CSS custom
+  properties rather than hard-coded hex — hardware blocks take the GPIO colour
+  off the board diagrams, logic takes the syntax keyword colour, so a block and
+  the line of Python it generates are the same colour. Its media (trashcan, zoom,
+  dropdown sprites) now ships with the app instead of being fetched from
+  Blockly's CDN, which the app's CSP refuses and an offline classroom can't
+  reach. Its `window.prompt` — which Electron's renderer doesn't implement — is
+  routed through the in-app prompt modal, so renaming a variable works.
+
+  The palette itself is still empty: the categories are there, the blocks that go
+  in them arrive over #1011-#1014. A file carrying blocks this build doesn't have
+  (from a newer Snakie, or a plugin that isn't installed) refuses to open the
+  canvas at all and says so, rather than showing an empty workspace that the next
+  save would write back over the program.
+
+  Keyboard accelerators follow the switcher's order, so **Code moved from Cmd-1
+  to Cmd-2** (Blocks is Cmd-1, Electronics Cmd-3, Build Cmd-4).
+
 - **Blocks file format** (#1008, epic #1007, phase 1). The foundation for the
   block editor: a blocks program **is a `.py` file**, with the Blockly workspace
   deflated into a trailing comment footer under the MicroPython it generated.
