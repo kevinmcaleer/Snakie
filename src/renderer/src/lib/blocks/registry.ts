@@ -66,6 +66,16 @@ export interface BlockDefinition {
    */
   pin?: { field: string; role: string; needs?: string }
   /**
+   * This block belongs to an instrument (#1013) — the id from
+   * `instruments-registry.ts`, e.g. `turtle`.
+   *
+   * Dragging one out REVEALS that instrument in the dock. A turtle block whose
+   * drawing goes into a panel nobody opened looks like a block that did nothing,
+   * which is the worst thing a first block can look like. #1014's whole category
+   * is built on this field.
+   */
+  instrument?: string
+  /**
    * The in-app help article this block's Help menu item opens, e.g. `ref-flow`.
    *
    * IN-APP, not a URL. Blockly's own `helpUrl` opens a web page, and a child on

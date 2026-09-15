@@ -1,0 +1,110 @@
+/* The Blocks workspace's empty state (#1013) — see `BlocksStart.tsx`.
+ *
+ * Soft Shell: a parchment card on the editor's own surface, green primary for
+ * the starter (it's the "go" action, same as Run) and the plain chrome treatment
+ * for the empty canvas. Every colour is a token, so both skins come out of the
+ * same rules. */
+
+.blocks-start {
+  overflow: auto;
+}
+
+.blocks-start__card {
+  max-width: 34rem;
+  margin: auto;
+  padding: 1.75rem 1.75rem 1.4rem;
+  background: var(--bg-elevated);
+  border: var(--border-w) solid var(--border);
+  border-radius: calc(var(--radius) * 1.5);
+  box-shadow: var(--pixel-shadow);
+  font-family: var(--font-ui);
+  text-align: left;
+}
+
+.blocks-start__title {
+  margin: 0 0 0.4rem;
+  font-size: 1.15rem;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.blocks-start__lead {
+  margin: 0 0 1.1rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.blocks-start__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.blocks-start__button {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.7rem 0.9rem;
+  text-align: left;
+  cursor: pointer;
+  background: var(--bg-sunken);
+  color: var(--text);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--pixel-shadow);
+  font-family: inherit;
+}
+
+.blocks-start__button:hover:not(:disabled) {
+  border-color: var(--handle-hover);
+}
+
+.blocks-start__button:active:not(:disabled) {
+  box-shadow: var(--pixel-shadow-active);
+}
+
+.blocks-start__button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* The starter leads, so it wears the same green as Run. */
+.blocks-start__button--primary {
+  background: var(--accent-2);
+  color: var(--accent-contrast);
+  border-color: var(--accent-2);
+}
+
+.blocks-start__button--primary:hover:not(:disabled) {
+  border-color: var(--accent-2);
+  filter: brightness(1.08);
+}
+
+.blocks-start__button-title {
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+
+.blocks-start__button-hint {
+  font-size: 0.78rem;
+  opacity: 0.8;
+}
+
+.blocks-start__error {
+  margin: 0.8rem 0 0;
+  font-size: 0.8rem;
+  color: var(--danger);
+}
+
+.blocks-start__foot {
+  margin: 1.1rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.blocks-start__foot code {
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+}

@@ -31,6 +31,11 @@ const MpyView = lazy(() => import('./MpyView'))
 // Blockly's multi-MB chunk off the initial load for the many users who never
 // open a blocks file.
 const BlocksSplit = lazy(() => import('./BlocksSplit'))
+// The Blocks workspace's empty state (#1013): the only place in the app that can
+// CREATE a blocks program, so picking Blocks with nothing open is a door rather
+// than a dead end. Small and not code-split — it is what the workspace shows
+// first, and it must not wait on a chunk.
+const BlocksStart = lazy(() => import('./BlocksStart'))
 
 /** Files opened as a table (Data View) rather than in the code editor (#274). */
 const DATA_FILE_RE = /\.(csv|tsv|tab)$/i
@@ -180,7 +185,18 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
       </div>
       <div className="region__body region__body--editor">
         {!hasFiles ? (
-          <EditorPlaceholder text="Open a file to start editing" />
+          // In the Blocks workspace an empty editor is an opportunity, not a
+          // gap: it is where the "Draw a square" starter and "new blocks
+          // program" live (#1013). Everywhere else the plain placeholder is
+          // right — offering to make a blocks file from the Code workspace
+          // would be answering a question nobody asked.
+          layout.active === 'blocks' ? (
+            <Suspense fallback={<EditorPlaceholder text="Loading…" />}>
+              <BlocksStart />
+            </Suspense>
+          ) : (
+            <EditorPlaceholder text="Open a file to start editing" />
+          )
         ) : showData ? (
           <Suspense fallback={<EditorPlaceholder text="Loading data view…" />}>
             <DataView />

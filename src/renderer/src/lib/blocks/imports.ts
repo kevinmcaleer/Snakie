@@ -81,9 +81,21 @@ const STDLIB = new Set([
  */
 const MACHINE = new Set(['machine', 'micropython', 'rp2', 'esp', 'esp32', 'network', 'bluetooth'])
 
+/**
+ * Snakie's OWN on-device libraries — the ones the app itself installs onto a
+ * board, not drivers for something you wired up.
+ *
+ * `turtle` is here because of #1013: the turtle blocks generate `import turtle`,
+ * and leaving it in the driver group would file Snakie's own library under
+ * "everything else", below a BME280 driver. It is the same kind of thing as
+ * `snakie` and `instruments` — shipped in `micropython/`, offered by the
+ * install banner, versioned by us.
+ */
+const SNAKIE = new Set(['instruments', 'turtle'])
+
 /** Which section an import belongs to. */
 export function importGroup(module: string): ImportGroup {
-  if (module === 'snakie' || module.startsWith('snakie.')) return 'snakie'
+  if (SNAKIE.has(module) || module === 'snakie' || module.startsWith('snakie.')) return 'snakie'
   if (STDLIB.has(module)) return 'stdlib'
   if (MACHINE.has(module)) return 'machine'
   return 'driver'

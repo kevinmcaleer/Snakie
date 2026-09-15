@@ -6,6 +6,7 @@ import 'blockly/blocks'
 import { defineBlocks } from '../registry'
 import { installBlockMessages } from './messages'
 import { installPinField } from '../pin-field'
+import { installColourField } from '../colour-field'
 import { CONTROL_BLOCKS } from './control'
 import { HARDWARE_BLOCKS } from './hardware'
 import { FUNCTION_BLOCKS } from './functions'
@@ -13,6 +14,7 @@ import { LIST_BLOCKS } from './lists'
 import { LOGIC_BLOCKS } from './logic'
 import { MATHS_BLOCKS } from './maths'
 import { TEXT_BLOCKS } from './text'
+import { TURTLE_BLOCKS } from './turtle'
 import { VARIABLE_BLOCKS } from './variables'
 import { WAIT_BLOCKS } from './wait'
 
@@ -49,11 +51,14 @@ import { WAIT_BLOCKS } from './wait'
  */
 export function installCorePalette(): void {
   installBlockMessages()
-  // The pin dropdowns are a custom field type, and a JSON definition naming a
-  // field type Blockly has never heard of throws while the block is built — so
-  // this has to be registered before the definitions below are installed.
+  // The pin dropdowns and the pen-colour swatch are custom field types, and a
+  // JSON definition naming a field type Blockly has never heard of throws while
+  // the block is built — so both have to be registered before the definitions
+  // below are installed.
   installPinField()
+  installColourField()
   defineBlocks([
+    ...TURTLE_BLOCKS,
     ...HARDWARE_BLOCKS,
     ...WAIT_BLOCKS,
     ...CONTROL_BLOCKS,

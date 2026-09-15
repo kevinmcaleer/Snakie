@@ -8,6 +8,61 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Turtle graphics blocks, and a way to start a blocks program at all**
+  (#1013, epic #1007, phase 2). Eighteen blocks over movement, pen, screen and
+  sensing, generating `import turtle` and `turtle.forward(100)`. This is the
+  first-hour demo: a sprite that moves when you tell it to, drawing as it goes,
+  **with nothing wired up** — on a Pico or in the simulator, which is what a
+  classroom of Chromebooks actually has.
+
+  **There was no way to make a blocks program.** Not an exaggeration: a blocks
+  program is a `.py` with a workspace in its footer, the `+` button makes an
+  ordinary empty `.py`, and an ordinary `.py` opens in Monaco — so picking
+  **Blocks** and pressing `+` got you the text editor, in the blocks workspace,
+  with nothing to say what was missing. Every blocks file that existed was one a
+  test wrote. The Blocks workspace's empty state is now the door: **Draw a
+  square** (the bundled starter, four blocks already assembled) and **New blocks
+  program**. The starter leads, because a beginner's first minute should be
+  something that already works and which they then take apart — an empty canvas
+  and a toolbox is a blank page, and a blank page is where people stop.
+
+  The starter ships as a **workspace**, not as a committed `.py`. A file with the
+  generated code baked in would be a second copy of the generator's output,
+  quietly drifting every time the generator improved — and drift here means a
+  starter that opens with a hand-edit conflict warning on it.
+
+  **The pen colour is a swatch**, which the issue rightly calls half of why
+  Scratch feels good, and the palette is twelve **named** colours rather than a
+  picker. The generated line reads `turtle.pencolor("hotpink")` — a line a
+  learner can read, remember and later type — where a picker would give
+  `turtle.pencolor("#c83c3c")`, and a mirror full of hex is a mirror nobody
+  learns from. Every colour reads on the instrument's dark screen, which is also
+  why the library's default pen is white rather than the black CPython's turtle
+  uses on paper.
+
+  **One block per library function**, so `pen up` and `pen down` are two blocks
+  and so are `turn right` and `turn left`. It is what Scratch does, so the muscle
+  memory transfers, and the block face says what will happen without anyone
+  reading a dropdown.
+
+  **Dragging a turtle block opens the Turtle instrument** — and scrolls it into
+  view, because the dock is a column with the mini board and the plotter above
+  it, and an instrument revealed below the fold is "opened" only in the sense
+  that it exists somewhere. Opening a saved turtle program does the same: a
+  drawing that goes nowhere looks exactly like a program that did nothing.
+
+  `import turtle` now files with Snakie's own libraries in the import section
+  rather than under part drivers, where it would sit below a BME280.
+
+### Changed
+
+- **`turtle.py` gains `xcor()`, `ycor()` and `heading()`** (#1013), and the
+  `Turtle` class gains `getheading()`. The blocks' "x position" / "y position" /
+  "direction" value blocks need them, and before this the only way to read the
+  shared turtle's heading was `turtle._default.heading` — reaching into a
+  private, which is not something to put in a child's program. Connect a board
+  and Snakie offers the update through the existing install banner.
+
 - **The hardware block palette** (#1012, epic #1007, phase 2). Twelve blocks that
   make a real pin do a real thing: LEDs on and off and toggling, the onboard LED,
   raw digital write and read, a button block that already knows about pull-ups,

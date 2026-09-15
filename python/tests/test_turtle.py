@@ -206,7 +206,24 @@ class ModuleLevelApi(unittest.TestCase):
             turt.forward(10)
             turt.right(90)
         self.assertEqual(turt.position(), (0, 10))
-        self.assertEqual(turt._default.heading, 90)
+        self.assertEqual(turt.heading(), 90)
+
+    def test_module_level_sensing_accessors(self):
+        # The block palette's "x position" / "y position" / "heading" value
+        # blocks (#1013) need these: before they existed the only way to read
+        # the shared turtle's heading was `turtle._default.heading`, a private.
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            turt.reset()
+            turt.right(90)
+            turt.forward(25)
+        # `almost`, not exact: heading 90 goes through cos(pi/2), which is 1.5e-15
+        # rather than 0. The accessors return the RAW position — only telemetry
+        # rounds (`_fmt`) — because a position that lies is worse than one that
+        # carries a float's last digit.
+        self.assertAlmostEqual(turt.xcor(), 25)
+        self.assertAlmostEqual(turt.ycor(), 0)
+        self.assertEqual(turt.heading(), 90)
 
     def test_short_aliases(self):
         self.assertIs(turt.fd, turt.forward)
