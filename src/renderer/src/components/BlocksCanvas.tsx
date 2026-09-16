@@ -2,9 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import * as Blockly from 'blockly/core'
 import { usePrompt } from './PromptModal'
 import {
-  BLOCK_CATEGORIES,
   buildSoftShellTheme,
-  categoryStyleName,
   readThemeTokens,
   softShellWorkspaceOptions,
   type BlocklyThemeInput
@@ -19,12 +17,7 @@ import { applyPythonWarnings } from '../lib/blocks/python-warnings'
 // the moment it is imported.
 import '../lib/blocks/python-editor'
 import { loadSelectedBoard, watchSelectedBoard } from './board-pin-source'
-import {
-  blockDefinition,
-  blocksInCategory,
-  installBlockDefinitions,
-  type BlockDefinition
-} from '../lib/blocks/registry'
+import { blockDefinition, installBlockDefinitions } from '../lib/blocks/registry'
 import { installCorePalette } from '../lib/blocks/palette'
 import {
   dispatchNeedLibrary,
@@ -41,6 +34,9 @@ import {
 } from '../lib/blocks/traceback'
 import { ensureBlocklyLocale } from '../lib/blocks/locale'
 import { unknownBlockTypes } from '../lib/blocks/workspace-check'
+import { buildToolbox } from '../lib/blocks/toolbox'
+import type { Dialect } from '../../../shared/dialect'
+import { useHelpDialect } from '../hooks/useHelpDialect'
 import { isStaleDeselect, putOutHighlight } from '../lib/blocks/highlight'
 import type { BlocksWorkspace } from '../../../shared/blocks-doc'
 import './BlocksCanvas.css'
@@ -272,6 +268,26 @@ export function BlocksCanvas({
   /** Blocks currently wearing an error badge, so a new run can clear exactly those. */
   const erroredRef = useRef<string[]>([])
 
+  /**
+   * WHICH PYTHON THIS BOARD SPEAKS (#1039, epic #209).
+   *
+   * The toolbox is filtered by it; the REGISTRY never is. See `scope` on
+   * `BlockDefinition` — a hardware program written on a Pico has to keep
+   * opening after a CircuitPython board is plugged in, and it only does
+   * because every block stays defined whether or not it is reachable.
+   */
+  const { dialect } = useHelpDialect()
+  /**
+   * A REF as well, because the injection below must read the dialect WITHOUT
+   * depending on it: re-injecting on a dialect change would tear the workspace
+   * down and take the learner's program with it. The rebuild effect further
+   * down is the one that follows the dialect.
+   */
+  const dialectRef = useRef(dialect)
+  dialectRef.current = dialect
+  /** The dialect the toolbox ON SCREEN was built for, so it isn't rebuilt twice. */
+  const toolboxDialectRef = useRef<Dialect | null>(null)
+
   const prompt = usePrompt()
 
   // Blockly's variable-rename and text prompts call `window.prompt`, which
@@ -300,13 +316,14 @@ export function BlocksCanvas({
     const tokens = readThemeTokens(document.documentElement)
     const ws = Blockly.inject(host, {
       ...softShellWorkspaceOptions(tokens),
-      toolbox: buildToolbox(),
+      toolbox: buildToolbox(dialectRef.current),
       theme: Blockly.Theme.defineTheme(
         'snakie-soft-shell',
         buildSoftShellTheme(tokens) as BlocklyThemeInput
       )
     })
     wsRef.current = ws
+    toolboxDialectRef.current = dialectRef.current
 
     // THE FUNCTIONS DRAWER IS DYNAMIC (#1045). Every other category is a fixed
     // list from the registry, which is right for them and wrong for this one:
@@ -605,26 +622,31 @@ export function BlocksCanvas({
     return () => observer.disconnect()
   }, [peek, blocked])
 
-  // THE PALETTE FOLLOWS THE BREADBOARD (#1017).
+  // THE PALETTE FOLLOWS THE BREADBOARD (#1017) AND THE BOARD'S RUNTIME (#1039).
   //
   // A part dropped in Electronics registers its blocks, bumps the nonce, and
   // this puts them in the toolbox of a canvas that is already open — no reload,
-  // no re-inject, and the learner's program untouched underneath.
+  // no re-inject, and the learner's program untouched underneath. Plugging in a
+  // CircuitPython board arrives the same way: `useHelpDialect` is live, so the
+  // drawers re-filter the moment the runtime probe answers.
   //
   // `installBlockDefinitions` FIRST: `updateToolbox` builds a flyout block of
   // every type it is given, and a type Blockly has not been taught throws while
   // the flyout opens, which would take the whole toolbox down with it.
   useEffect(() => {
     const ws = wsRef.current
-    // Nonce 0 is the first pass, whose toolbox the injection above already built.
-    if (!ws || peek || blocked || paletteNonce === 0) return
+    if (!ws || peek || blocked) return
+    // Nonce 0 with the dialect unchanged is the first pass, whose toolbox the
+    // injection above already built.
+    if (paletteNonce === 0 && toolboxDialectRef.current === dialect) return
     try {
       installBlockDefinitions()
-      ws.updateToolbox(buildToolbox())
+      ws.updateToolbox(buildToolbox(dialect))
+      toolboxDialectRef.current = dialect
     } catch (err) {
       console.warn('[blocks] could not rebuild the toolbox', err)
     }
-  }, [paletteNonce, peek, blocked])
+  }, [paletteNonce, dialect, peek, blocked])
 
   // Load the document. Keyed on the FILE — and on `reloadNonce`, which is the
   // one case where the outside is ahead of the canvas (#1034: the learner typed
@@ -858,15 +880,6 @@ function installBlockPythonMenu(): void {
 }
 
 /**
- * The toolbox: one category per entry in {@link BLOCK_CATEGORIES}, filled from
- * the block registry.
- *
- * Every category is shown even when it is empty, which is the state through most
- * of Phase 1. An empty `Turtle` says "turtle blocks go here and aren't built
- * yet"; hiding it would say "Snakie doesn't do turtles", which is the wrong
- * thing to tell someone who came here to draw one.
- */
-/**
  * The instruments a whole workspace's blocks declare, deduplicated (#1013).
  *
  * Registration order, so a program using two instruments reveals them in the
@@ -925,86 +938,6 @@ function revealInstrumentFor(ws: Blockly.Workspace, event: Blockly.Events.Abstra
       return
     }
   }
-}
-
-function buildToolbox(): Blockly.utils.toolbox.ToolboxDefinition {
-  return {
-    kind: 'categoryToolbox',
-    contents: BLOCK_CATEGORIES.map((c) =>
-      // Functions is the one category whose contents are a question about the
-      // WORKSPACE rather than about the registry (#1045), so it hands the job
-      // to Blockly — see the callback registered at injection. Everything else
-      // is a curated list and stays one.
-      c.id === 'functions'
-        ? {
-            kind: 'category',
-            name: c.name,
-            categorystyle: categoryStyleName(c.id),
-            custom: Blockly.PROCEDURE_CATEGORY_NAME
-          }
-        : {
-            kind: 'category',
-            name: c.name,
-            categorystyle: categoryStyleName(c.id),
-            contents: categoryContents(c)
-          }
-    )
-  }
-}
-
-/** One toolbox entry for a registered block. */
-function blockEntry(def: BlockDefinition): Record<string, unknown> {
-  return {
-    kind: 'block',
-    type: def.type,
-    // A block dragged out of the flyout arrives with sensible values in its
-    // sockets rather than holes a beginner has to discover how to fill.
-    ...(def.toolbox ?? {})
-  }
-}
-
-/**
- * A category's contents: its ungrouped blocks, then one SUB-CATEGORY per group
- * (#1017), then — if all of that came to nothing — the category's own hint.
- *
- * Grouping is what keeps "My parts" usable. The fixed categories are a curated
- * list and their sizes are known; this one holds whatever is on the breadboard,
- * and four sensors' worth of blocks in one flyout is a wall of near-identical
- * shapes. One drawer per part is the same answer the parts panel already gives.
- *
- * The HINT is the other half. An empty `Turtle` says "turtle blocks go here",
- * which is right, but an empty `My parts` can say the thing that FILLS it —
- * wire something up in Electronics — and a drawer that explains itself is worth
- * more than one that just looks broken.
- */
-function categoryContents(
-  category: (typeof BLOCK_CATEGORIES)[number]
-): Record<string, unknown>[] {
-  const blocks = blocksInCategory(category.id)
-  const loose = blocks.filter((b) => !b.group)
-  const groups = new Map<string, { name: string; blocks: BlockDefinition[] }>()
-  for (const def of blocks) {
-    if (!def.group) continue
-    const entry = groups.get(def.group.id) ?? { name: def.group.name, blocks: [] }
-    entry.blocks.push(def)
-    groups.set(def.group.id, entry)
-  }
-  const contents: Record<string, unknown>[] = loose.map(blockEntry)
-  for (const [id, group] of groups) {
-    contents.push({
-      kind: 'category',
-      name: group.name,
-      // The same style as the parent, so a part's drawer reads as part of `My
-      // parts` rather than as a category in its own right.
-      categorystyle: categoryStyleName(category.id),
-      toolboxitemid: id,
-      contents: group.blocks.map(blockEntry)
-    })
-  }
-  if (contents.length === 0 && 'hint' in category && category.hint) {
-    contents.push({ kind: 'label', text: category.hint })
-  }
-  return contents
 }
 
 export default BlocksCanvas

@@ -1,6 +1,7 @@
 import * as Blockly from 'blockly/core'
 import type { BlockCategoryId } from './theme'
 import type { PyImport } from './imports'
+import type { DialectScope } from '../../../../shared/dialect-api'
 import type { MicroPythonGenerator } from './generator'
 
 /**
@@ -131,6 +132,41 @@ export interface BlockDefinition {
    * the part is placed.
    */
   part?: { libraryId: string; partId: string }
+  /**
+   * Which runtimes this block is true for (#1039, epic #209).
+   *
+   * Absent means BOTH, matching `DialectScope`'s own default — most of the
+   * palette is plain Python and needs no annotation. Hardware and instruments
+   * are `'micropython'`, because what they generate goes through `machine`.
+   *
+   * THIS FILTERS THE TOOLBOX, NEVER THE REGISTRY. A block out of scope is one
+   * the learner cannot reach FOR; it is emphatically still registered, because
+   * `workspace-check.ts` refuses to open a file containing a type this build
+   * does not know. Deregistering would make every existing hardware program
+   * unopenable the moment a CircuitPython board was plugged in — the file still
+   * there, and Snakie declining to show it.
+   */
+  scope?: DialectScope
+}
+
+/**
+ * Mark a whole palette with a {@link BlockDefinition.scope} (#1039).
+ *
+ * At the REGISTRATION site rather than on each literal, because the scope here
+ * is a fact about the PALETTE and not about any one block: everything in
+ * `hardware.ts` reaches `machine` through the `snakie` umbrella, and a block
+ * added to it tomorrow will too. Written out twenty-nine times it would be
+ * twenty-nine chances to forget, and the one that was forgotten is the one a
+ * learner is offered on a board that cannot run it.
+ *
+ * A definition that states its own scope keeps it, so a single exception does
+ * not have to be lifted out of the list it belongs in.
+ */
+export function scoped(
+  scope: DialectScope,
+  defs: readonly BlockDefinition[]
+): BlockDefinition[] {
+  return defs.map((def) => (def.scope ? def : { ...def, scope }))
 }
 
 /** A sub-category inside a toolbox category (#1017). */

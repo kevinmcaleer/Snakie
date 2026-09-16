@@ -1,0 +1,125 @@
+import * as Blockly from 'blockly/core'
+import { inScope } from '../../../../shared/dialect-api'
+import { DIALECT_LABEL, type Dialect } from '../../../../shared/dialect'
+import { blocksInCategory, type BlockDefinition } from './registry'
+import { BLOCK_CATEGORIES, categoryStyleName } from './theme'
+
+/**
+ * THE TOOLBOX (#1011/#1017/#1039, epic #1007).
+ * =============================================================================
+ *
+ * The registry, arranged into the drawers a learner opens — and filtered to the
+ * runtime the board in front of them actually runs.
+ *
+ * Out here rather than in `BlocksCanvas` because it is PURE: categories and
+ * block definitions in, a Blockly toolbox description out, no DOM and no
+ * workspace. Which of the ninety-odd blocks a CircuitPython board is offered is
+ * exactly the kind of decision that should be a unit test rather than something
+ * you discover by plugging a Feather in.
+ */
+
+/**
+ * The toolbox: one category per entry in {@link BLOCK_CATEGORIES}, filled from
+ * the block registry, for the runtime the learner is on (#1039, epic #209).
+ *
+ * Every category is shown even when it is empty. An empty `Turtle` says "turtle
+ * blocks go here"; hiding it would say "Snakie doesn't do turtles", which is the
+ * wrong thing to tell someone who came here to draw one.
+ *
+ * `dialect` filters what can be REACHED FOR, never what is registered — see
+ * `BlockDefinition.scope`. `unknown` (no board, or a board that wouldn't say)
+ * shows everything, which is `inScope`'s own rule and the right default for a
+ * workspace whose whole point is that it works with nothing plugged in.
+ */
+export function buildToolbox(dialect: Dialect): Blockly.utils.toolbox.ToolboxDefinition {
+  return {
+    kind: 'categoryToolbox',
+    contents: BLOCK_CATEGORIES.map((c) =>
+      // Functions is the one category whose contents are a question about the
+      // WORKSPACE rather than about the registry (#1045), so it hands the job
+      // to Blockly — see the callback registered at injection. Everything else
+      // is a curated list and stays one.
+      c.id === 'functions'
+        ? {
+            kind: 'category',
+            name: c.name,
+            categorystyle: categoryStyleName(c.id),
+            custom: Blockly.PROCEDURE_CATEGORY_NAME
+          }
+        : {
+            kind: 'category',
+            name: c.name,
+            categorystyle: categoryStyleName(c.id),
+            contents: categoryContents(c, dialect)
+          }
+    )
+  }
+}
+
+/** One toolbox entry for a registered block. */
+function blockEntry(def: BlockDefinition): Record<string, unknown> {
+  return {
+    kind: 'block',
+    type: def.type,
+    // A block dragged out of the flyout arrives with sensible values in its
+    // sockets rather than holes a beginner has to discover how to fill.
+    ...(def.toolbox ?? {})
+  }
+}
+
+/**
+ * A category's contents: its ungrouped blocks, then one SUB-CATEGORY per group
+ * (#1017), then — if all of that came to nothing — the category's own hint.
+ *
+ * Grouping is what keeps "My parts" usable. The fixed categories are a curated
+ * list and their sizes are known; this one holds whatever is on the breadboard,
+ * and four sensors' worth of blocks in one flyout is a wall of near-identical
+ * shapes. One drawer per part is the same answer the parts panel already gives.
+ *
+ * The HINT is the other half. An empty `Turtle` says "turtle blocks go here",
+ * which is right, but an empty `My parts` can say the thing that FILLS it —
+ * wire something up in Electronics — and a drawer that explains itself is worth
+ * more than one that just looks broken.
+ */
+export function categoryContents(
+  category: (typeof BLOCK_CATEGORIES)[number],
+  dialect: Dialect
+): Record<string, unknown>[] {
+  // Out of dialect means out of the FLYOUT (#1039). The block stays registered —
+  // an existing program that uses it still opens and still generates.
+  const blocks = blocksInCategory(category.id).filter((b) => inScope(b.scope, dialect))
+  const loose = blocks.filter((b) => !b.group)
+  const groups = new Map<string, { name: string; blocks: BlockDefinition[] }>()
+  for (const def of blocks) {
+    if (!def.group) continue
+    const entry = groups.get(def.group.id) ?? { name: def.group.name, blocks: [] }
+    entry.blocks.push(def)
+    groups.set(def.group.id, entry)
+  }
+  const contents: Record<string, unknown>[] = loose.map(blockEntry)
+  for (const [id, group] of groups) {
+    contents.push({
+      kind: 'category',
+      name: group.name,
+      // The same style as the parent, so a part's drawer reads as part of `My
+      // parts` rather than as a category in its own right.
+      categorystyle: categoryStyleName(category.id),
+      toolboxitemid: id,
+      contents: group.blocks.map(blockEntry)
+    })
+  }
+  if (contents.length === 0) {
+    // A drawer the DIALECT emptied says so. The category's own hint is about
+    // filling it ("wire a part up in Electronics"), which is not the reason it
+    // is empty here and would send the learner off to do something that will
+    // not help.
+    const theirs = blocksInCategory(category.id).find((b) => b.scope && b.scope !== 'both')?.scope
+    const hint = theirs
+      ? `These blocks are ${DIALECT_LABEL[theirs]}. Your board is running ${DIALECT_LABEL[dialect]}.`
+      : 'hint' in category && category.hint
+        ? category.hint
+        : null
+    if (hint) contents.push({ kind: 'label', text: hint })
+  }
+  return contents
+}

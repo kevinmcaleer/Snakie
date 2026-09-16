@@ -376,6 +376,41 @@ describe('templates', () => {
   })
 })
 
+describe('a manifest declares its dialect (#1039)', () => {
+  const withScope = (scope: string): string => `
+version: 1
+blocks:
+  - id: read
+    message: distance in cm
+    shape: value
+    output: Number
+    code: sensor.read()
+    scope: ${scope}
+`
+
+  it('keeps a real scope', () => {
+    const { manifest, warnings } = parseBlocksManifest(withScope('circuitpython'))
+    expect(warnings).toEqual([])
+    expect(manifest.blocks[0].scope).toBe('circuitpython')
+  })
+
+  it('drops `both`, which is the default anyway', () => {
+    const { manifest, warnings } = parseBlocksManifest(withScope('both'))
+    expect(warnings).toEqual([])
+    expect(manifest.blocks[0].scope).toBeUndefined()
+  })
+
+  it('warns on a typo rather than scoping the block to a runtime that is not there', () => {
+    // The failure mode this prevents: `scope: micropythn` silently becoming a
+    // block nobody is ever offered, on any board.
+    const { manifest, warnings } = parseBlocksManifest(withScope('micropythn'))
+    expect(warnings).toEqual([
+      'block "read": scope must be one of both, micropython, circuitpython — ignored'
+    ])
+    expect(manifest.blocks[0].scope).toBeUndefined()
+  })
+})
+
 describe('round trip (epic #856)', () => {
   it('writes a manifest that parses back to itself', () => {
     const source = `
@@ -400,6 +435,7 @@ blocks:
         name: I2C
     tooltip: The sensor itself.
     help: ref-pins
+    scope: micropython
     colour: '#d4553f'
     inline: false
   - id: read

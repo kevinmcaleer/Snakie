@@ -43,6 +43,17 @@ import type { Dialect } from './dialect'
 export type DialectScope = 'both' | 'micropython' | 'circuitpython'
 
 /**
+ * Is `value` one of the three scopes? (#1039)
+ *
+ * A `blocks.yml` is written by hand by a part author, so the scope arrives as
+ * whatever string they typed. A typo must become a warning and a `both` block,
+ * never a block quietly scoped to a runtime that does not exist.
+ */
+export function isDialectScope(value: unknown): value is DialectScope {
+  return value === 'both' || value === 'micropython' || value === 'circuitpython'
+}
+
+/**
  * Is something with this scope shown to a session running `dialect`?
  *
  * `unknown` is NOT "MicroPython by default" — that assumption is precisely what
