@@ -52,3 +52,71 @@
 .ws-switcher__btn.is-active:hover {
   color: var(--ongold);
 }
+
+/* THE DOT (#1053) — the stop between Blocks and Code where both are on screen.
+   Sits INSIDE the segmented track, in the 3px gap between those two segments,
+   so it reads as a notch on the way between them rather than a fourth thing to
+   press. Deliberately small: it is a stop, not a segment. */
+.ws-switcher__dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  width: 18px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 9px;
+  cursor: pointer;
+  /* Eats the track's 3px gap on each side so the dot sits BETWEEN the two
+     segments rather than pushing them apart — and, when lit, so the three
+     pieces meet with no seam and read as one highlight. */
+  margin: 0 -3px;
+  transition: background 0.12s ease;
+}
+.ws-switcher__dot-mark {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--txt4, var(--text-muted));
+  opacity: 0.55;
+  transition: opacity 0.12s ease, transform 0.12s ease, background 0.12s ease;
+}
+.ws-switcher__dot:hover .ws-switcher__dot-mark {
+  opacity: 1;
+  transform: scale(1.35);
+}
+
+/* Lit: the dot joins the two segments into ONE highlight, because what is on
+   screen is both. The segments themselves already carry `.is-active`; this
+   fills the gap between them so the gold runs through rather than breaking. */
+.is-both .ws-switcher__dot,
+.ws-switcher__dot.is-active {
+  background: var(--grad-gold, var(--accent));
+  border-radius: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+}
+.is-both .ws-switcher__dot-mark,
+.ws-switcher__dot.is-active .ws-switcher__dot-mark {
+  background: var(--ongold);
+  opacity: 1;
+}
+/* Square off the inner corners so the three pieces read as ONE pill rather than
+   two buttons with something between them. Targeted by `data-ws` and not by
+   `nth-of-type`: the dot is a <button> too, so it counts in that sequence and
+   the positional selectors picked the wrong elements. */
+.is-both .ws-switcher__btn[data-ws='blocks'] {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.is-both .ws-switcher__btn[data-ws='code'] {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ws-switcher__dot,
+  .ws-switcher__dot-mark {
+    transition: none;
+  }
+}

@@ -7,6 +7,7 @@ import {
   coerceWorkspaceId,
   defaultLayoutState,
   loadLayoutState,
+  ratioShowsOnePane,
   recordedHorizontal,
   resolveSwitchTarget,
   type StorageLike,
@@ -456,5 +457,35 @@ describe('legacy migration (pre-#259 loose keys → the code workspace)', () => 
       })
     )
     expect(s.workspaces.code.filesCollapsed).toBe(false)
+  })
+})
+
+describe('the dot and the remembered ratio (#1053)', () => {
+  /**
+   * The bug this rule exists to stop: the dot did nothing.
+   *
+   * Blocks is canvas-only now, and `recordSizes` stores the live ratio on every
+   * drag frame — so the moment the canvas fills, the workspace remembers
+   * `[97, 3]`. Pressing the dot then "restored" that, which is the canvas
+   * again, so the switcher lit both segments while the screen did not change.
+   */
+  it('an end stop must be overridden — the canvas-only ratio', () => {
+    expect(ratioShowsOnePane([97, 3])).toBe(true)
+    expect(ratioShowsOnePane([3, 97])).toBe(true)
+  })
+
+  it('a ratio the learner chose is left alone', () => {
+    // Their middle, not ours: 65/35 was a decision.
+    expect(ratioShowsOnePane([65, 35])).toBe(false)
+    expect(ratioShowsOnePane([50, 50])).toBe(false)
+    expect(ratioShowsOnePane([20, 80])).toBe(false)
+  })
+
+  it('treats a missing or malformed ratio as one to override', () => {
+    // Overriding gives an even split, which is always usable; trusting rubbish
+    // gives whatever that rubbish lays out as.
+    expect(ratioShowsOnePane(undefined)).toBe(true)
+    expect(ratioShowsOnePane([50])).toBe(true)
+    expect(ratioShowsOnePane([Number.NaN, 50])).toBe(true)
   })
 })

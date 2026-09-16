@@ -64,6 +64,7 @@ function isRobotFile(name: string | undefined): boolean {
 export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps = {}): JSX.Element {
   const { openFiles, activeId } = useWorkspace()
   const layout = useWorkspaceLayout()
+  const { setBlocksBoth } = layout
   const hasFiles = openFiles.length > 0
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
   const showData = isDataFile(activeFile?.name)
@@ -90,14 +91,36 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
   // rather than in the layout store because it belongs to the document, and not
   // persisted because it is a reading position, not a preference.
   const [modes, setModes] = useState<Record<string, BlocksViewMode>>({})
-  const blocksMode = (activeId && modes[activeId]) || defaultBlocksViewMode(layout.active)
+  const blocksMode =
+    (activeId && modes[activeId]) || defaultBlocksViewMode(layout.active, layout.blocksBoth)
+  /**
+   * The emphasis changed — from the divider, or from the switcher's dot (#1053).
+   *
+   * THE TWO STAY IN STEP, which is the whole reason this pushes back into the
+   * layout store. The divider is the control (#1034) and the dot is its visible
+   * twin; a divider dragged to an end while the dot stayed lit would leave the
+   * switcher describing a screen that is not there.
+   */
   const setBlocksMode = useCallback(
     (mode: BlocksViewMode): void => {
-      if (!activeId) return
-      setModes((m) => ({ ...m, [activeId]: mode }))
+      if (activeId) setModes((m) => ({ ...m, [activeId]: mode }))
+      setBlocksBoth(mode === 'split')
     },
-    [activeId]
+    [activeId, setBlocksBoth]
   )
+
+  // The dot is workspace-level and the emphasis is per file, so a file the
+  // learner has set by hand would otherwise ignore the dot they just pressed.
+  // Pressing it clears the override and lets the workspace answer again.
+  useEffect(() => {
+    if (!activeId) return
+    setModes((m) => (activeId in m ? Object.fromEntries(
+      Object.entries(m).filter(([id]) => id !== activeId)
+    ) : m))
+    // Only when the DOT changes — not on every file switch, which would throw
+    // away an emphasis the learner set for a file they are still looking at.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layout.blocksBoth])
 
   // Open the Find & Replace window. The window itself drives the editor over IPC
   // (issue #146); we only need to open/focus it.

@@ -133,15 +133,37 @@ export const BLOCKS_VIEW_RATIOS: Record<BlocksViewMode, [number, number]> = {
  * answer only matters if someone switches away with a blocks file open; blocks
  * is the friendlier place to land.
  */
-export function defaultBlocksViewMode(workspace: WorkspaceId): BlocksViewMode {
-  // SPLIT IS THE DEFAULT IN BLOCKS (#1016), not an option somebody has to find.
+export function defaultBlocksViewMode(workspace: WorkspaceId, both = false): BlocksViewMode {
+  // THE DOT DECIDES (#1053). `both` is the switcher's middle position — the dot
+  // between Blocks and Code — and when it is set the answer is the split
+  // whichever side of it you came from.
   //
-  // The epic's teaching mechanism is the two panes being on screen TOGETHER: a
-  // learner who watches the Python grow as they drag is already reading it. A
+  // #1016 made the split the DEFAULT in Blocks instead, and said why: "a
   // canvas-primary default hid that behind a control most people never press,
-  // which is the same as not shipping it. Code stays Python-primary — that is
-  // what pressing Code means — with the canvas collapsed to its peek strip.
-  return workspace === 'code' ? 'python' : 'split'
+  // which is the same as not shipping it". That reasoning was about
+  // DISCOVERABILITY, and the control it was worried about did not exist — #1034
+  // removed the three-button one in favour of the divider, which is elegant and
+  // invisible. The dot is the control it was missing, so Blocks can go back to
+  // meaning blocks: the split is now one click away and visibly so.
+  if (both) return 'split'
+  return workspace === 'code' ? 'python' : 'blocks'
+}
+
+/**
+ * Would restoring this remembered ratio show only ONE pane (#1053)?
+ *
+ * The dot means "both on screen", and it restores the ratio the workspace
+ * remembers — which is recorded on every drag frame, so the moment Blocks shows
+ * its canvas-only view the remembered ratio becomes an end stop. Restoring that
+ * is the canvas again, and the dot appears to do nothing at all.
+ *
+ * Only an END counts. A learner who dragged the divider to 65/35 meant it, and
+ * pressing the dot should take them back to THEIR middle rather than ours.
+ */
+export function ratioShowsOnePane(ratio: readonly number[] | undefined): boolean {
+  if (!ratio || ratio.length !== 2) return true
+  if (!ratio.every((n) => typeof n === 'number' && Number.isFinite(n))) return true
+  return ratio[0] <= BLOCKS_PANE_SLIVER || ratio[1] <= BLOCKS_PANE_SLIVER
 }
 
 /** The persisted envelope. Bump `version` on breaking shape changes.
@@ -538,6 +560,19 @@ export interface LayoutStore {
   /** Transient editor focus (Robot pop-out): hide board/instruments/console so the
    *  URDF fills the editor. NOT persisted; cleared on workspace switch. */
   focus: boolean
+  /**
+   * THE DOT (#1053): the switcher's middle position, between Blocks and Code.
+   *
+   * Blocks and code on screen together is not a fourth workspace — it is an
+   * emphasis inside the one that shows a blocks file, which is why it is a flag
+   * here rather than a `WorkspaceId`. Electronics and Build are workspaces; this
+   * is the dot between two of them.
+   *
+   * NOT PERSISTED, and cleared by any plain workspace switch: pressing Blocks or
+   * Code is a statement about which side you want, and leaving the dot lit after
+   * it would make the switcher describe something that is not on screen.
+   */
+  blocksBoth: boolean
   /** Latest sizes for a group (live ref-backed; safe to call every render). */
   getSizes: (group: SizeGroup) => number[]
   /** Show a workspace. Pass `{ carryLesson: true }` only when a LESSON asked for
@@ -551,6 +586,14 @@ export interface LayoutStore {
   setDockOpen: (open: boolean) => void
   /** Enter/leave transient editor-focus mode. */
   setFocus: (focus: boolean) => void
+  /**
+   * Show blocks and code together (#1053) — the dot.
+   *
+   * Takes the workspace to show them in, because the dot is reachable from
+   * either side: clicking it from Code has to land somewhere that renders a
+   * canvas. Passing `false` just puts the dot out, leaving the workspace alone.
+   */
+  setBlocksBoth: (both: boolean) => void
   /**
    * Apply a `[canvas, python]` ratio to the Blocks split and make the mounted
    * panel group adopt it (#1009).
@@ -599,6 +642,8 @@ export function LayoutProvider({
   const [applyNonce, setApplyNonce] = useState(0)
   // Transient editor-focus (Robot pop-out) — never persisted.
   const [focus, setFocusState] = useState(false)
+  /** The dot (#1053) — blocks and code on screen together. Not persisted. */
+  const [blocksBoth, setBlocksBothState] = useState(false)
   // A board swap the mini board view punted to the Electronics view for its confirm
   // dialog (transient; never persisted).
   const [pendingBoardSwap, setPendingBoardSwap] = useState<string | null>(null)
@@ -687,6 +732,10 @@ export function LayoutProvider({
       s.workspaces[id] = resolveSwitchTarget(s.workspaces[s.active], s.workspaces[id], opts)
       s.active = id
       setActive(id)
+      // Pressing Blocks or Code is a statement about which side you want, so the
+      // dot goes out (#1053) — leaving it lit would make the switcher describe
+      // something that is not on screen.
+      setBlocksBothState(false)
       setWorkspace(s.workspaces[id])
       setFocusState(false) // leaving focus mode when the workspace changes
       setApplyNonce((n) => n + 1)
@@ -734,6 +783,40 @@ export function LayoutProvider({
   // instruments + console so the URDF fills the editor, without changing the
   // workspace. Bumps applyNonce so the shell re-collapses/expands + the board
   // pane elides; switching workspace clears it (below).
+  /**
+   * The dot (#1053). Turning it ON also makes sure we are somewhere that shows a
+   * canvas, because it is reachable from the Code side too.
+   *
+   * `switchWorkspace` clears the dot (a plain switch is a statement about which
+   * side you want), so the order matters: switch first, then light it.
+   */
+  const setBlocksBoth = useCallback(
+    (next: boolean): void => {
+      if (!next) {
+        setBlocksBothState(false)
+        return
+      }
+      if (stateRef.current?.active !== 'blocks') switchWorkspace('blocks')
+      const state = stateRef.current as LayoutState
+      const remembered = state.workspaces[state.active].blocksSplit
+      // THE REMEMBERED RATIO CAN BE AN END STOP, and then the dot does nothing
+      // visible. Blocks is canvas-only now (#1053), so `recordSizes` stores
+      // [97, 3] the moment it is shown — and the split would "restore" to that,
+      // which is the canvas again.
+      //
+      // Only an END is overridden. A learner who dragged the divider to 65/35
+      // meant it, and pressing the dot should take them back to THEIR middle,
+      // not to ours.
+      if (ratioShowsOnePane(remembered)) {
+        state.workspaces[state.active].blocksSplit = [...BLOCKS_VIEW_RATIOS.split]
+        persist()
+      }
+      setBlocksBothState(true)
+      setApplyNonce((n) => n + 1)
+    },
+    [switchWorkspace, persist]
+  )
+
   const setFocus = useCallback((next: boolean): void => {
     setFocusState((cur) => {
       if (cur === next) return cur
@@ -758,8 +841,10 @@ export function LayoutProvider({
       workspace,
       applyNonce,
       focus,
+      blocksBoth,
       getSizes,
       setBlocksSplit,
+      setBlocksBoth,
       switchWorkspace,
       resetActive,
       setActivityView,
@@ -776,8 +861,10 @@ export function LayoutProvider({
       workspace,
       applyNonce,
       focus,
+      blocksBoth,
       getSizes,
       setBlocksSplit,
+      setBlocksBoth,
       switchWorkspace,
       resetActive,
       setActivityView,
