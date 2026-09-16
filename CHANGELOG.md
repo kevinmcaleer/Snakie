@@ -6,6 +6,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A dot between Blocks and Code for the split view** (#1053, epic #1007).
+  #1034 made the divider the control and predicted the cost in its own issue:
+  *"more elegant and less discoverable"*. It was right — there was no named way
+  back to the middle, only dragging and hoping to find the detent.
+
+  Now there is a small dot between the **Blocks** and **Code** segments of the
+  workspace switcher. Click it and the highlight spans **both**, because what is
+  on screen is both. It is not a fifth workspace — Electronics and Build are
+  workspaces; this is a stop on the way between two of them, and the visible
+  half of the divider.
+
+  **And Blocks means blocks again.** #1016 made the split the default there,
+  because "a canvas-primary default hid that behind a control most people never
+  press". That was about discoverability, and the control it worried about was
+  then removed by #1034. The dot is the one it was missing, so the canvas-only
+  default is safe to restore.
+
+  **The dot and the divider stay in step, both ways.** Pressing the dot shows
+  the split from whichever side you press it; dragging the divider to an end
+  puts the dot out, so the switcher can never describe a screen that is not
+  there; and pressing Blocks or Code puts it out too, because that is a
+  statement about which side you want.
+
 ### Fixed
 
 - **Highlighting stopped working after #1050, in two more ways** (#1050

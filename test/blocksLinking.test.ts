@@ -149,10 +149,31 @@ describe('both directions agree (#1016)', () => {
   })
 })
 
-describe('split is the default (#1016)', () => {
-  it('opens both panes in Blocks, and Python-primary in Code', () => {
-    expect(defaultBlocksViewMode('blocks')).toBe('split')
+describe('what each switcher position opens (#1053, was #1016)', () => {
+  it('Blocks means blocks, Code means Python', () => {
+    // #1016 made SPLIT the default in Blocks, and gave a good reason: "a
+    // canvas-primary default hid that behind a control most people never
+    // press, which is the same as not shipping it". That was about
+    // DISCOVERABILITY — and the control it worried about did not exist, since
+    // #1034 replaced the three buttons with the divider, which is elegant and
+    // invisible.
+    //
+    // #1053 adds the dot between the two segments, so the split is one visible
+    // click away. Blocks can go back to meaning blocks.
+    expect(defaultBlocksViewMode('blocks')).toBe('blocks')
     expect(defaultBlocksViewMode('code')).toBe('python')
+  })
+
+  it('and the dot means both, from whichever side you press it', () => {
+    expect(defaultBlocksViewMode('blocks', true)).toBe('split')
+    expect(defaultBlocksViewMode('code', true)).toBe('split')
+  })
+
+  it('a solo workspace lands on blocks rather than nowhere', () => {
+    // Electronics and Build never show the editor, so their answer only matters
+    // if somebody switches away with a blocks file open.
+    expect(defaultBlocksViewMode('board')).toBe('blocks')
+    expect(defaultBlocksViewMode('robot')).toBe('blocks')
   })
 })
 

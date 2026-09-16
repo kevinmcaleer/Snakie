@@ -44,20 +44,25 @@ describe('the Blocks workspace segment (#1009)', () => {
     expect(p.filesCollapsed).toBe(false)
   })
 
-  it('opens SPLIT, while Code opens Python-primary', () => {
-    // #1016 changed this. The epic's teaching mechanism is the two panes being
-    // on screen TOGETHER — a learner who watches the Python grow as they drag is
-    // already reading it — and a canvas-primary default hid that behind a
-    // control most people never press, which is the same as not shipping it.
-    expect(defaultBlocksViewMode('blocks')).toBe('split')
+  it('opens the CANVAS, while Code opens Python-primary', () => {
+    // #1016 made this SPLIT, because "a canvas-primary default hid that behind
+    // a control most people never press, which is the same as not shipping it".
+    // The worry was discoverability, and it was right: #1034 then replaced the
+    // three buttons with the divider, which is elegant and invisible.
+    //
+    // #1053 puts a dot between Blocks and Code — the visible half of that
+    // divider — so the split is one click away and looks like it. With a
+    // control to find it by, Blocks means blocks again.
+    expect(defaultBlocksViewMode('blocks')).toBe('blocks')
+    // And the dot is what asks for both.
+    expect(defaultBlocksViewMode('blocks', true)).toBe('split')
     // Code still means "make the Python the big one". That is what the switcher
     // segment is FOR, and #1009's whole answer to "blocks or code?".
     expect(defaultBlocksViewMode('code')).toBe('python')
-    // The stored ratio still favours the canvas, because blocks are wide and a
-    // column of Python is not — "split" is both panes usable, not both equal.
-    // The workspace OPENS at the middle stop (#1016), so that is the ratio its
-    // preset carries — the blocks end is where the divider goes, not where it
-    // starts.
+    // The preset ratio stays the MIDDLE one even though the workspace now opens
+    // canvas-only (#1053): the mode decides what is shown, and this is the
+    // ratio the dot restores to. A fresh workspace pressing the dot gets an
+    // even split rather than whatever the canvas-only view last recorded.
     expect(WORKSPACE_PRESETS.blocks.blocksSplit).toEqual(BLOCKS_VIEW_RATIOS.split)
     expect(WORKSPACE_PRESETS.code.blocksSplit).toEqual(BLOCKS_VIEW_RATIOS.python)
   })
