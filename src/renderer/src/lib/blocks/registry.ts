@@ -125,6 +125,22 @@ export interface BlockDefinition {
     fn: string
     args: readonly string[]
     shape?: 'statement' | 'value'
+    /**
+     * This call is made on a HOISTED OBJECT rather than a module (#1058).
+     *
+     * A hardware line is not `led.set(15, True)` — it is `led_15.set(True)`,
+     * called on an object the generator hoisted into the setup section, whose
+     * NAME carries the pin. Without this, every hardware line came back from
+     * #1019 as a raw Python block: the program was readable and unbuildable.
+     */
+    receiver?: CallReceiver
+    /**
+     * Positional arguments that are FIELDS rather than sockets, by index.
+     *
+     * `led_15.set(True)` has no socket — `True` is the ON/OFF dropdown, and
+     * reading it back means mapping the Python text to the option value.
+     */
+    argFields?: Readonly<Record<number, ArgField>>
   }
   /**
    * The part this block belongs to (#1017) — so USING one can offer to install
@@ -167,6 +183,40 @@ export function scoped(
   defs: readonly BlockDefinition[]
 ): BlockDefinition[] {
   return defs.map((def) => (def.scope ? def : { ...def, scope }))
+}
+
+/**
+ * How a hoisted object is recognised on the way back in (#1058).
+ *
+ * The generator writes TWO lines for one block — a constructor in the setup
+ * section and the call that uses it — so reading one block back means reading
+ * both, and then making sure the constructor does not ALSO become a block of
+ * its own. Declared here beside the emitter for the same reason everything else
+ * in this file is: the two halves of the round trip cannot drift.
+ */
+export interface CallReceiver {
+  /** The name prefix the generator hoists under — `led` in `led_15`. */
+  name: string
+  /** The block field the pin out of that name goes into. */
+  pinField: string
+  /**
+   * The constructor, as a template. `{PIN}` is the pin; any other `{FIELD}` is
+   * a dropdown whose possible texts are listed in {@link options}.
+   *
+   * MATCHED EXACTLY, which is the point: a constructor that is not character
+   * for character what this block would have written is not this block's, and
+   * consuming it would delete a line somebody meant.
+   */
+  ctor: string
+  /** For each `{FIELD}` in {@link ctor}: the exact Python each option writes. */
+  options?: Readonly<Record<string, Readonly<Record<string, string>>>>
+}
+
+/** An argument that is a field: the field it fills, and what each text means. */
+export interface ArgField {
+  field: string
+  /** Python text → field value. `{ True: 'ON', False: 'OFF' }`. */
+  values: Readonly<Record<string, string>>
 }
 
 /** A sub-category inside a toolbox category (#1017). */

@@ -528,3 +528,130 @@ describe('the roots do not overlap (#1062)', () => {
     expect(ys[1] - ys[0]).toBeGreaterThan(0)
   })
 })
+
+/**
+ * HARDWARE COMES BACK (#1058).
+ * =============================================================================
+ *
+ * Only `turtle.ts` declared `read`, so a hardware program converted
+ * asymmetrically: blocks → Python perfect, Python → blocks dropping to the
+ * #1018 escape hatch on exactly the lines that matter. `led_15.set(True)` was a
+ * raw block, and the learner could read their program but not build it.
+ *
+ * A hardware block does not write one line. It writes a constructor hoisted
+ * into the setup section AND a call on it, with the pin in the object's NAME —
+ * so reading one back means reading both lines and then NOT emitting the
+ * constructor a second time.
+ */
+describe('a call on a hoisted object (#1058)', () => {
+  it('reads an LED back as an LED block', () => {
+    const src = ['from snakie import Led, Pin', '', 'led_15 = Led(pin=Pin(15, Pin.OUT))', '', 'led_15.set(True)', ''].join('\n')
+    expect(types(src)).toContain('snakie_led_set')
+    roundTrips(src)
+  })
+
+  it('takes the pin out of the object name and the state out of the argument', () => {
+    const { workspace } = pythonToBlocks(
+      ['from snakie import Led, Pin', '', 'led_15 = Led(pin=Pin(15, Pin.OUT))', 'led_15.set(False)', ''].join('\n')
+    )
+    const json = JSON.stringify(topLevel(workspace as never))
+    expect(json).toContain('"PIN":"15"')
+    expect(json).toContain('"STATE":"OFF"')
+  })
+
+  it('swallows the constructor rather than generating it twice', () => {
+    // The block carries the pin, so the generator writes the setup line back
+    // out from the block. Keeping the original as well would double it.
+    const src = ['from snakie import Led, Pin', '', 'led_15 = Led(pin=Pin(15, Pin.OUT))', '', 'led_15.set(True)', ''].join('\n')
+    expect(regenerate(src).code.match(/Led\(/g)).toHaveLength(1)
+    expect(types(src)).not.toContain('variables_set')
+  })
+
+  it('reads a pull resistor out of the CONSTRUCTOR, where it lives', () => {
+    // `pin_14.value()` says nothing about the resistor; getting it wrong would
+    // rewrite the learner's wiring.
+    for (const pull of ['Pin(14, Pin.IN, Pin.PULL_UP)', 'Pin(14, Pin.IN, Pin.PULL_DOWN)', 'Pin(14, Pin.IN)']) {
+      roundTrips(['from snakie import Pin', '', `pin_14 = ${pull}`, '', 'print(pin_14.value())', ''].join('\n'))
+    }
+  })
+
+  it('tells a pin WRITE from a pin READ, which are both `.value`', () => {
+    // They share a receiver and a function name and differ only in shape, so
+    // the rule table has to key on more than `module.fn`.
+    const src = ['from snakie import Pin', '', 'pin_15 = Pin(15, Pin.OUT)', '', 'pin_15.value(1)', 'pin_15.toggle()', ''].join('\n')
+    expect(types(src)).toContain('snakie_pin_write')
+    expect(types(src)).toContain('snakie_led_toggle')
+    roundTrips(src)
+  })
+
+  it('lets one object back several blocks', () => {
+    // `buzzer_16` is the receiver of both `tone` and `stop`.
+    const src = [
+      'from snakie import Buzzer, PWM, Pin, Servo',
+      '',
+      'servo_0 = Servo(PWM(Pin(0)), pin=0)',
+      'buzzer_16 = Buzzer(PWM(Pin(16)))',
+      '',
+      'servo_0.angle(90)',
+      'buzzer_16.tone(440, 200)',
+      'buzzer_16.stop()',
+      ''
+    ].join('\n')
+    expect(types(src)).toContain('snakie_buzzer_tone')
+    expect(types(src)).toContain('snakie_buzzer_stop')
+    expect(types(src)).toContain('snakie_servo_angle')
+    roundTrips(src)
+  })
+
+  it('round-trips a blink loop, blocks and all', () => {
+    roundTrips(
+      [
+        'from time import sleep',
+        '',
+        'from snakie import Led, Pin',
+        '',
+        'led_15 = Led(pin=Pin(15, Pin.OUT))',
+        '',
+        'while True:',
+        '    led_15.set(True)',
+        '    sleep(1)',
+        '    led_15.set(False)',
+        '    sleep(1)',
+        ''
+      ].join('\n')
+    )
+  })
+})
+
+describe('a hoisted object is all-or-nothing (#1058)', () => {
+  it('one unreadable use leaves the whole object alone', () => {
+    // THE BUG THIS RULE EXISTS FOR: keeping the constructor because one call
+    // was unreadable, while still turning the OTHERS into blocks, gives two
+    // objects on one pin — the learner's `led_15` and the block's own hoisted
+    // copy, renamed `led_15_` to dodge the collision. Two `Led`s driving one
+    // pin is a real bug, not an untidiness.
+    const src = [
+      'from snakie import Led, Pin',
+      '',
+      'led_15 = Led(pin=Pin(15, Pin.OUT))',
+      'led_15.set(True)',
+      'led_15.frobnicate()',
+      ''
+    ].join('\n')
+    expect(types(src)).not.toContain('snakie_led_set')
+    expect(regenerate(src).code).not.toContain('led_15_')
+    roundTrips(src)
+  })
+
+  it('a constructor that is not ours is not touched', () => {
+    // `Led(pin=Pin(15))` is not what this block writes. Somebody wrote their
+    // own, and reading it back as a block would rewrite their line.
+    const src = ['from snakie import Led, Pin', '', 'led_15 = Led(pin=Pin(15))', 'led_15.set(True)', ''].join('\n')
+    expect(types(src)).not.toContain('snakie_led_set')
+    roundTrips(src)
+  })
+
+  it('a variable that merely looks like one is left alone', () => {
+    roundTrips(['led_15 = 3', 'print(led_15)', ''].join('\n'))
+  })
+})

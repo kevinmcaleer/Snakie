@@ -4,6 +4,7 @@ import type { BlockDefinition } from '../registry'
 import { FIELD_PIN_TYPE } from '../pin-field'
 import { onboardLedToken } from '../board-pins'
 import { i2cBlockForPins } from '../../../components/display-logic'
+import { registerCallRules } from '../python-to-blocks'
 import type * as Blockly from 'blockly/core'
 
 /**
@@ -57,6 +58,15 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
   // ---------------------------------------------------------------- digital out
   {
     type: 'snakie_led_set',
+    // How that line reads BACK (#1058). Two lines make this block — the hoisted
+    // `led_15 = Led(...)` and the call on it — so the round trip has to know
+    // both, and that the pin lives in the object's NAME rather than either call.
+    read: {
+      fn: 'set',
+      args: [] as const,
+      receiver: { name: 'led', pinField: 'PIN', ctor: 'Led(pin=Pin({PIN}, Pin.OUT))' },
+      argFields: { 0: { field: 'STATE', values: { True: 'ON', False: 'OFF' } } }
+    },
     category: 'hardware',
     pin: { field: 'PIN', role: 'LED', needs: 'digital' },
     help: 'inst-led',
@@ -89,6 +99,11 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
   },
   {
     type: 'snakie_led_toggle',
+    read: {
+      fn: 'toggle',
+      args: [] as const,
+      receiver: { name: 'pin', pinField: 'PIN', ctor: 'Pin({PIN}, Pin.OUT)' }
+    },
     category: 'hardware',
     pin: { field: 'PIN', role: 'LED', needs: 'digital' },
     help: 'inst-led',
@@ -110,6 +125,12 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
   },
   {
     type: 'snakie_pin_write',
+    read: {
+      fn: 'value',
+      args: [] as const,
+      receiver: { name: 'pin', pinField: 'PIN', ctor: 'Pin({PIN}, Pin.OUT)' },
+      argFields: { 0: { field: 'VALUE', values: { '1': '1', '0': '0' } } }
+    },
     category: 'hardware',
     pin: { field: 'PIN', role: 'pin output', needs: 'digital' },
     help: 'ref-pins',
@@ -172,6 +193,22 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
   // ----------------------------------------------------------------- digital in
   {
     type: 'snakie_pin_read',
+    // The PULL comes off the CONSTRUCTOR, not the call — `pin_14.value()` says
+    // nothing about the resistor, and getting it wrong would rewrite the
+    // learner's wiring. `NONE` writes no suffix at all, hence the empty string.
+    read: {
+      fn: 'value',
+      args: [] as const,
+      shape: 'value' as const,
+      receiver: {
+        name: 'pin',
+        pinField: 'PIN',
+        ctor: 'Pin({PIN}, Pin.IN{PULL})',
+        options: {
+          PULL: { PULL_UP: ', Pin.PULL_UP', PULL_DOWN: ', Pin.PULL_DOWN', NONE: '' }
+        }
+      }
+    },
     category: 'hardware',
     pin: { field: 'PIN', role: 'pin input', needs: 'digital' },
     help: 'ref-pins',
@@ -248,6 +285,11 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
   },
   {
     type: 'snakie_pwm_freq',
+    read: {
+      fn: 'freq',
+      args: ['HZ'] as const,
+      receiver: { name: 'pwm', pinField: 'PIN', ctor: 'PWM(Pin({PIN}))' }
+    },
     category: 'hardware',
     pin: { field: 'PIN', role: 'frequency', needs: 'pwm' },
     help: 'ref-pwm',
@@ -314,6 +356,15 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
   // ---------------------------------------------------------------------- servo
   {
     type: 'snakie_servo_angle',
+    read: {
+      fn: 'angle',
+      args: ['ANGLE'] as const,
+      receiver: {
+        name: 'servo',
+        pinField: 'PIN',
+        ctor: 'Servo(PWM(Pin({PIN})), pin={PIN})'
+      }
+    },
     category: 'hardware',
     pin: { field: 'PIN', role: 'servo', needs: 'pwm' },
     help: 'inst-servo',
@@ -350,6 +401,11 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
   // --------------------------------------------------------------------- buzzer
   {
     type: 'snakie_buzzer_tone',
+    read: {
+      fn: 'tone',
+      args: ['FREQ', 'MS'] as const,
+      receiver: { name: 'buzzer', pinField: 'PIN', ctor: 'Buzzer(PWM(Pin({PIN})))' }
+    },
     category: 'hardware',
     pin: { field: 'PIN', role: 'buzzer', needs: 'pwm' },
     help: 'inst-buzzer',
@@ -384,6 +440,11 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
   },
   {
     type: 'snakie_buzzer_stop',
+    read: {
+      fn: 'stop',
+      args: [] as const,
+      receiver: { name: 'buzzer', pinField: 'PIN', ctor: 'Buzzer(PWM(Pin({PIN})))' }
+    },
     category: 'hardware',
     pin: { field: 'PIN', role: 'buzzer', needs: 'pwm' },
     help: 'inst-buzzer',
@@ -570,3 +631,31 @@ function pullDropdown(): Record<string, unknown> {
     ]
   }
 }
+
+/**
+ * Teach the Python → blocks converter how to read these lines back (#1058).
+ *
+ * Derived from the block list rather than written out again, exactly as the
+ * turtle palette does: the `read` each block carries IS the call its emitter
+ * writes, so a block that changes its function name or its constructor changes
+ * both halves at once, or neither.
+ *
+ * EIGHT OF THE TWELVE. The four left out are left out for a reason, and it is
+ * the same reason each time — their generated line is not a plain call on the
+ * hoisted object:
+ *
+ *  - `snakie_onboard_led` hoists as `onboard_led`, with no pin in the name to
+ *    read back (the board decides it, and on a Pico W it is not a number).
+ *  - `snakie_pin_pressed` changes the SHAPE of its line with the dropdown —
+ *    `not p.value()` for a pull-up, `p.value() == 1` otherwise — so the line is
+ *    not a call at all.
+ *  - `snakie_pwm_duty` and `snakie_adc_read` wrap theirs in arithmetic
+ *    (`int(x * 65535 / 100)`, `* 3.3 / 65535`), which is the lesson and cannot
+ *    be unpicked into a socket by a table.
+ *
+ * Those four still convert — as raw Python blocks, exactly as before. Reading
+ * back fewer lines correctly beats reading back more of them wrongly.
+ */
+registerCallRules(
+  HARDWARE_BLOCKS.flatMap((block) => (block.read ? [{ ...block.read, type: block.type }] : []))
+)

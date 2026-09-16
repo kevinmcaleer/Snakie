@@ -6,6 +6,33 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Hardware lines come back as hardware blocks** (#1058, epic #1007). Only the
+  turtle palette declared `read`, so a hardware program converted
+  asymmetrically: blocks → Python perfect, Python → blocks dropping to a raw
+  block on exactly the lines that mattered. `led_15.set(True)` was a grey box of
+  text; the learner could read their program but not build it.
+
+  A hardware block doesn't write one line — it writes a constructor hoisted into
+  the setup section *and* a call on it, with the pin in the object's **name**.
+  Reading one back means reading both lines and then not emitting the
+  constructor a second time. Eight of the twelve hardware blocks now do:
+  LED on/off and toggle, pin write and read, PWM frequency, servo angle, and the
+  buzzer's tone and stop. A pull resistor is read out of the *constructor*,
+  which is the only place it appears.
+
+  **All or nothing per object.** If any use of a hoisted object can't be read,
+  none of them are and its constructor stays — otherwise you get two `Led`s
+  driving one pin, the learner's and the block's own hoisted copy. And a
+  constructor that isn't character-for-character what the block would have
+  written is somebody else's line, and is left alone.
+
+  The four left out say why in the code: the onboard LED has no pin in its name,
+  "button is pressed" changes the *shape* of its line with the dropdown, and the
+  PWM-duty and ADC blocks wrap theirs in arithmetic that is the lesson. Those
+  still convert to raw blocks, exactly as before.
+
 ### Fixed
 
 - **The block shelf no longer appears in Build** (#1066). Build's preset
