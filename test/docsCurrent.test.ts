@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 
 /**
  * The docs still describe the app that ships (#962).
@@ -54,6 +54,24 @@ describe('the README does not pin a version that will rot', () => {
     // None of this run's work appeared anywhere in the docs.
     for (const feature of ['Board Finder', 'Application menus', '.mpy']) {
       expect(readme, `README never mentions ${feature}`).toContain(feature)
+    }
+  })
+})
+
+describe('no doc retypes the version that package.json already holds', () => {
+  it('states nowhere what package.json currently says', () => {
+    // `docs/blockly-epic.md` told its reader "current `package.json` is
+    // `0.56.0`" twelve minor versions after that stopped being true — the same
+    // failure as the README's "v0.13.0 released", for the same reason. The fix
+    // is not a fresher number but no number: `package.json` is one file away,
+    // and a plan that pins its own shipped range says something that stays true.
+    const pinned = /`?package\.json`?[^.\n]{0,40}?\b(?:is|was|=)\s*`?v?\d+\.\d+\.\d+/i
+    const docs = readdirSync('docs')
+      .filter((f) => f.endsWith('.md'))
+      .map((f) => `docs/${f}`)
+    for (const file of [...docs, 'README.md', 'CLAUDE.md']) {
+      const m = pinned.exec(readFileSync(file, 'utf8'))
+      expect(m?.[0], `${file} restates package.json's version: "${m?.[0]}"`).toBeUndefined()
     }
   })
 })

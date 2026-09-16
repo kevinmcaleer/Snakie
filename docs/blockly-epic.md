@@ -3,8 +3,10 @@
 > A block-based editor for MicroPython inside Snakie, so a learner coming off
 > Scratch can drive a real Pico — and then graduate to the Python they were
 > writing all along.
-> Owner: Kevin McAleer. Status: planning. Target: Snakie ≥ 0.57.0
-> (current `package.json` is `0.56.0`).
+> Owner: Kevin McAleer. Status: shipped — epic #1007 is closed with all 30
+> sub-issues done: the twelve planned here (#1008–#1019) plus those filed while
+> building. Landed on `master` from 0.57.0 through 0.68.8. This document is the
+> epic's architecture record now, not a forward plan.
 
 Twelve sub-issues (#1008–#1019), built in order. This document is the
 architecture, the phased roadmap, the design decisions the epic turns on,
