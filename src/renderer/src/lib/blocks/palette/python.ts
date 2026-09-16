@@ -245,7 +245,10 @@ function commentBlockMixin(): Record<string, unknown> {
     lineCount_: 0,
 
     init(this: Blockly.Block): void {
-      this.setStyle('python_blocks')
+      // Its OWN grey (#1062), not the Python category's — see `comment_blocks`
+      // in `theme.ts`. A note about the program should not carry the same
+      // visual weight as the program.
+      this.setStyle('comment_blocks')
       this.setPreviousStatement(true, null)
       this.setNextStatement(true, null)
       this.setTooltip(
@@ -267,12 +270,27 @@ function commentBlockMixin(): Record<string, unknown> {
       )
     },
 
-    /** One editable row per line. Rebuilt whole — a run is never partly edited. */
+    /**
+     * One row per line, as PLAIN TEXT rather than a text input.
+     *
+     * Thirty editable fields is thirty bordered boxes, which is most of what
+     * made a file's header read as a wall (#1062). A label is just text: it
+     * recedes, it keeps the mono alignment an ASCII table depends on, and it
+     * says "this is prose" without a single pixel of chrome. Comments are
+     * edited in the code pane, which is where prose is comfortable anyway.
+     *
+     * Rebuilt whole rather than diffed — a run is never partly edited.
+     */
     updateLines_(this: Blockly.Block, lines: readonly string[]): void {
       const self = this as unknown as { lineCount_: number }
       for (let i = 0; i < (self.lineCount_ ?? 0); i++) this.removeInput(`L${i}`, true)
       lines.forEach((line, i) => {
-        this.appendDummyInput(`L${i}`).appendField(new Blockly.FieldTextInput(line), `L${i}`)
+        this.appendDummyInput(`L${i}`).appendField(
+          // The same mono class the raw-Python fields wear, so a table that was
+          // aligned in the file is still aligned on the block.
+          new Blockly.FieldLabel(line, 'snakie-python-code'),
+          `L${i}`
+        )
       })
       self.lineCount_ = lines.length
     }

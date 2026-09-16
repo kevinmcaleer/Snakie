@@ -125,6 +125,22 @@ export interface BlockDefinition {
     fn: string
     args: readonly string[]
     shape?: 'statement' | 'value'
+    /**
+     * This call is made on a HOISTED OBJECT rather than a module (#1058).
+     *
+     * A hardware line is not `led.set(15, True)` — it is `led_15.set(True)`,
+     * called on an object the generator hoisted into the setup section, whose
+     * NAME carries the pin. Without this, every hardware line came back from
+     * #1019 as a raw Python block: the program was readable and unbuildable.
+     */
+    receiver?: CallReceiver
+    /**
+     * Positional arguments that are FIELDS rather than sockets, by index.
+     *
+     * `led_15.set(True)` has no socket — `True` is the ON/OFF dropdown, and
+     * reading it back means mapping the Python text to the option value.
+     */
+    argFields?: Readonly<Record<number, ArgField>>
   }
   /**
    * The part this block belongs to (#1017) — so USING one can offer to install
@@ -132,6 +148,25 @@ export interface BlockDefinition {
    * the part is placed.
    */
   part?: { libraryId: string; partId: string }
+  /**
+   * The same block, generating CIRCUITPYTHON (#1040, epic #209).
+   *
+   * One block, two templates — decided in `docs/blockly-epic.md` §9. The
+   * alternative was a second set of blocks, and it loses the property this file
+   * format exists for: a learner's program should be a program, not a
+   * program-for-a-Pico. A canvas built in a classroom's MicroPython half opens
+   * and runs in its CircuitPython half, and the mirror shows what it generated
+   * either way.
+   *
+   * ABSENT means this block only knows MicroPython — which is not a gap to be
+   * ashamed of but a fact to be honest about, and {@link scopedByEmitters}
+   * turns it into a `scope` so the toolbox never offers the block to a board
+   * that cannot run it.
+   */
+  circuitpython?: {
+    imports?: readonly PyImport[]
+    code: BlockEmitter
+  }
   /**
    * Which runtimes this block is true for (#1039, epic #209).
    *
@@ -167,6 +202,58 @@ export function scoped(
   defs: readonly BlockDefinition[]
 ): BlockDefinition[] {
   return defs.map((def) => (def.scope ? def : { ...def, scope }))
+}
+
+/**
+ * How a hoisted object is recognised on the way back in (#1058).
+ *
+ * The generator writes TWO lines for one block — a constructor in the setup
+ * section and the call that uses it — so reading one block back means reading
+ * both, and then making sure the constructor does not ALSO become a block of
+ * its own. Declared here beside the emitter for the same reason everything else
+ * in this file is: the two halves of the round trip cannot drift.
+ */
+export interface CallReceiver {
+  /** The name prefix the generator hoists under — `led` in `led_15`. */
+  name: string
+  /** The block field the pin out of that name goes into. */
+  pinField: string
+  /**
+   * The constructor, as a template. `{PIN}` is the pin; any other `{FIELD}` is
+   * a dropdown whose possible texts are listed in {@link options}.
+   *
+   * MATCHED EXACTLY, which is the point: a constructor that is not character
+   * for character what this block would have written is not this block's, and
+   * consuming it would delete a line somebody meant.
+   */
+  ctor: string
+  /** For each `{FIELD}` in {@link ctor}: the exact Python each option writes. */
+  options?: Readonly<Record<string, Readonly<Record<string, string>>>>
+}
+
+/** An argument that is a field: the field it fills, and what each text means. */
+export interface ArgField {
+  field: string
+  /** Python text → field value. `{ True: 'ON', False: 'OFF' }`. */
+  values: Readonly<Record<string, string>>
+}
+
+/**
+ * Scope a palette by what it can actually GENERATE (#1040).
+ *
+ * `scoped('micropython', …)` was right when nothing could speak CircuitPython.
+ * Now that some blocks can, saying so twice — once as an emitter, once as a
+ * scope — is two things to keep in step, and the one that drifts is the one
+ * that hides a working block from the board it works on. So the scope is
+ * derived: a block with a CircuitPython emitter is for both, and a block
+ * without one is MicroPython's.
+ *
+ * A definition that states its own scope keeps it, as always.
+ */
+export function scopedByEmitters(defs: readonly BlockDefinition[]): BlockDefinition[] {
+  return defs.map((def) =>
+    def.scope ? def : { ...def, scope: def.circuitpython ? 'both' : ('micropython' as const) }
+  )
 }
 
 /** A sub-category inside a toolbox category (#1017). */
@@ -209,11 +296,28 @@ export function defineDynamicBlocks(source: string, defs: readonly BlockDefiniti
 }
 
 /** Forget every dynamic set whose source is not in `keep` (#1017). */
-export function pruneDynamicBlocks(keep: ReadonlySet<string>): void {
+export function pruneDynamicBlocks(keep: ReadonlySet<string>, prefix?: string): void {
   for (const [type, def] of [...REGISTRY]) {
-    if (def.source && !keep.has(def.source)) REGISTRY.delete(type)
+    if (!def.source || keep.has(def.source)) continue
+    // A PREFIX SCOPES THE SWEEP (#1048). Two hooks now register dynamic sets —
+    // parts and plugins from the breadboard, modules from the program's own
+    // imports — and neither knows what the other is holding. Without this the
+    // part hook's prune would delete every module drawer a moment after the
+    // module hook filled it, and each rebuild would fight the other.
+    if (prefix === undefined ? def.source.startsWith(MODULE_PREFIX) : !def.source.startsWith(prefix)) {
+      continue
+    }
+    REGISTRY.delete(type)
   }
 }
+
+/**
+ * The namespace the imported-module sets live under (#1048).
+ *
+ * Declared here rather than imported, so `pruneDynamicBlocks` — which every
+ * dynamic registrant calls — does not depend on the hook that uses it.
+ */
+const MODULE_PREFIX = 'module:'
 
 /** Every registered block, in registration order. */
 export function registeredBlocks(): BlockDefinition[] {

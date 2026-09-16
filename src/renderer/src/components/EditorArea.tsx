@@ -5,6 +5,7 @@ import { ChatIcon } from './ui-icons'
 import { useWorkspace } from '../store/workspace'
 import { defaultBlocksViewMode, useWorkspaceLayout, type BlocksViewMode } from '../store/layout'
 import { isMpyFile } from '../../../shared/mpy-info'
+import { showsBlocksCanvas } from './editor-routing'
 
 export interface EditorAreaProps {
   /** Whether the AI chat pane is open (drives the Chat toggle's state). */
@@ -72,18 +73,10 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
   const showMpy = isMpyFile(activeFile?.name)
   // The one router entry that is NOT an extension test (#1008): a blocks file is
   // a `.py` on purpose, so the fact comes from the footer, read once at open
-  // time and carried on the file.
-  /**
-   * Show the blocks split for this file?
-   *
-   * A file with a blocks footer, anywhere — that has been true since #1008. And
-   * (#1034) **any Python file at all, in the Blocks workspace**: the `.py` is the
-   * program and the blocks are a view of it, so pressing Blocks on a file Snakie
-   * did not write now shows you blocks rather than appearing to ignore you.
-   */
-  const showBlocks =
-    activeFile?.isBlocks === true ||
-    (layout.active === 'blocks' && /\.py$/i.test(activeFile?.name ?? ''))
+  // time and carried on the file. The rule itself lives in `editor-routing.ts`,
+  // where it can be a test rather than something you find out by switching to
+  // Build and seeing the block shelf over the robot (#1066).
+  const showBlocks = showsBlocksCanvas(layout.active, activeFile)
 
   // The blocks emphasis is PER FILE, seeded from the workspace default (epic
   // #1007 §8 Q5): Blocks opens blocks-primary, Code opens Python-primary, and a

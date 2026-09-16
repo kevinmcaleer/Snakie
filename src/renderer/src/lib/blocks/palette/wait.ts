@@ -51,6 +51,40 @@ export const WAIT_BLOCKS: BlockDefinition[] = [
     },
     toolbox: { inputs: { MS: { shadow: { type: 'math_number', fields: { NUM: 500 } } } } },
     imports: [{ module: 'time' }],
-    code: (block, gen) => `time.sleep_ms(${gen.valueToCode(block, 'MS', Order.NONE) || '0'})\n`
+    code: (block, gen) => `time.sleep_ms(${gen.valueToCode(block, 'MS', Order.NONE) || '0'})\n`,
+    /**
+     * CIRCUITPYTHON HAS NO `sleep_ms` (#1041, epic #209).
+     *
+     * This is the only dialect-specific block outside hardware — its sibling
+     * `wait N seconds` writes `time.sleep(…)`, which is right on both.
+     *
+     * The issue offered three fixes. Generating the portable `time.sleep(0.5)`
+     * everywhere was the smallest, and it costs the idiom: `sleep_ms` is what
+     * every MicroPython tutorial uses, and the mirror is meant to show the code
+     * a learner will meet elsewhere. A second block costs a second block, for a
+     * difference that is a unit conversion. #1040's per-dialect template settled
+     * it — the label still says milliseconds, and each board gets the call it
+     * actually has.
+     */
+    circuitpython: {
+      imports: [{ module: 'time' }],
+      code: (block, gen) => `time.sleep(${seconds(gen.valueToCode(block, 'MS', Order.NONE))})\n`
+    }
   }
 ]
+
+/**
+ * Milliseconds → the seconds `time.sleep()` wants.
+ *
+ * A LITERAL IS CONVERTED HERE, not by the board: `time.sleep(0.5)` is what a
+ * CircuitPython tutorial writes and what a learner reading the mirror should
+ * see, while `time.sleep(500 / 1000)` is arithmetic nobody would type. Anything
+ * that is not a plain number — a variable, an expression — keeps the division,
+ * because it is the only form that is still correct when the value changes.
+ */
+function seconds(ms: string): string {
+  const text = (ms || '0').trim()
+  if (!/^\d+(\.\d+)?$/.test(text)) return `${text} / 1000`
+  // `String(n)` rather than `toFixed`: 500 → `0.5`, not `0.500`, and 1 → `0.001`.
+  return String(Number(text) / 1000)
+}

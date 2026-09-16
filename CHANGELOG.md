@@ -6,6 +6,160 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A Modules drawer, filled from your program's own imports** (#1048, epic
+  #1007). Open a real driver program and it converts perfectly — ten blocks, no
+  warnings, byte-exact round trip — and offers you *nothing*: the `oled.text(…)`
+  lines are raw Python blocks you can drag but cannot author more of. That is the
+  right floor and a poor ceiling.
+
+  There is now a **Modules** category, one sub-drawer per module the program
+  imports, separate from **My parts** — which keeps meaning "things on your
+  breadboard", because that distinction earns its keep.
+
+  This first tier is the one the issue calls a free win: the curated symbol
+  tables already carried kinds and one-line details for ~39 modules and were
+  wired only to Monaco's completions. Nothing in the blocks stack had ever
+  imported them. So `machine`, `time`, `neopixel` and friends get blocks with
+  **no parsing, no file and no board** — which matters because those are exactly
+  the modules whose source we will never have: they are frozen into the
+  firmware. The `detail` lines turn out to be signatures, so the blocks get real
+  parameter names too. Member-level dialect scope is respected, so a
+  CircuitPython board is not offered `time.sleep_ms`.
+
+  The source-reading tier is written and tested underneath it: `module-api.ts`
+  reads a module's classes, methods, parameters and defaults out of its `.py`
+  with #1019's lexer — **parsing only, never importing**, because a module a
+  learner downloaded is somebody else's code. Resolving that source (project
+  folder, board `/lib`, bundled), the board-side `dir()` probe for modules with
+  no source, and upgrading `part-blocks.ts`'s guessed class name to the real one
+  are the remaining tiers.
+
+### Fixed
+
+- **`wait N milliseconds` now runs on CircuitPython** (#1041, epic #209). It
+  emitted `time.sleep_ms(…)`, which CircuitPython does not have — the only
+  dialect-specific block outside hardware. It gets a per-dialect template, the
+  shape #1040 settled on: MicroPython keeps `sleep_ms`, which is what every
+  tutorial writes and what the mirror is meant to show, and CircuitPython gets
+  `time.sleep()`. The block's label still says milliseconds either way.
+
+  A literal is converted at generation time — `time.sleep(0.5)`, what a
+  CircuitPython tutorial writes, rather than `time.sleep(500 / 1000)`, which is
+  arithmetic nobody would type. A variable or an expression keeps the division,
+  the only form still correct when the value changes.
+
+### Added
+
+- **The hardware blocks speak CircuitPython** (#1040, epic #1007 and epic #209).
+  The same block, on a Feather, writes `digitalio.DigitalInOut(board.GP15)`
+  instead of `Led(pin=Pin(15, Pin.OUT))` — **one block, two templates**, which
+  is the decision #1040 left open and `docs/blockly-epic.md` §9.7b now records.
+
+  The argument in one line: *a learner's program should be a program, not a
+  program-for-a-Pico*. Two block sets would have thrown away the portability the
+  `.py`-with-a-footer format exists for; with one block a canvas built in a
+  classroom's MicroPython half opens and runs in its CircuitPython half. The
+  objection — a block whose code you cannot predict — is answered by the mirror
+  next door, which shows exactly what it generated.
+
+  Nine of the twelve hardware blocks do it. Servo and buzzer have no
+  CircuitPython *core* equivalent (they want `adafruit_motor` and `simpleio`,
+  third-party libraries and a different promise), so the toolbox withholds them
+  there — and scope is now **derived** from what a block can generate, so a
+  working block can never be hidden from the board it works on.
+
+  Pin names come off the board's own silk label, which is what CircuitPython's
+  `board` module is built from: `board.GP15` on an RP2040, `board.IO15` on an
+  ESP32-S3.
+
+- **Hardware lines come back as hardware blocks** (#1058, epic #1007). Only the
+  turtle palette declared `read`, so a hardware program converted
+  asymmetrically: blocks → Python perfect, Python → blocks dropping to a raw
+  block on exactly the lines that mattered. `led_15.set(True)` was a grey box of
+  text; the learner could read their program but not build it.
+
+  A hardware block doesn't write one line — it writes a constructor hoisted into
+  the setup section *and* a call on it, with the pin in the object's **name**.
+  Reading one back means reading both lines and then not emitting the
+  constructor a second time. Eight of the twelve hardware blocks now do:
+  LED on/off and toggle, pin write and read, PWM frequency, servo angle, and the
+  buzzer's tone and stop. A pull resistor is read out of the *constructor*,
+  which is the only place it appears.
+
+  **All or nothing per object.** If any use of a hoisted object can't be read,
+  none of them are and its constructor stays — otherwise you get two `Led`s
+  driving one pin, the learner's and the block's own hoisted copy. And a
+  constructor that isn't character-for-character what the block would have
+  written is somebody else's line, and is left alone.
+
+  The four left out say why in the code: the onboard LED has no pin in its name,
+  "button is pressed" changes the *shape* of its line with the dropdown, and the
+  PWM-duty and ADC blocks wrap theirs in arithmetic that is the lesson. Those
+  still convert to raw blocks, exactly as before.
+
+### Fixed
+
+- **The block shelf no longer appears in Build** (#1066). Build's preset
+  collapses the centre column to nothing so the URDF editor can have the screen
+  — but with a blocks file open the canvas stayed mounted in that zero-width
+  column, and Blockly's toolbox takes no hint from a host with no width. The
+  shelf painted itself straight over Build's robot tree and its Export buttons.
+  Electronics collapses the centre the same way and had the same bug waiting in
+  it. The canvas now belongs to the two workspaces that are *about* the program;
+  elsewhere a blocks file opens as ordinary code, which is all those workspaces
+  can usefully show of it.
+
+- **An I²C scan from a program now reaches the I²C Detect instrument** (#1067).
+  Drag the I²C block out, press Run, and the panel opened by itself — then sat
+  there saying *"Pick the bus + pins, then SCAN"* with FOUND 0 while the program
+  scanned. `instruments.py` prints `SNK I2C …` and the telemetry parser has
+  always understood it; **nothing consumed it**. The panel had one scan path —
+  its own button, firing a different sentinel over `device.exec` — so it could
+  only show a scan it had started itself. It now listens to the program too, and
+  draws the result exactly the same way. (The button stays: it is the answer
+  when there is no program. Telemetry carries addresses only, not the pins they
+  were found on, so the pin dropdowns are left alone rather than guessing.)
+
+- **Blocks plugged into a socket no longer look detached.** The roomier-blocks
+  change bumped Blockly's four *in-row* paddings along with everything else, and
+  that is exactly where a plugged-in block's left edge sits — so `if` and the
+  condition socketed into it drew with a visible gap between them, reading as
+  not quite joined. Those four are back at Blockly's own values, checked against
+  a stock `thrasos` render of the same program side by side. The vertical
+  roominess is untouched: the same block still measures 176px tall, and only the
+  horizontal gap came out.
+
+### Changed
+
+- **Comments are grey, and they are quiet** (#1062). #1062's folding made a
+  file's header one block instead of thirty, but it still rendered as thirty
+  bordered text inputs — a wall with one outline round it. Comment blocks now
+  have a style of their own: plain mono text rather than input boxes, in a true
+  neutral grey. (The Python category already wears the *comment* token, so
+  "paint comments the comment colour" would have made them identical to the
+  raw-Python blocks they sit among; the grey is that token with the colour taken
+  out, at the same brightness.) The lines are still verbatim, so an aligned
+  ASCII table still lines up. Comments are edited in the code pane.
+
+- **The code pane says MICROPYTHON.** That is what the generator writes, and a
+  learner graduating from that pane is graduating to the language named on it.
+  The narrow layout's tab keeps the short word, where the long one doesn't fit.
+
+### Fixed
+
+- **The code-only view no longer invites you to use a canvas that isn't there**
+  (#1062). *"click a line to find its block"* and *"drag a block onto the canvas"*
+  are both about the other half of the split, and both were showing with the
+  canvas closed. They now appear only when the blocks are actually beside the
+  code; the link itself still works.
+
+- **Roots no longer sit a screen apart.** #1062's height estimate counted every
+  *value* socket's contents as vertical height — a comparison inside an `if`
+  added three rows that are not on screen — so it reserved 1312px for a root
+  that renders 559. Only a statement body adds height now.
+
 ### Fixed
 
 - **A `while True:` with a `break` no longer opens as an empty canvas**

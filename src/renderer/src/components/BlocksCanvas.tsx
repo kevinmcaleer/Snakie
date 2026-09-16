@@ -368,7 +368,7 @@ export function BlocksCanvas({
       // the source map and the undo-relevant buffer for one gesture.
       if (debounceRef.current) clearTimeout(debounceRef.current)
       debounceRef.current = setTimeout(() => {
-        const program = { ...generateProgram(ws), workspace: json }
+        const program = { ...generateProgram(ws, dialectRef.current), workspace: json }
         // Keep the traceback mapper on the CURRENT program (#1015).
         sourceMapRef.current = program.sourceMap
         // Two blocks on one pin, a pin this board hasn't got, a pin that can't
@@ -697,7 +697,7 @@ export function BlocksCanvas({
       // Show the Python at once — but through `onGenerate` only. Writing here
       // would dirty a file whose stored code merely predates this generator,
       // for the crime of being opened.
-      const opened = { ...generateProgram(ws), workspace: loaded }
+      const opened = { ...generateProgram(ws, dialectRef.current), workspace: loaded }
       sourceMapRef.current = opened.sourceMap
       onGenerateRef.current?.(opened)
       applyPinWarnings(ws)

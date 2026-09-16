@@ -2,8 +2,9 @@ import { Order } from '../generator'
 import type { MicroPythonGenerator } from '../generator'
 import type { BlockDefinition } from '../registry'
 import { FIELD_PIN_TYPE } from '../pin-field'
-import { onboardLedToken } from '../board-pins'
+import { circuitPythonPin, onboardLedToken } from '../board-pins'
 import { i2cBlockForPins } from '../../../components/display-logic'
+import { registerCallRules } from '../python-to-blocks'
 import type * as Blockly from 'blockly/core'
 
 /**
@@ -53,10 +54,33 @@ export const pinField = (
 /** The pin a block's field holds, as the generated code writes it. */
 export const pinOf = (block: Blockly.Block, name = 'PIN'): string => String(block.getFieldValue(name) ?? 0)
 
+/** What each CircuitPython peripheral needs in scope (#1040). */
+const CP_DIGITAL = [{ module: 'board' }, { module: 'digitalio' }] as const
+const CP_PWM = [{ module: 'board' }, { module: 'pwmio' }] as const
+const CP_ADC = [{ module: 'board' }, { module: 'analogio' }] as const
+
 export const HARDWARE_BLOCKS: BlockDefinition[] = [
   // ---------------------------------------------------------------- digital out
   {
     type: 'snakie_led_set',
+    circuitpython: {
+      imports: CP_DIGITAL,
+      // `.value = True`, an attribute. There is no `.set()` and no `Led` class:
+      // CircuitPython's core has no opinion about what a pin is wired to.
+      code: (block, gen) =>
+        `${cpDigitalOut(gen, pinOf(block), block, 'led')}.value = ${
+          block.getFieldValue('STATE') === 'ON' ? 'True' : 'False'
+        }\n`
+    },
+    // How that line reads BACK (#1058). Two lines make this block — the hoisted
+    // `led_15 = Led(...)` and the call on it — so the round trip has to know
+    // both, and that the pin lives in the object's NAME rather than either call.
+    read: {
+      fn: 'set',
+      args: [] as const,
+      receiver: { name: 'led', pinField: 'PIN', ctor: 'Led(pin=Pin({PIN}, Pin.OUT))' },
+      argFields: { 0: { field: 'STATE', values: { True: 'ON', False: 'OFF' } } }
+    },
     category: 'hardware',
     pin: { field: 'PIN', role: 'LED', needs: 'digital' },
     help: 'inst-led',
@@ -89,6 +113,20 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
   },
   {
     type: 'snakie_led_toggle',
+    circuitpython: {
+      imports: CP_DIGITAL,
+      // No `.toggle()` either — `not` its own value, which is also the clearest
+      // thing to read and exactly what the MicroPython method does.
+      code: (block, gen) => {
+        const name = cpDigitalOut(gen, pinOf(block), block)
+        return `${name}.value = not ${name}.value\n`
+      }
+    },
+    read: {
+      fn: 'toggle',
+      args: [] as const,
+      receiver: { name: 'pin', pinField: 'PIN', ctor: 'Pin({PIN}, Pin.OUT)' }
+    },
     category: 'hardware',
     pin: { field: 'PIN', role: 'LED', needs: 'digital' },
     help: 'inst-led',
@@ -110,6 +148,19 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
   },
   {
     type: 'snakie_pin_write',
+    circuitpython: {
+      imports: CP_DIGITAL,
+      code: (block, gen) =>
+        `${cpDigitalOut(gen, pinOf(block), block)}.value = ${
+          block.getFieldValue('VALUE') === '1' ? 'True' : 'False'
+        }\n`
+    },
+    read: {
+      fn: 'value',
+      args: [] as const,
+      receiver: { name: 'pin', pinField: 'PIN', ctor: 'Pin({PIN}, Pin.OUT)' },
+      argFields: { 0: { field: 'VALUE', values: { '1': '1', '0': '0' } } }
+    },
     category: 'hardware',
     pin: { field: 'PIN', role: 'pin output', needs: 'digital' },
     help: 'ref-pins',
@@ -137,6 +188,21 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
   },
   {
     type: 'snakie_onboard_led',
+    circuitpython: {
+      imports: CP_DIGITAL,
+      // `board.LED` by name, on every CircuitPython board that has one — which
+      // is the case the MicroPython side needs a per-board token for.
+      code: (block, gen) => {
+        const name = gen.setup(
+          'cp-onboard-led',
+          'onboard_led',
+          'digitalio.DigitalInOut(board.LED)',
+          block,
+          ['{NAME}.direction = digitalio.Direction.OUTPUT']
+        )
+        return `${name}.value = ${block.getFieldValue('STATE') === 'ON' ? 'True' : 'False'}\n`
+      }
+    },
     category: 'hardware',
     help: 'inst-led',
     json: {
@@ -172,6 +238,32 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
   // ----------------------------------------------------------------- digital in
   {
     type: 'snakie_pin_read',
+    circuitpython: {
+      imports: CP_DIGITAL,
+      // A BOOLEAN here, where MicroPython gives 1/0 — so `int(...)`, because
+      // the block says "1 when it is high" and a block that says one thing and
+      // returns another is worse than a slightly longer line.
+      code: (block, gen) => [
+        `int(${cpDigitalIn(gen, pinOf(block), block.getFieldValue('PULL'), block)}.value)`,
+        Order.FUNCTION_CALL
+      ]
+    },
+    // The PULL comes off the CONSTRUCTOR, not the call — `pin_14.value()` says
+    // nothing about the resistor, and getting it wrong would rewrite the
+    // learner's wiring. `NONE` writes no suffix at all, hence the empty string.
+    read: {
+      fn: 'value',
+      args: [] as const,
+      shape: 'value' as const,
+      receiver: {
+        name: 'pin',
+        pinField: 'PIN',
+        ctor: 'Pin({PIN}, Pin.IN{PULL})',
+        options: {
+          PULL: { PULL_UP: ', Pin.PULL_UP', PULL_DOWN: ', Pin.PULL_DOWN', NONE: '' }
+        }
+      }
+    },
     category: 'hardware',
     pin: { field: 'PIN', role: 'pin input', needs: 'digital' },
     help: 'ref-pins',
@@ -190,6 +282,18 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
   },
   {
     type: 'snakie_pin_pressed',
+    circuitpython: {
+      imports: CP_DIGITAL,
+      code: (block, gen) => {
+        const pull = block.getFieldValue('PULL')
+        const name = cpDigitalIn(gen, pinOf(block), pull, block)
+        // Same reasoning as the MicroPython side: with a pull-UP a pressed
+        // button pulls the pin LOW.
+        return pull === 'PULL_UP'
+          ? [`not ${name}.value`, Order.LOGICAL_NOT]
+          : [`${name}.value`, Order.ATOMIC]
+      }
+    },
     category: 'hardware',
     pin: { field: 'PIN', role: 'button', needs: 'digital' },
     help: 'inst-button',
@@ -218,6 +322,16 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
   // ------------------------------------------------------------------------ PWM
   {
     type: 'snakie_pwm_duty',
+    circuitpython: {
+      imports: CP_PWM,
+      // `duty_cycle`, and the same 16-bit range — so the arithmetic that IS the
+      // lesson stays word for word what the MicroPython block writes.
+      code: (block, gen) => {
+        const name = cpPwm(gen, pinOf(block), block)
+        const percent = gen.valueToCode(block, 'PERCENT', Order.MULTIPLICATIVE) || '0'
+        return `${name}.duty_cycle = int(${percent} * 65535 / 100)\n`
+      }
+    },
     category: 'hardware',
     pin: { field: 'PIN', role: 'brightness', needs: 'pwm' },
     help: 'ref-pwm',
@@ -248,6 +362,18 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
   },
   {
     type: 'snakie_pwm_freq',
+    circuitpython: {
+      imports: CP_PWM,
+      code: (block, gen) =>
+        `${cpPwm(gen, pinOf(block), block)}.frequency = ${
+          gen.valueToCode(block, 'HZ', Order.NONE) || '1000'
+        }\n`
+    },
+    read: {
+      fn: 'freq',
+      args: ['HZ'] as const,
+      receiver: { name: 'pwm', pinField: 'PIN', ctor: 'PWM(Pin({PIN}))' }
+    },
     category: 'hardware',
     pin: { field: 'PIN', role: 'frequency', needs: 'pwm' },
     help: 'ref-pwm',
@@ -271,6 +397,16 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
   // ------------------------------------------------------------------------ ADC
   {
     type: 'snakie_adc_read',
+    circuitpython: {
+      imports: CP_ADC,
+      // `.value` is already 0–65535, the same range `read_u16()` gives, so both
+      // dialects divide by the same number and the lesson is the same lesson.
+      code: (block, gen) => {
+        const name = cpAdc(gen, pinOf(block), block)
+        if (block.getFieldValue('UNIT') === 'RAW') return [`${name}.value`, Order.MEMBER]
+        return [`${name}.value * 3.3 / 65535`, Order.MULTIPLICATIVE]
+      }
+    },
     category: 'hardware',
     pin: { field: 'PIN', role: 'analogue read', needs: 'adc' },
     help: 'ref-pins',
@@ -314,6 +450,15 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
   // ---------------------------------------------------------------------- servo
   {
     type: 'snakie_servo_angle',
+    read: {
+      fn: 'angle',
+      args: ['ANGLE'] as const,
+      receiver: {
+        name: 'servo',
+        pinField: 'PIN',
+        ctor: 'Servo(PWM(Pin({PIN})), pin={PIN})'
+      }
+    },
     category: 'hardware',
     pin: { field: 'PIN', role: 'servo', needs: 'pwm' },
     help: 'inst-servo',
@@ -350,6 +495,11 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
   // --------------------------------------------------------------------- buzzer
   {
     type: 'snakie_buzzer_tone',
+    read: {
+      fn: 'tone',
+      args: ['FREQ', 'MS'] as const,
+      receiver: { name: 'buzzer', pinField: 'PIN', ctor: 'Buzzer(PWM(Pin({PIN})))' }
+    },
     category: 'hardware',
     pin: { field: 'PIN', role: 'buzzer', needs: 'pwm' },
     help: 'inst-buzzer',
@@ -384,6 +534,11 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
   },
   {
     type: 'snakie_buzzer_stop',
+    read: {
+      fn: 'stop',
+      args: [] as const,
+      receiver: { name: 'buzzer', pinField: 'PIN', ctor: 'Buzzer(PWM(Pin({PIN})))' }
+    },
     category: 'hardware',
     pin: { field: 'PIN', role: 'buzzer', needs: 'pwm' },
     help: 'inst-buzzer',
@@ -570,3 +725,99 @@ function pullDropdown(): Record<string, unknown> {
     ]
   }
 }
+
+// ---------------------------------------------------------------------------
+// The same objects, in CircuitPython (#1040)
+// ---------------------------------------------------------------------------
+//
+// THE TWO APIS ARE DIFFERENT SHAPES, and that is the whole difficulty. A
+// `machine.Pin` says everything in its constructor; a `digitalio.DigitalInOut`
+// is built first and told its direction afterwards, and its value is an
+// ATTRIBUTE rather than a call. So these hoist with an `after` line, which is
+// what `gen.setup`'s last argument is for, and the emitters assign rather than
+// call.
+//
+// The pin name comes off the board profile (`circuitPythonPin`): `board.GP15`
+// and `machine.Pin(15)` are the same physical hole, and the silk label is what
+// CircuitPython's own `board` module is built from.
+
+/** `led_15 = digitalio.DigitalInOut(board.GP15)` + its direction. */
+function cpDigitalOut(gen: MicroPythonGenerator, pin: string, block: Blockly.Block, role = 'pin'): string {
+  return gen.setup(
+    `cp-out:${pin}`,
+    `${role}_${pin}`,
+    `digitalio.DigitalInOut(${circuitPythonPin(pin)})`,
+    block,
+    ['{NAME}.direction = digitalio.Direction.OUTPUT']
+  )
+}
+
+/** An input, with its pull. CircuitPython spells "no pull" as `None`. */
+function cpDigitalIn(
+  gen: MicroPythonGenerator,
+  pin: string,
+  pull: string,
+  block: Blockly.Block
+): string {
+  const pulls: Record<string, string> = {
+    PULL_UP: 'digitalio.Pull.UP',
+    PULL_DOWN: 'digitalio.Pull.DOWN',
+    NONE: 'None'
+  }
+  return gen.setup(
+    `cp-in:${pin}:${pull}`,
+    `pin_${pin}`,
+    `digitalio.DigitalInOut(${circuitPythonPin(pin)})`,
+    block,
+    [
+      '{NAME}.direction = digitalio.Direction.INPUT',
+      `{NAME}.pull = ${pulls[pull] ?? 'None'}`
+    ]
+  )
+}
+
+/** `pwm_15 = pwmio.PWMOut(board.GP15)`. */
+function cpPwm(gen: MicroPythonGenerator, pin: string, block: Blockly.Block): string {
+  return gen.setup(
+    `cp-pwm:${pin}`,
+    `pwm_${pin}`,
+    // `variable_frequency` so the frequency block can move it later; without it
+    // CircuitPython raises the moment anything assigns `.frequency`.
+    `pwmio.PWMOut(${circuitPythonPin(pin)}, variable_frequency=True)`,
+    block
+  )
+}
+
+/** `adc_26 = analogio.AnalogIn(board.GP26)`. */
+function cpAdc(gen: MicroPythonGenerator, pin: string, block: Blockly.Block): string {
+  return gen.setup(`cp-adc:${pin}`, `adc_${pin}`, `analogio.AnalogIn(${circuitPythonPin(pin)})`, block)
+}
+
+
+/**
+ * Teach the Python → blocks converter how to read these lines back (#1058).
+ *
+ * Derived from the block list rather than written out again, exactly as the
+ * turtle palette does: the `read` each block carries IS the call its emitter
+ * writes, so a block that changes its function name or its constructor changes
+ * both halves at once, or neither.
+ *
+ * EIGHT OF THE TWELVE. The four left out are left out for a reason, and it is
+ * the same reason each time — their generated line is not a plain call on the
+ * hoisted object:
+ *
+ *  - `snakie_onboard_led` hoists as `onboard_led`, with no pin in the name to
+ *    read back (the board decides it, and on a Pico W it is not a number).
+ *  - `snakie_pin_pressed` changes the SHAPE of its line with the dropdown —
+ *    `not p.value()` for a pull-up, `p.value() == 1` otherwise — so the line is
+ *    not a call at all.
+ *  - `snakie_pwm_duty` and `snakie_adc_read` wrap theirs in arithmetic
+ *    (`int(x * 65535 / 100)`, `* 3.3 / 65535`), which is the lesson and cannot
+ *    be unpicked into a socket by a table.
+ *
+ * Those four still convert — as raw Python blocks, exactly as before. Reading
+ * back fewer lines correctly beats reading back more of them wrongly.
+ */
+registerCallRules(
+  HARDWARE_BLOCKS.flatMap((block) => (block.read ? [{ ...block.read, type: block.type }] : []))
+)

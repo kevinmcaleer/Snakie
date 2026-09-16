@@ -519,7 +519,7 @@ Measured by walking the registry after `installCorePalette()`, not by reading.
 | Functions | 5 | — | **Both.** `def`/`return` | Nothing |
 | Python (#1018) | 9 | *(user's own)* | **Both by construction** — verbatim text | Nothing; change the import block's `machine` default |
 | Turtle | 19 | `turtle` | **Both.** `micropython/turtle.py` imports only `math` and prints | Nothing |
-| Wait | 2 | `time` | **Split.** `time.sleep()` both; `time.sleep_ms()` MicroPython-only | One block, one line |
+| Wait | 2 | `time` | ~~Split~~ **Done (#1041).** `time.sleep()` both; `wait ms` has a CircuitPython template | — |
 | Hardware | 12 | `snakie`, `machine` | **MicroPython** | The shim (§9.4) |
 | Instruments | 17 | `instruments`, `snakie`, `machine` | **MicroPython** | The shim, plus #760's note |
 | **Total** | **98** | | **68 fine, 1 trivial, 29 real** | |
@@ -586,8 +586,20 @@ takes a float; `time.monotonic()` replaces `ticks_ms`).
 
 `instruments.py` is already ahead of this: every `sleep_ms`, `sleep_us`,
 `ticks_ms` and `ticks_diff` in it is guarded with `hasattr(time, …)` and a
-seconds-based fallback, because the CPython simulator needed it. One block, one
-`hasattr` — or one dialect-scoped pair.
+seconds-based fallback, because the CPython simulator needed it.
+
+**DECIDED (#1041): a per-dialect template**, the same shape §9.7b chose for the
+hardware blocks. #1041 offered three fixes and called the portable
+`time.sleep(0.5)` the smallest — but it costs the idiom, and `sleep_ms` is what
+every MicroPython tutorial writes and what the mirror is meant to show. A second
+block costs a second block, for a difference that is a unit conversion. An
+inlined `hasattr` ternary is a lot of noise in a beginner's program for one
+wait. The template costs none of those: the label still says milliseconds, and
+each board gets the call it actually has.
+
+A **literal** is converted at generation time — `time.sleep(0.5)`, which is what
+a CircuitPython tutorial writes — while a variable or an expression keeps
+`… / 1000`, the only form still correct when the value changes.
 
 ### 9.6 What a CircuitPython file actually converts into (measured)
 
@@ -654,6 +666,59 @@ completions, the modules panel, the packages panel, the status bar, the run
 controls and the firmware flasher all read `status.runtime?.dialect`. The help
 tree already admits the gap: the `blocks-python` article carries
 `scope: 'micropython'`.
+
+### 9.7b DECIDED: one block, two templates (#1040)
+
+#1040 asked the question this section left open — *one block emitting two
+dialects, or two block sets?* — and it is settled: **one block, with a
+per-dialect code template.**
+
+`BlockDefinition` gains an optional `circuitpython: { imports, code }`, and
+`installEmitters` picks it when the generator's dialect says so. The block, its
+message, its fields and its pin dropdown are unchanged; only what it *writes*
+moves.
+
+**Why, in one line:** a learner's program should be a program, not a
+program-for-a-Pico.
+
+That is the property the `.py`-with-a-footer format exists for, and two block
+sets throw it away — a canvas built in a classroom's MicroPython half would
+carry blocks the CircuitPython half cannot reach. With one block it opens, it
+runs, and the mirror next door shows exactly what it generated. The objection
+in the issue — *"a block whose generated code the learner cannot predict"* —
+is answered by the mirror: the code is on screen, beside the block, always.
+
+**The shapes really are different, and the template absorbs it.** `machine.Pin`
+says everything in its constructor; `digitalio.DigitalInOut` is built first and
+told its `direction` after, and its `value` is an attribute rather than a call.
+So `gen.setup()` takes an `after` list — extra lines emitted straight below the
+assignment, with `{NAME}` filled in — and a hoisted object stays *one* object
+with one key that happens to take two lines to make.
+
+**Pin names come off the board profile.** `board.GP15` and `machine.Pin(15)` are
+the same physical hole, and `BlockPin.label` is already the board's own silk
+label — `GP15` on an RP2040, `IO15` on an ESP32-S3, `D13` on a Feather. So
+`circuitPythonPin()` reads the name that is written on the plastic rather than
+imposing a convention.
+
+**Scope is derived, not declared.** A block with a CircuitPython template is
+`both`; one without is `micropython`. Saying it twice would mean one copy could
+drift, and the copy that drifts is the one hiding a working block from the board
+it works on.
+
+**Nine of the twelve.** Servo and buzzer have no CircuitPython *core*
+equivalent — they want `adafruit_motor` and `simpleio`, which are third-party
+libraries and a different promise — so they stay MicroPython and the toolbox
+withholds them. The 17 instrument blocks stay MicroPython too: `instruments.py`
+is telemetry over `print()`, which CircuitPython runs happily, but the sensor
+reads underneath it are `machine`-based and #1038 made those *degrade* rather
+than work. A block that draws an empty oscilloscope is worse than a block the
+board never offered.
+
+**Still open after #1040:** the #1058 round-trip reads MicroPython-shaped
+constructors only, so a CircuitPython program converts back to raw blocks; and
+`blocks-python`'s `scope: 'micropython'` in the help tree stays until the
+article's examples are true on both sides.
 
 ### 9.8 Where the asterisk goes
 

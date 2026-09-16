@@ -3,7 +3,7 @@
 // which of them a learner can actually reach is decided by the registry below,
 // and the ones we don't register appear in no category and no flyout.
 import 'blockly/blocks'
-import { defineBlocks, scoped } from '../registry'
+import { defineBlocks, scoped, scopedByEmitters } from '../registry'
 import { installBlockMessages } from './messages'
 import { installPinField } from '../pin-field'
 import { installColourField } from '../colour-field'
@@ -68,13 +68,22 @@ export function installCorePalette(): void {
   installPythonBlocks()
   defineBlocks([
     ...TURTLE_BLOCKS,
-    // HARDWARE AND INSTRUMENTS ARE MICROPYTHON (#1039, epic #209). Both reach
-    // `machine` — through the `snakie` umbrella and through `instruments.py` —
-    // and neither has a CircuitPython spelling yet (#1040). Scope HIDES them
-    // from the toolbox of a CircuitPython board and leaves them REGISTERED, so
-    // a hardware program written on a Pico still opens, still edits and still
-    // saves when a Feather is plugged in. See `scope` on `BlockDefinition`.
-    ...scoped('micropython', HARDWARE_BLOCKS),
+    // HARDWARE IS SCOPED BY WHAT IT CAN GENERATE (#1039 → #1040). Nine of the
+    // twelve now have a CircuitPython template as well, so their scope is
+    // `both`; servo and buzzer do not, because CircuitPython has no core
+    // equivalent — they want `adafruit_motor` and `simpleio`, which are
+    // third-party libraries and not the same promise. Derived rather than
+    // written down twice, so a block cannot be hidden from a board it works on.
+    //
+    // Scope HIDES, it never deregisters: a hardware program written on a Pico
+    // still opens, still edits and still saves when a Feather is plugged in.
+    ...scopedByEmitters(HARDWARE_BLOCKS),
+    // INSTRUMENTS STAY MICROPYTHON (#1040). `instruments.py` is telemetry over
+    // `print()`, which CircuitPython runs happily — but the sensor reads
+    // underneath it are `machine`-based, and #1038 made those DEGRADE rather
+    // than work. A block that draws an empty oscilloscope is worse than a block
+    // the board never offered.
+    //
     // Derived from `instruments-registry.ts` rather than listed (#1014): an
     // instrument that declares a block gets one, with no edit here.
     ...scoped('micropython', instrumentBlocks()),

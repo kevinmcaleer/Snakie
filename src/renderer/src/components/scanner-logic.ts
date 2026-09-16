@@ -252,3 +252,18 @@ export function sortBtByStrength(list: BluetoothTelemetry[]): BluetoothTelemetry
     .sort((a, b) => b.d.rssi - a.d.rssi || a.i - b.i)
     .map(({ d }) => d)
 }
+
+/**
+ * The addresses out of a scan, whichever scan wrote them (#1067).
+ *
+ * TWO PATHS PRINT THESE, and they do not agree on the spelling: the panel's own
+ * probe writes `%02x` (`76`), and `instruments.py`'s `i2c_scan` — what a
+ * running program calls — writes `0x%02X` (`0x76`). Radix 16 reads both, so
+ * neither has to change and a program's scan lands on the same grid the button
+ * draws.
+ *
+ * Anything that is not a number is dropped rather than lighting cell NaN.
+ */
+export function i2cAddressesFrom(addrs: readonly string[]): number[] {
+  return addrs.map((a) => parseInt(a, 16)).filter((n) => Number.isFinite(n))
+}
