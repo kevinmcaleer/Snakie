@@ -6,6 +6,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **An I²C scan from a program now reaches the I²C Detect instrument** (#1067).
+  Drag the I²C block out, press Run, and the panel opened by itself — then sat
+  there saying *"Pick the bus + pins, then SCAN"* with FOUND 0 while the program
+  scanned. `instruments.py` prints `SNK I2C …` and the telemetry parser has
+  always understood it; **nothing consumed it**. The panel had one scan path —
+  its own button, firing a different sentinel over `device.exec` — so it could
+  only show a scan it had started itself. It now listens to the program too, and
+  draws the result exactly the same way. (The button stays: it is the answer
+  when there is no program. Telemetry carries addresses only, not the pins they
+  were found on, so the pin dropdowns are left alone rather than guessing.)
+
+- **Blocks plugged into a socket no longer look detached.** The roomier-blocks
+  change bumped Blockly's four *in-row* paddings along with everything else, and
+  that is exactly where a plugged-in block's left edge sits — so `if` and the
+  condition socketed into it drew with a visible gap between them, reading as
+  not quite joined. Those four are back at Blockly's own values, checked against
+  a stock `thrasos` render of the same program side by side. The vertical
+  roominess is untouched: the same block still measures 176px tall, and only the
+  horizontal gap came out.
+
 ### Changed
 
 - **Comments are grey, and they are quiet** (#1062). #1062's folding made a

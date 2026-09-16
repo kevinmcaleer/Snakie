@@ -9,6 +9,7 @@ import {
   bestWifi,
   btNameLabel,
   buildI2cGrid,
+  i2cAddressesFrom,
   detectedSet,
   dominantBand,
   formatI2cAddr,
@@ -291,5 +292,30 @@ describe('scanner-logic sort helpers (strongest-first, stable)', () => {
   it('sorts BLE nearest-first, stable for ties', () => {
     const list = [bt('a', '1', -70), bt('b', '2', -45), bt('c', '3', -45)]
     expect(sortBtByStrength(list).map((d) => d.mac)).toEqual(['2', '3', '1'])
+  })
+})
+
+describe('addresses from either scan path (#1067)', () => {
+  it('reads both spellings', () => {
+    // The panel's own probe writes `%02x`; `instruments.py`'s `i2c_scan` — what
+    // a RUNNING PROGRAM calls — writes `0x%02X`. Radix 16 reads both, so a
+    // program's scan lands on the same grid the button draws and neither side
+    // has to change its wire format.
+    expect(i2cAddressesFrom(['76', '3c'])).toEqual([0x76, 0x3c])
+    expect(i2cAddressesFrom(['0x76', '0x3C'])).toEqual([0x76, 0x3c])
+  })
+
+  it('drops anything that is not a number rather than lighting cell NaN', () => {
+    expect(i2cAddressesFrom(['0x76', 'zz', ''])).toEqual([0x76])
+  })
+
+  it('an empty bus is an empty result, not a failure', () => {
+    // `SNK I2C` with no addresses is a scan that found nothing — a real answer.
+    expect(i2cAddressesFrom([])).toEqual([])
+    expect(buildI2cGrid(i2cAddressesFrom([])).found).toEqual([])
+  })
+
+  it('lands on the grid the same way a button scan does', () => {
+    expect(buildI2cGrid(i2cAddressesFrom(['0x76'])).found).toEqual(buildI2cGrid([0x76]).found)
   })
 })

@@ -2,7 +2,14 @@ import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
-import { buildI2cGrid, formatI2cAddr, type I2cGridModel } from './scanner-logic'
+import { useTelemetryStream } from './instrument-telemetry-subscribe'
+import type { Telemetry } from './instrument-telemetry'
+import {
+  buildI2cGrid,
+  formatI2cAddr,
+  i2cAddressesFrom,
+  type I2cGridModel
+} from './scanner-logic'
 import { i2cOptions, i2cBuses, sdaOptions, sclOptions, type I2cOption, type I2cPad } from './i2c-pins'
 import { hexAddr, knownDevicesFor, partsForAddress } from './i2c-known-devices'
 import { addPartsToProject } from './project-parts'
@@ -121,6 +128,49 @@ export function I2cDetectInstrument({
     return () => window.clearInterval(id)
   }, [sweep === null]) // eslint-disable-line react-hooks/exhaustive-deps -- restart only on idle↔sweeping flips
 
+  /**
+   * Put a set of addresses on the grid, from wherever they came.
+   *
+   * Lifted out of the button's handler so the two scan paths render the same
+   * way (#1067): there is no sense in a program's scan looking different from
+   * a button's, and there was every chance of them drifting while they were
+   * two copies.
+   */
+  const showAddresses = useCallback((addrs: readonly number[]): void => {
+    setGrid(buildI2cGrid([...addrs]))
+    setScanSeq((n) => n + 1)
+    // Play the sweep — unless the user prefers reduced motion (show at once).
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+    setSweep(reduce ? null : 0)
+  }, [])
+
+  /**
+   * A SCAN FROM THE RUNNING PROGRAM (#1067).
+   *
+   * `inst.i2c_scan(bus)` prints `SNK I2C <addr> …`, and that has always been
+   * parsed — into nothing. This panel had one scan path, its own button, firing
+   * a different sentinel over `device.exec`; so a learner who dragged out the
+   * I²C block, watched this window open by itself and pressed Run was shown an
+   * empty grid still asking them to pick pins and press SCAN.
+   *
+   * The button stays: it is the answer when there is no program (#218). This is
+   * the answer when there is one.
+   *
+   * The telemetry carries ADDRESSES ONLY, not the pins they were found on, so
+   * the dropdowns above the grid are left alone rather than guessing. The grid
+   * answers "what is on the bus?", which is the question being asked.
+   */
+  useTelemetryStream(
+    useCallback(
+      (reading: Telemetry) => {
+        if (reading.kind !== 'i2c') return
+        setError(null)
+        showAddresses(i2cAddressesFrom(reading.addrs))
+      },
+      [showAddresses]
+    )
+  )
+
   // One-shot scan on the chosen pins (no running program needed).
   const scan = useCallback(async () => {
     if (!connected) return
@@ -132,17 +182,9 @@ export function I2cDetectInstrument({
       const okLine = out.split('\n').find((l) => l.startsWith('SNKI2C '))
       const errLine = out.split('\n').find((l) => l.startsWith('SNKI2CERR '))
       if (okLine) {
-        const addrs = okLine
-          .slice('SNKI2C '.length)
-          .trim()
-          .split(/\s+/)
-          .filter(Boolean)
-          .map((h) => parseInt(h, 16))
-        setGrid(buildI2cGrid(addrs))
-        setScanSeq((n) => n + 1)
-        // Play the sweep — unless the user prefers reduced motion (show at once).
-        const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
-        setSweep(reduce ? null : 0)
+        showAddresses(
+          i2cAddressesFrom(okLine.slice('SNKI2C '.length).trim().split(/\s+/).filter(Boolean))
+        )
       } else {
         setError(errLine ? errLine.slice('SNKI2CERR '.length) : 'Scan failed — check the pins/wiring.')
       }
@@ -151,7 +193,7 @@ export function I2cDetectInstrument({
     } finally {
       setScanning(false)
     }
-  }, [connected, sel])
+  }, [connected, sel, showAddresses])
 
   const found = grid?.found ?? []
   // While the cursor sweeps, FOUND counts up as detected cells are crossed.
