@@ -8,6 +8,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A variable slot is the same size as the slots beside it now.** In
+  `from (modulino) import (ModulinoMotors)` both holes are **fields**, drawn at
+  34px. In `set motors to (ModulinoMotors())` the hole is a whole **value
+  block**, and it was drawn at 48 — the same kind of gap in the same kind of
+  sentence, half again as tall.
+
+  The cause was `TOP_ROW_MIN_HEIGHT`/`BOTTOM_ROW_MIN_HEIGHT`, raised to 8 in the
+  renderer pass on the reasoning that a 12px corner needs somewhere to land.
+  They apply to *every* block's top and bottom row — including a value block
+  sitting in a socket — so the cost was paid somewhere nobody was looking. Back
+  at Zelos's own 4, the value block is 40 against the field's 34, which is just
+  the block's border round its field and reads as the same thing.
+
+  Statement blocks barely notice: they are sized by `MIN_BLOCK_HEIGHT` and their
+  contents, so they go 58 → 56 and the roominess stays.
+
 - **The Python mirror no longer pins an unreadable header when you scroll.**
   Monaco's sticky scroll keeps the enclosing `def`/`class`/`if` at the top of
   the pane, and it could not work here: every editor theme paints
