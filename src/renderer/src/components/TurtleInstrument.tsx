@@ -2,14 +2,16 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import { InstrumentRequirement } from './InstrumentRequirement'
 import { useTelemetryStream } from './instrument-telemetry-subscribe'
-import type { Telemetry } from './instrument-telemetry'
+import type { Telemetry, TurtleTelemetry } from './instrument-telemetry'
 import type { InstrumentDef } from './instruments-registry'
 import {
+  DEFAULT_TURTLE_SPEED,
   formatCoord,
   headingToRadians,
   INITIAL_TURTLE_STATE,
   isTurtleState,
-  reduceTurtle,
+  playTurtleStep,
+  turtleStepMs,
   worldToCanvas,
   type TurtleState
 } from './turtle-logic'
@@ -32,6 +34,16 @@ import './TurtleInstrument.css'
  */
 
 const CLEAR_TITLE = 'Clear the turtle canvas (does not move the turtle)'
+const SPEED_TITLE = 'How fast the drawing is animated — 0 draws it instantly'
+
+/**
+ * How often the playback clock looks for work when there is none (ms).
+ *
+ * The idle case, so it has to be cheap rather than fast: a sixteenth of a
+ * second is imperceptible at the start of a drawing and costs nothing while a
+ * learner sits reading their code.
+ */
+const IDLE_POLL_MS = 60
 
 export function TurtleInstrument({
   def,
@@ -56,16 +68,72 @@ export function TurtleInstrument({
   // updated on the same low-frequency cadence as the canvas repaint).
   const [readout, setReadout] = useState({ x: 0, y: 0, heading: 0, pen: true, segments: 0 })
 
+  // ── WATCHING IT DRAW (#1046) ──────────────────────────────────────────────
+  //
+  // Readings used to be folded into the state the instant they arrived, and a
+  // board emits a square's four sides faster than an eye can follow — so the
+  // picture appeared all at once, finished, with nothing to watch. They queue
+  // here instead, and the effect below drains them at the pace `speed()` asked
+  // for. `turtle-logic.ts` holds the pure half; this holds the clock.
+  const pendingRef = useRef<TurtleTelemetry[]>([])
+  const [speed, setSpeed] = useState(DEFAULT_TURTLE_SPEED)
+  const speedRef = useRef(speed)
+  speedRef.current = speed
+  /**
+   * The learner moved the slider, so the program stops overriding it.
+   *
+   * Without this, a program that calls `speed()` in a loop would drag the
+   * slider back out from under their hand every pass.
+   */
+  const ownSpeedRef = useRef(false)
+
   const onReading = useCallback(
     (reading: Telemetry) => {
       if (reading.kind !== 'turtle') return
       if (!started) setStarted(true)
-      stateRef.current = reduceTurtle(stateRef.current, reading)
-      dirty.current = true
+      // Queued rather than applied, INCLUDING the speed: a program that says
+      // `speed(1); forward(50); speed(10); forward(50)` means the first move
+      // slowly and the second fast, and applying the speed on arrival would
+      // play both at whatever it ended on.
+      pendingRef.current.push(reading)
     },
     [started]
   )
   useTelemetryStream(onReading)
+
+  // The playback clock. One movement per tick, waiting `turtleStepMs(speed)`
+  // between them; instantaneous readings ride along with the next movement so
+  // a `penup()`/`pendown()` pair never looks like a hang.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let stopped = false
+    const tick = (): void => {
+      if (stopped) return
+      const queued = pendingRef.current
+      if (queued.length === 0) {
+        // Nothing to play. Look again soon — this is the idle case, and it has
+        // to be cheap rather than fast.
+        timer = setTimeout(tick, IDLE_POLL_MS)
+        return
+      }
+      pendingRef.current = []
+      const frame = playTurtleStep(stateRef.current, queued, speedRef.current)
+      stateRef.current = frame.state
+      dirty.current = true
+      // Put the remainder back IN FRONT of anything that arrived while we were
+      // working, or a fast-drawing program would play out of order.
+      if (frame.rest.length > 0) pendingRef.current = [...frame.rest, ...pendingRef.current]
+      // A `speed` reading in that frame is the program talking, so it moves the
+      // slider — unless the learner has taken the slider over.
+      if (frame.speed !== speedRef.current && !ownSpeedRef.current) setSpeed(frame.speed)
+      timer = setTimeout(tick, frame.waitMs > 0 ? frame.waitMs : IDLE_POLL_MS)
+    }
+    tick()
+    return () => {
+      stopped = true
+      if (timer) clearTimeout(timer)
+    }
+  }, [])
 
   // Restore the last-drawn picture on mount (issue: undocking/redocking used to
   // remount a fresh component with an empty canvas, losing everything drawn so
@@ -256,6 +324,29 @@ export function TurtleInstrument({
             </div>
             <div className="turtle__footer">
               <span className="turtle__status">{readout.segments} segments</span>
+              {/* The pace, as a thing you can reach for. A learner watching a
+                  drawing go past too fast should not have to edit their
+                  program and run it again to slow it down — and a teacher
+                  demonstrating wants it slower than anyone writing it does. */}
+              <label className="turtle__speed" title={SPEED_TITLE}>
+                <span className="turtle__speed-lbl">SPEED</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={10}
+                  step={1}
+                  value={speed}
+                  onChange={(e) => {
+                    ownSpeedRef.current = true
+                    setSpeed(Number(e.target.value))
+                  }}
+                  className="turtle__speed-range"
+                  aria-label={SPEED_TITLE}
+                />
+                <span className="turtle__speed-val">
+                  {speed === 0 ? 'INSTANT' : `${(turtleStepMs(speed) / 1000).toFixed(1)}s`}
+                </span>
+              </label>
               <button
                 type="button"
                 className="turtle__clear"

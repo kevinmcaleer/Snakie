@@ -184,6 +184,14 @@ class VisibilityOutput(FreshTurtle):
 
 
 class SpeedGetSet(FreshTurtle):
+    """`speed()` is TELEMETRY now (#1046).
+
+    It used to store the value and print nothing, so the IDE's Turtle
+    instrument had no idea what pace had been asked for and drew every segment
+    the instant it arrived — which made the `set speed to N` block a call that
+    did nothing at all, on any board.
+    """
+
     def test_default_speed(self):
         self.assertEqual(self.t.speed(), 6)
 
@@ -191,8 +199,52 @@ class SpeedGetSet(FreshTurtle):
         self.t.speed(1)
         self.assertEqual(self.t.speed(), 1)
 
-    def test_speed_emits_no_telemetry(self):
-        self.assertEqual(_emit(self.t.speed, 3), [])
+    def test_setting_the_speed_announces_it(self):
+        # THE FIX: this used to assert the opposite — that nothing was emitted.
+        self.assertEqual(_emit(self.t.speed, 3), ["SNK TURT SPEED 3"])
+
+    def test_reading_the_speed_says_nothing(self):
+        # The getter is a question, not a change; announcing on it would put a
+        # line on the wire every time a program checked its own pace.
+        self.t.speed(4)
+        self.assertEqual(_emit(self.t.speed), [])
+
+    def test_cpython_turtle_speed_names(self):
+        # The docstring has always invited `speed("fast")`; it used to store the
+        # STRING, which would have put `SNK TURT SPEED fast` on the wire.
+        for name, expected in [
+            ("fastest", 0),
+            ("fast", 10),
+            ("normal", 6),
+            ("slow", 3),
+            ("slowest", 1),
+            ("FAST", 10),
+            ("  slow  ", 3),
+        ]:
+            self.t.speed(name)
+            self.assertEqual(self.t.speed(), expected, name)
+
+    def test_out_of_range_is_clamped(self):
+        self.t.speed(99)
+        self.assertEqual(self.t.speed(), 10)
+        self.t.speed(-4)
+        self.assertEqual(self.t.speed(), 0)
+
+    def test_nonsense_falls_back_to_the_default(self):
+        # A turtle that raises because somebody typed a word is worse than a
+        # turtle that draws at a normal pace.
+        self.t.speed("banana")
+        self.assertEqual(self.t.speed(), 6)
+        self.t.speed(None)  # the GETTER path — must not change anything
+        self.assertEqual(self.t.speed(), 6)
+
+    def test_the_line_is_always_an_integer(self):
+        # Whatever went in, what goes out is parseable by the IDE.
+        for value in ["fast", 3.7, True, 99]:
+            emitted = _emit(self.t.speed, value)
+            self.assertEqual(len(emitted), 1, value)
+            token = emitted[0].split()[-1]
+            self.assertTrue(token.lstrip("-").isdigit(), emitted[0])
 
 
 class ModuleLevelApi(unittest.TestCase):

@@ -8,6 +8,49 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Watch the turtle draw** (#1046). The Turtle instrument drew every segment
+  the instant its telemetry arrived, so a square appeared finished with nothing
+  to watch — for an instrument whose whole point is *seeing* the program move,
+  that lost most of the value.
+
+  **`speed()` was doing nothing at all.** `micropython/turtle.py` stored
+  `self._speed` and printed nothing; the `SNK TURT` protocol had no speed line
+  and `turtle-logic.ts` had no notion of one. So `set speed to 3` was a call
+  with no effect, on any board, despite the docstring saying the IDE used it to
+  pace the animation. It also stored its argument verbatim, so the
+  `speed("fast")` the docstring invites left a *string* where a number belonged.
+
+  Now the speed is telemetry (`SNK TURT SPEED <0..10>`, normalised on the board,
+  CPython `turtle`'s `"fast"`/`"slow"` names included), and the instrument
+  queues readings and plays them at the pace asked for. **One second per
+  movement at the default speed**, which is 6 — with a halving curve either
+  side, so the dial spans something worth spanning: `1 → 5.7s`, `4 → 2s`,
+  `6 → 1s`, `8 → 0.5s`, `10 → 0.25s`. `0` draws instantly, matching CPython
+  `turtle`'s `"fastest"`.
+
+  **A speed slider on the instrument**, because a learner watching a drawing go
+  past too fast should not have to edit their program and run it again, and a
+  teacher demonstrating wants it slower than whoever wrote it did. Moving it
+  takes the pace over from the program, so a `speed()` call inside a loop cannot
+  drag it back out from under their hand.
+
+  Two details that decide whether it feels right: only *movement* costs time —
+  pen, visibility and clear ride along with the next one, so a
+  `penup()`/`pendown()` pair never looks like a hang — and a drawn stroke plus
+  the position it ended at count as **one** movement, because a pen-down
+  `forward()` prints both and counting them separately made a square take twice
+  as long as it was asked to. Past a 60-movement backlog the excess is applied
+  at once and only the tail is animated, so a 500-segment spirograph appears
+  rather than taking eight minutes to arrive — and nothing is ever dropped,
+  only un-watched.
+
+  Animated in the IDE rather than slept on the device on purpose: sleeping
+  would slow the learner's *program* down, would do nothing for a drawing
+  already on screen, and would need a library update on every board.
+  `turtle.py` is `0.3.0`, so the IDE offers boards the update anyway.
+
+### Added
+
 - **The canvas stops flinching while you type** (#1036 + #1037, epic #1007).
   Two halves of the same complaint, left open by #1034.
 

@@ -20,7 +20,10 @@ const LIB = join(__dirname, '..', 'micropython', 'turtle.py')
 const SHA_BY_VERSION: Record<string, string> = {
   '0.1.0': '4fcc2e370ea8206478259be8a866bf7e3246b7a33d30440cba4d7db6f1b4644b',
   '0.1.1': '048b1092c6b45284b2958aaa9d2e928faead81ca7ec39500ef990dd0f05d6a4d',
-  '0.2.0': '83901fa7644cc006496b743a8a4c98ec029a0c8a220759b92e852ba9e38fc44c'
+  '0.2.0': '83901fa7644cc006496b743a8a4c98ec029a0c8a220759b92e852ba9e38fc44c',
+  // #1046: `speed()` became telemetry — it used to be stored and never sent, so
+  // the instrument had no idea what pace had been asked for.
+  '0.3.0': 'ea4f968a0b8e94b7edf6780b25c6d1e02fc63b8774fff06aa87be95f8ed5466c'
 }
 
 describe('turtle.py version discipline', () => {

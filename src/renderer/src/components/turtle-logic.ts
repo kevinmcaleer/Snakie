@@ -179,3 +179,165 @@ export function isTurtleState(v: unknown): v is TurtleState {
     s.segments.every(isSegment)
   )
 }
+
+// ---------------------------------------------------------------------------
+// PLAYBACK — watching it draw (#1046)
+// ---------------------------------------------------------------------------
+//
+// `reduceTurtle` folds each reading in the instant it arrives, and a board
+// emits a square's four sides faster than an eye can follow — so the picture
+// appeared all at once, finished, with nothing to watch. `speed()` was supposed
+// to pace it and never reached the IDE at all.
+//
+// So readings QUEUE, and a timer drains them at the pace the speed asks for.
+// The functions below are the pure half of that: how long one movement takes,
+// and how much backlog is worth animating. The timer itself lives in the
+// component, because only it has a clock.
+
+/**
+ * The speed a turtle starts at, matching `micropython/turtle.py`'s `_speed`.
+ *
+ * Six rather than five, which is also CPython `turtle`'s `"normal"`.
+ */
+export const DEFAULT_TURTLE_SPEED = 6
+
+/** How long ONE movement takes at {@link DEFAULT_TURTLE_SPEED} (ms). */
+export const TURTLE_STEP_MS_AT_DEFAULT = 1000
+
+/**
+ * How long one movement takes, in ms, at `speed`.
+ *
+ * A HALVING CURVE: every two steps up doubles the pace, so the dial spans
+ * something worth spanning rather than the narrow band a linear mapping gives.
+ * Anchored so the DEFAULT is exactly one second, which is the pace a class can
+ * actually follow a square at:
+ *
+ *   1 → 5657ms   2 → 4000ms   4 → 2000ms   6 → 1000ms   8 → 500ms   10 → 250ms
+ *
+ * `0` is CPython `turtle`'s "fastest", which means **no animation at all** —
+ * the escape hatch for a drawing too long to sit through.
+ */
+export function turtleStepMs(speed: number): number {
+  if (!Number.isFinite(speed)) return TURTLE_STEP_MS_AT_DEFAULT
+  const clamped = Math.max(0, Math.min(10, Math.round(speed)))
+  if (clamped === 0) return 0
+  return TURTLE_STEP_MS_AT_DEFAULT * Math.pow(2, (DEFAULT_TURTLE_SPEED - clamped) / 2)
+}
+
+/**
+ * The most movements worth holding back to animate.
+ *
+ * A spirograph is five hundred segments, and five hundred seconds is eight
+ * minutes of watching a picture that finished drawing long ago. Past this many
+ * queued movements the excess is applied AT ONCE and only the tail is animated
+ * — so a big drawing appears, and you still see the last of it being drawn.
+ *
+ * Chosen for the shape of the thing being taught: a square is 4, a polygon
+ * lesson is tens, and anything in the hundreds is a pattern nobody was going to
+ * watch stroke by stroke anyway.
+ */
+export const TURTLE_BACKLOG_CAP = 60
+
+/**
+ * Split a pending queue into "apply now, silently" and "animate".
+ *
+ * Pure so the cap is a tested number rather than something you discover by
+ * running a spirograph. Under the cap nothing is skipped, which is the case
+ * every lesson is in.
+ */
+export function splitBacklog<T>(
+  pending: readonly T[],
+  cap: number = TURTLE_BACKLOG_CAP
+): { drain: readonly T[]; animate: readonly T[] } {
+  if (pending.length <= cap) return { drain: [], animate: pending }
+  return { drain: pending.slice(0, pending.length - cap), animate: pending.slice(-cap) }
+}
+
+/**
+ * Does this reading take TIME to play, or is it instantaneous?
+ *
+ * Only movement is worth watching. Putting the pen down, hiding the turtle and
+ * setting the speed are bookkeeping — pausing a second on each would make a
+ * `penup()`/`pendown()` pair feel like the program had hung.
+ *
+ * ONE CALL IS NOT ALWAYS ONE READING, which is the subtlety here. A pen-down
+ * `forward()` prints a `LINE` **and then** a `POS` — the stroke, and where the
+ * turtle ended up. They are one movement, and counting them as two made a
+ * square take twice as long as it was asked to. `pendingPos` below is how the
+ * caller collapses them; a `POS` on its own is still a movement, because that
+ * is what `right()` and a pen-up `forward()` emit.
+ */
+export function isTurtleMovement(reading: TurtleTelemetry): boolean {
+  return reading.event === 'line' || reading.event === 'pos'
+}
+
+/** What one playback tick did, and how long to wait before the next. */
+export interface TurtleFrame {
+  state: TurtleState
+  /** Readings still queued. */
+  rest: readonly TurtleTelemetry[]
+  /** The pace in force after this tick — a `speed` reading can change it. */
+  speed: number
+  /** How long to wait before the next tick (ms). Zero means "immediately". */
+  waitMs: number
+}
+
+/**
+ * Play ONE step of the queue.
+ *
+ * Instantaneous readings — pen, visibility, clear, speed — are applied without
+ * costing time, up to and including the next movement, which is the one thing
+ * worth watching. So `penup(); forward(50); pendown()` is one wait, not three,
+ * and a program that only changes colours never appears to hang.
+ *
+ * The backlog cap is applied first: past `cap` queued readings the excess is
+ * folded in silently and only the tail is animated, so a five-hundred-segment
+ * spirograph appears rather than taking eight minutes to arrive. Under the cap
+ * — which is every lesson this was built for — nothing is skipped.
+ *
+ * Speed 0 drains everything at once, CPython `turtle`'s "fastest".
+ *
+ * Pure, so "does a big drawing still finish" is a test.
+ */
+export function playTurtleStep(
+  state: TurtleState,
+  pending: readonly TurtleTelemetry[],
+  speed: number,
+  cap: number = TURTLE_BACKLOG_CAP
+): TurtleFrame {
+  let next = state
+  let pace = speed
+  const apply = (reading: TurtleTelemetry): void => {
+    if (reading.event === 'speed') pace = reading.speed
+    else next = reduceTurtle(next, reading)
+  }
+
+  if (pending.length === 0) return { state: next, rest: [], speed: pace, waitMs: 0 }
+
+  const { drain, animate } = splitBacklog(pending, cap)
+  for (const reading of drain) apply(reading)
+
+  // No animation asked for: everything, now.
+  if (turtleStepMs(pace) === 0) {
+    for (const reading of animate) apply(reading)
+    return { state: next, rest: [], speed: pace, waitMs: 0 }
+  }
+
+  let i = 0
+  while (i < animate.length) {
+    const reading = animate[i]
+    i += 1
+    const movement = isTurtleMovement(reading)
+    apply(reading)
+    if (!movement) continue
+    // A drawn stroke is followed by the position it ended at — the same
+    // movement, reported twice. Take both, or every pen-down `forward()` costs
+    // two waits and a square draws at half the speed it was asked for.
+    if (reading.event === 'line' && animate[i]?.event === 'pos') {
+      apply(animate[i])
+      i += 1
+    }
+    break
+  }
+  return { state: next, rest: animate.slice(i), speed: pace, waitMs: turtleStepMs(pace) }
+}

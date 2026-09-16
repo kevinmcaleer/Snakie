@@ -31,6 +31,7 @@
  *   SNK TURT  PEN <0|1>                       → turtle pen up(0)/down(1)
  *   SNK TURT  VIS <0|1>                       → turtle sprite hidden(0)/shown(1)
  *   SNK TURT  CLEAR                           → wipe the turtle canvas
+ *   SNK TURT  SPEED <0..10>                   → how fast the instrument animates
  *
  * `<ch>` is a user label (e.g. `pwm`, `adc0`, a variable name) used to match a
  * reading to an open instrument.
@@ -246,6 +247,7 @@ export type TurtleTelemetry =
   | { kind: 'turtle'; event: 'pen'; down: boolean }
   | { kind: 'turtle'; event: 'vis'; visible: boolean }
   | { kind: 'turtle'; event: 'clear' }
+  | { kind: 'turtle'; event: 'speed'; speed: number }
 
 export type Telemetry =
   | ScopeTelemetry
@@ -500,6 +502,7 @@ export function parseTelemetry(line: string): Telemetry | null {
     // SNK TURT PEN <0|1>
     // SNK TURT VIS <0|1>
     // SNK TURT CLEAR
+    // SNK TURT SPEED <0..10>
     const event = parts[2]
     if (event === 'POS') {
       const x = Number(parts[3])
@@ -530,6 +533,14 @@ export function parseTelemetry(line: string): Telemetry | null {
     }
     if (event === 'CLEAR') {
       return { kind: 'turtle', event: 'clear' }
+    }
+    if (event === 'SPEED') {
+      const speed = Number(parts[3])
+      // The board clamps to 0..10 before sending; clamped again here because a
+      // reading is untrusted input and a negative delay would be a frozen
+      // instrument rather than a fast one.
+      if (!Number.isFinite(speed)) return null
+      return { kind: 'turtle', event: 'speed', speed: Math.max(0, Math.min(10, Math.round(speed))) }
     }
     return null
   }
