@@ -5,8 +5,10 @@ import {
   LAYOUT_STORAGE_KEY,
   appliedHorizontal,
   coerceWorkspaceId,
+  defaultBlocksViewMode,
   defaultLayoutState,
   loadLayoutState,
+  pressingActiveSegment,
   ratioShowsOnePane,
   recordedHorizontal,
   resolveSwitchTarget,
@@ -487,5 +489,38 @@ describe('the dot and the remembered ratio (#1053)', () => {
     expect(ratioShowsOnePane(undefined)).toBe(true)
     expect(ratioShowsOnePane([50])).toBe(true)
     expect(ratioShowsOnePane([Number.NaN, 50])).toBe(true)
+  })
+})
+
+describe('pressing a segment that is already active (#1060)', () => {
+  it('closes the split when the dot is lit', () => {
+    // THE BUG: in the split, `active` is already Blocks (or Code), so pressing
+    // that segment fell through to the re-click no-op and the view never
+    // changed — while pressing the DOT did, which is exactly backwards.
+    expect(pressingActiveSegment('blocks', true)).toBe('close-split')
+    expect(pressingActiveSegment('code', true)).toBe('close-split')
+  })
+
+  it('still means "exit focus mode" when the dot is out', () => {
+    expect(pressingActiveSegment('blocks', false)).toBe('exit-focus')
+    expect(pressingActiveSegment('code', false)).toBe('exit-focus')
+  })
+
+  it('never closes a split on a workspace that has none', () => {
+    // Electronics and Build are whole workspaces; the dot is not theirs to
+    // clear, and clearing it here would change the view they switch back to.
+    expect(pressingActiveSegment('board', true)).toBe('exit-focus')
+    expect(pressingActiveSegment('robot', true)).toBe('exit-focus')
+  })
+})
+
+describe('what each segment lands on (#1060)', () => {
+  it('Blocks means blocks, the dot means split, Code means code', () => {
+    // The three positions the issue asks for, read off the same rule the view
+    // uses. `both` is what the dot sets.
+    expect(defaultBlocksViewMode('blocks', false)).toBe('blocks')
+    expect(defaultBlocksViewMode('blocks', true)).toBe('split')
+    expect(defaultBlocksViewMode('code', true)).toBe('split')
+    expect(defaultBlocksViewMode('code', false)).toBe('python')
   })
 })

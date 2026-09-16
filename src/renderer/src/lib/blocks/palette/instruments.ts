@@ -4,8 +4,7 @@ import type { MicroPythonGenerator } from '../generator'
 import type { BlockDefinition } from '../registry'
 import { toPythonIdentifier } from '../names'
 import { pyString } from '../py'
-import { adc, pinField, pinOf, pwm } from './hardware'
-import { i2cBlockForPins } from '../../../components/display-logic'
+import { adc, i2c, pinField, pinOf, pwm } from './hardware'
 import {
   INSTRUMENTS,
   type InstrumentBlockArg,
@@ -268,7 +267,7 @@ const HARDWARE_INSTRUMENT_BLOCKS: BlockDefinition[] = [
         "List everything plugged into the I²C wires. This one pauses for a moment — don't put it in a fast loop."
     },
     imports: [{ module: 'machine', name: 'I2C' }, { module: 'snakie', name: 'Pin' }, ...NEEDS_INST],
-    code: (block, gen) => `${INST}.i2c_scan(${i2cBus(gen, block)})\n`
+    code: (block, gen) => `${INST}.i2c_scan(${i2c(gen, block)})\n`
   },
   {
     type: 'snakie_inst_gamepad_axis',
@@ -305,28 +304,6 @@ const HARDWARE_INSTRUMENT_BLOCKS: BlockDefinition[] = [
     }
   }
 ]
-
-/**
- * The I²C bus a SDA/SCL pair selects, hoisted into the setup section.
- *
- * The RP2040 muxes its two I²C blocks onto fixed pin sets, so the bus NUMBER is
- * decided by the pins — `i2cBlockForPins` is the same table `instruments.py`
- * and the Display panel already use, rather than a third copy of it. An invalid
- * pair falls back to bus 0 and leaves the pin-conflict pass to say so, because
- * refusing to generate would leave a learner with a block that silently does
- * nothing.
- */
-function i2cBus(gen: MicroPythonGenerator, block: Blockly.Block): string {
-  const sda = pinOf(block, 'SDA')
-  const scl = pinOf(block, 'SCL')
-  const bus = i2cBlockForPins(Number(sda), Number(scl)) ?? 0
-  return gen.setup(
-    `i2c:${bus}:${sda}:${scl}`,
-    `i2c_${bus}`,
-    `I2C(${bus}, sda=Pin(${sda}), scl=Pin(${scl}))`,
-    block
-  )
-}
 
 /** Everything the Instruments category holds. */
 export function instrumentBlocks(): BlockDefinition[] {

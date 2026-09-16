@@ -3,6 +3,7 @@ import type { MicroPythonGenerator } from '../generator'
 import type { BlockDefinition } from '../registry'
 import { FIELD_PIN_TYPE } from '../pin-field'
 import { onboardLedToken } from '../board-pins'
+import { i2cBlockForPins } from '../../../components/display-logic'
 import type * as Blockly from 'blockly/core'
 
 /**
@@ -400,6 +401,60 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
       { module: 'snakie', name: 'Pin' }
     ],
     code: (block, gen) => `${buzzer(gen, pinOf(block), block)}.stop()\n`
+  },
+
+  // ----------------------------------------------------------------- I2C bus
+  // WHY THESE ARE HERE AND NOT IN INSTRUMENTS (#1057). There is an
+  // `snakie_inst_i2c_scan` already, and it is a different thing: it feeds the
+  // I²C Detect panel. These hand the learner the ANSWER — the addresses, as a
+  // list, and the one question they actually ask of a bus, which is "is my
+  // sensor plugged in?". Before this, `i2c = I2C(Pin(0), Pin(1))` and
+  // `i2c.scan()` had no block at all and came back from #1019 as two raw
+  // Python blocks: readable, unbuildable.
+  {
+    type: 'snakie_i2c_scan',
+    category: 'hardware',
+    help: 'ref-pins',
+    json: {
+      message0: 'the I²C devices on SDA %1 SCL %2',
+      args0: [pinField('SDA', 'i2c', 4), pinField('SCL', 'i2c', 5)],
+      inputsInline: true,
+      output: 'Array',
+      tooltip:
+        'The addresses of everything plugged into the I²C wires, as a list. This one pauses for a moment — don’t put it in a fast loop.'
+    },
+    imports: [
+      { module: 'machine', name: 'I2C' },
+      { module: 'snakie', name: 'Pin' }
+    ],
+    code: (block, gen) => [`${i2c(gen, block)}.scan()`, Order.FUNCTION_CALL]
+  },
+  {
+    type: 'snakie_i2c_present',
+    category: 'hardware',
+    help: 'ref-pins',
+    json: {
+      message0: 'is there a device at address %1 on SDA %2 SCL %3',
+      args0: [
+        { type: 'field_input', name: 'ADDR', text: '0x76' },
+        pinField('SDA', 'i2c', 4),
+        pinField('SCL', 'i2c', 5)
+      ],
+      inputsInline: true,
+      output: 'Boolean',
+      tooltip:
+        'True when something answers at that address. The question a wiring problem actually asks — put it in an if.'
+    },
+    imports: [
+      { module: 'machine', name: 'I2C' },
+      { module: 'snakie', name: 'Pin' }
+    ],
+    // `in`, not `== scan()[0]`: a bus with two devices on it must still find
+    // the one being asked about, whichever order it came back in.
+    code: (block, gen) => [
+      `${i2cAddress(block)} in ${i2c(gen, block)}.scan()`,
+      Order.RELATIONAL
+    ]
   }
 ]
 
@@ -445,6 +500,50 @@ export function adc(gen: MicroPythonGenerator, pin: string, block: Blockly.Block
 /** `pwm_15 = PWM(Pin(15))`. Exported for #1014's `read_pwm`, as `adc` above. */
 export function pwm(gen: MicroPythonGenerator, pin: string, block: Blockly.Block): string {
   return gen.setup(`pwm:${pin}`, `pwm_${pin}`, `PWM(Pin(${pin}))`, block)
+}
+
+/**
+ * `i2c_0 = I2C(0, sda=Pin(4), scl=Pin(5))` — the bus a SDA/SCL pair selects.
+ *
+ * The RP2040 muxes its two I²C blocks onto fixed pin sets, so the bus NUMBER is
+ * decided by the pins: `i2cBlockForPins` is the same table `instruments.py` and
+ * the Display panel already use, rather than a third copy of it. An invalid
+ * pair falls back to bus 0 and leaves the pin-conflict pass to say so, because
+ * refusing to generate would leave a learner holding a block that silently does
+ * nothing.
+ *
+ * WRITTEN EXACTLY LIKE THIS ON PURPOSE. `parse-pins.ts` matches
+ * `I2C(id, sda=Pin(a), scl=Pin(b))` to light the Board View's SDA/SCL badges —
+ * so the spelling is what makes these HARDWARE blocks rather than calls. The
+ * same reason `Servo` is written `Servo(PWM(Pin(0)), pin=0)` above.
+ *
+ * Exported for #1014's `i2c_scan`, which used to keep its own copy of this.
+ */
+export function i2c(gen: MicroPythonGenerator, block: Blockly.Block): string {
+  const sda = pinOf(block, 'SDA')
+  const scl = pinOf(block, 'SCL')
+  const bus = i2cBlockForPins(Number(sda), Number(scl)) ?? 0
+  return gen.setup(
+    `i2c:${bus}:${sda}:${scl}`,
+    `i2c_${bus}`,
+    `I2C(${bus}, sda=Pin(${sda}), scl=Pin(${scl}))`,
+    block
+  )
+}
+
+/**
+ * The address field, as the generated code should write it.
+ *
+ * I²C addresses are quoted in hex everywhere a datasheet, a tutorial or a
+ * `i2cdetect` dump shows them, so the field holds `0x76` and the code says
+ * `0x76` — a learner comparing the block to the sensor's page should see the
+ * same characters. Anything that is not a number at all falls back to 0, which
+ * matches nothing and is visibly wrong, rather than generating a syntax error
+ * into their program.
+ */
+export function i2cAddress(block: Blockly.Block): string {
+  const raw = String(block.getFieldValue('ADDR') ?? '').trim()
+  return /^(0[xX][0-9a-fA-F]+|\d+)$/.test(raw) ? raw : '0'
 }
 
 /** `buzzer_16 = Buzzer(PWM(Pin(16)))`. */

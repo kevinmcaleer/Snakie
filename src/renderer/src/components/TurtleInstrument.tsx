@@ -11,7 +11,10 @@ import {
   INITIAL_TURTLE_STATE,
   isTurtleState,
   playTurtleStep,
-  turtleStepMs,
+  TURTLE_SLIDER_MAX,
+  turtleSliderForSpeed,
+  turtleSpeedForSlider,
+  turtleSpeedLabel,
   worldToCanvas,
   type TurtleState
 } from './turtle-logic'
@@ -34,7 +37,7 @@ import './TurtleInstrument.css'
  */
 
 const CLEAR_TITLE = 'Clear the turtle canvas (does not move the turtle)'
-const SPEED_TITLE = 'How fast the drawing is animated — 0 draws it instantly'
+const SPEED_TITLE = 'How fast the drawing is animated — all the way right draws it instantly'
 
 /**
  * How often the playback clock looks for work when there is none (ms).
@@ -330,22 +333,25 @@ export function TurtleInstrument({
                   demonstrating wants it slower than anyone writing it does. */}
               <label className="turtle__speed" title={SPEED_TITLE}>
                 <span className="turtle__speed-lbl">SPEED</span>
+                {/* THE SLIDER HAS ITS OWN SCALE (#1059). `speed(0)` means
+                    "instant", so a slider bound straight to the API value put
+                    the one setting that skips the animation at the far LEFT,
+                    below the slowest. Left to right is slow to fast, and
+                    instant is the end of that journey. */}
                 <input
                   type="range"
                   min={0}
-                  max={10}
+                  max={TURTLE_SLIDER_MAX}
                   step={1}
-                  value={speed}
+                  value={turtleSliderForSpeed(speed)}
                   onChange={(e) => {
                     ownSpeedRef.current = true
-                    setSpeed(Number(e.target.value))
+                    setSpeed(turtleSpeedForSlider(Number(e.target.value)))
                   }}
                   className="turtle__speed-range"
                   aria-label={SPEED_TITLE}
                 />
-                <span className="turtle__speed-val">
-                  {speed === 0 ? 'INSTANT' : `${(turtleStepMs(speed) / 1000).toFixed(1)}s`}
-                </span>
+                <span className="turtle__speed-val">{turtleSpeedLabel(speed)}</span>
               </label>
               <button
                 type="button"

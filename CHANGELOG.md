@@ -6,6 +6,52 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **An I²C bus, as a block** (#1057, epic #1007). Wiring an I²C sensor is one of
+  the first things anyone does on a Pico, and there was no block for it — not
+  I²C, not SPI. So `i2c = I2C(Pin(0), Pin(1))` and `print(i2c.scan())` came back
+  from the Python converter as two raw-Python blocks: a program you could read
+  and could not build.
+
+  **Hardware** now has *"the I²C devices on SDA / SCL"*, handing back the
+  addresses as a list, and *"is there a device at address … on SDA / SCL"*,
+  which is the question a wiring problem actually asks and drops straight into
+  an `if`. Both write the bus as `I2C(0, sda=Pin(4), scl=Pin(5))` — the spelling
+  `parse-pins.ts` matches — so the Board View lights the SDA and SCL badges, and
+  two blocks on one pair share one bus object rather than re-configuring the
+  pins. The bus number comes from the same pin-mux table the Display panel uses.
+
+### Fixed
+
+- **Pressing Blocks in the split view now shows blocks** (#1060). The dot (#1053)
+  made the switcher three-position across Blocks and Code, but in the split the
+  active workspace is *already* one of them — so pressing that segment fell into
+  the old "you re-clicked the current tab" no-op and nothing happened, while
+  pressing the dot worked. The switcher was offering a button that visibly could
+  not do what it said. All three positions now mean what they look like: Blocks
+  is blocks, the dot is both, Code is code — from either side.
+
+### Changed
+
+- **The turtle speed dial is a second to a tenth of a second, with instant at
+  the fast end** (#1059). Two things were wrong with it. It started at 5.7
+  seconds a movement, which is not a pace anyone watches, so the slow third of
+  the dial was unusable. And `speed(0)` means "instant" in the `turtle` API, so
+  a slider bound straight to that value sorted 0 to the far **left** — the
+  control read *instant, slowest, …, fastest*, with the one setting that skips
+  the animation parked at the slow end.
+
+  The dial now has its own scale, left to right, slow to fast: one second, down
+  a geometric curve to a tenth of a second, then instant. The readout says
+  milliseconds under a second, so the fast half no longer reads as four
+  identical `0.3s` settings. `turtle.speed()` itself is untouched — the
+  generated Python still says `turtle.speed(6)`.
+
+  **Note this moves the default.** `6` is still CPython `turtle`'s "normal" and
+  still what `turtle.py` starts at, but on the compressed scale that is 278ms a
+  movement rather than the second it used to be.
+
 ### Changed
 
 - **Rounder, roomier blocks.** Blockly's stock geometry is drawn for an adult
