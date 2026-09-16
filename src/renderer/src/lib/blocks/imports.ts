@@ -121,15 +121,36 @@ const GROUP_ORDER: ImportGroup[] = ['stdlib', 'machine', 'snakie', 'driver']
  */
 export class ImportManager {
   /** `module` → the names from-imported from it (empty = plain `import`) + its alias. */
-  private readonly wanted = new Map<string, { names: Set<string>; alias?: string }>()
+  private readonly wanted = new Map<
+    string,
+    { names: Set<string>; plain?: boolean; alias?: string; blockId?: string }
+  >()
 
-  /** Declare a need. Calling it twice with the same thing is the normal case. */
-  need(imp: PyImport): void {
+  /**
+   * Declare a need.
+   *
+   * `blockId` is optional and almost always absent: a palette block's imports
+   * are a consequence of what it generates, not a thing the learner wrote, and
+   * attributing `from snakie import Led` to whichever LED block emitted first
+   * would put a highlight on a line nobody chose. The IMPORT BLOCK (#1018) is
+   * the exception — its whole visible effect is that line, so it says so, and
+   * #1016's hover has something to light up.
+   */
+  need(imp: PyImport, blockId?: string): void {
     const entry = this.wanted.get(imp.module) ?? { names: new Set<string>() }
     if (imp.name) entry.names.add(imp.name)
+    // A NAMELESS need is a plain `import x`, and it is recorded separately from
+    // "nobody asked for a name yet" (#1018). A learner can legitimately write
+    // both `import machine` and `from machine import Pin`, and collapsing them
+    // to the from-form alone would leave every `machine.` in their program
+    // undefined — a NameError a long way from the block that caused it.
+    else entry.plain = true
     // First alias wins, so the section can't change shape depending on which
     // block happened to emit first.
     if (imp.alias && !entry.alias) entry.alias = imp.alias
+    // First claimant wins, for the same reason: a `from x import a, b` line two
+    // blocks both asked for belongs to whichever asked first, deterministically.
+    if (blockId && !entry.blockId) entry.blockId = blockId
     this.wanted.set(imp.module, entry)
   }
 
@@ -153,33 +174,53 @@ export class ImportManager {
    */
   boundNames(): Set<string> {
     const out = new Set<string>()
-    for (const [module, { names, alias }] of this.wanted) {
+    for (const [module, { names, plain, alias }] of this.wanted) {
       // The ALIAS is what lands in the namespace, so it is what a learner's own
       // variable must not be allowed to shadow — `inst = 3` above a loop calling
       // `inst.scope(...)` is the failure this prevents.
-      if (names.size === 0) out.add(alias ?? module.split('.')[0])
+      if (plain) out.add(alias ?? module.split('.')[0])
       for (const n of names) out.add(n)
     }
     return out
   }
 
-  /** The import section: grouped, sorted, blank-line separated. No trailing newline. */
-  render(): string {
+  /**
+   * The import section: grouped, sorted, blank-line separated. No trailing
+   * newline.
+   *
+   * `mark` is the generator's source-map marker (#1010), passed in rather than
+   * imported so this module stays free of the generator's internals — it knows
+   * about Python imports and nothing else. Absent, every line is written plain,
+   * which is what the golden-file tests and any other caller want.
+   */
+  render(mark?: (line: string, blockId: string | undefined) => string): string {
     const sections: string[] = []
     for (const group of GROUP_ORDER) {
-      const lines = this.renderGroup(group)
+      const lines = this.renderGroup(group, mark)
       if (lines.length > 0) sections.push(lines.join('\n'))
     }
     return sections.join('\n\n')
   }
 
-  private renderGroup(group: ImportGroup): string[] {
+  private renderGroup(
+    group: ImportGroup,
+    mark?: (line: string, blockId: string | undefined) => string
+  ): string[] {
     const plain: string[] = []
     const from: string[] = []
-    for (const [module, { names, alias }] of [...this.wanted].sort(byModule)) {
+    const write = (line: string, blockId: string | undefined): string =>
+      mark ? mark(line, blockId) : line
+    for (const [module, entry] of [...this.wanted].sort(byModule)) {
       if (importGroup(module) !== group) continue
-      if (names.size === 0) plain.push(alias ? `import ${module} as ${alias}` : `import ${module}`)
-      else from.push(`from ${module} import ${[...names].sort(byName).join(', ')}`)
+      const { names, alias, blockId } = entry
+      // BOTH forms when both were asked for. They are different requests about
+      // the same module and Python is perfectly happy with both lines.
+      if (entry.plain) {
+        plain.push(write(alias ? `import ${module} as ${alias}` : `import ${module}`, blockId))
+      }
+      if (names.size > 0) {
+        from.push(write(`from ${module} import ${[...names].sort(byName).join(', ')}`, blockId))
+      }
     }
     return [...plain, ...from]
   }

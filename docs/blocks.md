@@ -62,6 +62,7 @@ and its block is selected on the canvas. Right-click a block and choose
 | **Logic · Maths · Text · Lists** | the everyday building blocks |
 | **Variables · Functions** | naming things, and naming groups of steps |
 | **Plugins** | blocks a Python plugin added (desktop only) |
+| **Python** | grey blocks holding code you type yourself |
 
 **Turtle comes first** deliberately. It is the only category that needs nothing
 plugged in, and drawing a square is a better first ten minutes than wiring an
@@ -100,6 +101,38 @@ offers, at the moment you are actually about to need it.
 *For makers and teachers:* adding blocks to a part means dropping a `blocks.yml`
 into its folder, and a plugin can contribute blocks too. See
 [writing-plugins.md](writing-plugins.md#ship-blocks-with-your-plugin-1017).
+
+### When the block you need doesn't exist yet
+
+At the bottom of the toolbox is a category called **Python**, and the blocks in
+it are grey because they *are* code: one line of Python, written into the program
+exactly as it is typed.
+
+| Block | What it does |
+| --- | --- |
+| **statement** | one line of Python, in the stack |
+| **value** | a piece of Python that works out a value, in a socket |
+| **import** | makes a module available — the line appears at the *top* |
+| **call** | `call [method] on (object) with (…)`, for any driver at all |
+| **attribute** | reads or changes something on an object |
+
+Click into one and a real code editor opens, with the same autocomplete the main
+editor has. Type `machine.` and the list appears.
+
+This is the part that means **nothing is ever impossible** in the Blocks
+workspace. A sensor nobody has written blocks for, a module off a web page, a
+line from a tutorial — all of it works, today, without waiting for anyone.
+
+**One line per block**, and code that needs indenting goes *inside* a Control
+block — the same way Python indents it. Paste several lines at once and you get
+one block per line.
+
+Snakie checks what is typed and puts a sentence on the block when something is
+wrong (*"This round bracket ( is never closed."*). It is advice, not a veto: the
+code is generated either way, because these blocks exist so that nothing is ever
+refused.
+
+*Lesson 6 of the course is built around this.*
 
 ---
 
@@ -160,14 +193,15 @@ The last lesson of the **Blocks to Python** course is built for this moment.
 
 ## The course
 
-**Learn ▸ Blocks to Python** is six lessons:
+**Learn ▸ Blocks to Python** is seven lessons:
 
 1. **Make a light blink** — forever, toggle, wait
 2. **Read a button** — if, and why pull-up resistors mean `not`
 3. **Play a tune** — repeat, frequency and duration
 4. **Draw a square** — the turtle, and 360 ÷ the number of sides
 5. **Read a sensor** — value blocks, and watching a number move
-6. **The same program, in Python** — the handover
+6. **When the block you need doesn't exist yet** — the grey blocks, and a dice
+7. **The same program, in Python** — the handover
 
 Each lesson opens with its program already assembled, because a beginner's first
 minute should be something that works and which they then take apart. The last

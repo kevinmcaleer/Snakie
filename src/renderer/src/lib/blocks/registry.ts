@@ -110,6 +110,22 @@ export interface BlockDefinition {
    */
   source?: string
   /**
+   * How to read this block's generated call BACK into a block (#1019).
+   *
+   * The half of the round trip a generator cannot provide: `code` says what the
+   * block writes, and this says what that line looked like — the module, the
+   * function and the socket each argument came from. Declared on the definition
+   * so the two sides cannot drift, and absent on every block whose line is not a
+   * plain call (a `for`, an assignment, anything with a field in the middle of
+   * it), which the converter answers with a raw Python block instead.
+   */
+  read?: {
+    module?: string
+    fn: string
+    args: readonly string[]
+    shape?: 'statement' | 'value'
+  }
+  /**
    * The part this block belongs to (#1017) — so USING one can offer to install
    * that part's driver, the same consent-first banner the Board View shows when
    * the part is placed.

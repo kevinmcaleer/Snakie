@@ -351,10 +351,43 @@ hatches. This is what stops the palette from ageing.
 
 ### Phase 5 — Stretch (#1019)
 
-Python → blocks for the subset our own generator emits. **Spike before
-committing**: the open question is how to get a Python AST in the renderer —
-the bundled MicroPython WASM, a pure-JS parser, or the CPython plugin host
-(which is absent on the web build, i.e. exactly where the classrooms are).
+Python → blocks for the subset our own generator emits.
+
+#### The spike's answer: there is no AST, and we do not need one
+
+The open question was where a Python AST comes from in the renderer. All three
+candidates were checked rather than guessed, and all three lose:
+
+| Candidate | Verdict |
+| --- | --- |
+| **The bundled MicroPython WASM** | No `ast` module (`help("modules")` confirms it), and `compile()` returns a `code` object whose only attribute is `__class__`. It can say *whether* something parses; it cannot say *what it is*. |
+| **The CPython plugin host** | A real `ast` one JSON-RPC call away — on the desktop. Absent on the web build, which is exactly where the classrooms are, so it can only ever be a second implementation of something that has to exist anyway. |
+| **A pure-JS parser** | `tree-sitter-python` is ~1.2 MB of WASM plus a runtime, on top of a Blockly chunk we already apologise for. The unmaintained options are Python 2 flavoured. |
+
+**The decision: a lexer and an indentation tree, not a parser**
+(`lib/blocks/python-tokens.ts`). Python is line-oriented with significant
+indentation; the subset that matters is one we define; and #1018's raw-Python
+blocks are a per-line fallback that is *always* correct. So the reader is a few
+hundred lines of pure TypeScript, identical on desktop and web, unit-tested in
+node against the real generator.
+
+The correctness property is not "produces nice blocks" — that is a quality
+question, and it is allowed to vary. It is:
+
+> **converting a program and generating it again gives back the same program.**
+
+Under that rule a conversion that understood nothing and produced a stack of
+raw Python blocks still passes. Recognition is then a *quality gradient* on top
+of a guarantee, rather than a thing that can fail.
+
+The one documented exception: **imports are re-grouped**, because they go back
+through the generator's import manager, which sorts and sections them. A file
+whose imports were already in that order round-trips byte-for-byte; one whose
+weren't comes back tidied.
+
+`compile()` in the WASM build is still worth having — as a *syntax validator*
+that works on both hosts, which is strictly better than #1018's lint. Not wired
+up yet; noted here so the next person does not re-run the spike.
 
 ---
 

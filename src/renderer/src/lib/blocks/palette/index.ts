@@ -7,6 +7,7 @@ import { defineBlocks } from '../registry'
 import { installBlockMessages } from './messages'
 import { installPinField } from '../pin-field'
 import { installColourField } from '../colour-field'
+import { installPythonField } from '../python-field'
 import { CONTROL_BLOCKS } from './control'
 import { HARDWARE_BLOCKS } from './hardware'
 import { instrumentBlocks } from './instruments'
@@ -16,6 +17,7 @@ import { LOGIC_BLOCKS } from './logic'
 import { MATHS_BLOCKS } from './maths'
 import { TEXT_BLOCKS } from './text'
 import { TURTLE_BLOCKS } from './turtle'
+import { PYTHON_BLOCKS, installPythonBlocks } from './python'
 import { VARIABLE_BLOCKS } from './variables'
 import { WAIT_BLOCKS } from './wait'
 
@@ -58,6 +60,12 @@ export function installCorePalette(): void {
   // below are installed.
   installPinField()
   installColourField()
+  installPythonField()
+  // The two `call` blocks have inputs that come and go, so their shapes are
+  // built in code rather than declared as JSON — and, like Blockly's own
+  // `controls_if`, they must exist in `Blockly.Blocks` before anything tries to
+  // build one.
+  installPythonBlocks()
   defineBlocks([
     ...TURTLE_BLOCKS,
     ...HARDWARE_BLOCKS,
@@ -71,6 +79,9 @@ export function installCorePalette(): void {
     ...TEXT_BLOCKS,
     ...LIST_BLOCKS,
     ...VARIABLE_BLOCKS,
-    ...FUNCTION_BLOCKS
+    ...FUNCTION_BLOCKS,
+    // Last, and last in the toolbox: the escape hatches (#1018) are where you
+    // go when nothing above does what you need, and a palette is a curriculum.
+    ...PYTHON_BLOCKS
   ])
 }

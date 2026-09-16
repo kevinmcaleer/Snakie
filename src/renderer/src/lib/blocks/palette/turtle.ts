@@ -2,6 +2,7 @@ import { Order } from '../generator'
 import type { BlockDefinition } from '../registry'
 import { DEFAULT_PEN_COLOUR, FIELD_COLOUR_TYPE } from '../colour-field'
 import { pyString } from '../py'
+import { registerCallRules } from '../python-to-blocks'
 
 /**
  * TURTLE GRAPHICS (#1013, epic #1007).
@@ -89,7 +90,11 @@ const call = (
     tooltip
   },
   imports: NEEDS_TURTLE,
-  code: () => `turtle.${fn}()\n`
+  code: () => `turtle.${fn}()\n`,
+  // …and how to read that line BACK (#1019). Recorded here rather than restated
+  // in the converter, so the two can never disagree about what `turtle.penup()`
+  // means. The helper knows `fn`; nothing else has to.
+  read: { module: 'turtle', fn, args: [] as const }
 })
 
 /** A block that calls one turtle function with a single number socket. */
@@ -117,7 +122,8 @@ const callWithNumber = (
   imports: NEEDS_TURTLE,
   toolbox: { inputs: shadowNum(arg, fallback) },
   code: (block, gen) =>
-    `turtle.${fn}(${gen.valueToCode(block, arg, Order.NONE) || String(fallback)})\n`
+    `turtle.${fn}(${gen.valueToCode(block, arg, Order.NONE) || String(fallback)})\n`,
+  read: { module: 'turtle', fn, args: [arg] }
 })
 
 /** A value block reading one turtle accessor. */
@@ -139,7 +145,8 @@ const sensor = (
   imports: NEEDS_TURTLE,
   // FUNCTION_CALL, not ATOMIC: `turtle.xcor()` is a call, so an exponent or a
   // unary minus around it needs no brackets but `(turtle.xcor())[0]` would.
-  code: () => [`turtle.${fn}()`, Order.FUNCTION_CALL]
+  code: () => [`turtle.${fn}()`, Order.FUNCTION_CALL],
+  read: { module: 'turtle', fn, args: [] as const, shape: 'value' as const }
 })
 
 export const TURTLE_BLOCKS: BlockDefinition[] = [
@@ -313,3 +320,17 @@ export const TURTLE_BLOCKS: BlockDefinition[] = [
     'Which way the turtle is facing, in degrees: 0 is up, 90 is right.'
   )
 ]
+
+/**
+ * Teach the Python → blocks converter (#1019) how to read these lines back.
+ *
+ * Derived from the block list rather than written out again: the `read`
+ * signature each helper records IS the call its emitter writes, so eighteen
+ * recognitions come from the same place the eighteen blocks do. A turtle block
+ * that changes its function name changes both at once, or neither.
+ */
+registerCallRules(
+  TURTLE_BLOCKS.flatMap((block) =>
+    block.read ? [{ ...block.read, type: block.type }] : []
+  )
+)

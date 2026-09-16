@@ -12,6 +12,12 @@ import {
 import { generateProgram, type GeneratedProgram } from '../lib/blocks/generator'
 import { ledPinToken, setBoardPins } from '../lib/blocks/board-pins'
 import { applyPinWarnings } from '../lib/blocks/pin-conflicts'
+import { applyPythonWarnings } from '../lib/blocks/python-warnings'
+// Installs the Monaco editor the escape-hatch fields open (#1018). Imported for
+// the side effect, and HERE rather than in the palette: the palette is built in
+// plain node by the generator's golden-file suites, and Monaco touches `window`
+// the moment it is imported.
+import '../lib/blocks/python-editor'
 import { loadSelectedBoard, watchSelectedBoard } from './board-pin-source'
 import {
   blockDefinition,
@@ -295,6 +301,10 @@ export function BlocksCanvas({
         // do the job (#1012). The canvas is the only place that sees the whole
         // program at once, so it is where this is caught.
         applyPinWarnings(ws)
+        // And the raw-Python blocks' own typos (#1018) — on the block that has
+        // one, before Run, rather than as a device traceback naming a line in a
+        // file the learner never wrote.
+        applyPythonWarnings(ws)
         // Which parts this program now uses (#1017) — the caller offers their
         // drivers. Reported from the debounce rather than per create event so a
         // drag across the canvas is one answer, not forty.
@@ -548,6 +558,7 @@ export function BlocksCanvas({
       sourceMapRef.current = opened.sourceMap
       onGenerateRef.current?.(opened)
       applyPinWarnings(ws)
+      applyPythonWarnings(ws)
       // Show the instruments this program draws into (#1013). On LOAD as well as
       // on a drag, because a turtle program whose picture goes nowhere is a
       // program that looks like it did nothing — which is exactly what happens

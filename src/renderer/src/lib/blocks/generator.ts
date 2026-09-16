@@ -145,9 +145,15 @@ export class MicroPythonGenerator extends Blockly.CodeGenerator {
     this.INDENT = '    '
   }
 
-  /** Declare an import this block needs. */
-  need(imp: PyImport): void {
-    this.imports.need(imp)
+  /**
+   * Declare an import this block needs.
+   *
+   * `block` is optional: pass it only when the import IS the block's visible
+   * effect (#1018's import blocks), so the source map can point at the line it
+   * caused. See `ImportManager.need`.
+   */
+  need(imp: PyImport, block?: Blockly.Block): void {
+    this.imports.need(imp, block?.id)
   }
 
   /**
@@ -323,7 +329,12 @@ export function generateProgram(workspace: Blockly.Workspace): GeneratedProgram 
   const functions = gen.functionCode().join('\n')
 
   const sections = [
-    gen.imports.empty ? '' : `${gen.imports.render()}\n`,
+    gen.imports.empty
+      ? ''
+      : // An import line is marked only when a block claimed it (#1018) — an
+        // unclaimed line carries an EMPTY block id, which the assembler already
+        // knows means "this line belongs to nobody".
+        `${gen.imports.render((line, blockId) => `${MARK}${blockId ?? ''}${MARK}${line}`)}\n`,
     functions,
     setup,
     body

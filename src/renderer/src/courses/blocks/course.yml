@@ -1,8 +1,9 @@
 # THE BLOCKS TRACK (#1016, epic #1007).
 #
 # The on-ramp, as a course. Five lessons that are about a THING — a light, a
-# button, a tune, a shape, a sensor — and a sixth that is about the Python they
-# have been writing the whole time.
+# button, a tune, a shape, a sensor — one about what to do when no block does
+# what you want (#1018), and a last one about the Python they have been writing
+# the whole time.
 #
 # Every lesson carries a `blocks:` workspace rather than `code:`, so it opens on
 # the canvas with the program already assembled: a beginner's first minute
@@ -224,8 +225,49 @@ lessons:
                           NUM: 200
   tip: A **value** block sits inside another block, because it is a number rather than an
     action.
+- title: When the block you need doesn't exist yet
+  file: 06-python-block.md
+  view: blocks
+  blocks:
+    blocks:
+      languageVersion: 0
+      blocks:
+      - type: snakie_python_import
+        id: l6-import
+        x: 40
+        y: 40
+        fields:
+          MODULE: random
+        next:
+          block:
+            type: snakie_forever
+            id: l6-forever
+            inputs:
+              DO:
+                block:
+                  type: text_print
+                  id: l6-say
+                  inputs:
+                    TEXT:
+                      block:
+                        type: snakie_python_value
+                        id: l6-roll
+                        fields:
+                          CODE: random.randint(1, 6)
+                  next:
+                    block:
+                      type: snakie_wait_ms
+                      id: l6-wait
+                      inputs:
+                        MS:
+                          shadow:
+                            type: math_number
+                            fields:
+                              NUM: 500
+  tip: The grey blocks hold code you type yourself — for anything the rest of the palette
+    doesn't do yet.
 - title: The same program, in Python
-  file: 06-the-same-in-python.md
+  file: 07-the-same-in-python.md
   view: blocks
   viewMode: python
   blocks: *id001
