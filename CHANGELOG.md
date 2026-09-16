@@ -6,6 +6,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Python mirror no longer pins an unreadable header when you scroll.**
+  Monaco's sticky scroll keeps the enclosing `def`/`class`/`if` at the top of
+  the pane, and it could not work here: every editor theme paints
+  `editor.background` **transparent** on purpose, so the CSS ruled paper shows
+  through and scrolls with the text — and Monaco derives the sticky header's
+  fill from that same colour. The pinned lines came out see-through, with the
+  code scrolling underneath showing straight through them, both halves
+  illegible.
+
+  The main editor has had sticky scroll off since it was written; the mirror
+  (`PythonPane`) was created without that option and so had it on. It is off in
+  both now, with the reason recorded next to it — giving it an opaque surface of
+  its own (`editorStickyScroll.background`) is what turning it back on would
+  take.
+
 ### Changed
 
 - **Every block category has a colour of its own now** (epic #1007). The rule
