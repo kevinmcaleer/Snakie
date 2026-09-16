@@ -35,6 +35,7 @@ One ``print()`` per state change, ASCII, space-delimited::
     SNK TURT PEN  <0|1>                          # pen up(0) / down(1)
     SNK TURT VIS  <0|1>                          # turtle hidden(0) / shown(1)
     SNK TURT CLEAR                               # wipe the canvas
+    SNK TURT SPEED <0..10>                       # how fast the IDE animates
 
 ``<colour>`` is whatever ``pencolor()`` was given (a CSS colour name or a
 ``#rrggbb`` hex code), with any spaces replaced by ``_`` so it stays one
@@ -43,10 +44,37 @@ token on the wire.
 
 SENTINEL = "SNK"
 
+
+# CPython `turtle`'s speed names, so `speed("fast")` means what a learner who
+# looked it up expects. `fastest` is 0 there, and 0 means "no animation" — the
+# same escape hatch we want for a drawing too long to watch.
+_SPEED_NAMES = {"fastest": 0, "fast": 10, "normal": 6, "slow": 3, "slowest": 1}
+
+
+def _speed_value(value):
+    """Coerce whatever `speed()` was given into 0..10.
+
+    It used to store the argument verbatim, so `speed("fast")` left a STRING
+    where a number belonged — harmless while nothing read it, and a broken
+    telemetry line the moment something did.
+    """
+    if isinstance(value, str):
+        value = _SPEED_NAMES.get(value.strip().lower(), 6)
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        return 6
+    if value < 0:
+        return 0
+    if value > 10:
+        return 10
+    return value
+
+
 # Library version. Bump this on ANY change to this file — mirrors
 # `instruments.py`'s convention so a future "board library outdated" check can
 # reuse the same comparison.
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 # White, not black: the Turtle instrument draws on a dark phosphor screen (like
 # every other Snakie instrument), so a "black" default pen — sensible on paper,
@@ -190,10 +218,20 @@ class Turtle:
         """Get/set the animation pace (a small int, or a CPython-turtle-style
         name like ``"fast"``/``"slow"``); the IDE's Turtle instrument uses this
         to pace its draw animation. Returns the current speed when called with
-        no argument."""
+        no argument.
+
+        The speed is TELEMETRY (#1046). Before this it was stored and never
+        sent, so the instrument had no idea what pace had been asked for and
+        drew every segment the instant it arrived — which made `speed()` a call
+        that did nothing at all.
+
+        ``0`` means "no animation, draw it instantly", which is CPython
+        ``turtle``'s convention and the escape hatch for a long drawing.
+        """
         if value is None:
             return self._speed
-        self._speed = value
+        self._speed = _speed_value(value)
+        print("%s TURT SPEED %d" % (SENTINEL, self._speed))
         return None
 
     def hideturtle(self):

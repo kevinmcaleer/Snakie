@@ -88,8 +88,37 @@
   font-size: 11px;
   color: var(--txt3, #4a4f57);
 }
-.turtle__clear {
+/* THE PACE, as a thing you can reach for (#1046). Sits between the segment
+   count and CLEAR, so the footer reads left to right as "what has been drawn,
+   how fast, and start again". */
+.turtle__speed {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--txt3, #4a4f57);
+  cursor: pointer;
+}
+.turtle__speed-lbl {
+  font-family: var(--font-ui);
+  letter-spacing: 0.06em;
+}
+.turtle__speed-range {
+  width: 92px;
+  accent-color: var(--accent, #d8a13a);
+  cursor: pointer;
+}
+/* Fixed width and tabular figures so the number changing does not shuffle the
+   slider sideways under the hand that is dragging it. */
+.turtle__speed-val {
+  min-width: 52px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--txt2, #333);
+}
+
+.turtle__clear {
   display: flex;
   align-items: center;
   justify-content: center;
