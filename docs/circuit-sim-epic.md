@@ -1,7 +1,8 @@
 # Circuit Sim — Delivery Plan (Epic #597)
 
 > DC electronic simulation for the Snakie breadboard / Board View.
-> Owner: Kevin McAleer. Status: planning. Target: Snakie ≥ 0.36.0 (current `package.json` is `0.35.1`).
+> Owner: Kevin McAleer. Status: in progress — the first phases shipped in 0.36.0;
+> 4 of the 10 sub-issues are closed (#600, #602, #603, #604), the rest are open.
 
 This is the staff-engineering delivery plan for the whole Circuit Sim epic: 10 sub-issues
 (#600–#609), built in order 1→10. It defines the architecture, the phased roadmap, per-issue

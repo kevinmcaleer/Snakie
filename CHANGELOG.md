@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Two epic plans stopped claiming a version that had stopped being true.**
+  `docs/blockly-epic.md` opened with "current `package.json` is `0.56.0`" twelve
+  minor versions after that, and `docs/circuit-sim-epic.md` with `0.35.1` — and
+  both still said **Status: planning**, while one epic had closed all thirty of
+  its sub-issues and the other had shipped its first phases in 0.36.0.
+
+  Both headers say what actually happened now: Blockly (#1007) shipped and the
+  document is the epic's architecture record, Circuit Sim (#597) is four of ten
+  sub-issues in. Neither restates a number `package.json` already holds, and
+  `docsCurrent` pins that — the same move the README's "v0.13.0 released" got in
+  #962, for the same reason. A fact that has to be retyped goes quietly wrong,
+  and the plans had rotted for twelve and thirty-three minor versions unnoticed.
+
 ## [0.68.8] - 2026-09-16
 
 ### Added
