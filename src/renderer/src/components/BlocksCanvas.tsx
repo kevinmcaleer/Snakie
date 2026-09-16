@@ -19,6 +19,7 @@ import '../lib/blocks/python-editor'
 import { loadSelectedBoard, watchSelectedBoard } from './board-pin-source'
 import { blockDefinition, installBlockDefinitions } from '../lib/blocks/registry'
 import { installCorePalette } from '../lib/blocks/palette'
+import { installSoftShellRenderer } from '../lib/blocks/renderer'
 import {
   dispatchNeedLibrary,
   dispatchOpenHelp,
@@ -312,6 +313,9 @@ export function BlocksCanvas({
     // hold one. Here rather than at module load, so a block a part or plugin
     // registers later (#1017) is installed by the next canvas that opens.
     installBlockDefinitions()
+    // And the Soft Shell geometry, which the options below name. Registering a
+    // renderer Blockly has never heard of throws during injection.
+    installSoftShellRenderer()
 
     const tokens = readThemeTokens(document.documentElement)
     const ws = Blockly.inject(host, {

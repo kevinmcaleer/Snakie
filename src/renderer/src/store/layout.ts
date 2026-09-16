@@ -102,23 +102,32 @@ export interface WorkspaceLayout {
 export type BlocksViewMode = 'blocks' | 'split' | 'python'
 
 /**
- * How wide the closed pane is left at an end stop, as a share.
+ * A pane at or below this share is CLOSED — a tolerance, not a reserved strip.
  *
- * NOT ZERO, for two reasons that turn out to be the same one. A pane collapsed
- * to nothing puts the divider flush against the edge of the group, where it is
- * half off-screen and cannot be grabbed to bring the pane back — and the divider
- * is the only control there is. And a learner who cannot see where the blocks
- * went has lost their program, which is why #1009 invented the peek strip in the
- * first place. So an end stop leaves a sliver: an edge you can see, and take
- * hold of.
+ * It used to be both. #1034 made the divider the only control, and a pane
+ * collapsed to nothing would have put that divider flush against the edge of
+ * the group where it cannot be grabbed, so an end stop left three percent
+ * showing: an edge you could see and take hold of.
+ *
+ * #1053 gave the switcher a dot, which is a NAMED way back to the split from
+ * either end — so the sliver stopped paying for itself and started costing
+ * something instead. Three percent of a wide editor is forty pixels of the
+ * other pane bleeding in at the edge: a column of chopped-off Python beside the
+ * blocks, or a strip of half-blocks beside the code. "Blocks" should mean
+ * blocks.
+ *
+ * So the stops are now hard 0/100, and this is what remains: the threshold
+ * `modeForRatio` and friends read a ratio against. It also keeps a layout
+ * persisted before this change — a stored `[97, 3]` — reading as the end stop
+ * it was meant to be rather than as a very lopsided split.
  */
-export const BLOCKS_PANE_SLIVER = 3
+export const BLOCKS_PANE_CLOSED = 3
 
 /** `[canvas, python]` shares at each stop. */
 export const BLOCKS_VIEW_RATIOS: Record<BlocksViewMode, [number, number]> = {
-  blocks: [100 - BLOCKS_PANE_SLIVER, BLOCKS_PANE_SLIVER],
+  blocks: [100, 0],
   split: [50, 50],
-  python: [BLOCKS_PANE_SLIVER, 100 - BLOCKS_PANE_SLIVER]
+  python: [0, 100]
 }
 
 /**
@@ -163,7 +172,7 @@ export function defaultBlocksViewMode(workspace: WorkspaceId, both = false): Blo
 export function ratioShowsOnePane(ratio: readonly number[] | undefined): boolean {
   if (!ratio || ratio.length !== 2) return true
   if (!ratio.every((n) => typeof n === 'number' && Number.isFinite(n))) return true
-  return ratio[0] <= BLOCKS_PANE_SLIVER || ratio[1] <= BLOCKS_PANE_SLIVER
+  return ratio[0] <= BLOCKS_PANE_CLOSED || ratio[1] <= BLOCKS_PANE_CLOSED
 }
 
 /** The persisted envelope. Bump `version` on breaking shape changes.

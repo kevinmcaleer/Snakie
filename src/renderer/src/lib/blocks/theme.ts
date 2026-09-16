@@ -281,7 +281,11 @@ export function buildSoftShellTheme(tokens: ThemeTokens): SoftShellThemeSpec {
     },
     // Plus Jakarta Sans — Soft Shell's UI face — on block text. The mono face
     // belongs inside code FIELDS, which is a per-field style, not a theme one.
-    fontStyle: { family: 'Plus Jakarta Sans, system-ui, sans-serif', weight: '600', size: 11 },
+    // 12, not Blockly's 11: the blocks got roomier (see `renderer.ts`) and text
+    // that stayed put would have read as a small label floating in a large
+    // shape. This is also the size Blockly writes into the renderer's
+    // `FIELD_TEXT_FONTSIZE`, so the field boxes are measured around it.
+    fontStyle: { family: 'Plus Jakarta Sans, system-ui, sans-serif', weight: '600', size: 12 },
     // A hat on every top-level block: it is the visual that says "programs start
     // here", which is the single most useful thing the canvas can tell a child
     // who has only ever seen Scratch's "when green flag clicked".
@@ -290,9 +294,21 @@ export function buildSoftShellTheme(tokens: ThemeTokens): SoftShellThemeSpec {
 }
 
 /** The workspace options that don't depend on the theme (grid, zoom, trashcan). */
+/**
+ * The Soft Shell renderer's registered name (#573).
+ *
+ * Declared HERE, with the options that name it, rather than imported from
+ * `renderer.ts` — this module is deliberately Blockly-free so the golden-file
+ * theme tests can run in plain node, and `renderer.ts` subclasses Blockly's own
+ * classes. The dependency points that way instead.
+ */
+export const SOFT_SHELL_RENDERER = 'snakie-soft-shell'
+
 export function softShellWorkspaceOptions(tokens: ThemeTokens): Partial<BlocklyOptions> {
   return {
-    renderer: 'thrasos',
+    // Thrasos's row layout, wearing the Soft Shell geometry — rounder corners
+    // and room around a field. `installSoftShellRenderer()` must have run.
+    renderer: SOFT_SHELL_RENDERER,
     grid: { spacing: 24, length: 3, colour: tokens.line, snap: true },
     zoom: {
       controls: true,

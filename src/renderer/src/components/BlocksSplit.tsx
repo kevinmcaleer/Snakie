@@ -5,7 +5,7 @@ import {
   PanelResizeHandle,
   type ImperativePanelGroupHandle
 } from 'react-resizable-panels'
-import { BLOCKS_PANE_SLIVER, useWorkspaceLayout } from '../store/layout'
+import { useWorkspaceLayout } from '../store/layout'
 import { useWorkspace } from '../store/workspace'
 import { BLOCKS_SCHEMA_VERSION, parseBlocksFooter } from '../../../shared/blocks-doc'
 import { pythonToBlocks } from '../lib/blocks/python-to-blocks'
@@ -464,14 +464,16 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
             layout.recordSizes('blocksSplit', sizes)
           }}
         >
-          {/* NOT `collapsible`. A collapsed panel cannot be dragged back open —
-              the library only expands one through its own imperative API — and
-              the divider is the only control there is. The end stop leaves a
-              sliver instead (`BLOCKS_PANE_SLIVER`), which is an edge you can
-              take hold of. `minSize` is that same sliver, because the library
-              REFUSES a drag past `minSize` rather than clamping to it: anything
-              larger here and the divider would stop short of its own ends. */}
-          <Panel order={1} minSize={BLOCKS_PANE_SLIVER} defaultSize={view.ratio[0]}>
+          {/* `minSize={0}`, so an end stop CLOSES its pane rather than leaving a
+              sliver of it bleeding in at the edge. This used to be three
+              percent — forty pixels of chopped-off Python beside the blocks —
+              because the divider was the only way back and a divider flush
+              against the edge of the group cannot be grabbed. #1053's dot is
+              that way back now, from either end and by name, so the strip is no
+              longer paying for itself. The panel is still not `collapsible`:
+              the library's collapse is a separate state its imperative API
+              owns, and the ratio is ours. */}
+          <Panel order={1} minSize={0} defaultSize={view.ratio[0]}>
             {canvas}
           </Panel>
           {/* THE DIVIDER IS THE CONTROL (#1034). Three buttons reading
@@ -493,7 +495,7 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
               onModeChange(stop.mode)
             }}
           />
-          <Panel order={2} minSize={BLOCKS_PANE_SLIVER} defaultSize={view.ratio[1]}>
+          <Panel order={2} minSize={0} defaultSize={view.ratio[1]}>
             {python}
           </Panel>
         </PanelGroup>
