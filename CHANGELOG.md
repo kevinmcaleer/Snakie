@@ -8,6 +8,63 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The blocks no longer stop saving your file without saying so** (#1068,
+  epic #1007). Three ways the canvas and the `.py` could quietly stop being the
+  same program, each of which used to be silent, now share one state, one rule —
+  *the blocks do not write the file until it is sorted out* — and one strip above
+  the panes saying which it is. In all three your Python is untouched and still
+  runs.
+
+  - **A block Snakie cannot write Python for.** Unwire a part in Electronics
+    while its blocks are on the canvas and they keep rendering, but they leave
+    the registry — so the Python mirror quietly lost those lines and the file
+    simply stopped saving, with no unsaved dot and no message, for the rest of
+    the session. It now says so, and names the part's blocks.
+  - **A block whose code *threw*.** The guard above only ever knew about block
+    types with no generator at all, so a generator that failed slipped past it
+    and wrote a program short of a whole stack — sometimes an empty file — over
+    the top of the learner's. It counts as the same failure now.
+  - **Python edited by hand under a blocks footer.** `docs/blocks.md` says that
+    when the footer goes stale Snakie works the blocks out from the code, and
+    nothing did: the stale blocks went on the canvas, the mirror showed *their*
+    regeneration in place of the edited Python, and the first block touched wrote
+    it over the file. The code is what was last written and what runs, so the
+    blocks are now rebuilt from it, as documented.
+
+- **A `.py` Snakie did not write is checked before its blocks may change it**
+  (#1068). #1069 gates the conversion while you type; opening a file went
+  straight onto the canvas without it. If the blocks are only an approximation of
+  the file, they are now there to look at and will not rewrite it.
+
+- **`"%.1f" % value` no longer opens as an empty canvas** (#1068). `%` beside a
+  string is formatting, not modulo — read as modulo it built a block Blockly
+  refuses to load, which cleared the canvas and blocked saving. Two of the files
+  Snakie itself ships hit this.
+
+- **`t = 0.0` no longer comes back `t = 0`**, and `0x1F` no longer comes back
+  `31` (#1068). A number block holds a number rather than the text of one, so a
+  literal whose written form would not survive the trip stays exactly as typed.
+
+- **A `pass` keeping company with real statements is no longer dropped**
+  (#1068). It was being removed wherever it appeared, on the reasoning that an
+  empty body gets one back — true only when it *was* the whole body.
+  `examples/hello_world.py` came back a line short.
+
+### Changed
+
+- **The round-trip check compares what a conversion must not change, rather than
+  the text** (#1068). #1069's check compared rendered Python, and the generator
+  renders in its own house style — it hoists functions, prefers single quotes,
+  spaces operators out and renames a variable called `id` so the builtin survives.
+  Measured against the `.py` files this repo ships, that rejected **two files in
+  three**, `examples/hello_world.py` among them, which would have quietly stopped
+  the blocks following anybody who typed a double-quoted string. It now compares
+  each line's shape — operators and keywords, with names, numbers and strings as
+  placeholders — plus any comment on it, so a dropped, added, re-nested or
+  mangled line is still caught and house style is not.
+
+### Fixed
+
 - **Four ways the Python→blocks converter changed your program** (#1068,
   epic #1007). Each silent, each found by pointing the converter at Python a
   learner or a lesson sheet would actually write:

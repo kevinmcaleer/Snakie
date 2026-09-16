@@ -499,7 +499,13 @@ class Converter {
       // `pass` exists only to fill an empty suite, and an empty suite in blocks
       // is an empty socket — so carrying it over would add a block that means
       // "nothing" and then generate `pass` a second time.
-      if (node.line.text === 'pass') {
+      //
+      // ONLY WHEN IT IS THE WHOLE BODY, though (#1068). Dropping it wherever it
+      // appeared lost a `pass` that was keeping company with real statements, or
+      // standing at the top level where no socket will put it back —
+      // `examples/hello_world.py` came back a line short. Every emitter writes
+      // `pass` for an empty body, so the one case this is for is still covered.
+      if (node.line.text === 'pass' && grouped.length === 1) {
         this.report.total += 1
         this.report.recognised += 1
         continue
@@ -1021,9 +1027,24 @@ class Converter {
       tokens,
       at,
       ['*', '/', '%'],
-      (a, b, op): BlockJson =>
+      (a, b, op): BlockJson | null =>
         op === '%'
-          ? { type: 'math_modulo', inputs: { DIVIDEND: { block: a }, DIVISOR: { block: b } } }
+          ? // `%` ON A STRING IS FORMATTING, NOT MODULO (#1068).
+            //
+            // `"%.1f" % value` is the oldest way to format a number in Python
+            // and it is all over MicroPython examples — read as modulo it built
+            // a `math_modulo` with a `text` block in a socket that checks for
+            // Number, and `Blockly.serialization` THREW on the connection. The
+            // canvas caught that, cleared itself and blocked writes: an empty
+            // canvas beside a working program, which is exactly the failure the
+            // terminal-block fix was about. Two of the `.py` files this repo
+            // ships hit it.
+            //
+            // Declining takes the whole expression raw, where it regenerates
+            // verbatim and formats exactly as it always did.
+            isTextBlock(a) || isTextBlock(b)
+            ? null
+            : { type: 'math_modulo', inputs: { DIVIDEND: { block: a }, DIVISOR: { block: b } } }
           : {
               type: 'math_arithmetic',
               fields: { OP: op === '*' ? 'MULTIPLY' : 'DIVIDE' },
@@ -1055,12 +1076,17 @@ class Converter {
     return left
   }
 
-  /** The shared left-associative loop every level above `power` is. */
+  /**
+   * The shared left-associative loop every level above `power` is.
+   *
+   * `build` may return NULL to decline the operator it was handed (#1068), which
+   * takes the whole expression raw. `%` is why: see {@link parseMultiplicative}.
+   */
   private binary(
     tokens: readonly Token[],
     at: number,
     operators: readonly string[],
-    build: (a: BlockJson, b: BlockJson, op: string) => BlockJson,
+    build: (a: BlockJson, b: BlockJson, op: string) => BlockJson | null,
     next: (tokens: readonly Token[], at: number) => { block: BlockJson; next: number } | null
   ): { block: BlockJson; next: number } | null {
     let left = next(tokens, at)
@@ -1071,7 +1097,9 @@ class Converter {
       if (tok.kind !== 'op' && tok.kind !== 'keyword') return left
       const right = next(tokens, left.next + 1)
       if (!right) return null
-      left = { block: build(left.block, right.block, tok.text), next: right.next }
+      const built = build(left.block, right.block, tok.text)
+      if (!built) return null
+      left = { block: built, next: right.next }
     }
   }
 
@@ -1109,8 +1137,15 @@ class Converter {
     }
 
     if (tok.kind === 'number') {
-      const n = Number(tok.text.replace(/_/g, ''))
+      const written = tok.text.replace(/_/g, '')
+      const n = Number(written)
       if (!Number.isFinite(n)) return null
+      // ONLY IF THE BLOCK CAN SAY IT BACK (#1068). Blockly's number field holds a
+      // number, not the text of one, so `0.0` came back `0` — an int where the
+      // learner wrote a float — and `0x1F` came back `31`. Both are silent
+      // rewrites of somebody's source. A literal whose written form does not
+      // survive the trip stays a raw value block, which regenerates it exactly.
+      if (String(n) !== written) return { block: this.rawValue(written), next: at + 1 }
       return { block: { type: 'math_number', fields: { NUM: n } }, next: at + 1 }
     }
 
@@ -1218,6 +1253,11 @@ function readCall(
     i += 1
   }
   return null
+}
+
+/** Is this block a text literal? `%` beside one is formatting, not modulo. */
+function isTextBlock(block: BlockJson): boolean {
+  return block.type === 'text'
 }
 
 /**

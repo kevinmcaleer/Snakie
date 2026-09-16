@@ -8,6 +8,7 @@ import {
 import { installBlockDefinitions, resetBlockRegistry } from '../src/renderer/src/lib/blocks/registry'
 import { installCorePalette } from '../src/renderer/src/lib/blocks/palette'
 import { pythonToBlocks } from '../src/renderer/src/lib/blocks/python-to-blocks'
+import { blocksDocumentFor } from '../src/renderer/src/lib/blocks/document'
 import type { BlocksWorkspace } from '../src/shared/blocks-doc'
 
 /**
@@ -70,11 +71,32 @@ describe('what counts as the same program', () => {
   })
 
   it('counts depth off an indent stack, not off the character count', () => {
+    // Two-space indent, and the depths still come out 0/1/2. The lines are token
+    // SHAPES rather than text — names, numbers and strings as placeholders — so
+    // the comparison survives the generator's own house style.
     expect(conversionShape('if x:\n  if y:\n    print(1)\n')).toEqual([
-      '0:if x:',
-      '1:if y:',
-      '2:print(1)'
+      '0:if n :',
+      '1:if n :',
+      '2:n ( # )'
     ])
+  })
+
+  it('forgives the house style the generator renders in', () => {
+    // Measured against the .py files this repo ships: comparing rendered text
+    // rejected two files in three on nothing but these.
+    expect(sameProgram('x = "hi"\n', "x = 'hi'\n")).toBe(true) // quote style
+    expect(sameProgram('duty +=1\n', 'duty += 1\n')).toBe(true) // spacing
+    expect(sameProgram('id = 0\n', 'id_ = 0\n')).toBe(true) // a protected builtin
+    // And the hoisting, which is why the bag is not a sequence.
+    expect(sameProgram('go()\ndef go():\n    pass\n', 'def go():\n    pass\n\ngo()\n')).toBe(
+      true
+    )
+  })
+
+  it('still catches a comment dropped from a line it recognised', () => {
+    // The token shape alone cannot see a comment — the lexer stops at the `#` —
+    // so the signature carries it separately, for exactly this case.
+    expect(sameProgram('x = 5  # how many\n', 'x = 5\n')).toBe(false)
   })
 })
 
@@ -150,5 +172,53 @@ describe('verifying a real conversion', () => {
       ok: false,
       reason: 'lossy'
     })
+  })
+})
+
+/**
+ * THE GATE, AGAINST REAL FILES (#1068).
+ * ---------------------------------------------------------------------------
+ *
+ * The unit tests above say what the comparison is meant to forgive. This one
+ * says whether it actually does, over the `.py` files this repository ships —
+ * drivers, examples, the on-device library — which is the only way to find out
+ * that a rule reads well and rejects two files in three.
+ *
+ * It is a FLOOR, not a target. The files it still holds are ones where the
+ * converter genuinely changes the program (chained comparisons flattened,
+ * `+=` on a string read as arithmetic), each of which is its own fix; the
+ * number goes up as those land. What this test is here to catch is the number
+ * going DOWN, which would mean the gate has started refusing programs it used
+ * to accept — the failure mode that makes the blocks stop following anybody.
+ */
+describe('the gate against the files this repo ships (#1068)', () => {
+  it('accepts the great majority of them', async () => {
+    const { readdirSync, readFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const files: string[] = []
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name)
+        if (entry.isDirectory()) walk(path)
+        else if (entry.name.endsWith('.py')) files.push(path)
+      }
+    }
+    for (const root of ['micropython', 'examples']) {
+      try {
+        walk(root)
+      } catch {
+        /* not checked out — the assertion below still holds on an empty list */
+      }
+    }
+
+    let accepted = 0
+    for (const path of files) {
+      const doc = blocksDocumentFor(readFileSync(path, 'utf8'))
+      if (!doc) continue
+      if ((await verifyConversion(doc.code, doc.workspace)).ok) accepted += 1
+    }
+    // 43 of 56 when this was written. The margin is for files being added, not
+    // for the gate getting stricter.
+    expect(accepted / Math.max(files.length, 1)).toBeGreaterThan(0.7)
   })
 })

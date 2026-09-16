@@ -1,5 +1,5 @@
 import type { BlocksWorkspace } from '../../../../shared/blocks-doc'
-import { logicalLines } from './python-tokens'
+import { logicalLines, tokenize, trailingCommentAt } from './python-tokens'
 
 /**
  * THE ROUND-TRIP GATE (#1068, epic #1007).
@@ -31,7 +31,8 @@ import { logicalLines } from './python-tokens'
  * program changed by itself", which they cannot.
  *
  * WHAT COUNTS AS THE SAME PROGRAM, and this is the whole design. Not the same
- * bytes: the generator legitimately rewrites two things and always has.
+ * bytes — nowhere near it. The generator RENDERS the program in its own house
+ * style, and always has:
  *
  *  - **The import section.** `imports.ts` owns it — it dedupes, groups and sorts,
  *    and it ADDS the import a recognised block needs, which is the single most
@@ -42,11 +43,37 @@ import { logicalLines } from './python-tokens'
  *    generator indents with four spaces whatever the file did. Reindenting
  *    somebody's file is a documented consequence of the blocks being the source
  *    of truth; losing a line of it is not.
+ *  - **Order.** It hoists every `def` above the body and every construction into
+ *    a setup section, on purpose and for good reasons (`generator.ts`).
+ *  - **Quotes, spacing and protected names.** A `text` block holds text, not the
+ *    quotes around it, so `"1.0.0"` comes back `'1.0.0'`; `duty +=1` comes back
+ *    `duty += 1`; and `names.ts` deliberately renames `id` to `id_` so a learner
+ *    cannot lose the builtin. Every one of those is the generator doing its job.
  *
- * So what is compared is the SHAPE: every logical line that is not an import,
- * in order, each with its nesting depth. That is exactly "no statement was
- * dropped, added, re-nested or rewritten", which is the property that matters,
- * and it is blind to the two rewrites that are allowed.
+ * MEASURED, NOT GUESSED, and the measurement is why this is not a text
+ * comparison. Run over the `.py` files this repo ships, comparing rendered text
+ * rejected **two files in three** — `examples/hello_world.py` among them — on
+ * nothing but hoisting and quote style. A gate with that false-positive rate is
+ * not a gate, it is an outage: the blocks would simply stop following anybody
+ * who typed a double-quoted string.
+ *
+ * So what is compared is the BAG OF LINE SIGNATURES: for each logical line that
+ * is not an import, its nesting depth and its TOKEN SHAPE — operators and
+ * keywords verbatim, every name, number and string reduced to a placeholder —
+ * plus any comment on it, counted rather than sequenced.
+ *
+ * That catches the things a decompiler gets wrong:
+ *
+ *  - a line dropped, added or re-nested (the count or the depth moves);
+ *  - a line mangled (`x == 5` written back as `x = = 5` is `n = = #`, not
+ *    `n == #`);
+ *  - a comment dropped, which is carried on the signature for exactly that
+ *    reason — the token shape alone cannot see one.
+ *
+ * And it forgives everything in the list above. THE LIMIT, stated rather than
+ * discovered: a change of literal VALUE with the shape intact — `print(100)`
+ * becoming `print(10)` — reads as the same program here. Nothing in the
+ * converter does that, and the alternative is a gate nobody can use.
  *
  * PURE, except for one dynamic import. {@link conversionShape} and
  * {@link sameProgram} are plain string work and test in node with no Blockly
@@ -78,15 +105,43 @@ export function conversionShape(source: string): string[] {
     // already thrown away the blank lines that would otherwise look like one.
     stack.push(line.indent)
     if (IMPORT_LINE.test(line.text)) continue
-    out.push(`${depth}:${line.text}`)
+    out.push(`${depth}:${lineSignature(line.text)}`)
   }
   return out
 }
 
+/**
+ * One line reduced to what a conversion must not change: its operators and
+ * keywords verbatim, its names, numbers and strings as placeholders, and any
+ * comment on it.
+ *
+ * A line the lexer cannot read falls back to its own text with the whitespace
+ * collapsed — those are the raw blocks, which regenerate verbatim anyway, so
+ * comparing them exactly costs nothing and catches anything that mangles one.
+ */
+function lineSignature(text: string): string {
+  const at = trailingCommentAt(text)
+  const code = at >= 0 ? text.slice(0, at) : text
+  // CARRIED SEPARATELY because the lexer stops at a `#` and would otherwise make
+  // a dropped comment invisible to the very check meant to notice it.
+  const comment = at >= 0 ? ` ${text.slice(at).trim()}` : ''
+  const tokens = tokenize(code)
+  if (!tokens) return `${code.replace(/\s+/g, ' ').trim()}${comment}`
+  const shape = tokens
+    .map((t) =>
+      t.kind === 'name' ? 'n' : t.kind === 'number' ? '#' : t.kind === 'string' ? 's' : t.text
+    )
+    .join(' ')
+  return `${shape}${comment}`
+}
+
 /** Are these the same program, allowing for the rewrites the generator owns? */
 export function sameProgram(before: string, after: string): boolean {
-  const a = conversionShape(before)
-  const b = conversionShape(after)
+  // Sorted, so the generator's hoisting is not mistaken for a rewrite — see the
+  // header. Still a multiset and not a set: a line that appears twice has to
+  // appear twice on both sides, or something was dropped.
+  const a = conversionShape(before).sort()
+  const b = conversionShape(after).sort()
   return a.length === b.length && a.every((line, i) => line === b[i])
 }
 

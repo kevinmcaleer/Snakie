@@ -756,6 +756,18 @@ describe('a block with no emitter is reported, not silently dropped (#1010)', ()
 // Blockly's definition table is global and re-registering warns every time.
 Blockly.defineBlocksWithJsonArray([
   {
+    type: 'test_boom',
+    message0: 'boom',
+    previousStatement: null,
+    nextStatement: null
+  },
+  {
+    type: 'test_fine',
+    message0: 'fine',
+    previousStatement: null,
+    nextStatement: null
+  },
+  {
     type: 'test_shadow_var',
     message0: 'set %1 to 0',
     args0: [{ type: 'field_input', name: 'NAME', text: 'x' }],
@@ -823,5 +835,64 @@ describe('a variable cannot shadow a module imported below it (#1068)', () => {
       }
     })
     expect(program.code).toBe(['import time', '', 'time.sleep(1)', 'time_ = 0', ''].join('\n'))
+  })
+})
+
+/**
+ * A STACK THAT WOULD NOT GENERATE IS NOT IN THE PROGRAM (#1068).
+ * ---------------------------------------------------------------------------
+ *
+ * `missing` only ever knew about types with no registered emitter. An emitter
+ * that THREW for a type we do have left it empty — so `BlocksSplit`'s guard did
+ * not fire, and a program short of an entire stack (sometimes the empty string)
+ * was written over the learner's file. Blockly unwinds the whole chain from
+ * wherever the throw happened, so the blocks ABOVE the one that failed go too.
+ */
+describe('an emitter that throws is reported (#1068)', () => {
+  beforeEach(() => {
+    resetBlockRegistry()
+    defineBlocks([
+      {
+        type: 'test_boom',
+        category: 'control',
+        code: () => {
+          throw new Error('emitter blew up')
+        }
+      },
+      {
+        type: 'test_fine',
+        category: 'control',
+        code: () => 'print(1)\n'
+      }
+    ])
+  })
+
+  it('names the top block of the stack that failed', () => {
+    const program = gen({
+      blocks: { languageVersion: 0, blocks: [b('test_boom', 'boom')] }
+    })
+    expect(program.failed).toEqual(['boom'])
+    expect(program.missing).toEqual([])
+  })
+
+  it('reports it even though the code looks plausible', () => {
+    // The killer case: a stack whose first block generated fine, so what comes
+    // out is real Python — just not the learner's whole program.
+    const program = gen({
+      blocks: {
+        languageVersion: 0,
+        blocks: [
+          b('test_fine', 'a'),
+          { ...b('test_fine', 'b'), next: { block: b('test_boom', 'boom') } }
+        ]
+      }
+    })
+    expect(program.code).toBe('print(1)\n')
+    expect(program.failed).toEqual(['b'])
+  })
+
+  it('says nothing when every stack generated', () => {
+    const program = gen({ blocks: { languageVersion: 0, blocks: [b('test_fine', 'a')] } })
+    expect(program.failed).toEqual([])
   })
 })

@@ -113,6 +113,18 @@ export interface GeneratedProgram {
    * down, for the paths that don't go through it.
    */
   missing: string[]
+  /**
+   * The ids of top-level blocks whose stack threw while generating (#1068).
+   *
+   * The same warning as {@link missing} and a different cause: there the type
+   * has no emitter, here the emitter ran and failed. Either way `code` is short
+   * of everything that stack would have contributed — including the blocks above
+   * the one that threw, since Blockly unwinds the whole chain — so a caller must
+   * treat a non-empty `failed` exactly as it treats a non-empty `missing`.
+   *
+   * Ids rather than types, so the canvas can point at them.
+   */
+  failed: string[]
 }
 
 /** A hoisted object: `led = Led(15)` in the setup section, requested by key. */
@@ -322,21 +334,26 @@ export function generateProgram(workspace: Blockly.Workspace): GeneratedProgram 
   // its output is thrown away. The second is the real one, with those names
   // already spoken for, so the variable comes out `time_` wherever it sits.
   const survey = runPass(workspace, null)
-  const gen = runPass(workspace, survey.gen.imports.boundNames()).gen
-  return { ...assemble(sectionsOf(gen)), missing: blocksWithoutEmitters(workspace) }
+  const pass = runPass(workspace, survey.gen.imports.boundNames())
+  return {
+    ...assemble(sectionsOf(pass.gen)),
+    missing: blocksWithoutEmitters(workspace),
+    failed: pass.failed
+  }
 }
 
 /** One generation pass over `workspace`, with `reserved` names already taken. */
 function runPass(
   workspace: Blockly.Workspace,
   reserved: ReadonlySet<string> | null
-): { gen: MicroPythonGenerator } {
+): { gen: MicroPythonGenerator; failed: string[] } {
   const gen = new MicroPythonGenerator()
   installEmitters(gen)
   gen.init(workspace)
   if (reserved) gen.reserve(reserved)
 
   const chunks: string[] = []
+  const failed: string[] = []
   for (const block of workspace.getTopBlocks(true)) {
     if (block.outputConnection) continue // a naked value block generates nothing
     try {
@@ -347,12 +364,20 @@ function runPass(
       // Blockly THROWS on a block type with no emitter, and it throws from
       // wherever that block is — which takes the whole stack it sits in with it,
       // including everything above it that generated fine. Skipping the stack
-      // keeps the rest of the program readable in the mirror; `missing` is what
-      // stops anyone writing the result back to the file.
+      // keeps the rest of the program readable in the mirror.
+      //
+      // AND IT IS WRITTEN DOWN (#1068). This used to be swallowed in silence, on
+      // the reasoning that `missing` was already the guard — and `missing` only
+      // knows about types with no registered emitter. An emitter that THREW for
+      // a type we do have left `missing` empty, so the guard did not fire and a
+      // program short of an entire stack, sometimes the empty string, was
+      // written over the learner's file. A stack that would not generate is a
+      // stack that is not in the program, whatever the reason.
+      failed.push(block.id)
     }
   }
   gen.body = chunks.join('')
-  return { gen }
+  return { gen, failed }
 }
 
 /** The three marked sections, in the order they are written. */
@@ -388,7 +413,7 @@ function sectionsOf(gen: MicroPythonGenerator): string[] {
  * leaves no gap behind it — and so the line numbers the map is built from are
  * the line numbers of the text that actually ships.
  */
-function assemble(sections: readonly string[]): Omit<GeneratedProgram, 'missing'> {
+function assemble(sections: readonly string[]): Omit<GeneratedProgram, 'missing' | 'failed'> {
   const raw = sections.join('\n')
   const sourceMap = new Map<number, string>()
   const blockLines = new Map<string, number[]>()
