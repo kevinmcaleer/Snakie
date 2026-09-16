@@ -10,6 +10,8 @@ import {
   readDocTheme,
   readEditorTheme
 } from './monaco-theme'
+import { installEditorActions } from './editor-actions'
+import { useHelpDialect } from '../hooks/useHelpDialect'
 import './PythonPane.css'
 
 /**
@@ -96,6 +98,11 @@ export function PythonPane({
   const pushingRef = useRef(false)
   const onLineClickRef = useRef(onLineClick)
   onLineClickRef.current = onLineClick
+  // Read through a ref by the context-help action: the dialect changes when a
+  // board is plugged in, and the editor is created once.
+  const { dialect: helpDialect } = useHelpDialect()
+  const helpDialectRef = useRef(helpDialect)
+  helpDialectRef.current = helpDialect
 
   // Create once. The model is ours alone — deliberately NOT one of the editor's
   // per-file models, because sharing one would give this pane the editor's undo
@@ -135,6 +142,12 @@ export function PythonPane({
     editorRef.current = editor
     decorationsRef.current = editor.createDecorationsCollection()
 
+    // The same right-click menu as the editor — Help for symbol, Refactor…,
+    // Tidy this file. This pane is editable (#1034) and is where a blocks file
+    // is typed in, so it is not a preview of the editor: for that file it IS
+    // the editor. See `editor-actions.ts`.
+    const actions = installEditorActions(editor, () => helpDialectRef.current)
+
     // The user typed. Anything the CALLER pushed in is skipped, or a block
     // dragged on the canvas would loop back round through here.
     const keys = editor.onDidChangeModelContent(() => {
@@ -150,6 +163,7 @@ export function PythonPane({
     })
 
     return () => {
+      for (const action of actions) action.dispose()
       clicks.dispose()
       keys.dispose()
       editor.getModel()?.dispose()

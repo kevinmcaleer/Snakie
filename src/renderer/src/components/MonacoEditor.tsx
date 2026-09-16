@@ -33,8 +33,8 @@ import {
   setModelDiagnostics
 } from './plugin-code-actions'
 import { registerInlineCompletions } from './inline-completions'
-import { setActiveEditor, dispatchOpenFind, dispatchOpenHelp } from './editorBridge'
-import { resolveHelpTarget } from './context-help'
+import { setActiveEditor, dispatchOpenFind } from './editorBridge'
+import { installEditorActions } from './editor-actions'
 import { setCompletionDialect } from './micropython-completions'
 import { useHelpDialect } from '../hooks/useHelpDialect'
 import { validateFormat, formatKindForName } from './format-validate'
@@ -50,7 +50,7 @@ import {
   clearBoardPinDiagnostics,
   registerBoardPinCodeActions
 } from './board-pin-diagnostics'
-import { clearRefactorCache, registerRefactorCodeActions, tidyFile } from './refactor-code-actions'
+import { clearRefactorCache, registerRefactorCodeActions } from './refactor-code-actions'
 import { refactorHints, rulesCoveredByLinter } from './refactor-hints'
 import { getCachedCapabilities } from '../lib/board-capabilities'
 import {
@@ -294,55 +294,10 @@ export function MonacoEditor(): JSX.Element {
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyF, () => dispatchOpenFind(false))
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyH, () => dispatchOpenFind(true))
 
-    // Right-click context help (#221): "Help for <symbol>" in the editor's
-    // context menu. Resolves the word under the cursor to an installed library
-    // part's bundled help (bme280, servo, …) or a language-reference topic
-    // (Pin/PWM/I2C/sleep/…), and opens the mini help at that page. Unknown words
-    // open nothing (the resolver is the single source of what's helpable).
-    editor.addAction({
-      id: 'snakie.contextHelp',
-      label: 'Help for symbol (Snakie)',
-      contextMenuGroupId: 'navigation',
-      contextMenuOrder: 1.1,
-      run: async (ed) => {
-        const pos = ed.getPosition()
-        const word = pos ? ed.getModel()?.getWordAtPosition(pos)?.word : undefined
-        if (!word) return
-        const libs = await window.api.parts.listLibraries().catch(() => [])
-        // Dialect-aware (#763): `I2C` means different pages on the two runtimes,
-        // and a MicroPython name on a CircuitPython board resolves to the page
-        // that says what to write instead.
-        const target = resolveHelpTarget(word, libs, helpDialectRef.current)
-        if (target) dispatchOpenHelp(target.articleId)
-      }
-    })
-
-    // Right-click Refactor… (#634): opens Monaco's code-action picker filtered
-    // to `refactor.*`, listing what the shared engine offers for the selection.
-    // Every entry previews its diff before it touches the file, and a file that
-    // doesn't parse offers nothing at all.
-    editor.addAction({
-      id: 'snakie.refactor',
-      label: 'Refactor… (Snakie)',
-      contextMenuGroupId: 'navigation',
-      contextMenuOrder: 1.2,
-      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyR],
-      precondition: 'editorLangId == python',
-      run: (ed) => {
-        void ed.getAction('editor.action.refactor')?.run()
-      }
-    })
-
-    // Tidy this file (#634 R7): apply every provably-safe refactoring at once,
-    // as one preview and one undo step. Kept off the speed/RAM trade-off rules.
-    editor.addAction({
-      id: 'snakie.refactor.tidyFile',
-      label: 'Tidy this file (Snakie)',
-      contextMenuGroupId: 'navigation',
-      contextMenuOrder: 1.3,
-      precondition: 'editorLangId == python',
-      run: () => tidyFile(monaco)
-    })
+    // Snakie's context-menu actions. The list lives in `editor-actions.ts` so
+    // the blocks split's Python pane gets exactly the same menu — see the note
+    // there for why it did not.
+    const actions = installEditorActions(editor, () => helpDialectRef.current)
 
     // Inline sprite thumbnails (#790): a `.spr` named in a string literal draws
     // itself beside the code, and clicking it opens that file in the Sprite
@@ -361,6 +316,7 @@ export function MonacoEditor(): JSX.Element {
     const modelStore = models.current
     return () => {
       changeDisposable.dispose()
+      for (const action of actions) action.dispose()
       setActiveEditor(null)
       spriteThumbsRef.current?.dispose()
       spriteThumbsRef.current = null
