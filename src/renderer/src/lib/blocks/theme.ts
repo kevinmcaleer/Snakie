@@ -142,6 +142,17 @@ export const BLOCK_CATEGORIES = [
     token: 'pinPower',
     hint: 'Wire a part up in Electronics and its blocks appear here.'
   },
+  // The modules this program IMPORTS (#1048), one drawer each.
+  //
+  // NOT "My parts", and the distinction earns its keep: that one means things
+  // on your breadboard, it is populated from the wiring, and its empty-state
+  // hint says so. An arbitrary `import ssd1306` is not a thing on a breadboard.
+  {
+    id: 'modules',
+    name: 'Modules',
+    token: 'ident',
+    hint: 'Import a module and the blocks it offers appear here.'
+  },
   // Wait gets a category of its own rather than a corner of Control (#1011).
   // It is the single most-used block in any hardware lesson — every blink,
   // every debounce, every "now do the next thing" — and a beginner should not

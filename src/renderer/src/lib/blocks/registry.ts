@@ -296,11 +296,28 @@ export function defineDynamicBlocks(source: string, defs: readonly BlockDefiniti
 }
 
 /** Forget every dynamic set whose source is not in `keep` (#1017). */
-export function pruneDynamicBlocks(keep: ReadonlySet<string>): void {
+export function pruneDynamicBlocks(keep: ReadonlySet<string>, prefix?: string): void {
   for (const [type, def] of [...REGISTRY]) {
-    if (def.source && !keep.has(def.source)) REGISTRY.delete(type)
+    if (!def.source || keep.has(def.source)) continue
+    // A PREFIX SCOPES THE SWEEP (#1048). Two hooks now register dynamic sets —
+    // parts and plugins from the breadboard, modules from the program's own
+    // imports — and neither knows what the other is holding. Without this the
+    // part hook's prune would delete every module drawer a moment after the
+    // module hook filled it, and each rebuild would fight the other.
+    if (prefix === undefined ? def.source.startsWith(MODULE_PREFIX) : !def.source.startsWith(prefix)) {
+      continue
+    }
+    REGISTRY.delete(type)
   }
 }
+
+/**
+ * The namespace the imported-module sets live under (#1048).
+ *
+ * Declared here rather than imported, so `pruneDynamicBlocks` — which every
+ * dynamic registrant calls — does not depend on the hook that uses it.
+ */
+const MODULE_PREFIX = 'module:'
 
 /** Every registered block, in registration order. */
 export function registeredBlocks(): BlockDefinition[] {

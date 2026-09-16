@@ -45,8 +45,14 @@ import {
 
 /** Where a set of manifest blocks came from — the namespace of its types. */
 export interface BlockSource {
-  /** `part` or `plugin`; part of the generated type name. */
-  kind: 'part' | 'plugin'
+  /**
+   * `part`, `plugin` or `module`; part of the generated type name.
+   *
+   * `module` (#1048) is an imported Python module read for its API — a third
+   * way blocks arrive, and namespaced separately so `ssd1306`'s `show` can
+   * never collide with a part's.
+   */
+  kind: 'part' | 'plugin' | 'module'
   /**
    * Unique within the kind: `<libraryId>.<partId>` for a part, the plugin id for
    * a plugin. Non-identifier characters are flattened, so the type stays a legal

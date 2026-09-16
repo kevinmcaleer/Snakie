@@ -6,6 +6,36 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A Modules drawer, filled from your program's own imports** (#1048, epic
+  #1007). Open a real driver program and it converts perfectly — ten blocks, no
+  warnings, byte-exact round trip — and offers you *nothing*: the `oled.text(…)`
+  lines are raw Python blocks you can drag but cannot author more of. That is the
+  right floor and a poor ceiling.
+
+  There is now a **Modules** category, one sub-drawer per module the program
+  imports, separate from **My parts** — which keeps meaning "things on your
+  breadboard", because that distinction earns its keep.
+
+  This first tier is the one the issue calls a free win: the curated symbol
+  tables already carried kinds and one-line details for ~39 modules and were
+  wired only to Monaco's completions. Nothing in the blocks stack had ever
+  imported them. So `machine`, `time`, `neopixel` and friends get blocks with
+  **no parsing, no file and no board** — which matters because those are exactly
+  the modules whose source we will never have: they are frozen into the
+  firmware. The `detail` lines turn out to be signatures, so the blocks get real
+  parameter names too. Member-level dialect scope is respected, so a
+  CircuitPython board is not offered `time.sleep_ms`.
+
+  The source-reading tier is written and tested underneath it: `module-api.ts`
+  reads a module's classes, methods, parameters and defaults out of its `.py`
+  with #1019's lexer — **parsing only, never importing**, because a module a
+  learner downloaded is somebody else's code. Resolving that source (project
+  folder, board `/lib`, bundled), the board-side `dir()` probe for modules with
+  no source, and upgrading `part-blocks.ts`'s guessed class name to the real one
+  are the remaining tiers.
+
 ### Fixed
 
 - **`wait N milliseconds` now runs on CircuitPython** (#1041, epic #209). It
