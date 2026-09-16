@@ -6,6 +6,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A function you defined never appeared in the Functions drawer** (#1045, epic
+  #1007). Define `wiggle` on the canvas, open **Functions** to get a block that
+  calls it, and it was not there — the drawer held the two `def` blocks,
+  `if return`, and **two blank, nameless caller blocks**. A learner who had just
+  written their first function had no way to call it.
+
+  Every toolbox category was built as a static list from the block registry.
+  That is right for the other thirteen and wrong for this one, whose contents
+  are a question about the **workspace**: Blockly's own `flyoutCategory` reads it
+  and returns one caller per function actually defined, already carrying that
+  function's name and parameter sockets. The Functions category is now
+  `custom: 'PROCEDURE'` and hands the job over.
+
+  The two caller blocks stay **registered** — the generator looks an emitter up
+  by type, and `workspace-check.ts` refuses to open a file containing a type this
+  build does not know, so dropping them would have stranded every saved program
+  that calls a function. They are simply never listed.
+
 ### Added
 
 - **Watch the turtle draw** (#1046). The Turtle instrument drew every segment

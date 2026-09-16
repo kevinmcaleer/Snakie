@@ -286,6 +286,19 @@ export function BlocksCanvas({
     })
     wsRef.current = ws
 
+    // THE FUNCTIONS DRAWER IS DYNAMIC (#1045). Every other category is a fixed
+    // list from the registry, which is right for them and wrong for this one:
+    // its contents depend on what the learner has defined. Blockly's own
+    // `flyoutCategory` reads the workspace and returns the two `def` blocks,
+    // `ifreturn`, and ONE CALLER PER FUNCTION, already carrying that function's
+    // name and parameter sockets. Without this the drawer held two blank,
+    // nameless caller blocks and a learner who had just written their first
+    // function had no way to call it.
+    ws.registerToolboxCategoryCallback(
+      Blockly.PROCEDURE_CATEGORY_NAME,
+      Blockly.Procedures.flyoutCategory
+    )
+
     const listener = (event: Blockly.Events.Abstract): void => {
       // UI-only events (scroll, select, a flyout opening) are not edits, and
       // treating them as edits would mark a file dirty for looking at it.
@@ -852,12 +865,25 @@ function revealInstrumentFor(ws: Blockly.Workspace, event: Blockly.Events.Abstra
 function buildToolbox(): Blockly.utils.toolbox.ToolboxDefinition {
   return {
     kind: 'categoryToolbox',
-    contents: BLOCK_CATEGORIES.map((c) => ({
-      kind: 'category',
-      name: c.name,
-      categorystyle: categoryStyleName(c.id),
-      contents: categoryContents(c)
-    }))
+    contents: BLOCK_CATEGORIES.map((c) =>
+      // Functions is the one category whose contents are a question about the
+      // WORKSPACE rather than about the registry (#1045), so it hands the job
+      // to Blockly — see the callback registered at injection. Everything else
+      // is a curated list and stays one.
+      c.id === 'functions'
+        ? {
+            kind: 'category',
+            name: c.name,
+            categorystyle: categoryStyleName(c.id),
+            custom: Blockly.PROCEDURE_CATEGORY_NAME
+          }
+        : {
+            kind: 'category',
+            name: c.name,
+            categorystyle: categoryStyleName(c.id),
+            contents: categoryContents(c)
+          }
+    )
   }
 }
 
