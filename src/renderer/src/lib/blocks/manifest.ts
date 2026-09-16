@@ -5,6 +5,7 @@ import type { BlockDefinition, BlockGroup } from './registry'
 import type { BlockCategoryId } from './theme'
 import { FIELD_PIN_TYPE } from './pin-field'
 import { pyString } from './py'
+import { isAtomicExpression } from './python-check'
 import {
   SETUP_PLACEHOLDER,
   renderTemplate,
@@ -281,9 +282,5 @@ function literal(kind: BlockArgSpec['kind'], value: string | number | boolean): 
  * wrong answer.
  */
 function precedenceOf(text: string): number {
-  return /^[A-Za-z_][A-Za-z0-9_.]*(\([^()]*\))?$/.test(text.trim()) ||
-    /^-?\d+(\.\d+)?$/.test(text.trim()) ||
-    /^(True|False|None)$/.test(text.trim())
-    ? Order.ATOMIC
-    : Order.NONE
+  return isAtomicExpression(text) ? Order.ATOMIC : Order.NONE
 }

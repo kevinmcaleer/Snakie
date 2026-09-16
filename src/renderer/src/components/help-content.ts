@@ -278,7 +278,22 @@ export const HELP_SECTIONS: HelpNode[] = [
           { id: 'ref-builtins', kind: 'article', title: 'Built-in functions', accent: A.page },
           { id: 'ref-classes', kind: 'article', title: 'Classes', accent: A.page },
           { id: 'ref-exceptions', kind: 'article', title: 'Errors & exceptions', accent: A.page },
-          { id: 'ref-imports', kind: 'article', title: 'Imports & modules', accent: A.page }
+          { id: 'ref-imports', kind: 'article', title: 'Imports & modules', accent: A.page },
+          // The seam between the two worlds (#1018): it sits in the Python
+          // section rather than a Blocks one because that is where a learner
+          // who has started reading the code will already be.
+          //
+          // SCOPED to MicroPython even though it lives in the plain-Python
+          // section: the Blocks generator targets `machine`, `snakie` and
+          // `instruments`, so its examples are MicroPython and a CircuitPython
+          // reader would be shown code that cannot run on their board.
+          {
+            id: 'blocks-python',
+            kind: 'article',
+            title: 'Writing Python in blocks',
+            accent: A.page,
+            scope: 'micropython'
+          }
         ]
       },
       {

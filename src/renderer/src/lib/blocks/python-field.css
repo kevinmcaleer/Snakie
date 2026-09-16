@@ -1,0 +1,31 @@
+/*
+ * The Monaco editor that opens inside a Python block's field (#1018).
+ *
+ * It sits in Blockly's widget div, which is a bare positioned container — so the
+ * card look (the border, the shadow, the rounded corner) has to come from here.
+ * Soft Shell tokens, like every other surface in the app: the editor's own
+ * colours come from the Monaco theme, and these are the frame around it.
+ */
+.blocks-python-field {
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid var(--gold);
+  border-radius: 6px;
+  background: var(--editor);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.32);
+}
+
+/* Monaco's own padding would push a one-line editor off its own top edge. */
+.blocks-python-field .monaco-editor,
+.blocks-python-field .monaco-editor .overflow-guard {
+  border-radius: 5px;
+}
+
+/*
+ * The code ON the block — mono-spaced, so a grey block reads as code at a
+ * glance rather than as a grey block with words in it. IBM Plex Mono is Soft
+ * Shell's mono face and the one the mirror next door uses.
+ */
+.blocklyText.snakie-python-code {
+  font-family: var(--font-mono), ui-monospace, monospace;
+}

@@ -8,6 +8,48 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The escape hatches: nothing is impossible in the Blocks workspace any more**
+  (#1018, epic #1007, phase 4). #1017 makes the palette grow with the parts
+  library and the plugin ecosystem; these blocks remove the ceiling entirely.
+  Any MicroPython module on earth, driven from a block canvas, today, with no
+  manifest and no waiting for us.
+
+  A new **Python** category at the bottom of the toolbox, grey because the blocks
+  in it *are* code: a **statement** block and a **value** block holding one line
+  of Python written into the program verbatim, three **import** blocks, a
+  **call** block (`call [method] on (object) with (…)`) that works on any driver
+  at all, and **attribute** blocks that read or change something on an object.
+
+  **The field is a real code editor.** Clicking into one opens Monaco in the
+  block, with Python syntax highlighting, bracket matching and *the app's own
+  MicroPython completions* — type `machine.` in the grey block and you get the
+  same list as typing it in the editor next door, because it is the same list.
+  The escape hatch is now the best-autocompleted field in the app rather than
+  the worst.
+
+  **One line per block**, which is what makes the rest of the epic keep working:
+  each block owns exactly one line, so #1016's hover lights it up, #1015's
+  tracebacks land on it, and indented code goes *inside* a Control block the way
+  Python indents it. Paste a snippet of several lines and you get a stack of
+  blocks, one per line, rather than a lost paste or a truncated one.
+
+  **The import blocks route through the generator's import manager**, so an
+  `import machine` block and a hardware block that also needs `machine` produce
+  one line between them, in the right section — and the line is attributed back
+  to the block that asked for it, so hovering a block that generates nothing
+  where it stands still shows you what it did.
+
+  **Checked, not trusted.** An unclosed bracket, a statement plugged into a value
+  socket, a `for` header with no body — each puts a sentence on the block, before
+  Run, instead of a `SyntaxError` from a board naming a line in a file nobody
+  wrote. It is advice and not a veto: the code is generated either way, because
+  these blocks exist so that nothing is ever refused.
+
+  A seventh lesson, **"When the block you need doesn't exist yet"**, teaches them
+  with a dice roller built out of `import random` and a raw value block — and
+  `docs/blocks.md` and a new in-app help page say the same thing for teachers.
+
+
 - **Blocks that come from your parts and your plugins** (#1017, epic #1007,
   phase 4). A hand-maintained palette can only ever cover the parts we thought
   of. The parts library is in the hundreds and grows through a skill, so the
@@ -101,6 +143,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   **`docs/blocks.md`** is written for a teacher, not a developer.
 
 ### Fixed
+
+- **`import x` and `from x import y` no longer swallow each other** in generated
+  block programs (#1018). The import manager keyed only on the module, so asking
+  for both forms of one module produced only the `from` line — leaving every
+  `x.` in the program undefined, as a `NameError` a long way from its cause. It
+  could not happen before there were import blocks to ask with; it can now.
+
 
 - **A NUL byte could end up in a generated program** (#1016, a bug in #1010). A
   `def` block correctly generates nothing where it stands — its body is hoisted
