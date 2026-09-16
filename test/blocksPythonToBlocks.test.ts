@@ -528,3 +528,102 @@ describe('the roots do not overlap (#1062)', () => {
     expect(ys[1] - ys[0]).toBeGreaterThan(0)
   })
 })
+
+/**
+ * A BLOCK WITH NO NEXT CONNECTION CANNOT HOLD A CHAIN (#1068).
+ * ---------------------------------------------------------------------------
+ *
+ * `forever` and `break`/`continue` are defined with no next connection, on the
+ * true reasoning that nothing runs after them. The converter used to chain onto
+ * them anyway, and `Blockly.serialization.workspaces.load` THROWS on that — a
+ * throw that reached the canvas, cleared the workspace and blocked writes, so a
+ * `while True:` with a `break` and a line of cleanup under it opened as an empty
+ * canvas beside a perfectly good program.
+ *
+ * `regenerate` below already loads into a real workspace, so every one of these
+ * is a load test as much as a round-trip one.
+ */
+describe('a terminal block that is not last becomes a raw one (#1068)', () => {
+  it('survives the loop every hardware program is: forever, break, cleanup', () => {
+    roundTrips(
+      [
+        'import time',
+        '',
+        'while True:',
+        '    if button.value():',
+        '        break',
+        '    time.sleep(0.1)',
+        'led.off()',
+        ''
+      ].join('\n')
+    )
+  })
+
+  it('keeps a line after a break inside the loop', () => {
+    roundTrips(['while True:', '    break', '    print(1)', ''].join('\n'))
+  })
+
+  it('keeps a line after a continue', () => {
+    roundTrips(['for x in items:', '    continue', '    print(1)', ''].join('\n'))
+  })
+
+  it('handles two forever loops in one file', () => {
+    roundTrips(['while True:', '    print(1)', 'while True:', '    print(2)', ''].join('\n'))
+  })
+
+  it('still makes a real forever block when it IS last', () => {
+    expect(types('while True:\n    print(1)\n')).toContain('snakie_forever')
+    roundTrips('while True:\n    print(1)\n')
+  })
+
+  it('counts the demoted block as raw, not recognised', () => {
+    const { report } = regenerate(['while True:', '    print(1)', 'led.off()', ''].join('\n'))
+    // The demoted `while True:` on line 1, and `led.off()` — which nothing
+    // recognises — on line 3.
+    expect(report.raw).toBe(2)
+    expect(report.rawLines).toEqual([1, 3])
+  })
+
+  it('reports raw lines in ascending order', () => {
+    const { report } = regenerate(
+      ['robot.go()', 'while True:', '    print(1)', 'led.off()', ''].join('\n')
+    )
+    expect(report.rawLines).toEqual([...report.rawLines].sort((a, b) => a - b))
+  })
+})
+
+/**
+ * THE DRIFT GUARD for the set above. `python-to-blocks.ts` is Blockly-free by
+ * design, so it carries its own list of which types are terminal — which is only
+ * safe if a test checks the list against the real block definitions. Both
+ * directions: a type wrongly IN the set loses a real block for nothing, and one
+ * wrongly OUT of it is the crash this describe block exists for.
+ */
+describe('the terminal-type list matches the real blocks (#1068)', () => {
+  /** Every type the converter can emit, including the palette-registered rules. */
+  const EMITTED = [
+    'controls_flow_statements',
+    'controls_forEach',
+    'controls_if',
+    'controls_repeat_ext',
+    'controls_whileUntil',
+    'math_change',
+    'snakie_forever',
+    'snakie_python_comment',
+    'snakie_python_from_import',
+    'snakie_python_import',
+    'snakie_python_import_as',
+    'snakie_python_statement',
+    'snakie_python_suite',
+    'snakie_wait_ms',
+    'snakie_wait_seconds',
+    'text_print',
+    'variables_set'
+  ]
+
+  it('is exactly the set of emitted statement types with no next connection', () => {
+    const ws = new Blockly.Workspace()
+    const terminal = EMITTED.filter((type) => !ws.newBlock(type).nextConnection)
+    expect(terminal.sort()).toEqual(['controls_flow_statements', 'snakie_forever'])
+  })
+})

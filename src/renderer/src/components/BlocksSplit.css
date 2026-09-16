@@ -30,6 +30,32 @@
   margin: 0;
 }
 
+/* THE ROUND-TRIP GATE'S NOTE (#1068). A strip, not a dialog: the conversion
+   being held back is a fact about the canvas, not a thing to interrupt anybody
+   over — their Python is untouched and still runs. Amber rather than red for
+   the same reason. */
+.blocks-split__held {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+  color: var(--txt3);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.blocks-split__held-mark {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+
 /* Narrow layout (epic #903): one pane at a time with a tab pair, because two
    180px columns are not "both on screen", they are two things you can't use. */
 .blocks-split__narrow {

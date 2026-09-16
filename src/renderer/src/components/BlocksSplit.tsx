@@ -10,6 +10,7 @@ import { useWorkspace } from '../store/workspace'
 import { BLOCKS_SCHEMA_VERSION, parseBlocksFooter } from '../../../shared/blocks-doc'
 import { pythonToBlocks } from '../lib/blocks/python-to-blocks'
 import { syntaxOk, type DeviceExec } from '../lib/blocks/syntax-gate'
+import { verifyConversion, type ConversionHold } from '../lib/blocks/round-trip'
 import { PROGRAM_RUN_EVENT, type ProgramRunDetail } from './editorBridge'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useDynamicBlocks } from '../lib/blocks/use-dynamic-blocks'
@@ -230,6 +231,14 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   /** Bumped when a CODE edit rebuilt the workspace, so the canvas re-reads it. */
   const [reloadNonce, setReloadNonce] = useState(0)
   const codeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /**
+   * The conversion was held back by the round-trip gate (#1068), and why.
+   *
+   * Null the rest of the time, which is almost always. When it is set, the
+   * canvas is showing blocks from BEFORE the learner's last edit — which is a
+   * thing they are entitled to be told, quietly, rather than left to notice.
+   */
+  const [heldBack, setHeldBack] = useState<ConversionHold | null>(null)
 
   // ── THE PARSE GATE (#1037) ────────────────────────────────────────────────
   //
@@ -258,6 +267,7 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   const gateSeq = useRef(0)
   useEffect(() => {
     setCodeDraft(null)
+    setHeldBack(null)
   }, [file?.id])
   useEffect(
     () => () => {
@@ -273,8 +283,11 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
       // the learner's file minus whatever the missing blocks contributed, and
       // saving it would replace their program with a version that lost a step.
       if (program.missing.length > 0) return
-      // A block was dragged, so the blocks are what is being edited now.
+      // A block was dragged, so the blocks are what is being edited now — and
+      // whatever the code pane could not be converted into is no longer the
+      // question (#1068).
       setCodeDraft(null)
+      setHeldBack(null)
       // Code and workspace go to the store TOGETHER — `updateBlocks` is the only
       // writer of a blocks buffer for exactly this reason (#1008).
       updateBlocks(file.id, program.code, program.workspace)
@@ -301,18 +314,41 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
       if (codeTimer.current) clearTimeout(codeTimer.current)
       codeTimer.current = setTimeout(() => {
         const seq = (gateSeq.current += 1)
-        void syntaxOk(code, { exec: askBoardRef.current }).then((verdict) => {
-          // A probe that came back after the learner typed again is answering a
-          // question about text that no longer exists.
-          if (seq !== gateSeq.current) return
-          // Mid-sentence. Their text stays exactly as typed (`codeDraft` still
-          // holds it) and the blocks they already have stay on screen. No
-          // warning: a program half written is not a program with a mistake.
-          if (!verdict.ok) return
-          const { workspace } = pythonToBlocks(code)
-          updateBlocks(file.id, code, workspace)
-          setReloadNonce((n) => n + 1)
-        })
+        void syntaxOk(code, { exec: askBoardRef.current })
+          .then(async (verdict) => {
+            // A probe that came back after the learner typed again is answering a
+            // question about text that no longer exists.
+            if (seq !== gateSeq.current) return
+            // Mid-sentence. Their text stays exactly as typed (`codeDraft` still
+            // holds it) and the blocks they already have stay on screen. No
+            // warning: a program half written is not a program with a mistake.
+            if (!verdict.ok) return
+            const { workspace } = pythonToBlocks(code)
+            // ── THE ROUND-TRIP GATE (#1068) ─────────────────────────────────
+            //
+            // Committing this makes the blocks the source of truth, and the next
+            // block the learner touches regenerates the file from them. So the
+            // question is not "did we convert it" but "would regenerating give
+            // their program back" — and if it would not, the conversion does not
+            // get to become the program. See `lib/blocks/round-trip.ts`.
+            const faithful = await verifyConversion(code, workspace)
+            if (seq !== gateSeq.current) return
+            if (!faithful.ok) {
+              // Their text is untouched — `codeDraft` still holds exactly what
+              // they typed, and nothing has been written. The blocks on screen
+              // stay the blocks they already had.
+              setHeldBack(faithful.reason)
+              return
+            }
+            setHeldBack(null)
+            updateBlocks(file.id, code, workspace)
+            setReloadNonce((n) => n + 1)
+          })
+          .catch(() => {
+            // The gate itself failing is not a reason to write something we
+            // could not check.
+            if (seq === gateSeq.current) setHeldBack('unloadable')
+          })
       }, CODE_TO_BLOCKS_MS)
     },
     [file, updateBlocks]
@@ -403,6 +439,19 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   return (
     <div className="blocks-split" ref={hostRef}>
       {driverNeeds.length > 0 && <DriverInstallBanner needs={driverNeeds} />}
+      {/* THE ROUND-TRIP GATE SAID NO (#1068).
+          Said quietly, and said at all — the canvas is showing blocks from
+          before their last edit, and a learner who is not told that is a
+          learner watching the blocks ignore them. Not an error: their Python is
+          exactly as they typed it and still runs. */}
+      {heldBack && (
+        <p className="blocks-split__held" role="status">
+          <span className="blocks-split__held-mark" aria-hidden="true" />
+          These blocks are from before your last edit — Snakie could not turn that
+          Python into blocks without changing it. Your code is fine and will still
+          run.
+        </p>
+      )}
       {/* "What did THIS block write?" — right-click ▸ Show me the Python. */}
       {pythonFor && generated && (
         <BlockPythonPopover

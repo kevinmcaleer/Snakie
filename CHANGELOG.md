@@ -8,6 +8,44 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A `while True:` with a `break` no longer opens as an empty canvas**
+  (#1068, epic #1007). `forever` and `break`/`continue` are defined with no next
+  connection, on the true reasoning that nothing runs after them — but the
+  Python→blocks converter chained onto them anyway, and Blockly *throws* on a
+  `next` a block has nowhere to put. The throw reached the canvas, which cleared
+  the workspace and blocked writes, so the commonest hardware loop there is —
+
+  ```python
+  while True:
+      if button.value():
+          break
+      time.sleep(0.1)
+  led.off()
+  ```
+
+  — showed a blank canvas beside a perfectly good program, with nothing said.
+  A terminal block that turns out not to be last now becomes the raw block it
+  would have been if we had not recognised it: uglier, and correct.
+
+- **Typing Python that would not convert back cleanly no longer rewrites your
+  program** (#1068, epic #1007). Typing in the code pane makes the blocks the source of
+  truth, so the next block you touch rewrites the file from them — which means a
+  converter that lost a line did not merely look wrong, it eventually *saved*
+  that. The conversion is now generated straight back and compared before it is
+  allowed to become the program, and held back when the two disagree. Your text
+  is untouched either way, the blocks you had stay on screen, and a quiet strip
+  above the panes says so rather than leaving you to notice.
+
+  The comparison forgives the two things the generator legitimately rewrites —
+  the import section (including the `import time` it adds for you) and
+  whitespace — and nothing else, so a dropped statement, a dropped comment, a
+  re-nested body or a mangled line all hold the blocks back instead of
+  rewriting your file.
+
+  This covers the code pane. Opening a `.py` Snakie did not write still converts
+  it without the check — that path shares a surface with the other ways the
+  blocks and the file can disagree, and is being done with them (#1068).
+
 - **Opening a real module no longer loses most of it** (#1063, epic #1007).
   Pointing the Python→blocks converter at a 114-line robot module brought back
   **36 lines**. Four separate faults, each silent:
