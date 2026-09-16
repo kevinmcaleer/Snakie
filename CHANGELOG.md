@@ -8,6 +8,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Right-click help works again in a blocks file.** Right-clicking a variable
+  or a class name offered Monaco's bare default menu — no **Help for symbol**,
+  no **Refactor…**, no **Tidy this file**.
+
+  The blocks split mounts a *second* Monaco, the Python pane beside the canvas.
+  It was written after those three actions and never carried them over, and it
+  did not matter until #1034 made that pane editable and #1008 made a `.py` with
+  a blocks footer open in the split **even from the Code workspace** — at which
+  point the pane became where a learner does their typing, without the menu
+  written for exactly that gesture.
+
+  The list now lives in `editor-actions.ts` and both editors install it, the
+  same move `monaco-theme.ts` already made for the theme and for the same
+  reason. A test pins that both call it, because what broke was not behaviour
+  inside either editor: it was one of them never calling it at all.
+
 - **A variable slot is the same size as the slots beside it now.** In
   `from (modulino) import (ModulinoMotors)` both holes are **fields**, drawn at
   34px. In `set motors to (ModulinoMotors())` the hole is a whole **value
