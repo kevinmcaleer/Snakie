@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { renderToStaticMarkup } from 'react-dom/server'
 import { blocksFacts } from '../src/renderer/src/store/workspace'
-import { BlocksConflictNotice } from '../src/renderer/src/components/BlocksSplit'
 import { parseBlocksFooter, writeBlocksFooter } from '../src/shared/blocks-doc'
 
 const WS = {
@@ -36,7 +34,11 @@ describe('blocksFacts — deriving isBlocks from the buffer (#1008)', () => {
     expect(blocksFacts('')).toEqual({ isBlocks: false })
   })
 
-  it('hand-edited Python under an unchanged footer is blocks, in conflict', () => {
+  it('hand-edited Python under an unchanged footer is blocks, and says the footer is stale', () => {
+    // The FACT is unchanged; what we do with it is not. #1008 asked the learner
+    // which side won. Under #1034 the `.py` is the program and the footer is
+    // only remembered layout, so a mismatch silently re-derives the blocks from
+    // the code (`BlocksSplit`'s `doc`) instead of putting a modal in the way.
     const edited = BLOCKS_FILE.replace('Led(15).on()', 'Led(16).on()')
     expect(blocksFacts(edited)).toEqual({ isBlocks: true, blocksConflict: true })
   })
@@ -74,23 +76,3 @@ describe('session restore round-trips a blocks file (#1008)', () => {
   })
 })
 
-describe('BlocksConflictNotice (#1008)', () => {
-  const render = (): string =>
-    renderToStaticMarkup(<BlocksConflictNotice name="square.py" onKeepPython={() => {}} />)
-
-  it('offers the choice, and says nothing has been changed', () => {
-    const out = render()
-    expect(out).toContain('role="alert"')
-    expect(out).toContain('Nothing has been changed')
-    expect(out).toContain('Keep the Python, drop the blocks')
-    expect(out).toContain('square.py')
-  })
-
-  it('does not offer a "keep the blocks" button it cannot honour yet', () => {
-    // #1010 brings the generator; until then the alternative is described, not
-    // offered — a button that silently does nothing is worse than the gap.
-    const out = render()
-    expect(out.match(/<button/g)).toHaveLength(1)
-    expect(out).toContain('arrives with the generator')
-  })
-})

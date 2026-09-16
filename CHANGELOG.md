@@ -8,6 +8,40 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **One editable surface: the divider is the control, and "Graduate to Python"
+  is gone** (#1034, epic #1007, phase 6). The graduation model is removed —
+  button, celebration, one-way door and all. It was a control that claimed to
+  know when somebody had learned enough, and a learner could press it in their
+  first minute.
+
+  **The `.py` is the program; blocks and text are two views of it.** The Python
+  pane is a real Monaco editor now, not a read-only mirror: type in it and the
+  blocks follow, drag a block and the code follows, and neither side is the
+  source the other derives from. What makes that safe is #1019's guarantee — a
+  line nothing recognises becomes a raw Python block holding that exact line — so
+  there is no conversion that can fail and nothing to put a modal in front of.
+  The reconversion is debounced, because every keystroke is a change and a
+  program is not.
+
+  **Any MicroPython file opens in blocks.** A `.py` Snakie never wrote no longer
+  needs a footer to be opened in the Blocks workspace; the blocks are derived
+  from the code. #1008's footer keeps its job but loses its rank: it is
+  remembered layout, and a stale one silently re-derives rather than asking the
+  learner which side wins.
+
+  **The three-button `Blocks · Split · Python` control is replaced by the
+  divider itself.** It looked like three modes; there is one axis with an
+  in-between. Drag the split all the way one way for blocks, all the way the
+  other for code, and release it near the middle for both. A **white dot beneath
+  and between the panes** marks that middle stop and brightens as you near it,
+  because the two ends announce themselves and nothing else said the divider
+  rests halfway. The ends leave a sliver rather than collapsing — a collapsed
+  pane cannot be dragged back open, and the divider is the only control there is.
+
+  Lesson 7 of the blocks course is rewritten around it, and `docs/blocks.md`,
+  `docs/blockly-epic.md` §2.1 and the in-app help no longer describe a door that
+  does not exist.
+
 - **Python → blocks: the converter** (#1019, epic #1007, phase 5). The spike
   asked where a Python AST comes from in the renderer. All three candidates were
   checked rather than guessed, and all three lose: the bundled MicroPython WASM

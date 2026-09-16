@@ -174,34 +174,6 @@ export function dispatchBlocksViewMode(mode: string, name: string): void {
 }
 
 /**
- * "A blocks file just graduated to Python" (#1016, epic #1007).
- *
- * An EVENT because the celebration has to OUTLIVE the thing that raised it: the
- * moment a file stops being a blocks file the editor routes it to Monaco and the
- * split unmounts, taking any notice rendered inside it. The message belongs to
- * the document, not to the pane that happened to be showing it a frame ago.
- */
-export const GRADUATED_EVENT = 'snakie:graduated'
-
-export interface GraduatedDetail {
-  /** The buffer that graduated — so the celebration clears when they move ON. */
-  fileId: string
-  /** The file's name, now an ordinary `.py`. */
-  name: string
-  /** How many lines of Python they wrote. */
-  lines: number
-  /** Where the blocks were kept. */
-  blocksName: string
-  /** False when the blocks are an unsaved buffer rather than a file on disk. */
-  blocksSaved: boolean
-}
-
-/** Announce a graduation, for whoever is rendering the celebration. */
-export function dispatchGraduated(detail: GraduatedDetail): void {
-  window.dispatchEvent(new CustomEvent<GraduatedDetail>(GRADUATED_EVENT, { detail }))
-}
-
-/**
  * "Close the active tab" (#915), fired by File ▸ Close Tab.
  *
  * An EVENT rather than a store call, because closing a tab is not just removing

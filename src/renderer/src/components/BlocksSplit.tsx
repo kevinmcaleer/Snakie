@@ -5,16 +5,20 @@ import {
   PanelResizeHandle,
   type ImperativePanelGroupHandle
 } from 'react-resizable-panels'
-import { useWorkspaceLayout } from '../store/layout'
+import { BLOCKS_PANE_SLIVER, useWorkspaceLayout } from '../store/layout'
 import { useWorkspace } from '../store/workspace'
-import { parseBlocksFooter } from '../../../shared/blocks-doc'
-import { useGraduate } from '../lib/blocks/use-graduate'
+import { BLOCKS_SCHEMA_VERSION, parseBlocksFooter } from '../../../shared/blocks-doc'
+import { pythonToBlocks } from '../lib/blocks/python-to-blocks'
 import { useDynamicBlocks } from '../lib/blocks/use-dynamic-blocks'
 import { DriverInstallBanner } from './DriverInstallBanner'
 import type { PartDriverNeed } from './part-editor.util'
-import type { GraduatedDetail } from './editorBridge'
 import type { BlocksProgram } from './BlocksCanvas'
-import { resolveBlocksView, type BlocksPane } from '../lib/blocks/split'
+import {
+  modeForRatio,
+  resolveBlocksView,
+  stopFor,
+  type BlocksPane
+} from '../lib/blocks/split'
 import type { BlocksViewMode } from '../store/layout'
 import './BlocksSplit.css'
 
@@ -22,10 +26,21 @@ import './BlocksSplit.css'
 // RobotView are — a user who never opens a blocks file never downloads it,
 // which matters most on the web build over a school's connection.
 const BlocksCanvas = lazy(() => import('./BlocksCanvas'))
-// The mirror is Monaco (#1010), which is the biggest chunk in the app. Split for
-// the same reason, and so this module stays importable outside a browser — the
-// conflict notice below is rendered in a plain-node test.
-const PythonMirror = lazy(() => import('./PythonMirror'))
+
+/**
+ * How long after the last keystroke the code is turned back into blocks (ms).
+ *
+ * Long enough that typing a line is one conversion rather than thirty, short
+ * enough that pausing to think shows you what you just wrote. The canvas
+ * rebuild is the expensive half, and it is also the one that would be
+ * distracting if it happened per character.
+ */
+const CODE_TO_BLOCKS_MS = 450
+
+
+// The code pane is Monaco (#1010), which is the biggest chunk in the app. Split
+// for the same reason, and so this module stays importable outside a browser.
+const PythonPane = lazy(() => import('./PythonPane'))
 
 /**
  * THE BLOCKS SPLIT (#1009, epic #1007).
@@ -67,12 +82,30 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   const layout = useWorkspaceLayout()
   const file = openFiles.find((f) => f.id === activeId) ?? null
   const content = file?.content
-  const doc = useMemo(() => (content === undefined ? null : parseBlocksFooter(content)), [content])
+  /**
+   * The document, as blocks and as code.
+   *
+   * A file with a footer brings its own workspace — the blocks exactly where the
+   * learner left them. A file WITHOUT one is converted (#1019, #1034): the `.py`
+   * is the program, and the blocks are a view of it, so any MicroPython file can
+   * be opened here rather than only the ones Snakie wrote.
+   */
+  const doc = useMemo(() => {
+    if (content === undefined) return null
+    const stored = parseBlocksFooter(content)
+    if (stored) return stored
+    const { workspace } = pythonToBlocks(content)
+    return { code: content, workspace, version: BLOCKS_SCHEMA_VERSION, codeMatches: true }
+  }, [content])
 
   const hostRef = useRef<HTMLDivElement>(null)
   const groupRef = useRef<ImperativePanelGroupHandle>(null)
   const [width, setWidth] = useState(BLOCKS_INITIAL_WIDTH)
   const [pane, setPane] = useState<BlocksPane>('canvas')
+  /** Where the divider is, read on release to find the stop it fell into. */
+  const ratioRef = useRef<[number, number]>([50, 50])
+  /** The same number as state, so the detent marker can light up as you near it. */
+  const [canvasShare, setCanvasShare] = useState(50)
 
   // The editor region's width decides split-or-tabs, and nothing else reports
   // it: a panel drag changes it without a window resize, and a workspace switch
@@ -91,13 +124,20 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   const remembered = layout.workspace.blocksSplit
   const view = useMemo(() => resolveBlocksView(mode, width, remembered), [mode, width, remembered])
 
-  // Apply the resolved ratio to the mounted group. `applyNonce` is in the
-  // dependency list because the view-mode control writes through the layout
-  // store, which bumps it — the same signal a workspace switch uses.
+  // Apply the resolved ratio to the mounted group, when the STOP changes or a
+  // workspace switch asks for it (`applyNonce`).
+  //
+  // Keyed on `mode` and NOT on `view.ratio`, which is a fresh array from
+  // `resolveBlocksView` on every render. Depending on it re-applied the layout
+  // on each render — and since a drag re-renders (the detent marker follows the
+  // divider), the effect undid the drag frame by frame and the divider could
+  // not be moved at all.
+  const viewRatioRef = useRef(view.ratio)
+  viewRatioRef.current = view.ratio
   useEffect(() => {
     if (view.kind !== 'split') return
-    groupRef.current?.setLayout([...view.ratio])
-  }, [view.kind, view.ratio, layout.applyNonce])
+    groupRef.current?.setLayout([...viewRatioRef.current])
+  }, [view.kind, mode, layout.applyNonce])
 
   // A narrow layout has no handle to drag, so the tab pair is the only way
   // between the two — keep it in step with the emphasis the user last chose.
@@ -157,6 +197,33 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
     setPythonFor(null)
   }, [file?.id])
 
+  /**
+   * WHO IS DRIVING (#1034).
+   *
+   * Blocks and code are two views of one program, so both can be edited — but
+   * only one of them at a time is the thing being edited, and the other has to
+   * follow without arguing. While the learner is typing, this holds their exact
+   * text and the pane shows it; the canvas follows along underneath. The moment
+   * they touch a block, it clears and the generator takes the wheel back.
+   *
+   * Without it the two halves fight: a keystroke converts to blocks, the blocks
+   * regenerate code, and the regenerated code — which is tidied, with its
+   * imports re-sorted — lands back in the pane under the cursor, mid-word.
+   */
+  const [codeDraft, setCodeDraft] = useState<string | null>(null)
+  /** Bumped when a CODE edit rebuilt the workspace, so the canvas re-reads it. */
+  const [reloadNonce, setReloadNonce] = useState(0)
+  const codeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    setCodeDraft(null)
+  }, [file?.id])
+  useEffect(
+    () => () => {
+      if (codeTimer.current) clearTimeout(codeTimer.current)
+    },
+    []
+  )
+
   const handleEdit = useCallback(
     (program: BlocksProgram): void => {
       if (!file) return
@@ -164,9 +231,37 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
       // the learner's file minus whatever the missing blocks contributed, and
       // saving it would replace their program with a version that lost a step.
       if (program.missing.length > 0) return
+      // A block was dragged, so the blocks are what is being edited now.
+      setCodeDraft(null)
       // Code and workspace go to the store TOGETHER — `updateBlocks` is the only
       // writer of a blocks buffer for exactly this reason (#1008).
       updateBlocks(file.id, program.code, program.workspace)
+    },
+    [file, updateBlocks]
+  )
+
+  /**
+   * The learner typed in the code pane (#1034). Convert it back into blocks.
+   *
+   * DEBOUNCED, because every keystroke is a change and a program is not: half a
+   * line converts to something very different from the finished one, and a
+   * canvas rebuilding itself on each character would be unusable. Their text
+   * appears instantly; the blocks catch up when they pause.
+   *
+   * The conversion cannot fail (#1019) — a line nothing recognises becomes a raw
+   * Python block holding that exact line — so there is nothing to validate and
+   * nothing to refuse.
+   */
+  const handleCodeChange = useCallback(
+    (code: string): void => {
+      if (!file) return
+      setCodeDraft(code)
+      if (codeTimer.current) clearTimeout(codeTimer.current)
+      codeTimer.current = setTimeout(() => {
+        const { workspace } = pythonToBlocks(code)
+        updateBlocks(file.id, code, workspace)
+        setReloadNonce((n) => n + 1)
+      }, CODE_TO_BLOCKS_MS)
     },
     [file, updateBlocks]
   )
@@ -208,15 +303,10 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
     return out
   }, [partsUsed, partFor])
 
-  // Graduating (#1016) — the same implementation the editor header's button
-  // uses, because the ORDER matters (blocks kept first) and a second copy that
-  // got it wrong would lose somebody's work.
-  const { graduate, error: graduateError, clearError } = useGraduate(file?.id ?? null)
-
   if (!file || !doc) {
     return (
       <div className="blocks-split blocks-split--empty">
-        <p className="blocks-split__note">No blocks file is open.</p>
+        <p className="blocks-split__note">No file is open.</p>
       </div>
     )
   }
@@ -230,24 +320,26 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
         onEdit={handleEdit}
         peek={view.peek}
         onExpand={() => onModeChange('split')}
-        onGraduate={graduate}
         onHoverBlock={setLinkedBlock}
         onSelectBlock={setLinkedBlock}
         selectBlockId={selectFromPython}
         onShowBlockPython={setPythonFor}
         paletteNonce={paletteNonce}
         onPartsUsed={setPartsUsed}
+        reloadNonce={reloadNonce}
       />
     </Suspense>
   )
   // The generator's output when there is any, the file's stored code until then
   // — so the pane is never blank for the frame between opening and generating.
-  const mirrored = generated?.code ?? doc.code
+  // The learner's own text while they are typing it, the generator's output
+  // otherwise. See `codeDraft` above for why the order matters.
+  const shown = codeDraft ?? generated?.code ?? doc.code
   const python = (
     <Suspense fallback={<div className="blocks-split__loading">Loading the Python…</div>}>
-      <PythonMirror
-        code={mirrored}
-        onEditAttempt={graduate}
+      <PythonPane
+        code={shown}
+        onCodeChange={handleCodeChange}
         highlightLines={linkedLines}
         onLineClick={handleLineClick}
         revealLine={revealLine}
@@ -257,18 +349,7 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
 
   return (
     <div className="blocks-split" ref={hostRef}>
-      {file.blocksConflict && (
-        <BlocksConflictNotice name={file.name} onKeepPython={graduate} />
-      )}
       {driverNeeds.length > 0 && <DriverInstallBanner needs={driverNeeds} />}
-      {graduateError && (
-        <div className="blocks-split__conflict" role="alert">
-          <p>Couldn&rsquo;t keep the blocks, so nothing was changed: {graduateError}</p>
-          <button type="button" className="btn btn--sm btn--ghost" onClick={clearError}>
-            Dismiss
-          </button>
-        </div>
-      )}
       {/* "What did THIS block write?" — right-click ▸ Show me the Python. */}
       {pythonFor && generated && (
         <BlockPythonPopover
@@ -278,6 +359,17 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
         />
       )}
 
+      {/* THE MIDDLE STOP, marked. The two ends announce themselves — you can
+          see the pane you are about to close — but nothing says the divider
+          rests halfway, so a learner who drags it once goes all the way across
+          and never finds the view the whole epic is built around. One dot,
+          beneath and between the two panes, on the stop it marks. */}
+      {view.kind === 'split' && (
+        <span
+          className={`blocks-split__detent${Math.abs(canvasShare - 50) < 6 ? ' is-near' : ''}`}
+          aria-hidden="true"
+        />
+      )}
       {view.kind === 'tabs' ? (
         <div className="blocks-split__narrow">
           {/* Too narrow for two usable columns, so one at a time with a switch —
@@ -313,62 +405,46 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
           direction="horizontal"
           ref={groupRef}
           className="blocks-split__group"
-          onLayout={(sizes) => layout.recordSizes('blocksSplit', sizes)}
+          onLayout={(sizes) => {
+            ratioRef.current = [sizes[0] ?? 50, sizes[1] ?? 50]
+            setCanvasShare(sizes[0] ?? 50)
+            layout.recordSizes('blocksSplit', sizes)
+          }}
         >
-          <Panel
-            order={1}
-            defaultSize={view.ratio[0]}
-            collapsible
-            collapsedSize={0}
-            minSize={view.peek ? 0 : 20}
-          >
+          {/* NOT `collapsible`. A collapsed panel cannot be dragged back open —
+              the library only expands one through its own imperative API — and
+              the divider is the only control there is. The end stop leaves a
+              sliver instead (`BLOCKS_PANE_SLIVER`), which is an edge you can
+              take hold of. `minSize` is that same sliver, because the library
+              REFUSES a drag past `minSize` rather than clamping to it: anything
+              larger here and the divider would stop short of its own ends. */}
+          <Panel order={1} minSize={BLOCKS_PANE_SLIVER} defaultSize={view.ratio[0]}>
             {canvas}
           </Panel>
-          <PanelResizeHandle className="resize-handle resize-handle--vertical" />
-          <Panel order={2} defaultSize={view.ratio[1]} minSize={20}>
+          {/* THE DIVIDER IS THE CONTROL (#1034). Three buttons reading
+              `Blocks · Split · Python` looked like three modes; there is one
+              axis with an in-between, and the thing that moves along it is the
+              thing you already reach for to resize. */}
+          <PanelResizeHandle
+            className="resize-handle resize-handle--vertical blocks-split__divider"
+            onDragging={(isDragging) => {
+              if (isDragging) return
+              // Snap on RELEASE, never during the drag: a divider that jumps
+              // out from under the pointer is a divider you cannot aim.
+              const stop = stopFor(ratioRef.current[0])
+              if (!stop) {
+                onModeChange(modeForRatio(ratioRef.current))
+                return
+              }
+              groupRef.current?.setLayout([stop.at, 100 - stop.at])
+              onModeChange(stop.mode)
+            }}
+          />
+          <Panel order={2} minSize={BLOCKS_PANE_SLIVER} defaultSize={view.ratio[1]}>
             {python}
           </Panel>
         </PanelGroup>
       )}
-    </div>
-  )
-}
-
-/**
- * The hand-edit conflict (#1008): the Python above the footer moved, so the file
- * asks which side wins before anything is written.
- *
- * Its own component, store-free, because it is the one piece of this screen with
- * consequences — a wrong answer here loses work — and that makes it the piece
- * worth holding to its exact words in a test.
- *
- * "Keep the Python" works now. "Keep the blocks" means rebuilding the code from
- * the workspace, which IS the generator (#1010), so it is described rather than
- * offered as a button that would do nothing (epic #853: no stub that lies).
- */
-export function BlocksConflictNotice({
-  name,
-  onKeepPython
-}: {
-  name: string
-  onKeepPython: () => void
-}): JSX.Element {
-  return (
-    <div className="blocks-split__conflict" role="alert">
-      <h2 className="blocks-split__conflict-title">This file&rsquo;s Python was edited</h2>
-      <p>
-        The code in <strong>{name}</strong> no longer matches the blocks saved with it. Nothing has
-        been changed — pick which one to keep.
-      </p>
-      <div className="blocks-split__actions">
-        <button type="button" className="btn btn--sm" onClick={onKeepPython}>
-          Keep the Python, drop the blocks
-        </button>
-      </div>
-      <p className="blocks-split__hint">
-        Keeping the blocks instead means rebuilding the Python from them, which arrives with the
-        generator (#1010). Until then the edited code is safe here, and saving changes nothing.
-      </p>
     </div>
   )
 }
@@ -451,54 +527,6 @@ export function BlockPythonPopover({
           Python appears inside that block&rsquo;s line.
         </p>
       )}
-    </div>
-  )
-}
-
-/**
- * The step is done, and it is an achievement (#1016).
- *
- * The obvious implementation of this moment is a confirm dialog with the word
- * "irreversible" in it, which tells a ten-year-old that what they just did was
- * dangerous. It wasn't: the blocks are saved beside the file, and they have been
- * reading this Python for an hour. So the sentence names the NUMBER instead —
- * true, checkable by scrolling, and the thing that actually happened.
- *
- * It does NOT switch workspace. Graduating and then finding yourself somewhere
- * else is the app moving the furniture while you are walking; the file is open
- * in Monaco right here, and the button OFFERS Code rather than taking it.
- *
- * Store-free and exported, so the words a learner meets at the milestone the
- * whole epic is built around are held to in a test.
- */
-export function GraduationNotice({
-  detail,
-  onDismiss,
-  onOpenInCode
-}: {
-  detail: GraduatedDetail
-  onDismiss: () => void
-  onOpenInCode?: () => void
-}): JSX.Element {
-  const lines = detail.lines === 1 ? '1 line' : `${detail.lines} lines`
-  return (
-    <div className="blocks-split__graduated" role="status">
-      <h2 className="blocks-split__graduated-title">You wrote {lines} of Python.</h2>
-      <p>
-        <strong>{detail.name}</strong> is ordinary Python now, and you can edit it. Your blocks are
-        safe in <strong>{detail.blocksName}</strong>
-        {detail.blocksSaved ? ' beside it' : ', which is open and unsaved — save it to keep them'}.
-      </p>
-      <div className="blocks-split__actions">
-        {onOpenInCode && (
-          <button type="button" className="btn btn--sm" onClick={onOpenInCode}>
-            Open the Code workspace
-          </button>
-        )}
-        <button type="button" className="btn btn--sm btn--ghost" onClick={onDismiss}>
-          Stay here
-        </button>
-      </div>
     </div>
   )
 }

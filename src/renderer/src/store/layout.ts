@@ -89,20 +89,36 @@ export interface WorkspaceLayout {
 }
 
 /**
- * The three emphases of the `Blocks · Split · Python` control (#1009).
+ * The three STOPS of the split (#1009, reshaped by #1034).
  *
- * Not three layouts — ONE split at three ratios, because the teaching mechanism
- * is that both sides are always on screen. `python` is the exception and even it
- * keeps the canvas reachable, as a peek strip rather than a hidden pane: a
- * learner who cannot see where the blocks went has lost their program.
+ * Not three layouts — one divider with three positions it clicks into. Blocks
+ * at one end, code at the other, and both in the middle; the divider is the
+ * control, so these are where it rests rather than what three buttons set.
+ *
+ * A collapsed pane is never a HIDDEN one: it keeps a sliver the divider can be
+ * dragged back off, because a learner who cannot see where the blocks went has
+ * lost their program.
  */
 export type BlocksViewMode = 'blocks' | 'split' | 'python'
 
-/** `[canvas, python]` shares each emphasis applies. */
+/**
+ * How wide the closed pane is left at an end stop, as a share.
+ *
+ * NOT ZERO, for two reasons that turn out to be the same one. A pane collapsed
+ * to nothing puts the divider flush against the edge of the group, where it is
+ * half off-screen and cannot be grabbed to bring the pane back — and the divider
+ * is the only control there is. And a learner who cannot see where the blocks
+ * went has lost their program, which is why #1009 invented the peek strip in the
+ * first place. So an end stop leaves a sliver: an edge you can see, and take
+ * hold of.
+ */
+export const BLOCKS_PANE_SLIVER = 3
+
+/** `[canvas, python]` shares at each stop. */
 export const BLOCKS_VIEW_RATIOS: Record<BlocksViewMode, [number, number]> = {
-  blocks: [64, 36],
+  blocks: [100 - BLOCKS_PANE_SLIVER, BLOCKS_PANE_SLIVER],
   split: [50, 50],
-  python: [0, 100]
+  python: [BLOCKS_PANE_SLIVER, 100 - BLOCKS_PANE_SLIVER]
 }
 
 /**
@@ -170,7 +186,7 @@ export const WORKSPACE_PRESETS: Record<WorkspaceId, WorkspaceLayout> = {
     // A shorter console than Code's: the canvas needs the height, and the
     // console here is for a traceback (#1015), not a working REPL.
     vertical: [68, 32],
-    blocksSplit: [...BLOCKS_VIEW_RATIOS.blocks]
+    blocksSplit: [...BLOCKS_VIEW_RATIOS.split]
   },
   // Today's default layout, unchanged: files open, editor + console, no dock.
   code: {
@@ -203,7 +219,7 @@ export const WORKSPACE_PRESETS: Record<WorkspaceId, WorkspaceLayout> = {
     boardPaneOpen: true,
     horizontal: [0, 0, 100, 0],
     vertical: [65, 35],
-    blocksSplit: [...BLOCKS_VIEW_RATIOS.blocks]
+    blocksSplit: [...BLOCKS_VIEW_RATIOS.split]
   },
   // Build (#320): the URDF/3-D editor FULL SCREEN — no code, no board view. The
   // centre column hosts the full-screen Robot pose tool (files collapsed, board
@@ -219,7 +235,7 @@ export const WORKSPACE_PRESETS: Record<WorkspaceId, WorkspaceLayout> = {
     boardPaneOpen: false,
     horizontal: [0, 100, 0, 0],
     vertical: [65, 35],
-    blocksSplit: [...BLOCKS_VIEW_RATIOS.blocks]
+    blocksSplit: [...BLOCKS_VIEW_RATIOS.split]
   }
 }
 

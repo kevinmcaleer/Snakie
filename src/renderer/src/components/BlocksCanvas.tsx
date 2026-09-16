@@ -106,8 +106,6 @@ export interface BlocksCanvasProps {
   peek?: boolean
   /** Click handler for the peek strip (restores the split). */
   onExpand?: () => void
-  /** Drop the footer and keep the Python — the escape from an unreadable file. */
-  onGraduate?: () => void
   /**
    * The learner is pointing at a block (#1016) — hovered, or `null` on leaving.
    *
@@ -141,6 +139,16 @@ export interface BlocksCanvasProps {
    * the caller can offer to install their drivers.
    */
   onPartsUsed?: (parts: readonly { libraryId: string; partId: string }[]) => void
+  /**
+   * Bumped when the workspace changed from OUTSIDE the canvas (#1034) — the
+   * learner edited the code, and it was converted back into blocks.
+   *
+   * The canvas is otherwise the source of truth once it is up (see the load
+   * effect), which is what stops an edit echoing back and re-loading under the
+   * user's cursor. A code edit is the one case where the outside is ahead, and
+   * this is how it says so.
+   */
+  reloadNonce?: number
 }
 
 // Blockly's message table is a precondition of `inject` — see `locale.ts`.
@@ -174,13 +182,13 @@ export function BlocksCanvas({
   onEdit,
   peek = false,
   onExpand,
-  onGraduate,
   onHoverBlock,
   onSelectBlock,
   selectBlockId,
   onShowBlockPython,
   paletteNonce = 0,
-  onPartsUsed
+  onPartsUsed,
+  reloadNonce = 0
 }: BlocksCanvasProps): JSX.Element {
   // BEFORE anything else: can this build read these blocks at all? A file made
   // by a newer Snakie, or with a part/plugin's blocks (#1017) that isn't
@@ -530,12 +538,18 @@ export function BlocksCanvas({
     }
   }, [paletteNonce, peek, blocked])
 
-  // Load the document. Keyed on the FILE, not the JSON: the canvas is the source
-  // of truth once it is up, so re-loading on every workspace change would fight
-  // the user's own drag — the store's content is downstream of this canvas.
+  // Load the document. Keyed on the FILE — and on `reloadNonce`, which is the
+  // one case where the outside is ahead of the canvas (#1034: the learner typed
+  // in the code pane and it was converted back). Keying on the JSON instead
+  // would re-load on every workspace change and fight the user's own drag,
+  // because the store's content is otherwise downstream of this canvas.
   useEffect(() => {
     const ws = wsRef.current
     if (!ws || peek || blocked) return
+    // A reload rebuilds every block, so the view would jump back to the origin
+    // each time the learner paused typing. Put it back where they left it.
+    const scroll =
+      'scrollX' in ws ? { x: (ws as Blockly.WorkspaceSvg).scrollX, y: (ws as Blockly.WorkspaceSvg).scrollY } : null
     writeBlockedRef.current = false
     loadingRef.current = true
     // Belt to the comparison's braces: Blockly's own way of saying "this change
@@ -570,6 +584,13 @@ export function BlocksCanvas({
       // program saved yesterday is exactly the one whose board has been
       // re-flashed since.
       onPartsUsedRef.current?.(partsUsedBy(ws))
+      if (scroll && 'scroll' in ws) {
+        try {
+          ;(ws as Blockly.WorkspaceSvg).scroll(scroll.x, scroll.y)
+        } catch {
+          /* a workspace with no rendered view — nothing to put back */
+        }
+      }
     } catch {
       // Belt and braces behind the `blocked` check above: a type can be
       // registered and still fail to deserialise (a malformed field, a shape
@@ -585,7 +606,7 @@ export function BlocksCanvas({
     }
     // `workspace` is intentionally not a dependency — see the comment above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fileId, peek, blocked])
+  }, [fileId, reloadNonce, peek, blocked])
 
   // Blockly sizes itself from its host and does not observe it, so a panel drag,
   // a workspace switch or a window resize leaves the canvas the wrong size with
@@ -604,7 +625,7 @@ export function BlocksCanvas({
   const expand = useCallback(() => onExpand?.(), [onExpand])
 
   if (blocked) {
-    return <BlocksUnreadable types={unknown} onGraduate={onGraduate} />
+    return <BlocksUnreadable types={unknown} />
   }
 
   if (peek) {
@@ -621,19 +642,13 @@ export function BlocksCanvas({
 /**
  * The file uses blocks this build doesn't have (#1009).
  *
- * Deliberately offers only the ONE action that cannot lose anything. "Install
- * what's missing" is #1017's job and we don't yet know where a block came from;
- * "open it anyway" is the overwrite this whole path exists to prevent. Doing
- * nothing is a real option and is spelled out, because for a file from a newer
- * Snakie it is the right one.
+ * Deliberately offers NO action. "Install what's missing" needs to know where a
+ * block came from; "open it anyway" is the overwrite this whole path exists to
+ * prevent. Doing nothing is a real option and is spelled out, because for a file
+ * from a newer Snakie it is the right one — and the code is readable in the pane
+ * beside this notice either way (#1034), which is where the escape now is.
  */
-function BlocksUnreadable({
-  types,
-  onGraduate
-}: {
-  types: readonly string[]
-  onGraduate?: () => void
-}): JSX.Element {
+function BlocksUnreadable({ types }: { types: readonly string[] }): JSX.Element {
   return (
     <div className="blocks-unreadable" role="alert">
       <h2 className="blocks-unreadable__title">These blocks need a newer Snakie</h2>
@@ -653,13 +668,6 @@ function BlocksUnreadable({
         Nothing has been changed, and closing this file leaves it exactly as it is — update Snakie,
         or install the part or plugin these blocks came from, and it will open normally.
       </p>
-      {onGraduate && (
-        <div className="blocks-unreadable__actions">
-          <button type="button" className="btn btn--sm" onClick={onGraduate}>
-            Keep the Python, drop the blocks
-          </button>
-        </div>
-      )}
     </div>
   )
 }
