@@ -910,3 +910,65 @@ describe('a subscript needs no brackets (#1071)', () => {
     roundTrips('x = (values[f(i)]) + 1\n')
   })
 })
+
+/**
+ * AN IMPORT IS HOISTED, SO ONLY A MODULE-SCOPE ONE MAY BECOME A BLOCK (#1071).
+ * =============================================================================
+ *
+ * The un-traced cause behind one of #1071's thirteen files, and the second
+ * WRONG ANSWER in that list rather than a refusal.
+ *
+ * An import block is hoisted: the generator gathers every one into the import
+ * section at the top. That is right for the `import time` a learner drags in,
+ * and it destroys the one idiom every portable MicroPython driver opens with:
+ *
+ * ```python
+ * try:
+ *     import ustruct as struct     # the board's
+ * except ImportError:
+ *     import struct                # CPython's, so the file is import-safe
+ * ```
+ *
+ * Both arms used to be hoisted to module scope and both arms replaced with
+ * `pass` — so a file written *because* one of the two may be missing became a
+ * file that raises `ImportError` on line 1 and never starts. The conversion
+ * reported a clean run while doing it.
+ *
+ * `examples/parts/snakie-standard/icm20948/icm20948.py` is the shipped file
+ * this was found in.
+ */
+describe('only a module-scope import becomes an import block (#1071)', () => {
+  it('keeps a try/except import fallback exactly as written', () => {
+    roundTrips(
+      [
+        'try:',
+        '    import ustruct as struct',
+        'except ImportError:',
+        '    import struct',
+        ''
+      ].join('\n')
+    )
+  })
+
+  it('builds no import block for either arm', () => {
+    const t = types('try:\n    import ustruct as struct\nexcept ImportError:\n    import struct\n')
+    expect(t).not.toContain('snakie_python_import')
+    expect(t).not.toContain('snakie_python_import_as')
+  })
+
+  it('leaves a lazy import inside a function where it was written', () => {
+    // Deliberately off the start-up path. Hoisting it is a quieter version of
+    // the same mistake.
+    roundTrips('def f():\n    import time\n    return time\n')
+  })
+
+  it('leaves a nested `from … import …` alone too', () => {
+    roundTrips('if fast:\n    from machine import Pin\n')
+  })
+
+  it('still makes a real block for an import at module scope', () => {
+    expect(types('import time\n')).toContain('snakie_python_import')
+    expect(types('import ustruct as struct\n')).toContain('snakie_python_import_as')
+    expect(types('from machine import Pin\n')).toContain('snakie_python_from_import')
+  })
+})

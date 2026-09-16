@@ -8,6 +8,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A driver's `try: import ustruct / except: import struct` fallback no longer
+  becomes a file that cannot start** (#1071, epic #1007). An import block is
+  *hoisted* — the generator gathers every one into the import section at the
+  top, which is right for the `import time` a learner drags in and catastrophic
+  for an import that is nested on purpose:
+
+  ```python
+  try:                              import struct
+      import ustruct as struct      import ustruct as struct
+  except ImportError:          →
+      import struct                 try:
+                                        pass
+                                    except ImportError:
+                                        pass
+  ```
+
+  That idiom exists precisely *because* one of the two may not be there, so
+  hoisting both turns a file that runs into one that raises `ImportError` on
+  line 1 — while the arms it came from are replaced with `pass`. The conversion
+  reported a clean run while doing it. A lazy import inside a function was the
+  same mistake more quietly: it was written off the start-up path deliberately.
+
+  Only a module-scope import becomes an import block now — the same depth guard
+  `def` already used, for the same reason. Nested, the line stays raw and
+  regenerates exactly where it was. This was the un-traced cause behind
+  `examples/parts/snakie-standard/icm20948/icm20948.py`, one of #1071's thirteen.
+
+
 - **A chained comparison no longer changes what your program means** (#1071,
   epic #1007). Python reads `0 <= n <= 59` as `0 <= n and n <= 59`. The
   converter folded it left into `(0 <= n) <= 59`, which compares a **bool**
