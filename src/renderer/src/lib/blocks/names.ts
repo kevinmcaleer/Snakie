@@ -143,8 +143,15 @@ export function toPythonIdentifier(name: string, taken: ReadonlySet<string> = EM
  * let a name drift between the setup line and the call that uses it.
  */
 export function sanitise(name: string): string {
-  const cleaned = name
-    .trim()
+  const given = name.trim()
+  // ALREADY AN IDENTIFIER? Then this is a no-op, and it has to be (#1063).
+  // The cleaning below is for a LABEL somebody typed — "my turtle!" — and it
+  // strips leading and trailing underscores and collapses runs of them, which
+  // is right for a label and destructive for a name that was already Python:
+  // `__init__` came back as `init` and `_pack_rows` as `pack_rows`, renaming a
+  // function while every call to it kept the old name.
+  if (/^[A-Za-z_]\w*$/.test(given)) return given
+  const cleaned = given
     // Anything outside the ASCII identifier set becomes a separator. Python 3
     // does allow unicode identifiers, but `🐢 = Turtle()` is a trap: it reads
     // fine here and breaks the moment the file meets an older tool.

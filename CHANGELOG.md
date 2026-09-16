@@ -6,6 +6,53 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Opening a real module no longer loses most of it** (#1063, epic #1007).
+  Pointing the Python→blocks converter at a 114-line robot module brought back
+  **36 lines**. Four separate faults, each silent:
+
+  - **A suite we could not read lost its body.** `class Frame:` became one block
+    holding that line and nothing else — both methods and everything in them,
+    gone, with the conversion reported as a success. Same for `try`, `with`,
+    `async def` and anything else the rules miss. There is now a raw *suite*
+    block: the header verbatim, the body nested under it.
+  - **Methods were lifted out of their class.** A `def` was always collected as
+    a top-level definition, so twelve methods became twelve un-indented
+    top-level functions detached from the objects they belong to. A nested `def`
+    now stays where it is.
+  - **Names were rewritten.** `__init__` came back as `init` and `_pack_rows` as
+    `pack_rows`, because the label-sanitiser strips leading underscores. A name
+    that is already a valid Python identifier is now left alone.
+  - **Signatures were rewritten and early returns became dead code.**
+    `def load(path, flip_x=None)` came back as `def load(path)` — defaults
+    silently dropped while every call still passed them — and every `return`
+    that was not the last line became `if False: return …`. A `def` whose
+    parameters Blockly cannot hold now stays a raw suite, and a `return` is a
+    `return`.
+
+  The same module now round-trips to the line.
+
+- **One string literal no longer freezes the whole canvas** (#1062). `#1037`'s
+  gate reconverts only when the code parses, and the no-board lint blanked
+  string literals to *spaces* — so `if cell not in " ."` trimmed to `if cell not
+  in` and read as a half-typed line. One such line anywhere in a file made the
+  whole file unparseable, and the blocks canvas just stayed empty with nothing
+  to say why. A string is a term.
+
+### Changed
+
+- **A run of comments is one block, and roots no longer overlap** (#1062). A
+  module's header is prose — the one that prompted this opens with thirty lines
+  of rationale and an ASCII table — and it became thirty identical grey blocks,
+  taller than the class they described. Consecutive comments now fold into a
+  single comment block, one row per line, carrying the lines verbatim so the
+  alignment survives the round trip.
+
+  Roots were also laid out a fixed 240px apart, so anything taller than that —
+  which is any real class — was drawn *underneath* the next one. They are now
+  stacked by height.
+
 ### Added
 
 - **An I²C bus, as a block** (#1057, epic #1007). Wiring an I²C sensor is one of

@@ -167,3 +167,35 @@ describe('half-typed', () => {
     expect(code('f(1,)')).toBeNull()
   })
 })
+
+describe('a string is a term, not a gap (#1062)', () => {
+  it('accepts a comparison against a string literal', () => {
+    // THE BUG: string literals were blanked to SPACES, so `x in " ."` trimmed
+    // to `x in` and read as somebody who stopped typing mid-expression. One
+    // such line anywhere in a file made #1037's gate reject the whole file, and
+    // the canvas simply stayed empty with nothing to say why.
+    expect(checkPython('if x in " ."', 'statement')).toBeNull()
+    expect(checkPython("if cell not in ' .'", 'statement')).toBeNull()
+    expect(checkPython('if name is "bob"', 'statement')).toBeNull()
+    expect(checkPython('x = y and "yes"', 'statement')).toBeNull()
+  })
+
+  it('still catches a line that really does stop at an operator', () => {
+    // The rule is worth keeping — it just has to count a string as a term.
+    expect(checkPython('x +', 'statement')?.code).toBe('trailing-operator')
+    expect(checkPython('a and', 'statement')?.code).toBe('trailing-operator')
+    expect(checkPython('x = "a" +', 'statement')?.code).toBe('trailing-operator')
+    expect(checkPython('if x in', 'statement')?.code).toBe('trailing-operator')
+  })
+
+  it('leaves a comment-only line alone', () => {
+    // Comments stay blanked to spaces: a comment is not code, and a line that
+    // is only a comment should reach no rule at all.
+    expect(checkPython('# just a note, ending in a comma,', 'statement')).toBeNull()
+  })
+
+  it('does not let a string hide a real problem', () => {
+    expect(checkPython('print("hi"', 'statement')?.code).toBe('unclosed-bracket')
+    expect(checkPython('print("hi)', 'statement')?.code).toBe('unclosed-string')
+  })
+})

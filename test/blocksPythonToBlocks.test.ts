@@ -323,3 +323,208 @@ describe('the lexer', () => {
     expect(tokenize('go()  # later')?.map((t) => t.text)).toEqual(['go', '(', ')'])
   })
 })
+
+/**
+ * WHAT A REAL MODULE DOES TO IT (#1062, #1063).
+ * =============================================================================
+ *
+ * Every test above was written against a program the converter was designed
+ * for. #1062 pointed it at a 114-line module off a robot — classes, `try`,
+ * default arguments, early returns, a thirty-line comment header — and the
+ * round trip came back as 36 lines. The property at the top of this file was
+ * not merely failing; it was failing in the direction that costs somebody their
+ * work, because #1034 reconverts on every typing pause.
+ *
+ * These are the cases that module is made of.
+ */
+describe('a suite we cannot read keeps its body (#1063)', () => {
+  it('a class keeps its methods', () => {
+    // THE BUG, at its smallest: this came back as `class Frame:` and nothing
+    // else. Five lines out of eight, gone, and the report called it a success.
+    roundTrips(
+      [
+        'class Frame:',
+        '    def __init__(self, sprite):',
+        '        self.sprite = sprite',
+        // No blank line between the methods: `logicalLines` drops blank lines
+        // for the whole converter, so they are not part of this property.
+        '    def draw(self, matrix):',
+        '        print(self.sprite)',
+        ''
+      ].join('\n')
+    )
+  })
+
+  it('try/except keeps what it guards', () => {
+    roundTrips(
+      [
+        'try:',
+        '    risky()',
+        'except OSError as e:',
+        '    print(e)',
+        ''
+      ].join('\n')
+    )
+  })
+
+  it('with keeps its block', () => {
+    roundTrips(["with open(path, 'rb') as f:", '    blob = f.read()', ''].join('\n'))
+  })
+
+  it('nests them', () => {
+    roundTrips(
+      [
+        'class Sprite:',
+        '    def load(self, path):',
+        "        with open(path, 'rb') as f:",
+        '            self.blob = f.read()',
+        ''
+      ].join('\n')
+    )
+  })
+})
+
+describe('names survive the trip (#1063)', () => {
+  it('a dunder is not renamed', () => {
+    // `sanitise` strips leading and trailing underscores, which is right for a
+    // label somebody typed and destructive for a name that was already Python:
+    // `__init__` came back as `init`.
+    const code = regenerate(['class A:', '    def __init__(self):', '        pass', ''].join('\n')).code
+    expect(code).toContain('def __init__(self):')
+    expect(code).not.toContain('def init(')
+  })
+
+  it('a private function keeps its underscore', () => {
+    roundTrips(['def _pack_rows(rows):', '    return rows', ''].join('\n'))
+  })
+
+  it('a method stays inside its class rather than becoming a top-level def', () => {
+    // Blockly models a `def` as a hat, and a hat cannot nest — so a nested one
+    // was collected as a ROOT and generated un-indented, detached from the
+    // object it belongs to. Twelve of them, on the module in #1062.
+    const { workspace } = pythonToBlocks(
+      ['class A:', '    def go(self):', '        pass', ''].join('\n')
+    )
+    expect(topLevel(workspace as never)).toHaveLength(1)
+  })
+})
+
+describe('signatures are not rewritten (#1063)', () => {
+  it('keeps default arguments', () => {
+    // `procedures_def`'s parameters are bare names, so a default has nowhere to
+    // live on the block — and they used to be FILTERED OUT, turning
+    // `def load(path, flip_x=None)` into `def load(path)` while every call to
+    // it still passed two arguments.
+    roundTrips(['def load(path, flip_x=None, flip_y=None):', '    return path', ''].join('\n'))
+  })
+
+  it('keeps *args and **kwargs', () => {
+    roundTrips(['def go(*args, **kwargs):', '    return args', ''].join('\n'))
+  })
+
+  it('still models a plain signature as a real function block', () => {
+    // The escape hatch is for what we cannot hold, not a excuse to stop trying.
+    expect(types(['def double(n):', '    return n * 2', ''].join('\n'))).toContain(
+      'procedures_defreturn'
+    )
+  })
+})
+
+describe('an early return is not dead code (#1063)', () => {
+  it('generates the return it was given', () => {
+    // It became `procedures_ifreturn`, whose code is `if <COND>: return <VALUE>`
+    // — and with nothing in COND the generator wrote `if False:`. Every early
+    // return in the program became unreachable, silently.
+    const code = regenerate(
+      ['def f(x):', '    if x:', '        return 1', '    return 2', ''].join('\n')
+    ).code
+    expect(code).not.toContain('if False:')
+    expect(code).toContain('return 1')
+  })
+
+  it('round-trips a guard clause', () => {
+    roundTrips(['def f(x):', '    if x:', '        return 1', '    return 2', ''].join('\n'))
+  })
+})
+
+describe('a run of comments is one block (#1062)', () => {
+  it('folds consecutive comment lines together', () => {
+    const src = ['# one', '# two', '# three', 'print(1)', ''].join('\n')
+    // `types` walks the value children too, hence the number in the print.
+    expect(types(src)).toEqual(['snakie_python_comment', 'text_print', 'math_number'])
+    roundTrips(src)
+  })
+
+  it('keeps the exact spacing, because that is a comment’s content', () => {
+    // The header in #1062 carries an ASCII table of a binary format. Strip the
+    // `#` and a space for display and `#foo` comes back as `# foo`; keep the
+    // line verbatim and the alignment survives.
+    roundTrips(
+      ['#     offset size  field', '#     0      4     magic', '#     4      1     version', ''].join('\n')
+    )
+  })
+
+  it('does not join comments across the code between them', () => {
+    expect(types(['# a', 'print(1)', '# b', ''].join('\n'))).toEqual([
+      'snakie_python_comment',
+      'text_print',
+      'math_number',
+      'snakie_python_comment'
+    ])
+  })
+
+  it('a lone comment is still one comment block', () => {
+    expect(types(['# just the one', ''].join('\n'))).toEqual(['snakie_python_comment'])
+  })
+})
+
+describe('the roots do not overlap (#1062)', () => {
+  /** Every root as `[top, bottom]`, using the converter's own estimate. */
+  const spans = (source: string): [number, number][] => {
+    const { workspace } = pythonToBlocks(source)
+    const roots = topLevel(workspace as never) as unknown as { y: number }[]
+    return roots.map((r, i) => [r.y, i + 1 < roots.length ? roots[i + 1].y : r.y] as [number, number])
+  }
+
+  it('puts a tall root clear of the next one', () => {
+    // A fixed 240px gap was fine for a four-block program and wrong for a real
+    // one: a class with eight methods is well over a thousand pixels tall, so
+    // the next four roots were drawn on top of it.
+    const tall = [
+      'def big():',
+      ...Array.from({ length: 30 }, (_, i) => `    print(${i})`),
+      '',
+      'def after():',
+      '    print("me")',
+      ''
+    ].join('\n')
+    const [first, second] = spans(tall)
+    // The first root's own height must fit in the space before the second.
+    expect(second[0] - first[0]).toBeGreaterThan(30 * 40)
+  })
+
+  it('stacks every root downwards, in order, never back up', () => {
+    const src = [
+      'def a():',
+      '    print(1)',
+      '',
+      'def b():',
+      '    print(2)',
+      '',
+      'def c():',
+      '    print(3)',
+      '',
+      'print(4)',
+      ''
+    ].join('\n')
+    const ys = spans(src).map(([top]) => top)
+    for (let i = 1; i < ys.length; i++) expect(ys[i]).toBeGreaterThan(ys[i - 1])
+  })
+
+  it('counts a folded comment block by its lines, not as one row', () => {
+    // The case a per-block estimate gets worst: one block, thirty rows tall.
+    const many = ['def f():', '    print(1)', '', ...Array.from({ length: 30 }, (_, i) => `# line ${i}`), ''].join('\n')
+    const ys = spans(many).map(([top]) => top)
+    expect(ys[1] - ys[0]).toBeGreaterThan(0)
+  })
+})
