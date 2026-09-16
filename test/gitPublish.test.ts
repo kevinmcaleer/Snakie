@@ -64,6 +64,21 @@ function git(dir: string, args: string[]): string {
 
 const roots: string[] = []
 
+/**
+ * The allowance the real-git suites take, matching the other real-I/O suites in
+ * the repo (`}, 30000)` in `deviceScratch`, `micropythonRuntime`, the e2e files).
+ *
+ * `committedRepo()` spawns FIVE `git` subprocesses and `publishPreflight` spawns
+ * more. That costs ~90ms on an idle box and fits vitest's 5s default with room
+ * to spare — right up until CI runs 354 test files in parallel and the runner
+ * starves them. It timed out there on two unrelated changes while passing in
+ * isolation every time: contention, not a slow test.
+ *
+ * Nothing is skipped or weakened by this — every assertion still runs. They are
+ * simply allowed the time that spawning real processes on a loaded machine takes.
+ */
+const REAL_GIT_TIMEOUT_MS = 30_000
+
 /** A committed repository, the normal starting point for a publish. */
 function committedRepo(): string {
   // realpath: macOS temp dirs are symlinks (/var → /private/var) and git always
@@ -399,7 +414,10 @@ describe('git IPC registration', () => {
 // Against a real git binary
 // ---------------------------------------------------------------------------
 
-describe.skipIf(!haveGit())('GitService.publish guards, against a real git', () => {
+describe.skipIf(!haveGit())(
+  'GitService.publish guards, against a real git',
+  { timeout: REAL_GIT_TIMEOUT_MS },
+  () => {
   let service: GitService
 
   beforeEach(() => {
@@ -456,7 +474,10 @@ describe.skipIf(!haveGit())('GitService.publish guards, against a real git', () 
   })
 })
 
-describe.skipIf(!haveGit())('GitService.publishPreflight, against a real git', () => {
+describe.skipIf(!haveGit())(
+  'GitService.publishPreflight, against a real git',
+  { timeout: REAL_GIT_TIMEOUT_MS },
+  () => {
   let service: GitService
 
   beforeEach(() => {

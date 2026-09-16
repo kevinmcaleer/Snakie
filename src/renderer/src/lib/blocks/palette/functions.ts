@@ -65,6 +65,17 @@ export const FUNCTION_BLOCKS: BlockDefinition[] = [
       return ''
     }
   },
+  // THE TWO CALLER BLOCKS ARE REGISTERED BUT NEVER LISTED (#1045).
+  //
+  // They must stay in the registry: the generator looks a block's emitter up by
+  // type, and `workspace-check.ts` refuses to open a file containing a type this
+  // build does not know — so dropping them would strand every saved program that
+  // calls a function.
+  //
+  // They must NOT appear in the flyout, which is why the Functions category is
+  // `custom: 'PROCEDURE'` (see `buildToolbox`). Listed statically they render as
+  // what they are with no procedure to name: two BLANK, nameless blocks. Blockly
+  // generates a named caller per defined function instead.
   {
     type: 'procedures_callnoreturn',
     category: 'functions',
