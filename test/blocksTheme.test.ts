@@ -3,11 +3,13 @@ import {
   BLOCK_CATEGORIES,
   FALLBACK_TOKENS,
   buildSoftShellTheme,
+  categoryColour,
   categoryStyleName,
   greyOf,
   mixHex,
   readThemeTokens,
-  softShellWorkspaceOptions
+  softShellWorkspaceOptions,
+  withHue
 } from '../src/renderer/src/lib/blocks/theme'
 
 /**
@@ -24,18 +26,86 @@ describe('buildSoftShellTheme (#1009)', () => {
     expect(styleNames).toEqual(BLOCK_CATEGORIES.map((c) => categoryStyleName(c.id)).sort())
   })
 
-  it('paints a category with the token it declares — no hard-coded hex', () => {
+  it('paints a category from the token it declares — no hard-coded hex', () => {
+    // Still the rule: every colour is derived from a token, whether or not the
+    // category moves it to its own hue. A literal hex in the table is the thing
+    // this is here to stop.
     for (const c of BLOCK_CATEGORIES) {
-      expect(theme.categoryStyles[categoryStyleName(c.id)].colour).toBe(FALLBACK_TOKENS[c.token])
+      expect(theme.categoryStyles[categoryStyleName(c.id)].colour).toBe(
+        categoryColour(FALLBACK_TOKENS, c)
+      )
     }
   })
 
-  it('hardware wears the board diagrams\' GPIO colour', () => {
-    // The point of the palette: a block and the thing it drives are the same
-    // colour everywhere in the app.
-    expect(theme.categoryStyles['hardware_category'].colour).toBe(FALLBACK_TOKENS.pinGpio)
-    expect(theme.categoryStyles['logic_category'].colour).toBe(FALLBACK_TOKENS.kw)
-    expect(theme.categoryStyles['text_category'].colour).toBe(FALLBACK_TOKENS.str)
+  it('keeps the four anchors on their token exactly', () => {
+    // Maths IS the idea: `num` is the colour a number has in the mirror beside
+    // it. Turtle owns green, parts wears the board's power dot, and variables
+    // and python are near-greys that cost no hue space.
+    expect(theme.categoryStyles['math_category'].colour).toBe(FALLBACK_TOKENS.num)
+    expect(theme.categoryStyles['turtle_category'].colour).toBe(FALLBACK_TOKENS.green)
+    expect(theme.categoryStyles['parts_category'].colour).toBe(FALLBACK_TOKENS.pinPower)
+    expect(theme.categoryStyles['variables_category'].colour).toBe(FALLBACK_TOKENS.ident)
+    expect(theme.categoryStyles['python_category'].colour).toBe(FALLBACK_TOKENS.com)
+  })
+
+  it('keeps hardware recognisably the GPIO dot, six degrees off it', () => {
+    // It moves only far enough to clear `str`, so a block and the pin it drives
+    // still read as the same colour.
+    const hardware = theme.categoryStyles['hardware_category'].colour
+    expect(hardware).not.toBe(FALLBACK_TOKENS.pinGpio)
+    expect(Math.abs(hueOf(hardware) - hueOf(FALLBACK_TOKENS.pinGpio))).toBeLessThanOrEqual(8)
+  })
+
+  it('moves a hue without changing the token\'s depth', () => {
+    // The palette holds together because saturation and lightness do not move.
+    const moved = withHue(FALLBACK_TOKENS.gold, 200)
+    const a = hsl(FALLBACK_TOKENS.gold)
+    const b = hsl(moved)
+    expect(Math.abs(a.s - b.s)).toBeLessThanOrEqual(1)
+    expect(Math.abs(a.l - b.l)).toBeLessThanOrEqual(1)
+    expect(hueOf(moved)).toBe(200)
+  })
+
+  it('gives every category a colour of its own', () => {
+    // The defect this table was fixed for: fifteen drawers over nine tokens,
+    // and two of the clashes were between DIFFERENT tokens — `kw` sat one
+    // degree off `pinPower`, `str` three degrees off `pinGpio`. A learner could
+    // not tell a Text block from a Hardware one.
+    const colours = BLOCK_CATEGORIES.map((c) => categoryColour(FALLBACK_TOKENS, c))
+    expect(new Set(colours).size).toBe(BLOCK_CATEGORIES.length)
+  })
+
+  it('never puts a hue on a near-grey token, where it would do nothing', () => {
+    // `withHue` keeps saturation, which is what holds the palette together —
+    // and means a hue declared on `ident` or `com` is silently a no-op: the
+    // category comes out the same near-grey it started as, however far round
+    // the wheel it was sent. Modules hit exactly this and had to change token.
+    for (const c of BLOCK_CATEGORIES) {
+      // `satisfies` narrows each entry literally, so only the ones that declare
+      // a hue have the property at all.
+      if ((c as { hue?: number }).hue === undefined) continue
+      const { s: sat } = hsl(categoryColour(FALLBACK_TOKENS, c))
+      expect({ id: c.id, vivid: sat > 30 }).toEqual({ id: c.id, vivid: true })
+    }
+  })
+
+  it('keeps the vivid categories at least 20° apart on the wheel', () => {
+    // Near-greys are excluded on purpose: they take no hue space and are told
+    // apart by lightness, which is why variables and python can share a corner.
+    const vivid = BLOCK_CATEGORIES.map((c) => ({
+      id: c.id,
+      ...hsl(categoryColour(FALLBACK_TOKENS, c))
+    })).filter((c) => c.s > 30)
+
+    const tooClose: string[] = []
+    for (const a of vivid) {
+      for (const b of vivid) {
+        if (a.id >= b.id) continue
+        const d = Math.abs(a.h - b.h)
+        if (Math.min(d, 360 - d) < 20) tooClose.push(`${a.id}/${b.id}`)
+      }
+    }
+    expect(tooClose).toEqual([])
   })
 
   it('derives each block\'s three shades rather than hand-picking them', () => {
@@ -132,3 +202,26 @@ describe('comments recede (#1062)', () => {
     expect(g).toBe(b)
   })
 })
+
+/** HSL of a 6-digit hex, for the palette assertions above. */
+function hsl(hex: string): { h: number; s: number; l: number } {
+  const n = parseInt(hex.slice(1), 16)
+  const r = ((n >> 16) & 255) / 255
+  const g = ((n >> 8) & 255) / 255
+  const b = (n & 255) / 255
+  const mx = Math.max(r, g, b)
+  const mn = Math.min(r, g, b)
+  const d = mx - mn
+  let h = 0
+  if (d !== 0) {
+    if (mx === r) h = ((g - b) / d) % 6
+    else if (mx === g) h = (b - r) / d + 2
+    else h = (r - g) / d + 4
+    h *= 60
+    if (h < 0) h += 360
+  }
+  const l = (mx + mn) / 2
+  return { h: Math.round(h), s: Math.round((d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1))) * 100), l: Math.round(l * 100) }
+}
+
+const hueOf = (hex: string): number => hsl(hex).h

@@ -118,6 +118,16 @@ export function PythonPane({
       contextmenu: true,
       occurrencesHighlight: 'off',
       renderLineHighlight: 'line',
+      // OFF, as it is in the main editor (`MonacoEditor.tsx`). Sticky scroll
+      // pins the enclosing `def`/`class`/`if` to the top of the pane, and it
+      // cannot work here: every theme paints `editor.background` TRANSPARENT so
+      // the CSS ruled paper shows through and scrolls with the text, and Monaco
+      // derives the sticky header's fill from that same colour. The pinned
+      // lines came out see-through, with the code scrolling underneath showing
+      // straight through them — both halves illegible. Giving it an opaque
+      // surface of its own (`editorStickyScroll.background`) is what it would
+      // take; until someone wants the feature enough to do that, off is honest.
+      stickyScroll: { enabled: false },
       scrollbar: { vertical: 'auto', horizontal: 'auto' },
       wordWrap: 'off',
       ...editorMetricsFor(skin, ruleSpacing())

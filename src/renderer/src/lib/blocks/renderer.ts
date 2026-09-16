@@ -65,10 +65,20 @@ class SoftShellConstantProvider extends Blockly.zelos.ConstantProvider {
     this.FIELD_BORDER_RECT_RADIUS = 16
 
     // ---- Room ------------------------------------------------------------
-    // Zelos's 4 is tight against a 12px corner — the text starts before the
-    // arc has finished. 8 gives the arc somewhere to land.
-    this.TOP_ROW_MIN_HEIGHT = 8 // Zelos: 4
-    this.BOTTOM_ROW_MIN_HEIGHT = 8 // Zelos: 4
+    // ZELOS'S OWN 4, AND IT HAS TO BE. These were 8 for a pass, on the
+    // reasoning that a 12px corner needs somewhere to land — and the cost was
+    // paid somewhere it was not being looked at.
+    //
+    // Every block's top and bottom row grows by this, INCLUDING a value block
+    // sitting in a socket. So `from (modulino) import (ModulinoMotors)`, whose
+    // two slots are FIELDS, drew them at 34px, while `set motors to
+    // (ModulinoMotors())`, whose slot is a whole value block, drew it at 48 —
+    // the same kind of hole in the same kind of sentence, half again as tall.
+    //
+    // At 4 the value block is 40 against the field's 34, which is the block's
+    // own border round its field and reads as the same thing. Statement blocks
+    // barely notice: they are sized by MIN_BLOCK_HEIGHT and their contents, so
+    // they go 58 → 56, and the roominess this file exists for is untouched.
     // A hair over Zelos's 48, so a one-field block clears its own corners.
     this.MIN_BLOCK_HEIGHT = 52 // Zelos: 48
     // The indent of a C-block's mouth, which has to grow with the corner radius
