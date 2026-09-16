@@ -6,6 +6,41 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The blocks are shaped like MakeCode and Scratch now, because they are
+  rendered like them** (epic #1007, #573's design direction). The canvas moves
+  from Blockly's `thrasos` renderer to **`zelos`** — which is Blockly's own port
+  of `scratch-blocks`.
+
+  This had been approached twice by hand, rounding corners and adding padding a
+  few pixels at a time, and it kept not arriving. The reason is that the three
+  things that make those editors look the way they do are not constants on
+  `thrasos` at all:
+
+  - **Value inputs were EXTERNAL.** A block plugged into a socket sat *outside*
+    its parent, past the right edge, joined by a puzzle tab — so `set x to (5)`
+    drew as two blocks touching, with the `5` visibly shorter than the row it
+    belonged to. No amount of padding fixes that, because the child was not
+    inside anything. Zelos uses inline inputs: the `5` sits *within* its parent
+    with even space around it.
+  - **Only two corners were round.** The outline arced the left-hand pair and
+    drew the right-hand pair square, and a value block was a plain rectangle
+    with a tab on it. All four are arcs now, booleans are hexagons and reporters
+    are pills — the Scratch vocabulary a child arrives already knowing.
+  - **The notch was a sharp trapezoid.** It is the soft bump now.
+
+  Sizes are consistent rather than incidental: every value block is **48px**,
+  every statement block **64px**, and a plugged-in value has the same 8px of
+  parent around it wherever it appears. Before, a variable was 38px inside a
+  48px row in one place and a 54px row in another.
+
+  Stock Zelos is already generous, so only five constants are overridden, each
+  making it rounder or roomier than Scratch rather than re-deriving it — the
+  12px corner radius, the notch offset that has to clear it, a pill radius on
+  field boxes, 8px top and bottom rows, and a 20px C-block mouth.
+
+
 ### Added
 
 - **A Modules drawer, filled from your program's own imports** (#1048, epic
