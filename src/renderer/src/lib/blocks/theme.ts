@@ -57,6 +57,8 @@ export interface ThemeTokens {
   ident: string
   /** The GPIO pin dot from the board diagrams — hardware blocks wear it. */
   pinGpio: string
+  /** The POWER pin dot — worn by the blocks a wired-up part brings with it. */
+  pinPower: string
 }
 
 /** The custom property each token comes from. */
@@ -75,7 +77,8 @@ const TOKEN_VARS: Record<keyof ThemeTokens, string> = {
   num: '--num',
   com: '--com',
   ident: '--ident',
-  pinGpio: '--pin-gpio'
+  pinGpio: '--pin-gpio',
+  pinPower: '--pin-power'
 }
 
 /**
@@ -102,7 +105,8 @@ export const FALLBACK_TOKENS: ThemeTokens = {
   num: '#7fc4e0',
   com: '#6f7a63',
   ident: '#cdd4cb',
-  pinGpio: '#d9a441'
+  pinGpio: '#d9a441',
+  pinPower: '#d4553f'
 }
 
 /** Read the live Soft Shell tokens off `el` (normally the document root). */
@@ -129,6 +133,15 @@ export const BLOCK_CATEGORIES = [
   { id: 'turtle', name: 'Turtle', token: 'green' },
   { id: 'hardware', name: 'Hardware', token: 'pinGpio' },
   { id: 'instruments', name: 'Instruments', token: 'num' },
+  // The parts on the breadboard bring their own blocks (#1017), grouped one
+  // drawer per part. It sits next to Hardware because that is what it IS — the
+  // difference is only that nobody hand-wrote these.
+  {
+    id: 'parts',
+    name: 'My parts',
+    token: 'pinPower',
+    hint: 'Wire a part up in Electronics and its blocks appear here.'
+  },
   // Wait gets a category of its own rather than a corner of Control (#1011).
   // It is the single most-used block in any hardware lesson — every blink,
   // every debounce, every "now do the next thing" — and a beginner should not
@@ -141,8 +154,27 @@ export const BLOCK_CATEGORIES = [
   { id: 'lists', name: 'Lists', token: 'str' },
   { id: 'variables', name: 'Variables', token: 'ident' },
   { id: 'functions', name: 'Functions', token: 'kw' },
+  {
+    id: 'plugins',
+    name: 'Plugins',
+    token: 'str',
+    hint: 'A Python plugin can add blocks here — see Writing plugins.'
+  },
   { id: 'python', name: 'Python', token: 'com' }
-] as const satisfies readonly { id: string; name: string; token: keyof ThemeTokens }[]
+] as const satisfies readonly {
+  id: string
+  name: string
+  token: keyof ThemeTokens
+  /**
+   * What an EMPTY category says (#1017).
+   *
+   * The fixed categories are shown empty on purpose — an empty `Turtle` says
+   * "turtle blocks go here". But a category that is empty because the learner
+   * has not done something yet can say what that something IS, which turns a
+   * dead drawer into the one instruction that fills it.
+   */
+  hint?: string
+}[]
 
 export type BlockCategoryId = (typeof BLOCK_CATEGORIES)[number]['id']
 

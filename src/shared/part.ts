@@ -1237,6 +1237,19 @@ export interface PartDefinition {
    */
   helpText?: string
 
+  // --- Blocks contributed by this part (#1017) -----------------------------
+  /**
+   * Populated by the main process on read: the raw text of a `blocks.yml` sitting
+   * beside this part's `parts.yml`, if it has one. NOT written back — the file on
+   * disk is the source of truth and Snakie never authors it.
+   *
+   * RAW TEXT rather than a parsed manifest, deliberately. The parser lives in
+   * `shared/blocks-manifest.ts` and produces WARNINGS as well as blocks; handing
+   * the renderer the text means one parse, in the place that can show what it
+   * complained about, instead of a silent one here whose warnings nobody sees.
+   */
+  blocksYaml?: string
+
   // --- Concurrency stamp (#750) --------------------------------------------
   /**
    * Populated by the main process on read: a hash of the EXACT `parts.yml` text

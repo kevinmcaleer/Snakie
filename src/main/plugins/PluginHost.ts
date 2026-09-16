@@ -3,6 +3,7 @@ import { existsSync } from 'fs'
 import { join } from 'path'
 import { app } from 'electron'
 import type {
+  BlocksListing,
   CommandInfo,
   LintResult,
   MotionCheckResult,
@@ -285,6 +286,23 @@ export class PluginHost {
     await this.start()
     if (!this.child) return { diagnostics: [] }
     return this.request<LintResult>('lint', { context })
+  }
+
+  /**
+   * Every plugin-contributed palette block (#1017, epic #1007).
+   *
+   * An empty listing with no Python, like `lint` and for the same reason: the
+   * Blocks toolbox is built whether or not an interpreter exists, and a palette
+   * that throws because the user has no Python would be a far worse failure than
+   * one that is simply missing the plugin drawer. The web build (#267) never has
+   * a host at all, and parts ship `blocks.yml` precisely so that it still gets
+   * third-party blocks.
+   */
+  async listBlocks(): Promise<BlocksListing> {
+    await this.start()
+    if (!this.child) return { providers: [] }
+    const res = await this.request<BlocksListing>('listBlocks')
+    return { providers: res?.providers ?? [] }
   }
 
   /**

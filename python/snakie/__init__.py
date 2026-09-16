@@ -39,12 +39,14 @@ __all__ = [
     "Command",
     "Linter",
     "Refactoring",
+    "BlockProvider",
     "message",
     "edit",
     "diagnostic",
     "status",
     "fix",
     "refactoring",
+    "block",
 ]
 
 __version__ = "0.1.0"
@@ -280,6 +282,73 @@ def refactoring(
     return item
 
 
+def block(
+    id: str,
+    message: str,
+    code: str,
+    *,
+    args: Optional[List[Dict[str, Any]]] = None,
+    shape: str = "statement",
+    output: Optional[str] = None,
+    setup: Optional[Dict[str, Any]] = None,
+    imports: Optional[List[Any]] = None,
+    tooltip: Optional[str] = None,
+    help: Optional[str] = None,
+    colour: Optional[str] = None,
+    inline: Optional[bool] = None,
+) -> Dict[str, Any]:
+    """Build one block for ``@plugin.blocks`` (#1017, epic #1007).
+
+    This is the same manifest a part ships as ``blocks.yml`` — the schema is
+    documented once, in ``docs/writing-plugins.md``, and a plugin returning these
+    dicts and a part shipping that YAML go through exactly the same validator on
+    the Snakie side.
+
+    ``message`` is a Blockly message string: ``"flash %1 times"``, with ``%1``
+    through ``%n`` in argument order. ``code`` is a Python TEMPLATE, with
+    ``{NAME}`` holes naming the arguments (and ``{SETUP}`` for a hoisted object
+    declared via ``setup``). A template can only ever produce a string — your
+    plugin does not run on the learner's canvas, its blocks do::
+
+        from snakie import plugin, block
+
+        @plugin.blocks("classroom")
+        def classroom_blocks(_ctx=None):
+            return [
+                block(
+                    "cheer",
+                    "cheer %1 times",
+                    'for _ in range({TIMES}):\n    print("well done!")\n',
+                    args=[{"name": "TIMES", "kind": "number", "default": 3}],
+                    tooltip="Print some encouragement.",
+                )
+            ]
+
+    Every field is optional except the three positional ones. Anything Snakie
+    does not understand is reported back to you as a warning rather than being
+    quietly dropped, so a typo in a key name is findable.
+    """
+    item: Dict[str, Any] = {"id": str(id), "message": str(message), "code": str(code)}
+    if args:
+        item["args"] = list(args)
+    item["shape"] = "value" if shape == "value" else "statement"
+    if output is not None:
+        item["output"] = str(output)
+    if setup is not None:
+        item["setup"] = dict(setup) if isinstance(setup, dict) else {"expr": str(setup)}
+    if imports:
+        item["imports"] = list(imports)
+    if tooltip is not None:
+        item["tooltip"] = str(tooltip)
+    if help is not None:
+        item["help"] = str(help)
+    if colour is not None:
+        item["colour"] = str(colour)
+    if inline is not None:
+        item["inline"] = bool(inline)
+    return item
+
+
 # ---------------------------------------------------------------------------
 # The plugin registry
 # ---------------------------------------------------------------------------
@@ -330,6 +399,25 @@ class Refactoring:
     plugin_id: str = ""
 
 
+@dataclass
+class BlockProvider:
+    """A registered source of palette blocks (#1017, epic #1007).
+
+    ``handler`` takes no arguments (an optional context is passed for symmetry
+    with the other handlers and may be ignored) and returns a list of block
+    dicts built with :func:`block`. It is called when the Blocks workspace builds
+    its toolbox, so it should be cheap and must not touch the device.
+
+    Desktop-only by nature, like refactorings: it needs the Python host, which
+    the web build (#267) does not have. Parts ship their blocks as a
+    ``blocks.yml`` instead, which works everywhere.
+    """
+
+    name: str
+    handler: Callable[..., Any]
+    plugin_id: str = ""
+
+
 class Plugin:
     """The shared registry that ``@plugin.command`` writes to.
 
@@ -342,6 +430,7 @@ class Plugin:
         self.commands: List[Command] = []
         self.linters: List[Linter] = []
         self.refactorings: List[Refactoring] = []
+        self.block_providers: List[BlockProvider] = []
         # The plugin id the host is currently importing; commands registered
         # while this is set are attributed to it. Set by the host around each
         # import (see snakie.host).
@@ -411,6 +500,34 @@ class Plugin:
         def decorator(func: Callable[[Context], Any]) -> Callable[[Context], Any]:
             self.refactorings.append(
                 Refactoring(name=name, handler=func, plugin_id=self._current_plugin_id)
+            )
+            return func
+
+        return decorator
+
+    def blocks(self, name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        """Decorator: register ``func`` as a source of palette blocks (#1017).
+
+        The handler returns a list of blocks built with :func:`block`; they
+        appear in the Blocks workspace's **Plugins** category, in a drawer named
+        after your plugin. Returning a single block, a list, or ``None`` are all
+        accepted.
+
+        This is the second of the epic's three answers to "what about a library
+        Blockly has never seen?": a part can ship blocks as data, a plugin can
+        return them over this host, and the escape hatches cover whatever is
+        left. Extending the palette never means editing Snakie::
+
+            from snakie import plugin, block
+
+            @plugin.blocks("my-robot")
+            def my_robot_blocks(_ctx=None):
+                return [block("beep", "beep", "buzzer.beep()\n")]
+        """
+
+        def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+            self.block_providers.append(
+                BlockProvider(name=name, handler=func, plugin_id=self._current_plugin_id)
             )
             return func
 

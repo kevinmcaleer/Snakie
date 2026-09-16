@@ -543,6 +543,12 @@ async function readPart(libDir: string, partId: string): Promise<PartDefinition 
     const text = await inlineHelp(partDir, part.help)
     if (text !== undefined) part.helpText = text
   }
+  // Blocks the part ships (#1017). Read unconditionally — unlike `help` there is
+  // no field naming the file, because the whole point is that dropping a
+  // `blocks.yml` into a part folder is all it takes. One extra `readTextOrNull`
+  // per part, which returns null without reading anything when it isn't there.
+  const blocks = await readTextOrNull(join(partDir, 'blocks.yml'))
+  if (blocks !== null && blocks.trim()) part.blocksYaml = blocks
   return part
 }
 

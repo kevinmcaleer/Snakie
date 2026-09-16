@@ -80,6 +80,7 @@ import type {
   GitPublishResult
 } from '../main/git/types'
 import type {
+  BlocksListing,
   LintResult,
   MotionCheckResult,
   MotionReadResult,
@@ -880,6 +881,12 @@ const plugins = {
    */
   lint: (context: PluginContext): Promise<LintResult> =>
     unwrap(ipcRenderer.invoke('plugins:lint', context)),
+  /**
+   * Palette blocks contributed by plugins (#1017, epic #1007), grouped by the
+   * plugin that registered them. Empty when there is no Python — the Blocks
+   * toolbox is built either way.
+   */
+  listBlocks: (): Promise<BlocksListing> => unwrap(ipcRenderer.invoke('plugins:listBlocks')),
   /** Kill + re-spawn the host, picking up newly added plugins. */
   reload: (): Promise<PluginStatus> => unwrap(ipcRenderer.invoke('plugins:reload')),
   /**

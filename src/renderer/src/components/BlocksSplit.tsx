@@ -9,6 +9,9 @@ import { useWorkspaceLayout } from '../store/layout'
 import { useWorkspace } from '../store/workspace'
 import { parseBlocksFooter } from '../../../shared/blocks-doc'
 import { useGraduate } from '../lib/blocks/use-graduate'
+import { useDynamicBlocks } from '../lib/blocks/use-dynamic-blocks'
+import { DriverInstallBanner } from './DriverInstallBanner'
+import type { PartDriverNeed } from './part-editor.util'
 import type { GraduatedDetail } from './editorBridge'
 import type { BlocksProgram } from './BlocksCanvas'
 import { resolveBlocksView, type BlocksPane } from '../lib/blocks/split'
@@ -60,7 +63,7 @@ export interface BlocksSplitProps {
 }
 
 export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Element {
-  const { openFiles, activeId, updateBlocks } = useWorkspace()
+  const { openFiles, activeId, updateBlocks, currentFolder } = useWorkspace()
   const layout = useWorkspaceLayout()
   const file = openFiles.find((f) => f.id === activeId) ?? null
   const content = file?.content
@@ -168,6 +171,43 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
     [file, updateBlocks]
   )
 
+  // The part- and plugin-contributed palette (#1017). Registered here rather
+  // than in the canvas because the canvas is lazily loaded and re-mounts on a
+  // view-mode change, and re-running a Python host round-trip for a layout
+  // change would be absurd.
+  const { nonce: paletteNonce, partFor } = useDynamicBlocks(currentFolder)
+  // The parts whose blocks are on the canvas right now — the driver banner's
+  // input. Empty until the canvas reports, which is also the state on a file
+  // with no part blocks in it, so the banner simply never appears.
+  const [partsUsed, setPartsUsed] = useState<readonly { libraryId: string; partId: string }[]>([])
+  useEffect(() => setPartsUsed([]), [file?.id])
+  /**
+   * USING a part's block offers its driver (#1017) — the same consent-first
+   * banner the Board View shows when the part is placed, in the workspace that
+   * hides the Board View.
+   *
+   * It is the right moment for it. Placing a part on the breadboard is a drawing
+   * action and its driver may never be needed; dragging that part's BLOCK into a
+   * program is a statement of intent to run code that imports it, and the import
+   * is the line that will fail.
+   */
+  const driverNeeds = useMemo<PartDriverNeed[]>(() => {
+    const out: PartDriverNeed[] = []
+    for (const ref of partsUsed) {
+      const part = partFor(ref.libraryId, ref.partId)
+      if (!part?.drivers || part.drivers.length === 0) continue
+      out.push({
+        key: `${ref.libraryId}:${ref.partId}`,
+        libraryId: ref.libraryId,
+        partId: ref.partId,
+        label: part.name || ref.partId,
+        part,
+        drivers: part.drivers
+      })
+    }
+    return out
+  }, [partsUsed, partFor])
+
   // Graduating (#1016) — the same implementation the editor header's button
   // uses, because the ORDER matters (blocks kept first) and a second copy that
   // got it wrong would lose somebody's work.
@@ -195,6 +235,8 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
         onSelectBlock={setLinkedBlock}
         selectBlockId={selectFromPython}
         onShowBlockPython={setPythonFor}
+        paletteNonce={paletteNonce}
+        onPartsUsed={setPartsUsed}
       />
     </Suspense>
   )
@@ -218,6 +260,7 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
       {file.blocksConflict && (
         <BlocksConflictNotice name={file.name} onKeepPython={graduate} />
       )}
+      {driverNeeds.length > 0 && <DriverInstallBanner needs={driverNeeds} />}
       {graduateError && (
         <div className="blocks-split__conflict" role="alert">
           <p>Couldn&rsquo;t keep the blocks, so nothing was changed: {graduateError}</p>

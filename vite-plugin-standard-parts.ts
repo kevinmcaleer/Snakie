@@ -17,7 +17,9 @@ import type { Plugin } from 'vite'
  * draw parts (servos etc.). Raster `image.<ext>` assets are EMITTED as normal
  * hashed build assets and referenced by URL (kept out of the JS payload — they
  * total a few MB), which an SVG `<image href>` renders under `img-src 'self'`.
- * `help.md` is inlined as `helpText` (small, powers the help panel).
+ * `help.md` is inlined as `helpText` (small, powers the help panel), and a
+ * part's `blocks.yml` as `blocksYaml` (#1017) so the web palette gets the same
+ * part-contributed blocks the desktop does.
  *
  * Parsing intentionally lives in the plugin (Node/build side) using the `yaml`
  * package, mirroring the desktop's `partFromYaml`/`libraryFromYaml`, so the
@@ -97,6 +99,16 @@ export function standardPartsPlugin(): Plugin {
           } catch {
             /* missing help — ignore */
           }
+        }
+
+        // Blocks the part ships (#1017). Inlined as raw text, exactly as the
+        // desktop reader hands it over, so the renderer runs one parser in one
+        // place whichever host it is in.
+        try {
+          const blocks = readFileSync(join(partDir, 'blocks.yml'), 'utf-8')
+          if (blocks.trim()) part.blocksYaml = blocks
+        } catch {
+          /* no blocks.yml — the part's blocks are derived instead */
         }
 
         // Bundle each declared driver file's source (a bundled filename, not a

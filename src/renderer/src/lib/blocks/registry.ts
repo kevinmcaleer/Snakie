@@ -90,6 +90,39 @@ export interface BlockDefinition {
    * than empty sockets a beginner has to discover how to fill.
    */
   toolbox?: Record<string, unknown>
+  /**
+   * A SUB-CATEGORY within {@link category} (#1017).
+   *
+   * The categories are a fixed, curated list — a curriculum, as the palette's
+   * own comment says — but "My parts" holds whatever the learner happens to have
+   * wired up this afternoon. Those group by part, one drawer each, rather than
+   * spilling forty blocks from four sensors into one flyout nobody can read.
+   */
+  group?: BlockGroup
+  /**
+   * Which dynamic set this block belongs to, e.g. `part:snakie-standard.vl53l0x`
+   * (#1017). Absent for the built-in palette.
+   *
+   * The identity {@link defineDynamicBlocks} replaces on: a part that is
+   * unwired, re-wired, or edited in the Part Editor re-registers its whole set,
+   * and the previous one has to go — otherwise a block whose part is gone stays
+   * in the flyout, draggable, generating code for hardware that isn't there.
+   */
+  source?: string
+  /**
+   * The part this block belongs to (#1017) — so USING one can offer to install
+   * that part's driver, the same consent-first banner the Board View shows when
+   * the part is placed.
+   */
+  part?: { libraryId: string; partId: string }
+}
+
+/** A sub-category inside a toolbox category (#1017). */
+export interface BlockGroup {
+  /** Stable id — the flyout's identity, so re-registering doesn't reorder it. */
+  id: string
+  /** What the drawer is called: the part's or the plugin's name. */
+  name: string
 }
 
 const REGISTRY = new Map<string, BlockDefinition>()
@@ -100,6 +133,34 @@ const REGISTRY = new Map<string, BlockDefinition>()
  */
 export function defineBlocks(defs: readonly BlockDefinition[]): void {
   for (const def of defs) REGISTRY.set(def.type, def)
+}
+
+/**
+ * Register (or re-register) one DYNAMIC set of blocks (#1017).
+ *
+ * A part's or a plugin's blocks are not a fact about this build — they are a
+ * fact about what is wired up and installed right now, and both change while the
+ * app is running. So a set is replaced WHOLE: everything previously registered
+ * under `source` is forgotten first, and what is passed in takes its place.
+ *
+ * Blockly's own definition table is not pruned to match, and that is deliberate.
+ * A workspace on screen may still hold a block from the set being replaced, and
+ * un-defining its type would strand it as an unrenderable shape mid-session. The
+ * REGISTRY is what the toolbox is built from, so dropping it here is enough for
+ * the block to stop being reachable, which is the thing that matters.
+ */
+export function defineDynamicBlocks(source: string, defs: readonly BlockDefinition[]): void {
+  for (const [type, def] of [...REGISTRY]) {
+    if (def.source === source) REGISTRY.delete(type)
+  }
+  for (const def of defs) REGISTRY.set(def.type, { ...def, source })
+}
+
+/** Forget every dynamic set whose source is not in `keep` (#1017). */
+export function pruneDynamicBlocks(keep: ReadonlySet<string>): void {
+  for (const [type, def] of [...REGISTRY]) {
+    if (def.source && !keep.has(def.source)) REGISTRY.delete(type)
+  }
 }
 
 /** Every registered block, in registration order. */

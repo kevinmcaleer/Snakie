@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import type { IpcResult } from '../device/types'
 import { PluginHost } from './PluginHost'
 import type {
+  BlocksListing,
   LintResult,
   MotionCheckResult,
   MotionReadResult,
@@ -57,6 +58,7 @@ export function registerPluginsIpc(): void {
   ipcMain.handle('plugins:lint', (_e, context: PluginContext) =>
     wrap<LintResult>(() => h.lint(context))
   )
+  ipcMain.handle('plugins:listBlocks', () => wrap<BlocksListing>(() => h.listBlocks()))
   ipcMain.handle('plugins:reload', () => wrap<PluginStatus>(() => h.reload()))
   ipcMain.handle('plugins:motionRead', (_e, source: string) =>
     wrap<MotionReadResult>(() => h.motionRead(source))

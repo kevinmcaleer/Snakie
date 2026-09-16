@@ -56,10 +56,12 @@ and its block is selected on the canvas. Right-click a block and choose
 | **Turtle** | a pen that draws on screen — needs no hardware |
 | **Hardware** | LEDs, buttons, PWM, servos, buzzers, analogue readings |
 | **Instruments** | send readings to Snakie's oscilloscope, plotter, multimeter… |
+| **My parts** | blocks for the parts on *your* breadboard — one drawer each |
 | **Wait** | the two pause blocks, in a category of their own |
 | **Control** | forever, repeat, if, for each, break |
 | **Logic · Maths · Text · Lists** | the everyday building blocks |
 | **Variables · Functions** | naming things, and naming groups of steps |
+| **Plugins** | blocks a Python plugin added (desktop only) |
 
 **Turtle comes first** deliberately. It is the only category that needs nothing
 plugged in, and drawing a square is a better first ten minutes than wiring an
@@ -75,6 +77,29 @@ a first electronics lesson.
 If two blocks are set to the same pin, both get a **warning badge**. It is a
 warning, not an error: sharing a pin is sometimes exactly right, and the app
 cannot tell. The badge means *look at this*, which is all anyone knows.
+
+### The toolbox follows your breadboard
+
+Wire a part up in **Electronics** and its blocks are waiting for you in
+**Blocks**, in a drawer with its name on it — with the pins it is actually
+joined to already filled in. Nothing to install, nothing to configure; unwire it
+and the drawer goes away again.
+
+Where the part's maker wrote blocks for it, those are what you get: a BME280
+offers *temperature*, *pressure* and *humidity*. Where nobody did, Snakie works
+three out from the driver the part declares — the sensor itself, a way to give
+it a command, and a way to read a value from it. Those ones carry the name of
+the driver's class in a box you can edit, because Snakie is guessing it from the
+module name and would rather guess where you can see it. The part's help page
+has the real name.
+
+Dragging a part's block out also offers to install that part's driver onto the
+board, if it isn't there yet — the same one-click install the Electronics view
+offers, at the moment you are actually about to need it.
+
+*For makers and teachers:* adding blocks to a part means dropping a `blocks.yml`
+into its folder, and a plugin can contribute blocks too. See
+[writing-plugins.md](writing-plugins.md#ship-blocks-with-your-plugin-1017).
 
 ---
 

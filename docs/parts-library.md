@@ -27,6 +27,8 @@ destination explicit.
     <partId>/
       parts.yml              # the part definition (human-readable YAML)
       image.png|jpg|svg      # optional board image asset
+      help.md                # optional offline mini-help
+      blocks.yml             # optional blocks for the Blocks workspace (#1017)
 ```
 
 `<userData>` is the per-user app-data directory Electron picks for Snakie
@@ -198,6 +200,23 @@ You rarely hand-write `parts.yml`. The **Part Editor** authors it visually and
 writes the folder + asset for you — see [part-editor.md](part-editor.md). Parts
 you create land in an auto-created local **My Parts** library
 (`<userData>/parts/my-parts/`).
+
+## Blocks a part ships (#1017)
+
+Drop a **`blocks.yml`** beside a part's `parts.yml` and its blocks appear in the
+**Blocks** workspace whenever that part is on the breadboard, in a drawer of its
+own under **My parts** — with the pins it is *actually wired to* already filled
+in. Snakie reads that file and never writes it: it is the part author's, like
+`help.md`.
+
+A part that ships no `blocks.yml` still gets blocks, derived from its
+`library.module` (or its driver file name): the object itself, a call block and
+a read block. Rough, but never nothing — and a part that wants better says so in
+a manifest.
+
+The schema, every argument kind, and what makes a block get turned away are in
+[writing-plugins.md § Blocks that ship with a part](writing-plugins.md#blocks-that-ship-with-a-part).
+The worked example is `examples/parts/snakie-standard/bme280/blocks.yml`.
 
 ## See also
 
