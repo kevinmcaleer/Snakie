@@ -11,7 +11,7 @@ stdin/stdout**. The host:
 2. Imports each, running its ``@plugin.command`` decorators. A per-plugin import
    error is reported in the plugin list, not fatal.
 3. Serves the JSON-RPC loop: ``initialize``, ``listCommands``,
-   ``runCommand``, ``lint``, ``shutdown``.
+   ``runCommand``, ``lint``, ``refactor``, ``listBlocks``, ``shutdown``.
 
 Protocol
 --------
@@ -288,6 +288,57 @@ def _run_lint(params: Dict[str, Any]) -> Dict[str, Any]:
     if actions:
         out["actions"] = actions
     return out
+
+
+def _list_blocks() -> Dict[str, Any]:
+    """Collect every registered block provider's blocks (#1017, epic #1007).
+
+    Grouped BY PLUGIN rather than concatenated, because the Blocks toolbox gives
+    each plugin its own drawer and needs to know whose block is whose — and
+    because the block ids are namespaced per plugin on the Snakie side, so two
+    plugins may both ship a ``beep`` without colliding.
+
+    A provider that raises is skipped with a note on stderr, exactly as a linter
+    is: one broken plugin must not empty the palette for the others. Validation
+    of the blocks themselves happens in Snakie, against the same schema a part's
+    ``blocks.yml`` is held to — so this deliberately does no checking beyond
+    "is it a dict", and lets the warnings come back where someone will see them.
+    """
+    groups: List[Dict[str, Any]] = []
+    for provider in plugin.block_providers:
+        try:
+            result = provider.handler()
+        except TypeError:
+            # A handler written `def f(ctx)` is the obvious mistake and costs
+            # nothing to accept — the other handlers all take one.
+            try:
+                result = provider.handler(None)
+            except Exception as exc:  # noqa: BLE001 - per-provider isolation
+                print(
+                    f"snakie.host: block provider {provider.name!r} failed: {exc}",
+                    file=sys.stderr,
+                )
+                continue
+        except Exception as exc:  # noqa: BLE001 - per-provider isolation
+            print(
+                f"snakie.host: block provider {provider.name!r} failed: {exc}",
+                file=sys.stderr,
+            )
+            continue
+        if result is None:
+            continue
+        items = result if isinstance(result, (list, tuple)) else [result]
+        blocks = [b for b in items if isinstance(b, dict)]
+        if not blocks:
+            continue
+        groups.append(
+            {
+                "pluginId": provider.plugin_id or provider.name,
+                "name": provider.name,
+                "blocks": blocks,
+            }
+        )
+    return {"providers": groups}
 
 
 def _normalise_refactoring(item: Any, provider: str) -> Optional[Dict[str, Any]]:
@@ -594,6 +645,9 @@ class Host:
         if method == "refactor":
             self._ensure_discovered()
             return _run_refactor(params)
+        if method == "listBlocks":
+            self._ensure_discovered()
+            return _list_blocks()
         if method == "motion.read":
             return _motion_read(params)
         if method == "motion.check":

@@ -1,0 +1,76 @@
+# Blocks this part contributes to the Blocks workspace (#1017, epic #1007).
+#
+# Drop a file like this beside a part's `parts.yml` and its blocks appear in the
+# Blocks toolbox, in a drawer of their own, whenever the part is on the
+# breadboard. Nothing in Snakie has to change — see `docs/writing-plugins.md`.
+#
+# WHY ONE BLOCK CONSTRUCTS AND THREE READ. The sensor is opened once, above the
+# program; a reading inside a loop must not re-open the I²C bus three thousand
+# times a second. `setup` is what hoists it, and the three reading blocks take
+# the sensor as an argument — pre-filled, so dragging one out already works.
+#
+# The pin and bus fields are FILLED IN FROM THE REAL CIRCUIT. The defaults below
+# are only what a part that isn't wired up yet falls back to.
+version: 1
+blocks:
+  - id: sensor
+    message: BME280 on I²C %1 with SDA %2 and SCL %3
+    shape: value
+    output: Object
+    args:
+      - name: BUS
+        kind: number-field
+        default: 0
+      - name: SDA
+        kind: pin
+        capability: i2c
+        default: 0
+      - name: SCL
+        kind: pin
+        capability: i2c
+        default: 1
+    setup:
+      # Keyed on the wiring, not on the part: two BME280s on two buses are two
+      # sensors, and one sensor read by four blocks is one object.
+      key: "bme280:{BUS}:{SDA}:{SCL}"
+      name: bme
+      expr: "BME280(I2C({BUS}, sda=Pin({SDA}), scl=Pin({SCL})))"
+    code: "{SETUP}"
+    imports:
+      - module: bme280
+        name: BME280
+      - module: machine
+        name: I2C
+      - module: machine
+        name: Pin
+    tooltip: The BME280 itself. Plug it into one of the reading blocks.
+  - id: temperature
+    message: temperature °C from %1
+    shape: value
+    output: Number
+    args:
+      - name: SENSOR
+        kind: any
+        shadow: sensor
+    code: "{SENSOR}.temperature()"
+    tooltip: How warm it is, in degrees Celsius.
+  - id: pressure
+    message: pressure hPa from %1
+    shape: value
+    output: Number
+    args:
+      - name: SENSOR
+        kind: any
+        shadow: sensor
+    code: "{SENSOR}.pressure()"
+    tooltip: Air pressure in hectopascals — it falls before rain.
+  - id: humidity
+    message: humidity %% from %1
+    shape: value
+    output: Number
+    args:
+      - name: SENSOR
+        kind: any
+        shadow: sensor
+    code: "{SENSOR}.humidity()"
+    tooltip: Relative humidity, as a percentage.

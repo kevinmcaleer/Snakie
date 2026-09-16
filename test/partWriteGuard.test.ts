@@ -165,6 +165,27 @@ describe('writePart — sibling files a part did not author (#750)', () => {
     expect(existsSync(join(partDir, 'help.md'))).toBe(true)
   })
 
+  it('reads a `blocks.yml` beside it, and never writes it back (#1017)', async () => {
+    // A part's blocks are its author's file, exactly like help.md: Snakie reads
+    // it to fill the toolbox and has no business editing it. If the writer ever
+    // started serialising `blocksYaml` back into `parts.yml`, there would be two
+    // copies of one file that could diverge — and the one in the folder would
+    // stop being the source of truth for the palette.
+    const manifest = 'version: 1\nblocks:\n  - id: go\n    message: go\n    code: "robot.go()"\n'
+    writeFileSync(join(partDir, 'blocks.yml'), manifest, 'utf-8')
+
+    const part = await loadPart()
+    expect(part.blocksYaml).toBe(manifest)
+
+    const res = await writePart(LIB, { ...part })
+    expect(res.ok).toBe(true)
+    // Still there, untouched...
+    expect(readFileSync(join(partDir, 'blocks.yml'), 'utf-8')).toBe(manifest)
+    // ...and not copied into parts.yml.
+    expect(readFileSync(ymlPath, 'utf-8')).not.toMatch(/blocksYaml/)
+    expect(readFileSync(ymlPath, 'utf-8')).not.toMatch(/robot\.go/)
+  })
+
   it('leaves an image asset it did not write alone', async () => {
     // A hand-placed `image.png` with no `image:` key in parts.yml: the blanket
     // "remove every image.<ext>" sweep used to delete it on an unrelated save.

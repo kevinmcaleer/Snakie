@@ -193,6 +193,29 @@ export interface MotionCheckResult {
   pythonFound?: boolean
 }
 
+/**
+ * One plugin's contributed palette blocks (#1017, epic #1007).
+ *
+ * The blocks themselves are left as `unknown[]` ON PURPOSE. They are a stranger's
+ * JSON, and the one place allowed to decide what a block is, is the shared
+ * `blocks-manifest` normaliser that a part's `blocks.yml` also goes through.
+ * Typing them here would be a second, weaker gate sitting in front of the real
+ * one, and the two would drift.
+ */
+export interface BlockProviderGroup {
+  /** The plugin that registered them — namespaces the block ids. */
+  pluginId: string
+  /** The provider's name, shown as the toolbox drawer's title. */
+  name: string
+  /** Raw block descriptors, validated on the renderer side. */
+  blocks: unknown[]
+}
+
+/** Result of the `listBlocks` RPC. */
+export interface BlocksListing {
+  providers: BlockProviderGroup[]
+}
+
 /** Whether a Python interpreter + host were found. */
 export interface PluginStatus {
   /** True when a Python interpreter was located and the host started. */

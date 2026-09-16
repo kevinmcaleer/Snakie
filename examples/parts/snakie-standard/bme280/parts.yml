@@ -18,7 +18,7 @@ properties:
   interface: I²C (0x76 default, 0x77 via ADDR)
   measures: temperature, pressure, humidity
   connectors: 0.1" header + Qw/ST (Qwiic / STEMMA QT)
-version: 0.1.0
+version: 0.2.0
 pcbColor: "#1b1b1b"
 aspect: 1.0
 dimensions:

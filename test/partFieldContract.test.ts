@@ -146,6 +146,7 @@ const EVERY_FIELD: Required<PartDefinition> = {
   // --- Bundled help --------------------------------------------------------
   help: 'help.md',
   helpText: '# Contract Part\n', // runtime-only — see RUNTIME_ONLY
+  blocksYaml: 'version: 1\nblocks: []\n', // runtime-only — see RUNTIME_ONLY
 
   // --- Concurrency stamp ---------------------------------------------------
   sourceHash: 'e3b0c44298fc1c149afbf4c8996fb924', // runtime-only — see RUNTIME_ONLY
@@ -199,6 +200,8 @@ const RUNTIME_ONLY: Partial<Record<keyof PartDefinition, string>> = {
   imageData:
     'inlined by the main process on read; parts.yml keeps the relative `image` filename',
   helpText: 'inlined by the main process on read; parts.yml keeps the relative `help` filename',
+  blocksYaml:
+    "the text of a `blocks.yml` sitting BESIDE parts.yml (#1017). Snakie reads that file and never authors it, so writing it into parts.yml would create a second, diverging copy of a file the part's author owns.",
   sourceHash:
     'a hash of the parts.yml text the part was READ from (#750) — file identity, not part content. Writing it would change the very bytes it stamps.'
 }

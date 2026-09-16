@@ -13,7 +13,12 @@ import { generateProgram, type GeneratedProgram } from '../lib/blocks/generator'
 import { ledPinToken, setBoardPins } from '../lib/blocks/board-pins'
 import { applyPinWarnings } from '../lib/blocks/pin-conflicts'
 import { loadSelectedBoard, watchSelectedBoard } from './board-pin-source'
-import { blockDefinition, blocksInCategory, installBlockDefinitions } from '../lib/blocks/registry'
+import {
+  blockDefinition,
+  blocksInCategory,
+  installBlockDefinitions,
+  type BlockDefinition
+} from '../lib/blocks/registry'
 import { installCorePalette } from '../lib/blocks/palette'
 import {
   dispatchNeedLibrary,
@@ -115,6 +120,21 @@ export interface BlocksCanvasProps {
   selectBlockId?: string | null
   /** Right-click ▸ "Show me the Python for just this block". */
   onShowBlockPython?: (blockId: string) => void
+  /**
+   * Bumped when the part/plugin palette changes (#1017) — the toolbox is rebuilt
+   * on it.
+   *
+   * A NONCE rather than the blocks themselves, because the canvas does not own
+   * them: they are in the module registry by the time this changes, and passing
+   * them through props would mean two copies that could disagree about which
+   * blocks exist.
+   */
+  paletteNonce?: number
+  /**
+   * Which parts the blocks on the canvas belong to (#1017), deduplicated — so
+   * the caller can offer to install their drivers.
+   */
+  onPartsUsed?: (parts: readonly { libraryId: string; partId: string }[]) => void
 }
 
 // Blockly's message table is a precondition of `inject` — see `locale.ts`.
@@ -152,7 +172,9 @@ export function BlocksCanvas({
   onHoverBlock,
   onSelectBlock,
   selectBlockId,
-  onShowBlockPython
+  onShowBlockPython,
+  paletteNonce = 0,
+  onPartsUsed
 }: BlocksCanvasProps): JSX.Element {
   // BEFORE anything else: can this build read these blocks at all? A file made
   // by a newer Snakie, or with a part/plugin's blocks (#1017) that isn't
@@ -188,6 +210,8 @@ export function BlocksCanvas({
   onSelectBlockRef.current = onSelectBlock
   const onShowBlockPythonRef = useRef(onShowBlockPython)
   onShowBlockPythonRef.current = onShowBlockPython
+  const onPartsUsedRef = useRef(onPartsUsed)
+  onPartsUsedRef.current = onPartsUsed
   /** Pending regeneration, so a drag doesn't generate once per mouse move. */
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   /**
@@ -271,6 +295,10 @@ export function BlocksCanvas({
         // do the job (#1012). The canvas is the only place that sees the whole
         // program at once, so it is where this is caught.
         applyPinWarnings(ws)
+        // Which parts this program now uses (#1017) — the caller offers their
+        // drivers. Reported from the debounce rather than per create event so a
+        // drag across the canvas is one answer, not forty.
+        onPartsUsedRef.current?.(partsUsedBy(ws))
         onGenerateRef.current?.(program)
         onEditRef.current(program)
       }, REGENERATE_DEBOUNCE_MS)
@@ -471,6 +499,27 @@ export function BlocksCanvas({
     return () => observer.disconnect()
   }, [peek, blocked])
 
+  // THE PALETTE FOLLOWS THE BREADBOARD (#1017).
+  //
+  // A part dropped in Electronics registers its blocks, bumps the nonce, and
+  // this puts them in the toolbox of a canvas that is already open — no reload,
+  // no re-inject, and the learner's program untouched underneath.
+  //
+  // `installBlockDefinitions` FIRST: `updateToolbox` builds a flyout block of
+  // every type it is given, and a type Blockly has not been taught throws while
+  // the flyout opens, which would take the whole toolbox down with it.
+  useEffect(() => {
+    const ws = wsRef.current
+    // Nonce 0 is the first pass, whose toolbox the injection above already built.
+    if (!ws || peek || blocked || paletteNonce === 0) return
+    try {
+      installBlockDefinitions()
+      ws.updateToolbox(buildToolbox())
+    } catch (err) {
+      console.warn('[blocks] could not rebuild the toolbox', err)
+    }
+  }, [paletteNonce, peek, blocked])
+
   // Load the document. Keyed on the FILE, not the JSON: the canvas is the source
   // of truth once it is up, so re-loading on every workspace change would fight
   // the user's own drag — the store's content is downstream of this canvas.
@@ -506,6 +555,10 @@ export function BlocksCanvas({
       // Once per load rather than per block: the load fires a create event per
       // block, and revealing eighteen times would scroll the dock eighteen times.
       dispatchRevealInstruments(instrumentsUsedBy(ws))
+      // And the parts it needs drivers for (#1017) — on load too, because a
+      // program saved yesterday is exactly the one whose board has been
+      // re-flashed since.
+      onPartsUsedRef.current?.(partsUsedBy(ws))
     } catch {
       // Belt and braces behind the `blocked` check above: a type can be
       // registered and still fail to deserialise (a malformed field, a shape
@@ -692,6 +745,23 @@ function instrumentsUsedBy(ws: Blockly.Workspace): string[] {
 }
 
 /**
+ * The parts whose blocks are on the canvas, deduplicated (#1017).
+ *
+ * Read off each block's REGISTERED DEFINITION rather than its type name: the
+ * definition is where the part reference was declared, and parsing it back out
+ * of a namespaced type string would be a second encoding of the same fact that
+ * could disagree with the first.
+ */
+function partsUsedBy(ws: Blockly.Workspace): { libraryId: string; partId: string }[] {
+  const seen = new Map<string, { libraryId: string; partId: string }>()
+  for (const block of ws.getAllBlocks(false)) {
+    const part = blockDefinition(block.type)?.part
+    if (part) seen.set(`${part.libraryId}:${part.partId}`, part)
+  }
+  return [...seen.values()]
+}
+
+/**
  * Reveal the instrument a newly created block belongs to (#1013).
  *
  * Only on CREATE: a learner dragging a turtle block out of the flyout needs the
@@ -727,15 +797,64 @@ function buildToolbox(): Blockly.utils.toolbox.ToolboxDefinition {
       kind: 'category',
       name: c.name,
       categorystyle: categoryStyleName(c.id),
-      contents: blocksInCategory(c.id).map((def) => ({
-        kind: 'block',
-        type: def.type,
-        // A block dragged out of the flyout arrives with sensible values in its
-        // sockets rather than holes a beginner has to discover how to fill.
-        ...(def.toolbox ?? {})
-      }))
+      contents: categoryContents(c)
     }))
   }
+}
+
+/** One toolbox entry for a registered block. */
+function blockEntry(def: BlockDefinition): Record<string, unknown> {
+  return {
+    kind: 'block',
+    type: def.type,
+    // A block dragged out of the flyout arrives with sensible values in its
+    // sockets rather than holes a beginner has to discover how to fill.
+    ...(def.toolbox ?? {})
+  }
+}
+
+/**
+ * A category's contents: its ungrouped blocks, then one SUB-CATEGORY per group
+ * (#1017), then — if all of that came to nothing — the category's own hint.
+ *
+ * Grouping is what keeps "My parts" usable. The fixed categories are a curated
+ * list and their sizes are known; this one holds whatever is on the breadboard,
+ * and four sensors' worth of blocks in one flyout is a wall of near-identical
+ * shapes. One drawer per part is the same answer the parts panel already gives.
+ *
+ * The HINT is the other half. An empty `Turtle` says "turtle blocks go here",
+ * which is right, but an empty `My parts` can say the thing that FILLS it —
+ * wire something up in Electronics — and a drawer that explains itself is worth
+ * more than one that just looks broken.
+ */
+function categoryContents(
+  category: (typeof BLOCK_CATEGORIES)[number]
+): Record<string, unknown>[] {
+  const blocks = blocksInCategory(category.id)
+  const loose = blocks.filter((b) => !b.group)
+  const groups = new Map<string, { name: string; blocks: BlockDefinition[] }>()
+  for (const def of blocks) {
+    if (!def.group) continue
+    const entry = groups.get(def.group.id) ?? { name: def.group.name, blocks: [] }
+    entry.blocks.push(def)
+    groups.set(def.group.id, entry)
+  }
+  const contents: Record<string, unknown>[] = loose.map(blockEntry)
+  for (const [id, group] of groups) {
+    contents.push({
+      kind: 'category',
+      name: group.name,
+      // The same style as the parent, so a part's drawer reads as part of `My
+      // parts` rather than as a category in its own right.
+      categorystyle: categoryStyleName(category.id),
+      toolboxitemid: id,
+      contents: group.blocks.map(blockEntry)
+    })
+  }
+  if (contents.length === 0 && 'hint' in category && category.hint) {
+    contents.push({ kind: 'label', text: category.hint })
+  }
+  return contents
 }
 
 export default BlocksCanvas

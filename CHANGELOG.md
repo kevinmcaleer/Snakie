@@ -8,6 +8,51 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Blocks that come from your parts and your plugins** (#1017, epic #1007,
+  phase 4). A hand-maintained palette can only ever cover the parts we thought
+  of. The parts library is in the hundreds and grows through a skill, so the
+  blocks now come from the same place the parts do.
+
+  **Wire a part up in Electronics and its blocks are waiting for you in
+  Blocks** — in a drawer of its own under **My parts**, with the pins it is
+  *actually joined to* already filled in, read from the project's own connection
+  graph. Nothing to install, nothing to configure; unwire it and the drawer goes
+  away again. The toolbox updates under a canvas that is already open, so a part
+  dropped in the other window appears without a reload.
+
+  **A part ships its blocks as a `blocks.yml`** beside its `parts.yml` — a
+  declarative manifest with a Blockly message, typed arguments (sockets,
+  dropdowns, pin menus), a Python template, imports and a hoisted constructor.
+  Adding a block to Snakie no longer means touching Electron code, ever. The
+  BME280 ships one, offering *temperature*, *pressure* and *humidity*.
+
+  **A part that ships nothing still gets blocks.** From the `library.module` it
+  already declares (or its driver's file name) Snakie derives three: the object
+  itself, a way to give it a command, and a way to read a value from it. The
+  driver's class name is a guess — the conventional upper-cased module name — so
+  it goes in an **editable field on the face of the block**, where it can be seen
+  and corrected, rather than failing quietly on the board. Rough, but never
+  nothing.
+
+  **Plugins ship blocks too**, through a new `@plugin.blocks` provider on the
+  Python host — so a club or a school can put its own robot's blocks in the
+  palette with a `pip install`, and they land in a **Plugins** drawer of their
+  own. Worked examples for both routes ship in `examples/plugins/blocks_demo/`
+  and `examples/parts/snakie-standard/bme280/blocks.yml`, and the schema is
+  documented in `docs/writing-plugins.md`.
+
+  **Using a part's block offers that part's driver** — the same consent-first
+  install banner the Board View shows when a part is placed, now in the
+  workspace that hides the Board View. Dragging the block out is the moment the
+  import is actually about to run.
+
+  A manifest can only ever produce a *string*: there is no way for a part or a
+  plugin to run code on a learner's canvas. Nothing is dropped in silence either
+  (epic #856) — an unknown field, a template naming an argument that doesn't
+  exist, a message with no slot for a field, each comes back as a warning naming
+  the block, because whoever wrote the file is rarely the person who will see it
+  not work.
+
 - **Graduate to Python, and the two panes finally talk to each other** (#1016,
   epic #1007, phase 3). The epic is called an *on-ramp*; this is the part where
   the learner gets onto the road.
