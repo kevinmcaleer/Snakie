@@ -6,6 +6,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Rounder, roomier blocks.** Blockly's stock geometry is drawn for an adult
+  IDE — 8px corners, five pixels of padding either side of a field, an 16px
+  field box holding 11px text — and next to MakeCode or Scratch, which is where
+  Snakie's users arrive from, it read as cramped and sharp. The blocks now wear
+  their own Soft Shell geometry: 12px corners, near-pill field boxes, about half
+  again as much padding around every row, and 12px text to match. `thrasos`
+  stays the base renderer, so the row layout that keeps `set x to (…)` reading
+  as a sentence is unchanged.
+
+- **"Blocks" means blocks, and "Code" means code.** Each end of the split used
+  to leave a three-percent sliver of the other pane showing — forty pixels of
+  chopped-off Python beside the canvas, or a strip of half-blocks beside the
+  editor. That sliver was there because the divider was the only way back and a
+  divider flush against the edge cannot be grabbed. #1053's dot is a named way
+  back from either end, so the sliver stopped paying for itself: the end stops
+  are now hard, and each view shows one thing.
+
 ### Added
 
 - **Blocks know which Python your board speaks** (#1039, epic #1007 and

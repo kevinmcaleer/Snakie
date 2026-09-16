@@ -17,7 +17,7 @@
  * Pure, so the threshold is a tested number rather than a media query somebody
  * has to reproduce by dragging a window.
  */
-import { BLOCKS_PANE_SLIVER, BLOCKS_VIEW_RATIOS, type BlocksViewMode } from '../../store/layout'
+import { BLOCKS_PANE_CLOSED, BLOCKS_VIEW_RATIOS, type BlocksViewMode } from '../../store/layout'
 
 /**
  * Narrowest editor width (px) that still holds two usable columns.
@@ -103,7 +103,7 @@ function usable(r: readonly [number, number] | undefined): r is readonly [number
   if (!r || r.length !== 2) return false
   if (!r.every((n) => typeof n === 'number' && Number.isFinite(n))) return false
   if (Math.abs(r[0] + r[1] - 100) > 1) return false
-  return r[0] >= BLOCKS_PANE_SLIVER && r[1] >= BLOCKS_PANE_SLIVER
+  return r[0] >= BLOCKS_PANE_CLOSED && r[1] >= BLOCKS_PANE_CLOSED
 }
 
 // ---------------------------------------------------------------------------
@@ -165,7 +165,7 @@ export function stopFor(canvasShare: number): BlocksStop | null {
  * half each".
  */
 export function modeForRatio(ratio: readonly [number, number]): BlocksViewMode {
-  if (ratio[0] <= BLOCKS_PANE_SLIVER) return 'python'
-  if (ratio[1] <= BLOCKS_PANE_SLIVER) return 'blocks'
+  if (ratio[0] <= BLOCKS_PANE_CLOSED) return 'python'
+  if (ratio[1] <= BLOCKS_PANE_CLOSED) return 'blocks'
   return 'split'
 }

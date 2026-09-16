@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  BLOCKS_PANE_SLIVER,
+  BLOCKS_PANE_CLOSED,
   BLOCKS_VIEW_RATIOS,
   WORKSPACE_PRESETS,
   defaultBlocksViewMode,
@@ -146,13 +146,14 @@ describe('resolveBlocksView — the split, and when it stops fitting (#1009)', (
     expect(v.ratio[0]).toBeGreaterThan(v.ratio[1])
   })
 
-  it('python-primary collapses the canvas to a peek strip, not out of existence', () => {
+  it('python-primary closes the canvas completely', () => {
     const v = resolveBlocksView('python', 1400)
     expect(v.kind).toBe('split')
     expect(v.peek).toBe(true)
-    // A sliver, not nothing: the divider has to stay grabbable, and a learner
-    // who cannot see where the blocks went has lost their program.
-    expect(v.ratio).toEqual([BLOCKS_PANE_SLIVER, 100 - BLOCKS_PANE_SLIVER])
+    // NOTHING, not a sliver. The end stop used to leave three percent showing so
+    // the divider stayed grabbable; #1053's dot is a named way back from either
+    // end, so "Code" can mean code with no strip of half-blocks beside it.
+    expect(v.ratio).toEqual([0, 100])
   })
 
   it('split is half and half', () => {
@@ -177,14 +178,8 @@ describe('resolveBlocksView — the split, and when it stops fitting (#1009)', (
   })
 
   it('the ends are the ends — a remembered ratio cannot reopen a closed pane', () => {
-    expect(resolveBlocksView('blocks', 1400, [30, 70]).ratio).toEqual([
-      100 - BLOCKS_PANE_SLIVER,
-      BLOCKS_PANE_SLIVER
-    ])
-    expect(resolveBlocksView('python', 1400, [30, 70]).ratio).toEqual([
-      BLOCKS_PANE_SLIVER,
-      100 - BLOCKS_PANE_SLIVER
-    ])
+    expect(resolveBlocksView('blocks', 1400, [30, 70]).ratio).toEqual([100, 0])
+    expect(resolveBlocksView('python', 1400, [30, 70]).ratio).toEqual([0, 100])
   })
 
   it('degrades to a tab pair below the threshold, never to two unusable columns', () => {
@@ -206,9 +201,9 @@ describe('resolveBlocksView — the split, and when it stops fitting (#1009)', (
 describe('the divider is the control (#1034)', () => {
   it('has three stops: code, both, blocks', () => {
     expect(BLOCKS_STOPS.map((s) => [s.mode, s.at])).toEqual([
-      ['python', BLOCKS_PANE_SLIVER],
+      ['python', 0],
       ['split', 50],
-      ['blocks', 100 - BLOCKS_PANE_SLIVER]
+      ['blocks', 100]
     ])
   })
 
@@ -233,8 +228,12 @@ describe('the divider is the control (#1034)', () => {
   })
 
   it('reads a ratio back as the stop it is sitting at', () => {
-    expect(modeForRatio([100 - BLOCKS_PANE_SLIVER, BLOCKS_PANE_SLIVER])).toBe('blocks')
-    expect(modeForRatio([BLOCKS_PANE_SLIVER, 100 - BLOCKS_PANE_SLIVER])).toBe('python')
+    expect(modeForRatio([100, 0])).toBe('blocks')
+    expect(modeForRatio([0, 100])).toBe('python')
+    // And a layout persisted before the sliver went away still reads as the end
+    // stop it was meant to be, rather than as a very lopsided split.
+    expect(modeForRatio([100 - BLOCKS_PANE_CLOSED, BLOCKS_PANE_CLOSED])).toBe('blocks')
+    expect(modeForRatio([BLOCKS_PANE_CLOSED, 100 - BLOCKS_PANE_CLOSED])).toBe('python')
     expect(modeForRatio([50, 50])).toBe('split')
     // Anything with both panes on screen is the middle stop: it means "both",
     // not "exactly half".
