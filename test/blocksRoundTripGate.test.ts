@@ -185,9 +185,8 @@ describe('verifying a real conversion', () => {
  * that a rule reads well and rejects two files in three.
  *
  * It is a FLOOR, not a target. The files it still holds are ones where the
- * converter genuinely changes the program (chained comparisons flattened,
- * `+=` on a string read as arithmetic), each of which is its own fix; the
- * number goes up as those land. What this test is here to catch is the number
+ * converter genuinely changes the program, each of which is its own fix; the
+ * number goes up as those land, and #1071's have. What this test is here to catch is the number
  * going DOWN, which would mean the gate has started refusing programs it used
  * to accept — the failure mode that makes the blocks stop following anybody.
  */
@@ -217,9 +216,10 @@ describe('the gate against the files this repo ships (#1068)', () => {
       if (!doc) continue
       if ((await verifyConversion(doc.code, doc.workspace)).ok) accepted += 1
     }
-    // 43 of 56 when this was written. The margin is for files being added, not
-    // for the gate getting stricter.
-    expect(accepted / Math.max(files.length, 1)).toBeGreaterThan(0.7)
+    // 49 of 56 — 43 when this was written, and #1071's chained-comparison and
+    // socket-type fixes took it the rest of the way. The margin is for files
+    // being added, not for the gate getting stricter.
+    expect(accepted / Math.max(files.length, 1)).toBeGreaterThan(0.8)
   })
 })
 
