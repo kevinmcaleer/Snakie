@@ -50,11 +50,24 @@ function offered(dialect: Dialect): string[] {
 }
 
 describe('which blocks carry a scope', () => {
-  it('marks every hardware and instrument block MicroPython', () => {
-    for (const id of ['hardware', 'instruments'] as const) {
-      const blocks = blocksInCategory(id)
-      expect(blocks.length).toBeGreaterThan(0)
-      for (const block of blocks) expect([block.type, block.scope]).toEqual([block.type, 'micropython'])
+  it('marks every instrument block MicroPython', () => {
+    // `instruments.py` is telemetry over `print()`, which CircuitPython runs —
+    // but the sensor reads underneath it are `machine`-based, and #1038 made
+    // those degrade rather than work. A block that draws an empty oscilloscope
+    // is worse than a block the board never offered.
+    const blocks = blocksInCategory('instruments')
+    expect(blocks.length).toBeGreaterThan(0)
+    for (const block of blocks) expect([block.type, block.scope]).toEqual([block.type, 'micropython'])
+  })
+
+  it('scopes a hardware block by what it can GENERATE (#1040)', () => {
+    // Derived, not written down twice — otherwise the copy that drifts is the
+    // one hiding a working block from the board it works on.
+    for (const block of blocksInCategory('hardware')) {
+      expect([block.type, block.scope]).toEqual([
+        block.type,
+        block.circuitpython ? 'both' : 'micropython'
+      ])
     }
   })
 
@@ -74,11 +87,19 @@ describe('the toolbox follows the dialect', () => {
     expect(types).toContain('controls_if')
   })
 
-  it('withholds the hardware blocks on CircuitPython', () => {
+  it('offers the hardware blocks that speak CircuitPython, and withholds the rest', () => {
     const types = offered('circuitpython')
-    expect(types).not.toContain('snakie_led_set')
+    // #1040 taught these to generate `digitalio`/`pwmio`/`analogio`.
+    expect(types).toContain('snakie_led_set')
+    expect(types).toContain('snakie_pwm_duty')
+    expect(types).toContain('snakie_adc_read')
+    // Servo and buzzer have no CircuitPython CORE equivalent — they want
+    // `adafruit_motor` and `simpleio`, which is a different promise.
+    expect(types).not.toContain('snakie_servo_angle')
+    expect(types).not.toContain('snakie_buzzer_tone')
+    // Instruments go through `machine` underneath, so none of them.
     expect(types).not.toContain('snakie_inst_read_adc')
-    // …and keeps every block that is just Python.
+    // …and every block that is just Python is there as always.
     expect(types).toContain('controls_if')
     expect(types).toContain('snakie_turtle_forward')
   })
@@ -93,18 +114,29 @@ describe('the toolbox follows the dialect', () => {
 })
 
 describe('a drawer the dialect emptied', () => {
-  const hardware = BLOCK_CATEGORIES.find((c) => c.id === 'hardware')!
+  // Instruments, not Hardware: since #1040 the hardware drawer keeps nine of
+  // its twelve on CircuitPython, so it is no longer the emptied one.
+  const instruments = BLOCK_CATEGORIES.find((c) => c.id === 'instruments')!
 
   it('says which runtime its blocks are for, and which one you are on', () => {
-    const contents = categoryContents(hardware, 'circuitpython')
+    const contents = categoryContents(instruments, 'circuitpython')
     expect(contents).toEqual([
       { kind: 'label', text: 'These blocks are MicroPython. Your board is running CircuitPython.' }
     ])
   })
 
   it('does not say it on a dialect that can see them', () => {
-    const labels = categoryContents(hardware, 'micropython').filter((c) => c.kind === 'label')
+    const labels = categoryContents(instruments, 'micropython').filter((c) => c.kind === 'label')
     expect(labels).toEqual([])
+  })
+
+  it('a drawer that only LOST some blocks is not an emptied drawer', () => {
+    // Hardware keeps its CircuitPython-capable blocks, so it shows blocks
+    // rather than an explanation.
+    const hardware = BLOCK_CATEGORIES.find((c) => c.id === 'hardware')!
+    const contents = categoryContents(hardware, 'circuitpython')
+    expect(contents.filter((c) => c.kind === 'label')).toEqual([])
+    expect(contents.length).toBeGreaterThan(0)
   })
 
   it('leaves a genuinely empty category its own hint', () => {

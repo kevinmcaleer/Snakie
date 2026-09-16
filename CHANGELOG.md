@@ -8,6 +8,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The hardware blocks speak CircuitPython** (#1040, epic #1007 and epic #209).
+  The same block, on a Feather, writes `digitalio.DigitalInOut(board.GP15)`
+  instead of `Led(pin=Pin(15, Pin.OUT))` — **one block, two templates**, which
+  is the decision #1040 left open and `docs/blockly-epic.md` §9.7b now records.
+
+  The argument in one line: *a learner's program should be a program, not a
+  program-for-a-Pico*. Two block sets would have thrown away the portability the
+  `.py`-with-a-footer format exists for; with one block a canvas built in a
+  classroom's MicroPython half opens and runs in its CircuitPython half. The
+  objection — a block whose code you cannot predict — is answered by the mirror
+  next door, which shows exactly what it generated.
+
+  Nine of the twelve hardware blocks do it. Servo and buzzer have no
+  CircuitPython *core* equivalent (they want `adafruit_motor` and `simpleio`,
+  third-party libraries and a different promise), so the toolbox withholds them
+  there — and scope is now **derived** from what a block can generate, so a
+  working block can never be hidden from the board it works on.
+
+  Pin names come off the board's own silk label, which is what CircuitPython's
+  `board` module is built from: `board.GP15` on an RP2040, `board.IO15` on an
+  ESP32-S3.
+
 - **Hardware lines come back as hardware blocks** (#1058, epic #1007). Only the
   turtle palette declared `read`, so a hardware program converted
   asymmetrically: blocks → Python perfect, Python → blocks dropping to a raw

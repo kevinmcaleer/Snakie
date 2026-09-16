@@ -149,6 +149,25 @@ export interface BlockDefinition {
    */
   part?: { libraryId: string; partId: string }
   /**
+   * The same block, generating CIRCUITPYTHON (#1040, epic #209).
+   *
+   * One block, two templates — decided in `docs/blockly-epic.md` §9. The
+   * alternative was a second set of blocks, and it loses the property this file
+   * format exists for: a learner's program should be a program, not a
+   * program-for-a-Pico. A canvas built in a classroom's MicroPython half opens
+   * and runs in its CircuitPython half, and the mirror shows what it generated
+   * either way.
+   *
+   * ABSENT means this block only knows MicroPython — which is not a gap to be
+   * ashamed of but a fact to be honest about, and {@link scopedByEmitters}
+   * turns it into a `scope` so the toolbox never offers the block to a board
+   * that cannot run it.
+   */
+  circuitpython?: {
+    imports?: readonly PyImport[]
+    code: BlockEmitter
+  }
+  /**
    * Which runtimes this block is true for (#1039, epic #209).
    *
    * Absent means BOTH, matching `DialectScope`'s own default — most of the
@@ -217,6 +236,24 @@ export interface ArgField {
   field: string
   /** Python text → field value. `{ True: 'ON', False: 'OFF' }`. */
   values: Readonly<Record<string, string>>
+}
+
+/**
+ * Scope a palette by what it can actually GENERATE (#1040).
+ *
+ * `scoped('micropython', …)` was right when nothing could speak CircuitPython.
+ * Now that some blocks can, saying so twice — once as an emitter, once as a
+ * scope — is two things to keep in step, and the one that drifts is the one
+ * that hides a working block from the board it works on. So the scope is
+ * derived: a block with a CircuitPython emitter is for both, and a block
+ * without one is MicroPython's.
+ *
+ * A definition that states its own scope keeps it, as always.
+ */
+export function scopedByEmitters(defs: readonly BlockDefinition[]): BlockDefinition[] {
+  return defs.map((def) =>
+    def.scope ? def : { ...def, scope: def.circuitpython ? 'both' : ('micropython' as const) }
+  )
 }
 
 /** A sub-category inside a toolbox category (#1017). */
