@@ -35,7 +35,7 @@ beforeAll(() => {
 beforeEach(() => {
   // Every test starts on the default board; the ones about board-specific
   // behaviour set their own.
-  setBoardPins(FALLBACK_PINS, '"LED"')
+  setBoardPins(FALLBACK_PINS, "'LED'")
 })
 
 function gen(blocks: unknown[]): GeneratedProgram {
@@ -111,9 +111,9 @@ describe('the onboard LED (#1012)', () => {
   it('uses the token the BOARD declares, not a guess', () => {
     // A Pico W's onboard LED hangs off the wireless chip and has no GPIO number
     // at all; a plain Pico's is GP25. One block, two boards.
-    setBoardPins(FALLBACK_PINS, '"LED"')
+    setBoardPins(FALLBACK_PINS, "'LED'")
     expect(gen([{ type: 'snakie_onboard_led', id: 'o', fields: { STATE: 'ON' } }]).code).toContain(
-      'onboard_led = Pin("LED", Pin.OUT)'
+      "onboard_led = Pin('LED', Pin.OUT)"
     )
     setBoardPins(FALLBACK_PINS, '25')
     expect(gen([{ type: 'snakie_onboard_led', id: 'o', fields: { STATE: 'ON' } }]).code).toContain(
@@ -559,7 +559,7 @@ describe('ledPinToken (#1012)', () => {
     // NameError. Getting this the wrong way round breaks the first program most
     // people write, on half the boards.
     expect(ledPinToken('25')).toBe('25')
-    expect(ledPinToken('LED')).toBe('"LED"')
+    expect(ledPinToken('LED')).toBe("'LED'")
     expect(ledPinToken('GP25')).toBe('25')
   })
 

@@ -40,6 +40,16 @@ export interface PyImport {
   module: string
   /** For `from <module> import <name>`. Omit for a plain `import <module>`. */
   name?: string
+  /**
+   * Import the module under another name: `import instruments as inst` (#1014).
+   *
+   * Only for a module every Snakie example and doc page already aliases — the
+   * generated code is meant to be the code we teach, and a learner who
+   * graduates to text and opens `docs/instruments-library.md` should find the
+   * same three letters in front of every call. Ignored alongside `name`, since
+   * a from-import binds the names themselves.
+   */
+  alias?: string
 }
 
 /** The four sections, in the order they are written. */
@@ -81,9 +91,21 @@ const STDLIB = new Set([
  */
 const MACHINE = new Set(['machine', 'micropython', 'rp2', 'esp', 'esp32', 'network', 'bluetooth'])
 
+/**
+ * Snakie's OWN on-device libraries — the ones the app itself installs onto a
+ * board, not drivers for something you wired up.
+ *
+ * `turtle` is here because of #1013: the turtle blocks generate `import turtle`,
+ * and leaving it in the driver group would file Snakie's own library under
+ * "everything else", below a BME280 driver. It is the same kind of thing as
+ * `snakie` and `instruments` — shipped in `micropython/`, offered by the
+ * install banner, versioned by us.
+ */
+const SNAKIE = new Set(['instruments', 'turtle'])
+
 /** Which section an import belongs to. */
 export function importGroup(module: string): ImportGroup {
-  if (module === 'snakie' || module.startsWith('snakie.')) return 'snakie'
+  if (SNAKIE.has(module) || module === 'snakie' || module.startsWith('snakie.')) return 'snakie'
   if (STDLIB.has(module)) return 'stdlib'
   if (MACHINE.has(module)) return 'machine'
   return 'driver'
@@ -98,14 +120,17 @@ const GROUP_ORDER: ImportGroup[] = ['stdlib', 'machine', 'snakie', 'driver']
  * accumulate imports from a workspace the user has since emptied.
  */
 export class ImportManager {
-  /** `module` → the names from-imported from it (empty = plain `import`). */
-  private readonly wanted = new Map<string, Set<string>>()
+  /** `module` → the names from-imported from it (empty = plain `import`) + its alias. */
+  private readonly wanted = new Map<string, { names: Set<string>; alias?: string }>()
 
   /** Declare a need. Calling it twice with the same thing is the normal case. */
   need(imp: PyImport): void {
-    const names = this.wanted.get(imp.module) ?? new Set<string>()
-    if (imp.name) names.add(imp.name)
-    this.wanted.set(imp.module, names)
+    const entry = this.wanted.get(imp.module) ?? { names: new Set<string>() }
+    if (imp.name) entry.names.add(imp.name)
+    // First alias wins, so the section can't change shape depending on which
+    // block happened to emit first.
+    if (imp.alias && !entry.alias) entry.alias = imp.alias
+    this.wanted.set(imp.module, entry)
   }
 
   /** Declare several at once — what a block emitter usually has to hand. */
@@ -128,8 +153,11 @@ export class ImportManager {
    */
   boundNames(): Set<string> {
     const out = new Set<string>()
-    for (const [module, names] of this.wanted) {
-      if (names.size === 0) out.add(module.split('.')[0])
+    for (const [module, { names, alias }] of this.wanted) {
+      // The ALIAS is what lands in the namespace, so it is what a learner's own
+      // variable must not be allowed to shadow — `inst = 3` above a loop calling
+      // `inst.scope(...)` is the failure this prevents.
+      if (names.size === 0) out.add(alias ?? module.split('.')[0])
       for (const n of names) out.add(n)
     }
     return out
@@ -148,9 +176,9 @@ export class ImportManager {
   private renderGroup(group: ImportGroup): string[] {
     const plain: string[] = []
     const from: string[] = []
-    for (const [module, names] of [...this.wanted].sort(byModule)) {
+    for (const [module, { names, alias }] of [...this.wanted].sort(byModule)) {
       if (importGroup(module) !== group) continue
-      if (names.size === 0) plain.push(`import ${module}`)
+      if (names.size === 0) plain.push(alias ? `import ${module} as ${alias}` : `import ${module}`)
       else from.push(`from ${module} import ${[...names].sort(byName).join(', ')}`)
     }
     return [...plain, ...from]

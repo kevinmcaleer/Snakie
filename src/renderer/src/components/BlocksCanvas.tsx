@@ -15,7 +15,7 @@ import { applyPinWarnings } from '../lib/blocks/pin-conflicts'
 import { loadSelectedBoard, watchSelectedBoard } from './board-pin-source'
 import { blockDefinition, blocksInCategory, installBlockDefinitions } from '../lib/blocks/registry'
 import { installCorePalette } from '../lib/blocks/palette'
-import { dispatchOpenHelp } from './editorBridge'
+import { dispatchOpenHelp, dispatchRevealInstruments } from './editorBridge'
 import { ensureBlocklyLocale } from '../lib/blocks/locale'
 import { unknownBlockTypes } from '../lib/blocks/workspace-check'
 import type { BlocksWorkspace } from '../../../shared/blocks-doc'
@@ -190,6 +190,12 @@ export function BlocksCanvas({
       // in is the one test that can't be fooled by when an event shows up.
       if (serialised === lastLoadedRef.current) return
       lastLoadedRef.current = serialised
+      // A block that belongs to an instrument reveals it (#1013). AFTER the guard
+      // above, so this fires for a block a learner DRAGGED and not for the ones a
+      // file arrived carrying — opening a turtle program should not force a dock
+      // somebody deliberately closed back open, but reaching for a turtle block
+      // should, because that is the moment they need somewhere to draw.
+      revealInstrumentFor(ws, event)
       // Debounced: Blockly fires an event per drag frame, and generating (and
       // writing) forty times while a block is in the air would churn the mirror,
       // the source map and the undo-relevant buffer for one gesture.
@@ -287,6 +293,13 @@ export function BlocksCanvas({
       // for the crime of being opened.
       onGenerateRef.current?.({ ...generateProgram(ws), workspace: loaded })
       applyPinWarnings(ws)
+      // Show the instruments this program draws into (#1013). On LOAD as well as
+      // on a drag, because a turtle program whose picture goes nowhere is a
+      // program that looks like it did nothing — which is exactly what happens
+      // when a child saves their square, opens it the next day and presses Run.
+      // Once per load rather than per block: the load fires a create event per
+      // block, and revealing eighteen times would scroll the dock eighteen times.
+      dispatchRevealInstruments(instrumentsUsedBy(ws))
     } catch {
       // Belt and braces behind the `blocked` check above: a type can be
       // registered and still fail to deserialise (a malformed field, a shape
@@ -423,6 +436,50 @@ function installBlockHelpMenu(): void {
  * yet"; hiding it would say "Snakie doesn't do turtles", which is the wrong
  * thing to tell someone who came here to draw one.
  */
+/**
+ * The instruments a whole workspace's blocks declare, deduplicated (#1013).
+ *
+ * Registration order, so a program using two instruments reveals them in the
+ * order its blocks were written rather than whatever order a Set iterates.
+ */
+function instrumentsUsedBy(ws: Blockly.Workspace): string[] {
+  const seen = new Set<string>()
+  for (const block of ws.getAllBlocks(false)) {
+    const instrument = blockDefinition(block.type)?.instrument
+    if (instrument) seen.add(instrument)
+  }
+  return [...seen]
+}
+
+/**
+ * Reveal the instrument a newly created block belongs to (#1013).
+ *
+ * Only on CREATE: a learner dragging a turtle block out of the flyout needs the
+ * Turtle instrument on screen, but moving or editing one they already have does
+ * not — re-revealing on every edit would fight anybody who closed the dock.
+ *
+ * The block's own definition names the instrument (`registry.ts`'s `instrument`),
+ * so this reads a declared fact rather than guessing from the block's category
+ * or its type name.
+ */
+function revealInstrumentFor(ws: Blockly.Workspace, event: Blockly.Events.Abstract): void {
+  if (event.type !== Blockly.Events.BLOCK_CREATE) return
+  const id = (event as Blockly.Events.BlockCreate).blockId
+  if (!id) return
+  const created = ws.getBlockById(id)
+  if (!created) return
+  // A dragged block brings its children (the number shadows in its sockets), and
+  // any of them may be the one that declares the instrument — so ask the whole
+  // little tree rather than just its root.
+  for (const block of [created, ...created.getDescendants(false)]) {
+    const instrument = blockDefinition(block.type)?.instrument
+    if (instrument) {
+      dispatchRevealInstruments([instrument])
+      return
+    }
+  }
+}
+
 function buildToolbox(): Blockly.utils.toolbox.ToolboxDefinition {
   return {
     kind: 'categoryToolbox',

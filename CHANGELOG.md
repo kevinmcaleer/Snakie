@@ -8,6 +8,130 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Instruments in block mode, derived from the instrument registry** (#1014,
+  epic #1007, phase 2). Seventeen blocks that feed Snakie's own panels: the
+  oscilloscope, multimeter, plotter, radar, IMU, barometer, button, encoder and
+  display, plus the Wi-Fi/Bluetooth/I²C scanners and the control channel that
+  lets the app drive the board.
+
+  **Most of it already worked, and that is the headline.** Instruments are
+  surfaced by scanning the active file's *source* — `parse-pins.ts` for the
+  peripheral constructors, each instrument's `uses`/`hints` for driver and import
+  signals. Blocks generate source, so the dock already lit up correctly in block
+  mode with no new machinery. That is the whole argument for generating real
+  MicroPython instead of interpreting a block tree, cashed in.
+
+  **The palette is derived, not written.** An `InstrumentDef` declares its blocks
+  beside the `uses`/`hints` it already had, and that one declaration becomes a
+  Blockly definition, a MicroPython emitter, a toolbox slot, a help link and the
+  drag-to-reveal. A new instrument gets a block without anyone opening the block
+  code. Three blocks stay hand-written — `read_adc`, `read_pwm` and `i2c_scan`
+  take a *hardware object*, so each needs a pin dropdown and a hoisted
+  constructor; a descriptor that could express those could express anything,
+  which is the point at which it stops being a description.
+
+  **A keyword argument is only written when it differs from the library's own
+  default**, so the common call stays short: `inst.scope(value)` for a learner
+  who never touches the channel, `inst.scope(value, ch='ch2')` for one who does.
+
+  Two places the obvious block would have generated something that runs and is
+  wrong: the display block passes its text as a **list of rows**, because
+  `screen("Hello")` iterates the string and puts five one-character rows on the
+  screen; and the button block's state is a **boolean socket**, because a text
+  socket would emit `inst.button('a', 'True')` — a string, and so always truthy.
+
+  Scanner blocks say **"this one pauses for a moment — don't put it in a fast
+  loop"** on the block itself. Every other block here is a single cheap `print()`
+  that is safe in a tight loop; a scan is not, and a child who puts one inside
+  `forever` sees their program stutter with nothing to explain it.
+
+  `read_adc` and `read_pwm` are **value** blocks, as they return the reading as
+  well as sending it — so `set temperature to (read volts on GP26)` reads like a
+  sentence — and they share the hoisted `ADC`/`PWM` object with the Hardware
+  palette's blocks, because two `ADC`s on one pin is a bug rather than an
+  untidiness.
+
+  The `instruments.py` install banner was already reachable from the canvas: it
+  lives at the top of the shell rather than inside the Code workspace, so a
+  connected board missing the library offers the one-click install in Blocks too.
+  There is now a test saying so.
+
+### Changed
+
+- **Generated programs quote their strings one way** (#1014). The blocks emitted
+  two conventions into the same file — `print('hello')` from the text blocks and
+  `turtle.pencolor("hotpink")` from the fields — which is invisible in a test and
+  obvious in a program whose entire purpose is to be read by someone learning
+  what Python looks like. One helper now writes every string literal.
+- **The import manager understands aliases** (#1014), so the instrument blocks
+  generate `import instruments as inst` — what every example in `examples/` and
+  every line of `docs/instruments-library.md` already says. A learner's own
+  variable is guarded against the *alias*, since that is the name the program
+  actually binds.
+
+### Fixed
+
+- **Opening a program that drives several instruments revealed only one of them**
+  (#1014, a bug in #1013's reveal). The dock's visibility is stored as one
+  object written whole, so four reveal events fired in a single burst each
+  started from the same pre-render state and the last one won. The set is now
+  sent as one event and written once.
+
+- **Turtle graphics blocks, and a way to start a blocks program at all**
+  (#1013, epic #1007, phase 2). Eighteen blocks over movement, pen, screen and
+  sensing, generating `import turtle` and `turtle.forward(100)`. This is the
+  first-hour demo: a sprite that moves when you tell it to, drawing as it goes,
+  **with nothing wired up** — on a Pico or in the simulator, which is what a
+  classroom of Chromebooks actually has.
+
+  **There was no way to make a blocks program.** Not an exaggeration: a blocks
+  program is a `.py` with a workspace in its footer, the `+` button makes an
+  ordinary empty `.py`, and an ordinary `.py` opens in Monaco — so picking
+  **Blocks** and pressing `+` got you the text editor, in the blocks workspace,
+  with nothing to say what was missing. Every blocks file that existed was one a
+  test wrote. The Blocks workspace's empty state is now the door: **Draw a
+  square** (the bundled starter, four blocks already assembled) and **New blocks
+  program**. The starter leads, because a beginner's first minute should be
+  something that already works and which they then take apart — an empty canvas
+  and a toolbox is a blank page, and a blank page is where people stop.
+
+  The starter ships as a **workspace**, not as a committed `.py`. A file with the
+  generated code baked in would be a second copy of the generator's output,
+  quietly drifting every time the generator improved — and drift here means a
+  starter that opens with a hand-edit conflict warning on it.
+
+  **The pen colour is a swatch**, which the issue rightly calls half of why
+  Scratch feels good, and the palette is twelve **named** colours rather than a
+  picker. The generated line reads `turtle.pencolor("hotpink")` — a line a
+  learner can read, remember and later type — where a picker would give
+  `turtle.pencolor("#c83c3c")`, and a mirror full of hex is a mirror nobody
+  learns from. Every colour reads on the instrument's dark screen, which is also
+  why the library's default pen is white rather than the black CPython's turtle
+  uses on paper.
+
+  **One block per library function**, so `pen up` and `pen down` are two blocks
+  and so are `turn right` and `turn left`. It is what Scratch does, so the muscle
+  memory transfers, and the block face says what will happen without anyone
+  reading a dropdown.
+
+  **Dragging a turtle block opens the Turtle instrument** — and scrolls it into
+  view, because the dock is a column with the mini board and the plotter above
+  it, and an instrument revealed below the fold is "opened" only in the sense
+  that it exists somewhere. Opening a saved turtle program does the same: a
+  drawing that goes nowhere looks exactly like a program that did nothing.
+
+  `import turtle` now files with Snakie's own libraries in the import section
+  rather than under part drivers, where it would sit below a BME280.
+
+### Changed
+
+- **`turtle.py` gains `xcor()`, `ycor()` and `heading()`** (#1013), and the
+  `Turtle` class gains `getheading()`. The blocks' "x position" / "y position" /
+  "direction" value blocks need them, and before this the only way to read the
+  shared turtle's heading was `turtle._default.heading` — reaching into a
+  private, which is not something to put in a child's program. Connect a board
+  and Snakie offers the update through the existing install banner.
+
 - **The hardware block palette** (#1012, epic #1007, phase 2). Twelve blocks that
   make a real pin do a real thing: LEDs on and off and toggling, the onboard LED,
   raw digital write and read, a button block that already knows about pull-ups,

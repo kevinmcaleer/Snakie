@@ -46,7 +46,7 @@ SENTINEL = "SNK"
 # Library version. Bump this on ANY change to this file — mirrors
 # `instruments.py`'s convention so a future "board library outdated" check can
 # reuse the same comparison.
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 
 # White, not black: the Turtle instrument draws on a dark phosphor screen (like
 # every other Snakie instrument), so a "black" default pen — sensible on paper,
@@ -210,6 +210,24 @@ class Turtle:
         """Return the current ``(x, y)``."""
         return (self.x, self.y)
 
+    def xcor(self):
+        """Return the current x coordinate (CPython ``turtle``'s name for it)."""
+        return self.x
+
+    def ycor(self):
+        """Return the current y coordinate."""
+        return self.y
+
+    def getheading(self):
+        """Return the current compass heading in degrees (0 = north).
+
+        ``heading`` itself is a plain attribute, so this exists for the
+        module-level API below: a module-level ``heading()`` FUNCTION cannot
+        read an attribute on the shared default turtle, and reaching into
+        ``turtle._default.heading`` from a program is not something to teach.
+        """
+        return self.heading
+
 
 # ---------------------------------------------------------------------------
 # Module-level API — the shared default turtle most programs use directly, so
@@ -285,6 +303,18 @@ def showturtle():
 
 def position():
     return _default.position()
+
+
+def xcor():
+    return _default.xcor()
+
+
+def ycor():
+    return _default.ycor()
+
+
+def heading():
+    return _default.getheading()
 
 
 # Short aliases, kept for anyone porting CPython `turtle` code (`fd`/`bk`

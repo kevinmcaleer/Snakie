@@ -32,6 +32,21 @@ call, so loops, variables and functions all work as normal. Import from
 shared default turtle; construct your own `turtle.Turtle()` for more than one
 turtle on screen at once.
 
+The **Turtle blocks** (in the Blocks workspace) write the qualified form:
+
+```python
+import turtle
+
+for _ in range(4):
+    turtle.forward(100)
+    turtle.right(90)
+```
+
+Both styles do the same thing. The blocks use `turtle.forward(...)` because one
+`import turtle` covers every function however big the drawing gets, and because
+`forward` and `left` are exactly the names you are likely to give your own
+functions.
+
 ## Commands
 
 | Function | Behaviour |
@@ -44,3 +59,5 @@ turtle on screen at once.
 | `home()` / `reset()` | Return to centre / clear + return to centre |
 | `clear()` | Wipe the drawing, keep the turtle where it is |
 | `hideturtle()` / `showturtle()` | Toggle the turtle sprite |
+| `speed(value)` | How fast the instrument animates the drawing (1 slow → 10 quick) |
+| `xcor()` / `ycor()` / `heading()` | Read where the turtle is and which way it faces |

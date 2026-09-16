@@ -45,7 +45,12 @@ import {
   type InstrumentVisibility,
   type OpenInstrument
 } from './InstrumentHost'
-import { defaultVisibility, deriveInUse, moduleCoveredByInstrument } from './instruments-registry'
+import {
+  defaultVisibility,
+  deriveInUse,
+  instrumentById,
+  moduleCoveredByInstrument
+} from './instruments-registry'
 import { type UsedPins } from './parse-pins'
 import { runFindCommand } from './findController'
 import { ShellPanel } from './ShellPanel'
@@ -68,7 +73,9 @@ import {
   dispatchOpenFind,
   dispatchOpenHelp,
   HELP_EVENT,
-  type HelpEventDetail
+  REVEAL_INSTRUMENT_EVENT,
+  type HelpEventDetail,
+  type RevealInstrumentDetail
 } from './editorBridge'
 import { InstrumentLibBanner } from './InstrumentLibBanner'
 import { NoticeStack } from './Notice'
@@ -1214,6 +1221,57 @@ export function AppShell(): JSX.Element {
       revealForOpenRef.current(payload.kind, payload.conn as UsedPins)
     })
     return off
+  }, [])
+
+  // A block that belongs to an instrument was dragged onto the canvas (#1013), so
+  // show that instrument. Both halves matter: turning the id's visibility ON (it
+  // may have been toggled off, or never defaulted on) and opening the dock region
+  // (which may be collapsed) — one without the other looks like nothing happened,
+  // which is exactly the impression this exists to prevent.
+  //
+  // Registered once and reading the live values through a ref, like the
+  // instrument-open relay above: the reveal must not be able to race a re-render.
+  const revealInstrumentRef = useRef<(ids: readonly string[]) => void>(() => {})
+  revealInstrumentRef.current = (ids: readonly string[]): void => {
+    // ONE write for the whole set. `setVisibility` stores the object whole, so
+    // a loop of `setKindVisible` calls in a single burst would each start from
+    // the same pre-render value and the last would win — which is exactly what
+    // happened: a program driving four instruments revealed one.
+    const next = { ...visibility }
+    for (const id of ids) next[id] = true
+    setVisibility(next)
+    setDockOpen(true)
+    // And SCROLL IT INTO VIEW. The dock is a column with the mini board and the
+    // always-on Plotter above, so a newly shown instrument lands below the fold
+    // on a laptop screen — "opened" in the sense that it exists somewhere, which
+    // is not the sense a child dragging their first turtle block means. Two
+    // frames out, because the panel does not exist until React has re-rendered
+    // with the visibility we just set.
+    // Scroll to the FIRST of them: several panels cannot all be at the top, and
+    // the one the program mentions first is the one to land on.
+    const name = ids.map((id) => instrumentById(id)?.name).find(Boolean)
+    if (!name) return
+    // Matched case-INSENSITIVELY: the dock renders its instrument titles in caps,
+    // so the label reads `TURTLE instrument` while the registry says `Turtle`. An
+    // exact selector silently matches nothing, which looks exactly like a reveal
+    // that worked and an instrument that stayed put.
+    const label = `${name} instrument`.toLowerCase()
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        const panel = [...document.querySelectorAll('.shell__dock section.instr')].find(
+          (el) => (el.getAttribute('aria-label') ?? '').toLowerCase() === label
+        )
+        panel?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+      })
+    )
+  }
+  useEffect(() => {
+    const handler = (e: Event): void => {
+      const detail = (e as CustomEvent<RevealInstrumentDetail>).detail
+      if (detail?.ids?.length) revealInstrumentRef.current(detail.ids)
+    }
+    window.addEventListener(REVEAL_INSTRUMENT_EVENT, handler)
+    return () => window.removeEventListener(REVEAL_INSTRUMENT_EVENT, handler)
   }, [])
 
   // Drive the Find & Replace window (issue #146): it has no editor access, so it

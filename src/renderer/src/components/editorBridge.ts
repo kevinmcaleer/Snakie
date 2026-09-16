@@ -51,6 +51,47 @@ export function dispatchOpenHelp(articleId: string): void {
 }
 
 /**
+ * "Reveal this instrument in the dock" (#1013, epic #1007).
+ *
+ * Fired by the block canvas when a learner drags out a block that belongs to an
+ * instrument — a turtle block needs the Turtle instrument on screen, because the
+ * drawing IS the output and a program that draws into a panel nobody opened looks
+ * like a program that did nothing.
+ *
+ * An EVENT rather than a prop, for the same reason as the rest of this file: the
+ * canvas is four components deep inside a lazy chunk and the dock's visibility
+ * lives in `AppShell`. Threading a callback down would mean touching every layer
+ * between, and #1014 adds a block category where EVERY block does this.
+ *
+ * Keyed by the instrument id from `instruments-registry.ts`, so a block names an
+ * instrument that demonstrably exists rather than a string the dock has to guess
+ * at.
+ */
+export const REVEAL_INSTRUMENT_EVENT = 'snakie:reveal-instrument'
+
+export interface RevealInstrumentDetail {
+  /**
+   * The instrument ids, e.g. `['turtle']`.
+   *
+   * A LIST, not one id, and that is not future-proofing. The dock's visibility
+   * is a single stored object written whole: four separate events fire in one
+   * synchronous burst, each reads the same pre-render state, and each overwrites
+   * the last — so opening a program that drives four instruments revealed one of
+   * them. The caller already knows the whole set; sending it as one event is
+   * what lets the shell write it once.
+   */
+  ids: readonly string[]
+}
+
+/** Ask the shell to show these instruments in the dock, opening the dock if needed. */
+export function dispatchRevealInstruments(ids: readonly string[]): void {
+  if (ids.length === 0) return
+  window.dispatchEvent(
+    new CustomEvent<RevealInstrumentDetail>(REVEAL_INSTRUMENT_EVENT, { detail: { ids } })
+  )
+}
+
+/**
  * "Close the active tab" (#915), fired by File ▸ Close Tab.
  *
  * An EVENT rather than a store call, because closing a tab is not just removing

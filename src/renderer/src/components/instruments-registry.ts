@@ -42,6 +42,70 @@ export type InstrumentGroup = 'input' | 'output' | 'both'
  */
 export type InstrumentKind = 'pin' | 'singleton'
 
+/**
+ * ONE ARGUMENT ON AN INSTRUMENT BLOCK (#1014, epic #1007).
+ *
+ * Declarative, because the whole point of #1014 is that a new instrument gets a
+ * block by describing it HERE, beside the `uses`/`hints` that already make it
+ * light up — not by anyone editing block code.
+ */
+export interface InstrumentBlockArg {
+  /** The Blockly input/field name, e.g. `VALUE`. Upper case by convention. */
+  name: string
+  /** What the block says in front of this argument. Omit for none. */
+  label?: string
+  /**
+   * `number`, `text` and `boolean` are SOCKETS (any block can plug in, with a
+   * shadow holding the default). `field` is a string typed on the block face,
+   * for something that is a label rather than a value — a channel name.
+   * `keyword` is a field too, but its text becomes the PYTHON KEYWORD of the
+   * argument after it: the Plotter's `plot(temp=21.4)`, where the learner names
+   * their own series.
+   */
+  kind: 'number' | 'text' | 'boolean' | 'field' | 'keyword'
+  /** What the shadow or field starts as. */
+  default: string | number
+  /**
+   * The Python keyword this becomes: `ch`, `unit`, `addr`. Positional when
+   * absent. A keyword argument is only emitted when it DIFFERS from the
+   * library's own default, so the common call stays short.
+   */
+  keyword?: string
+  /**
+   * Pass this socket's value as a ONE-ELEMENT LIST: `screen(["Hello"])`.
+   *
+   * Not a convenience. `screen(lines)` iterates `lines`, so handing it the bare
+   * string `"Hello"` puts five one-character rows on the display — code that
+   * runs, produces something, and is wrong in a way a beginner cannot read back
+   * from the block. The socket is checked as a String so a list block can't be
+   * plugged in and end up doubly wrapped.
+   */
+  list?: boolean
+}
+
+/** One block an instrument contributes to the palette (#1014). */
+export interface InstrumentBlockDef {
+  /** The `instruments.py` function this calls, e.g. `scope`. */
+  fn: string
+  /** The Blockly type id. Derived ones are all `snakie_inst_<something>`. */
+  type: string
+  /** The block text before its arguments, e.g. `oscilloscope sample`. */
+  label: string
+  /** Its arguments, in call order. */
+  args: InstrumentBlockArg[]
+  /** The block's tooltip. */
+  tooltip: string
+  /**
+   * This call BLOCKS the program for a moment — a scan, not a print.
+   *
+   * Every other block here is a single cheap `print()` that is safe in a tight
+   * loop; a scanner is not, and a child who puts one in `forever` sees their
+   * program stutter with nothing to say why. The tooltip says so, in those
+   * words, on the block itself.
+   */
+  slow?: boolean
+}
+
 /** One instrument's static descriptor — the dock/toolbar/palette all read this. */
 export interface InstrumentDef {
   /** Stable id (the visibility-map key + the palette/dock key). */
@@ -72,6 +136,16 @@ export interface InstrumentDef {
    * peripherals `parse-pins` doesn't classify (e.g. an IMU/encoder/BLE driver).
    */
   hints?: string[]
+  /**
+   * The blocks this instrument contributes to the Blocks palette (#1014).
+   *
+   * Absent for an instrument with nothing a program would CALL: the Data Logger
+   * records whatever is already being printed, the LED and Servo panels drive
+   * hardware the Hardware palette (#1012) already covers directly. An
+   * instrument that emits telemetry declares it here and gets a block, a
+   * toolbox slot, an emitter and a help link with no other file touched.
+   */
+  blocks?: InstrumentBlockDef[]
 }
 
 /** A `<path d="…">` border alpha helper kept inline for clarity in the table. */
@@ -94,7 +168,19 @@ export const INSTRUMENTS: InstrumentDef[] = [
     group: 'input',
     kind: 'pin',
     description: 'Trace a PWM channel as a live square-wave on a CRT screen.',
-    uses: ['pwm']
+    uses: ['pwm'],
+    blocks: [
+      {
+        fn: 'scope',
+        type: 'snakie_inst_scope',
+        label: 'oscilloscope: plot %1 on channel %2',
+        args: [
+          { name: 'VALUE', kind: 'number', default: 0 },
+          { name: 'CH', kind: 'field', default: 'ch1', keyword: 'ch' }
+        ],
+        tooltip: 'Send one sample to the Oscilloscope. Call it in a loop to draw a waveform.'
+      }
+    ]
   },
   {
     id: 'meter',
@@ -106,7 +192,20 @@ export const INSTRUMENTS: InstrumentDef[] = [
     group: 'input',
     kind: 'pin',
     description: 'Read an ADC pin as a voltage with min/max/avg statistics.',
-    uses: ['adc']
+    uses: ['adc'],
+    blocks: [
+      {
+        fn: 'meter',
+        type: 'snakie_inst_meter',
+        label: 'multimeter: show %1 %2 on channel %3',
+        args: [
+          { name: 'VALUE', kind: 'number', default: 0 },
+          { name: 'UNIT', kind: 'field', default: 'V', keyword: 'unit' },
+          { name: 'CH', kind: 'field', default: 'adc0', keyword: 'ch' }
+        ],
+        tooltip: 'Send one reading to the Multimeter, which tracks its min, max and average.'
+      }
+    ]
   },
   {
     id: 'plotter',
@@ -117,7 +216,19 @@ export const INSTRUMENTS: InstrumentDef[] = [
     icon: 'M3 17 L9 11 L13 14.5 L21 6',
     group: 'input',
     kind: 'singleton',
-    description: 'Plot printed serial values over time as a scrolling chart.'
+    description: 'Plot printed serial values over time as a scrolling chart.',
+    blocks: [
+      {
+        fn: 'plot',
+        type: 'snakie_inst_plot',
+        label: 'plot %1 = %2',
+        args: [
+          { name: 'NAME', kind: 'keyword', default: 'value' },
+          { name: 'VALUE', kind: 'number', default: 0 }
+        ],
+        tooltip: 'Add one point to the Plotter. Each name is its own line on the chart.'
+      }
+    ]
   },
   {
     id: 'logger',
@@ -142,7 +253,24 @@ export const INSTRUMENTS: InstrumentDef[] = [
     group: 'output',
     kind: 'singleton',
     description: 'Drive a connected device from an on-screen gamepad.',
-    hints: ['gamepad', 'joystick']
+    hints: ['gamepad', 'joystick'],
+    blocks: [
+      {
+        fn: 'start',
+        type: 'snakie_inst_start',
+        label: 'let Snakie drive this board',
+        args: [],
+        tooltip:
+          "Put this once at the top. Snakie's panels can then run scans and drive the board while your program runs."
+      },
+      {
+        fn: 'control.poll',
+        type: 'snakie_inst_poll',
+        label: 'check for Snakie commands',
+        args: [],
+        tooltip: 'Put this inside your forever loop so commands from Snakie get acted on.'
+      }
+    ]
   },
   {
     id: 'range',
@@ -154,7 +282,19 @@ export const INSTRUMENTS: InstrumentDef[] = [
     group: 'input',
     kind: 'singleton',
     description: 'Show distance from an ultrasonic / ToF range sensor.',
-    hints: ['hcsr04', 'hc-sr04', 'ultrasonic', 'vl53', 'tof', 'distance', 'range']
+    hints: ['hcsr04', 'hc-sr04', 'ultrasonic', 'vl53', 'tof', 'distance', 'range'],
+    blocks: [
+      {
+        fn: 'distance',
+        type: 'snakie_inst_distance',
+        label: 'radar: show %1 mm on channel %2',
+        args: [
+          { name: 'MM', kind: 'number', default: 0 },
+          { name: 'CH', kind: 'field', default: 'dist', keyword: 'ch' }
+        ],
+        tooltip: 'Send one distance reading, in millimetres, to the Range instrument.'
+      }
+    ]
   },
   {
     id: 'pot',
@@ -178,7 +318,20 @@ export const INSTRUMENTS: InstrumentDef[] = [
     group: 'input',
     kind: 'singleton',
     description: 'Visualise accelerometer / gyro orientation from an IMU.',
-    hints: ['imu', 'mpu6050', 'mpu9250', 'lsm', 'icm20948', 'bno055', 'accel', 'gyro']
+    hints: ['imu', 'mpu6050', 'mpu9250', 'lsm', 'icm20948', 'bno055', 'accel', 'gyro'],
+    blocks: [
+      {
+        fn: 'imu',
+        type: 'snakie_inst_imu',
+        label: 'IMU: roll %1 pitch %2 yaw %3',
+        args: [
+          { name: 'ROLL', kind: 'number', default: 0 },
+          { name: 'PITCH', kind: 'number', default: 0 },
+          { name: 'YAW', kind: 'number', default: 0 }
+        ],
+        tooltip: 'Send an orientation, in degrees, to the IMU instrument.'
+      }
+    ]
   },
   {
     id: 'env',
@@ -190,7 +343,20 @@ export const INSTRUMENTS: InstrumentDef[] = [
     group: 'input',
     kind: 'singleton',
     description: 'Temperature, pressure and humidity on an antique barometer.',
-    hints: ['bme280', 'bmp280', 'bme680', 'dht22', 'dht11', 'sht31', 'aht20', 'barometer', 'weather']
+    hints: ['bme280', 'bmp280', 'bme680', 'dht22', 'dht11', 'sht31', 'aht20', 'barometer', 'weather'],
+    blocks: [
+      {
+        fn: 'env',
+        type: 'snakie_inst_env',
+        label: 'barometer: %1 °C  %2 hPa  %3 %%RH',
+        args: [
+          { name: 'TEMP', kind: 'number', default: 20 },
+          { name: 'PRESSURE', kind: 'number', default: 1013 },
+          { name: 'HUMIDITY', kind: 'number', default: 50 }
+        ],
+        tooltip: 'Send a weather reading to the Barometer instrument.'
+      }
+    ]
   },
   {
     id: 'led',
@@ -266,7 +432,19 @@ export const INSTRUMENTS: InstrumentDef[] = [
     group: 'input',
     kind: 'singleton',
     description: 'Watch a digital input button / switch state.',
-    hints: ['button', 'switch']
+    hints: ['button', 'switch'],
+    blocks: [
+      {
+        fn: 'button',
+        type: 'snakie_inst_button',
+        label: 'button %1 is pressed %2',
+        args: [
+          { name: 'NAME', kind: 'field', default: 'a' },
+          { name: 'STATE', kind: 'boolean', default: 'True' }
+        ],
+        tooltip: 'Tell the Button instrument whether a button is down. True is pressed.'
+      }
+    ]
   },
   {
     id: 'buzzer',
@@ -302,7 +480,19 @@ export const INSTRUMENTS: InstrumentDef[] = [
     group: 'input',
     kind: 'singleton',
     description: 'Count steps and direction from a rotary encoder.',
-    hints: ['encoder', 'rotary']
+    hints: ['encoder', 'rotary'],
+    blocks: [
+      {
+        fn: 'encoder',
+        type: 'snakie_inst_encoder',
+        label: 'encoder: count %1 on channel %2',
+        args: [
+          { name: 'COUNT', kind: 'number', default: 0 },
+          { name: 'CH', kind: 'field', default: 'enc', keyword: 'ch' }
+        ],
+        tooltip: 'Send a rotary-encoder count to the Encoder instrument.'
+      }
+    ]
   },
   {
     id: 'i2c-display',
@@ -315,7 +505,17 @@ export const INSTRUMENTS: InstrumentDef[] = [
     kind: 'singleton',
     description: 'Preview text/graphics for an I²C OLED / LCD or an ST7789 SPI TFT.',
     uses: ['i2c'],
-    hints: ['ssd1306', 'sh1106', 'lcd', 'oled', 'st7789', 'tft', 'spi']
+    hints: ['ssd1306', 'sh1106', 'lcd', 'oled', 'st7789', 'tft', 'spi'],
+    blocks: [
+      {
+        fn: 'screen',
+        type: 'snakie_inst_screen',
+        label: 'display: show %1',
+        args: [{ name: 'LINES', kind: 'text', default: 'Hello', list: true }],
+        tooltip:
+          'Show a line of text on the Display instrument. Plug a list in to show several rows.'
+      }
+    ]
   },
   {
     id: 'font',
@@ -340,7 +540,17 @@ export const INSTRUMENTS: InstrumentDef[] = [
     group: 'input',
     kind: 'singleton',
     description: 'List nearby Wi-Fi networks and signal strength.',
-    hints: ['network', 'wlan', 'wifi']
+    hints: ['network', 'wlan', 'wifi'],
+    blocks: [
+      {
+        fn: 'wifi_scan',
+        type: 'snakie_inst_wifi_scan',
+        label: 'scan for Wi-Fi networks',
+        args: [],
+        slow: true,
+        tooltip: 'List the Wi-Fi networks nearby.'
+      }
+    ]
   },
   {
     id: 'bluetooth',
@@ -352,7 +562,17 @@ export const INSTRUMENTS: InstrumentDef[] = [
     group: 'input',
     kind: 'singleton',
     description: 'Scan for and inspect nearby Bluetooth / BLE devices.',
-    hints: ['bluetooth', 'ble', 'ubluetooth', 'aioble']
+    hints: ['bluetooth', 'ble', 'ubluetooth', 'aioble'],
+    blocks: [
+      {
+        fn: 'bt_scan',
+        type: 'snakie_inst_bt_scan',
+        label: 'scan for Bluetooth devices for %1 ms',
+        args: [{ name: 'MS', kind: 'number', default: 4000 }],
+        slow: true,
+        tooltip: 'Look for nearby Bluetooth devices.'
+      }
+    ]
   },
   {
     id: 'turtle',
