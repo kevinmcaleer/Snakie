@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  isStaleDeselect,
   putOutHighlight,
   type BlockLookup,
   type LitRef
@@ -99,5 +100,40 @@ describe('it never throws (#1050)', () => {
     const ref = lit('a')
     expect(() => putOutHighlight(ws, ref, 'b')).not.toThrow()
     expect(ref.current).toBe(null)
+  })
+})
+
+describe('a selection event that has been overtaken (#1050)', () => {
+  /**
+   * The regression the first fix caused, and the reason this rule exists.
+   *
+   * Putting our own highlight out fires a selection event carrying NO id, and
+   * Blockly queues its events — so that "nothing is selected" lands AFTER we
+   * have lit the next block. Forwarding it as the learner's choice cleared the
+   * link: clicking a block on the canvas lit its lines in the Python for an
+   * instant, then put them out again.
+   */
+  it('drops a "nothing selected" that something has already replaced', () => {
+    expect(isStaleDeselect(null, 'b')).toBe(true)
+  })
+
+  it('lets a GENUINE deselect through — clicking empty canvas', () => {
+    // Nothing selected, and nothing IS: that is the learner, not our echo.
+    expect(isStaleDeselect(null, null)).toBe(false)
+  })
+
+  it('never drops an event that names a block', () => {
+    expect(isStaleDeselect('a', 'a')).toBe(false)
+    expect(isStaleDeselect('a', 'b')).toBe(false)
+    expect(isStaleDeselect('a', null)).toBe(false)
+  })
+
+  it('is decided by what is selected NOW, not by event order', () => {
+    // Whether our echo arrives before or after the next `select()` is Blockly's
+    // business. Asking the present tense is what makes the rule timing-proof.
+    const beforeOurSelect = isStaleDeselect(null, null)
+    const afterOurSelect = isStaleDeselect(null, 'b')
+    expect(beforeOurSelect).toBe(false)
+    expect(afterOurSelect).toBe(true)
   })
 })

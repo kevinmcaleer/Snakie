@@ -169,6 +169,17 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   const [linkedBlock, setLinkedBlock] = useState<string | null>(null)
   /** A block to select on the canvas, set only by a click in the Python. */
   const [selectFromPython, setSelectFromPython] = useState<string | null>(null)
+  /**
+   * Bumped on EVERY line click, even one that names the block already named
+   * (#1050).
+   *
+   * Without it, clicking the same line twice did nothing: React sees the same
+   * id and skips the update, so the canvas never re-asserts — and by then
+   * clicking into the code pane has moved focus out of the canvas, which is how
+   * Blockly clears a selection. The learner clicked a line and watched nothing
+   * light up.
+   */
+  const [selectNonce, setSelectNonce] = useState(0)
   /** The block whose Python was asked for by name (right-click ▸ Show me). */
   const [pythonFor, setPythonFor] = useState<string | null>(null)
 
@@ -189,6 +200,8 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
       // line the generator added, and saying "no block" is the honest answer.
       setLinkedBlock(id)
       setSelectFromPython(id)
+      // Always, so pointing at the same line twice still answers.
+      setSelectNonce((n) => n + 1)
     },
     [generated]
   )
@@ -362,6 +375,7 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
         onHoverBlock={setLinkedBlock}
         onSelectBlock={setLinkedBlock}
         selectBlockId={selectFromPython}
+        selectNonce={selectNonce}
         onShowBlockPython={setPythonFor}
         paletteNonce={paletteNonce}
         onPartsUsed={setPartsUsed}

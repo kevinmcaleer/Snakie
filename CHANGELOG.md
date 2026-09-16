@@ -8,6 +8,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Highlighting stopped working after #1050, in two more ways** (#1050
+  follow-up, epic #1007).
+
+  **Clicking a block on the canvas put the Python lines out.** The fix for the
+  piling-up highlights added an `unselect()` call — and that fires a selection
+  event carrying *no id*, which Blockly queues and delivers **after** the next
+  block has been lit. Forwarded as the learner's choice, it cleared the link:
+  the lines lit for an instant and went dark. A selection event saying nothing
+  is selected, while something is, is describing a moment that has passed, so it
+  is dropped. A genuine deselect — clicking empty canvas — still comes through.
+
+  **Clicking the same line twice did nothing.** The id was unchanged, so React
+  skipped the update and the canvas never re-asserted — while clicking into the
+  code pane had already moved focus out of the canvas, which is how Blockly
+  clears a selection. Every line click now re-asserts, whether or not it names
+  the same block.
+
+### Fixed
+
 - **The block↔line highlight never cleared** (#1050, epic #1007). Clicking a
   line in the Python pane lit the block that wrote it — and clicking a different
   line lit that one too, leaving the first on. They piled up: four lines clicked

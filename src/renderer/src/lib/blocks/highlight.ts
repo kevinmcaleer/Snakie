@@ -66,3 +66,24 @@ export function putOutHighlight(
   ws?.getBlockById(lit)?.unselect()
   litRef.current = null
 }
+
+/**
+ * Is this "nothing is selected" event stale (#1050)?
+ *
+ * Putting our own highlight out fires a selection event carrying NO id, and
+ * Blockly queues its events — so that "nothing is selected" can be delivered
+ * *after* we have already lit the next block. Forwarding it as the learner's
+ * choice clears the link: they click a block on the canvas, its lines light in
+ * the Python for an instant, and then go dark again.
+ *
+ * The test has to be timing-independent, because whether the echo lands before
+ * or after our next `select()` is Blockly's business and not ours. So rather
+ * than guessing at order, ask what is selected NOW: an event that says nothing
+ * is selected, while something is, is describing a moment that has passed.
+ *
+ * A genuine deselect — the learner clicking empty canvas — says nothing is
+ * selected and nothing IS, so it comes through.
+ */
+export function isStaleDeselect(selected: string | null, nowSelected: string | null): boolean {
+  return selected === null && nowSelected !== null
+}
