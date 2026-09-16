@@ -308,6 +308,7 @@ Both routes use the same schema and the same validator.
 | `imports` | `{module, name?, alias?}`, or a bare module name. |
 | `tooltip` | Shown on hover. Write it for the learner, not the maintainer. |
 | `help` | An **in-app** help article id (`ref-pins`), not a URL — classrooms are often offline. |
+| `scope` | Which runtime the block is for: `both` (the default), `micropython` or `circuitpython`. An out-of-scope block is kept out of the toolbox — never unregistered, so a program already using it still opens. |
 | `colour` | A `#rrggbb` override. Omit it and the block wears its category's colour. |
 | `inline` | `false` stacks the arguments vertically. Defaults to inline. |
 

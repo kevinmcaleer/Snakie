@@ -122,6 +122,8 @@ function toDefinition(
     source: `${source.kind}:${source.id}`,
     ...(source.part ? { part: source.part } : {}),
     ...(block.help ? { help: block.help } : {}),
+    // The manifest's own dialect scope (#1039), if it declared one.
+    ...(block.scope ? { scope: block.scope } : {}),
     json,
     ...(shadows ? { toolbox: { inputs: shadows } } : {}),
     imports: (block.imports ?? []).map((i) => ({

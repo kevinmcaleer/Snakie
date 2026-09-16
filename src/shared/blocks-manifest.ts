@@ -31,6 +31,7 @@
  * it rather than anything cleverer.
  */
 
+import { isDialectScope, type DialectScope } from './dialect-api'
 import { parse, stringify } from 'yaml'
 
 /** The manifest schema version this build understands. */
@@ -173,6 +174,16 @@ export interface ManifestBlock {
    * nothing. The help library ships inside the app.
    */
   help?: string
+  /**
+   * Which runtime this block is true for (#1039): `both` (the default),
+   * `micropython` or `circuitpython`.
+   *
+   * A part's driver is very often written for one of them and not the other, and
+   * the author of the `blocks.yml` is the only person who knows which. Saying so
+   * here keeps the block out of the toolbox of a board that cannot run it —
+   * HIDDEN, never unregistered, so a program already using it still opens.
+   */
+  scope?: DialectScope
   /** An explicit block colour. Omit it and the block wears its category's. */
   colour?: string
   /** Lay the arguments out in a row rather than stacked. Defaults to true. */
@@ -289,6 +300,7 @@ const BLOCK_KEYS = new Set([
   'imports',
   'tooltip',
   'help',
+  'scope',
   'colour',
   'color',
   'inline'
@@ -505,6 +517,18 @@ function coerceBlock(raw: unknown, index: number, warnings: string[]): ManifestB
   if (imports.length > 0) block.imports = imports
   if (typeof raw.tooltip === 'string' && raw.tooltip.trim()) block.tooltip = raw.tooltip.trim()
   if (typeof raw.help === 'string' && raw.help.trim()) block.help = raw.help.trim()
+  if (raw.scope !== undefined) {
+    const scope = String(raw.scope).trim()
+    if (isDialectScope(scope)) {
+      // `both` is the default, so recording it would only make the definition
+      // noisier without changing anything.
+      if (scope !== 'both') block.scope = scope
+    } else {
+      warnings.push(
+        `${named}: scope must be one of both, micropython, circuitpython — ignored`
+      )
+    }
+  }
   const colour = raw.colour ?? raw.color
   if (typeof colour === 'string' && colour.trim()) block.colour = colour.trim()
   if (typeof raw.inline === 'boolean') block.inline = raw.inline
@@ -677,6 +701,7 @@ export function blocksManifestToYaml(manifest: BlocksManifest): string {
     }
     if (b.tooltip !== undefined) block.tooltip = b.tooltip
     if (b.help !== undefined) block.help = b.help
+    if (b.scope !== undefined) block.scope = b.scope
     if (b.colour !== undefined) block.colour = b.colour
     if (b.inline !== undefined) block.inline = b.inline
     return block

@@ -8,6 +8,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Blocks know which Python your board speaks** (#1039, epic #1007 and
+  epic #209). The Blocks workspace was the one subsystem that ignored the
+  dialect entirely — the help tree, the completions, the modules panel, the
+  status bar and the flasher all read it; the toolbox handed a CircuitPython
+  board a `machine`-shaped block and let a child find out on the board.
+
+  A block can now declare a `scope` — `both` (the default), `micropython` or
+  `circuitpython` — and the toolbox is filtered to the runtime that is actually
+  connected. The hardware and instrument blocks are marked MicroPython; the
+  other sixty-eight, which are plain Python, are untouched. A part's or a
+  plugin's `blocks.yml` can declare a scope too.
+
+  **It hides, it never unregisters**, and that distinction is the whole feature.
+  Snakie refuses to mount a canvas holding a block type it does not know, so it
+  can never save an empty workspace over somebody's file — which means a filter
+  that removed blocks from the *registry* would make every existing hardware
+  program unopenable the moment a CircuitPython board was plugged in. Filtering
+  the flyout instead, that file still opens, still edits and still saves; the
+  learner simply cannot reach for a *new* block that could not run.
+
+  A drawer emptied by the dialect says so — "These blocks are MicroPython. Your
+  board is running CircuitPython." — rather than looking broken. And with
+  nothing plugged in, the whole palette is there: `unknown` is not "MicroPython
+  by default", and a Chromebook with no board sees everything.
+
 - **A dot between Blocks and Code for the split view** (#1053, epic #1007).
   #1034 made the divider the control and predicted the cost in its own issue:
   *"more elegant and less discoverable"*. It was right — there was no named way
