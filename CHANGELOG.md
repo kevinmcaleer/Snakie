@@ -8,6 +8,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The block↔line highlight never cleared** (#1050, epic #1007). Clicking a
+  line in the Python pane lit the block that wrote it — and clicking a different
+  line lit that one too, leaving the first on. They piled up: four lines clicked
+  in turn left four blocks lit, and the only way to clear one was to click it on
+  the canvas and then click away.
+
+  **Blockly does not clear the previous selection for a programmatic
+  `select()`.** In v13 the current selection belongs to the focus manager —
+  `common.setSelected` is `@internal` and its own doc says a selection is cleared
+  by focusing something else, which a `select()` call from our code never does.
+  The canvas assumed otherwise and only ever called `select()`.
+
+  It now remembers the block it lit and takes it off before lighting another —
+  including when there is nothing to light. Clicking a line no block wrote (an
+  import, a comment, a blank line) clears the highlight, because "nothing here
+  came from a block" is a real answer and should look like one. Selecting a
+  block on the canvas clears it too, which used to leave two lit at once.
+
+### Fixed
+
 - **A function you defined never appeared in the Functions drawer** (#1045, epic
   #1007). Define `wiggle` on the canvas, open **Functions** to get a block that
   calls it, and it was not there — the drawer held the two `def` blocks,

@@ -41,6 +41,7 @@ import {
 } from '../lib/blocks/traceback'
 import { ensureBlocklyLocale } from '../lib/blocks/locale'
 import { unknownBlockTypes } from '../lib/blocks/workspace-check'
+import { putOutHighlight } from '../lib/blocks/highlight'
 import type { BlocksWorkspace } from '../../../shared/blocks-doc'
 import './BlocksCanvas.css'
 
@@ -118,8 +119,14 @@ export interface BlocksCanvasProps {
   onSelectBlock?: (blockId: string | null) => void
   /**
    * Select and centre this block — the other direction, driven by a click in the
-   * Python. `null` leaves the canvas alone rather than clearing the selection,
-   * so moving the mouse out of the mirror doesn't deselect what they just found.
+   * Python.
+   *
+   * `null` CLEARS the highlight (#1050). It used to leave the canvas alone, on
+   * the reasoning that moving the mouse out of the pane should not deselect what
+   * the learner had just found — but hovering drives `onHoverBlock`, not this,
+   * so the only thing that ever sends `null` is a click on a line no block
+   * wrote. That is a real answer and deserves to look like one, and leaving the
+   * last block lit instead made the link look stuck.
    */
   selectBlockId?: string | null
   /** Right-click ▸ "Show me the Python for just this block". */
@@ -232,6 +239,11 @@ export function BlocksCanvas({
   onHoverBlockRef.current = onHoverBlock
   const onSelectBlockRef = useRef(onSelectBlock)
   onSelectBlockRef.current = onSelectBlock
+  /**
+   * The block WE lit from a Python line click (#1016), so it can be put out
+   * again — see {@link putOutHighlight}.
+   */
+  const litRef = useRef<string | null>(null)
   const onShowBlockPythonRef = useRef(onShowBlockPython)
   onShowBlockPythonRef.current = onShowBlockPython
   const onPartsUsedRef = useRef(onPartsUsed)
@@ -355,6 +367,18 @@ export function BlocksCanvas({
     const pointing = (event: Blockly.Events.Abstract): void => {
       if (event.type !== Blockly.Events.SELECTED) return
       const selected = (event as Blockly.Events.Selected).newElementId ?? null
+      // The learner selected ANOTHER BLOCK themselves, so the one we lit from a
+      // line click is stale (#1050). Blockly's own selection does not clear a
+      // programmatic one, so clicking a block on the canvas used to leave two
+      // lit at once.
+      //
+      // Only for a real block, never for a null selection — and that `null` is
+      // not hypothetical. Our own `unselect()` of the previous block fires this
+      // event with no id, and it arrives AFTER the effect has lit the new one;
+      // treating that as "they selected nothing" put the fresh highlight out
+      // again the instant it appeared. Clicking away on the canvas deselects
+      // through Blockly's own path anyway, so nothing is missed by ignoring it.
+      if (selected) putOutHighlight(wsRef.current, litRef, selected)
       onSelectBlockRef.current?.(selected)
     }
     ws.addChangeListener(pointing)
@@ -505,15 +529,41 @@ export function BlocksCanvas({
   // view. The other half of the link, and the half that does the teaching —
   // "that line came from THIS", pointed at from the side they are learning to
   // read.
+  //
+  // CLEARING IS NOT AUTOMATIC, and assuming it was is what made the link feel
+  // broken (#1050). `BlockSvg.select()` highlights, but in Blockly 13 the
+  // CURRENT selection belongs to the focus manager — `common.setSelected` is
+  // `@internal` and its own doc says a selection is cleared by focusing
+  // something else, which a programmatic `select()` never does. So calling it
+  // on block after block ADDED a highlight each time and removed none: clicking
+  // four lines in turn left four blocks lit, and the learner had to click each
+  // one on the canvas and away again to put it out.
+  //
+  // So this effect clears before it selects, every time — including when there
+  // is nothing to select, which is the case that matters most. An import, a
+  // blank line, a comment: pointing at a line no block wrote is a real answer
+  // ("nothing here came from a block"), and it has to look like one.
   useEffect(() => {
-    if (peek || blocked || !selectBlockId) return
+    if (peek || blocked) return
     const ws = wsRef.current
-    const block = ws?.getBlockById(selectBlockId)
+    if (!ws) return
+
+    putOutHighlight(ws, litRef, selectBlockId ?? null)
+    // And whatever Blockly itself has, so a block the learner selected by
+    // clicking the canvas does not stay lit beside the one they just asked for.
+    const current = Blockly.getSelected()
+    if (current && current.id !== selectBlockId && current instanceof Blockly.BlockSvg) {
+      current.unselect()
+    }
+
+    if (!selectBlockId) return
+    const block = ws.getBlockById(selectBlockId)
     if (!block) return
     // Centring rather than merely selecting: a block off-screen is selected and
     // invisible, which looks exactly like nothing happening.
-    ws?.centerOnBlock(selectBlockId)
+    ws.centerOnBlock(selectBlockId)
     block.select()
+    litRef.current = selectBlockId
   }, [selectBlockId, peek, blocked])
 
   // Follow the app's skin. Same MutationObserver pattern as `Terminal.tsx` and
