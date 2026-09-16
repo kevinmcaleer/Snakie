@@ -571,6 +571,12 @@ because a learner can type `from snakie import Led` in the Code workspace today.
 
 **This is the one finding in this audit that is a bug rather than a gap.**
 
+*Fixed in #1038.* The runtime is now asked (`sys.implementation.name`) rather
+than inferred from a failed import, and every path in `instruments.py` that used
+to give up silently — the `Pin`/`PWM` stubs and six more in `Buzzer`,
+`Rangefinder`, `Display` and `Servo` — raises a readable error on CircuitPython
+while staying inert under CPython, which is what the simulator needs.
+
 ### 9.5 Timing is one line
 
 `snakie_wait_seconds` emits `time.sleep(…)`, correct on both. `snakie_wait_ms`

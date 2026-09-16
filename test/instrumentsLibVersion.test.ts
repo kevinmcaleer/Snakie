@@ -20,7 +20,10 @@ const LIB = join(__dirname, '..', 'micropython', 'instruments.py')
 
 /** version → sha256 of the file that shipped as that version. */
 const SHA_BY_VERSION: Record<string, string> = {
-  '0.10.0': '193e3609d1b1114d4093cb8b7c5048e37faa443ebef0fef74e21b8512838e885'
+  '0.10.0': '193e3609d1b1114d4093cb8b7c5048e37faa443ebef0fef74e21b8512838e885',
+  // #1038: `except ImportError` stopped meaning "be inert" — on CircuitPython it
+  // now raises, because there it was handing a real board the simulator's stubs.
+  '0.11.0': '791a2e8dfb8fbab56913a592f6297d242411504235f00dcadb5b68af69ff395c'
 }
 
 describe('instruments.py version discipline', () => {

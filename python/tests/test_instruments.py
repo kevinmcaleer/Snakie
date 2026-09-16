@@ -1347,5 +1347,152 @@ class ImuDuckTyping(unittest.TestCase):
         inst.unwatch("imu")
 
 
+class TestCircuitPythonIsNotTheSimulator(unittest.TestCase):
+    """#1038: `except ImportError` must not mean "be inert" on CircuitPython.
+
+    The library used to work out whether it had hardware by trying
+    `from machine import Pin, PWM` and catching the failure. CircuitPython has
+    no `machine` either, so a real CircuitPython board got the SIMULATOR's
+    no-op stubs: `Led(15).on()` returned successfully, the LED did not light,
+    and nothing said a word.
+
+    These tests run under CPython, where `machine` is genuinely absent and the
+    stubs are genuinely what you want — so each one flips `_IMPL` to pin the
+    behaviour of the branch it is naming, and the CPython half is asserted just
+    as hard, because staying inert in the simulator is the reason the stubs
+    exist and breaking that would be the same bug pointed the other way.
+    """
+
+    def setUp(self):
+        self._impl = inst._IMPL
+
+    def tearDown(self):
+        inst._IMPL = self._impl
+
+    # -- the helper itself ---------------------------------------------------
+
+    def test_helper_is_silent_under_cpython(self):
+        inst._IMPL = "cpython"
+        self.assertIsNone(inst._no_machine())
+
+    def test_helper_is_silent_on_micropython_without_machine(self):
+        # A MicroPython build with no `machine` of its own (the WASM port) is a
+        # real case, and it must keep getting the stubs rather than an error.
+        inst._IMPL = "micropython"
+        self.assertIsNone(inst._no_machine())
+
+    def test_helper_raises_on_circuitpython(self):
+        inst._IMPL = "circuitpython"
+        with self.assertRaises(NotImplementedError):
+            inst._no_machine()
+
+    def test_the_message_names_the_replacement(self):
+        # An error a learner can act on, not just one they can read.
+        inst._IMPL = "circuitpython"
+        with self.assertRaises(NotImplementedError) as caught:
+            inst._no_machine()
+        msg = str(caught.exception)
+        self.assertIn("machine", msg)
+        self.assertIn("CircuitPython", msg)
+        for replacement in ("board", "digitalio", "pwmio", "analogio"):
+            self.assertIn(replacement, msg)
+
+    # -- the constructors generated code actually runs ------------------------
+
+    def test_pin_is_inert_under_cpython(self):
+        inst._IMPL = "cpython"
+        self.assertEqual(inst.Pin(15, inst.Pin.OUT).id, 15)
+        self.assertEqual(inst.Pin(15).value(), 0)
+
+    def test_pin_raises_on_circuitpython(self):
+        # THE BUG, stated as a test: this is the line a generated blocks program
+        # contains, and it used to succeed and do nothing.
+        inst._IMPL = "circuitpython"
+        with self.assertRaises(NotImplementedError):
+            inst.Pin(15, inst.Pin.OUT)
+
+    def test_pwm_is_inert_under_cpython(self):
+        inst._IMPL = "cpython"
+        self.assertEqual(inst.PWM(inst.Pin(16)).freq(), 50)
+
+    def test_pwm_raises_on_circuitpython(self):
+        inst._IMPL = "cpython"
+        pin = inst.Pin(16)  # built while we still can
+        inst._IMPL = "circuitpython"
+        with self.assertRaises(NotImplementedError):
+            inst.PWM(pin)
+
+    # -- the six paths that used to give up silently --------------------------
+
+    def test_buzzer_set_pin_raises_on_circuitpython(self):
+        buzzer = inst.Buzzer()
+        inst._IMPL = "circuitpython"
+        with self.assertRaises(NotImplementedError):
+            buzzer.set_pin(16)
+
+    def test_buzzer_set_pin_stays_inert_under_cpython(self):
+        inst._IMPL = "cpython"
+        inst.Buzzer().set_pin(16)  # no exception, no hardware
+
+    def test_servo_set_pin_raises_on_circuitpython(self):
+        servo = inst.Servo()
+        inst._IMPL = "circuitpython"
+        with self.assertRaises(NotImplementedError):
+            servo.set_pin(15)
+
+    def test_servo_set_pin_stays_inert_under_cpython(self):
+        inst._IMPL = "cpython"
+        inst.Servo().set_pin(15)
+
+    def test_rangefinder_set_pins_raises_on_circuitpython(self):
+        rangefinder = inst.Rangefinder()
+        inst._IMPL = "circuitpython"
+        with self.assertRaises(NotImplementedError):
+            rangefinder.set_pins(14, 15)
+
+    def test_rangefinder_set_pins_stays_inert_under_cpython(self):
+        inst._IMPL = "cpython"
+        inst.Rangefinder().set_pins(14, 15)
+
+    def test_display_i2c_raises_on_circuitpython(self):
+        display = inst.Display()
+        inst._IMPL = "circuitpython"
+        with self.assertRaises(NotImplementedError):
+            display.set_pins(sda=4, scl=5)
+
+    def test_display_i2c_stays_inert_under_cpython(self):
+        inst._IMPL = "cpython"
+        inst.Display().set_pins(sda=4, scl=5)
+
+    def test_display_spi_raises_on_circuitpython(self):
+        display = inst.Display()
+        inst._IMPL = "circuitpython"
+        with self.assertRaises(NotImplementedError):
+            display.set_spi(sck=18, mosi=19, dc=20, rst=21, cs=17)
+
+    def test_display_spi_stays_inert_under_cpython(self):
+        inst._IMPL = "cpython"
+        inst.Display().set_spi(sck=18, mosi=19, dc=20, rst=21, cs=17)
+
+    def test_rangefinder_read_raises_on_circuitpython(self):
+        # `read()` returns None without pins, so give it pins first — under
+        # CPython `set_pins` leaves them unset, which is the inert path, so this
+        # asserts the `read()` guard through a Rangefinder that thinks it is wired.
+        rangefinder = inst.Rangefinder()
+        inst._IMPL = "cpython"
+        rangefinder._trig = inst.Pin(14, inst.Pin.OUT)
+        rangefinder._echo = inst.Pin(15, inst.Pin.IN)
+        inst._IMPL = "circuitpython"
+        with self.assertRaises(NotImplementedError):
+            rangefinder.read()
+
+    def test_rangefinder_read_stays_inert_under_cpython(self):
+        inst._IMPL = "cpython"
+        rangefinder = inst.Rangefinder()
+        rangefinder._trig = inst.Pin(14, inst.Pin.OUT)
+        rangefinder._echo = inst.Pin(15, inst.Pin.IN)
+        self.assertIsNone(rangefinder.read())
+
+
 if __name__ == "__main__":
     unittest.main()
