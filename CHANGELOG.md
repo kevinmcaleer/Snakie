@@ -8,6 +8,54 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Tracebacks land on the block that caused them** (#1015, epic #1007, phase 3).
+  A beginner who presses Run and gets `File "<stdin>", line 7` is being shown a
+  line number in a file they never wrote. The error now appears **on the block**,
+  Scratch-style, in a sentence they can act on.
+
+  **Run in block mode is the same Run.** The generated Python goes to
+  `device.runProgram`, the output streams to the same console, and the
+  auto-connect, the real-board preference and the simulator fallback all come
+  along unchanged — no "Run blocks" button, because it is not a different thing,
+  and no second device path. A classroom with no Picos still gets a green Run.
+
+  **Nothing is hidden.** The console prints the board's own traceback verbatim,
+  because that text is what a learner is graduating to and a tool that hides it
+  teaches them to fear it. The friendly sentence sits beside it, on the block.
+
+  **Which line, and whose.** The block chosen is the last frame that is the
+  *learner's* program, not the innermost frame overall: a program that calls into
+  `instruments.py` and fails in there has its innermost frame in a file nobody
+  dragged, and the call they made is the thing that is theirs to fix. An error
+  inside a function they defined lands on the block inside the function.
+
+  **An error with nowhere to land stays in the console.** No block wrote
+  `import turtle`, and a traceback whose frames are all inside a library has no
+  line in the program at all. Inventing an owner would put a red badge on an
+  innocent block.
+
+  A handful of errors get plain English — a missing library, an old library on
+  the board, a pin that can't do the job, a name used before it was set, dividing
+  by zero, an index off the end of a list. **Everything else keeps the board's own
+  words**, because a vague paraphrase of an error nobody anticipated is worse than
+  the real text.
+
+  `ImportError: no module named 'instruments'` also **brings the one-click install
+  back**. The banner already appears when a board connects without the library,
+  but a child who dismissed it meets the problem again as a traceback they cannot
+  act on.
+
+  **A running program makes the canvas glow** in the Soft Shell accent — the "my
+  code is alive" feedback Scratch gets right and a text editor never gives you.
+  It stops the moment the program crashes, because a canvas still pulsing over a
+  dead program is a lie about the one thing it exists to report. Stop clears the
+  glow and the error badges together, so a program the learner has just fixed
+  doesn't still look broken.
+
+  **Pressing Stop is not an error.** It raises `KeyboardInterrupt` wherever the
+  program had got to, and badging that block would tell a child they broke
+  something when all they did was press the button that says stop.
+
 - **Instruments in block mode, derived from the instrument registry** (#1014,
   epic #1007, phase 2). Seventeen blocks that feed Snakie's own panels: the
   oscilloscope, multimeter, plotter, radar, IMU, barometer, button, encoder and

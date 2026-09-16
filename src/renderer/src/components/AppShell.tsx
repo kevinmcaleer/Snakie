@@ -73,8 +73,10 @@ import {
   dispatchOpenFind,
   dispatchOpenHelp,
   HELP_EVENT,
+  NEED_LIBRARY_EVENT,
   REVEAL_INSTRUMENT_EVENT,
   type HelpEventDetail,
+  type NeedLibraryDetail,
   type RevealInstrumentDetail
 } from './editorBridge'
 import { InstrumentLibBanner } from './InstrumentLibBanner'
@@ -1272,6 +1274,28 @@ export function AppShell(): JSX.Element {
     }
     window.addEventListener(REVEAL_INSTRUMENT_EVENT, handler)
     return () => window.removeEventListener(REVEAL_INSTRUMENT_EVENT, handler)
+  }, [])
+
+  // A program raised `ImportError: no module named 'instruments'` (#1015), so
+  // put the one-click install back in front of them.
+  //
+  // The banner already appears when a board connects WITHOUT the library — but a
+  // child who dismissed it, or whose board carries an old copy that passed the
+  // version check, meets the problem again as a traceback they cannot act on.
+  // Un-dismissing is the whole fix: the install button is already built, already
+  // queued behind the other device work, and already knows what to write.
+  const needLibraryRef = useRef<(library: 'instruments' | 'turtle') => void>(() => {})
+  needLibraryRef.current = (library: 'instruments' | 'turtle'): void => {
+    if (library === 'turtle') setTurtleLibDismissed(false)
+    else setLibDismissed(false)
+  }
+  useEffect(() => {
+    const handler = (e: Event): void => {
+      const detail = (e as CustomEvent<NeedLibraryDetail>).detail
+      if (detail?.library) needLibraryRef.current(detail.library)
+    }
+    window.addEventListener(NEED_LIBRARY_EVENT, handler)
+    return () => window.removeEventListener(NEED_LIBRARY_EVENT, handler)
   }, [])
 
   // Drive the Find & Replace window (issue #146): it has no editor access, so it

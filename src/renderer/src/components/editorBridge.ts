@@ -92,6 +92,55 @@ export function dispatchRevealInstruments(ids: readonly string[]): void {
 }
 
 /**
+ * "A program started or stopped" (#1015, epic #1007).
+ *
+ * The block canvas needs to know, for two reasons: a new run must clear the
+ * error badges the LAST run left on the blocks (otherwise a fixed program still
+ * looks broken), and while a program is running the canvas glows — the "my code
+ * is alive" feedback Scratch gets right and a text editor never gives you.
+ *
+ * An EVENT, because Run lives in the toolbar and the canvas is four components
+ * deep inside a lazy chunk, and because the device layer has no opinion about
+ * blocks. Fired by `Toolbar` for every path that starts or ends a run, including
+ * the board dropping out from under one.
+ */
+export const PROGRAM_RUN_EVENT = 'snakie:program-run'
+
+export interface ProgramRunDetail {
+  /** True when a program has just been sent to the board; false when it ended. */
+  running: boolean
+}
+
+/** Tell the canvas a program started (`true`) or stopped (`false`). */
+export function dispatchProgramRunState(running: boolean): void {
+  window.dispatchEvent(
+    new CustomEvent<ProgramRunDetail>(PROGRAM_RUN_EVENT, { detail: { running } })
+  )
+}
+
+/**
+ * "This program needs a Snakie library the board hasn't got" (#1015).
+ *
+ * Raised from a traceback rather than from a connection check: the install
+ * banner appears when a board connects without the library, but a child who
+ * dismissed it — or whose board has an OLD copy — meets the problem again as an
+ * `ImportError` they cannot act on. This brings the one-click install back.
+ */
+export const NEED_LIBRARY_EVENT = 'snakie:need-library'
+
+export interface NeedLibraryDetail {
+  /** Which library: the instruments bundle, or turtle graphics. */
+  library: 'instruments' | 'turtle'
+}
+
+/** Ask the shell to re-offer `library`'s one-click install. */
+export function dispatchNeedLibrary(library: 'instruments' | 'turtle'): void {
+  window.dispatchEvent(
+    new CustomEvent<NeedLibraryDetail>(NEED_LIBRARY_EVENT, { detail: { library } })
+  )
+}
+
+/**
  * "Close the active tab" (#915), fired by File ▸ Close Tab.
  *
  * An EVENT rather than a store call, because closing a tab is not just removing

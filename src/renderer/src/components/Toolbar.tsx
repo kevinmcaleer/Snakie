@@ -5,6 +5,7 @@ import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
 import { useConsole } from '../store/console'
 import { onDeviceAction } from './device-bus'
+import { dispatchProgramRunState } from './editorBridge'
 import { isVirtualPort } from '../../../shared/virtual-device'
 import { runTitle, stopTitle } from './run-controls'
 import './RunControls.css'
@@ -125,6 +126,11 @@ export function Toolbar(): JSX.Element {
   useEffect(() => {
     if (!connected) setRunning(false)
   }, [connected])
+  // Tell the block canvas (#1015). Driven off the STATE rather than added to
+  // each handler, so every path that starts or ends a run is covered by
+  // construction — including the board dropping out from under one, which is
+  // the path a per-handler dispatch would forget.
+  useEffect(() => dispatchProgramRunState(running), [running])
 
   // Remember the last device the user was actually connected to: a REAL board's
   // port, or null when it was the simulator. Drives Run's auto-connect so a

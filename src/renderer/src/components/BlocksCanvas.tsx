@@ -15,7 +15,19 @@ import { applyPinWarnings } from '../lib/blocks/pin-conflicts'
 import { loadSelectedBoard, watchSelectedBoard } from './board-pin-source'
 import { blockDefinition, blocksInCategory, installBlockDefinitions } from '../lib/blocks/registry'
 import { installCorePalette } from '../lib/blocks/palette'
-import { dispatchOpenHelp, dispatchRevealInstruments } from './editorBridge'
+import {
+  dispatchNeedLibrary,
+  dispatchOpenHelp,
+  dispatchRevealInstruments,
+  PROGRAM_RUN_EVENT,
+  type ProgramRunDetail
+} from './editorBridge'
+import {
+  blockForLine,
+  friendlyError,
+  isRealError,
+  TracebackWatcher
+} from '../lib/blocks/traceback'
 import { ensureBlocklyLocale } from '../lib/blocks/locale'
 import { unknownBlockTypes } from '../lib/blocks/workspace-check'
 import type { BlocksWorkspace } from '../../../shared/blocks-doc'
@@ -102,6 +114,15 @@ installCorePalette()
 installBlockDefinitions()
 installBlockHelpMenu()
 
+/**
+ * The warning "channel" a runtime error uses (#1015).
+ *
+ * Blockly keys warnings by id, so an error and #1012's pin-conflict warning can
+ * sit on the same block without either erasing the other — which matters,
+ * because a block on a pin it can't use is exactly the block likely to raise.
+ */
+const ERROR_WARNING = 'snakie-error'
+
 export function BlocksCanvas({
   fileId,
   workspace,
@@ -138,6 +159,17 @@ export function BlocksCanvas({
   onEditRef.current = onEdit
   /** Pending regeneration, so a drag doesn't generate once per mouse move. */
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /**
+   * The source map of the code as it stands (#1015).
+   *
+   * A REF, not state: the traceback watcher reads it from inside a serial-stream
+   * callback registered once, and a stale closure there would map a line number
+   * against the program as it was three edits ago — pointing the error at the
+   * wrong block, which is worse than pointing at none.
+   */
+  const sourceMapRef = useRef<ReadonlyMap<number, string>>(new Map())
+  /** Blocks currently wearing an error badge, so a new run can clear exactly those. */
+  const erroredRef = useRef<string[]>([])
 
   const prompt = usePrompt()
 
@@ -202,6 +234,8 @@ export function BlocksCanvas({
       if (debounceRef.current) clearTimeout(debounceRef.current)
       debounceRef.current = setTimeout(() => {
         const program = { ...generateProgram(ws), workspace: json }
+        // Keep the traceback mapper on the CURRENT program (#1015).
+        sourceMapRef.current = program.sourceMap
         // Two blocks on one pin, a pin this board hasn't got, a pin that can't
         // do the job (#1012). The canvas is the only place that sees the whole
         // program at once, so it is where this is caught.
@@ -242,6 +276,78 @@ export function BlocksCanvas({
     apply()
     return watchSelectedBoard(apply)
   }, [])
+
+  // Tracebacks land on the block that caused them (#1015).
+  //
+  // Reading the SAME broadcast serial stream the Terminal and the instruments
+  // read — nothing is intercepted and nothing is hidden: the console prints the
+  // board's own traceback verbatim, because that text is what a learner is
+  // graduating to. What lands on the block is one sentence beside it.
+  useEffect(() => {
+    if (peek || blocked) return
+    const watcher = new TracebackWatcher()
+    const decoder = new TextDecoder()
+    // Captured now: the cleanup below takes the glow off, and by then the ref
+    // may point at a different node (or none), which would leave a canvas
+    // glowing for a program that ended.
+    const host = hostRef.current
+
+    /** Take the error badges off, which is what a new run and Stop both do. */
+    const clearErrors = (): void => {
+      const ws = wsRef.current
+      for (const id of erroredRef.current) ws?.getBlockById(id)?.setWarningText(null, ERROR_WARNING)
+      erroredRef.current = []
+    }
+
+    const offData = window.api.device.onData((chunk) => {
+      const parsed = watcher.feed(decoder.decode(chunk, { stream: true }))
+      // Stop raises KeyboardInterrupt wherever the program had got to; badging
+      // whichever block that was would tell a child they broke something when
+      // all they did was press Stop.
+      if (!parsed || !isRealError(parsed)) return
+      // The program is over: MicroPython prints the traceback and hands the
+      // prompt back. The glow says "alive", so it has to stop saying it — a
+      // canvas still pulsing over a crashed program is a lie about the one
+      // thing it exists to report.
+      host?.classList.remove('blocks-canvas__host--running')
+      const friendly = friendlyError(parsed)
+      // The install banner, back on its feet: `ImportError: no module named
+      // 'instruments'` is not a sentence a child can act on, and the fix is one
+      // button they may have dismissed on connect.
+      if (friendly?.install) dispatchNeedLibrary(friendly.install)
+
+      const ws = wsRef.current
+      const id = blockForLine(sourceMapRef.current, parsed.line)
+      const block = id ? ws?.getBlockById(id) : null
+      // An error with nowhere to land is not a failure of this feature: an
+      // import line belongs to no block, and a library-only traceback has no
+      // frame in the learner's program at all. The console still has it.
+      if (!block) return
+      clearErrors()
+      block.setWarningText(
+        friendly ? `${friendly.text}\n\n${parsed.error}: ${parsed.message}` : `${parsed.error}: ${parsed.message}`,
+        ERROR_WARNING
+      )
+      erroredRef.current = [block.id]
+      ws?.centerOnBlock(block.id)
+    })
+
+    const onRunState = (e: Event): void => {
+      const running = (e as CustomEvent<ProgramRunDetail>).detail?.running === true
+      // A new run starts from a clean canvas, or a program the learner has just
+      // fixed still wears the last run's badge and looks broken.
+      watcher.reset()
+      clearErrors()
+      host?.classList.toggle('blocks-canvas__host--running', running)
+    }
+    window.addEventListener(PROGRAM_RUN_EVENT, onRunState)
+
+    return () => {
+      offData()
+      window.removeEventListener(PROGRAM_RUN_EVENT, onRunState)
+      host?.classList.remove('blocks-canvas__host--running')
+    }
+  }, [peek, blocked])
 
   // Follow the app's skin. Same MutationObserver pattern as `Terminal.tsx` and
   // `RobotView.tsx`: `data-theme` on the document root is the single source of
@@ -291,7 +397,9 @@ export function BlocksCanvas({
       // Show the Python at once — but through `onGenerate` only. Writing here
       // would dirty a file whose stored code merely predates this generator,
       // for the crime of being opened.
-      onGenerateRef.current?.({ ...generateProgram(ws), workspace: loaded })
+      const opened = { ...generateProgram(ws), workspace: loaded }
+      sourceMapRef.current = opened.sourceMap
+      onGenerateRef.current?.(opened)
       applyPinWarnings(ws)
       // Show the instruments this program draws into (#1013). On LOAD as well as
       // on a drag, because a turtle program whose picture goes nowhere is a
