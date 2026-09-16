@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`wait N milliseconds` now runs on CircuitPython** (#1041, epic #209). It
+  emitted `time.sleep_ms(…)`, which CircuitPython does not have — the only
+  dialect-specific block outside hardware. It gets a per-dialect template, the
+  shape #1040 settled on: MicroPython keeps `sleep_ms`, which is what every
+  tutorial writes and what the mirror is meant to show, and CircuitPython gets
+  `time.sleep()`. The block's label still says milliseconds either way.
+
+  A literal is converted at generation time — `time.sleep(0.5)`, what a
+  CircuitPython tutorial writes, rather than `time.sleep(500 / 1000)`, which is
+  arithmetic nobody would type. A variable or an expression keeps the division,
+  the only form still correct when the value changes.
+
 ### Added
 
 - **The hardware blocks speak CircuitPython** (#1040, epic #1007 and epic #209).

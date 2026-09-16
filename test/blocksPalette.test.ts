@@ -957,3 +957,42 @@ describe('a whole first program (#1011)', () => {
     )
   })
 })
+
+describe('waiting, on either runtime (#1041)', () => {
+  const cp = (blocks: unknown[]): string => {
+    const ws = new Blockly.Workspace()
+    Blockly.serialization.workspaces.load({ blocks: { languageVersion: 0, blocks } }, ws)
+    return generateProgram(ws, 'circuitpython').code
+  }
+  const waitMs = (value: unknown): unknown[] => [
+    { type: 'snakie_wait_ms', id: 'w', inputs: { MS: { block: value } } }
+  ]
+  const number = (n: number): unknown => ({ type: 'math_number', id: 'n', fields: { NUM: n } })
+
+  it('keeps the MicroPython idiom on MicroPython', () => {
+    // `sleep_ms` is what every tutorial writes, and the mirror is meant to show
+    // the code a learner will meet elsewhere.
+    expect(gen(waitMs(number(500))).code).toContain('time.sleep_ms(500)')
+  })
+
+  it('converts a literal to seconds on CircuitPython, which has no sleep_ms', () => {
+    // `time.sleep(0.5)` is what a CircuitPython tutorial writes;
+    // `time.sleep(500 / 1000)` is arithmetic nobody would type.
+    expect(cp(waitMs(number(500)))).toContain('time.sleep(0.5)')
+    expect(cp(waitMs(number(1)))).toContain('time.sleep(0.001)')
+    expect(cp(waitMs(number(2000)))).toContain('time.sleep(2)')
+  })
+
+  it('keeps the division when the value is not a literal', () => {
+    // The only form still correct when the value changes.
+    const fromVariable = cp(waitMs({ type: 'math_arithmetic', id: 'a', fields: { OP: 'ADD' },
+      inputs: { A: { block: number(100) }, B: { block: { ...(number(50) as object), id: 'n2' } } } }))
+    expect(fromVariable).toContain('/ 1000')
+  })
+
+  it('the seconds block is already right on both', () => {
+    const secs = [{ type: 'snakie_wait_seconds', id: 's', inputs: { SECS: { block: number(1) } } }]
+    expect(gen(secs).code).toContain('time.sleep(1)')
+    expect(cp(secs)).toContain('time.sleep(1)')
+  })
+})

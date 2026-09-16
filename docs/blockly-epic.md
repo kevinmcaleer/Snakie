@@ -519,7 +519,7 @@ Measured by walking the registry after `installCorePalette()`, not by reading.
 | Functions | 5 | — | **Both.** `def`/`return` | Nothing |
 | Python (#1018) | 9 | *(user's own)* | **Both by construction** — verbatim text | Nothing; change the import block's `machine` default |
 | Turtle | 19 | `turtle` | **Both.** `micropython/turtle.py` imports only `math` and prints | Nothing |
-| Wait | 2 | `time` | **Split.** `time.sleep()` both; `time.sleep_ms()` MicroPython-only | One block, one line |
+| Wait | 2 | `time` | ~~Split~~ **Done (#1041).** `time.sleep()` both; `wait ms` has a CircuitPython template | — |
 | Hardware | 12 | `snakie`, `machine` | **MicroPython** | The shim (§9.4) |
 | Instruments | 17 | `instruments`, `snakie`, `machine` | **MicroPython** | The shim, plus #760's note |
 | **Total** | **98** | | **68 fine, 1 trivial, 29 real** | |
@@ -586,8 +586,20 @@ takes a float; `time.monotonic()` replaces `ticks_ms`).
 
 `instruments.py` is already ahead of this: every `sleep_ms`, `sleep_us`,
 `ticks_ms` and `ticks_diff` in it is guarded with `hasattr(time, …)` and a
-seconds-based fallback, because the CPython simulator needed it. One block, one
-`hasattr` — or one dialect-scoped pair.
+seconds-based fallback, because the CPython simulator needed it.
+
+**DECIDED (#1041): a per-dialect template**, the same shape §9.7b chose for the
+hardware blocks. #1041 offered three fixes and called the portable
+`time.sleep(0.5)` the smallest — but it costs the idiom, and `sleep_ms` is what
+every MicroPython tutorial writes and what the mirror is meant to show. A second
+block costs a second block, for a difference that is a unit conversion. An
+inlined `hasattr` ternary is a lot of noise in a beginner's program for one
+wait. The template costs none of those: the label still says milliseconds, and
+each board gets the call it actually has.
+
+A **literal** is converted at generation time — `time.sleep(0.5)`, which is what
+a CircuitPython tutorial writes — while a variable or an expression keeps
+`… / 1000`, the only form still correct when the value changes.
 
 ### 9.6 What a CircuitPython file actually converts into (measured)
 
