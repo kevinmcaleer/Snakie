@@ -114,6 +114,18 @@ export interface GeneratedProgram {
    * down, for the paths that don't go through it.
    */
   missing: string[]
+  /**
+   * The ids of top-level blocks whose stack threw while generating (#1068).
+   *
+   * The same warning as {@link missing} and a different cause: there the type
+   * has no emitter, here the emitter ran and failed. Either way `code` is short
+   * of everything that stack would have contributed — including the blocks above
+   * the one that threw, since Blockly unwinds the whole chain — so a caller must
+   * treat a non-empty `failed` exactly as it treats a non-empty `missing`.
+   *
+   * Ids rather than types, so the canvas can point at them.
+   */
+  failed: string[]
 }
 
 /** A hoisted object: `led = Led(15)` in the setup section, requested by key. */
@@ -157,6 +169,8 @@ export class MicroPythonGenerator extends Blockly.CodeGenerator {
   /** Blockly procedure name -> the Python identifier it settled on this pass. */
   private functionNames = new Map<string, string>()
   private workspaceRef: Blockly.Workspace | null = null
+  /** The program section, filled in by the pass that walked the workspace. */
+  body = ''
 
   constructor() {
     super('MicroPython')
@@ -268,6 +282,14 @@ export class MicroPythonGenerator extends Blockly.CodeGenerator {
     return [...this.functions.values()]
   }
 
+  /**
+   * Spoken for before this pass starts — the names the imports are going to
+   * bind (#1068). See the two passes in {@link generateProgram}.
+   */
+  reserve(names: Iterable<string>): void {
+    for (const name of names) this.taken.add(name)
+  }
+
   /** Reset for a fresh pass. Called by {@link generateProgram}. */
   override init(workspace: Blockly.Workspace): void {
     this.imports = new ImportManager()
@@ -325,13 +347,44 @@ export function generateProgram(
   dialect: Dialect = 'micropython'
 ): GeneratedProgram {
   ensureBlocklyLocale()
+  // TWO PASSES, BECAUSE A NAME CANNOT BE TAKEN BACK (#1068).
+  //
+  // `ImportManager.boundNames()` is what stops a learner's variable called
+  // `time` replacing the module — but it can only report the imports declared
+  // SO FAR, and they keep arriving while blocks emit. A variable above the block
+  // that needs `import time` was named before anything had asked for it:
+  //
+  //     time = 0           import time      <- hoisted to the top, as always
+  //     time.sleep(1)  ->  time = 0         <- and now the module is an int
+  //                        time.sleep(1)       AttributeError, nowhere near
+  //                                            the block that caused it
+  //
+  // The first pass exists only to find out which names the imports will bind;
+  // its output is thrown away. The second is the real one, with those names
+  // already spoken for, so the variable comes out `time_` wherever it sits.
+  const survey = runPass(workspace, dialect, null)
+  const pass = runPass(workspace, dialect, survey.gen.imports.boundNames())
+  return {
+    ...assemble(sectionsOf(pass.gen)),
+    missing: blocksWithoutEmitters(workspace),
+    failed: pass.failed
+  }
+}
+
+/** One generation pass over `workspace`, with `reserved` names already taken. */
+function runPass(
+  workspace: Blockly.Workspace,
+  dialect: Dialect,
+  reserved: ReadonlySet<string> | null
+): { gen: MicroPythonGenerator; failed: string[] } {
   const gen = new MicroPythonGenerator()
   gen.dialect = dialect
   installEmitters(gen)
   gen.init(workspace)
+  if (reserved) gen.reserve(reserved)
 
-  const missing = blocksWithoutEmitters(workspace)
   const chunks: string[] = []
+  const failed: string[] = []
   for (const block of workspace.getTopBlocks(true)) {
     if (block.outputConnection) continue // a naked value block generates nothing
     try {
@@ -342,13 +395,25 @@ export function generateProgram(
       // Blockly THROWS on a block type with no emitter, and it throws from
       // wherever that block is — which takes the whole stack it sits in with it,
       // including everything above it that generated fine. Skipping the stack
-      // keeps the rest of the program readable in the mirror; `missing` is what
-      // stops anyone writing the result back to the file.
+      // keeps the rest of the program readable in the mirror.
+      //
+      // AND IT IS WRITTEN DOWN (#1068). This used to be swallowed in silence, on
+      // the reasoning that `missing` was already the guard — and `missing` only
+      // knows about types with no registered emitter. An emitter that THREW for
+      // a type we do have left `missing` empty, so the guard did not fire and a
+      // program short of an entire stack, sometimes the empty string, was
+      // written over the learner's file. A stack that would not generate is a
+      // stack that is not in the program, whatever the reason.
+      failed.push(block.id)
     }
   }
-  const body = chunks.join('')
+  gen.body = chunks.join('')
+  return { gen, failed }
+}
 
-  // Setup is collected DURING the walk above, so it can only be rendered now.
+/** The three marked sections, in the order they are written. */
+function sectionsOf(gen: MicroPythonGenerator): string[] {
+  // Setup is collected DURING the walk, so it can only be rendered now.
   const setup = gen
     .setupLines()
     .map((b) =>
@@ -366,7 +431,7 @@ export function generateProgram(
   // runs it, and putting them first is also where a Python programmer looks.
   const functions = gen.functionCode().join('\n')
 
-  const sections = [
+  return [
     gen.imports.empty
       ? ''
       : // An import line is marked only when a block claimed it (#1018) — an
@@ -375,9 +440,8 @@ export function generateProgram(
         `${gen.imports.render((line, blockId) => `${MARK}${blockId ?? ''}${MARK}${line}`)}\n`,
     functions,
     setup,
-    body
+    gen.body
   ].filter((s) => s !== '')
-  return { ...assemble(sections), missing }
 }
 
 /**
@@ -388,7 +452,7 @@ export function generateProgram(
  * leaves no gap behind it — and so the line numbers the map is built from are
  * the line numbers of the text that actually ships.
  */
-function assemble(sections: readonly string[]): Omit<GeneratedProgram, 'missing'> {
+function assemble(sections: readonly string[]): Omit<GeneratedProgram, 'missing' | 'failed'> {
   const raw = sections.join('\n')
   const sourceMap = new Map<number, string>()
   const blockLines = new Map<string, number[]>()

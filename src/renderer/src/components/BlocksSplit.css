@@ -56,6 +56,36 @@
   background: var(--warn);
 }
 
+.blocks-split__held-text {
+  margin: 0;
+  flex: 1 1 auto;
+}
+
+.blocks-split__held-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+/* Two equal buttons, because the choice is genuinely even: neither "keep my
+   Python" nor "use the blocks" is the safe default, and styling one as primary
+   would be the app guessing at something only the learner knows. */
+.blocks-split__held-button {
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--txt2);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.blocks-split__held-button:hover {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
 /* Narrow layout (epic #903): one pane at a time with a tab pair, because two
    180px columns are not "both on screen", they are two things you can't use. */
 .blocks-split__narrow {

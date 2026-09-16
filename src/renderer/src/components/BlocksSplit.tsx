@@ -7,10 +7,11 @@ import {
 } from 'react-resizable-panels'
 import { useWorkspaceLayout } from '../store/layout'
 import { useWorkspace } from '../store/workspace'
-import { BLOCKS_SCHEMA_VERSION, parseBlocksFooter } from '../../../shared/blocks-doc'
+import { blocksDocumentFor } from '../lib/blocks/document'
 import { pythonToBlocks } from '../lib/blocks/python-to-blocks'
 import { syntaxOk, type DeviceExec } from '../lib/blocks/syntax-gate'
 import { verifyConversion, type ConversionHold } from '../lib/blocks/round-trip'
+import { blocksMayWrite, holdFor, type BlocksHold } from '../lib/blocks/hold'
 import { PROGRAM_RUN_EVENT, type ProgramRunDetail } from './editorBridge'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useDynamicBlocks } from '../lib/blocks/use-dynamic-blocks'
@@ -89,20 +90,10 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   const file = openFiles.find((f) => f.id === activeId) ?? null
   const content = file?.content
   /**
-   * The document, as blocks and as code.
-   *
-   * A file with a footer brings its own workspace — the blocks exactly where the
-   * learner left them. A file WITHOUT one is converted (#1019, #1034): the `.py`
-   * is the program, and the blocks are a view of it, so any MicroPython file can
-   * be opened here rather than only the ones Snakie wrote.
+   * The document, as blocks and as code — see `lib/blocks/document.ts`, which
+   * owns the three cases and the reason the middle one is not a modal.
    */
-  const doc = useMemo(() => {
-    if (content === undefined) return null
-    const stored = parseBlocksFooter(content)
-    if (stored) return stored
-    const { workspace } = pythonToBlocks(content)
-    return { code: content, workspace, version: BLOCKS_SCHEMA_VERSION, codeMatches: true }
-  }, [content])
+  const doc = useMemo(() => blocksDocumentFor(content), [content])
 
   const hostRef = useRef<HTMLDivElement>(null)
   const groupRef = useRef<ImperativePanelGroupHandle>(null)
@@ -241,6 +232,15 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
    * thing they are entitled to be told, quietly, rather than left to notice.
    */
   const [heldBack, setHeldBack] = useState<ConversionHold | null>(null)
+  /**
+   * The verdict on the blocks this FILE was converted into (#1068).
+   *
+   * Only ever set for a `.py` that arrived without a footer: a stored workspace
+   * generated the code beside it, and one we worked out from the text has never
+   * been checked against anything. Until it is, those blocks must not write.
+   */
+  const [openedHold, setOpenedHold] = useState<ConversionHold | null>(null)
+
 
   // ── THE PARSE GATE (#1037) ────────────────────────────────────────────────
   //
@@ -270,6 +270,7 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   useEffect(() => {
     setCodeDraft(null)
     setHeldBack(null)
+    setOpenedHold(null)
   }, [file?.id])
   useEffect(
     () => () => {
@@ -278,13 +279,64 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
     []
   )
 
+  /**
+   * CHECK THE BLOCKS WE MADE UP (#1068).
+   *
+   * A file with a footer brought blocks that generated its code when it was
+   * saved. A file without one got blocks we worked out from the text, and #1069
+   * gates exactly this check while somebody types — but opening a `.py` Snakie
+   * did not write went straight onto the canvas without it, and the first block
+   * dragged rewrote the file from an approximation of it.
+   *
+   * Runs once per document rather than per keystroke: `doc` only changes when
+   * the file's content does, and a file with a footer (which is what it has the
+   * moment anything is written) never reaches this at all.
+   */
+  useEffect(() => {
+    if (!doc?.derived) {
+      setOpenedHold(null)
+      return
+    }
+    let live = true
+    void verifyConversion(doc.code, doc.workspace)
+      .then((verdict) => {
+        if (live) setOpenedHold(verdict.ok ? null : verdict.reason)
+      })
+      .catch(() => {
+        if (live) setOpenedHold('unloadable')
+      })
+    return () => {
+      live = false
+    }
+  }, [doc])
+
+  /**
+   * ARE THE TWO VIEWS THE SAME PROGRAM RIGHT NOW (#1068)?
+   *
+   * One answer for the four ways they can come apart — see `lib/blocks/hold.ts`,
+   * which owns the precedence. Null almost always, and when it is not, the blocks
+   * do not get to write the file.
+   */
+  const hold = useMemo<BlocksHold | null>(
+    () =>
+      holdFor({
+        program: generated,
+        opened: openedHold,
+        typing: heldBack
+      }),
+    [generated, openedHold, heldBack]
+  )
+  const holdRef = useRef(hold)
+  holdRef.current = hold
+
   const handleEdit = useCallback(
     (program: BlocksProgram): void => {
       if (!file) return
-      // A program the generator could not finish must never be written: it is
-      // the learner's file minus whatever the missing blocks contributed, and
-      // saving it would replace their program with a version that lost a step.
-      if (program.missing.length > 0) return
+      // THE ONE GUARD, for all four ways the views come apart (#1068). It used
+      // to be `program.missing.length > 0` and a bare `return` — the right
+      // refusal, silent, and blind to an emitter that threw. Now it covers those
+      // too, and the banner above says which it is.
+      if (!blocksMayWrite(holdRef.current)) return
       // A block was dragged, so the blocks are what is being edited now — and
       // whatever the code pane could not be converted into is no longer the
       // question (#1068).
@@ -452,19 +504,13 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   return (
     <div className="blocks-split" ref={hostRef}>
       {driverNeeds.length > 0 && <DriverInstallBanner needs={driverNeeds} />}
-      {/* THE ROUND-TRIP GATE SAID NO (#1068).
-          Said quietly, and said at all — the canvas is showing blocks from
-          before their last edit, and a learner who is not told that is a
-          learner watching the blocks ignore them. Not an error: their Python is
-          exactly as they typed it and still runs. */}
-      {heldBack && (
-        <p className="blocks-split__held" role="status">
-          <span className="blocks-split__held-mark" aria-hidden="true" />
-          These blocks are from before your last edit — Snakie could not turn that
-          Python into blocks without changing it. Your code is fine and will still
-          run.
-        </p>
-      )}
+      {/* THE TWO VIEWS HAVE COME APART (#1068).
+          Said quietly, and said at all: every one of these used to be silent,
+          and a learner who is not told is a learner watching the blocks ignore
+          them — or, worse, not watching their Python being replaced. Never an
+          error: in all four cases the Python in the file is untouched and still
+          runs. */}
+      {hold && <BlocksHoldBanner hold={hold} />}
       {/* "What did THIS block write?" — right-click ▸ Show me the Python. */}
       {pythonFor && generated && (
         <BlockPythonPopover
@@ -587,6 +633,45 @@ const BLOCKS_INITIAL_WIDTH = 1200
  * Its own component, store-free, so the text it puts in front of a learner can
  * be held to in a test.
  */
+/**
+ * THE BLOCKS AND THE FILE HAVE STOPPED AGREEING (#1068).
+ * ---------------------------------------------------------------------------
+ *
+ * One strip for the four ways it happens (`lib/blocks/hold.ts`), because to a
+ * learner they are one thing: the blocks in front of them are not the program in
+ * the file. What changes is the sentence and whether there is anything to press.
+ *
+ * A STRIP AND NOT A DIALOG, even for the conflict. Their Python is intact and
+ * still runs in every one of these cases, so nothing here is urgent enough to
+ * take the screen away from them — and a modal in front of the code is a modal
+ * in front of the very thing they need to look at to answer it.
+ */
+function BlocksHoldBanner({ hold }: { hold: BlocksHold }): JSX.Element {
+  return (
+    <div className="blocks-split__held" role="status">
+      <span className="blocks-split__held-mark" aria-hidden="true" />
+      <p className="blocks-split__held-text">{holdMessage(hold)}</p>
+    </div>
+  )
+}
+
+/** What to say, in words a ten-year-old can act on. */
+function holdMessage(hold: BlocksHold): string {
+  switch (hold.kind) {
+    case 'incomplete':
+      // NAMED where we can name them, because "some blocks" sends somebody
+      // hunting across a canvas. The reachable case is a part unwired in
+      // Electronics while its blocks are still on screen (#1017).
+      return hold.types.length > 0
+        ? `Snakie cannot write Python for ${hold.types.length === 1 ? 'a block' : 'some blocks'} on this canvas (${hold.types.join(', ')}) — if they came from a part, wiring it back up in Electronics brings them back. Nothing is being saved until then, and your file is as you left it.`
+        : 'Snakie could not turn some of these blocks into Python, so nothing is being saved until that is sorted out. Your file is as you left it.'
+    case 'unfaithful':
+      return 'These blocks are Snakie\u2019s reading of this file, and they do not write it back exactly — so they are here to look at, and editing them will not change your Python.'
+    case 'mid-edit':
+      return 'These blocks are from before your last edit — Snakie could not turn that Python into blocks without changing it. Your code is fine and will still run.'
+  }
+}
+
 export function BlockPythonPopover({
   code,
   lines,

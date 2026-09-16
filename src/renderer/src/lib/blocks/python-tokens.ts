@@ -174,6 +174,8 @@ export function logicalLines(source: string): LogicalLine[] {
 
     const parts: string[] = []
     const open: string[] = []
+    // Comments met INSIDE brackets (#1068) — see the `#` branch below.
+    const folded: string[] = []
     let buffer = ''
     while (i < text.length) {
       const ch = text[i]
@@ -202,10 +204,26 @@ export function logicalLines(source: string): LogicalLine[] {
       }
       if (ch === '#') {
         // To the end of the physical line, verbatim.
+        let comment = ''
         while (i < text.length && text[i] !== '\n') {
-          buffer += text[i]
+          comment += text[i]
           i += 1
         }
+        // A COMMENT INSIDE BRACKETS CANNOT STAY WHERE IT IS (#1068). The line
+        // break after it is about to be folded into a space, so leaving the
+        // comment in place puts the REST OF THE CALL inside it:
+        //
+        //     print(              became    print( 1,  # first 2)
+        //         1,  # first
+        //         2)
+        //
+        // — an unclosed bracket where valid Python used to be, written straight
+        // back out by the raw block that held it. The whole logical line is
+        // being reflowed onto one line whatever we do, so the comment goes to
+        // the end of it, where a comment can live: nothing is lost and nothing
+        // is broken.
+        if (open.length > 0) folded.push(comment)
+        else buffer += comment
         continue
       }
       if (ch === '"' || ch === "'") {
@@ -227,7 +245,12 @@ export function logicalLines(source: string): LogicalLine[] {
       i += 1
     }
     parts.push(buffer.trimEnd())
-    const joined = parts.filter((p) => p !== '').join(' ').trim()
+    const code = parts.filter((p) => p !== '').join(' ').trim()
+    // The folded comments ride at the end, two spaces off the code, which is the
+    // shape PEP 8 asks for and what `trailingCommentAt` will find there.
+    const comment = folded.join(' ')
+    const joined =
+      folded.length === 0 ? code : code === '' ? comment : `${code}  ${comment}`
     if (joined !== '') out.push({ indent, text: joined, line: startLine })
   }
   return out
@@ -311,6 +334,37 @@ export function tokenize(text: string): Token[] | null {
     continue
   }
   return out
+}
+
+/**
+ * Where a trailing comment starts on this line, or -1 (#1068).
+ *
+ * "Trailing" meaning a `#` that is really a `#` — not one inside a string, which
+ * is why this walks rather than calling `indexOf`. For a line that is nothing
+ * but a comment the answer is 0, which is still the right answer to the question
+ * asked.
+ *
+ * `python-to-blocks.ts` uses it to REFUSE to recognise a line that carries one.
+ * `tokenize` stops at the comment and hands back the code alone, so every
+ * recogniser downstream matched the line and silently dropped the rest of it:
+ * `x = 5  # how many times` came back as `x = 5`, and `time.sleep(1)  # pause`
+ * as a wait block with the pause forgotten. A comment is somebody's writing.
+ */
+export function trailingCommentAt(text: string): number {
+  let i = 0
+  while (i < text.length) {
+    const ch = text[i]
+    if (ch === '#') return i
+    if (ch === '"' || ch === "'") {
+      const quote = text.slice(i, i + 3) === ch.repeat(3) ? ch.repeat(3) : ch
+      const end = closingQuote(text, i + quote.length, quote)
+      // An unterminated literal has no comment after it — there is no "after".
+      i = end === -1 ? text.length : end + quote.length
+      continue
+    }
+    i += 1
+  }
+  return -1
 }
 
 /**

@@ -1,6 +1,13 @@
 import type { BlocksWorkspace } from '../../../../shared/blocks-doc'
 import type { ArgField, CallReceiver } from './registry'
-import { isSuiteHeader, logicalLines, tokenize, type LogicalLine, type Token } from './python-tokens'
+import {
+  isSuiteHeader,
+  logicalLines,
+  tokenize,
+  trailingCommentAt,
+  type LogicalLine,
+  type Token
+} from './python-tokens'
 
 /**
  * PYTHON → BLOCKS (#1019, epic #1007, phase 5).
@@ -734,6 +741,14 @@ class Converter {
    * because reading a call's arguments starts a parse inside a parse.
    */
   private source = ''
+  /**
+   * The `elif`/`else` nodes an `if` above them has already taken (#1068).
+   *
+   * Identity, not a text test: only the chain that consumed an arm knows it did,
+   * and guessing from the text is what lost an `else` whose `if` had a comment
+   * between them. Nodes are unique objects, so one set serves the whole tree.
+   */
+  private readonly consumed = new Set<Stmt>()
 
   /** A chain of statement blocks, or null for an empty suite. */
   statements(nodes: readonly Stmt[]): BlockJson | null {
@@ -773,14 +788,34 @@ class Converter {
       // `pass` exists only to fill an empty suite, and an empty suite in blocks
       // is an empty socket — so carrying it over would add a block that means
       // "nothing" and then generate `pass` a second time.
-      if (node.line.text === 'pass') {
+      //
+      // ONLY WHEN IT IS THE WHOLE BODY, though (#1068). Dropping it wherever it
+      // appeared lost a `pass` that was keeping company with real statements, or
+      // standing at the top level where no socket will put it back —
+      // `examples/hello_world.py` came back a line short. Every emitter writes
+      // `pass` for an empty body, so the one case this is for is still covered.
+      if (node.line.text === 'pass' && grouped.length === 1) {
         this.report.total += 1
         this.report.recognised += 1
         continue
       }
-      // `elif`/`else` are not statements: they belong to the `if` above them and
-      // were consumed by it.
-      if (/^(elif|else)\b/.test(node.line.text) && built.length > 0) continue
+      // `elif`/`else` are not statements: they belong to the `if` above them.
+      //
+      // ASKED, NOT ASSUMED (#1068). This used to skip any line STARTING with
+      // `elif` or `else` on the reasoning that `ifChain` must already have taken
+      // it — and `ifChain` stops scanning at the first sibling that is neither,
+      // which a comment at column zero between the arms is:
+      //
+      //     if x:          the `else:` was never consumed, was skipped anyway,
+      //         a()        and its whole body went with it — silently, and
+      //     # otherwise    counted as a success, because `statement()` (which
+      //     else:          does the counting) was never reached.
+      //         b()
+      //
+      // `while … else:` and `for … else:` are real Python and were losing their
+      // else the same way. An arm nobody claimed now falls through to the raw
+      // suite below and keeps its header and its body verbatim.
+      if (this.consumed.has(node)) continue
       for (const block of this.statement(node, nodes)) built.push({ block, line: node.line })
     }
     if (built.length === 0) return null
@@ -852,6 +887,21 @@ class Converter {
     const recognised = (blocks: BlockJson[]): BlockJson[] => {
       this.report.recognised += 1
       return blocks
+    }
+
+    // --- a line that carries a comment is that whole line (#1068) ----------
+    //
+    // `tokenize` stops at a trailing `#` and hands back the code alone, so every
+    // recogniser below used to match the line and drop the rest of it — `x = 5
+    // # how many times` came back as `x = 5`, and the module header three files
+    // over promises the exact opposite about comments.
+    //
+    // No block holds a statement AND a comment about it, so recognising one at
+    // all would mean choosing which half to keep. Raw keeps both, verbatim,
+    // which is what the escape hatches are for.
+    if (trailingCommentAt(text) >= 0) {
+      if (isSuiteHeader(text) && node.body.length > 0) return [this.rawSuite(node)]
+      return [this.raw(node.line)]
     }
 
     // --- imports ---------------------------------------------------------
@@ -1006,8 +1056,14 @@ class Converter {
       }
       return [this.raw(node.line)]
     }
-    const assign = /^([A-Za-z_]\w*)\s*=\s*(.+)$/.exec(text)
-    if (assign && !/[=<>!]=/.test(text.slice(0, text.indexOf('=')))) {
+    // `=(?!=)` IS THE WHOLE GUARD (#1068). This used to read the `=` and then
+    // check `text.slice(0, text.indexOf('='))` for a comparison operator — a
+    // slice that stops BEFORE the character it is looking for, so `x == 5` was
+    // read as assigning `= 5` to `x` and regenerated as `x = = 5`, which is not
+    // Python at all. `!=`, `<=` and `>=` never reached the guard: `\s*` cannot
+    // eat the `!`, `<` or `>`, so the pattern had already failed on them.
+    const assign = /^([A-Za-z_]\w*)\s*=(?!=)\s*(.+)$/.exec(text)
+    if (assign) {
       return recognised([
         {
           type: 'variables_set',
@@ -1042,11 +1098,13 @@ class Converter {
       const next = siblings[i]
       if (/^elif\s+.+:$/.test(next.line.text)) {
         arms.push(next)
+        this.consumed.add(next)
         i += 1
         continue
       }
       if (next.line.text === 'else:') {
         elseArm = next
+        this.consumed.add(next)
         i += 1
       }
       break
@@ -1383,9 +1441,24 @@ class Converter {
       tokens,
       at,
       ['*', '/', '%'],
-      (a, b, op): BlockJson =>
+      (a, b, op): BlockJson | null =>
         op === '%'
-          ? { type: 'math_modulo', inputs: { DIVIDEND: { block: a }, DIVISOR: { block: b } } }
+          ? // `%` ON A STRING IS FORMATTING, NOT MODULO (#1068).
+            //
+            // `"%.1f" % value` is the oldest way to format a number in Python
+            // and it is all over MicroPython examples — read as modulo it built
+            // a `math_modulo` with a `text` block in a socket that checks for
+            // Number, and `Blockly.serialization` THREW on the connection. The
+            // canvas caught that, cleared itself and blocked writes: an empty
+            // canvas beside a working program, which is exactly the failure the
+            // terminal-block fix was about. Two of the `.py` files this repo
+            // ships hit it.
+            //
+            // Declining takes the whole expression raw, where it regenerates
+            // verbatim and formats exactly as it always did.
+            isTextBlock(a) || isTextBlock(b)
+            ? null
+            : { type: 'math_modulo', inputs: { DIVIDEND: { block: a }, DIVISOR: { block: b } } }
           : {
               type: 'math_arithmetic',
               fields: { OP: op === '*' ? 'MULTIPLY' : 'DIVIDE' },
@@ -1422,15 +1495,25 @@ class Converter {
   /**
    * The shared left-associative loop every level above `power` is.
    *
-   * `operand` is the type both sockets of the block being built accept (#1071).
-   * A side that cannot fit refuses the whole expression rather than building a
-   * workspace Blockly will not load — see {@link fitsSocket}.
+   * TWO WAYS TO DECLINE, and they answer different questions.
+   *
+   * `build` may return NULL to decline the operator it was handed (#1068),
+   * which takes the whole expression raw. `%` is why: beside a string it is
+   * formatting, not modulo — see {@link parseMultiplicative}.
+   *
+   * `operand` is the type both sockets of the block being built accept
+   * (#1071). A side that cannot fit refuses the whole expression rather than
+   * building a workspace Blockly will not load — see {@link fitsSocket}.
+   *
+   * The first is about what the OPERATOR means; the second about what the
+   * OPERANDS are. Either one declining keeps the line raw, which regenerates
+   * it verbatim.
    */
   private binary(
     tokens: readonly Token[],
     at: number,
     operators: readonly string[],
-    build: (a: BlockJson, b: BlockJson, op: string) => BlockJson,
+    build: (a: BlockJson, b: BlockJson, op: string) => BlockJson | null,
     next: (tokens: readonly Token[], at: number) => { block: BlockJson; next: number } | null,
     operand?: SocketType
   ): { block: BlockJson; next: number } | null {
@@ -1442,10 +1525,14 @@ class Converter {
       if (tok.kind !== 'op' && tok.kind !== 'keyword') return left
       const right = next(tokens, left.next + 1)
       if (!right) return null
+      // The operands first: a side that cannot fit the socket is refused
+      // whatever the operator turns out to mean.
       if (operand && (!fitsSocket(left.block, operand) || !fitsSocket(right.block, operand))) {
         return null
       }
-      left = { block: build(left.block, right.block, tok.text), next: right.next }
+      const built = build(left.block, right.block, tok.text)
+      if (!built) return null
+      left = { block: built, next: right.next }
     }
   }
 
@@ -1483,8 +1570,15 @@ class Converter {
     }
 
     if (tok.kind === 'number') {
-      const n = Number(tok.text.replace(/_/g, ''))
+      const written = tok.text.replace(/_/g, '')
+      const n = Number(written)
       if (!Number.isFinite(n)) return null
+      // ONLY IF THE BLOCK CAN SAY IT BACK (#1068). Blockly's number field holds a
+      // number, not the text of one, so `0.0` came back `0` — an int where the
+      // learner wrote a float — and `0x1F` came back `31`. Both are silent
+      // rewrites of somebody's source. A literal whose written form does not
+      // survive the trip stays a raw value block, which regenerates it exactly.
+      if (String(n) !== written) return { block: this.rawValue(written), next: at + 1 }
       return { block: { type: 'math_number', fields: { NUM: n } }, next: at + 1 }
     }
 
@@ -1594,6 +1688,11 @@ function readCall(
     i += 1
   }
   return null
+}
+
+/** Is this block a text literal? `%` beside one is formatting, not modulo. */
+function isTextBlock(block: BlockJson): boolean {
+  return block.type === 'text'
 }
 
 /**

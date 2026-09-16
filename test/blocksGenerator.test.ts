@@ -736,3 +736,163 @@ describe('a block with no emitter is reported, not silently dropped (#1010)', ()
     expect(blocksWithoutEmitters(ws)).toEqual([])
   })
 })
+
+/**
+ * A NAME CANNOT BE TAKEN BACK (#1068).
+ * ---------------------------------------------------------------------------
+ *
+ * `ImportManager.boundNames()` is what stops a learner's variable called `time`
+ * replacing the module — and it could only ever report the imports declared SO
+ * FAR, while they keep arriving throughout the walk. A variable emitted above
+ * the block that needs `import time` was named before anything had asked for it,
+ * so it kept `time`, and the import section — which is hoisted to the top —
+ * then bound the module to a name the program immediately overwrote. The failure
+ * lands at the next `time.sleep`, a long way from the block that caused it.
+ *
+ * The generator makes two passes now: one to find out what the imports will
+ * bind, one to write the program with those names already spoken for.
+ */
+// The Blockly side, at module scope like the fixtures at the top of this file —
+// Blockly's definition table is global and re-registering warns every time.
+Blockly.defineBlocksWithJsonArray([
+  {
+    type: 'test_boom',
+    message0: 'boom',
+    previousStatement: null,
+    nextStatement: null
+  },
+  {
+    type: 'test_fine',
+    message0: 'fine',
+    previousStatement: null,
+    nextStatement: null
+  },
+  {
+    type: 'test_shadow_var',
+    message0: 'set %1 to 0',
+    args0: [{ type: 'field_input', name: 'NAME', text: 'x' }],
+    previousStatement: null,
+    nextStatement: null
+  },
+  {
+    type: 'test_needs_time',
+    message0: 'wait 1 second',
+    previousStatement: null,
+    nextStatement: null
+  }
+])
+
+describe('a variable cannot shadow a module imported below it (#1068)', () => {
+  beforeEach(() => {
+    resetBlockRegistry()
+    defineBlocks([
+      {
+        type: 'test_shadow_var',
+        category: 'variables',
+        code: (block, g) => `${g.variableName(`v_${block.id}`, block.getFieldValue('NAME'))} = 0\n`
+      },
+      {
+        type: 'test_needs_time',
+        category: 'wait',
+        imports: [{ module: 'time' }],
+        code: () => 'time.sleep(1)\n'
+      }
+    ])
+  })
+
+  it('renames the variable even when the import is declared below it', () => {
+    const program = gen({
+      blocks: {
+        languageVersion: 0,
+        blocks: [
+          {
+            ...b('test_shadow_var', 'a', { fields: { NAME: 'time' } }),
+            next: { block: b('test_needs_time', 'b') }
+          }
+        ]
+      }
+    })
+    expect(program.code).toBe(['import time', '', 'time_ = 0', 'time.sleep(1)', ''].join('\n'))
+  })
+
+  it('leaves the name alone when nothing imports that module', () => {
+    const program = gen({
+      blocks: { languageVersion: 0, blocks: [b('test_shadow_var', 'a', { fields: { NAME: 'time' } })] }
+    })
+    expect(program.code).toBe('time = 0\n')
+  })
+
+  it('is not order-dependent: the import above it renames it too', () => {
+    const program = gen({
+      blocks: {
+        languageVersion: 0,
+        blocks: [
+          {
+            ...b('test_needs_time', 'b'),
+            next: { block: b('test_shadow_var', 'a', { fields: { NAME: 'time' } }) }
+          }
+        ]
+      }
+    })
+    expect(program.code).toBe(['import time', '', 'time.sleep(1)', 'time_ = 0', ''].join('\n'))
+  })
+})
+
+/**
+ * A STACK THAT WOULD NOT GENERATE IS NOT IN THE PROGRAM (#1068).
+ * ---------------------------------------------------------------------------
+ *
+ * `missing` only ever knew about types with no registered emitter. An emitter
+ * that THREW for a type we do have left it empty — so `BlocksSplit`'s guard did
+ * not fire, and a program short of an entire stack (sometimes the empty string)
+ * was written over the learner's file. Blockly unwinds the whole chain from
+ * wherever the throw happened, so the blocks ABOVE the one that failed go too.
+ */
+describe('an emitter that throws is reported (#1068)', () => {
+  beforeEach(() => {
+    resetBlockRegistry()
+    defineBlocks([
+      {
+        type: 'test_boom',
+        category: 'control',
+        code: () => {
+          throw new Error('emitter blew up')
+        }
+      },
+      {
+        type: 'test_fine',
+        category: 'control',
+        code: () => 'print(1)\n'
+      }
+    ])
+  })
+
+  it('names the top block of the stack that failed', () => {
+    const program = gen({
+      blocks: { languageVersion: 0, blocks: [b('test_boom', 'boom')] }
+    })
+    expect(program.failed).toEqual(['boom'])
+    expect(program.missing).toEqual([])
+  })
+
+  it('reports it even though the code looks plausible', () => {
+    // The killer case: a stack whose first block generated fine, so what comes
+    // out is real Python — just not the learner's whole program.
+    const program = gen({
+      blocks: {
+        languageVersion: 0,
+        blocks: [
+          b('test_fine', 'a'),
+          { ...b('test_fine', 'b'), next: { block: b('test_boom', 'boom') } }
+        ]
+      }
+    })
+    expect(program.code).toBe('print(1)\n')
+    expect(program.failed).toEqual(['b'])
+  })
+
+  it('says nothing when every stack generated', () => {
+    const program = gen({ blocks: { languageVersion: 0, blocks: [b('test_fine', 'a')] } })
+    expect(program.failed).toEqual([])
+  })
+})
