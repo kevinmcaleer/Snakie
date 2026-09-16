@@ -33,8 +33,9 @@ every blocks lesson in the course.
 | **Bottom** | the console — what the program prints, and any errors |
 | **Far right** | the instruments — the turtle's drawing, a plotter, a multimeter |
 
-The **Blocks · Split · Python** control above the canvas changes which side is
-big. It does not convert anything; it is a pair of curtains.
+**The divider between them is the control.** Drag it all the way one way for
+blocks only, all the way the other for code only — and there is a **white dot**
+beneath it, halfway along, marking the stop where you get both.
 
 ### The two panes are the lesson
 
@@ -159,35 +160,39 @@ top of the window. A child cannot be expected to diagnose `ImportError`.
 
 ---
 
-## Graduating to Python
+## Moving to Python
 
-This is what the whole thing is for.
+There is no button for this, and that is deliberate. A button saying *you have
+learned enough now* cannot know that, and a child can press it in their first
+minute.
 
-**Graduate to Python** turns the blocks file into an ordinary `.py`. It is
-one-way — going back would mean turning Python into blocks, which Snakie does not
-do — so it is made *safe* instead of reversible: **the blocks are saved beside
-the file** as `name.blocks.py`, which opens on the canvas exactly as before.
+Instead, **both panes are editable**. The blocks write the Python; typing in the
+Python rewrites the blocks. They are two views of one program, so a learner
+drifts from dragging to typing at whatever pace they drift, and nothing marks
+the crossing.
 
-The moment is celebrated rather than warned about:
+What that means in a lesson:
 
-> **You wrote 47 lines of Python.**
+- a child who wants to change a number can change it in whichever pane they are
+  looking at;
+- a child who wants to write a line no block does can just write it;
+- nobody has to decide anything, or be told they are ready.
 
-That is true, and they can scroll up and check it. There is nothing to undo and
-nothing to be careful about, so the dialog does not pretend otherwise.
+Drag the divider towards the code as they lean that way. Most classes end up
+leaving it near the middle for a long time.
 
-Typing in the read-only Python pane asks the same question, which is the point:
-a learner reaching for the keyboard on that side has just told you they are
-ready.
+### What happens underneath
 
-### When to do it
+The `.py` file is the program. The blocks are remembered in a comment at the
+bottom so they reopen where they were left — but if that comment goes stale, or
+is missing entirely, Snakie works the blocks out from the code. Nothing is lost
+either way, which is why none of this needs a warning.
 
-There is no right lesson number. Some children ask in week one; some are happy
-for a term. Two signs worth watching for:
+### Signs it is happening
 
 - they start predicting the Python before looking at it;
-- they get annoyed that a block cannot do something they can describe.
-
-The last lesson of the **Blocks to Python** course is built for this moment.
+- they get annoyed that a block cannot do something they can describe;
+- they stop dragging the divider back.
 
 ---
 
@@ -201,11 +206,11 @@ The last lesson of the **Blocks to Python** course is built for this moment.
 4. **Draw a square** — the turtle, and 360 ÷ the number of sides
 5. **Read a sensor** — value blocks, and watching a number move
 6. **When the block you need doesn't exist yet** — the grey blocks, and a dice
-7. **The same program, in Python** — the handover
+7. **The same program, in Python** — typing in the other pane
 
 Each lesson opens with its program already assembled, because a beginner's first
 minute should be something that works and which they then take apart. The last
-one opens Python-first with the blocks peeking beside it.
+one opens with the divider at the code end and the blocks a sliver away.
 
 ---
 
@@ -235,8 +240,10 @@ browser at `app.snakie.org`.
 Snakie tutorial would teach them to type, with the same imports and the same
 library. That is the entire design.
 
-**Can they go back to blocks after graduating?** Not that file — but the blocks
-were saved beside it, so nothing is lost and they can keep both.
+**Can they go back to blocks after typing in the code?** Yes, always. The blocks
+follow the code — that is what makes the two panes two views rather than a source
+and a copy. Snakie can also work blocks out from a `.py` it never wrote, so a
+file from a lesson sheet or a web page opens in blocks like any other.
 
 **What if a file has blocks from a newer Snakie?** It refuses to open on the
 canvas rather than opening a version of it with pieces missing, and offers to

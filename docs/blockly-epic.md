@@ -89,8 +89,10 @@ The alternatives, and why they lose:
 | Next to Run/Stop | Run/Stop are **device** controls; view mode isn't. It also crowds the one cluster that has to stay unmissable for a beginner. |
 | In the tab strip | Exactly the confusion raised in the epic: some tabs blocks, some code, and a toggle that cannot honour itself on a `.py` that was never blocks. |
 
-**But the switcher does not convert anything**, because it can't — that's §1's
-asymmetry. So:
+**The workspace switcher does not convert anything** — but since #1034 the
+Blocks workspace will open ANY `.py` in the split, deriving the blocks from the
+code (#1019). The asymmetry in §1 is still real; what changed is that the
+conversion cannot fail, only be uglier, so there is nothing to refuse. So:
 
 - The **mode is a property of the file** (#1008), not of the app.
 - The Blocks workspace is a **layout**: files panel + block canvas + Python

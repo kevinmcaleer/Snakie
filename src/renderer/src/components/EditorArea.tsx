@@ -1,14 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { EditorTabs } from './EditorTabs'
-import {
-  BLOCKS_VIEW_EVENT,
-  FIND_EVENT,
-  GRADUATED_EVENT,
-  type BlocksViewDetail,
-  type GraduatedDetail
-} from './editorBridge'
-import { GraduationNotice } from './BlocksSplit'
-import { useGraduate } from '../lib/blocks/use-graduate'
+import { BLOCKS_VIEW_EVENT, FIND_EVENT, type BlocksViewDetail } from './editorBridge'
 import { ChatIcon } from './ui-icons'
 import { useWorkspace } from '../store/workspace'
 import { defaultBlocksViewMode, useWorkspaceLayout, type BlocksViewMode } from '../store/layout'
@@ -80,7 +72,17 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
   // The one router entry that is NOT an extension test (#1008): a blocks file is
   // a `.py` on purpose, so the fact comes from the footer, read once at open
   // time and carried on the file.
-  const showBlocks = activeFile?.isBlocks === true
+  /**
+   * Show the blocks split for this file?
+   *
+   * A file with a blocks footer, anywhere — that has been true since #1008. And
+   * (#1034) **any Python file at all, in the Blocks workspace**: the `.py` is the
+   * program and the blocks are a view of it, so pressing Blocks on a file Snakie
+   * did not write now shows you blocks rather than appearing to ignore you.
+   */
+  const showBlocks =
+    activeFile?.isBlocks === true ||
+    (layout.active === 'blocks' && /\.py$/i.test(activeFile?.name ?? ''))
 
   // The blocks emphasis is PER FILE, seeded from the workspace default (epic
   // #1007 §8 Q5): Blocks opens blocks-primary, Code opens Python-primary, and a
@@ -156,31 +158,6 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
     setPendingMode(null)
   }, [pendingMode, openFiles])
 
-  // The graduation celebration (#1016). It lives HERE, not in the split, because
-  // the moment a file graduates it stops being a blocks file and the split
-  // unmounts — a notice rendered inside it would appear and vanish in the same
-  // frame, at the milestone the whole epic is built around.
-  // The same implementation the split's own offers use (#1016).
-  const { graduate, error: graduateError, clearError } = useGraduate(activeId)
-
-  const [graduated, setGraduated] = useState<GraduatedDetail | null>(null)
-  useEffect(() => {
-    const handler = (e: Event): void => {
-      const detail = (e as CustomEvent<GraduatedDetail>).detail
-      if (detail) setGraduated(detail)
-    }
-    window.addEventListener(GRADUATED_EVENT, handler)
-    return () => window.removeEventListener(GRADUATED_EVENT, handler)
-  }, [])
-  // Opening ANOTHER file puts the moment behind them — but not the flicker of
-  // activity graduating itself causes: keeping the blocks opens a second buffer,
-  // which makes it active for an instant before the graduated file is put back
-  // in front. Clearing on any change at all would race that and swallow the
-  // celebration at the milestone the whole epic is built around.
-  useEffect(() => {
-    setGraduated((g) => (g && g.fileId !== activeId ? null : g))
-  }, [activeId])
-
   return (
     <section
       className="region region--editor"
@@ -189,40 +166,6 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
     >
       <div className="editor-header">
         <EditorTabs />
-        {showBlocks && (
-          <div className="editor-header__actions">
-            {/* The LOCAL mode control. It overrides the workspace emphasis for
-                this file; it lives here, beside Chat and Find, rather than in
-                the toolbar — the toolbar keeps exactly one global mode control
-                (the workspace switcher) and this is not it. */}
-            <div className="blocks-viewmode" role="group" aria-label="Blocks view">
-              {BLOCKS_VIEW_LABELS.map(({ id, label, hint }) => (
-                <button
-                  key={id}
-                  type="button"
-                  className={`blocks-viewmode__btn${blocksMode === id ? ' is-active' : ''}`}
-                  aria-pressed={blocksMode === id}
-                  title={hint}
-                  onClick={() => setBlocksMode(id)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            {/* THE DOOR (#1016). One command, where the per-file controls for
-                this document already are — not buried in a menu, because the
-                step it performs is the point of the whole feature. The blocks
-                are kept beside the file, so it needs no confirmation. */}
-            <button
-              type="button"
-              className="btn btn--sm"
-              onClick={graduate}
-              title="Keep the Python and put the blocks in a file beside it"
-            >
-              Graduate to Python
-            </button>
-          </div>
-        )}
         {(onToggleChat || (hasFiles && !showData && !showRobot && !showMpy && !showBlocks)) && (
           <div className="editor-header__actions">
             {/* Chat toggle — moved here from the console header (which was too
@@ -255,28 +198,6 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
           </div>
         )}
       </div>
-      {graduateError && (
-        <div className="editor-graduate-error" role="alert">
-          Couldn&rsquo;t keep the blocks, so nothing was changed: {graduateError}
-          <button type="button" className="btn btn--sm btn--ghost" onClick={clearError}>
-            Dismiss
-          </button>
-        </div>
-      )}
-      {graduated && (
-        <GraduationNotice
-          detail={graduated}
-          onDismiss={() => setGraduated(null)}
-          onOpenInCode={
-            layout.active === 'code'
-              ? undefined
-              : () => {
-                  layout.switchWorkspace('code')
-                  setGraduated(null)
-                }
-          }
-        />
-      )}
       <div className="region__body region__body--editor">
         {!hasFiles ? (
           // In the Blocks workspace an empty editor is an opportunity, not a
@@ -316,13 +237,6 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
     </section>
   )
 }
-
-/** The three emphases, in the order the header shows them. */
-const BLOCKS_VIEW_LABELS: readonly { id: BlocksViewMode; label: string; hint: string }[] = [
-  { id: 'blocks', label: 'Blocks', hint: 'Make the block canvas the big one' },
-  { id: 'split', label: 'Split', hint: 'Blocks and Python, half and half' },
-  { id: 'python', label: 'Python', hint: 'Make the Python the big one' }
-]
 
 function EditorPlaceholder({ text }: { text: string }): JSX.Element {
   return (

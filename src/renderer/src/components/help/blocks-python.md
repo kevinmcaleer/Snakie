@@ -20,6 +20,9 @@ sensor.temperature()  # a value block, plugged into `say [ ]`
 Click into one and you get a real code editor, with the same autocomplete the
 main editor has: type `machine.` and the list appears.
 
+You can also just type in the **Python pane** beside the canvas — it is an
+editor, not a read-only copy, and what you write there turns back into blocks.
+
 **One line per block.** That is not a limit, it is the shape: each block owns one
 line, so hovering it lights up that line in the Python beside you, and an error
 on that line badges that block. Code that needs indenting goes *inside* a

@@ -10,39 +10,43 @@ import {
   readDocTheme,
   readEditorTheme
 } from './monaco-theme'
-import './PythonMirror.css'
+import './PythonPane.css'
 
 /**
- * THE PYTHON MIRROR (#1010, epic #1007).
+ * THE PYTHON PANE (#1010, made two-way by #1034).
  * =============================================================================
  *
- * The Python half of the blocks split: the code the blocks wrote, beside the
- * blocks that wrote it, regenerated on every change. This is the teaching
- * mechanism of the whole epic — a learner who watches the text grow as they drag
- * is already reading it, and the step to Monaco is a step across rather than off
- * a cliff.
+ * The code half of the blocks split: the Python beside the blocks, in the same
+ * font and the same colours as the editor, because "the same as the editor" is
+ * the point — moving between them should change which pane is big, not what the
+ * code looks like.
  *
- * WHY MONACO, for a pane nobody can type in. Because "the same theme and font as
- * the editor" is the point: the graduation moment (#1016) should change which
- * pane is big, not what the code looks like. Monaco gives that for free, in
- * every editor colour theme the user might have picked, with real Python
- * tokenisation — and it gives #1015 and #1016 the decorations API to highlight
- * the line a traceback names and the lines a hovered block owns. The chunk is
- * shared with the editor, so a blocks file costs the download once.
+ * IT USED TO BE A MIRROR, and read-only, because blocks were the source of
+ * truth and code was derived. #1034 inverts that: **the `.py` is the program**,
+ * and blocks and text are two views of it. So this is an editor, and typing in
+ * it is not an accident to be answered with a modal — it is the other way of
+ * writing the same program.
  *
- * A MIRROR, NOT A SECOND EDITOR. The blocks are the source of truth, so this is
- * read-only. But read-only as an AFFORDANCE, not a locked box: Monaco swallows
- * keystrokes in a read-only model and shows nothing, which is the worst answer a
- * teaching tool can give — "I pressed a key and the computer ignored me". So the
- * attempt is CAUGHT and answered with the graduation offer, turning the
- * commonest accident in a split view into the milestone the epic is built
- * around.
+ * What makes that safe is #1019: converting code back into blocks cannot fail,
+ * only be uglier, because a line nobody can classify becomes a raw Python block
+ * holding that exact line. There is no door between the two halves, so there is
+ * nothing to warn anybody about.
+ *
+ * THE ONE PIECE OF BOOKKEEPING that matters here: an edit the CALLER pushed in
+ * must not come back out as an edit the user made. Monaco fires its change
+ * event for `setValue` exactly as it does for typing, and without the guard
+ * below a block dragged on the canvas would regenerate the code, push it here,
+ * read it back as a code edit, and re-convert it to blocks — a loop with the
+ * learner's program inside it.
  */
-export interface PythonMirrorProps {
-  /** The generated MicroPython, footer already stripped. */
+export interface PythonPaneProps {
+  /** The program's MicroPython, footer already stripped. */
   code: string
-  /** The user tried to type here — the caller offers to graduate the file. */
-  onEditAttempt?: () => void
+  /**
+   * The user typed. The caller converts it back into blocks (#1019) — debounced,
+   * because every keystroke is a change and a program is not.
+   */
+  onCodeChange?: (code: string) => void
   /**
    * Lines to mark, 1-based — the lines the hovered or selected block wrote
    * (#1016). Empty means no decorations.
@@ -65,24 +69,26 @@ export interface PythonMirrorProps {
   revealLine?: number | null
 }
 
-export function PythonMirror({
+export function PythonPane({
   code,
-  onEditAttempt,
+  onCodeChange,
   highlightLines,
   onLineClick,
   revealLine
-}: PythonMirrorProps): JSX.Element {
+}: PythonPaneProps): JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const decorationsRef = useRef<monaco.editor.IEditorDecorationsCollection | null>(null)
-  const onEditAttemptRef = useRef(onEditAttempt)
-  onEditAttemptRef.current = onEditAttempt
+  const onCodeChangeRef = useRef(onCodeChange)
+  onCodeChangeRef.current = onCodeChange
+  /** True while the caller's own text is being pushed in — see the header. */
+  const pushingRef = useRef(false)
   const onLineClickRef = useRef(onLineClick)
   onLineClickRef.current = onLineClick
 
   // Create once. The model is ours alone — deliberately NOT one of the editor's
-  // per-file models, because sharing one would give the mirror the editor's undo
-  // history and let a read-only pane's view state fight the real editor's.
+  // per-file models, because sharing one would give this pane the editor's undo
+  // history, and typing here would then be undoable from the other tab.
   useEffect(() => {
     const host = hostRef.current
     if (!host) return
@@ -92,20 +98,15 @@ export function PythonMirror({
       value: '',
       language: 'python',
       theme: monacoTheme(skin, readEditorTheme()),
-      readOnly: true,
-      // Monaco's own read-only tooltip says "Cannot edit in read-only editor",
-      // which is true and useless. We answer the attempt properly instead.
-      readOnlyMessage: { value: 'The blocks write this code — press a key to graduate to Python.' },
+      readOnly: false,
       automaticLayout: true,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
       lineNumbersMinChars: 3,
       folding: false,
-      // Nothing here is editable, so every editing affordance is noise that
-      // invites a click that can't do anything.
-      contextmenu: false,
+      contextmenu: true,
       occurrencesHighlight: 'off',
-      renderLineHighlight: 'none',
+      renderLineHighlight: 'line',
       scrollbar: { vertical: 'auto', horizontal: 'auto' },
       wordWrap: 'off',
       ...editorMetricsFor(skin, ruleSpacing())
@@ -113,14 +114,11 @@ export function PythonMirror({
     editorRef.current = editor
     decorationsRef.current = editor.createDecorationsCollection()
 
-    // A read-only Monaco still receives keystrokes; it just does nothing with
-    // them. Catch the ones that LOOK like typing and answer them.
-    const keys = editor.onKeyDown((e) => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return // let copy, find, navigation through
-      if (!isTypingKey(e.browserEvent.key)) return
-      e.preventDefault()
-      e.stopPropagation()
-      onEditAttemptRef.current?.()
+    // The user typed. Anything the CALLER pushed in is skipped, or a block
+    // dragged on the canvas would loop back round through here.
+    const keys = editor.onDidChangeModelContent(() => {
+      if (pushingRef.current) return
+      onCodeChangeRef.current?.(editor.getValue())
     })
 
     // Clicking a line asks "which block wrote this?" (#1016). Monaco's own
@@ -146,11 +144,18 @@ export function PythonMirror({
   useEffect(() => {
     const editor = editorRef.current
     if (!editor) return
-    if (editor.getValue() !== code) editor.setValue(code)
+    if (editor.getValue() === code) return
+    // Guarded: `setValue` fires the change event exactly as typing does.
+    pushingRef.current = true
+    try {
+      editor.setValue(code)
+    } finally {
+      pushingRef.current = false
+    }
   }, [code])
 
   // Follow the app's skin and the user's editor colour theme, the same way the
-  // real editor does — the mirror and the editor must never be different colours.
+  // real editor does — the two must never be different colours.
   useEffect(() => {
     const apply = (): void => {
       const skin = readDocTheme()
@@ -183,51 +188,36 @@ export function PythonMirror({
     collection.set(
       (highlightLines ?? []).map((line) => ({
         range: new monaco.Range(line, 1, line, 1),
-        options: { isWholeLine: true, className: 'pymirror__hit' }
+        options: { isWholeLine: true, className: 'python-pane__hit' }
       }))
     )
   }, [highlightLines])
 
   return (
-    <div className="pymirror">
-      <div className="pymirror__header">
-        <span className="pymirror__title">Python</span>
-        <span
-          className="pymirror__badge"
-          title="The blocks write this — edit the blocks to change it"
-        >
-          read-only
-        </span>
+    <div className="python-pane">
+      <div className="python-pane__header">
+        <span className="python-pane__title">Python</span>
         {/* The link is invisible until you try it, so say it once. This is the
             teaching mechanism of the whole epic and it should not be a secret. */}
         {onLineClick && (
-          <span className="pymirror__hint">click a line to find its block</span>
+          <span className="python-pane__hint">click a line to find its block</span>
         )}
       </div>
       {code === '' && (
-        <p className="pymirror__empty">Drag a block onto the canvas and its Python appears here.</p>
+        <p className="python-pane__empty">
+          Drag a block onto the canvas, or start typing here — they are the same program.
+        </p>
       )}
-      <div className="pymirror__body" ref={hostRef} data-testid="python-mirror-host" />
+      <div className="python-pane__body" ref={hostRef} data-testid="python-pane-host" />
     </div>
   )
-}
-
-/**
- * Does this key mean "I am trying to write in here"?
- *
- * Single characters plus the three that delete or split a line. Arrows, Tab,
- * Escape and the function keys are navigation, and answering those with a modal
- * would make the pane unreadable with a keyboard (epic #188).
- */
-function isTypingKey(key: string): boolean {
-  return key.length === 1 || key === 'Backspace' || key === 'Delete' || key === 'Enter'
 }
 
 /**
  * The ruled-paper line spacing the app is currently set to, in px.
  *
  * Read from the CSS custom property rather than the settings store: the store is
- * a React context the mirror would otherwise have to be inside, and the property
+ * a React context this pane would otherwise have to be inside, and the property
  * is what the paper gradient itself uses — so the text lands on the lines.
  */
 function ruleSpacing(): number {
@@ -238,4 +228,4 @@ function ruleSpacing(): number {
   return Number.isFinite(px) && px > 0 ? px : 30
 }
 
-export default PythonMirror
+export default PythonPane

@@ -212,3 +212,70 @@
 .blocks-split__graduated .blocks-split__actions {
   margin-top: 0.7rem;
 }
+
+/*
+ * THE MIDDLE STOP (#1034).
+ *
+ * The divider is the control, and its two ends announce themselves — you can
+ * see the pane you are about to close. Nothing announces the stop in between,
+ * so a learner drags the divider once, goes all the way across, and never finds
+ * the split the whole epic is built around.
+ *
+ * One dot, beneath and between the two panes, sitting on the stop it marks. It
+ * is quiet until the divider comes near it and then brightens, which is the
+ * whole of the affordance: a place the divider wants to go.
+ */
+.blocks-split__detent {
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0.28;
+  pointer-events: none;
+  /* Above the panes, which paint their own backgrounds. */
+  z-index: 3;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.blocks-split__detent.is-near {
+  opacity: 0.9;
+  transform: scale(1.5);
+}
+
+/*
+ * THE DIVIDER IS THE CONTROL (#1034), so it has to be grabbable.
+ *
+ * Everywhere else in the app a resize handle is a 1px line you can find if you
+ * look. Here it is the only way between blocks and code, and at a stop it sits
+ * flush against the edge of the pane group — where a 1px target is half
+ * off-screen and effectively unclickable. So it gets a real width, with the
+ * line drawn down the middle of it, and the extra width is hit area.
+ */
+.blocks-split__divider {
+  position: relative;
+  width: 11px;
+  background: transparent;
+  flex-shrink: 0;
+}
+
+.blocks-split__divider::after {
+  content: '';
+  position: absolute;
+  inset: 0 5px;
+  background: var(--line);
+}
+
+.blocks-split__divider:hover::after,
+.blocks-split__divider[data-resize-handle-active]::after {
+  background: var(--gold);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blocks-split__detent {
+    transition: none;
+  }
+}

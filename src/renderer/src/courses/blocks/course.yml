@@ -271,5 +271,5 @@ lessons:
   view: blocks
   viewMode: python
   blocks: *id001
-  tip: Press **Graduate to Python** — your blocks are kept beside the file, so nothing is
-    lost.
+  tip: Drag the divider between the panes — the white dot halfway along is the stop where
+    you get both.

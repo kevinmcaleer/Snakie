@@ -1,7 +1,7 @@
 /* The Python half of the blocks split (#1009 geometry, #1010 contents). Reads as
    the editor's own paper, because it IS the editor's theme — the graduation
    moment should change which pane is big, not what the code looks like. */
-.pymirror {
+.python-pane {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -10,7 +10,7 @@
   background: var(--editor);
 }
 
-.pymirror__header {
+.python-pane__header {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
@@ -20,7 +20,7 @@
   background: var(--panel);
 }
 
-.pymirror__title {
+.python-pane__title {
   color: var(--txt2);
   font-family: var(--font-ui);
   font-size: 11px;
@@ -29,18 +29,7 @@
   text-transform: uppercase;
 }
 
-/* Says why you can't type here before you try, which is the whole reason the
-   badge exists rather than just a blocked keystroke. */
-.pymirror__badge {
-  padding: 1px 6px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  color: var(--txt4);
-  font-family: var(--font-ui);
-  font-size: 10px;
-}
-
-.pymirror__body {
+.python-pane__body {
   flex: 1 1 auto;
   min-height: 0;
 }
@@ -48,7 +37,7 @@
 /* Sits OVER the empty editor rather than replacing it: Monaco is mounted from
    the first frame either way, so the first generated line appears where the
    prompt was instead of the pane rebuilding itself underneath the learner. */
-.pymirror__empty {
+.python-pane__empty {
   position: absolute;
   z-index: 1;
   right: 12px;
@@ -63,14 +52,14 @@
 
 /* The decoration seam #1015 (the line a traceback named) and #1016 (the lines a
    hovered block owns) both paint through. */
-.pymirror__hit {
+.python-pane__hit {
   background: color-mix(in srgb, var(--gold) 22%, transparent);
   box-shadow: inset 2px 0 0 var(--gold);
 }
 
 /* The link is invisible until you try it, so the header says it once (#1016).
    Quiet enough to ignore, present enough to answer "can I click this?". */
-.pymirror__hint {
+.python-pane__hint {
   margin-left: auto;
   color: var(--txt4);
   font-family: var(--font-ui);
@@ -79,6 +68,6 @@
 }
 
 /* Clicking a line asks which block wrote it, so the text should look clickable. */
-.pymirror__body .view-line {
+.python-pane__body .view-line {
   cursor: pointer;
 }
