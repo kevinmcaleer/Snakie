@@ -396,6 +396,11 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
         highlightLines={linkedLines}
         onLineClick={handleLineClick}
         revealLine={revealLine}
+        // Both of the pane's invitations are about the canvas next to it, and in
+        // the code-only view there is no canvas to point at (#1062). `split` is
+        // exactly "both panes on screen" — `modeForRatio` calls any ratio with
+        // two open panes that, not only the halfway one.
+        linked={mode === 'split'}
       />
     </Suspense>
   )

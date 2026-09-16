@@ -252,6 +252,19 @@ export function buildSoftShellTheme(tokens: ThemeTokens): SoftShellThemeSpec {
     }
   }
 
+  // COMMENTS ARE NOT CODE (#1062), so they do not wear the Python category's
+  // colour — which, awkwardly, is already the COMMENT token, so "paint comments
+  // the comment colour" would have made them identical to the raw-Python blocks
+  // they sit among. A thirty-line header rendered at the weight of the program
+  // dominates the canvas — the "wall of comments" the issue reported — and the
+  // fix is the one every editor already made: let a note RECEDE.
+  //
+  // So: the comment colour with the COLOUR TAKEN OUT. Soft Shell is a warm
+  // palette, so anything mixed within it stays warm and reads as another kind
+  // of code; a true neutral is the only thing on this canvas that is not trying
+  // to be a category, which is exactly what a comment is.
+  blockStyles.comment_blocks = shades(greyOf(tokens.com))
+
   // The stock names, pointed at the same colours as the categories they map to.
   for (const [stockStyle, category] of Object.entries(STOCK_STYLE_ALIASES)) {
     const entry = BLOCK_CATEGORIES.find((c) => c.id === category)
@@ -339,6 +352,24 @@ export function softShellWorkspaceOptions(tokens: ThemeTokens): Partial<BlocklyO
  * and a silent misparse of some other notation would produce a plausible-looking
  * wrong colour rather than an obvious failure. Anything else comes back as `a`.
  */
+/**
+ * The same brightness, with the colour taken out (#1062).
+ *
+ * Rec. 601 luma, which is the weighting that matches how the eye reads
+ * brightness — a naive average of the channels turns a mid green noticeably
+ * darker than the mid red beside it, and the whole point here is that the grey
+ * should sit at the same visual depth as the token it came from.
+ *
+ * Anything that is not a 6-digit hex comes back unchanged, like {@link mixHex}.
+ */
+export function greyOf(colour: string): string {
+  const c = parseHex(colour)
+  if (!c) return colour
+  const y = Math.round(0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2])
+  const h = Math.min(255, Math.max(0, y)).toString(16).padStart(2, '0')
+  return `#${h}${h}${h}`
+}
+
 export function mixHex(a: string, b: string, t: number): string {
   const ca = parseHex(a)
   const cb = parseHex(b)

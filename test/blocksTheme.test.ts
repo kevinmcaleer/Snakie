@@ -4,6 +4,7 @@ import {
   FALLBACK_TOKENS,
   buildSoftShellTheme,
   categoryStyleName,
+  greyOf,
   mixHex,
   readThemeTokens,
   softShellWorkspaceOptions
@@ -97,5 +98,37 @@ describe('softShellWorkspaceOptions (#1009)', () => {
     expect(o.sounds).toBe(false)
     expect(o.trashcan).toBe(true)
     expect(o.zoom?.controls).toBe(true)
+  })
+})
+
+describe('comments recede (#1062)', () => {
+  it('greyOf keeps the brightness and drops the colour', () => {
+    // Rec. 601 luma, not a channel average: a naive mean turns a mid green
+    // darker than the mid red beside it, and the grey has to sit at the same
+    // visual depth as the token it came from.
+    expect(greyOf('#a39877')).toBe('#989898')
+    expect(greyOf('#6f7a63')).toBe('#747474')
+    expect(greyOf('#ffffff')).toBe('#ffffff')
+    expect(greyOf('#000000')).toBe('#000000')
+  })
+
+  it('leaves anything that is not a 6-digit hex alone', () => {
+    expect(greyOf('rebeccapurple')).toBe('rebeccapurple')
+    expect(greyOf('#abc')).toBe('#abc')
+  })
+
+  it('gives the comment block a style of its own, not the Python one', () => {
+    // The Python category already wears the COMMENT token, so painting comments
+    // "the comment colour" would have made them identical to the raw-Python
+    // blocks they sit among.
+    const theme = buildSoftShellTheme(FALLBACK_TOKENS)
+    expect(theme.blockStyles.comment_blocks).toBeDefined()
+    expect(theme.blockStyles.comment_blocks.colourPrimary).not.toBe(
+      theme.blockStyles.python_blocks.colourPrimary
+    )
+    // …and it is a true neutral: all three channels equal.
+    const [, r, g, b] = /^#(..)(..)(..)$/.exec(theme.blockStyles.comment_blocks.colourPrimary)!
+    expect(r).toBe(g)
+    expect(g).toBe(b)
   })
 })

@@ -6,6 +6,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Comments are grey, and they are quiet** (#1062). #1062's folding made a
+  file's header one block instead of thirty, but it still rendered as thirty
+  bordered text inputs — a wall with one outline round it. Comment blocks now
+  have a style of their own: plain mono text rather than input boxes, in a true
+  neutral grey. (The Python category already wears the *comment* token, so
+  "paint comments the comment colour" would have made them identical to the
+  raw-Python blocks they sit among; the grey is that token with the colour taken
+  out, at the same brightness.) The lines are still verbatim, so an aligned
+  ASCII table still lines up. Comments are edited in the code pane.
+
+- **The code pane says MICROPYTHON.** That is what the generator writes, and a
+  learner graduating from that pane is graduating to the language named on it.
+  The narrow layout's tab keeps the short word, where the long one doesn't fit.
+
+### Fixed
+
+- **The code-only view no longer invites you to use a canvas that isn't there**
+  (#1062). *"click a line to find its block"* and *"drag a block onto the canvas"*
+  are both about the other half of the split, and both were showing with the
+  canvas closed. They now appear only when the blocks are actually beside the
+  code; the link itself still works.
+
+- **Roots no longer sit a screen apart.** #1062's height estimate counted every
+  *value* socket's contents as vertical height — a comparison inside an `if`
+  added three rows that are not on screen — so it reserved 1312px for a root
+  that renders 559. Only a statement body adds height now.
+
 ### Fixed
 
 - **Opening a real module no longer loses most of it** (#1063, epic #1007).

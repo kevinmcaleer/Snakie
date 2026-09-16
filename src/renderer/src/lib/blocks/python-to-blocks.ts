@@ -234,26 +234,29 @@ function blockHeight(block: BlockJson): number {
   // folding, and the case that would break a per-block estimate worst.
   const lines = (block.extraState as { lines?: unknown[] } | undefined)?.lines
   let total = Array.isArray(lines) && lines.length > 0 ? lines.length * ROW_HEIGHT : ROW_HEIGHT
-  for (const input of Object.values(block.inputs ?? {})) {
-    const inner = input.block
+  for (const [name, input] of Object.entries(block.inputs ?? {})) {
     // A VALUE socket sits on the row that is already counted; only a STATEMENT
     // body adds height, and it brings the arm under the mouth with it.
-    if (inner && isStatementBody(inner)) total += chainHeight(inner) + MOUTH_BOTTOM
+    if (input.block && isStatementBody(name)) total += chainHeight(input.block) + MOUTH_BOTTOM
   }
   return total
 }
 
 /**
- * Does this block sit in a statement socket rather than a value one?
+ * Is this input a statement BODY — something that adds height — rather than a
+ * value socket, which sits on a row already counted?
  *
- * Read off the block itself rather than the input name, because the converter
- * writes several body inputs (`DO`, `ELSE`, `STACK`…) and a rule could add
- * another. A block with a `next` chain is certainly a statement; a lone one is
- * decided by its type, and the raw value block is the only shape that can be
- * confused for one.
+ * Read off the INPUT NAME, and these are all of them: the converter writes
+ * exactly `DO`, `DO0…DOn`, `ELSE` and `STACK`, and nothing else opens a mouth.
+ *
+ * Sniffing the block instead, which is what this did first, counted every value
+ * socket's contents as vertical height — a comparison inside an `if` added
+ * three rows that are not there. On the module in #1062 that reserved 1312px
+ * for a root which renders 559, so the roots were laid out correct but a screen
+ * apart. Measured against the real canvas; see the comment above.
  */
-function isStatementBody(block: BlockJson): boolean {
-  return block.next !== undefined || block.type !== 'snakie_python_value'
+function isStatementBody(input: string): boolean {
+  return input === 'ELSE' || input === 'STACK' || /^DO\d*$/.test(input)
 }
 
 /**
