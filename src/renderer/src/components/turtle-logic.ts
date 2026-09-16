@@ -201,27 +201,86 @@ export function isTurtleState(v: unknown): v is TurtleState {
  */
 export const DEFAULT_TURTLE_SPEED = 6
 
-/** How long ONE movement takes at {@link DEFAULT_TURTLE_SPEED} (ms). */
-export const TURTLE_STEP_MS_AT_DEFAULT = 1000
+/** How long ONE movement takes at the SLOWEST speed, `1` (ms). */
+export const TURTLE_SLOWEST_STEP_MS = 1000
+
+/** How long one takes at the fastest ANIMATED speed, `10` (ms). */
+export const TURTLE_FASTEST_STEP_MS = 100
 
 /**
  * How long one movement takes, in ms, at `speed`.
  *
- * A HALVING CURVE: every two steps up doubles the pace, so the dial spans
- * something worth spanning rather than the narrow band a linear mapping gives.
- * Anchored so the DEFAULT is exactly one second, which is the pace a class can
- * actually follow a square at:
+ * ONE DECADE ACROSS THE DIAL (#1059): a second at the slow end, a tenth of a
+ * second at the fast end, geometric in between — so each notch is the same
+ * proportional change and the dial's middle is its geometric middle rather
+ * than a crawl:
  *
- *   1 → 5657ms   2 → 4000ms   4 → 2000ms   6 → 1000ms   8 → 500ms   10 → 250ms
+ *   1 → 1000ms   2 → 774ms   4 → 464ms   6 → 278ms   8 → 167ms   10 → 100ms
+ *
+ * WHY THE WHOLE RANGE MOVED. It used to start at 5.7 seconds a move and halve
+ * every two notches, anchored so the DEFAULT was one second. Five and a half
+ * seconds to draw one side of a square is not a pace anyone watches, so the
+ * slow end was a third of the dial nobody could use. One second is the slowest
+ * thing worth having, and it is now where the dial STARTS — which does mean the
+ * default (`6`, CPython `turtle`'s "normal") is a brisk 278ms rather than the
+ * second it used to be.
  *
  * `0` is CPython `turtle`'s "fastest", which means **no animation at all** —
- * the escape hatch for a drawing too long to sit through.
+ * the escape hatch for a drawing too long to sit through. It is not part of
+ * this curve and, on the dial, it is not at the slow end either: see
+ * {@link turtleSpeedForSlider}.
  */
 export function turtleStepMs(speed: number): number {
-  if (!Number.isFinite(speed)) return TURTLE_STEP_MS_AT_DEFAULT
+  if (!Number.isFinite(speed)) return TURTLE_SLOWEST_STEP_MS
   const clamped = Math.max(0, Math.min(10, Math.round(speed)))
   if (clamped === 0) return 0
-  return TURTLE_STEP_MS_AT_DEFAULT * Math.pow(2, (DEFAULT_TURTLE_SPEED - clamped) / 2)
+  const decades = (clamped - 1) / 9
+  return TURTLE_SLOWEST_STEP_MS * Math.pow(TURTLE_FASTEST_STEP_MS / TURTLE_SLOWEST_STEP_MS, decades)
+}
+
+/**
+ * THE DIAL IS NOT THE API (#1059).
+ *
+ * `turtle.speed()` numbers them 1 (slowest) to 10 (fastest) and then gives
+ * **0** the special meaning "fastest of all, don't animate". That is fine as an
+ * API and wrong as a slider: sorted numerically, `0` sits at the far LEFT, so
+ * the control read *instant, slowest, …, fastest* and the one setting that
+ * skips the animation was parked at the slow end.
+ *
+ * So the slider has its own scale — eleven positions, left to right, slow to
+ * fast — and these two functions are the only place the two meet. The generated
+ * Python still says `turtle.speed(6)`; nothing about the API moves.
+ *
+ *   position  0  1  2  3  4  5  6  7  8  9  10
+ *   speed     1  2  3  4  5  6  7  8  9 10   0   ← instant, at the FAST end
+ */
+export const TURTLE_SLIDER_MAX = 10
+
+/** The `turtle.speed()` value a slider position means. */
+export function turtleSpeedForSlider(position: number): number {
+  if (!Number.isFinite(position)) return DEFAULT_TURTLE_SPEED
+  const clamped = Math.max(0, Math.min(TURTLE_SLIDER_MAX, Math.round(position)))
+  return clamped === TURTLE_SLIDER_MAX ? 0 : clamped + 1
+}
+
+/** Where a `turtle.speed()` value sits on the slider. */
+export function turtleSliderForSpeed(speed: number): number {
+  if (!Number.isFinite(speed)) return DEFAULT_TURTLE_SPEED - 1
+  const clamped = Math.max(0, Math.min(10, Math.round(speed)))
+  return clamped === 0 ? TURTLE_SLIDER_MAX : clamped - 1
+}
+
+/**
+ * What the readout beside the slider says.
+ *
+ * Milliseconds under a second, because `0.3s` for a quarter-second step is both
+ * wrong and the same string as the notch either side of it — the fast half of
+ * the dial would read as four identical settings.
+ */
+export function turtleSpeedLabel(speed: number): string {
+  const ms = turtleStepMs(speed)
+  if (ms === 0) return 'INSTANT'
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms)}ms`
 }
 
 /**

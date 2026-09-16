@@ -6,6 +6,10 @@ import {
   playTurtleStep,
   splitBacklog,
   TURTLE_BACKLOG_CAP,
+  TURTLE_SLIDER_MAX,
+  turtleSliderForSpeed,
+  turtleSpeedForSlider,
+  turtleSpeedLabel,
   turtleStepMs
 } from '../src/renderer/src/components/turtle-logic'
 import { parseTelemetry } from '../src/renderer/src/components/instrument-telemetry'
@@ -34,19 +38,32 @@ const line = (x2: number): TurtleTelemetry => ({
   width: 2
 })
 
-describe('the speed curve (#1046)', () => {
-  it('the default is one second a movement', () => {
-    // The number the whole curve is anchored to: the pace a class can follow a
-    // square at.
-    expect(turtleStepMs(DEFAULT_TURTLE_SPEED)).toBe(1000)
-    expect(DEFAULT_TURTLE_SPEED).toBe(6)
+describe('the speed curve (#1046, re-scaled by #1059)', () => {
+  it('runs one second to a tenth of a second, end to end', () => {
+    // The two numbers the curve is pinned to. It used to START at 5.7 seconds
+    // a movement — not a pace anyone watches, so a third of the dial was
+    // unusable. One second is the slowest thing worth having.
+    expect(turtleStepMs(1)).toBe(1000)
+    expect(turtleStepMs(10)).toBe(100)
   })
 
-  it('halves every two steps up', () => {
-    expect(Math.round(turtleStepMs(4))).toBe(2000)
-    expect(Math.round(turtleStepMs(8))).toBe(500)
-    expect(Math.round(turtleStepMs(10))).toBe(250)
-    expect(Math.round(turtleStepMs(2))).toBe(4000)
+  it('is geometric, so every notch is the same proportional change', () => {
+    expect(Math.round(turtleStepMs(4))).toBe(464)
+    expect(Math.round(turtleStepMs(7))).toBe(215)
+    // Equal ratios, not equal differences: the middle of the dial is the
+    // geometric middle rather than a crawl.
+    const step = turtleStepMs(2) / turtleStepMs(1)
+    for (let s = 1; s < 10; s++) {
+      expect(turtleStepMs(s + 1) / turtleStepMs(s)).toBeCloseTo(step, 6)
+    }
+  })
+
+  it('leaves the default a brisk one, not a slow one', () => {
+    // 6 is still CPython turtle's "normal" and still what `turtle.py` starts
+    // at — but on the new scale that is 278ms, not the second it used to be.
+    // Compressing the range is the point of #1059; this is what it costs.
+    expect(DEFAULT_TURTLE_SPEED).toBe(6)
+    expect(Math.round(turtleStepMs(DEFAULT_TURTLE_SPEED))).toBe(278)
   })
 
   it('is monotonic — higher is always faster', () => {
@@ -62,6 +79,54 @@ describe('the speed curve (#1046)', () => {
     expect(turtleStepMs(99)).toBe(turtleStepMs(10))
     expect(turtleStepMs(-5)).toBe(0)
     expect(turtleStepMs(Number.NaN)).toBe(1000)
+  })
+})
+
+describe('the dial is not the API (#1059)', () => {
+  it('runs slow to fast, left to right, with instant at the far right', () => {
+    // THE BUG: `speed(0)` means "instant", so a slider bound straight to the
+    // API value sorted 0 to the far LEFT — the control read *instant,
+    // slowest, …, fastest*, with the one setting that skips the animation
+    // parked at the slow end.
+    expect(turtleSpeedForSlider(0)).toBe(1)
+    expect(turtleSpeedForSlider(TURTLE_SLIDER_MAX)).toBe(0)
+    const paces = Array.from({ length: TURTLE_SLIDER_MAX + 1 }, (_, pos) =>
+      turtleStepMs(turtleSpeedForSlider(pos))
+    )
+    for (let i = 0; i < paces.length - 1; i++) expect(paces[i + 1]).toBeLessThan(paces[i])
+    expect(paces[paces.length - 1]).toBe(0)
+  })
+
+  it('round-trips every speed', () => {
+    for (let speed = 0; speed <= 10; speed++) {
+      expect(turtleSpeedForSlider(turtleSliderForSpeed(speed))).toBe(speed)
+    }
+  })
+
+  it('puts the default where the default is', () => {
+    expect(turtleSliderForSpeed(DEFAULT_TURTLE_SPEED)).toBe(5)
+  })
+})
+
+describe('the readout beside the slider (#1059)', () => {
+  it('uses milliseconds under a second', () => {
+    // `toFixed(1)` would call a quarter-second step "0.3s" — wrong, and the
+    // same string as the notches either side, so the fast half of the dial
+    // read as four identical settings.
+    expect(turtleSpeedLabel(1)).toBe('1.0s')
+    expect(turtleSpeedLabel(10)).toBe('100ms')
+    expect(turtleSpeedLabel(DEFAULT_TURTLE_SPEED)).toBe('278ms')
+  })
+
+  it('names the instant setting', () => {
+    expect(turtleSpeedLabel(0)).toBe('INSTANT')
+  })
+
+  it('never says the same thing twice', () => {
+    const labels = Array.from({ length: TURTLE_SLIDER_MAX + 1 }, (_, pos) =>
+      turtleSpeedLabel(turtleSpeedForSlider(pos))
+    )
+    expect(new Set(labels).size).toBe(labels.length)
   })
 })
 
@@ -103,7 +168,9 @@ describe('playing one step (#1046)', () => {
     const frame = playTurtleStep(INITIAL_TURTLE_STATE, [line(1), line(2), line(3)], 6)
     expect(frame.state.segments).toHaveLength(1)
     expect(frame.rest).toHaveLength(2)
-    expect(frame.waitMs).toBe(1000)
+    // Whatever the curve says for 6 — this test is about waiting once per
+    // movement, not about where the dial is scaled (#1059 moved that).
+    expect(frame.waitMs).toBe(turtleStepMs(6))
   })
 
   it('a stroke and the position it ended at are ONE movement', () => {
@@ -144,7 +211,7 @@ describe('playing one step (#1046)', () => {
       6
     )
     expect(frame.speed).toBe(10)
-    expect(frame.waitMs).toBe(250)
+    expect(frame.waitMs).toBe(turtleStepMs(10))
   })
 
   it('speed 0 drains the whole queue at once', () => {

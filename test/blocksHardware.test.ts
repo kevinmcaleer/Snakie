@@ -541,7 +541,10 @@ describe('the hardware category (#1012)', () => {
       'snakie_adc_read',
       'snakie_servo_angle',
       'snakie_buzzer_tone',
-      'snakie_buzzer_stop'
+      'snakie_buzzer_stop',
+      // The bus #1012 did not cover and #1057 added.
+      'snakie_i2c_scan',
+      'snakie_i2c_present'
     ])
   })
 
@@ -567,5 +570,118 @@ describe('ledPinToken (#1012)', () => {
     expect(ledPinToken(undefined)).toBeNull()
     expect(ledPinToken('')).toBeNull()
     expect(ledPinToken('   ')).toBeNull()
+  })
+})
+
+describe('the I²C bus (#1057)', () => {
+  const printing = (block: Record<string, unknown>): Record<string, unknown> => ({
+    type: 'text_print',
+    id: 'p',
+    inputs: { TEXT: { block } }
+  })
+
+  it('scans a bus and hands back the addresses', () => {
+    // WHAT THIS REPLACES: `i2c = I2C(Pin(0), Pin(1))` and `print(i2c.scan())`
+    // had no block at all, so #1019 brought them back as two raw Python blocks
+    // — a program a learner could read and could not build.
+    expect(
+      lines([
+        printing({ type: 'snakie_i2c_scan', id: 's', fields: { SDA: '4', SCL: '5' } })
+      ])
+    ).toEqual([
+      'from machine import I2C',
+      '',
+      'from snakie import Pin',
+      '',
+      'i2c_0 = I2C(0, sda=Pin(4), scl=Pin(5))',
+      '',
+      'print(i2c_0.scan())',
+      ''
+    ])
+  })
+
+  it('answers the question a wiring problem actually asks', () => {
+    expect(
+      lines([
+        printing({
+          type: 'snakie_i2c_present',
+          id: 'q',
+          fields: { ADDR: '0x76', SDA: '4', SCL: '5' }
+        })
+      ])
+    ).toEqual([
+      'from machine import I2C',
+      '',
+      'from snakie import Pin',
+      '',
+      'i2c_0 = I2C(0, sda=Pin(4), scl=Pin(5))',
+      '',
+      // `in`, not an index: a bus with two devices must still find this one.
+      'print(0x76 in i2c_0.scan())',
+      ''
+    ])
+  })
+
+  it('writes the address the way the datasheet does', () => {
+    // A learner comparing the block to the sensor's page should see the same
+    // characters, so hex stays hex rather than becoming 118.
+    const code = (addr: string): string =>
+      gen([
+        printing({ type: 'snakie_i2c_present', id: 'q', fields: { ADDR: addr, SDA: '4', SCL: '5' } })
+      ]).code
+    expect(code('0x76')).toContain('0x76 in')
+    expect(code('118')).toContain('118 in')
+    // Anything that is not a number matches nothing and is visibly wrong,
+    // rather than generating a syntax error into their program.
+    expect(code('seventy-six')).toContain('0 in')
+  })
+
+  it('picks the bus its pins are muxed onto', () => {
+    // The RP2040 decides the bus NUMBER from the pins, so the block cannot ask.
+    expect(
+      gen([printing({ type: 'snakie_i2c_scan', id: 's', fields: { SDA: '2', SCL: '3' } })]).code
+    ).toContain('i2c_1 = I2C(1, sda=Pin(2), scl=Pin(3))')
+  })
+
+  it('two blocks on one pair share one bus object', () => {
+    // Constructing a second I2C on the same pins would re-configure them, which
+    // is the bug the hoisting exists to prevent.
+    const code = gen([
+      printing({ type: 'snakie_i2c_scan', id: 's', fields: { SDA: '4', SCL: '5' } }),
+      {
+        type: 'text_print',
+        id: 'p2',
+        x: 0,
+        y: 200,
+        inputs: {
+          TEXT: {
+            block: {
+              type: 'snakie_i2c_present',
+              id: 'q',
+              fields: { ADDR: '0x76', SDA: '4', SCL: '5' }
+            }
+          }
+        }
+      }
+    ]).code
+    // One constructor. `from machine import I2C` has no paren, so this counts
+    // exactly the thing being asserted.
+    expect(code.match(/I2C\(/g)).toHaveLength(1)
+  })
+
+  it('lands on the Board View as an I²C claim on both pins', () => {
+    // The whole reason the constructor is spelled this way: `parse-pins.ts`
+    // matches `I2C(id, sda=Pin(a), scl=Pin(b))`, so the SDA/SCL badges light.
+    expect(
+      parsePins(
+        gen([printing({ type: 'snakie_i2c_scan', id: 's', fields: { SDA: '4', SCL: '5' } })]).code
+      ).map((u) => ({ type: u.type, pins: u.pins }))
+    ).toEqual([{ type: 'i2c', pins: ['4', '5'] }])
+  })
+
+  it('is in the Hardware drawer, where a bus belongs', () => {
+    const types = blocksInCategory('hardware').map((b) => b.type)
+    expect(types).toContain('snakie_i2c_scan')
+    expect(types).toContain('snakie_i2c_present')
   })
 })

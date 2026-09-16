@@ -175,6 +175,34 @@ export function ratioShowsOnePane(ratio: readonly number[] | undefined): boolean
   return ratio[0] <= BLOCKS_PANE_CLOSED || ratio[1] <= BLOCKS_PANE_CLOSED
 }
 
+/**
+ * What pressing a workspace segment means when that workspace is ALREADY the
+ * active one (#1060).
+ *
+ * There used to be one answer — "you re-clicked the current tab" — and it was
+ * right while the switcher had one position per workspace. The dot (#1053) made
+ * it three-position across Blocks and Code, and in the split BOTH of those
+ * segments are lit while only one of them is `active`. So pressing the lit
+ * segment you are already "on" fell through to the no-op, and the switcher
+ * offered a button that visibly could not do what it said.
+ *
+ * Pressing a segment is a statement about which side you want — the same thing
+ * it means when the dot is out — so it closes the split.
+ *
+ * Pure, so the three-way rule is a test rather than something you find out by
+ * pressing Blocks in the split view and watching nothing happen.
+ */
+export type ActiveSegmentPress = 'close-split' | 'exit-focus'
+
+export function pressingActiveSegment(id: WorkspaceId, both: boolean): ActiveSegmentPress {
+  // Only Blocks and Code have a split to close; Electronics and Build are
+  // whole workspaces and the dot is never lit on them.
+  if (both && (id === 'blocks' || id === 'code')) return 'close-split'
+  // Otherwise the old meaning stands: a way out of focus mode without
+  // switching away.
+  return 'exit-focus'
+}
+
 /** The persisted envelope. Bump `version` on breaking shape changes.
  *  v2 (#…): Electronics + Build were redesigned — Electronics hides code+console
  *  so the Board View fills the area; Build is the full-screen URDF editor with no
@@ -653,6 +681,16 @@ export function LayoutProvider({
   const [focus, setFocusState] = useState(false)
   /** The dot (#1053) — blocks and code on screen together. Not persisted. */
   const [blocksBoth, setBlocksBothState] = useState(false)
+  /**
+   * The same value as a REF, because `switchWorkspace` has to branch on it
+   * (#1060) and a callback that closed over the state would read a stale one.
+   * Every write goes through {@link setBoth} so the two cannot drift.
+   */
+  const blocksBothRef = useRef(false)
+  const setBoth = useCallback((next: boolean): void => {
+    blocksBothRef.current = next
+    setBlocksBothState(next)
+  }, [])
   // A board swap the mini board view punted to the Electronics view for its confirm
   // dialog (transient; never persisted).
   const [pendingBoardSwap, setPendingBoardSwap] = useState<string | null>(null)
@@ -727,6 +765,18 @@ export function LayoutProvider({
     (id: WorkspaceId, opts?: SwitchOptions): void => {
       const s = stateRef.current as LayoutState
       if (s.active === id) {
+        // THE DOT MAKES THIS CONTROL THREE-POSITION (#1060). In the split, the
+        // active workspace is ALREADY Blocks or Code — so pressing that same
+        // segment used to fall into "re-clicking the active tab" and do
+        // nothing at all, leaving the switcher offering a button that could
+        // not do the thing it said. Pressing a segment is a statement about
+        // which side you want, exactly as it is when the dot is out, so the
+        // dot goes out and the pane opens to the end.
+        if (pressingActiveSegment(id, blocksBothRef.current) === 'close-split') {
+          setBoth(false)
+          setApplyNonce((n) => n + 1)
+          return
+        }
         // Re-clicking the active workspace tab exits focus mode (a way back to
         // the normal layout without switching away).
         setFocusState((f) => {
@@ -744,13 +794,13 @@ export function LayoutProvider({
       // Pressing Blocks or Code is a statement about which side you want, so the
       // dot goes out (#1053) — leaving it lit would make the switcher describe
       // something that is not on screen.
-      setBlocksBothState(false)
+      setBoth(false)
       setWorkspace(s.workspaces[id])
       setFocusState(false) // leaving focus mode when the workspace changes
       setApplyNonce((n) => n + 1)
       persist()
     },
-    [persist]
+    [persist, setBoth]
   )
 
   const resetActive = useCallback((): void => {
@@ -802,7 +852,7 @@ export function LayoutProvider({
   const setBlocksBoth = useCallback(
     (next: boolean): void => {
       if (!next) {
-        setBlocksBothState(false)
+        setBoth(false)
         return
       }
       if (stateRef.current?.active !== 'blocks') switchWorkspace('blocks')
@@ -820,10 +870,10 @@ export function LayoutProvider({
         state.workspaces[state.active].blocksSplit = [...BLOCKS_VIEW_RATIOS.split]
         persist()
       }
-      setBlocksBothState(true)
+      setBoth(true)
       setApplyNonce((n) => n + 1)
     },
-    [switchWorkspace, persist]
+    [switchWorkspace, persist, setBoth]
   )
 
   const setFocus = useCallback((next: boolean): void => {
