@@ -15,6 +15,8 @@ import { blocksMayWrite, holdFor, type BlocksHold } from '../lib/blocks/hold'
 import { PROGRAM_RUN_EVENT, type ProgramRunDetail } from './editorBridge'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useDynamicBlocks } from '../lib/blocks/use-dynamic-blocks'
+import { useModuleBlocks } from '../lib/blocks/use-module-blocks'
+import { useHelpDialect } from '../hooks/useHelpDialect'
 import { DriverInstallBanner } from './DriverInstallBanner'
 import type { PartDriverNeed } from './part-editor.util'
 import type { BlocksProgram } from './BlocksCanvas'
@@ -410,7 +412,13 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   // than in the canvas because the canvas is lazily loaded and re-mounts on a
   // view-mode change, and re-running a Python host round-trip for a layout
   // change would be absurd.
-  const { nonce: paletteNonce, partFor } = useDynamicBlocks(currentFolder)
+  const { dialect } = useHelpDialect()
+  const { nonce: partsNonce, partFor } = useDynamicBlocks(currentFolder)
+  // And the modules this program imports (#1048). Keyed on the DOCUMENT's code
+  // rather than the draft, so a half-typed `import ss` does not register a
+  // drawer and then take it away again a keystroke later.
+  const modulesNonce = useModuleBlocks(doc?.code ?? '', dialect)
+  const paletteNonce = partsNonce + modulesNonce
   // The parts whose blocks are on the canvas right now — the driver banner's
   // input. Empty until the canvas reports, which is also the state on a file
   // with no part blocks in it, so the banner simply never appears.
@@ -484,6 +492,11 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
         highlightLines={linkedLines}
         onLineClick={handleLineClick}
         revealLine={revealLine}
+        // Both of the pane's invitations are about the canvas next to it, and in
+        // the code-only view there is no canvas to point at (#1062). `split` is
+        // exactly "both panes on screen" — `modeForRatio` calls any ratio with
+        // two open panes that, not only the halfway one.
+        linked={mode === 'split'}
       />
     </Suspense>
   )

@@ -48,14 +48,20 @@ class SoftShellConstantProvider extends Blockly.blockRendering.ConstantProvider 
     // reads as a thing you can press rather than as a text input.
     this.FIELD_BORDER_RECT_RADIUS = 10
 
-    // ---- Room ------------------------------------------------------------
-    // The three paddings Blockly spaces rows and columns with. Each is bumped
-    // by roughly half, which is enough to feel different and small enough that
-    // a full program still fits the canvas at the default 0.9 zoom.
-    this.SMALL_PADDING = 5
-    this.MEDIUM_PADDING = 8
-    this.MEDIUM_LARGE_PADDING = 11
-    this.LARGE_PADDING = 14
+    // ---- Room, VERTICALLY ------------------------------------------------
+    //
+    // AND ONLY VERTICALLY. The first pass at this also bumped Blockly's four
+    // in-row paddings — the space between one element of a row and the next —
+    // and that is where a plugged-in block's left edge sits. Widening it left a
+    // visible gap between `if` and the condition socketed into it: the two read
+    // as not quite joined, which on a block canvas is the one thing that must
+    // never be ambiguous. Those four are back at Blockly's own values, checked
+    // against a stock `thrasos` render of the same program side by side.
+    //
+    // "Cramped" was never the horizontal axis anyway. It was text sitting five
+    // pixels from the top of its block, and a one-field block twenty-four
+    // pixels tall. That is all below, and it all stays.
+    //
     // A one-field block, and an empty socket inside a loop. Both were 24 — the
     // height of the text plus almost nothing.
     this.MIN_BLOCK_HEIGHT = 32

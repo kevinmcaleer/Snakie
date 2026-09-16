@@ -6,192 +6,82 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Fixed
-
-- **The blocks no longer stop saving your file without saying so** (#1068,
-  epic #1007). Three ways the canvas and the `.py` could quietly stop being the
-  same program, each of which used to be silent, now share one state, one rule —
-  *the blocks do not write the file until it is sorted out* — and one strip above
-  the panes saying which it is. In all three your Python is untouched and still
-  runs.
-
-  - **A block Snakie cannot write Python for.** Unwire a part in Electronics
-    while its blocks are on the canvas and they keep rendering, but they leave
-    the registry — so the Python mirror quietly lost those lines and the file
-    simply stopped saving, with no unsaved dot and no message, for the rest of
-    the session. It now says so, and names the part's blocks.
-  - **A block whose code *threw*.** The guard above only ever knew about block
-    types with no generator at all, so a generator that failed slipped past it
-    and wrote a program short of a whole stack — sometimes an empty file — over
-    the top of the learner's. It counts as the same failure now.
-  - **Python edited by hand under a blocks footer.** `docs/blocks.md` says that
-    when the footer goes stale Snakie works the blocks out from the code, and
-    nothing did: the stale blocks went on the canvas, the mirror showed *their*
-    regeneration in place of the edited Python, and the first block touched wrote
-    it over the file. The code is what was last written and what runs, so the
-    blocks are now rebuilt from it, as documented.
-
-- **A `.py` Snakie did not write is checked before its blocks may change it**
-  (#1068). #1069 gates the conversion while you type; opening a file went
-  straight onto the canvas without it. If the blocks are only an approximation of
-  the file, they are now there to look at and will not rewrite it.
-
-- **`"%.1f" % value` no longer opens as an empty canvas** (#1068). `%` beside a
-  string is formatting, not modulo — read as modulo it built a block Blockly
-  refuses to load, which cleared the canvas and blocked saving. Two of the files
-  Snakie itself ships hit this.
-
-- **`t = 0.0` no longer comes back `t = 0`**, and `0x1F` no longer comes back
-  `31` (#1068). A number block holds a number rather than the text of one, so a
-  literal whose written form would not survive the trip stays exactly as typed.
-
-- **A `pass` keeping company with real statements is no longer dropped**
-  (#1068). It was being removed wherever it appeared, on the reasoning that an
-  empty body gets one back — true only when it *was* the whole body.
-  `examples/hello_world.py` came back a line short.
-
-### Changed
-
-- **The round-trip check compares what a conversion must not change, rather than
-  the text** (#1068). #1069's check compared rendered Python, and the generator
-  renders in its own house style — it hoists functions, prefers single quotes,
-  spaces operators out and renames a variable called `id` so the builtin survives.
-  Measured against the `.py` files this repo ships, that rejected **two files in
-  three**, `examples/hello_world.py` among them, which would have quietly stopped
-  the blocks following anybody who typed a double-quoted string. It now compares
-  each line's shape — operators and keywords, with names, numbers and strings as
-  placeholders — plus any comment on it, so a dropped, added, re-nested or
-  mangled line is still caught and house style is not.
-
-### Fixed
-
-- **Four ways the Python→blocks converter changed your program** (#1068,
-  epic #1007). Each silent, each found by pointing the converter at Python a
-  learner or a lesson sheet would actually write:
-
-  - **An `else` nobody claimed was deleted, body and all.** The converter
-    skipped any line starting with `elif`/`else` on the reasoning that the `if`
-    above must have taken it — but an `if` stops looking at the first sibling
-    that is neither, which a comment at column zero between the arms is. So
-    `if:` / `# note` / `else:` lost the else branch entirely, and the conversion
-    report called it a clean run. `while … else:` and `for … else:` — real
-    Python that no `if` ever claims — went the same way. An arm nobody consumed
-    now keeps its header and its body.
-  - **A trailing comment was dropped from every line it recognised.**
-    `x = 5  # how many times` came back as `x = 5`, and `time.sleep(1)  # pause`
-    as a wait block with the pause forgotten. No block holds a statement *and* a
-    comment about it, so a line carrying one stays raw and keeps both.
-  - **`x == 5` was read as an assignment** and written back as `x = = 5`, which
-    is not Python. The guard sliced the line up to the first `=` — stopping one
-    character before the thing it was looking for.
-  - **A comment inside a bracketed call swallowed the rest of it.** The line
-    break after it is folded into a space, so
-
-    ```python
-    print(
-        1,  # first
-        2)
-    ```
-
-    became `print( 1,  # first 2)` — an unclosed bracket where valid Python used
-    to be. The comment now rides at the end of the line it was already being
-    folded onto.
-
-- **A variable can no longer shadow a module imported below it** (#1068,
-  epic #1007). A variable called `time` sitting above the block that needs
-  `import time` kept the name, and the import section — which is hoisted to the
-  top — then bound the module to a name the next line overwrote, so the program
-  died at the following `time.sleep` with an error nowhere near the block that
-  caused it. The guard could only ever see the imports declared so far; the
-  generator now makes a first pass to find out what the imports will bind, so
-  the variable comes out `time_` wherever it sits.
-
-### Fixed
-
-- **A `while True:` with a `break` no longer opens as an empty canvas**
-  (#1068, epic #1007). `forever` and `break`/`continue` are defined with no next
-  connection, on the true reasoning that nothing runs after them — but the
-  Python→blocks converter chained onto them anyway, and Blockly *throws* on a
-  `next` a block has nowhere to put. The throw reached the canvas, which cleared
-  the workspace and blocked writes, so the commonest hardware loop there is —
-
-  ```python
-  while True:
-      if button.value():
-          break
-      time.sleep(0.1)
-  led.off()
-  ```
-
-  — showed a blank canvas beside a perfectly good program, with nothing said.
-  A terminal block that turns out not to be last now becomes the raw block it
-  would have been if we had not recognised it: uglier, and correct.
-
-- **Typing Python that would not convert back cleanly no longer rewrites your
-  program** (#1068, epic #1007). Typing in the code pane makes the blocks the source of
-  truth, so the next block you touch rewrites the file from them — which means a
-  converter that lost a line did not merely look wrong, it eventually *saved*
-  that. The conversion is now generated straight back and compared before it is
-  allowed to become the program, and held back when the two disagree. Your text
-  is untouched either way, the blocks you had stay on screen, and a quiet strip
-  above the panes says so rather than leaving you to notice.
-
-  The comparison forgives the two things the generator legitimately rewrites —
-  the import section (including the `import time` it adds for you) and
-  whitespace — and nothing else, so a dropped statement, a dropped comment, a
-  re-nested body or a mangled line all hold the blocks back instead of
-  rewriting your file.
-
-  This covers the code pane. Opening a `.py` Snakie did not write still converts
-  it without the check — that path shares a surface with the other ways the
-  blocks and the file can disagree, and is being done with them (#1068).
-
-- **Opening a real module no longer loses most of it** (#1063, epic #1007).
-  Pointing the Python→blocks converter at a 114-line robot module brought back
-  **36 lines**. Four separate faults, each silent:
-
-  - **A suite we could not read lost its body.** `class Frame:` became one block
-    holding that line and nothing else — both methods and everything in them,
-    gone, with the conversion reported as a success. Same for `try`, `with`,
-    `async def` and anything else the rules miss. There is now a raw *suite*
-    block: the header verbatim, the body nested under it.
-  - **Methods were lifted out of their class.** A `def` was always collected as
-    a top-level definition, so twelve methods became twelve un-indented
-    top-level functions detached from the objects they belong to. A nested `def`
-    now stays where it is.
-  - **Names were rewritten.** `__init__` came back as `init` and `_pack_rows` as
-    `pack_rows`, because the label-sanitiser strips leading underscores. A name
-    that is already a valid Python identifier is now left alone.
-  - **Signatures were rewritten and early returns became dead code.**
-    `def load(path, flip_x=None)` came back as `def load(path)` — defaults
-    silently dropped while every call still passed them — and every `return`
-    that was not the last line became `if False: return …`. A `def` whose
-    parameters Blockly cannot hold now stays a raw suite, and a `return` is a
-    `return`.
-
-  The same module now round-trips to the line.
-
-- **One string literal no longer freezes the whole canvas** (#1062). `#1037`'s
-  gate reconverts only when the code parses, and the no-board lint blanked
-  string literals to *spaces* — so `if cell not in " ."` trimmed to `if cell not
-  in` and read as a half-typed line. One such line anywhere in a file made the
-  whole file unparseable, and the blocks canvas just stayed empty with nothing
-  to say why. A string is a term.
-
-### Changed
-
-- **A run of comments is one block, and roots no longer overlap** (#1062). A
-  module's header is prose — the one that prompted this opens with thirty lines
-  of rationale and an ASCII table — and it became thirty identical grey blocks,
-  taller than the class they described. Consecutive comments now fold into a
-  single comment block, one row per line, carrying the lines verbatim so the
-  alignment survives the round trip.
-
-  Roots were also laid out a fixed 240px apart, so anything taller than that —
-  which is any real class — was drawn *underneath* the next one. They are now
-  stacked by height.
-
 ### Added
+
+- **A Modules drawer, filled from your program's own imports** (#1048, epic
+  #1007). Open a real driver program and it converts perfectly — ten blocks, no
+  warnings, byte-exact round trip — and offers you *nothing*: the `oled.text(…)`
+  lines are raw Python blocks you can drag but cannot author more of. That is the
+  right floor and a poor ceiling.
+
+  There is now a **Modules** category, one sub-drawer per module the program
+  imports, separate from **My parts** — which keeps meaning "things on your
+  breadboard", because that distinction earns its keep.
+
+  This first tier is the one the issue calls a free win: the curated symbol
+  tables already carried kinds and one-line details for ~39 modules and were
+  wired only to Monaco's completions. Nothing in the blocks stack had ever
+  imported them. So `machine`, `time`, `neopixel` and friends get blocks with
+  **no parsing, no file and no board** — which matters because those are exactly
+  the modules whose source we will never have: they are frozen into the
+  firmware. The `detail` lines turn out to be signatures, so the blocks get real
+  parameter names too. Member-level dialect scope is respected, so a
+  CircuitPython board is not offered `time.sleep_ms`.
+
+  The source-reading tier is written and tested underneath it: `module-api.ts`
+  reads a module's classes, methods, parameters and defaults out of its `.py`
+  with #1019's lexer — **parsing only, never importing**, because a module a
+  learner downloaded is somebody else's code. Resolving that source (project
+  folder, board `/lib`, bundled), the board-side `dir()` probe for modules with
+  no source, and upgrading `part-blocks.ts`'s guessed class name to the real one
+  are the remaining tiers.
+
+- **The hardware blocks speak CircuitPython** (#1040, epic #1007 and epic #209).
+  The same block, on a Feather, writes `digitalio.DigitalInOut(board.GP15)`
+  instead of `Led(pin=Pin(15, Pin.OUT))` — **one block, two templates**, which
+  is the decision #1040 left open and `docs/blockly-epic.md` §9.7b now records.
+
+  The argument in one line: *a learner's program should be a program, not a
+  program-for-a-Pico*. Two block sets would have thrown away the portability the
+  `.py`-with-a-footer format exists for; with one block a canvas built in a
+  classroom's MicroPython half opens and runs in its CircuitPython half. The
+  objection — a block whose code you cannot predict — is answered by the mirror
+  next door, which shows exactly what it generated.
+
+  Nine of the twelve hardware blocks do it. Servo and buzzer have no
+  CircuitPython *core* equivalent (they want `adafruit_motor` and `simpleio`,
+  third-party libraries and a different promise), so the toolbox withholds them
+  there — and scope is now **derived** from what a block can generate, so a
+  working block can never be hidden from the board it works on.
+
+  Pin names come off the board's own silk label, which is what CircuitPython's
+  `board` module is built from: `board.GP15` on an RP2040, `board.IO15` on an
+  ESP32-S3.
+
+- **Hardware lines come back as hardware blocks** (#1058, epic #1007). Only the
+  turtle palette declared `read`, so a hardware program converted
+  asymmetrically: blocks → Python perfect, Python → blocks dropping to a raw
+  block on exactly the lines that mattered. `led_15.set(True)` was a grey box of
+  text; the learner could read their program but not build it.
+
+  A hardware block doesn't write one line — it writes a constructor hoisted into
+  the setup section *and* a call on it, with the pin in the object's **name**.
+  Reading one back means reading both lines and then not emitting the
+  constructor a second time. Eight of the twelve hardware blocks now do:
+  LED on/off and toggle, pin write and read, PWM frequency, servo angle, and the
+  buzzer's tone and stop. A pull resistor is read out of the *constructor*,
+  which is the only place it appears.
+
+  **All or nothing per object.** If any use of a hoisted object can't be read,
+  none of them are and its constructor stays — otherwise you get two `Led`s
+  driving one pin, the learner's and the block's own hoisted copy. And a
+  constructor that isn't character-for-character what the block would have
+  written is somebody else's line, and is left alone.
+
+  The four left out say why in the code: the onboard LED has no pin in its name,
+  "button is pressed" changes the *shape* of its line with the dropdown, and the
+  PWM-duty and ADC blocks wrap theirs in arithmetic that is the lesson. Those
+  still convert to raw blocks, exactly as before.
 
 - **An I²C bus, as a block** (#1057, epic #1007). Wiring an I²C sensor is one of
   the first things anyone does on a Pico, and there was no block for it — not
@@ -206,57 +96,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `parse-pins.ts` matches — so the Board View lights the SDA and SCL badges, and
   two blocks on one pair share one bus object rather than re-configuring the
   pins. The bus number comes from the same pin-mux table the Display panel uses.
-
-### Fixed
-
-- **Pressing Blocks in the split view now shows blocks** (#1060). The dot (#1053)
-  made the switcher three-position across Blocks and Code, but in the split the
-  active workspace is *already* one of them — so pressing that segment fell into
-  the old "you re-clicked the current tab" no-op and nothing happened, while
-  pressing the dot worked. The switcher was offering a button that visibly could
-  not do what it said. All three positions now mean what they look like: Blocks
-  is blocks, the dot is both, Code is code — from either side.
-
-### Changed
-
-- **The turtle speed dial is a second to a tenth of a second, with instant at
-  the fast end** (#1059). Two things were wrong with it. It started at 5.7
-  seconds a movement, which is not a pace anyone watches, so the slow third of
-  the dial was unusable. And `speed(0)` means "instant" in the `turtle` API, so
-  a slider bound straight to that value sorted 0 to the far **left** — the
-  control read *instant, slowest, …, fastest*, with the one setting that skips
-  the animation parked at the slow end.
-
-  The dial now has its own scale, left to right, slow to fast: one second, down
-  a geometric curve to a tenth of a second, then instant. The readout says
-  milliseconds under a second, so the fast half no longer reads as four
-  identical `0.3s` settings. `turtle.speed()` itself is untouched — the
-  generated Python still says `turtle.speed(6)`.
-
-  **Note this moves the default.** `6` is still CPython `turtle`'s "normal" and
-  still what `turtle.py` starts at, but on the compressed scale that is 278ms a
-  movement rather than the second it used to be.
-
-### Changed
-
-- **Rounder, roomier blocks.** Blockly's stock geometry is drawn for an adult
-  IDE — 8px corners, five pixels of padding either side of a field, an 16px
-  field box holding 11px text — and next to MakeCode or Scratch, which is where
-  Snakie's users arrive from, it read as cramped and sharp. The blocks now wear
-  their own Soft Shell geometry: 12px corners, near-pill field boxes, about half
-  again as much padding around every row, and 12px text to match. `thrasos`
-  stays the base renderer, so the row layout that keeps `set x to (…)` reading
-  as a sentence is unchanged.
-
-- **"Blocks" means blocks, and "Code" means code.** Each end of the split used
-  to leave a three-percent sliver of the other pane showing — forty pixels of
-  chopped-off Python beside the canvas, or a strip of half-blocks beside the
-  editor. That sliver was there because the divider was the only way back and a
-  divider flush against the edge cannot be grabbed. #1053's dot is a named way
-  back from either end, so the sliver stopped paying for itself: the end stops
-  are now hard, and each view shows one thing.
-
-### Added
 
 - **Blocks know which Python your board speaks** (#1039, epic #1007 and
   epic #209). The Blocks workspace was the one subsystem that ignored the
@@ -306,67 +145,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   there; and pressing Blocks or Code puts it out too, because that is a
   statement about which side you want.
 
-### Fixed
-
-- **Highlighting stopped working after #1050, in two more ways** (#1050
-  follow-up, epic #1007).
-
-  **Clicking a block on the canvas put the Python lines out.** The fix for the
-  piling-up highlights added an `unselect()` call — and that fires a selection
-  event carrying *no id*, which Blockly queues and delivers **after** the next
-  block has been lit. Forwarded as the learner's choice, it cleared the link:
-  the lines lit for an instant and went dark. A selection event saying nothing
-  is selected, while something is, is describing a moment that has passed, so it
-  is dropped. A genuine deselect — clicking empty canvas — still comes through.
-
-  **Clicking the same line twice did nothing.** The id was unchanged, so React
-  skipped the update and the canvas never re-asserted — while clicking into the
-  code pane had already moved focus out of the canvas, which is how Blockly
-  clears a selection. Every line click now re-asserts, whether or not it names
-  the same block.
-
-### Fixed
-
-- **The block↔line highlight never cleared** (#1050, epic #1007). Clicking a
-  line in the Python pane lit the block that wrote it — and clicking a different
-  line lit that one too, leaving the first on. They piled up: four lines clicked
-  in turn left four blocks lit, and the only way to clear one was to click it on
-  the canvas and then click away.
-
-  **Blockly does not clear the previous selection for a programmatic
-  `select()`.** In v13 the current selection belongs to the focus manager —
-  `common.setSelected` is `@internal` and its own doc says a selection is cleared
-  by focusing something else, which a `select()` call from our code never does.
-  The canvas assumed otherwise and only ever called `select()`.
-
-  It now remembers the block it lit and takes it off before lighting another —
-  including when there is nothing to light. Clicking a line no block wrote (an
-  import, a comment, a blank line) clears the highlight, because "nothing here
-  came from a block" is a real answer and should look like one. Selecting a
-  block on the canvas clears it too, which used to leave two lit at once.
-
-### Fixed
-
-- **A function you defined never appeared in the Functions drawer** (#1045, epic
-  #1007). Define `wiggle` on the canvas, open **Functions** to get a block that
-  calls it, and it was not there — the drawer held the two `def` blocks,
-  `if return`, and **two blank, nameless caller blocks**. A learner who had just
-  written their first function had no way to call it.
-
-  Every toolbox category was built as a static list from the block registry.
-  That is right for the other thirteen and wrong for this one, whose contents
-  are a question about the **workspace**: Blockly's own `flyoutCategory` reads it
-  and returns one caller per function actually defined, already carrying that
-  function's name and parameter sockets. The Functions category is now
-  `custom: 'PROCEDURE'` and hands the job over.
-
-  The two caller blocks stay **registered** — the generator looks an emitter up
-  by type, and `workspace-check.ts` refuses to open a file containing a type this
-  build does not know, so dropping them would have stranded every saved program
-  that calls a function. They are simply never listed.
-
-### Added
-
 - **Watch the turtle draw** (#1046). The Turtle instrument drew every segment
   the instant its telemetry arrived, so a square appeared finished with nothing
   to watch — for an instrument whose whole point is *seeing* the program move,
@@ -408,8 +186,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   already on screen, and would need a library update on every board.
   `turtle.py` is `0.3.0`, so the IDE offers boards the update anyway.
 
-### Added
-
 - **The canvas stops flinching while you type** (#1036 + #1037, epic #1007).
   Two halves of the same complaint, left open by #1034.
 
@@ -441,71 +217,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   raw REPL, and killing a learner's blink loop every 450ms to tidy a canvas
   would be an appalling trade), and it never blocks on a slow answer — the
   device path has a short timeout and every failure falls through to the lint.
-
-### Fixed
-
-- **CircuitPython got the simulator's no-op stubs, and nothing said so** (#1038,
-  epics #1007 and #209). `micropython/instruments.py` decided whether it had
-  hardware by trying `from machine import Pin, PWM` and catching the failure:
-  `except ImportError` **meant** "we are headless under CPython in the Snakie
-  simulator, so be inert". While MicroPython was the only Python on a board,
-  that was true.
-
-  CircuitPython has no `machine` either. So a real CircuitPython board landed in
-  the same branch and got the simulator's stubs — `Led(15).on()` returned
-  successfully, the LED did not light, and there was no traceback and no
-  warning. A silent wrong answer on real hardware is worse than a crash, and it
-  is exactly what epic #209 exists to prevent. It needed no blocks to reach:
-  `from snakie import Led` in the Code workspace was enough.
-
-  The library now **asks** rather than infers — `sys.implementation.name`, the
-  same signal the IDE's own runtime probe uses. On CircuitPython the `Pin` and
-  `PWM` stand-ins raise on construction, so the error lands on the
-  `Pin(15, Pin.OUT)` line in the learner's own program and names the
-  replacement (`board` with `digitalio`/`pwmio`/`analogio`). Six more paths that
-  used to return silently — in `Buzzer`, `Rangefinder`, `Display` (I²C and SPI)
-  and `Servo` — go through the same check.
-
-  **The CPython path is unchanged**, deliberately and under test: staying inert
-  is the whole point of the simulator. So is a MicroPython build with no
-  `machine` of its own, which the WASM port really is.
-
-  `instruments.py` is now `0.11.0`, so the IDE offers boards the update.
-
-### Changed
-
-- **The CircuitPython audit: where the asterisk goes** (#1033, epic #1007).
-  #1034 made the Blocks workspace the front door for any Python file, so
-  somebody had to answer what a CircuitPython user gets when they walk through
-  it. `docs/blockly-epic.md` §9 is the answer, measured rather than assumed. No
-  code — the audit's output is a written table, four filed issues (#1038–#1041)
-  and one bug it found on the way.
-
-  **Reading is already safe; writing is not.** Two canonical Adafruit programs
-  run through #1019's converter came back 7-of-10 and 9-of-10 recognised, with
-  the `board`/`digitalio` lines held verbatim in raw Python blocks — not the
-  stack of grey blocks the issue expected. **69% of the palette is already
-  dialect-neutral** (68 of 98 blocks), including the whole of turtle, which is
-  what the blocks course is taught in — so a CircuitPython learner can do the
-  entire on-ramp today.
-
-  **The bug it found** (#1038): `micropython/instruments.py` decides the dialect
-  with one `try: from machine import Pin, PWM / except ImportError:`, and that
-  `except` was written to mean "we are in the CPython simulator". CircuitPython
-  has no `machine` either, so a real CircuitPython board falls through to the
-  simulator's **no-op stubs** — `Led(15).on()` returns successfully and the LED
-  never lights. No traceback, no warning. That is reachable today without the
-  Blocks workspace at all, and it is exactly the failure epic #209 exists to
-  prevent.
-
-  Also recorded: the hardware palette does not emit `machine` directly (it goes
-  through the `snakie` umbrella, so the dialect is decided in **one** place, not
-  twelve); a dialect filter must go on the **toolbox**, never the registry, or
-  plugging in a CircuitPython board would make every existing hardware program
-  unopenable; and #1019's round-trip property is "every line survives and still
-  runs", not byte-identity — the import manager normalises order either way.
-
-### Added
 
 - **One editable surface: the divider is the control, and "Graduate to Python"
   is gone** (#1034, epic #1007, phase 6). The graduation model is removed —
@@ -707,121 +418,109 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
   **`docs/blocks.md`** is written for a teacher, not a developer.
 
-### Fixed
-
-- **`import x` and `from x import y` no longer swallow each other** in generated
-  block programs (#1018). The import manager keyed only on the module, so asking
-  for both forms of one module produced only the `from` line — leaving every
-  `x.` in the program undefined, as a `NameError` a long way from its cause. It
-  could not happen before there were import blocks to ask with; it can now.
-
-
-- **A NUL byte could end up in a generated program** (#1016, a bug in #1010). A
-  `def` block correctly generates nothing where it stands — its body is hoisted
-  into the functions section — but it was still given a source-map marker, and a
-  marker with no line of its own fuses with the next block's line. The assembler
-  stripped the first and left the second sitting in the code, which was then
-  saved to the file and sent to the board. It affected any program with a
-  function and anything after it, which is most programs that have a function at
-  all.
-
-- **Tracebacks land on the block that caused them** (#1015, epic #1007, phase 3).
-  A beginner who presses Run and gets `File "<stdin>", line 7` is being shown a
-  line number in a file they never wrote. The error now appears **on the block**,
-  Scratch-style, in a sentence they can act on.
-
-  **Run in block mode is the same Run.** The generated Python goes to
-  `device.runProgram`, the output streams to the same console, and the
-  auto-connect, the real-board preference and the simulator fallback all come
-  along unchanged — no "Run blocks" button, because it is not a different thing,
-  and no second device path. A classroom with no Picos still gets a green Run.
-
-  **Nothing is hidden.** The console prints the board's own traceback verbatim,
-  because that text is what a learner is graduating to and a tool that hides it
-  teaches them to fear it. The friendly sentence sits beside it, on the block.
-
-  **Which line, and whose.** The block chosen is the last frame that is the
-  *learner's* program, not the innermost frame overall: a program that calls into
-  `instruments.py` and fails in there has its innermost frame in a file nobody
-  dragged, and the call they made is the thing that is theirs to fix. An error
-  inside a function they defined lands on the block inside the function.
-
-  **An error with nowhere to land stays in the console.** No block wrote
-  `import turtle`, and a traceback whose frames are all inside a library has no
-  line in the program at all. Inventing an owner would put a red badge on an
-  innocent block.
-
-  A handful of errors get plain English — a missing library, an old library on
-  the board, a pin that can't do the job, a name used before it was set, dividing
-  by zero, an index off the end of a list. **Everything else keeps the board's own
-  words**, because a vague paraphrase of an error nobody anticipated is worse than
-  the real text.
-
-  `ImportError: no module named 'instruments'` also **brings the one-click install
-  back**. The banner already appears when a board connects without the library,
-  but a child who dismissed it meets the problem again as a traceback they cannot
-  act on.
-
-  **A running program makes the canvas glow** in the Soft Shell accent — the "my
-  code is alive" feedback Scratch gets right and a text editor never gives you.
-  It stops the moment the program crashes, because a canvas still pulsing over a
-  dead program is a lie about the one thing it exists to report. Stop clears the
-  glow and the error badges together, so a program the learner has just fixed
-  doesn't still look broken.
-
-  **Pressing Stop is not an error.** It raises `KeyboardInterrupt` wherever the
-  program had got to, and badging that block would tell a child they broke
-  something when all they did was press the button that says stop.
-
-- **Instruments in block mode, derived from the instrument registry** (#1014,
-  epic #1007, phase 2). Seventeen blocks that feed Snakie's own panels: the
-  oscilloscope, multimeter, plotter, radar, IMU, barometer, button, encoder and
-  display, plus the Wi-Fi/Bluetooth/I²C scanners and the control channel that
-  lets the app drive the board.
-
-  **Most of it already worked, and that is the headline.** Instruments are
-  surfaced by scanning the active file's *source* — `parse-pins.ts` for the
-  peripheral constructors, each instrument's `uses`/`hints` for driver and import
-  signals. Blocks generate source, so the dock already lit up correctly in block
-  mode with no new machinery. That is the whole argument for generating real
-  MicroPython instead of interpreting a block tree, cashed in.
-
-  **The palette is derived, not written.** An `InstrumentDef` declares its blocks
-  beside the `uses`/`hints` it already had, and that one declaration becomes a
-  Blockly definition, a MicroPython emitter, a toolbox slot, a help link and the
-  drag-to-reveal. A new instrument gets a block without anyone opening the block
-  code. Three blocks stay hand-written — `read_adc`, `read_pwm` and `i2c_scan`
-  take a *hardware object*, so each needs a pin dropdown and a hoisted
-  constructor; a descriptor that could express those could express anything,
-  which is the point at which it stops being a description.
-
-  **A keyword argument is only written when it differs from the library's own
-  default**, so the common call stays short: `inst.scope(value)` for a learner
-  who never touches the channel, `inst.scope(value, ch='ch2')` for one who does.
-
-  Two places the obvious block would have generated something that runs and is
-  wrong: the display block passes its text as a **list of rows**, because
-  `screen("Hello")` iterates the string and puts five one-character rows on the
-  screen; and the button block's state is a **boolean socket**, because a text
-  socket would emit `inst.button('a', 'True')` — a string, and so always truthy.
-
-  Scanner blocks say **"this one pauses for a moment — don't put it in a fast
-  loop"** on the block itself. Every other block here is a single cheap `print()`
-  that is safe in a tight loop; a scan is not, and a child who puts one inside
-  `forever` sees their program stutter with nothing to explain it.
-
-  `read_adc` and `read_pwm` are **value** blocks, as they return the reading as
-  well as sending it — so `set temperature to (read volts on GP26)` reads like a
-  sentence — and they share the hoisted `ADC`/`PWM` object with the Hardware
-  palette's blocks, because two `ADC`s on one pin is a bug rather than an
-  untidiness.
-
-  The `instruments.py` install banner was already reachable from the canvas: it
-  lives at the top of the shell rather than inside the Code workspace, so a
-  connected board missing the library offers the one-click install in Blocks too.
-  There is now a test saying so.
-
 ### Changed
+
+- **Comments are grey, and they are quiet** (#1062). #1062's folding made a
+  file's header one block instead of thirty, but it still rendered as thirty
+  bordered text inputs — a wall with one outline round it. Comment blocks now
+  have a style of their own: plain mono text rather than input boxes, in a true
+  neutral grey. (The Python category already wears the *comment* token, so
+  "paint comments the comment colour" would have made them identical to the
+  raw-Python blocks they sit among; the grey is that token with the colour taken
+  out, at the same brightness.) The lines are still verbatim, so an aligned
+  ASCII table still lines up. Comments are edited in the code pane.
+
+- **The code pane says MICROPYTHON.** That is what the generator writes, and a
+  learner graduating from that pane is graduating to the language named on it.
+  The narrow layout's tab keeps the short word, where the long one doesn't fit.
+
+- **The round-trip check compares what a conversion must not change, rather than
+  the text** (#1068). #1069's check compared rendered Python, and the generator
+  renders in its own house style — it hoists functions, prefers single quotes,
+  spaces operators out and renames a variable called `id` so the builtin survives.
+  Measured against the `.py` files this repo ships, that rejected **two files in
+  three**, `examples/hello_world.py` among them, which would have quietly stopped
+  the blocks following anybody who typed a double-quoted string. It now compares
+  each line's shape — operators and keywords, with names, numbers and strings as
+  placeholders — plus any comment on it, so a dropped, added, re-nested or
+  mangled line is still caught and house style is not.
+
+- **A run of comments is one block, and roots no longer overlap** (#1062). A
+  module's header is prose — the one that prompted this opens with thirty lines
+  of rationale and an ASCII table — and it became thirty identical grey blocks,
+  taller than the class they described. Consecutive comments now fold into a
+  single comment block, one row per line, carrying the lines verbatim so the
+  alignment survives the round trip.
+
+  Roots were also laid out a fixed 240px apart, so anything taller than that —
+  which is any real class — was drawn *underneath* the next one. They are now
+  stacked by height.
+
+- **The turtle speed dial is a second to a tenth of a second, with instant at
+  the fast end** (#1059). Two things were wrong with it. It started at 5.7
+  seconds a movement, which is not a pace anyone watches, so the slow third of
+  the dial was unusable. And `speed(0)` means "instant" in the `turtle` API, so
+  a slider bound straight to that value sorted 0 to the far **left** — the
+  control read *instant, slowest, …, fastest*, with the one setting that skips
+  the animation parked at the slow end.
+
+  The dial now has its own scale, left to right, slow to fast: one second, down
+  a geometric curve to a tenth of a second, then instant. The readout says
+  milliseconds under a second, so the fast half no longer reads as four
+  identical `0.3s` settings. `turtle.speed()` itself is untouched — the
+  generated Python still says `turtle.speed(6)`.
+
+  **Note this moves the default.** `6` is still CPython `turtle`'s "normal" and
+  still what `turtle.py` starts at, but on the compressed scale that is 278ms a
+  movement rather than the second it used to be.
+
+- **Rounder, roomier blocks.** Blockly's stock geometry is drawn for an adult
+  IDE — 8px corners, five pixels of padding either side of a field, an 16px
+  field box holding 11px text — and next to MakeCode or Scratch, which is where
+  Snakie's users arrive from, it read as cramped and sharp. The blocks now wear
+  their own Soft Shell geometry: 12px corners, near-pill field boxes, about half
+  again as much padding around every row, and 12px text to match. `thrasos`
+  stays the base renderer, so the row layout that keeps `set x to (…)` reading
+  as a sentence is unchanged.
+
+- **"Blocks" means blocks, and "Code" means code.** Each end of the split used
+  to leave a three-percent sliver of the other pane showing — forty pixels of
+  chopped-off Python beside the canvas, or a strip of half-blocks beside the
+  editor. That sliver was there because the divider was the only way back and a
+  divider flush against the edge cannot be grabbed. #1053's dot is a named way
+  back from either end, so the sliver stopped paying for itself: the end stops
+  are now hard, and each view shows one thing.
+
+- **The CircuitPython audit: where the asterisk goes** (#1033, epic #1007).
+  #1034 made the Blocks workspace the front door for any Python file, so
+  somebody had to answer what a CircuitPython user gets when they walk through
+  it. `docs/blockly-epic.md` §9 is the answer, measured rather than assumed. No
+  code — the audit's output is a written table, four filed issues (#1038–#1041)
+  and one bug it found on the way.
+
+  **Reading is already safe; writing is not.** Two canonical Adafruit programs
+  run through #1019's converter came back 7-of-10 and 9-of-10 recognised, with
+  the `board`/`digitalio` lines held verbatim in raw Python blocks — not the
+  stack of grey blocks the issue expected. **69% of the palette is already
+  dialect-neutral** (68 of 98 blocks), including the whole of turtle, which is
+  what the blocks course is taught in — so a CircuitPython learner can do the
+  entire on-ramp today.
+
+  **The bug it found** (#1038): `micropython/instruments.py` decides the dialect
+  with one `try: from machine import Pin, PWM / except ImportError:`, and that
+  `except` was written to mean "we are in the CPython simulator". CircuitPython
+  has no `machine` either, so a real CircuitPython board falls through to the
+  simulator's **no-op stubs** — `Led(15).on()` returns successfully and the LED
+  never lights. No traceback, no warning. That is reachable today without the
+  Blocks workspace at all, and it is exactly the failure epic #209 exists to
+  prevent.
+
+  Also recorded: the hardware palette does not emit `machine` directly (it goes
+  through the `snakie` umbrella, so the dialect is decided in **one** place, not
+  twelve); a dialect filter must go on the **toolbox**, never the registry, or
+  plugging in a CircuitPython board would make every existing hardware program
+  unopenable; and #1019's round-trip property is "every line survives and still
+  runs", not byte-identity — the import manager normalises order either way.
 
 - **Generated programs quote their strings one way** (#1014). The blocks emitted
   two conventions into the same file — `print('hello')` from the text blocks and
@@ -833,62 +532,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   every line of `docs/instruments-library.md` already says. A learner's own
   variable is guarded against the *alias*, since that is the name the program
   actually binds.
-
-### Fixed
-
-- **Opening a program that drives several instruments revealed only one of them**
-  (#1014, a bug in #1013's reveal). The dock's visibility is stored as one
-  object written whole, so four reveal events fired in a single burst each
-  started from the same pre-render state and the last one won. The set is now
-  sent as one event and written once.
-
-- **Turtle graphics blocks, and a way to start a blocks program at all**
-  (#1013, epic #1007, phase 2). Eighteen blocks over movement, pen, screen and
-  sensing, generating `import turtle` and `turtle.forward(100)`. This is the
-  first-hour demo: a sprite that moves when you tell it to, drawing as it goes,
-  **with nothing wired up** — on a Pico or in the simulator, which is what a
-  classroom of Chromebooks actually has.
-
-  **There was no way to make a blocks program.** Not an exaggeration: a blocks
-  program is a `.py` with a workspace in its footer, the `+` button makes an
-  ordinary empty `.py`, and an ordinary `.py` opens in Monaco — so picking
-  **Blocks** and pressing `+` got you the text editor, in the blocks workspace,
-  with nothing to say what was missing. Every blocks file that existed was one a
-  test wrote. The Blocks workspace's empty state is now the door: **Draw a
-  square** (the bundled starter, four blocks already assembled) and **New blocks
-  program**. The starter leads, because a beginner's first minute should be
-  something that already works and which they then take apart — an empty canvas
-  and a toolbox is a blank page, and a blank page is where people stop.
-
-  The starter ships as a **workspace**, not as a committed `.py`. A file with the
-  generated code baked in would be a second copy of the generator's output,
-  quietly drifting every time the generator improved — and drift here means a
-  starter that opens with a hand-edit conflict warning on it.
-
-  **The pen colour is a swatch**, which the issue rightly calls half of why
-  Scratch feels good, and the palette is twelve **named** colours rather than a
-  picker. The generated line reads `turtle.pencolor("hotpink")` — a line a
-  learner can read, remember and later type — where a picker would give
-  `turtle.pencolor("#c83c3c")`, and a mirror full of hex is a mirror nobody
-  learns from. Every colour reads on the instrument's dark screen, which is also
-  why the library's default pen is white rather than the black CPython's turtle
-  uses on paper.
-
-  **One block per library function**, so `pen up` and `pen down` are two blocks
-  and so are `turn right` and `turn left`. It is what Scratch does, so the muscle
-  memory transfers, and the block face says what will happen without anyone
-  reading a dropdown.
-
-  **Dragging a turtle block opens the Turtle instrument** — and scrolls it into
-  view, because the dock is a column with the mini board and the plotter above
-  it, and an instrument revealed below the fold is "opened" only in the sense
-  that it exists somewhere. Opening a saved turtle program does the same: a
-  drawing that goes nowhere looks exactly like a program that did nothing.
-
-  `import turtle` now files with Snakie's own libraries in the import section
-  rather than under part drivers, where it would sit below a BME280.
-
-### Changed
 
 - **`turtle.py` gains `xcor()`, `ycor()` and `heading()`** (#1013), and the
   `Turtle` class gains `getheading()`. The blocks' "x position" / "y position" /
@@ -1101,6 +744,467 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `SNK TURT ...` telemetry line per state change (mirroring the existing
   `instruments.py` protocol), so a running program draws live without
   interrupting the REPL, on real hardware and in the browser simulator alike.
+
+### Fixed
+
+- **`wait N milliseconds` now runs on CircuitPython** (#1041, epic #209). It
+  emitted `time.sleep_ms(…)`, which CircuitPython does not have — the only
+  dialect-specific block outside hardware. It gets a per-dialect template, the
+  shape #1040 settled on: MicroPython keeps `sleep_ms`, which is what every
+  tutorial writes and what the mirror is meant to show, and CircuitPython gets
+  `time.sleep()`. The block's label still says milliseconds either way.
+
+  A literal is converted at generation time — `time.sleep(0.5)`, what a
+  CircuitPython tutorial writes, rather than `time.sleep(500 / 1000)`, which is
+  arithmetic nobody would type. A variable or an expression keeps the division,
+  the only form still correct when the value changes.
+
+- **The block shelf no longer appears in Build** (#1066). Build's preset
+  collapses the centre column to nothing so the URDF editor can have the screen
+  — but with a blocks file open the canvas stayed mounted in that zero-width
+  column, and Blockly's toolbox takes no hint from a host with no width. The
+  shelf painted itself straight over Build's robot tree and its Export buttons.
+  Electronics collapses the centre the same way and had the same bug waiting in
+  it. The canvas now belongs to the two workspaces that are *about* the program;
+  elsewhere a blocks file opens as ordinary code, which is all those workspaces
+  can usefully show of it.
+
+- **An I²C scan from a program now reaches the I²C Detect instrument** (#1067).
+  Drag the I²C block out, press Run, and the panel opened by itself — then sat
+  there saying *"Pick the bus + pins, then SCAN"* with FOUND 0 while the program
+  scanned. `instruments.py` prints `SNK I2C …` and the telemetry parser has
+  always understood it; **nothing consumed it**. The panel had one scan path —
+  its own button, firing a different sentinel over `device.exec` — so it could
+  only show a scan it had started itself. It now listens to the program too, and
+  draws the result exactly the same way. (The button stays: it is the answer
+  when there is no program. Telemetry carries addresses only, not the pins they
+  were found on, so the pin dropdowns are left alone rather than guessing.)
+
+- **Blocks plugged into a socket no longer look detached.** The roomier-blocks
+  change bumped Blockly's four *in-row* paddings along with everything else, and
+  that is exactly where a plugged-in block's left edge sits — so `if` and the
+  condition socketed into it drew with a visible gap between them, reading as
+  not quite joined. Those four are back at Blockly's own values, checked against
+  a stock `thrasos` render of the same program side by side. The vertical
+  roominess is untouched: the same block still measures 176px tall, and only the
+  horizontal gap came out.
+
+- **The code-only view no longer invites you to use a canvas that isn't there**
+  (#1062). *"click a line to find its block"* and *"drag a block onto the canvas"*
+  are both about the other half of the split, and both were showing with the
+  canvas closed. They now appear only when the blocks are actually beside the
+  code; the link itself still works.
+
+- **Roots no longer sit a screen apart.** #1062's height estimate counted every
+  *value* socket's contents as vertical height — a comparison inside an `if`
+  added three rows that are not on screen — so it reserved 1312px for a root
+  that renders 559. Only a statement body adds height now.
+
+- **The blocks no longer stop saving your file without saying so** (#1068,
+  epic #1007). Three ways the canvas and the `.py` could quietly stop being the
+  same program, each of which used to be silent, now share one state, one rule —
+  *the blocks do not write the file until it is sorted out* — and one strip above
+  the panes saying which it is. In all three your Python is untouched and still
+  runs.
+
+  - **A block Snakie cannot write Python for.** Unwire a part in Electronics
+    while its blocks are on the canvas and they keep rendering, but they leave
+    the registry — so the Python mirror quietly lost those lines and the file
+    simply stopped saving, with no unsaved dot and no message, for the rest of
+    the session. It now says so, and names the part's blocks.
+  - **A block whose code *threw*.** The guard above only ever knew about block
+    types with no generator at all, so a generator that failed slipped past it
+    and wrote a program short of a whole stack — sometimes an empty file — over
+    the top of the learner's. It counts as the same failure now.
+  - **Python edited by hand under a blocks footer.** `docs/blocks.md` says that
+    when the footer goes stale Snakie works the blocks out from the code, and
+    nothing did: the stale blocks went on the canvas, the mirror showed *their*
+    regeneration in place of the edited Python, and the first block touched wrote
+    it over the file. The code is what was last written and what runs, so the
+    blocks are now rebuilt from it, as documented.
+
+- **A `.py` Snakie did not write is checked before its blocks may change it**
+  (#1068). #1069 gates the conversion while you type; opening a file went
+  straight onto the canvas without it. If the blocks are only an approximation of
+  the file, they are now there to look at and will not rewrite it.
+
+- **`"%.1f" % value` no longer opens as an empty canvas** (#1068). `%` beside a
+  string is formatting, not modulo — read as modulo it built a block Blockly
+  refuses to load, which cleared the canvas and blocked saving. Two of the files
+  Snakie itself ships hit this.
+
+- **`t = 0.0` no longer comes back `t = 0`**, and `0x1F` no longer comes back
+  `31` (#1068). A number block holds a number rather than the text of one, so a
+  literal whose written form would not survive the trip stays exactly as typed.
+
+- **A `pass` keeping company with real statements is no longer dropped**
+  (#1068). It was being removed wherever it appeared, on the reasoning that an
+  empty body gets one back — true only when it *was* the whole body.
+  `examples/hello_world.py` came back a line short.
+
+- **Four ways the Python→blocks converter changed your program** (#1068,
+  epic #1007). Each silent, each found by pointing the converter at Python a
+  learner or a lesson sheet would actually write:
+
+  - **An `else` nobody claimed was deleted, body and all.** The converter
+    skipped any line starting with `elif`/`else` on the reasoning that the `if`
+    above must have taken it — but an `if` stops looking at the first sibling
+    that is neither, which a comment at column zero between the arms is. So
+    `if:` / `# note` / `else:` lost the else branch entirely, and the conversion
+    report called it a clean run. `while … else:` and `for … else:` — real
+    Python that no `if` ever claims — went the same way. An arm nobody consumed
+    now keeps its header and its body.
+  - **A trailing comment was dropped from every line it recognised.**
+    `x = 5  # how many times` came back as `x = 5`, and `time.sleep(1)  # pause`
+    as a wait block with the pause forgotten. No block holds a statement *and* a
+    comment about it, so a line carrying one stays raw and keeps both.
+  - **`x == 5` was read as an assignment** and written back as `x = = 5`, which
+    is not Python. The guard sliced the line up to the first `=` — stopping one
+    character before the thing it was looking for.
+  - **A comment inside a bracketed call swallowed the rest of it.** The line
+    break after it is folded into a space, so
+
+    ```python
+    print(
+        1,  # first
+        2)
+    ```
+
+    became `print( 1,  # first 2)` — an unclosed bracket where valid Python used
+    to be. The comment now rides at the end of the line it was already being
+    folded onto.
+
+- **A variable can no longer shadow a module imported below it** (#1068,
+  epic #1007). A variable called `time` sitting above the block that needs
+  `import time` kept the name, and the import section — which is hoisted to the
+  top — then bound the module to a name the next line overwrote, so the program
+  died at the following `time.sleep` with an error nowhere near the block that
+  caused it. The guard could only ever see the imports declared so far; the
+  generator now makes a first pass to find out what the imports will bind, so
+  the variable comes out `time_` wherever it sits.
+
+- **A `while True:` with a `break` no longer opens as an empty canvas**
+  (#1068, epic #1007). `forever` and `break`/`continue` are defined with no next
+  connection, on the true reasoning that nothing runs after them — but the
+  Python→blocks converter chained onto them anyway, and Blockly *throws* on a
+  `next` a block has nowhere to put. The throw reached the canvas, which cleared
+  the workspace and blocked writes, so the commonest hardware loop there is —
+
+  ```python
+  while True:
+      if button.value():
+          break
+      time.sleep(0.1)
+  led.off()
+  ```
+
+  — showed a blank canvas beside a perfectly good program, with nothing said.
+  A terminal block that turns out not to be last now becomes the raw block it
+  would have been if we had not recognised it: uglier, and correct.
+
+- **Typing Python that would not convert back cleanly no longer rewrites your
+  program** (#1068, epic #1007). Typing in the code pane makes the blocks the source of
+  truth, so the next block you touch rewrites the file from them — which means a
+  converter that lost a line did not merely look wrong, it eventually *saved*
+  that. The conversion is now generated straight back and compared before it is
+  allowed to become the program, and held back when the two disagree. Your text
+  is untouched either way, the blocks you had stay on screen, and a quiet strip
+  above the panes says so rather than leaving you to notice.
+
+  The comparison forgives the two things the generator legitimately rewrites —
+  the import section (including the `import time` it adds for you) and
+  whitespace — and nothing else, so a dropped statement, a dropped comment, a
+  re-nested body or a mangled line all hold the blocks back instead of
+  rewriting your file.
+
+  This covers the code pane. Opening a `.py` Snakie did not write still converts
+  it without the check — that path shares a surface with the other ways the
+  blocks and the file can disagree, and is being done with them (#1068).
+
+- **Opening a real module no longer loses most of it** (#1063, epic #1007).
+  Pointing the Python→blocks converter at a 114-line robot module brought back
+  **36 lines**. Four separate faults, each silent:
+
+  - **A suite we could not read lost its body.** `class Frame:` became one block
+    holding that line and nothing else — both methods and everything in them,
+    gone, with the conversion reported as a success. Same for `try`, `with`,
+    `async def` and anything else the rules miss. There is now a raw *suite*
+    block: the header verbatim, the body nested under it.
+  - **Methods were lifted out of their class.** A `def` was always collected as
+    a top-level definition, so twelve methods became twelve un-indented
+    top-level functions detached from the objects they belong to. A nested `def`
+    now stays where it is.
+  - **Names were rewritten.** `__init__` came back as `init` and `_pack_rows` as
+    `pack_rows`, because the label-sanitiser strips leading underscores. A name
+    that is already a valid Python identifier is now left alone.
+  - **Signatures were rewritten and early returns became dead code.**
+    `def load(path, flip_x=None)` came back as `def load(path)` — defaults
+    silently dropped while every call still passed them — and every `return`
+    that was not the last line became `if False: return …`. A `def` whose
+    parameters Blockly cannot hold now stays a raw suite, and a `return` is a
+    `return`.
+
+  The same module now round-trips to the line.
+
+- **One string literal no longer freezes the whole canvas** (#1062). `#1037`'s
+  gate reconverts only when the code parses, and the no-board lint blanked
+  string literals to *spaces* — so `if cell not in " ."` trimmed to `if cell not
+  in` and read as a half-typed line. One such line anywhere in a file made the
+  whole file unparseable, and the blocks canvas just stayed empty with nothing
+  to say why. A string is a term.
+
+- **Pressing Blocks in the split view now shows blocks** (#1060). The dot (#1053)
+  made the switcher three-position across Blocks and Code, but in the split the
+  active workspace is *already* one of them — so pressing that segment fell into
+  the old "you re-clicked the current tab" no-op and nothing happened, while
+  pressing the dot worked. The switcher was offering a button that visibly could
+  not do what it said. All three positions now mean what they look like: Blocks
+  is blocks, the dot is both, Code is code — from either side.
+
+- **Highlighting stopped working after #1050, in two more ways** (#1050
+  follow-up, epic #1007).
+
+  **Clicking a block on the canvas put the Python lines out.** The fix for the
+  piling-up highlights added an `unselect()` call — and that fires a selection
+  event carrying *no id*, which Blockly queues and delivers **after** the next
+  block has been lit. Forwarded as the learner's choice, it cleared the link:
+  the lines lit for an instant and went dark. A selection event saying nothing
+  is selected, while something is, is describing a moment that has passed, so it
+  is dropped. A genuine deselect — clicking empty canvas — still comes through.
+
+  **Clicking the same line twice did nothing.** The id was unchanged, so React
+  skipped the update and the canvas never re-asserted — while clicking into the
+  code pane had already moved focus out of the canvas, which is how Blockly
+  clears a selection. Every line click now re-asserts, whether or not it names
+  the same block.
+
+- **The block↔line highlight never cleared** (#1050, epic #1007). Clicking a
+  line in the Python pane lit the block that wrote it — and clicking a different
+  line lit that one too, leaving the first on. They piled up: four lines clicked
+  in turn left four blocks lit, and the only way to clear one was to click it on
+  the canvas and then click away.
+
+  **Blockly does not clear the previous selection for a programmatic
+  `select()`.** In v13 the current selection belongs to the focus manager —
+  `common.setSelected` is `@internal` and its own doc says a selection is cleared
+  by focusing something else, which a `select()` call from our code never does.
+  The canvas assumed otherwise and only ever called `select()`.
+
+  It now remembers the block it lit and takes it off before lighting another —
+  including when there is nothing to light. Clicking a line no block wrote (an
+  import, a comment, a blank line) clears the highlight, because "nothing here
+  came from a block" is a real answer and should look like one. Selecting a
+  block on the canvas clears it too, which used to leave two lit at once.
+
+- **A function you defined never appeared in the Functions drawer** (#1045, epic
+  #1007). Define `wiggle` on the canvas, open **Functions** to get a block that
+  calls it, and it was not there — the drawer held the two `def` blocks,
+  `if return`, and **two blank, nameless caller blocks**. A learner who had just
+  written their first function had no way to call it.
+
+  Every toolbox category was built as a static list from the block registry.
+  That is right for the other thirteen and wrong for this one, whose contents
+  are a question about the **workspace**: Blockly's own `flyoutCategory` reads it
+  and returns one caller per function actually defined, already carrying that
+  function's name and parameter sockets. The Functions category is now
+  `custom: 'PROCEDURE'` and hands the job over.
+
+  The two caller blocks stay **registered** — the generator looks an emitter up
+  by type, and `workspace-check.ts` refuses to open a file containing a type this
+  build does not know, so dropping them would have stranded every saved program
+  that calls a function. They are simply never listed.
+
+- **CircuitPython got the simulator's no-op stubs, and nothing said so** (#1038,
+  epics #1007 and #209). `micropython/instruments.py` decided whether it had
+  hardware by trying `from machine import Pin, PWM` and catching the failure:
+  `except ImportError` **meant** "we are headless under CPython in the Snakie
+  simulator, so be inert". While MicroPython was the only Python on a board,
+  that was true.
+
+  CircuitPython has no `machine` either. So a real CircuitPython board landed in
+  the same branch and got the simulator's stubs — `Led(15).on()` returned
+  successfully, the LED did not light, and there was no traceback and no
+  warning. A silent wrong answer on real hardware is worse than a crash, and it
+  is exactly what epic #209 exists to prevent. It needed no blocks to reach:
+  `from snakie import Led` in the Code workspace was enough.
+
+  The library now **asks** rather than infers — `sys.implementation.name`, the
+  same signal the IDE's own runtime probe uses. On CircuitPython the `Pin` and
+  `PWM` stand-ins raise on construction, so the error lands on the
+  `Pin(15, Pin.OUT)` line in the learner's own program and names the
+  replacement (`board` with `digitalio`/`pwmio`/`analogio`). Six more paths that
+  used to return silently — in `Buzzer`, `Rangefinder`, `Display` (I²C and SPI)
+  and `Servo` — go through the same check.
+
+  **The CPython path is unchanged**, deliberately and under test: staying inert
+  is the whole point of the simulator. So is a MicroPython build with no
+  `machine` of its own, which the WASM port really is.
+
+  `instruments.py` is now `0.11.0`, so the IDE offers boards the update.
+
+- **`import x` and `from x import y` no longer swallow each other** in generated
+  block programs (#1018). The import manager keyed only on the module, so asking
+  for both forms of one module produced only the `from` line — leaving every
+  `x.` in the program undefined, as a `NameError` a long way from its cause. It
+  could not happen before there were import blocks to ask with; it can now.
+
+
+- **A NUL byte could end up in a generated program** (#1016, a bug in #1010). A
+  `def` block correctly generates nothing where it stands — its body is hoisted
+  into the functions section — but it was still given a source-map marker, and a
+  marker with no line of its own fuses with the next block's line. The assembler
+  stripped the first and left the second sitting in the code, which was then
+  saved to the file and sent to the board. It affected any program with a
+  function and anything after it, which is most programs that have a function at
+  all.
+
+- **Tracebacks land on the block that caused them** (#1015, epic #1007, phase 3).
+  A beginner who presses Run and gets `File "<stdin>", line 7` is being shown a
+  line number in a file they never wrote. The error now appears **on the block**,
+  Scratch-style, in a sentence they can act on.
+
+  **Run in block mode is the same Run.** The generated Python goes to
+  `device.runProgram`, the output streams to the same console, and the
+  auto-connect, the real-board preference and the simulator fallback all come
+  along unchanged — no "Run blocks" button, because it is not a different thing,
+  and no second device path. A classroom with no Picos still gets a green Run.
+
+  **Nothing is hidden.** The console prints the board's own traceback verbatim,
+  because that text is what a learner is graduating to and a tool that hides it
+  teaches them to fear it. The friendly sentence sits beside it, on the block.
+
+  **Which line, and whose.** The block chosen is the last frame that is the
+  *learner's* program, not the innermost frame overall: a program that calls into
+  `instruments.py` and fails in there has its innermost frame in a file nobody
+  dragged, and the call they made is the thing that is theirs to fix. An error
+  inside a function they defined lands on the block inside the function.
+
+  **An error with nowhere to land stays in the console.** No block wrote
+  `import turtle`, and a traceback whose frames are all inside a library has no
+  line in the program at all. Inventing an owner would put a red badge on an
+  innocent block.
+
+  A handful of errors get plain English — a missing library, an old library on
+  the board, a pin that can't do the job, a name used before it was set, dividing
+  by zero, an index off the end of a list. **Everything else keeps the board's own
+  words**, because a vague paraphrase of an error nobody anticipated is worse than
+  the real text.
+
+  `ImportError: no module named 'instruments'` also **brings the one-click install
+  back**. The banner already appears when a board connects without the library,
+  but a child who dismissed it meets the problem again as a traceback they cannot
+  act on.
+
+  **A running program makes the canvas glow** in the Soft Shell accent — the "my
+  code is alive" feedback Scratch gets right and a text editor never gives you.
+  It stops the moment the program crashes, because a canvas still pulsing over a
+  dead program is a lie about the one thing it exists to report. Stop clears the
+  glow and the error badges together, so a program the learner has just fixed
+  doesn't still look broken.
+
+  **Pressing Stop is not an error.** It raises `KeyboardInterrupt` wherever the
+  program had got to, and badging that block would tell a child they broke
+  something when all they did was press the button that says stop.
+
+- **Instruments in block mode, derived from the instrument registry** (#1014,
+  epic #1007, phase 2). Seventeen blocks that feed Snakie's own panels: the
+  oscilloscope, multimeter, plotter, radar, IMU, barometer, button, encoder and
+  display, plus the Wi-Fi/Bluetooth/I²C scanners and the control channel that
+  lets the app drive the board.
+
+  **Most of it already worked, and that is the headline.** Instruments are
+  surfaced by scanning the active file's *source* — `parse-pins.ts` for the
+  peripheral constructors, each instrument's `uses`/`hints` for driver and import
+  signals. Blocks generate source, so the dock already lit up correctly in block
+  mode with no new machinery. That is the whole argument for generating real
+  MicroPython instead of interpreting a block tree, cashed in.
+
+  **The palette is derived, not written.** An `InstrumentDef` declares its blocks
+  beside the `uses`/`hints` it already had, and that one declaration becomes a
+  Blockly definition, a MicroPython emitter, a toolbox slot, a help link and the
+  drag-to-reveal. A new instrument gets a block without anyone opening the block
+  code. Three blocks stay hand-written — `read_adc`, `read_pwm` and `i2c_scan`
+  take a *hardware object*, so each needs a pin dropdown and a hoisted
+  constructor; a descriptor that could express those could express anything,
+  which is the point at which it stops being a description.
+
+  **A keyword argument is only written when it differs from the library's own
+  default**, so the common call stays short: `inst.scope(value)` for a learner
+  who never touches the channel, `inst.scope(value, ch='ch2')` for one who does.
+
+  Two places the obvious block would have generated something that runs and is
+  wrong: the display block passes its text as a **list of rows**, because
+  `screen("Hello")` iterates the string and puts five one-character rows on the
+  screen; and the button block's state is a **boolean socket**, because a text
+  socket would emit `inst.button('a', 'True')` — a string, and so always truthy.
+
+  Scanner blocks say **"this one pauses for a moment — don't put it in a fast
+  loop"** on the block itself. Every other block here is a single cheap `print()`
+  that is safe in a tight loop; a scan is not, and a child who puts one inside
+  `forever` sees their program stutter with nothing to explain it.
+
+  `read_adc` and `read_pwm` are **value** blocks, as they return the reading as
+  well as sending it — so `set temperature to (read volts on GP26)` reads like a
+  sentence — and they share the hoisted `ADC`/`PWM` object with the Hardware
+  palette's blocks, because two `ADC`s on one pin is a bug rather than an
+  untidiness.
+
+  The `instruments.py` install banner was already reachable from the canvas: it
+  lives at the top of the shell rather than inside the Code workspace, so a
+  connected board missing the library offers the one-click install in Blocks too.
+  There is now a test saying so.
+
+- **Opening a program that drives several instruments revealed only one of them**
+  (#1014, a bug in #1013's reveal). The dock's visibility is stored as one
+  object written whole, so four reveal events fired in a single burst each
+  started from the same pre-render state and the last one won. The set is now
+  sent as one event and written once.
+
+- **Turtle graphics blocks, and a way to start a blocks program at all**
+  (#1013, epic #1007, phase 2). Eighteen blocks over movement, pen, screen and
+  sensing, generating `import turtle` and `turtle.forward(100)`. This is the
+  first-hour demo: a sprite that moves when you tell it to, drawing as it goes,
+  **with nothing wired up** — on a Pico or in the simulator, which is what a
+  classroom of Chromebooks actually has.
+
+  **There was no way to make a blocks program.** Not an exaggeration: a blocks
+  program is a `.py` with a workspace in its footer, the `+` button makes an
+  ordinary empty `.py`, and an ordinary `.py` opens in Monaco — so picking
+  **Blocks** and pressing `+` got you the text editor, in the blocks workspace,
+  with nothing to say what was missing. Every blocks file that existed was one a
+  test wrote. The Blocks workspace's empty state is now the door: **Draw a
+  square** (the bundled starter, four blocks already assembled) and **New blocks
+  program**. The starter leads, because a beginner's first minute should be
+  something that already works and which they then take apart — an empty canvas
+  and a toolbox is a blank page, and a blank page is where people stop.
+
+  The starter ships as a **workspace**, not as a committed `.py`. A file with the
+  generated code baked in would be a second copy of the generator's output,
+  quietly drifting every time the generator improved — and drift here means a
+  starter that opens with a hand-edit conflict warning on it.
+
+  **The pen colour is a swatch**, which the issue rightly calls half of why
+  Scratch feels good, and the palette is twelve **named** colours rather than a
+  picker. The generated line reads `turtle.pencolor("hotpink")` — a line a
+  learner can read, remember and later type — where a picker would give
+  `turtle.pencolor("#c83c3c")`, and a mirror full of hex is a mirror nobody
+  learns from. Every colour reads on the instrument's dark screen, which is also
+  why the library's default pen is white rather than the black CPython's turtle
+  uses on paper.
+
+  **One block per library function**, so `pen up` and `pen down` are two blocks
+  and so are `turn right` and `turn left`. It is what Scratch does, so the muscle
+  memory transfers, and the block face says what will happen without anyone
+  reading a dropdown.
+
+  **Dragging a turtle block opens the Turtle instrument** — and scrolls it into
+  view, because the dock is a column with the mini board and the plotter above
+  it, and an instrument revealed below the fold is "opened" only in the sense
+  that it exists somewhere. Opening a saved turtle program does the same: a
+  drawing that goes nowhere looks exactly like a program that did nothing.
+
+  `import turtle` now files with Snakie's own libraries in the import section
+  rather than under part drivers, where it would sit below a BME280.
 
 ## [0.56.0] - 2026-09-06
 

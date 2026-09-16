@@ -1,4 +1,5 @@
 import type { BlocksWorkspace } from '../../../../shared/blocks-doc'
+import type { ArgField, CallReceiver } from './registry'
 import {
   isSuiteHeader,
   logicalLines,
@@ -104,7 +105,36 @@ export interface CallRule {
   args?: readonly string[]
   /** Statement blocks stack; value blocks plug in. */
   shape?: 'statement' | 'value'
+  /** This call is made on a hoisted object rather than a module (#1058). */
+  receiver?: CallReceiver
+  /** Positional arguments that are fields rather than sockets, by index. */
+  argFields?: Readonly<Record<number, ArgField>>
 }
+
+/**
+ * HARDWARE COMES BACK IN TWO LINES (#1058).
+ * ---------------------------------------------------------------------------
+ *
+ * Everything above reads ONE line: `turtle.forward(100)` in, one block out. A
+ * hardware block does not write one line. It writes a constructor hoisted into
+ * the setup section and a call that uses it:
+ *
+ *     led_15 = Led(pin=Pin(15, Pin.OUT))     <- the setup
+ *     led_15.set(True)                        <- the block's own line
+ *
+ * and the pin lives in the object's NAME rather than in either call. So reading
+ * one block back means reading both lines, putting the pin in a field, and then
+ * making sure the constructor does not also become a block of its own — which
+ * would generate it twice.
+ *
+ * THE CONSTRUCTOR IS ONLY CONSUMED WHEN IT IS SAFE TO. Dropping a line is the
+ * one thing this module must never do carelessly, so the decision is made from
+ * the FINISHED conversion rather than guessed at: convert once, see which
+ * hoisted names became real blocks and which are still mentioned by a raw block,
+ * and only then convert again dropping the constructors that are fully
+ * accounted for. Two passes over a lexer is cheap; a deleted line is not.
+ */
+export type { CallReceiver, ArgField }
 
 /**
  * The calls this recognises, beyond the ones the palettes register themselves.
@@ -133,11 +163,28 @@ const REGISTERED: CallRule[] = []
  */
 export function registerCallRules(rules: readonly CallRule[]): void {
   for (const rule of rules) {
-    const key = `${rule.module ?? ''}.${rule.fn}`
-    const at = REGISTERED.findIndex((r) => `${r.module ?? ''}.${r.fn}` === key)
+    const key = ruleKey(rule)
+    const at = REGISTERED.findIndex((r) => ruleKey(r) === key)
     if (at === -1) REGISTERED.push(rule)
     else REGISTERED[at] = rule
   }
+}
+
+/**
+ * What makes two rules the same rule, for replacement.
+ *
+ * NOT just module + function (#1058). A receiver rule has no module at all —
+ * its call goes through an object this file declared — so every hardware rule
+ * keyed as `.set`, `.value`, `.toggle`, and `snakie_pin_read`'s `value` quietly
+ * REPLACED `snakie_pin_write`'s. `pin_15.value(1)` then had no rule to match and
+ * fell back to a raw block, while `pin_15.toggle()` beside it read fine.
+ *
+ * The receiver's own name and the shape are part of the identity: `pin.value`
+ * as a statement writes a pin, and `pin.value` as a value reads one. Two rules,
+ * two blocks.
+ */
+function ruleKey(rule: CallRule): string {
+  return `${rule.receiver?.name ?? rule.module ?? ''}.${rule.fn}/${rule.shape ?? 'statement'}`
 }
 
 /** Every rule, palette-registered ones first so a palette can override. */
@@ -156,8 +203,23 @@ export function resetCallRules(): void {
 
 /** Turn Python into a blocks workspace. Never throws; never refuses. */
 export function pythonToBlocks(source: string): Conversion {
-  const state = new Converter()
-  const stack = state.statements(tree(logicalLines(source)))
+  const lines = logicalLines(source)
+  // Which hoisted objects this file even HAS (#1058) — the constructor lines
+  // that match a receiver rule's template exactly.
+  const hoisted = hoistedObjects(lines, rules())
+  // THE FIRST PASS IS A QUESTION, NOT AN ANSWER. It asks which of those objects
+  // actually became blocks, and which are still named by a raw block — because a
+  // constructor may only be consumed when every use of its object was
+  // understood. Guessing that from the text would be guessing; converting and
+  // looking is not.
+  const probe = convert(lines, hoisted, null)
+  const consumable = new Set([...probe.claimed].filter((name) => !probe.rawNames.has(name)))
+  // The probe read every hoisted call it could and swallowed no constructors —
+  // it was only ever a question. So whenever it read ANY, the real pass has to
+  // run: to swallow the constructors of the objects that came out fully
+  // understood, and to leave the rest of the program exactly as it was.
+  const state = probe.claimed.size > 0 ? convert(lines, hoisted, consumable) : probe
+  const stack = state.stack
   // Definitions are TOP-LEVEL blocks, not links in the chain: Blockly models a
   // `def` as a hat with no previous or next connection, which is also the truth
   // about Python — a function is not a step in the program, it is a thing the
@@ -256,26 +318,29 @@ function blockHeight(block: BlockJson): number {
   // folding, and the case that would break a per-block estimate worst.
   const lines = (block.extraState as { lines?: unknown[] } | undefined)?.lines
   let total = Array.isArray(lines) && lines.length > 0 ? lines.length * ROW_HEIGHT : ROW_HEIGHT
-  for (const input of Object.values(block.inputs ?? {})) {
-    const inner = input.block
+  for (const [name, input] of Object.entries(block.inputs ?? {})) {
     // A VALUE socket sits on the row that is already counted; only a STATEMENT
     // body adds height, and it brings the arm under the mouth with it.
-    if (inner && isStatementBody(inner)) total += chainHeight(inner) + MOUTH_BOTTOM
+    if (input.block && isStatementBody(name)) total += chainHeight(input.block) + MOUTH_BOTTOM
   }
   return total
 }
 
 /**
- * Does this block sit in a statement socket rather than a value one?
+ * Is this input a statement BODY — something that adds height — rather than a
+ * value socket, which sits on a row already counted?
  *
- * Read off the block itself rather than the input name, because the converter
- * writes several body inputs (`DO`, `ELSE`, `STACK`…) and a rule could add
- * another. A block with a `next` chain is certainly a statement; a lone one is
- * decided by its type, and the raw value block is the only shape that can be
- * confused for one.
+ * Read off the INPUT NAME, and these are all of them: the converter writes
+ * exactly `DO`, `DO0…DOn`, `ELSE` and `STACK`, and nothing else opens a mouth.
+ *
+ * Sniffing the block instead, which is what this did first, counted every value
+ * socket's contents as vertical height — a comparison inside an `if` added
+ * three rows that are not there. On the module in #1062 that reserved 1312px
+ * for a root which renders 559, so the roots were laid out correct but a screen
+ * apart. Measured against the real canvas; see the comment above.
  */
-function isStatementBody(block: BlockJson): boolean {
-  return block.next !== undefined || block.type !== 'snakie_python_value'
+function isStatementBody(input: string): boolean {
+  return input === 'ELSE' || input === 'STACK' || /^DO\d*$/.test(input)
 }
 
 /**
@@ -350,6 +415,134 @@ function splitParams(params: string): string[] {
  */
 function modellableParams(params: string): boolean {
   return splitParams(params).every((p) => /^[A-Za-z_]\w*$/.test(p))
+}
+
+// ---------------------------------------------------------------------------
+// Hoisted objects (#1058)
+// ---------------------------------------------------------------------------
+
+/** One hoisted object, as read back off its constructor line. */
+export interface Hoisted {
+  /** The pin out of the object's NAME: `15` from `led_15`. */
+  pin: string
+  /**
+   * EVERY rule this constructor could serve, not just the first.
+   *
+   * One object backs several blocks — `buzzer_16` is the receiver of both
+   * `tone` and `stop`, and `pin_15` of both `value` and `toggle`. Keeping only
+   * the first match made the second call unreadable, which then kept the
+   * constructor alive as a raw block AND let the blocks hoist a second copy of
+   * it under a collision-avoiding name. The call's own function name picks.
+   */
+  matches: readonly { rule: CallRule; fields: Readonly<Record<string, string>> }[]
+}
+
+/** `led_15 = Led(...)` → `led_15`. Null for anything that is not an assignment. */
+export function constructorName(text: string): string | null {
+  return /^([A-Za-z_]\w*)\s*=\s*\S/.test(text) ? /^([A-Za-z_]\w*)/.exec(text)![1] : null
+}
+
+/** Does `text` use `name` as a whole word? */
+function mentions(text: string, name: string): boolean {
+  return new RegExp(`(^|[^A-Za-z0-9_])${escapeRe(name)}([^A-Za-z0-9_]|$)`).test(text)
+}
+
+function escapeRe(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
+ * Every hoisted object this file declares, by name.
+ *
+ * MATCHED AGAINST THE TEMPLATE, CHARACTER FOR CHARACTER. A constructor that is
+ * not exactly what the block would have written is not that block's — somebody
+ * wrote their own `Led(...)` differently, and reading it back as a block would
+ * rewrite their line. So the name has to fit `<prefix>_<pin>` AND the expression
+ * has to match `receiver.ctor` with `{PIN}` filled in and each `{FIELD}` one of
+ * its listed options.
+ */
+export function hoistedObjects(
+  lines: readonly LogicalLine[],
+  rs: readonly CallRule[]
+): Map<string, Hoisted> {
+  const receivers = rs.filter((r) => r.receiver)
+  const out = new Map<string, Hoisted>()
+  if (receivers.length === 0) return out
+  for (const line of lines) {
+    const m = /^([A-Za-z_]\w*)\s*=\s*(\S.*)$/.exec(line.text)
+    if (!m) continue
+    const [, name, expr] = m
+    const matches: { rule: CallRule; fields: Record<string, string> }[] = []
+    let pin = ''
+    for (const rule of receivers) {
+      const rec = rule.receiver!
+      const pinMatch = new RegExp(`^${escapeRe(rec.name)}_(\\w+)$`).exec(name)
+      if (!pinMatch) continue
+      const fields = matchCtor(rec, pinMatch[1], expr.trim())
+      if (!fields) continue
+      pin = pinMatch[1]
+      matches.push({ rule, fields })
+    }
+    if (matches.length > 0) out.set(name, { pin, matches })
+  }
+  return out
+}
+
+/**
+ * Does `expr` match this receiver's constructor for `pin`? If so, with which
+ * field values?
+ *
+ * The template is turned into a regex rather than the expression into a parse
+ * tree, because the template is OURS: the generator wrote it, so an exact match
+ * is both achievable and the only safe test.
+ */
+function matchCtor(
+  rec: CallReceiver,
+  pin: string,
+  expr: string
+): Record<string, string> | null {
+  const names: string[] = []
+  let pattern = ''
+  let rest = rec.ctor
+  for (;;) {
+    const at = rest.search(/\{[A-Z_]+\}/)
+    if (at === -1) {
+      pattern += escapeRe(rest)
+      break
+    }
+    pattern += escapeRe(rest.slice(0, at))
+    const token = /^\{([A-Z_]+)\}/.exec(rest.slice(at))![1]
+    rest = rest.slice(at + token.length + 2)
+    if (token === 'PIN') {
+      pattern += escapeRe(pin)
+      continue
+    }
+    const options = rec.options?.[token]
+    if (!options) return null
+    names.push(token)
+    pattern += `(${Object.values(options).map(escapeRe).join('|')})`
+  }
+  const found = new RegExp(`^${pattern}$`).exec(expr)
+  if (!found) return null
+  const fields: Record<string, string> = {}
+  names.forEach((token, i) => {
+    const options = rec.options![token]
+    const text = found[i + 1]
+    const value = Object.keys(options).find((k) => options[k] === text)
+    if (value !== undefined) fields[token] = value
+  })
+  return fields
+}
+
+/** One conversion pass over an already-lexed file. */
+function convert(
+  lines: readonly LogicalLine[],
+  hoisted: ReadonlyMap<string, Hoisted>,
+  consumable: ReadonlySet<string> | null
+): Converter {
+  const state = new Converter(hoisted, consumable)
+  state.stack = state.statements(tree(lines))
+  return state
 }
 
 /** Build the indentation tree. A header owns every line indented past it. */
@@ -438,6 +631,35 @@ function identifyBlock(block: BlockJson, path: string): void {
 
 class Converter {
   readonly report: ConversionReport = { recognised: 0, raw: 0, rawLines: [], total: 0 }
+  /** The module-level chain, filled in by {@link convert}. */
+  stack: BlockJson | null = null
+  /** Hoisted objects this file declares, by name (#1058). */
+  private readonly hoisted: ReadonlyMap<string, Hoisted>
+  /**
+   * Hoisted names this pass may READ — and therefore whose constructor it
+   * swallows. `null` is the probe pass: read everything, swallow nothing.
+   *
+   * ALL OR NOTHING PER OBJECT, which is the rule the first attempt got wrong.
+   * Keeping a constructor because one of its calls was unreadable, while still
+   * turning the OTHER calls into blocks, gives you two objects on one pin: the
+   * learner's `led_15` and the block's own hoisted copy, renamed `led_15_` to
+   * avoid the collision. Two `Led`s driving one pin is a real bug, not an
+   * untidiness. So a name is either fully understood — every use a block, the
+   * constructor gone — or left alone entirely.
+   */
+  private readonly consumable: ReadonlySet<string> | null
+  /** Hoisted names that became a real block. */
+  readonly claimed = new Set<string>()
+  /** Hoisted names still mentioned by a RAW block — their constructor must stay. */
+  readonly rawNames = new Set<string>()
+
+  constructor(
+    hoisted: ReadonlyMap<string, Hoisted> = new Map(),
+    consumable: ReadonlySet<string> | null = null
+  ) {
+    this.hoisted = hoisted
+    this.consumable = consumable
+  }
   /** Variable name → the id the workspace declares it under. */
   readonly variables = new Map<string, string>()
   /** `def` blocks, which are top-level hats rather than links in a chain. */
@@ -494,6 +716,16 @@ class Converter {
           },
           line: node.line
         })
+        continue
+      }
+      // A CONSTRUCTOR THE BLOCKS ALREADY CARRY (#1058). `led_15 = Led(...)` is
+      // the setup line of a block that also holds the pin, and the generator
+      // writes it back out from that block — so keeping it here would generate
+      // it twice. Only ever a name the pass before this one proved is fully
+      // accounted for.
+      if (this.consumable?.has(constructorName(node.line.text) ?? '')) {
+        this.report.total += 1
+        this.report.recognised += 1
         continue
       }
       // `pass` exists only to fill an empty suite, and an empty suite in blocks
@@ -850,6 +1082,13 @@ class Converter {
   private raw(line: LogicalLine, shape: 'statement' | 'value' = 'statement'): BlockJson {
     this.report.raw += 1
     this.report.rawLines.push(line.line)
+    // A hoisted object named by a line we could NOT read keeps its constructor
+    // (#1058): dropping it would leave this raw block calling a name nothing
+    // declares. Recorded rather than decided here, because the decision belongs
+    // to the whole file and this is one line of it.
+    for (const name of this.hoisted.keys()) {
+      if (mentions(line.text, name)) this.rawNames.add(name)
+    }
     return {
       type: shape === 'value' ? 'snakie_python_value' : 'snakie_python_statement',
       fields: { CODE: line.text }
@@ -895,11 +1134,68 @@ class Converter {
     if (!tokens) return null
     const call = readCall(tokens, text)
     if (!call || call.rest.length > 0) return null
+    // A call on a hoisted object first (#1058) — `led_15.set(True)`. Its
+    // "module" is an object this file declared, not a module at all.
+    const onObject = this.receiverCall(call, 'statement')
+    if (onObject) return onObject
     const rule = rules().find(
       (r) => r.fn === call.fn && (r.module ?? '') === (call.module ?? '') && (r.shape ?? 'statement') === 'statement'
     )
     if (!rule) return null
     return this.buildCall(rule, call.args)
+  }
+
+  /**
+   * A call on a HOISTED OBJECT → the block that wrote it (#1058).
+   *
+   * `led_15.set(True)`: the receiver names the object, the object's name holds
+   * the pin, and its constructor — already matched in {@link hoistedObjects} —
+   * holds anything else the block put there (a pull resistor, say). What is
+   * left is the arguments, which are either sockets or fields.
+   *
+   * Null for anything that does not line up exactly, which puts the line back
+   * on the raw path it was always on.
+   */
+  private receiverCall(
+    call: { module?: string; fn: string; args: string[] },
+    shape: 'statement' | 'value'
+  ): BlockJson | null {
+    if (!call.module) return null
+    // On the real pass, only a name the probe proved is fully accounted for.
+    if (this.consumable && !this.consumable.has(call.module)) return null
+    const object = this.hoisted.get(call.module)
+    if (!object) return null
+    const match = object.matches.find(
+      (m) => m.rule.fn === call.fn && (m.rule.shape ?? 'statement') === shape
+    )
+    if (!match) return null
+    const rule = match.rule
+    const rec = rule.receiver!
+    const argFields = rule.argFields ?? {}
+    const sockets = rule.args ?? []
+    // Every argument is either a socket or a field, and there are exactly as
+    // many as the block has. One too many is not this block.
+    if (call.args.length !== sockets.length + Object.keys(argFields).length) return null
+
+    const fields: Record<string, unknown> = { [rec.pinField]: object.pin, ...match.fields }
+    const inputs: Record<string, { block: BlockJson }> = {}
+    let socket = 0
+    for (let i = 0; i < call.args.length; i++) {
+      const asField = argFields[i]
+      if (asField) {
+        const value = asField.values[call.args[i].trim()]
+        // A value the dropdown cannot hold — `led.set(x)` with a variable in it
+        // — is not this block, and a raw line says so honestly.
+        if (value === undefined) return null
+        fields[asField.field] = value
+        continue
+      }
+      inputs[sockets[socket++]] = { block: this.expression(call.args[i]) }
+    }
+    this.claimed.add(call.module)
+    const block: BlockJson = { type: rule.type, fields }
+    if (Object.keys(inputs).length > 0) block.inputs = inputs
+    return block
   }
 
   /** Fill a rule's block from the argument texts. */
@@ -1168,6 +1464,8 @@ class Converter {
     if (tok.kind === 'name') {
       const call = readCall(tokens, this.source, at)
       if (call) {
+        const onObject = this.receiverCall(call, 'value')
+        if (onObject) return { block: onObject, next: call.next }
         const rule = rules().find(
           (r) =>
             r.fn === call.fn &&

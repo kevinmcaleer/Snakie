@@ -129,3 +129,23 @@ export function ledPinToken(ledLabel: string | null | undefined): string | null 
   const gp = /^GP([0-9]+)$/i.exec(raw)
   return gp ? gp[1] : pyString(raw)
 }
+
+/**
+ * What CircuitPython calls the pin MicroPython calls `15` (#1040).
+ *
+ * `board.GP15` and `machine.Pin(15)` are the same physical hole with two
+ * different names, and this is the join. The name comes from the BOARD's own
+ * silk label, which is exactly what CircuitPython's `board` module is built
+ * from — `GP15` on an RP2040, `IO15` on an ESP32-S3, `D13` on a Feather — so
+ * reading it off the profile is not a convention we are imposing, it is the one
+ * already written on the plastic.
+ *
+ * A pin the profile does not know falls back to `GP<n>`, which is right for the
+ * RP2040 family this defaults to and visibly wrong anywhere else — better than
+ * silently generating a pin that is not the one the learner picked.
+ */
+export function circuitPythonPin(gpio: string | number): string {
+  const n = Number(gpio)
+  const pin = boardPins().find((p) => p.gpio === n)
+  return `board.${pin?.label ?? `GP${n}`}`
+}

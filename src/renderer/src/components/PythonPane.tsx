@@ -67,6 +67,16 @@ export interface PythonPaneProps {
    * see is the same as not highlighting them.
    */
   revealLine?: number | null
+  /**
+   * Are the blocks on screen BESIDE this pane right now? (#1062)
+   *
+   * Both of this header's messages are about the other half of the split —
+   * "click a line to find its block", and the empty state's "drag a block onto
+   * the canvas". In the code-only view there is no canvas to click through to
+   * or drag onto, so they were pointing at something the learner could not see.
+   * The link itself still works; only the invitations to use it are hidden.
+   */
+  linked?: boolean
 }
 
 export function PythonPane({
@@ -74,7 +84,8 @@ export function PythonPane({
   onCodeChange,
   highlightLines,
   onLineClick,
-  revealLine
+  revealLine,
+  linked = false
 }: PythonPaneProps): JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
@@ -196,16 +207,23 @@ export function PythonPane({
   return (
     <div className="python-pane">
       <div className="python-pane__header">
-        <span className="python-pane__title">Python</span>
+        {/* MICROPYTHON, not PYTHON. The generator writes MicroPython — that is
+            the whole premise of the epic — and a learner who graduates from
+            this pane is graduating to the language named on it. The narrow
+            layout's tab keeps the short word: it sits beside "Blocks" in a
+            two-tab strip under 720px, where the long one does not fit. */}
+        <span className="python-pane__title">MicroPython</span>
         {/* The link is invisible until you try it, so say it once. This is the
             teaching mechanism of the whole epic and it should not be a secret. */}
-        {onLineClick && (
+        {onLineClick && linked && (
           <span className="python-pane__hint">click a line to find its block</span>
         )}
       </div>
       {code === '' && (
         <p className="python-pane__empty">
-          Drag a block onto the canvas, or start typing here — they are the same program.
+          {linked
+            ? 'Drag a block onto the canvas, or start typing here — they are the same program.'
+            : 'Start typing here, or press Blocks to build this program out of blocks.'}
         </p>
       )}
       <div className="python-pane__body" ref={hostRef} data-testid="python-pane-host" />

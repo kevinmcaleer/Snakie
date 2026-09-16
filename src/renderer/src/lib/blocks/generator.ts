@@ -1,3 +1,4 @@
+import type { Dialect } from '../../../../shared/dialect'
 import * as Blockly from 'blockly/core'
 import { ensureBlocklyLocale } from './locale'
 import { ImportManager, type PyImport } from './imports'
@@ -133,9 +134,28 @@ interface SetupBinding {
   expr: string
   /** The block that first asked — so a traceback in setup lands somewhere real. */
   blockId: string | null
+  /**
+   * Lines emitted straight after the assignment, with `{NAME}` filled in.
+   *
+   * CircuitPython needs this and MicroPython does not, which is most of what
+   * makes the two APIs different shapes (#1040): `machine.Pin(15, Pin.OUT)`
+   * says everything in the constructor, while `digitalio` builds the object
+   * first and sets its `direction` afterwards. A hoisted object is still ONE
+   * object with one key — it just takes two lines to make.
+   */
+  after: readonly string[]
 }
 
 export class MicroPythonGenerator extends Blockly.CodeGenerator {
+  /**
+   * Which Python this pass is writing (#1040).
+   *
+   * MicroPython unless told otherwise, which is both the default this app was
+   * built for and the safe answer: `unknown` — no board, or a board that would
+   * not say — generates MicroPython, because a program has to be written in
+   * SOMETHING and that is what every Snakie lesson teaches.
+   */
+  dialect: Dialect = 'micropython'
   /** Imports declared during this pass. */
   imports = new ImportManager()
   /** Hoisted constructions, keyed so the second asker gets the first's object. */
@@ -179,12 +199,18 @@ export class MicroPythonGenerator extends Blockly.CodeGenerator {
    * wrong and you get two objects fighting over one pin; make it too coarse and
    * two different LEDs collapse into one.
    */
-  setup(key: string, suggestedName: string, expr: string, block?: Blockly.Block): string {
+  setup(
+    key: string,
+    suggestedName: string,
+    expr: string,
+    block?: Blockly.Block,
+    after: readonly string[] = []
+  ): string {
     const existing = this.setupBindings.get(key)
     if (existing) return existing.name
     const name = toPythonIdentifier(sanitise(suggestedName), this.reservedNames())
     this.taken.add(name)
-    this.setupBindings.set(key, { name, expr, blockId: block?.id ?? null })
+    this.setupBindings.set(key, { name, expr, blockId: block?.id ?? null, after: [...after] })
     return name
   }
 
@@ -316,7 +342,10 @@ export class MicroPythonGenerator extends Blockly.CodeGenerator {
  * the three sections here is also what decides the line numbering the map is
  * expressed in, so the two can't disagree.
  */
-export function generateProgram(workspace: Blockly.Workspace): GeneratedProgram {
+export function generateProgram(
+  workspace: Blockly.Workspace,
+  dialect: Dialect = 'micropython'
+): GeneratedProgram {
   ensureBlocklyLocale()
   // TWO PASSES, BECAUSE A NAME CANNOT BE TAKEN BACK (#1068).
   //
@@ -333,8 +362,8 @@ export function generateProgram(workspace: Blockly.Workspace): GeneratedProgram 
   // The first pass exists only to find out which names the imports will bind;
   // its output is thrown away. The second is the real one, with those names
   // already spoken for, so the variable comes out `time_` wherever it sits.
-  const survey = runPass(workspace, null)
-  const pass = runPass(workspace, survey.gen.imports.boundNames())
+  const survey = runPass(workspace, dialect, null)
+  const pass = runPass(workspace, dialect, survey.gen.imports.boundNames())
   return {
     ...assemble(sectionsOf(pass.gen)),
     missing: blocksWithoutEmitters(workspace),
@@ -345,9 +374,11 @@ export function generateProgram(workspace: Blockly.Workspace): GeneratedProgram 
 /** One generation pass over `workspace`, with `reserved` names already taken. */
 function runPass(
   workspace: Blockly.Workspace,
+  dialect: Dialect,
   reserved: ReadonlySet<string> | null
 ): { gen: MicroPythonGenerator; failed: string[] } {
   const gen = new MicroPythonGenerator()
+  gen.dialect = dialect
   installEmitters(gen)
   gen.init(workspace)
   if (reserved) gen.reserve(reserved)
@@ -385,7 +416,15 @@ function sectionsOf(gen: MicroPythonGenerator): string[] {
   // Setup is collected DURING the walk, so it can only be rendered now.
   const setup = gen
     .setupLines()
-    .map((b) => `${MARK}${b.blockId ?? ''}${MARK}${b.name} = ${b.expr}\n`)
+    .map((b) =>
+      [
+        `${MARK}${b.blockId ?? ''}${MARK}${b.name} = ${b.expr}\n`,
+        // `{NAME}` rather than the name inline, because the generator picks the
+        // name — a second `led_15` on another pin becomes `led_16`, and a
+        // follow-up line written by hand would still say `led_15`.
+        ...b.after.map((line) => `${MARK}${b.blockId ?? ''}${MARK}${line.replace(/\{NAME\}/g, b.name)}\n`)
+      ].join('')
+    )
     .join('')
 
   // Functions ABOVE setup and the program: a `def` has to exist before anything
@@ -464,11 +503,22 @@ function assemble(sections: readonly string[]): Omit<GeneratedProgram, 'missing'
 function installEmitters(gen: MicroPythonGenerator): void {
   const forBlock = gen.forBlock as Record<string, unknown>
   for (const def of registeredBlocks()) {
+    // ONE BLOCK, TWO TEMPLATES (#1040). The alternative was two block sets, and
+    // the argument against it is the argument for this whole file format: a
+    // learner's program should be a program, not a program-for-a-Pico. One
+    // block means a canvas saved in a classroom's MicroPython half opens and
+    // runs in its CircuitPython half, and the mirror next door shows exactly
+    // what it generated either way — so "you cannot predict the code" is
+    // answered by looking at it.
+    //
+    // Absent means this block only knows MicroPython, which `scopedByEmitters`
+    // turns into a scope so the toolbox never offers it to the wrong board.
+    const emitter = gen.dialect === 'circuitpython' && def.circuitpython ? def.circuitpython : def
     forBlock[def.type] = (block: Blockly.Block) => {
       // Imports declared on the DEFINITION are needed whenever the block emits,
       // so they are collected here instead of in every emitter's first line.
-      if (def.imports) gen.imports.needAll(def.imports)
-      return def.code(block, gen)
+      if (emitter.imports) gen.imports.needAll(emitter.imports)
+      return emitter.code(block, gen)
     }
   }
 }

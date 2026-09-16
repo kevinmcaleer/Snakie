@@ -685,3 +685,148 @@ describe('the I²C bus (#1057)', () => {
     expect(types).toContain('snakie_i2c_present')
   })
 })
+
+/**
+ * THE SAME BLOCKS, IN CIRCUITPYTHON (#1040, epic #209).
+ * =============================================================================
+ *
+ * ONE BLOCK, TWO TEMPLATES — the decision `docs/blockly-epic.md` §9 records. The
+ * alternative was a second set of blocks, and it loses the property this file
+ * format exists for: a learner's program should be a program, not a
+ * program-for-a-Pico. The same canvas, on a Feather, writes `digitalio`.
+ *
+ * The two APIs are genuinely different shapes, which is what makes this worth
+ * testing line by line rather than asserting a substring: `machine.Pin` says
+ * everything in its constructor, while a `DigitalInOut` is built first and told
+ * its direction after — and its value is an attribute, not a call.
+ */
+describe('CircuitPython hardware (#1040)', () => {
+  const cp = (blocks: unknown[]): string[] => {
+    const ws = new Blockly.Workspace()
+    Blockly.serialization.workspaces.load({ blocks: { languageVersion: 0, blocks } }, ws)
+    const out = generateProgram(ws, 'circuitpython')
+    expect(out.missing).toEqual([])
+    return out.code.split('\n')
+  }
+
+  it('builds the object, then tells it its direction', () => {
+    expect(cp([{ type: 'snakie_led_set', id: 'l', fields: { PIN: '15', STATE: 'ON' } }])).toEqual([
+      // Two plain imports group together; the manager only spaces the kinds.
+      'import board',
+      'import digitalio',
+      '',
+      'led_15 = digitalio.DigitalInOut(board.GP15)',
+      'led_15.direction = digitalio.Direction.OUTPUT',
+      '',
+      // An ATTRIBUTE, not a call. There is no `.set()` in CircuitPython.
+      'led_15.value = True',
+      ''
+    ])
+  })
+
+  it('names the pin the way the board does', () => {
+    // `board.GP15` and `machine.Pin(15)` are the same physical hole. The name
+    // comes off the board profile's silk label, which is what CircuitPython's
+    // own `board` module is built from.
+    expect(cp([{ type: 'snakie_led_toggle', id: 't', fields: { PIN: '15' } }]).join('\n')).toContain(
+      'board.GP15'
+    )
+  })
+
+  it('toggles by assigning `not` its own value, since there is no toggle()', () => {
+    expect(cp([{ type: 'snakie_led_toggle', id: 't', fields: { PIN: '15' } }]).at(-2)).toBe(
+      'pin_15.value = not pin_15.value'
+    )
+  })
+
+  it('sets a pull on the object, and spells "none" as None', () => {
+    const lines = cp([
+      {
+        type: 'text_print',
+        id: 'p',
+        inputs: {
+          TEXT: { block: { type: 'snakie_pin_read', id: 'r', fields: { PIN: '14', PULL: 'NONE' } } }
+        }
+      }
+    ])
+    expect(lines).toContain('pin_14.pull = None')
+    // `int(...)`, because the block says "1 when it is high" and CircuitPython
+    // hands back a boolean. A block that says one thing and returns another is
+    // worse than a slightly longer line.
+    expect(lines).toContain('print(int(pin_14.value))')
+  })
+
+  it('a pull-up button still reads pressed as `not`', () => {
+    const lines = cp([
+      {
+        type: 'text_print',
+        id: 'p',
+        inputs: {
+          TEXT: {
+            block: { type: 'snakie_pin_pressed', id: 'b', fields: { PIN: '14', PULL: 'PULL_UP' } }
+          }
+        }
+      }
+    ])
+    expect(lines).toContain('pin_14.pull = digitalio.Pull.UP')
+    expect(lines).toContain('print(not pin_14.value)')
+  })
+
+  it('keeps the duty arithmetic word for word, because it is the lesson', () => {
+    const lines = cp([
+      {
+        type: 'snakie_pwm_duty',
+        id: 'd',
+        fields: { PIN: '15' },
+        inputs: { PERCENT: { block: num(50) } }
+      }
+    ])
+    // `variable_frequency`, or assigning `.frequency` later raises.
+    expect(lines).toContain('pwm_15 = pwmio.PWMOut(board.GP15, variable_frequency=True)')
+    expect(lines).toContain('pwm_15.duty_cycle = int(50 * 65535 / 100)')
+  })
+
+  it('reads an analogue pin over the same 16-bit range', () => {
+    // `.value` is already 0–65535, exactly what `read_u16()` gives — so both
+    // dialects divide by the same number and it is the same lesson.
+    const lines = cp([
+      {
+        type: 'text_print',
+        id: 'p',
+        inputs: {
+          TEXT: {
+            block: { type: 'snakie_adc_read', id: 'a', fields: { PIN: '26', UNIT: 'VOLTS' } }
+          }
+        }
+      }
+    ])
+    expect(lines).toContain('adc_26 = analogio.AnalogIn(board.GP26)')
+    expect(lines).toContain('print(adc_26.value * 3.3 / 65535)')
+  })
+
+  it('uses board.LED for the onboard one, which needs no per-board token', () => {
+    const lines = cp([{ type: 'snakie_onboard_led', id: 'o', fields: { STATE: 'ON' } }])
+    expect(lines).toContain('onboard_led = digitalio.DigitalInOut(board.LED)')
+  })
+
+  it('shares one object between two blocks on the same pin, as MicroPython does', () => {
+    const code = cp([
+      {
+        type: 'snakie_led_set',
+        id: 'a',
+        fields: { PIN: '15', STATE: 'ON' },
+        next: { block: { type: 'snakie_led_set', id: 'b', fields: { PIN: '15', STATE: 'OFF' } } }
+      }
+    ]).join('\n')
+    expect(code.match(/DigitalInOut\(/g)).toHaveLength(1)
+    expect(code.match(/\.direction =/g)).toHaveLength(1)
+  })
+
+  it('still writes MicroPython when nobody says otherwise', () => {
+    // The default is not a guess: a program has to be written in SOMETHING, and
+    // MicroPython is what every Snakie lesson teaches.
+    expect(lines([{ type: 'snakie_led_set', id: 'l', fields: { PIN: '15', STATE: 'ON' } }])).toContain(
+      'led_15 = Led(pin=Pin(15, Pin.OUT))'
+    )
+  })
+})
