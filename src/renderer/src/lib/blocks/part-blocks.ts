@@ -157,6 +157,34 @@ export function guessClassName(module: string): string {
 }
 
 /**
+ * The class a driver's SOURCE says it offers (#1048).
+ *
+ * Upgrades {@link guessClassName} from a guess to a fact, whenever the module's
+ * `.py` could be found and read. This file's header states the old limit
+ * exactly — *"we cannot know its methods without reading and parsing a Python
+ * file we may not even have yet"* — and #1048 is the issue that reads it.
+ *
+ * WHICH CLASS, when a driver defines several. Two rules, in order:
+ *
+ *  1. the one whose name matches the guess, case-insensitively — `ssd1306.py`
+ *     defining `SSD1306` and `SSD1306_I2C` should still answer `SSD1306` when
+ *     that is what the convention pointed at; and
+ *  2. otherwise the LAST one, because a driver that builds up from a base class
+ *     names the concrete, usable one last.
+ *
+ * `null` when the module offers no class at all, which puts the guess back.
+ */
+export function classNameFromApi(
+  module: string,
+  classes: readonly { name: string }[]
+): string | null {
+  if (classes.length === 0) return null
+  const guess = guessClassName(module).toLowerCase()
+  const exact = classes.find((c) => c.name.toLowerCase() === guess)
+  return (exact ?? classes[classes.length - 1]).name
+}
+
+/**
  * The constructor call a part's wiring implies, as a template.
  *
  * The three cases are the three ways a beginner's part is ever attached, and
@@ -210,11 +238,19 @@ function constructorExpr(wiring: PartWiring): { expr: string; imports: { module:
  * to any object; these are the same idea scoped to one part, with its wiring
  * already filled in.
  */
-export function derivedManifestFor(part: PartDefinition, wiring: PartWiring): BlocksManifest {
+export function derivedManifestFor(
+  part: PartDefinition,
+  wiring: PartWiring,
+  /** The class the driver's own source declares, when it could be read (#1048). */
+  knownClass?: string | null
+): BlocksManifest {
   const module = moduleOf(part)
   if (!module) return { version: BLOCKS_MANIFEST_VERSION, blocks: [] }
   const name = part.name || part.id
-  const guess = guessClassName(module)
+  // A fact when we have one, the convention when we do not. The field stays
+  // editable either way — a driver we could not find is still a driver the
+  // learner may know the class of.
+  const guess = knownClass || guessClassName(module)
   const ctor = constructorExpr(wiring)
   const imports = [{ module }, ...ctor.imports]
   // The module is imported plainly and the class taken off it, rather than
@@ -298,11 +334,25 @@ export function moduleOf(part: PartDefinition): string | null {
  * because the alternative is a drawer per instance and a toolbox that grows with
  * the size of the robot.
  */
+/** The class for a part's module, when the caller could read one. */
+function knownClass(
+  part: PartDefinition,
+  classFor?: (module: string) => string | null | undefined
+): string | null {
+  const module = moduleOf(part)
+  return module && classFor ? (classFor(module) ?? null) : null
+}
+
 export function placedPartBlocks(
   robot: RobotDefinition | null | undefined,
   libraries: readonly { id: string; parts?: PartDefinition[] }[],
   boardPin: BoardPinLookup,
-  parseManifest: (text: string) => { manifest: BlocksManifest; warnings: string[] }
+  parseManifest: (text: string) => { manifest: BlocksManifest; warnings: string[] },
+  /**
+   * The class a module's own source declares, when it could be read (#1048).
+   * Absent — or answering `undefined` — falls back to the conventional guess.
+   */
+  classFor?: (module: string) => string | null | undefined
 ): PlacedPartBlocks[] {
   const out: PlacedPartBlocks[] = []
   const seen = new Set<string>()
@@ -333,7 +383,7 @@ export function placedPartBlocks(
         // Unreadable YAML is the part author's mistake, and falling back to the
         // derived set means the learner still gets blocks rather than an empty
         // drawer and no explanation.
-        const wiredFallback = derivedManifestFor(part, wiring)
+        const wiredFallback = derivedManifestFor(part, wiring, knownClass(part, classFor))
         out.push({
           source,
           manifest: wiredFallback,
@@ -348,11 +398,11 @@ export function placedPartBlocks(
       }
       // A manifest every one of whose blocks was dropped is worse than none:
       // derive, and keep the warnings so the reason is still findable.
-      out.push({ source, manifest: derivedManifestFor(part, wiring), warnings: parsed.warnings, derived: true })
+      out.push({ source, manifest: derivedManifestFor(part, wiring, knownClass(part, classFor)), warnings: parsed.warnings, derived: true })
       continue
     }
 
-    const manifest = derivedManifestFor(part, wiring)
+    const manifest = derivedManifestFor(part, wiring, knownClass(part, classFor))
     if (manifest.blocks.length === 0) continue
     out.push({ source, manifest, warnings: [], derived: true })
   }
@@ -394,4 +444,35 @@ function withWiring(manifest: BlocksManifest, wiring: PartWiring): BlocksManifes
       })
     }))
   }
+}
+
+/**
+ * The driver modules the placed parts import (#1048).
+ *
+ * The same walk as {@link placedPartBlocks}, reduced to the one question the
+ * class-name upgrade has to ask: which module files are worth trying to read?
+ * Kept here, beside the walk it mirrors, so a change to how a part names its
+ * module cannot drift apart from how its blocks are built.
+ *
+ * Deduplicated, because two parts can share a driver and reading it twice is a
+ * round trip spent on nothing. Parts that name no module contribute nothing:
+ * `derivedManifestFor` already gives them no blocks.
+ */
+export function placedPartModules(
+  robot: RobotDefinition | null | undefined,
+  libraries: readonly { id: string; parts?: PartDefinition[] }[]
+): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const instance of robot?.parts ?? []) {
+    const part = libraries
+      .find((l) => l.id === instance.lib)
+      ?.parts?.find((p) => p.id === instance.part)
+    if (!part) continue
+    const module = moduleOf(part)
+    if (!module || seen.has(module)) continue
+    seen.add(module)
+    out.push(module)
+  }
+  return out
 }

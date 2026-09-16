@@ -9,7 +9,14 @@ import {
 import { loadSelectedBoard, watchSelectedBoard } from '../../components/board-pin-source'
 import type { BoardPinInfo } from '../../components/board-pin-check'
 import { blockDefinitionsFrom, type BlockSource } from './manifest'
-import { placedPartBlocks, type BoardPinLookup } from './part-blocks'
+import {
+  classNameFromApi,
+  placedPartBlocks,
+  placedPartModules,
+  type BoardPinLookup
+} from './part-blocks'
+import { findModuleSource } from './module-source'
+import { readModuleApi } from './module-api'
 import { defineDynamicBlocks, pruneDynamicBlocks } from './registry'
 import { reportError } from '../report-error'
 
@@ -169,9 +176,69 @@ export function useDynamicBlocks(folder: string | null | undefined): DynamicBloc
     }
   }, [])
 
+  /**
+   * THE GUESSED CLASS NAME, UPGRADED TO A FACT (#1048).
+   *
+   * `part-blocks.ts` has always had to guess: `vl53l0x` → `VL53L0X`, right for
+   * most drivers and visibly wrong on the block for the rest. Now that a
+   * module's source can be found and read, a wired part whose driver we have
+   * gets the class the driver actually declares.
+   *
+   * Resolved OUT OF BAND and folded in when it arrives, rather than blocking
+   * the palette on file reads: the blocks appear immediately with the guess,
+   * and correct themselves a moment later if the guess was wrong. A part whose
+   * driver is nowhere keeps the guess for good, which is exactly the old
+   * behaviour.
+   */
+  const [classNames, setClassNames] = useState<Record<string, string>>({})
+  const partModules = useMemo(
+    () => placedPartModules(robot, libraries).sort().join(','),
+    [robot, libraries]
+  )
+  useEffect(() => {
+    let live = true
+    const names = partModules ? partModules.split(',') : []
+    if (names.length === 0) {
+      setClassNames((prev) => (Object.keys(prev).length === 0 ? prev : {}))
+      return
+    }
+    void (async () => {
+      const found: Record<string, string> = {}
+      for (const module of names) {
+        const src = await findModuleSource(module, {
+          folder,
+          readLocal: (path) => window.api.fs.readFile(path),
+          // Only when a board is there: a read against nothing is a rejected
+          // promise per module, which is noise in the console and nothing else.
+          readDevice: window.api.device?.readFile
+            ? (path) => window.api.device.readFile(path)
+            : null,
+          readBundled: (file) => window.api.modules.bundledSource(file)
+        }).catch(() => null)
+        if (!src) continue
+        const name = classNameFromApi(module, readModuleApi(module, src.text).classes)
+        if (name) found[module] = name
+      }
+      if (!live) return
+      setClassNames((prev) =>
+        JSON.stringify(prev) === JSON.stringify(found) ? prev : found
+      )
+    })()
+    return () => {
+      live = false
+    }
+  }, [partModules, folder])
+
   const parts = useMemo(
-    () => placedPartBlocks(robot, libraries, boardPinLookup(boardPins), parseBlocksManifest),
-    [robot, libraries, boardPins]
+    () =>
+      placedPartBlocks(
+        robot,
+        libraries,
+        boardPinLookup(boardPins),
+        parseBlocksManifest,
+        (module) => classNames[module]
+      ),
+    [robot, libraries, boardPins, classNames]
   )
 
   // Register, and bump the nonce only when the REGISTERED SET actually differs.

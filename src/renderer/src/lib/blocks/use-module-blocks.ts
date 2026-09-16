@@ -5,7 +5,14 @@ import { MODULES } from '../../components/micropython-symbols'
 import { CIRCUITPYTHON_MODULES } from '../../components/circuitpython-symbols'
 import { inScope } from '../../../../shared/dialect-api'
 import type { Dialect } from '../../../../shared/dialect'
-import { apiFromCurated, type CuratedMember } from './module-api'
+import {
+  apiFromCurated,
+  readModuleApi,
+  type CuratedMember,
+  type ModuleApi
+} from './module-api'
+import { findModuleSource, type ModuleSourceReaders } from './module-source'
+import { memberProbeSnippet, readMemberProbe, type ProbedMembers } from './module-probe'
 import { manifestForModule, moduleGroupId } from './module-blocks'
 import { blockDefinitionsFrom } from './manifest'
 import { defineDynamicBlocks, pruneDynamicBlocks } from './registry'
@@ -55,7 +62,45 @@ function curatedMembers(module: string, dialect: Dialect): CuratedMember[] | nul
  * Register a Modules drawer for `source`'s imports. Returns a nonce the canvas
  * rebuilds its toolbox on.
  */
-export function useModuleBlocks(source: string, dialect: Dialect): number {
+/**
+ * Everything a module could offer, best tier first (#1048).
+ *
+ * The tiers are ordered by what they BUY, which is the issue's own ordering:
+ *
+ *  1. **Its source**, wherever the nearest copy is — real parameter names,
+ *     real defaults, and which arguments may be omitted. Parsed, never
+ *     imported.
+ *  2. **The curated tables** — no file, no board, and the only tier that covers
+ *     a module frozen into the firmware without a round trip.
+ *  3. **The board's own `dir()`** — names and kinds but no signatures, for a C
+ *     module or a `.mpy` that nothing else can describe.
+ *
+ * A module answered by tier 1 is not asked of tiers 2 and 3: a signature read
+ * off the real file beats one inferred from a catalogue, every time.
+ */
+async function apiForModule(
+  module: string,
+  dialect: Dialect,
+  readers: ModuleSourceReaders,
+  probed: ProbedMembers
+): Promise<ModuleApi | null> {
+  const found = await findModuleSource(module, readers)
+  if (found) {
+    const api = readModuleApi(module, found.text)
+    if (api.classes.length > 0 || api.functions.length > 0 || api.constants.length > 0) return api
+  }
+  const curated = curatedMembers(module, dialect)
+  if (curated && curated.length > 0) return apiFromCurated(module, curated)
+  const fromBoard = probed[module]
+  if (fromBoard && fromBoard.length > 0) return apiFromCurated(module, fromBoard)
+  return null
+}
+
+/**
+ * Register a Modules drawer for `source`'s imports. Returns a nonce the canvas
+ * rebuilds its toolbox on.
+ */
+export function useModuleBlocks(source: string, dialect: Dialect, folder?: string | null): number {
   const [nonce, setNonce] = useState(0)
   const lastKey = useRef('')
 
@@ -64,15 +109,45 @@ export function useModuleBlocks(source: string, dialect: Dialect): number {
   const imports = useMemo(() => [...parsePyImports(source)].sort().join(','), [source])
 
   useEffect(() => {
-    const key = `${dialect}|${imports}`
+    const key = `${dialect}|${folder ?? ''}|${imports}`
     if (key === lastKey.current) return
     lastKey.current = key
-    try {
+    let live = true
+
+    const run = async (): Promise<void> => {
+      const names = imports ? imports.split(',') : []
+      if (names.length === 0) {
+        pruneDynamicBlocks(new Set(), MODULE_SOURCE_PREFIX)
+        setNonce((n) => n + 1)
+        return
+      }
+
+      const readers: ModuleSourceReaders = {
+        folder,
+        readLocal: (path) => window.api.fs.readFile(path),
+        // Only when something is CONNECTED: a read against no board is a
+        // rejected promise per module per keystroke-pause, which is noise.
+        readDevice: connected() ? (path) => window.api.device.readFile(path) : null,
+        readBundled: (file) => window.api.modules.bundledSource(file)
+      }
+
+      // ONE round trip for the board tier, and only for what the other two
+      // could not answer — asking the board about `time` when the tables
+      // already describe it is a serial round trip spent on nothing.
+      const unresolved: string[] = []
+      for (const module of names) {
+        if (await findModuleSource(module, readers)) continue
+        if (curatedMembers(module, dialect)) continue
+        unresolved.push(module)
+      }
+      const probed = unresolved.length > 0 ? await probeMembers(unresolved) : {}
+      if (!live) return
+
       const keep = new Set<string>()
-      for (const module of imports ? imports.split(',') : []) {
-        const members = curatedMembers(module, dialect)
-        if (!members || members.length === 0) continue
-        const { manifest } = normaliseBlocksManifest(manifestForModule(apiFromCurated(module, members)))
+      for (const module of names) {
+        const api = await apiForModule(module, dialect, readers, probed)
+        if (!api) continue
+        const { manifest } = normaliseBlocksManifest(manifestForModule(api))
         if (manifest.blocks.length === 0) continue
         const id = moduleGroupId(module)
         keep.add(id)
@@ -86,14 +161,41 @@ export function useModuleBlocks(source: string, dialect: Dialect): number {
           })
         )
       }
+      if (!live) return
       // Only OUR sources: a part's blocks are not this hook's to remove, and
       // `use-dynamic-blocks.ts` says the same about ours.
       pruneDynamicBlocks(keep, MODULE_SOURCE_PREFIX)
       setNonce((n) => n + 1)
-    } catch (err) {
-      reportError('blocks: registering module blocks', err)
     }
-  }, [imports, dialect])
+
+    run().catch((err) => reportError('blocks: registering module blocks', err))
+    return () => {
+      live = false
+    }
+  }, [imports, dialect, folder])
 
   return nonce
+}
+
+/** Is a board connected right now? Cheap, and re-read on every pass. */
+function connected(): boolean {
+  try {
+    return Boolean(window.api?.device?.readFile)
+  } catch {
+    return false
+  }
+}
+
+/** Ask the board about the modules nothing else could describe. Never throws. */
+async function probeMembers(modules: readonly string[]): Promise<ProbedMembers> {
+  const snippet = memberProbeSnippet(modules)
+  if (!snippet) return {}
+  try {
+    const out = await window.api.device.exec(snippet)
+    return readMemberProbe(`${out?.stdout ?? ''}`)
+  } catch {
+    // No board, a board mid-run, a board that said something odd — all of it is
+    // "this tier has no answer", which is what the drawer being empty means.
+    return {}
+  }
 }

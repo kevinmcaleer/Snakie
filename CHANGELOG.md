@@ -28,13 +28,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   parameter names too. Member-level dialect scope is respected, so a
   CircuitPython board is not offered `time.sleep_ms`.
 
-  The source-reading tier is written and tested underneath it: `module-api.ts`
-  reads a module's classes, methods, parameters and defaults out of its `.py`
-  with #1019's lexer — **parsing only, never importing**, because a module a
-  learner downloaded is somebody else's code. Resolving that source (project
-  folder, board `/lib`, bundled), the board-side `dir()` probe for modules with
-  no source, and upgrading `part-blocks.ts`'s guessed class name to the real one
-  are the remaining tiers.
+  Three tiers now fill the drawer, best first, and a module answered by one is
+  never asked of the next:
+
+  1. **Its own source, wherever the nearest copy is** — your project folder, then
+     the board's `/lib`, then the drivers Snakie bundles. `module-api.ts` reads
+     the classes, methods, parameters and defaults out of the `.py` with #1019's
+     lexer: **parsing only, never importing**, because a module a learner
+     downloaded is somebody else's code and importing it on the host to look
+     inside would run it. Real parameter names, real defaults, and a socket only
+     for the arguments that have no default.
+  2. **The curated tables**, as above.
+  3. **The board's own `dir()`** — one batched round trip for the modules
+     nothing else could describe (a C module, a stripped `.mpy`), and only for
+     those. This tier imports on the *board*, which is the same exposure as
+     pressing Run.
+
+  Reading a module's source also retires a guess that has been visible on the
+  face of every derived part block since #1017. `vl53l0x` → `VL53L0X` is right
+  for most drivers and plainly wrong for the rest; a wired part whose driver we
+  can find now carries the class the driver actually declares — the Grove I²C
+  motor driver says `GroveMotorDriver`, not `TB6612`. The field stays editable,
+  and a part whose driver is nowhere keeps the old guess.
 
 - **The hardware blocks speak CircuitPython** (#1040, epic #1007 and epic #209).
   The same block, on a Feather, writes `digitalio.DigitalInOut(board.GP15)`
