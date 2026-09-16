@@ -106,3 +106,41 @@
   display: flex;
   gap: 8px;
 }
+
+/* ---------------------------------------------------------------------------
+ * A RUNNING PROGRAM LOOKS ALIVE (#1015).
+ *
+ * The "my code is alive" feedback Scratch gets right and a text editor never
+ * gives you: while the program is on the board, the canvas itself glows in the
+ * Soft Shell accent. Inset, so it reads as the surface being lit rather than as
+ * a border somebody drew, and animated slowly enough to be noticed without
+ * being the thing you look at.
+ *
+ * NOT a glow on the RUNNING BLOCK, which is what the issue asks for and what we
+ * cannot honestly do: knowing which block is executing needs per-line telemetry
+ * from the board, and MicroPython has no trace hook to give it. The canvas-level
+ * state is the true half of that idea; the per-block half waits for a mechanism
+ * that can actually tell.
+ * ------------------------------------------------------------------------- */
+.blocks-canvas__host--running {
+  box-shadow: inset 0 0 0 2px var(--accent-2);
+  animation: blocks-canvas-alive 1.9s ease-in-out infinite;
+}
+
+@keyframes blocks-canvas-alive {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent-2) 45%, transparent);
+  }
+  50% {
+    box-shadow: inset 0 0 0 2px var(--accent-2);
+  }
+}
+
+/* Someone who has asked for less motion gets the state without the pulse — the
+   information is the glow, the animation is only emphasis. */
+@media (prefers-reduced-motion: reduce) {
+  .blocks-canvas__host--running {
+    animation: none;
+  }
+}
