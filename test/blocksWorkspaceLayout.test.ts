@@ -39,11 +39,19 @@ describe('the Blocks workspace segment (#1009)', () => {
     expect(p.filesCollapsed).toBe(false)
   })
 
-  it('opens canvas-primary, while Code opens Python-primary', () => {
+  it('opens SPLIT, while Code opens Python-primary', () => {
+    // #1016 changed this. The epic's teaching mechanism is the two panes being
+    // on screen TOGETHER — a learner who watches the Python grow as they drag is
+    // already reading it — and a canvas-primary default hid that behind a
+    // control most people never press, which is the same as not shipping it.
+    expect(defaultBlocksViewMode('blocks')).toBe('split')
+    // Code still means "make the Python the big one". That is what the switcher
+    // segment is FOR, and #1009's whole answer to "blocks or code?".
+    expect(defaultBlocksViewMode('code')).toBe('python')
+    // The stored ratio still favours the canvas, because blocks are wide and a
+    // column of Python is not — "split" is both panes usable, not both equal.
     expect(WORKSPACE_PRESETS.blocks.blocksSplit).toEqual(BLOCKS_VIEW_RATIOS.blocks)
     expect(WORKSPACE_PRESETS.code.blocksSplit).toEqual(BLOCKS_VIEW_RATIOS.python)
-    expect(defaultBlocksViewMode('blocks')).toBe('blocks')
-    expect(defaultBlocksViewMode('code')).toBe('python')
   })
 
   it('every workspace has a blocks ratio — a blocks file opens anywhere', () => {

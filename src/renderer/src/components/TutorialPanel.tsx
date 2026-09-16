@@ -24,9 +24,11 @@ import { useWorkspace } from '../store/workspace'
 import { useWorkspaceLayout } from '../store/layout'
 import { lessonFileName, seedAction } from '../lib/lesson-seed'
 import { formatCourseLink, parseCourseLink, resolveLessonIndex } from '../lib/course-link'
+import { dispatchBlocksViewMode } from './editorBridge'
 import { Markdown } from './Markdown'
 import { BuildChecklist } from './BuildChecklist'
 import { DemoProjectCard } from './DemoProjectCard'
+import { BlocksStarterCard } from './BlocksStarterCard'
 import type { Course, CourseTrack } from '../lib/courses'
 import { BulbIcon, CourseIcon } from './ui-icons'
 import './Tutorials.css'
@@ -83,9 +85,59 @@ export function TutorialPanel(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courses])
 
+  /**
+   * Place a blocks lesson's starter workspace (#1016).
+   *
+   * Built through the generator rather than stored as finished text, for the
+   * same reason #1013's "Draw a square" starter is: a `.py` with the code baked
+   * in would be a second copy of the generator's output, drifting every time the
+   * generator improved — and drift here means a lesson that opens with a
+   * hand-edit conflict warning across it.
+   */
+  const seedBlocksLesson = useCallback(
+    async (
+      courseId: string,
+      index: number,
+      workspace: unknown,
+      viewMode?: string
+    ): Promise<void> => {
+      const name = lessonFileName(courseId, index)
+      const open = openFiles.find((f) => f.name === name)
+      // Their own work wins, exactly as it does for a code lesson: re-opening a
+      // lesson they have edited brings their file to the front, unchanged.
+      if (open) setActive(open.id)
+      else {
+        try {
+          const { buildBlocksDocument } = await import('../lib/blocks/starters')
+          openBuffer(name, await buildBlocksDocument(workspace as never))
+        } catch {
+          // A malformed workspace must not take the lesson down with it — the
+          // words are the lesson, and they are already on screen.
+          return
+        }
+      }
+      // THE EMPHASIS COMES LAST, and that is not tidiness. It is stored per
+      // FILE, keyed by whichever file is active when it is set — so dispatching
+      // it before this await would key it to the previous lesson's buffer and
+      // the handover lesson would open in the ordinary split, silently.
+      if (viewMode) dispatchBlocksViewMode(viewMode, name)
+    },
+    [openFiles, openBuffer, setActive]
+  )
+
   /** Place a lesson's starter code without trampling the learner's own edits. */
   const seedLesson = useCallback((): void => {
-    if (!course || !lesson?.code) return
+    if (!course) return
+    // A BLOCKS lesson (#1016) hands over a canvas rather than a page of text, so
+    // its starter has to become a blocks file — which means generating the
+    // Python and writing the footer, which means the Blockly chunk. Hence the
+    // separate async path: the ordinary code lesson must not start waiting on a
+    // 1.1MB download it has no use for.
+    if (lesson?.blocks) {
+      void seedBlocksLesson(course.id, lessonIndex, lesson.blocks, lesson.viewMode)
+      return
+    }
+    if (!lesson?.code) return
     const name = lessonFileName(course.id, lessonIndex)
     const open = openFiles.find((f) => f.name === name)
     const key = `${course.id}#${lessonIndex}`
@@ -115,7 +167,7 @@ export function TutorialPanel(): JSX.Element {
     } else {
       openBuffer(name, lesson.code)
     }
-  }, [course, lesson, lessonIndex, openFiles, openBuffer, setActive, updateContent])
+  }, [course, lesson, lessonIndex, openFiles, openBuffer, setActive, updateContent, seedBlocksLesson])
 
   useEffect(() => {
     setTipOpen(false)
@@ -143,6 +195,9 @@ export function TutorialPanel(): JSX.Element {
         <BuildChecklist />
         {/* A working robot before any lesson: the fastest way to see that the
             three workspaces are one project (#483). */}
+        {/* Blocks before the robot: the on-ramp is the first thing a beginner
+            should meet, and it needs no hardware at all (#1016). */}
+        <BlocksStarterCard />
         <DemoProjectCard />
         {courses.length === 0 && <p className="tp__empty">No tutorials are bundled in this build yet.</p>}
         {tracks.map((t) => {

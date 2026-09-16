@@ -1,0 +1,233 @@
+# THE BLOCKS TRACK (#1016, epic #1007).
+#
+# The on-ramp, as a course. Five lessons that are about a THING — a light, a
+# button, a tune, a shape, a sensor — and a sixth that is about the Python they
+# have been writing the whole time.
+#
+# Every lesson carries a `blocks:` workspace rather than `code:`, so it opens on
+# the canvas with the program already assembled: a beginner's first minute
+# should be something that works and which they then take apart. The last one
+# asks for `viewMode: python`, so it opens Python-primary with the blocks still
+# peeking — the layout saying what the words say.
+#
+# The workspaces are Blockly's own serialisation, generated from the real
+# palettes and normalised by loading them once, so what is stored here is what
+# the canvas produces (a starter that differs opens with a hand-edit conflict
+# warning on it).
+title: Blocks to Python
+description: Snap blocks together, watch Snakie write the MicroPython beside them, then take
+  the pen.
+emoji: 🧩
+accent: '#3fae5a'
+track: beginner
+lessons:
+- title: Make a light blink
+  file: 01-blink.md
+  view: blocks
+  blocks:
+    blocks:
+      languageVersion: 0
+      blocks:
+      - type: snakie_forever
+        id: l1-forever
+        x: 40
+        y: 40
+        inputs:
+          DO:
+            block:
+              type: snakie_led_toggle
+              id: l1-toggle
+              fields:
+                PIN: '15'
+              next:
+                block:
+                  type: snakie_wait_ms
+                  id: l1-wait
+                  inputs:
+                    MS:
+                      shadow:
+                        type: math_number
+                        fields:
+                          NUM: 400
+  tip: '**Toggle** flips the LED each time round the loop — that is what makes it blink rather
+    than just turn on.'
+- title: Read a button
+  file: 02-button.md
+  view: blocks
+  blocks:
+    blocks:
+      languageVersion: 0
+      blocks:
+      - type: snakie_forever
+        id: l2-forever
+        x: 40
+        y: 40
+        inputs:
+          DO:
+            block:
+              type: controls_if
+              id: l2-if
+              inputs:
+                IF0:
+                  block:
+                    type: snakie_pin_pressed
+                    id: l2-pressed
+                    fields:
+                      PIN: '14'
+                      PULL: PULL_UP
+                DO0:
+                  block:
+                    type: text_print
+                    id: l2-print
+                    inputs:
+                      TEXT:
+                        shadow:
+                          type: text
+                          fields:
+                            TEXT: Pressed!
+              next:
+                block:
+                  type: snakie_wait_ms
+                  id: l2-wait
+                  inputs:
+                    MS:
+                      shadow:
+                        type: math_number
+                        fields:
+                          NUM: 100
+  tip: '**Pull up** holds the pin at 1 until the button pulls it to 0 — which is why the Python
+    says `not`.'
+- title: Play a tune
+  file: 03-buzzer.md
+  view: blocks
+  blocks:
+    blocks:
+      languageVersion: 0
+      blocks:
+      - type: controls_repeat_ext
+        id: l3-rep
+        x: 40
+        y: 40
+        inputs:
+          TIMES:
+            shadow:
+              type: math_number
+              fields:
+                NUM: 3
+          DO:
+            block:
+              type: snakie_buzzer_tone
+              id: l3-a
+              fields:
+                PIN: '16'
+              inputs:
+                FREQ:
+                  shadow:
+                    type: math_number
+                    fields:
+                      NUM: 440
+                MS:
+                  shadow:
+                    type: math_number
+                    fields:
+                      NUM: 200
+              next:
+                block:
+                  type: snakie_buzzer_tone
+                  id: l3-b
+                  fields:
+                    PIN: '16'
+                  inputs:
+                    FREQ:
+                      shadow:
+                        type: math_number
+                        fields:
+                          NUM: 660
+                    MS:
+                      shadow:
+                        type: math_number
+                        fields:
+                          NUM: 200
+  tip: Doubling a frequency is the same note an octave higher. 440 → 880.
+- title: Draw a square
+  file: 04-turtle-square.md
+  view: blocks
+  blocks: &id001
+    blocks:
+      languageVersion: 0
+      blocks:
+      - type: controls_repeat_ext
+        id: l4-rep
+        x: 40
+        y: 40
+        inputs:
+          TIMES:
+            shadow:
+              type: math_number
+              fields:
+                NUM: 4
+          DO:
+            block:
+              type: snakie_turtle_forward
+              id: l4-fwd
+              inputs:
+                STEPS:
+                  shadow:
+                    type: math_number
+                    fields:
+                      NUM: 100
+              next:
+                block:
+                  type: snakie_turtle_right
+                  id: l4-right
+                  inputs:
+                    ANGLE:
+                      shadow:
+                        type: math_number
+                        fields:
+                          NUM: 90
+  tip: The turn is always 360 ÷ the number of sides. A circle shared out between the corners.
+- title: Read a sensor
+  file: 05-sensor.md
+  view: blocks
+  blocks:
+    blocks:
+      languageVersion: 0
+      blocks:
+      - type: snakie_forever
+        id: l5-forever
+        x: 40
+        y: 40
+        inputs:
+          DO:
+            block:
+              type: snakie_inst_plot
+              id: l5-plot
+              fields:
+                NAME: light
+              inputs:
+                VALUE:
+                  block:
+                    type: snakie_inst_read_adc
+                    id: l5-adc
+                    fields:
+                      PIN: '26'
+              next:
+                block:
+                  type: snakie_wait_ms
+                  id: l5-wait
+                  inputs:
+                    MS:
+                      shadow:
+                        type: math_number
+                        fields:
+                          NUM: 200
+  tip: A **value** block sits inside another block, because it is a number rather than an
+    action.
+- title: The same program, in Python
+  file: 06-the-same-in-python.md
+  view: blocks
+  viewMode: python
+  blocks: *id001
+  tip: Press **Graduate to Python** — your blocks are kept beside the file, so nothing is
+    lost.

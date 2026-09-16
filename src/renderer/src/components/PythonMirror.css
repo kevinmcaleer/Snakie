@@ -67,3 +67,18 @@
   background: color-mix(in srgb, var(--gold) 22%, transparent);
   box-shadow: inset 2px 0 0 var(--gold);
 }
+
+/* The link is invisible until you try it, so the header says it once (#1016).
+   Quiet enough to ignore, present enough to answer "can I click this?". */
+.pymirror__hint {
+  margin-left: auto;
+  color: var(--txt4);
+  font-family: var(--font-ui);
+  font-size: 10px;
+  opacity: 0.85;
+}
+
+/* Clicking a line asks which block wrote it, so the text should look clickable. */
+.pymirror__body .view-line {
+  cursor: pointer;
+}
