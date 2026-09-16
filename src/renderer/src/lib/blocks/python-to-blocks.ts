@@ -62,6 +62,17 @@ export interface Conversion {
   report: ConversionReport
 }
 
+/**
+ * The block types this converter can emit that have NO next connection (#1068).
+ *
+ * Kept as data here rather than asked of Blockly, because this module is
+ * deliberately Blockly-free — it emits plain JSON so the whole conversion can be
+ * unit-tested in node. `blocksPythonToBlocks.test.ts` asserts this set against
+ * the real block definitions in both directions, so a palette that gains or
+ * loses a next connection fails a test rather than a learner's canvas.
+ */
+const TERMINAL_TYPES = new Set(['snakie_forever', 'controls_flow_statements'])
+
 /** A statement and the suite indented under it. */
 interface Stmt {
   line: LogicalLine
@@ -147,6 +158,10 @@ export function pythonToBlocks(source: string): Conversion {
   const roots = [...state.definitions, ...(stack ? [stack] : [])]
   const positioned = stackRoots(roots)
   identify(positioned)
+  // Ascending, as the field promises: a block demoted to a raw one because it
+  // turned out not to be last in its chain (#1068) reports its line after the
+  // walk that found it, not during.
+  state.report.rawLines.sort((a, b) => a - b)
   const workspace: BlocksWorkspace = {
     blocks: { languageVersion: 0, blocks: positioned }
   }
@@ -443,7 +458,10 @@ class Converter {
 
   /** A chain of statement blocks, or null for an empty suite. */
   statements(nodes: readonly Stmt[]): BlockJson | null {
-    const blocks: BlockJson[] = []
+    // The line each block came from, carried alongside it: a block that turns
+    // out not to be last in its chain has to be re-made as a raw one, and the
+    // report needs to know which source line that was.
+    const built: { block: BlockJson; line: LogicalLine }[] = []
     // A RUN OF COMMENTS IS ONE BLOCK (#1062). Grouped before anything else
     // looks at them, because the grouping is about consecutive SIBLINGS and
     // this is the only place that sees a whole body at once.
@@ -452,11 +470,14 @@ class Converter {
       if (node.comment) {
         this.report.total += node.comment.length
         this.report.recognised += node.comment.length
-        blocks.push({
-          // The literal, like the raw blocks above: this module is imported by the
-          // palette, so it must not import back.
-          type: 'snakie_python_comment',
-          extraState: { lines: node.comment.map((l) => l.text) }
+        built.push({
+          block: {
+            // The literal, like the raw blocks above: this module is imported by the
+            // palette, so it must not import back.
+            type: 'snakie_python_comment',
+            extraState: { lines: node.comment.map((l) => l.text) }
+          },
+          line: node.line
         })
         continue
       }
@@ -470,12 +491,54 @@ class Converter {
       }
       // `elif`/`else` are not statements: they belong to the `if` above them and
       // were consumed by it.
-      if (/^(elif|else)\b/.test(node.line.text) && blocks.length > 0) continue
-      blocks.push(...this.statement(node, nodes))
+      if (/^(elif|else)\b/.test(node.line.text) && built.length > 0) continue
+      for (const block of this.statement(node, nodes)) built.push({ block, line: node.line })
     }
-    if (blocks.length === 0) return null
+    if (built.length === 0) return null
+    // A TERMINAL BLOCK CANNOT HOLD A CHAIN (#1068), and Blockly does not forgive
+    // being asked to. `forever` and `break`/`continue` are defined with no next
+    // connection, on the true reasoning that nothing runs after `while True:` or
+    // after a `break` — but `while True:` with a `break` in it and cleanup below
+    // is the commonest hardware loop there is, and `Blockly.serialization` THROWS
+    // on a `next` that the block has nowhere to put. That throw reached the
+    // canvas's load, which cleared the workspace and blocked writes: an empty
+    // canvas beside a perfectly good program, with nothing said.
+    //
+    // So a terminal block that is not last becomes the raw block it would have
+    // been if we had not recognised it. Uglier, and correct — the same answer
+    // `modellableParams` and the mid-function `return` already give.
+    for (let i = 0; i < built.length - 1; i++) {
+      built[i].block = this.demoteTerminal(built[i].block, built[i].line)
+    }
+    const blocks = built.map((b) => b.block)
     for (let i = blocks.length - 1; i > 0; i--) blocks[i - 1].next = { block: blocks[i] }
     return blocks[0]
+  }
+
+  /**
+   * The raw equivalent of a block that has no next connection — see the call
+   * site above. Anything else is returned untouched.
+   *
+   * The BODY is carried across rather than re-converted: it is already the right
+   * blocks, and `snakie_python_suite` holds a statement input under the same name.
+   */
+  private demoteTerminal(block: BlockJson, line: LogicalLine): BlockJson {
+    if (!TERMINAL_TYPES.has(block.type)) return block
+    this.report.recognised -= 1
+    this.report.raw += 1
+    this.report.rawLines.push(line.line)
+    if (block.type === 'snakie_forever') {
+      return {
+        type: 'snakie_python_suite',
+        fields: { CODE: 'while True:' },
+        ...(block.inputs ? { inputs: block.inputs } : {})
+      }
+    }
+    // `break` / `continue`, whose whole content is the keyword itself.
+    return {
+      type: 'snakie_python_statement',
+      fields: { CODE: String((block.fields as { FLOW?: string } | undefined)?.FLOW ?? '').toLowerCase() }
+    }
   }
 
   /**
