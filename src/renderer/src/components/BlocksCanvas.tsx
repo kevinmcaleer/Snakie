@@ -211,6 +211,16 @@ export function BlocksCanvas({
   const loadingRef = useRef(false)
   /** A load that failed anyway — never write this canvas back to the file. */
   const writeBlockedRef = useRef(false)
+  /**
+   * The file the last load was for (#1036).
+   *
+   * A reload of the SAME file — the learner typed in the code pane — should put
+   * the canvas back exactly as they left it. A load of a DIFFERENT file must
+   * not: block ids are positional now, so `r0.0` means "the first statement" in
+   * both programs, and carrying one file's layout into another would move the
+   * new file's blocks to wherever the old file's happened to sit.
+   */
+  const loadedFileRef = useRef<string | null>(null)
   const onGenerateRef = useRef(onGenerate)
   onGenerateRef.current = onGenerate
   const onEditRef = useRef(onEdit)
@@ -550,6 +560,21 @@ export function BlocksCanvas({
     // each time the learner paused typing. Put it back where they left it.
     const scroll =
       'scrollX' in ws ? { x: (ws as Blockly.WorkspaceSvg).scrollX, y: (ws as Blockly.WorkspaceSvg).scrollY } : null
+    // WHERE THE LEARNER PUT THINGS (#1036). A reload rebuilds every block from
+    // the document, whose roots are laid out on a grid — so a root somebody
+    // dragged aside goes back to the grid, once per typing pause. Ids are
+    // positional (`python-to-blocks.ts`), so a root that is still the same
+    // statement is still the same id, and putting it back is a lookup.
+    const sameFile = loadedFileRef.current === fileId
+    const places = new Map<string, { x: number; y: number }>()
+    const selected = sameFile ? (Blockly.getSelected()?.id ?? null) : null
+    if (sameFile) {
+      for (const block of ws.getTopBlocks(false)) {
+        const at = block.getRelativeToSurfaceXY()
+        places.set(block.id, { x: at.x, y: at.y })
+      }
+    }
+    loadedFileRef.current = fileId
     writeBlockedRef.current = false
     loadingRef.current = true
     // Belt to the comparison's braces: Blockly's own way of saying "this change
@@ -584,6 +609,21 @@ export function BlocksCanvas({
       // program saved yesterday is exactly the one whose board has been
       // re-flashed since.
       onPartsUsedRef.current?.(partsUsedBy(ws))
+      // Back where they were. Only roots: everything else is positioned by the
+      // block it is connected to, and moving those would be a fight with
+      // Blockly's own layout rather than a courtesy.
+      for (const block of ws.getTopBlocks(false)) {
+        const at = places.get(block.id)
+        if (!at) continue
+        const now = block.getRelativeToSurfaceXY()
+        block.moveBy(at.x - now.x, at.y - now.y)
+      }
+      // And still selected, so a reconversion cannot steal the highlight out
+      // from under #1016's link.
+      if (selected) {
+        const block = ws.getBlockById(selected)
+        if (block && 'select' in block) (block as Blockly.BlockSvg).select()
+      }
       if (scroll && 'scroll' in ws) {
         try {
           ;(ws as Blockly.WorkspaceSvg).scroll(scroll.x, scroll.y)
