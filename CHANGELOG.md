@@ -6,6 +6,39 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The CircuitPython audit: where the asterisk goes** (#1033, epic #1007).
+  #1034 made the Blocks workspace the front door for any Python file, so
+  somebody had to answer what a CircuitPython user gets when they walk through
+  it. `docs/blockly-epic.md` §9 is the answer, measured rather than assumed. No
+  code — the audit's output is a written table, four filed issues (#1038–#1041)
+  and one bug it found on the way.
+
+  **Reading is already safe; writing is not.** Two canonical Adafruit programs
+  run through #1019's converter came back 7-of-10 and 9-of-10 recognised, with
+  the `board`/`digitalio` lines held verbatim in raw Python blocks — not the
+  stack of grey blocks the issue expected. **69% of the palette is already
+  dialect-neutral** (68 of 98 blocks), including the whole of turtle, which is
+  what the blocks course is taught in — so a CircuitPython learner can do the
+  entire on-ramp today.
+
+  **The bug it found** (#1038): `micropython/instruments.py` decides the dialect
+  with one `try: from machine import Pin, PWM / except ImportError:`, and that
+  `except` was written to mean "we are in the CPython simulator". CircuitPython
+  has no `machine` either, so a real CircuitPython board falls through to the
+  simulator's **no-op stubs** — `Led(15).on()` returns successfully and the LED
+  never lights. No traceback, no warning. That is reachable today without the
+  Blocks workspace at all, and it is exactly the failure epic #209 exists to
+  prevent.
+
+  Also recorded: the hardware palette does not emit `machine` directly (it goes
+  through the `snakie` umbrella, so the dialect is decided in **one** place, not
+  twelve); a dialect filter must go on the **toolbox**, never the registry, or
+  plugging in a CircuitPython board would make every existing hardware program
+  unopenable; and #1019's round-trip property is "every line survives and still
+  runs", not byte-identity — the import manager normalises order either way.
+
 ### Added
 
 - **One editable surface: the divider is the control, and "Graduate to Python"

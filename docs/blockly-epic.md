@@ -435,6 +435,10 @@ React/DOM-free logic with plain-node vitest coverage, like `parse-pins.ts` and
 **Schema safety.** `blocks.yml` normalisation follows epic #856: no silently
 eaten fields, round-trip tested.
 
+**Dialects.** Every block in the palette generates MicroPython, and the blocks
+are the one subsystem that ignores epic #209's dialect machinery. §9 audits what
+CircuitPython would need — which is less than it sounds, and includes one bug.
+
 ---
 
 ## 7. Versioning
@@ -472,3 +476,213 @@ Phase 1 alone is one. Docs- and plan-only changes (including this file) are
    one** (e.g. `.blocks.py`) so the file tree can sort and badge them without
    reading every file? Reading a footer is cheap; a distinct extension is
    cheaper and more legible, but slightly less "it's just Python".
+
+---
+
+## 9. Dialects: what CircuitPython would need (#1033)
+
+**An audit, not a plan.** #1034 made the Blocks workspace the front door for
+*any* Python file, and #1033 asked what a CircuitPython user gets when they walk
+through it. This section is the answer. No code was written for it.
+
+### 9.1 The short answer
+
+**Converting CircuitPython is already safe. Authoring with the palette is not,
+and it fails the worst possible way — silently.**
+
+Those are two different surfaces and they are in very different states. Opening
+a CircuitPython file in the Blocks workspace (#1019 + #1034) does the honest
+thing today: recognisable structure becomes real blocks, and everything
+CircuitPython-specific becomes a raw Python block holding the exact line. But
+dragging a *hardware* block into that file emits code that imports `machine`,
+and on a CircuitPython board that import does not raise — it falls through a
+shim to a set of no-op stubs. The LED does not light and nothing complains.
+
+The scope is also much smaller than "every block in the palette generates
+MicroPython" suggests. It is **29 blocks out of 98**, in two categories, and the
+generated code for most of them routes through **one** `try/except` in
+`micropython/instruments.py`.
+
+### 9.2 The census
+
+Measured by walking the registry after `installCorePalette()`, not by reading.
+"Needs" is the set of modules the blocks in that category declare.
+
+| Category | Blocks | Needs | Dialect status | What we do |
+| --- | ---: | --- | --- | --- |
+| Control | 7 | — | **Both.** `while True:`, `for`, `if`, `break` | Nothing |
+| Logic | 6 | — | **Both** | Nothing |
+| Maths | 8 | `math`, `random` | **Both** — `ceil`/`floor`/`randint` exist on each | Nothing |
+| Text | 4 | — | **Both.** `print`, `str`, `+` | Nothing |
+| Lists | 6 | — | **Both** | Nothing |
+| Variables | 3 | — | **Both** | Nothing |
+| Functions | 5 | — | **Both.** `def`/`return` | Nothing |
+| Python (#1018) | 9 | *(user's own)* | **Both by construction** — verbatim text | Nothing; change the import block's `machine` default |
+| Turtle | 19 | `turtle` | **Both.** `micropython/turtle.py` imports only `math` and prints | Nothing |
+| Wait | 2 | `time` | **Split.** `time.sleep()` both; `time.sleep_ms()` MicroPython-only | One block, one line |
+| Hardware | 12 | `snakie`, `machine` | **MicroPython** | The shim (§9.4) |
+| Instruments | 17 | `instruments`, `snakie`, `machine` | **MicroPython** | The shim, plus #760's note |
+| **Total** | **98** | | **68 fine, 1 trivial, 29 real** | |
+
+The headline number is the one worth carrying around: **69% of the palette is
+already dialect-neutral**, and it includes the whole of the beginner curriculum.
+
+### 9.3 Turtle is the finding that changes the plan
+
+`micropython/turtle.py` is a *telemetry* library, not a driver: every call
+`print()`s one `SNK TURT …` line and the IDE draws the picture. It imports
+`math` and nothing else. It runs on CircuitPython unchanged, today.
+
+The blocks course — the entire on-ramp this epic exists to build — is taught in
+turtle. So a CircuitPython learner can already do all of it. Whatever we decide
+about the hardware palette, **the teaching path is not blocked**, which means
+this is not an emergency and does not have to be solved before #1034 ships.
+
+### 9.4 The hardware palette does not emit `machine` — and that is the problem
+
+#1033 assumed the hardware palette is `machine.Pin` / `machine.PWM` /
+`machine.ADC`. It is not. Only **three** of 98 blocks import `machine` directly
+(`snakie_adc_read`, `snakie_inst_read_adc`, `snakie_inst_i2c_scan`, for `ADC`
+and `I2C`). Everything else generates `from snakie import Led, Pin, PWM, Servo,
+Buzzer`, and the chain is:
+
+```
+snakie_led_set  →  from snakie import Led
+micropython/snakie.py:21   from instruments import Servo, Buzzer, Led, Pin, PWM
+micropython/instruments.py:84
+        try:
+            from machine import Pin, PWM
+        except ImportError:          # the CPython simulator has no `machine`
+            class Pin: ...           # no-op stubs
+            class PWM: ...
+```
+
+That is **one** place where the dialect is decided, for twelve blocks. Which is
+good news for the fix and very bad news for the status quo:
+
+> On a CircuitPython board, `import machine` raises `ImportError`, the `except`
+> branch installs the **simulator's no-op stubs**, and `Led(15).on()` returns
+> successfully having done nothing.
+
+No traceback, no warning, a program that looks like it ran. That is strictly
+worse than a crash, and it is the exact failure epic #209 was written to
+prevent. It is also already true — it does not need #1034 to become reachable,
+because a learner can type `from snakie import Led` in the Code workspace today.
+
+**This is the one finding in this audit that is a bug rather than a gap.**
+
+### 9.5 Timing is one line
+
+`snakie_wait_seconds` emits `time.sleep(…)`, correct on both. `snakie_wait_ms`
+emits `time.sleep_ms(…)`, which CircuitPython does not have — and
+`API_EQUIVALENTS`' `delay` row already states the replacement (`time.sleep()`
+takes a float; `time.monotonic()` replaces `ticks_ms`).
+
+`instruments.py` is already ahead of this: every `sleep_ms`, `sleep_us`,
+`ticks_ms` and `ticks_diff` in it is guarded with `hasattr(time, …)` and a
+seconds-based fallback, because the CPython simulator needed it. One block, one
+`hasattr` — or one dialect-scoped pair.
+
+### 9.6 What a CircuitPython file actually converts into (measured)
+
+Two canonical Adafruit programs, run through `pythonToBlocks` and back through
+`generateProgram`:
+
+**Blink** (`board` + `digitalio`, 10 statements): 7 recognised, 3 raw. The
+`while True:` became `forever`, both `time.sleep(0.5)` became **wait** blocks,
+the three imports became import blocks, and `led.direction = …` / `led.value =
+True` / `led.value = False` became raw Python blocks holding those exact lines.
+
+**Analog + PWM** (`analogio` + `pwmio`, 10 statements): 9 recognised, 1 raw.
+`for i in range(10)` became a for-each, `print(pot.value)` became a print block
+with a raw value inside, and only `buzzer.duty_cycle = 32768` stayed raw.
+
+So the answer to "what does a CircuitPython `.py` convert into?" is **not** a
+stack of grey blocks. It is a mostly-real program with the hardware lines held
+verbatim — which is the best outcome available and needs no work at all.
+
+**One caveat, and it is not CircuitPython's:** the round trip is not
+byte-identical once imports are involved. The generator's import manager
+normalises order and grouping (`import time` is hoisted above `import board`),
+and string literals are re-emitted single-quoted. The same is true of a
+MicroPython file with its imports out of canonical order — verified with a
+control run. #1019's property is "every line survives and still runs", not
+"byte-for-byte", and §5 should be read that way.
+
+### 9.7 Does a block declare a `DialectScope`?
+
+**Yes, and almost all of the machinery exists.** `DialectScope` is already
+`'both' | 'micropython' | 'circuitpython'` in `src/shared/dialect-api.ts`, and
+`inScope(scope, dialect)` already encodes the rule that matters:
+
+```ts
+export function inScope(scope: DialectScope | undefined, dialect: Dialect): boolean {
+  if (scope === undefined || scope === 'both') return true
+  if (dialect === 'unknown') return true
+  return scope === dialect
+}
+```
+
+`unknown` sees everything. A learner with no board plugged in gets the whole
+palette — which is the right default for a workspace whose whole point is that
+it works on a Chromebook with no hardware.
+
+`helpTreeFor()` in `help-content.ts` is the working precedent: it walks the tree,
+drops out-of-scope nodes and prunes branches that lose all their children.
+`buildToolbox()` in `BlocksCanvas.tsx` has exactly the same shape over the block
+registry, and the canvas already has a toolbox-rebuild path.
+
+**But the filter must go on the TOOLBOX, never on the REGISTRY** — and this
+answers #1033's worry that scoping recreates #1008's "newer Snakie" case.
+`workspace-check.ts` refuses to mount a canvas containing a block type this
+build does not know, precisely so it can never serialise an empty workspace over
+somebody's file. If a dialect filter *deregistered* blocks, plugging in a
+CircuitPython board would make every existing hardware program unopenable. If it
+only hides them from the flyout, an existing file opens and edits normally and
+the learner simply cannot reach for a new one. Hide, don't deregister.
+
+The blocks are also the only subsystem left out. `src/renderer/src/lib/blocks/**`
+contains **zero** dialect code — two passing mentions in comments, no import of
+`shared/dialect`, no `DialectScope`. Meanwhile the help tree, the Monaco
+completions, the modules panel, the packages panel, the status bar, the run
+controls and the firmware flasher all read `status.runtime?.dialect`. The help
+tree already admits the gap: the `blocks-python` article carries
+`scope: 'micropython'`.
+
+### 9.8 Where the asterisk goes
+
+> *"Snakie opens any Python file in blocks."*
+
+That sentence is true, with no asterisk, as a statement about **reading**.
+
+The asterisk belongs on **writing**: the hardware and instrument blocks — 29 of
+98 — generate code that needs `machine`, and on a CircuitPython board that code
+currently fails silently rather than loudly.
+
+### 9.9 One issue or five?
+
+**Four, and only the first is urgent.** They are independent and deliberately
+ordered by how much harm each removes. Filed as #1038, #1039, #1040 and #1041.
+
+1. **Make the `machine` shim fail loudly, or not at all** (#1038). `instruments.py`'s
+   `except ImportError` cannot keep meaning "we are in the simulator" now that
+   CircuitPython also lands there. Detect the runtime (`sys.implementation.name`
+   — the same signal `RUNTIME_PROBE_PY` already uses) and either raise something
+   a learner can read, or map to `board`/`digitalio`/`pwmio`. **This is a bug
+   fix and it is not blocked by anything in this epic.**
+2. **Give blocks a `DialectScope` and filter the toolbox** (#1039). `scope` on
+   `BlockDefinition`, `inScope` in `categoryContents`, rebuild on dialect change,
+   and a category hint saying why a drawer is empty — the same shape as #1017's
+   "wire something up in Electronics". Hide, never deregister.
+3. **A CircuitPython hardware palette** (#1040). The real work, and the only item with
+   any size to it. `API_EQUIVALENTS` already holds the mapping for digital out,
+   digital in, analog in, PWM, I²C, SPI, UART, delay and pin names — eleven rows
+   that were written for the help tree and turn out to be a specification.
+   Whether that is one block emitting two dialects or two blocks is a question
+   for that issue; the manifest language from #1017 (`blocks.yml`) suggests one
+   block with a per-dialect `code` template.
+4. **`snakie_wait_ms`** (#1041). One block, one `hasattr`, or a scoped pair. Trivial,
+   listed separately so it is not lost inside (3).
+
+Nothing here blocks #1034, because of §9.3: the course is turtle, and turtle
+already works.
