@@ -41,7 +41,7 @@ import {
 } from '../lib/blocks/traceback'
 import { ensureBlocklyLocale } from '../lib/blocks/locale'
 import { unknownBlockTypes } from '../lib/blocks/workspace-check'
-import { putOutHighlight } from '../lib/blocks/highlight'
+import { isStaleDeselect, putOutHighlight } from '../lib/blocks/highlight'
 import type { BlocksWorkspace } from '../../../shared/blocks-doc'
 import './BlocksCanvas.css'
 
@@ -129,6 +129,15 @@ export interface BlocksCanvasProps {
    * last block lit instead made the link look stuck.
    */
   selectBlockId?: string | null
+  /**
+   * Bumped on every line click, so the SAME block can be asked for twice
+   * (#1050).
+   *
+   * Clicking into the code pane moves focus out of the canvas, which is how
+   * Blockly clears a selection — so "the same block as last time" still needs
+   * re-asserting, and an id alone cannot say that.
+   */
+  selectNonce?: number
   /** Right-click ▸ "Show me the Python for just this block". */
   onShowBlockPython?: (blockId: string) => void
   /**
@@ -192,6 +201,7 @@ export function BlocksCanvas({
   onHoverBlock,
   onSelectBlock,
   selectBlockId,
+  selectNonce = 0,
   onShowBlockPython,
   paletteNonce = 0,
   onPartsUsed,
@@ -367,6 +377,11 @@ export function BlocksCanvas({
     const pointing = (event: Blockly.Events.Abstract): void => {
       if (event.type !== Blockly.Events.SELECTED) return
       const selected = (event as Blockly.Events.Selected).newElementId ?? null
+      // Our own `unselect()` below fires one of these carrying NO id, and
+      // Blockly queues its events — so it can arrive AFTER we have lit the next
+      // block, and forwarding it as the learner's choice puts the link out
+      // (#1050). Ask what is selected now rather than guessing at the order.
+      if (isStaleDeselect(selected, Blockly.getSelected()?.id ?? null)) return
       // The learner selected ANOTHER BLOCK themselves, so the one we lit from a
       // line click is stale (#1050). Blockly's own selection does not clear a
       // programmatic one, so clicking a block on the canvas used to leave two
@@ -564,7 +579,7 @@ export function BlocksCanvas({
     ws.centerOnBlock(selectBlockId)
     block.select()
     litRef.current = selectBlockId
-  }, [selectBlockId, peek, blocked])
+  }, [selectBlockId, selectNonce, peek, blocked])
 
   // Follow the app's skin. Same MutationObserver pattern as `Terminal.tsx` and
   // `RobotView.tsx`: `data-theme` on the document root is the single source of
