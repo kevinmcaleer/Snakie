@@ -8,6 +8,64 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Graduate to Python, and the two panes finally talk to each other** (#1016,
+  epic #1007, phase 3). The epic is called an *on-ramp*; this is the part where
+  the learner gets onto the road.
+
+  **Hover a block and its Python lights up. Click a line and its block is
+  selected**, scrolled into view on the canvas. Both directions come out of
+  #1010's source map, and between them they turn two things on one screen into
+  the same thing, twice — which is the whole pedagogical payload of the epic.
+  Right-click a block and **Show me the Python** answers the same question by
+  name, for a program long enough that the highlight is off the top of the pane.
+
+  **Split is now the default in Blocks**, not an option somebody has to find. A
+  canvas-primary default hid the teaching mechanism behind a control most people
+  never press, which is the same as not shipping it. Code still means "make the
+  Python the big one".
+
+  **Graduate to Python** is one button in the editor header. It drops the blocks
+  footer and leaves an ordinary `.py` — one-way, because the reverse is
+  decompilation — so the step is made **safe rather than reversible**: the blocks
+  are saved beside the file as `name.blocks.py`, which opens on the canvas
+  exactly as before.
+
+  And it is **celebrated rather than warned about**:
+
+  > **You wrote 47 lines of Python.**
+
+  True, checkable by scrolling, and the thing that actually happened. There is
+  nothing to undo, so the dialog doesn't pretend otherwise. **Typing in the
+  read-only Python pane does the same thing** — reaching for the keyboard on that
+  side is the most natural way a learner ever says *I'm ready*, and it is treated
+  as exactly that. Graduating does **not** move you to another workspace: the
+  file is open in Monaco right there, and the notice *offers* Code rather than
+  taking it.
+
+  **A blocks lesson track**: *Blocks to Python*, six lessons — blink, a button, a
+  buzzer tune, a turtle square, a sensor, and then **"the same program, in
+  Python"**. Each opens with its program already assembled on the canvas, and the
+  last one opens **Python-primary with the blocks peeking beside it** — the
+  layout saying what the words say. A lesson can now carry a starter `blocks`
+  workspace beside its `code`, and ask for a `viewMode`.
+
+  The bundled starters are in the **Learn gallery** too, above the demo robot:
+  blocks need no hardware at all, so they are the first thing a beginner should
+  meet.
+
+  **`docs/blocks.md`** is written for a teacher, not a developer.
+
+### Fixed
+
+- **A NUL byte could end up in a generated program** (#1016, a bug in #1010). A
+  `def` block correctly generates nothing where it stands — its body is hoisted
+  into the functions section — but it was still given a source-map marker, and a
+  marker with no line of its own fuses with the next block's line. The assembler
+  stripped the first and left the second sitting in the code, which was then
+  saved to the file and sent to the board. It affected any program with a
+  function and anything after it, which is most programs that have a function at
+  all.
+
 - **Tracebacks land on the block that caused them** (#1015, epic #1007, phase 3).
   A beginner who presses Run and gets `File "<stdin>", line 7` is being shown a
   line number in a file they never wrote. The error now appears **on the block**,

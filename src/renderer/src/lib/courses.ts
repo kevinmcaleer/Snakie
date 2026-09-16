@@ -12,7 +12,7 @@
  * image assets need authoring.
  */
 import { parse } from 'yaml'
-import type { WorkspaceId } from '../store/layout'
+import type { BlocksViewMode, WorkspaceId } from '../store/layout'
 
 export interface Lesson {
   title: string
@@ -31,6 +31,24 @@ export interface Lesson {
    * nothing about where it lives has no business moving the user.
    */
   view?: WorkspaceId
+  /**
+   * A starter BLOCKS workspace (#1016), as Blockly's own serialisation.
+   *
+   * Beside `code`, not instead of it: a lesson in the blocks track hands over a
+   * canvas, and the last lesson of that track hands over the same program as
+   * text. When both are present the blocks win — a blocks lesson opened as a
+   * plain `.py` would be a lesson about blocks with no blocks in it.
+   */
+  blocks?: unknown
+  /**
+   * Which side of a blocks file the lesson wants big: `blocks`, `split` or
+   * `python`.
+   *
+   * The visual form of the handover. The last lesson of the blocks track is
+   * "the same program, in Python", and it should OPEN Python-primary with the
+   * canvas still peeking beside it — the layout saying what the words say.
+   */
+  viewMode?: BlocksViewMode
 }
 
 export type CourseTrack = 'beginner' | 'robotics' | 'urdf'
@@ -51,6 +69,8 @@ interface RawLesson {
   code?: string
   tip?: string
   view?: string
+  blocks?: unknown
+  viewMode?: string
 }
 interface RawCourse {
   title: string
@@ -85,6 +105,10 @@ export function coerceView(raw: unknown): WorkspaceId | undefined {
   const v = String(raw ?? '').trim().toLowerCase()
   if (!v) return undefined
   const alias: Record<string, WorkspaceId> = {
+    // `blocks` is a workspace too since #1009, and a lesson in the blocks track
+    // has every reason to ask for it.
+    blocks: 'blocks',
+    canvas: 'blocks',
     code: 'code',
     editor: 'code',
     board: 'board',
@@ -96,6 +120,41 @@ export function coerceView(raw: unknown): WorkspaceId | undefined {
     '3d': 'robot'
   }
   return alias[v]
+}
+
+/**
+ * A lesson's blocks starter, or `undefined` when it has none or it is malformed.
+ *
+ * Course YAML is authored by hand, so a workspace that isn't one must degrade to
+ * "this lesson has no blocks" rather than reaching the canvas and throwing
+ * inside Blockly's deserialiser — which #1009 established is the failure that
+ * can lose a program.
+ */
+export function coerceBlocks(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const blocks = (raw as { blocks?: unknown }).blocks
+  if (!blocks || typeof blocks !== 'object') return undefined
+  return raw
+}
+
+/**
+ * A lesson's requested blocks emphasis, or `undefined`.
+ *
+ * `undefined` means "use the workspace default", which since #1016 is the split
+ * — so a lesson has to ASK to be Python-primary, and only the handover lesson
+ * does.
+ */
+export function coerceViewMode(raw: unknown): BlocksViewMode | undefined {
+  const v = String(raw ?? '').trim().toLowerCase()
+  const modes: Record<string, BlocksViewMode> = {
+    blocks: 'blocks',
+    canvas: 'blocks',
+    split: 'split',
+    both: 'split',
+    python: 'python',
+    code: 'python'
+  }
+  return modes[v]
 }
 
 /** `../courses/<id>/course.yml` → `<id>`. */
@@ -121,7 +180,15 @@ export function loadCourses(): Course[] {
       .map((l): Lesson | null => {
         const body = lessonMd[`${dir}/${l.file}`]
         if (body == null) return null
-        return { title: l.title, body, code: l.code, tip: l.tip, view: coerceView(l.view) }
+        return {
+          title: l.title,
+          body,
+          code: l.code,
+          tip: l.tip,
+          view: coerceView(l.view),
+          blocks: coerceBlocks(l.blocks),
+          viewMode: coerceViewMode(l.viewMode)
+        }
       })
       .filter((l): l is Lesson => l !== null)
     if (!lessons.length) continue

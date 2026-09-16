@@ -257,7 +257,18 @@ export class MicroPythonGenerator extends Blockly.CodeGenerator {
    */
   override scrub_(block: Blockly.Block, code: string, thisOnly?: boolean): string {
     if (block.outputConnection) return code
-    const marked = `${MARK}${block.id}${MARK}${code}`
+    // A BLOCK THAT GENERATED NOTHING GETS NO MARKER (#1016).
+    //
+    // `def` is the one emitter that correctly returns the empty string — its
+    // body is hoisted into the functions section, so it contributes nothing
+    // where it stands. A marker on an empty string is a marker with no line of
+    // its own, and it FUSES with whatever comes next: the def's marker and the
+    // next block's marker end up on one line, of which the assembler strips the
+    // first and leaves the second sitting in the code. That put a NUL byte in
+    // the generated Python, saved it to the file and sent it to the board — in
+    // any program with a function and anything after it, which is most programs
+    // that have a function at all.
+    const marked = code === '' ? '' : `${MARK}${block.id}${MARK}${code}`
     if (thisOnly) return marked
     const next = block.nextConnection?.targetBlock() ?? null
     return marked + (next ? (this.blockToCode(next) as string) : '')

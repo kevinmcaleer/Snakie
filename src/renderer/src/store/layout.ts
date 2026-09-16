@@ -118,7 +118,14 @@ export const BLOCKS_VIEW_RATIOS: Record<BlocksViewMode, [number, number]> = {
  * is the friendlier place to land.
  */
 export function defaultBlocksViewMode(workspace: WorkspaceId): BlocksViewMode {
-  return workspace === 'code' ? 'python' : 'blocks'
+  // SPLIT IS THE DEFAULT IN BLOCKS (#1016), not an option somebody has to find.
+  //
+  // The epic's teaching mechanism is the two panes being on screen TOGETHER: a
+  // learner who watches the Python grow as they drag is already reading it. A
+  // canvas-primary default hid that behind a control most people never press,
+  // which is the same as not shipping it. Code stays Python-primary — that is
+  // what pressing Code means — with the canvas collapsed to its peek strip.
+  return workspace === 'code' ? 'python' : 'split'
 }
 
 /** The persisted envelope. Bump `version` on breaking shape changes.

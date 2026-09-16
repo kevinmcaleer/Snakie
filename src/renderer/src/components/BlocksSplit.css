@@ -1,6 +1,8 @@
 /* The blocks split (#1009, epic #1007): canvas and Python side by side, with the
    workspace deciding only which side is big. */
 .blocks-split {
+  /* Positioned, so #1016's "show me the Python" card can float over the canvas. */
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -105,4 +107,108 @@
 .blocks-split__hint {
   color: var(--txt2);
   font-size: 12px;
+}
+
+/* ---------------------------------------------------------------------------
+ * "Show me the Python for just this block" (#1016).
+ *
+ * A floating card over the canvas rather than a panel, because it answers one
+ * question and then goes away — a pane would imply it is a place you work.
+ * ------------------------------------------------------------------------- */
+.blocks-split__popover {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 6;
+  max-width: 24rem;
+  padding: 0.6rem 0.75rem 0.75rem;
+  background: var(--bg-elevated);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--pixel-shadow);
+}
+
+.blocks-split__popover-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.blocks-split__popover-title {
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.blocks-split__popover-close {
+  margin-left: auto;
+  padding: 0 0.3rem;
+  background: none;
+  border: 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.blocks-split__popover-close:hover {
+  color: var(--text);
+}
+
+.blocks-split__popover-code {
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  overflow-x: auto;
+  background: var(--bg-sunken);
+  border-radius: calc(var(--radius) / 1.5);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  white-space: pre;
+}
+
+.blocks-split__popover-none {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+/* ---------------------------------------------------------------------------
+ * THE GRADUATION (#1016) — a celebration, not a warning.
+ *
+ * Green, the colour Run and "connected" already use in this app, because this
+ * is the same kind of moment: something worked. The one thing it must not look
+ * like is the conflict notice above it, which is the screen where a wrong
+ * answer loses work.
+ * ------------------------------------------------------------------------- */
+.blocks-split__graduated {
+  padding: 0.85rem 1rem;
+  background: color-mix(in srgb, var(--accent-2) 14%, var(--bg-elevated));
+  border-bottom: var(--border-w) solid var(--accent-2);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.blocks-split__graduated p {
+  margin: 0.3rem 0 0;
+  color: var(--text-muted);
+}
+
+.blocks-split__graduated-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.blocks-split__graduated .blocks-split__actions {
+  margin-top: 0.7rem;
 }

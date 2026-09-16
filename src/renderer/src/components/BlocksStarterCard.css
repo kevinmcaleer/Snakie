@@ -1,0 +1,77 @@
+/* The blocks starters in the Learn gallery (#1016) — see `BlocksStarterCard.tsx`.
+   Sits between the demo robot and the courses, so it reads as a third way in
+   rather than as part of either. */
+
+.blocks-starter-card {
+  margin: 0 0 1rem;
+  padding: 0.9rem 1rem 1rem;
+  background: var(--bg-elevated);
+  border: var(--border-w) solid var(--border);
+  border-radius: calc(var(--radius) * 1.5);
+  box-shadow: var(--pixel-shadow);
+  font-family: var(--font-ui);
+}
+
+.blocks-starter-card__head {
+  display: flex;
+  gap: 0.7rem;
+  align-items: flex-start;
+}
+
+.blocks-starter-card__emoji {
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+
+.blocks-starter-card__title {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.blocks-starter-card__sub {
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.blocks-starter-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.8rem;
+}
+
+.blocks-starter-card__button {
+  padding: 0.45rem 0.8rem;
+  background: var(--accent-2);
+  color: var(--accent-contrast);
+  border: var(--border-w) solid var(--accent-2);
+  border-radius: var(--radius);
+  box-shadow: var(--pixel-shadow);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+
+.blocks-starter-card__button:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.blocks-starter-card__button:active:not(:disabled) {
+  box-shadow: var(--pixel-shadow-active);
+}
+
+.blocks-starter-card__button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.blocks-starter-card__error {
+  margin: 0.7rem 0 0;
+  font-size: 0.8rem;
+  color: var(--danger);
+}

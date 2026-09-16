@@ -2906,3 +2906,17 @@ body {
   color: var(--text-muted);
   font-size: 0.8rem;
 }
+
+/* The graduation could not keep the blocks, so nothing was changed (#1016). The
+   one failure path of the step the whole epic is built around, said plainly. */
+.editor-graduate-error {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.5rem 0.9rem;
+  background: color-mix(in srgb, var(--danger) 12%, var(--bg-elevated));
+  border-bottom: var(--border-w) solid var(--danger);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+}

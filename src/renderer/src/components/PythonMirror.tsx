@@ -44,22 +44,41 @@ export interface PythonMirrorProps {
   /** The user tried to type here — the caller offers to graduate the file. */
   onEditAttempt?: () => void
   /**
-   * Lines to mark, 1-based. #1015 passes the line a traceback named; #1016 will
-   * pass the lines a hovered block owns. Empty means no decorations.
+   * Lines to mark, 1-based — the lines the hovered or selected block wrote
+   * (#1016). Empty means no decorations.
    */
   highlightLines?: readonly number[]
+  /**
+   * A line was clicked (#1016) — the caller selects the block that wrote it.
+   *
+   * The other direction of the link, and the one that teaches: a learner who
+   * cannot yet read a line of Python can still point at it and be shown which
+   * block put it there.
+   */
+  onLineClick?: (line: number) => void
+  /**
+   * Scroll this 1-based line into view, without selecting anything.
+   *
+   * Set when a hovered block's code is off-screen: highlighting lines nobody can
+   * see is the same as not highlighting them.
+   */
+  revealLine?: number | null
 }
 
 export function PythonMirror({
   code,
   onEditAttempt,
-  highlightLines
+  highlightLines,
+  onLineClick,
+  revealLine
 }: PythonMirrorProps): JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const decorationsRef = useRef<monaco.editor.IEditorDecorationsCollection | null>(null)
   const onEditAttemptRef = useRef(onEditAttempt)
   onEditAttemptRef.current = onEditAttempt
+  const onLineClickRef = useRef(onLineClick)
+  onLineClickRef.current = onLineClick
 
   // Create once. The model is ours alone — deliberately NOT one of the editor's
   // per-file models, because sharing one would give the mirror the editor's undo
@@ -104,7 +123,15 @@ export function PythonMirror({
       onEditAttemptRef.current?.()
     })
 
+    // Clicking a line asks "which block wrote this?" (#1016). Monaco's own
+    // cursor still moves, which is right: the caret marks what they pointed at.
+    const clicks = editor.onMouseDown((e) => {
+      const line = e.target.position?.lineNumber
+      if (typeof line === 'number') onLineClickRef.current?.(line)
+    })
+
     return () => {
+      clicks.dispose()
       keys.dispose()
       editor.getModel()?.dispose()
       editor.dispose()
@@ -139,9 +166,17 @@ export function PythonMirror({
     return () => observer.disconnect()
   }, [])
 
-  // The seam #1015 and #1016 hang off: whole-line decorations on the lines the
-  // caller names. Cleared when there are none, so a stale traceback highlight
-  // can't outlive the run that produced it.
+  // Bring a linked line into view (#1016). `InCenterIfOutsideViewport` rather
+  // than a plain reveal, so hovering block after block down a long program
+  // doesn't scroll the pane on every one — only when the answer is off-screen.
+  useEffect(() => {
+    if (revealLine == null) return
+    editorRef.current?.revealLineInCenterIfOutsideViewport(revealLine)
+  }, [revealLine])
+
+  // Whole-line decorations on the lines the caller names: the lines a hovered
+  // block wrote (#1016). Cleared when there are none, so a highlight can't
+  // outlive the hover that produced it.
   useEffect(() => {
     const collection = decorationsRef.current
     if (!collection) return
@@ -163,6 +198,11 @@ export function PythonMirror({
         >
           read-only
         </span>
+        {/* The link is invisible until you try it, so say it once. This is the
+            teaching mechanism of the whole epic and it should not be a secret. */}
+        {onLineClick && (
+          <span className="pymirror__hint">click a line to find its block</span>
+        )}
       </div>
       {code === '' && (
         <p className="pymirror__empty">Drag a block onto the canvas and its Python appears here.</p>

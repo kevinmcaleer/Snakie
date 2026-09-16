@@ -1,6 +1,14 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { EditorTabs } from './EditorTabs'
-import { FIND_EVENT } from './editorBridge'
+import {
+  BLOCKS_VIEW_EVENT,
+  FIND_EVENT,
+  GRADUATED_EVENT,
+  type BlocksViewDetail,
+  type GraduatedDetail
+} from './editorBridge'
+import { GraduationNotice } from './BlocksSplit'
+import { useGraduate } from '../lib/blocks/use-graduate'
 import { ChatIcon } from './ui-icons'
 import { useWorkspace } from '../store/workspace'
 import { defaultBlocksViewMode, useWorkspaceLayout, type BlocksViewMode } from '../store/layout'
@@ -121,6 +129,58 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
     [hasFiles, openFind]
   )
 
+  // A lesson asked for an emphasis (#1016).
+  //
+  // Held as PENDING and resolved by name, because the lesson dispatches this
+  // right after opening its buffer — before React has made that buffer active.
+  // Applying it to "the active file" there would key it to the lesson before,
+  // and the handover lesson would open in the ordinary split with nothing to
+  // say why.
+  const [pendingMode, setPendingMode] = useState<BlocksViewDetail | null>(null)
+  useEffect(() => {
+    const handler = (e: Event): void => {
+      const detail = (e as CustomEvent<BlocksViewDetail>).detail
+      if (detail?.name) setPendingMode(detail)
+    }
+    window.addEventListener(BLOCKS_VIEW_EVENT, handler)
+    return () => window.removeEventListener(BLOCKS_VIEW_EVENT, handler)
+  }, [])
+  useEffect(() => {
+    if (!pendingMode) return
+    const target = openFiles.find((f) => f.name === pendingMode.name)
+    if (!target) return
+    const mode = pendingMode.mode
+    if (mode === 'blocks' || mode === 'split' || mode === 'python') {
+      setModes((m) => ({ ...m, [target.id]: mode }))
+    }
+    setPendingMode(null)
+  }, [pendingMode, openFiles])
+
+  // The graduation celebration (#1016). It lives HERE, not in the split, because
+  // the moment a file graduates it stops being a blocks file and the split
+  // unmounts — a notice rendered inside it would appear and vanish in the same
+  // frame, at the milestone the whole epic is built around.
+  // The same implementation the split's own offers use (#1016).
+  const { graduate, error: graduateError, clearError } = useGraduate(activeId)
+
+  const [graduated, setGraduated] = useState<GraduatedDetail | null>(null)
+  useEffect(() => {
+    const handler = (e: Event): void => {
+      const detail = (e as CustomEvent<GraduatedDetail>).detail
+      if (detail) setGraduated(detail)
+    }
+    window.addEventListener(GRADUATED_EVENT, handler)
+    return () => window.removeEventListener(GRADUATED_EVENT, handler)
+  }, [])
+  // Opening ANOTHER file puts the moment behind them — but not the flicker of
+  // activity graduating itself causes: keeping the blocks opens a second buffer,
+  // which makes it active for an instant before the graduated file is put back
+  // in front. Clearing on any change at all would race that and swallow the
+  // celebration at the milestone the whole epic is built around.
+  useEffect(() => {
+    setGraduated((g) => (g && g.fileId !== activeId ? null : g))
+  }, [activeId])
+
   return (
     <section
       className="region region--editor"
@@ -149,6 +209,18 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
                 </button>
               ))}
             </div>
+            {/* THE DOOR (#1016). One command, where the per-file controls for
+                this document already are — not buried in a menu, because the
+                step it performs is the point of the whole feature. The blocks
+                are kept beside the file, so it needs no confirmation. */}
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={graduate}
+              title="Keep the Python and put the blocks in a file beside it"
+            >
+              Graduate to Python
+            </button>
           </div>
         )}
         {(onToggleChat || (hasFiles && !showData && !showRobot && !showMpy && !showBlocks)) && (
@@ -183,6 +255,28 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
           </div>
         )}
       </div>
+      {graduateError && (
+        <div className="editor-graduate-error" role="alert">
+          Couldn&rsquo;t keep the blocks, so nothing was changed: {graduateError}
+          <button type="button" className="btn btn--sm btn--ghost" onClick={clearError}>
+            Dismiss
+          </button>
+        </div>
+      )}
+      {graduated && (
+        <GraduationNotice
+          detail={graduated}
+          onDismiss={() => setGraduated(null)}
+          onOpenInCode={
+            layout.active === 'code'
+              ? undefined
+              : () => {
+                  layout.switchWorkspace('code')
+                  setGraduated(null)
+                }
+          }
+        />
+      )}
       <div className="region__body region__body--editor">
         {!hasFiles ? (
           // In the Blocks workspace an empty editor is an opportunity, not a

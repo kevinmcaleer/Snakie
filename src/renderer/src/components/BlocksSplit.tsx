@@ -8,6 +8,8 @@ import {
 import { useWorkspaceLayout } from '../store/layout'
 import { useWorkspace } from '../store/workspace'
 import { parseBlocksFooter } from '../../../shared/blocks-doc'
+import { useGraduate } from '../lib/blocks/use-graduate'
+import type { GraduatedDetail } from './editorBridge'
 import type { BlocksProgram } from './BlocksCanvas'
 import { resolveBlocksView, type BlocksPane } from '../lib/blocks/split'
 import type { BlocksViewMode } from '../store/layout'
@@ -58,7 +60,7 @@ export interface BlocksSplitProps {
 }
 
 export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Element {
-  const { openFiles, activeId, updateBlocks, graduateToPython } = useWorkspace()
+  const { openFiles, activeId, updateBlocks } = useWorkspace()
   const layout = useWorkspaceLayout()
   const file = openFiles.find((f) => f.id === activeId) ?? null
   const content = file?.content
@@ -109,6 +111,49 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   // mirror for the frame before the new one generates.
   useEffect(() => setGenerated(null), [file?.id])
 
+  // ── THE LINK (#1016) ──────────────────────────────────────────────────────
+  //
+  // The two halves of this screen have been side by side since #1009 and the
+  // map between them has existed since #1010. This is where they are joined,
+  // and it is the whole pedagogical payload of the epic: point at a block, see
+  // its Python; point at a line, see its block. Two things on one screen become
+  // the same thing, twice.
+
+  /** The block the mouse is over, or the one a line click selected. */
+  const [linkedBlock, setLinkedBlock] = useState<string | null>(null)
+  /** A block to select on the canvas, set only by a click in the Python. */
+  const [selectFromPython, setSelectFromPython] = useState<string | null>(null)
+  /** The block whose Python was asked for by name (right-click ▸ Show me). */
+  const [pythonFor, setPythonFor] = useState<string | null>(null)
+
+  // The lines the linked block wrote. Straight out of #1010's map, which is why
+  // the issue calls this "nearly free once the source map exists".
+  const linkedLines = useMemo(
+    () => (linkedBlock ? (generated?.blockLines.get(linkedBlock) ?? []) : []),
+    [linkedBlock, generated]
+  )
+  // Scroll the FIRST of them into view. Highlighting lines nobody can see is the
+  // same as not highlighting them.
+  const revealLine = linkedLines.length > 0 ? linkedLines[0] : null
+
+  const handleLineClick = useCallback(
+    (line: number): void => {
+      const id = generated?.sourceMap.get(line) ?? null
+      // A line no block wrote — an import — is not a failure to report. It is a
+      // line the generator added, and saying "no block" is the honest answer.
+      setLinkedBlock(id)
+      setSelectFromPython(id)
+    },
+    [generated]
+  )
+
+  // Nothing on the old file's canvas should stay linked when another opens.
+  useEffect(() => {
+    setLinkedBlock(null)
+    setSelectFromPython(null)
+    setPythonFor(null)
+  }, [file?.id])
+
   const handleEdit = useCallback(
     (program: BlocksProgram): void => {
       if (!file) return
@@ -122,6 +167,11 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
     },
     [file, updateBlocks]
   )
+
+  // Graduating (#1016) — the same implementation the editor header's button
+  // uses, because the ORDER matters (blocks kept first) and a second copy that
+  // got it wrong would lose somebody's work.
+  const { graduate, error: graduateError, clearError } = useGraduate(file?.id ?? null)
 
   if (!file || !doc) {
     return (
@@ -140,7 +190,11 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
         onEdit={handleEdit}
         peek={view.peek}
         onExpand={() => onModeChange('split')}
-        onGraduate={() => graduateToPython(file.id)}
+        onGraduate={graduate}
+        onHoverBlock={setLinkedBlock}
+        onSelectBlock={setLinkedBlock}
+        selectBlockId={selectFromPython}
+        onShowBlockPython={setPythonFor}
       />
     </Suspense>
   )
@@ -151,7 +205,10 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
     <Suspense fallback={<div className="blocks-split__loading">Loading the Python…</div>}>
       <PythonMirror
         code={mirrored}
-        onEditAttempt={() => requestGraduate(file.name, () => graduateToPython(file.id))}
+        onEditAttempt={graduate}
+        highlightLines={linkedLines}
+        onLineClick={handleLineClick}
+        revealLine={revealLine}
       />
     </Suspense>
   )
@@ -159,7 +216,23 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   return (
     <div className="blocks-split" ref={hostRef}>
       {file.blocksConflict && (
-        <BlocksConflictNotice name={file.name} onKeepPython={() => graduateToPython(file.id)} />
+        <BlocksConflictNotice name={file.name} onKeepPython={graduate} />
+      )}
+      {graduateError && (
+        <div className="blocks-split__conflict" role="alert">
+          <p>Couldn&rsquo;t keep the blocks, so nothing was changed: {graduateError}</p>
+          <button type="button" className="btn btn--sm btn--ghost" onClick={clearError}>
+            Dismiss
+          </button>
+        </div>
+      )}
+      {/* "What did THIS block write?" — right-click ▸ Show me the Python. */}
+      {pythonFor && generated && (
+        <BlockPythonPopover
+          code={generated.code}
+          lines={generated.blockLines.get(pythonFor) ?? []}
+          onClose={() => setPythonFor(null)}
+        />
       )}
 
       {view.kind === 'tabs' ? (
@@ -267,17 +340,124 @@ export function BlocksConflictNotice({
 const BLOCKS_INITIAL_WIDTH = 1200
 
 /**
- * The read-only mirror was typed into. #1016 turns this into the graduation
- * flow proper (an in-app modal, and the file opening in Monaco at the caret);
- * until then it asks the question and honours the answer, which is the part
- * that must not be a no-op — a learner who types and gets silence learns that
- * the pane is broken.
+ * "Show me the Python for just this block" (#1016).
+ *
+ * The mirror shows the whole program and the hover already lights this block's
+ * lines inside it. This answers the same question the other way round, for a
+ * program long enough that the answer is off the top of the pane — and it shows
+ * the lines ON THEIR OWN, which is a different thing from highlighted-in-context
+ * and the thing somebody asking by name wants.
+ *
+ * Its own component, store-free, so the text it puts in front of a learner can
+ * be held to in a test.
  */
-function requestGraduate(name: string, graduate: () => void): void {
-  const ok = window.confirm(
-    `Editing the Python means leaving the blocks behind.\n\nGraduate "${name}" to Python?`
+export function BlockPythonPopover({
+  code,
+  lines,
+  onClose
+}: {
+  code: string
+  lines: readonly number[]
+  onClose: () => void
+}): JSX.Element {
+  const all = code.split('\n')
+  // INDENTATION, PER RUN. A block's lines are often not next to each other: the
+  // toggle block owns its `pin_15.toggle()` inside a loop AND the hoisted
+  // `pin_15 = Pin(...)` at the margin, and showing those two with their original
+  // indentation reads as a fragment of something broken. Each contiguous run is
+  // moved to the margin, so every run reads as its own little program, while
+  // lines that ARE next to each other keep their relationship.
+  const sorted = [...lines].sort((a, b) => a - b)
+  const shown: string[] = []
+  let run: number[] = []
+  const flush = (): void => {
+    if (run.length === 0) return
+    const texts = run.map((n) => all[n - 1] ?? '')
+    const indent = Math.min(
+      ...texts.filter((l) => l.trim() !== '').map((l) => l.length - l.trimStart().length)
+    )
+    for (const l of texts) shown.push(Number.isFinite(indent) ? l.slice(indent) : l)
+    run = []
+  }
+  for (const n of sorted) {
+    if (run.length > 0 && n !== run[run.length - 1] + 1) flush()
+    run.push(n)
+  }
+  flush()
+
+  return (
+    <div className="blocks-split__popover" role="dialog" aria-label="The Python for this block">
+      <div className="blocks-split__popover-head">
+        <span className="blocks-split__popover-title">This block writes</span>
+        <button
+          type="button"
+          className="blocks-split__popover-close"
+          onClick={onClose}
+          aria-label="Close"
+        >
+          ×
+        </button>
+      </div>
+      {shown.length > 0 ? (
+        <pre className="blocks-split__popover-code">{shown.join('\n')}</pre>
+      ) : (
+        // A value block plugged into nothing generates no line of its own. Say
+        // that, rather than showing an empty box that reads as a bug.
+        <p className="blocks-split__popover-none">
+          Nothing on its own — plug it into a block that does something and its
+          Python appears inside that block&rsquo;s line.
+        </p>
+      )}
+    </div>
   )
-  if (ok) graduate()
+}
+
+/**
+ * The step is done, and it is an achievement (#1016).
+ *
+ * The obvious implementation of this moment is a confirm dialog with the word
+ * "irreversible" in it, which tells a ten-year-old that what they just did was
+ * dangerous. It wasn't: the blocks are saved beside the file, and they have been
+ * reading this Python for an hour. So the sentence names the NUMBER instead —
+ * true, checkable by scrolling, and the thing that actually happened.
+ *
+ * It does NOT switch workspace. Graduating and then finding yourself somewhere
+ * else is the app moving the furniture while you are walking; the file is open
+ * in Monaco right here, and the button OFFERS Code rather than taking it.
+ *
+ * Store-free and exported, so the words a learner meets at the milestone the
+ * whole epic is built around are held to in a test.
+ */
+export function GraduationNotice({
+  detail,
+  onDismiss,
+  onOpenInCode
+}: {
+  detail: GraduatedDetail
+  onDismiss: () => void
+  onOpenInCode?: () => void
+}): JSX.Element {
+  const lines = detail.lines === 1 ? '1 line' : `${detail.lines} lines`
+  return (
+    <div className="blocks-split__graduated" role="status">
+      <h2 className="blocks-split__graduated-title">You wrote {lines} of Python.</h2>
+      <p>
+        <strong>{detail.name}</strong> is ordinary Python now, and you can edit it. Your blocks are
+        safe in <strong>{detail.blocksName}</strong>
+        {detail.blocksSaved ? ' beside it' : ', which is open and unsaved — save it to keep them'}.
+      </p>
+      <div className="blocks-split__actions">
+        {onOpenInCode && (
+          <button type="button" className="btn btn--sm" onClick={onOpenInCode}>
+            Open the Code workspace
+          </button>
+        )}
+        <button type="button" className="btn btn--sm btn--ghost" onClick={onDismiss}>
+          Stay here
+        </button>
+      </div>
+    </div>
+  )
 }
 
 export default BlocksSplit

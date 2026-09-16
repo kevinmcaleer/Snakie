@@ -97,6 +97,24 @@ export interface BlocksCanvasProps {
   onExpand?: () => void
   /** Drop the footer and keep the Python — the escape from an unreadable file. */
   onGraduate?: () => void
+  /**
+   * The learner is pointing at a block (#1016) — hovered, or `null` on leaving.
+   *
+   * The whole pedagogical payload of the epic hangs off this: the mirror lights
+   * up the lines this block wrote, so "these blocks" and "this Python" stop
+   * being two things on one screen and start being the same thing twice.
+   */
+  onHoverBlock?: (blockId: string | null) => void
+  /** The learner clicked a block, or cleared the selection. */
+  onSelectBlock?: (blockId: string | null) => void
+  /**
+   * Select and centre this block — the other direction, driven by a click in the
+   * Python. `null` leaves the canvas alone rather than clearing the selection,
+   * so moving the mouse out of the mirror doesn't deselect what they just found.
+   */
+  selectBlockId?: string | null
+  /** Right-click ▸ "Show me the Python for just this block". */
+  onShowBlockPython?: (blockId: string) => void
 }
 
 // Blockly's message table is a precondition of `inject` — see `locale.ts`.
@@ -130,7 +148,11 @@ export function BlocksCanvas({
   onEdit,
   peek = false,
   onExpand,
-  onGraduate
+  onGraduate,
+  onHoverBlock,
+  onSelectBlock,
+  selectBlockId,
+  onShowBlockPython
 }: BlocksCanvasProps): JSX.Element {
   // BEFORE anything else: can this build read these blocks at all? A file made
   // by a newer Snakie, or with a part/plugin's blocks (#1017) that isn't
@@ -157,6 +179,15 @@ export function BlocksCanvas({
   onGenerateRef.current = onGenerate
   const onEditRef = useRef(onEdit)
   onEditRef.current = onEdit
+  // The linking callbacks (#1016), through refs for the same reason as the rest:
+  // they are read inside Blockly listeners registered once, and a stale closure
+  // there would report a block to a mirror that has since moved on.
+  const onHoverBlockRef = useRef(onHoverBlock)
+  onHoverBlockRef.current = onHoverBlock
+  const onSelectBlockRef = useRef(onSelectBlock)
+  onSelectBlockRef.current = onSelectBlock
+  const onShowBlockPythonRef = useRef(onShowBlockPython)
+  onShowBlockPythonRef.current = onShowBlockPython
   /** Pending regeneration, so a drag doesn't generate once per mouse move. */
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   /**
@@ -246,7 +277,49 @@ export function BlocksCanvas({
     }
     ws.addChangeListener(listener)
 
+    // WHICH BLOCK IS THE LEARNER POINTING AT (#1016).
+    //
+    // Selection comes through Blockly's own event, which fires for a click, for
+    // keyboard navigation and for a programmatic `select()` alike — so the
+    // mirror lights up however they got there, including with a keyboard
+    // (epic #188).
+    const pointing = (event: Blockly.Events.Abstract): void => {
+      if (event.type !== Blockly.Events.SELECTED) return
+      const selected = (event as Blockly.Events.Selected).newElementId ?? null
+      onSelectBlockRef.current?.(selected)
+    }
+    ws.addChangeListener(pointing)
+
+    // HOVER is not a Blockly event, so it comes off the DOM. One delegated
+    // listener on the host rather than one per block: blocks are created and
+    // destroyed constantly, and per-block listeners would leak with every drag.
+    const blockUnder = (target: EventTarget | null): string | null => {
+      const el = target instanceof Element ? target.closest('.blocklyDraggable') : null
+      const id = el?.getAttribute('data-id')
+      // A block inside the FLYOUT is a menu item, not part of the program, and
+      // has no line in the generated code to light up.
+      if (!id || el?.closest('.blocklyFlyout')) return null
+      return id
+    }
+    let hovered: string | null = null
+    const onMove = (e: MouseEvent): void => {
+      const id = blockUnder(e.target)
+      if (id === hovered) return
+      hovered = id
+      onHoverBlockRef.current?.(id)
+    }
+    const onLeave = (): void => {
+      if (hovered === null) return
+      hovered = null
+      onHoverBlockRef.current?.(null)
+    }
+    host.addEventListener('mousemove', onMove)
+    host.addEventListener('mouseleave', onLeave)
+
     return () => {
+      host.removeEventListener('mousemove', onMove)
+      host.removeEventListener('mouseleave', onLeave)
+      ws.removeChangeListener(pointing)
       if (debounceRef.current) clearTimeout(debounceRef.current)
       ws.removeChangeListener(listener)
       ws.dispose()
@@ -348,6 +421,31 @@ export function BlocksCanvas({
       host?.classList.remove('blocks-canvas__host--running')
     }
   }, [peek, blocked])
+
+  // The context-menu item is registered once for the app; the canvas that can
+  // answer it is mounted per file. Claim the slot while we are on screen.
+  useEffect(() => {
+    if (peek || blocked) return
+    showBlockPython = (blockId: string) => onShowBlockPythonRef.current?.(blockId)
+    return () => {
+      showBlockPython = null
+    }
+  }, [peek, blocked])
+
+  // A line was clicked in the Python (#1016): select its block and bring it into
+  // view. The other half of the link, and the half that does the teaching —
+  // "that line came from THIS", pointed at from the side they are learning to
+  // read.
+  useEffect(() => {
+    if (peek || blocked || !selectBlockId) return
+    const ws = wsRef.current
+    const block = ws?.getBlockById(selectBlockId)
+    if (!block) return
+    // Centring rather than merely selecting: a block off-screen is selected and
+    // invisible, which looks exactly like nothing happening.
+    ws?.centerOnBlock(selectBlockId)
+    block.select()
+  }, [selectBlockId, peek, blocked])
 
   // Follow the app's skin. Same MutationObserver pattern as `Terminal.tsx` and
   // `RobotView.tsx`: `data-theme` on the document root is the single source of
@@ -514,6 +612,7 @@ function BlocksUnreadable({
  * article rather than showing an item that does nothing.
  */
 function installBlockHelpMenu(): void {
+  installBlockPythonMenu()
   const id = 'snakieBlockHelp'
   if (Blockly.ContextMenuRegistry.registry.getItem(id)) return
   // Blockly's OWN Help item comes first, and it opens `helpUrl` — which every
@@ -531,6 +630,39 @@ function installBlockHelpMenu(): void {
     callback: (scope) => {
       const article = scope.block && blockDefinition(scope.block.type)?.help
       if (article) dispatchOpenHelp(article)
+    }
+  })
+}
+
+/**
+ * A block's right-click **Show me the Python** (#1016).
+ *
+ * The mirror already shows the Python for the whole program, and the linked
+ * highlighting already lights up a hovered block's lines in it. This is for the
+ * question that asks itself the other way round — *"what did THIS one write?"* —
+ * on a program long enough that the answer is somewhere off the top of the pane.
+ *
+ * Dispatched through a module-level handler rather than a prop, because a
+ * Blockly context-menu item is registered once for the whole app while the
+ * canvas that should answer it is mounted and unmounted with the file. The
+ * canvas sets the handler on mount; an item clicked with none set does nothing
+ * rather than throwing inside Blockly's menu.
+ */
+let showBlockPython: ((blockId: string) => void) | null = null
+
+function installBlockPythonMenu(): void {
+  const id = 'snakieBlockPython'
+  if (Blockly.ContextMenuRegistry.registry.getItem(id)) return
+  Blockly.ContextMenuRegistry.registry.register({
+    id,
+    scopeType: Blockly.ContextMenuRegistry.ScopeType.BLOCK,
+    // Above Help: it is about the block in front of them, where Help is about
+    // the kind of block.
+    weight: 99,
+    displayText: 'Show me the Python',
+    preconditionFn: (scope) => (scope.block && showBlockPython ? 'enabled' : 'hidden'),
+    callback: (scope) => {
+      if (scope.block) showBlockPython?.(scope.block.id)
     }
   })
 }

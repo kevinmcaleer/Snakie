@@ -141,6 +141,67 @@ export function dispatchNeedLibrary(library: 'instruments' | 'turtle'): void {
 }
 
 /**
+ * "This lesson wants the blocks shown like THIS" (#1016).
+ *
+ * The emphasis is per file and owned by `EditorArea`, but a lesson has an
+ * opinion about it: the last lesson of the blocks track is *"the same program,
+ * in Python"*, and it should open Python-primary with the canvas peeking beside
+ * it — the layout saying what the words say. An event, because the tutorial
+ * panel and the editor are on opposite sides of the shell.
+ */
+export const BLOCKS_VIEW_EVENT = 'snakie:blocks-view'
+
+export interface BlocksViewDetail {
+  /** `blocks`, `split` or `python`. */
+  mode: string
+  /**
+   * The file it is about, BY NAME.
+   *
+   * Not "the active file", and not an id. The emphasis is stored per file, and
+   * the lesson that asks for one has just opened the buffer it means — which
+   * React has not finished making active yet, so "the active file" at dispatch
+   * time is the PREVIOUS lesson's. The name is the one thing the caller knows
+   * and the editor can resolve once the buffer appears.
+   */
+  name: string
+}
+
+/** Ask the editor to show the blocks file called `name` with this emphasis. */
+export function dispatchBlocksViewMode(mode: string, name: string): void {
+  window.dispatchEvent(
+    new CustomEvent<BlocksViewDetail>(BLOCKS_VIEW_EVENT, { detail: { mode, name } })
+  )
+}
+
+/**
+ * "A blocks file just graduated to Python" (#1016, epic #1007).
+ *
+ * An EVENT because the celebration has to OUTLIVE the thing that raised it: the
+ * moment a file stops being a blocks file the editor routes it to Monaco and the
+ * split unmounts, taking any notice rendered inside it. The message belongs to
+ * the document, not to the pane that happened to be showing it a frame ago.
+ */
+export const GRADUATED_EVENT = 'snakie:graduated'
+
+export interface GraduatedDetail {
+  /** The buffer that graduated — so the celebration clears when they move ON. */
+  fileId: string
+  /** The file's name, now an ordinary `.py`. */
+  name: string
+  /** How many lines of Python they wrote. */
+  lines: number
+  /** Where the blocks were kept. */
+  blocksName: string
+  /** False when the blocks are an unsaved buffer rather than a file on disk. */
+  blocksSaved: boolean
+}
+
+/** Announce a graduation, for whoever is rendering the celebration. */
+export function dispatchGraduated(detail: GraduatedDetail): void {
+  window.dispatchEvent(new CustomEvent<GraduatedDetail>(GRADUATED_EVENT, { detail }))
+}
+
+/**
  * "Close the active tab" (#915), fired by File ▸ Close Tab.
  *
  * An EVENT rather than a store call, because closing a tab is not just removing
