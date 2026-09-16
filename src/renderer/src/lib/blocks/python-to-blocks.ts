@@ -143,11 +143,10 @@ export function pythonToBlocks(source: string): Conversion {
   // about Python — a function is not a step in the program, it is a thing the
   // program can do. The generator hoists their code above the body either way.
   const roots = [...state.definitions, ...(stack ? [stack] : [])]
+  const positioned = roots.map((block, i) => ({ ...block, x: 40, y: 40 + i * 240 }))
+  identify(positioned)
   const workspace: BlocksWorkspace = {
-    blocks: {
-      languageVersion: 0,
-      blocks: roots.map((block, i) => ({ ...block, x: 40, y: 40 + i * 240 }))
-    }
+    blocks: { languageVersion: 0, blocks: positioned }
   }
   if (state.variables.size > 0) {
     ;(workspace as Record<string, unknown>).variables = [...state.variables].map(([name, id]) => ({
@@ -179,6 +178,67 @@ function tree(lines: readonly LogicalLine[]): Stmt[] {
   }
   out.push(...read(lines.length > 0 ? lines[0].indent : 0))
   return out
+}
+
+/**
+ * IDENTITY, FROM POSITION (#1036, epic #1007).
+ * ---------------------------------------------------------------------------
+ *
+ * The conversion used to emit blocks with no `id`, so Blockly minted a fresh
+ * random one for every block on every load. Under #1034 that load happens each
+ * time the learner pauses typing in the code pane — and a program whose blocks
+ * are all new blocks every 450ms is a program with no identity at all:
+ *
+ *  - #1016's link drops the block you were hovering, because the id it was
+ *    holding no longer exists.
+ *  - #1015's tracebacks point at a block that was deleted a keystroke ago.
+ *  - Any block the learner dragged somewhere goes back to the layout grid.
+ *
+ * So give a block an id that says WHERE IT IS: root index, then the chain
+ * position at each level, then the input name on the way down. Converting the
+ * same program twice produces the same ids, and converting an edited program
+ * produces the same ids for everything that did not move — which is the whole
+ * of what "identity-stable" needs to mean here, with no diff to compute.
+ *
+ * THE TYPE IS DELIBERATELY NOT IN THE KEY. A learner who replaces
+ * `time.sleep(1)` with `print("hi")` has changed what the third statement IS,
+ * not which statement it is, and the block at that position is still the block
+ * at that position — the hover and the traceback should follow it there. Adding
+ * the type would churn an id on every retype and buy nothing.
+ *
+ * Readable rather than hashed, matching the variable ids a few lines below:
+ * `r0.2:DO.1` is a thing you can find on a canvas, and an opaque digest is not.
+ * Blockly treats ids as opaque strings, and these cannot collide with its own
+ * random 20-character ones.
+ */
+function identify(roots: readonly BlockJson[]): void {
+  roots.forEach((root, i) => identifyChain(root, `r${i}`))
+}
+
+/** Walk a statement chain, numbering as it goes. Iterative, so a fifty-line
+ *  program's last block gets `r0.49` rather than fifty nested segments. */
+function identifyChain(first: BlockJson, path: string): void {
+  let block: BlockJson | undefined = first
+  let i = 0
+  while (block) {
+    identifyBlock(block, `${path}.${i}`)
+    block = block.next?.block
+    i += 1
+  }
+}
+
+function identifyBlock(block: BlockJson, path: string): void {
+  block.id = path
+  for (const [name, input] of Object.entries(block.inputs ?? {})) {
+    // A value input holds one block, but a statement input (`DO`) holds a
+    // chain — so both go through `identifyChain`, which handles one block as
+    // the one-element case.
+    if (input.block) identifyChain(input.block, `${path}:${name}`)
+    // Shadows are the greyed defaults in an empty socket. They get ids too, or
+    // Blockly mints random ones and the workspace stops re-serialising
+    // identically — which is what `lastLoadedRef` in the canvas compares.
+    if (input.shadow) identifyBlock(input.shadow, `${path}:${name}^`)
+  }
 }
 
 class Converter {

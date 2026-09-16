@@ -6,6 +6,40 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The canvas stops flinching while you type** (#1036 + #1037, epic #1007).
+  Two halves of the same complaint, left open by #1034.
+
+  **Blocks now know where they are** (#1036). The conversion emitted no ids, so
+  Blockly minted fresh random ones on every load — and under #1034 that load
+  happens each time the learner pauses typing. A program whose blocks are all
+  *new* blocks every 450ms has no identity at all: #1016's hover link dropped
+  the block it was holding, #1015's tracebacks pointed at blocks deleted a
+  keystroke ago, and anything dragged aside went back to the layout grid. A
+  block's id is now derived from **where it is** — `r0.1:DO.2` is the third
+  statement inside the second statement of the first root — so converting an
+  edited program gives back the same ids for everything that did not move, with
+  no diff to compute. Changing `time.sleep(1)` to `time.sleep(9)` now changes
+  one field and nothing else. Root positions and the selected block survive a
+  reconversion too.
+
+  **And it only reconverts when the text parses** (#1037). Half-written code is
+  still code: `if x` with no colon yet is not a condition, it is a raw Python
+  block, and it becomes an `if` again a keystroke later. The answer comes from
+  **the board's own `compile()`** — the free syntax validator the #1019 spike
+  found and wrote down but never wired up — falling back to #1018's lint where
+  there is no board, because the Blocks workspace is meant to work on a
+  Chromebook with nothing plugged in. While the text does not parse, the blocks
+  already on screen stay exactly as they are, and nothing is warned about: a
+  program mid-sentence is not a program with a mistake.
+
+  Two things the gate will not do, and they matter more than the feature does:
+  it never asks a board that is **running a program** (`exec` goes through the
+  raw REPL, and killing a learner's blink loop every 450ms to tidy a canvas
+  would be an appalling trade), and it never blocks on a slow answer — the
+  device path has a short timeout and every failure falls through to the lint.
+
 ### Fixed
 
 - **CircuitPython got the simulator's no-op stubs, and nothing said so** (#1038,

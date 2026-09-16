@@ -9,6 +9,9 @@ import { BLOCKS_PANE_SLIVER, useWorkspaceLayout } from '../store/layout'
 import { useWorkspace } from '../store/workspace'
 import { BLOCKS_SCHEMA_VERSION, parseBlocksFooter } from '../../../shared/blocks-doc'
 import { pythonToBlocks } from '../lib/blocks/python-to-blocks'
+import { syntaxOk, type DeviceExec } from '../lib/blocks/syntax-gate'
+import { PROGRAM_RUN_EVENT, type ProgramRunDetail } from './editorBridge'
+import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useDynamicBlocks } from '../lib/blocks/use-dynamic-blocks'
 import { DriverInstallBanner } from './DriverInstallBanner'
 import type { PartDriverNeed } from './part-editor.util'
@@ -214,6 +217,32 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   /** Bumped when a CODE edit rebuilt the workspace, so the canvas re-reads it. */
   const [reloadNonce, setReloadNonce] = useState(0)
   const codeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // ── THE PARSE GATE (#1037) ────────────────────────────────────────────────
+  //
+  // Whether the board is worth asking. `exec` goes through the raw REPL, which
+  // INTERRUPTS whatever the board is doing — so a running program means we use
+  // the lint instead, every time. Killing a learner's blink loop every 450ms to
+  // tidy up a canvas would be an appalling trade.
+  const deviceStatus = useDeviceStatus()
+  const [programRunning, setProgramRunning] = useState(false)
+  useEffect(() => {
+    const handler = (e: Event): void => {
+      setProgramRunning(!!(e as CustomEvent<ProgramRunDetail>).detail?.running)
+    }
+    window.addEventListener(PROGRAM_RUN_EVENT, handler)
+    return () => window.removeEventListener(PROGRAM_RUN_EVENT, handler)
+  }, [])
+  const askBoard: DeviceExec | null = useMemo(() => {
+    if (programRunning) return null
+    if (deviceStatus.state !== 'connected') return null
+    const exec = window.api?.device?.exec
+    return exec ? (code: string) => exec(code) : null
+  }, [programRunning, deviceStatus.state])
+  const askBoardRef = useRef(askBoard)
+  askBoardRef.current = askBoard
+  /** Guards against a slow probe landing after a newer one (#1037). */
+  const gateSeq = useRef(0)
   useEffect(() => {
     setCodeDraft(null)
   }, [file?.id])
@@ -258,9 +287,19 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
       setCodeDraft(code)
       if (codeTimer.current) clearTimeout(codeTimer.current)
       codeTimer.current = setTimeout(() => {
-        const { workspace } = pythonToBlocks(code)
-        updateBlocks(file.id, code, workspace)
-        setReloadNonce((n) => n + 1)
+        const seq = (gateSeq.current += 1)
+        void syntaxOk(code, { exec: askBoardRef.current }).then((verdict) => {
+          // A probe that came back after the learner typed again is answering a
+          // question about text that no longer exists.
+          if (seq !== gateSeq.current) return
+          // Mid-sentence. Their text stays exactly as typed (`codeDraft` still
+          // holds it) and the blocks they already have stay on screen. No
+          // warning: a program half written is not a program with a mistake.
+          if (!verdict.ok) return
+          const { workspace } = pythonToBlocks(code)
+          updateBlocks(file.id, code, workspace)
+          setReloadNonce((n) => n + 1)
+        })
       }, CODE_TO_BLOCKS_MS)
     },
     [file, updateBlocks]
