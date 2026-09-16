@@ -627,3 +627,135 @@ describe('the terminal-type list matches the real blocks (#1068)', () => {
     expect(terminal.sort()).toEqual(['controls_flow_statements', 'snakie_forever'])
   })
 })
+
+/**
+ * AN ARM NOBODY CLAIMED IS STILL AN ARM (#1068).
+ * ---------------------------------------------------------------------------
+ *
+ * `statements` used to skip any line starting with `elif`/`else` on the
+ * reasoning that `ifChain` must already have consumed it. `ifChain` stops
+ * scanning at the first sibling that is neither — which a comment at column zero
+ * between the arms is, and which `while … else:` always is — so the arm was
+ * skipped without ever being taken, and its whole body went with it. Silently,
+ * and counted as a success, because the counting lives in `statement()` and
+ * `statement()` was never reached.
+ */
+describe('an else nobody consumed is kept (#1068)', () => {
+  it('keeps an else separated from its if by a comment', () => {
+    roundTrips(
+      ['x = 1', 'if x:', '    print(1)', '# otherwise', 'else:', '    print(2)', ''].join('\n')
+    )
+  })
+
+  it('keeps an elif separated from its if by a comment', () => {
+    roundTrips(['if x:', '    print(1)', '# hmm', 'elif y:', '    print(2)', ''].join('\n'))
+  })
+
+  it("keeps a while loop's else, which no if ever claims", () => {
+    roundTrips(['while x:', '    print(1)', 'else:', '    print(2)', ''].join('\n'))
+  })
+
+  it("keeps a for loop's else", () => {
+    roundTrips(['for i in items:', '    print(i)', 'else:', '    print(2)', ''].join('\n'))
+  })
+
+  it('counts the lines it kept instead of reporting a clean run', () => {
+    const { report } = regenerate(
+      ['if x:', '    print(1)', '# otherwise', 'else:', '    print(2)', ''].join('\n')
+    )
+    // Five lines in, five lines accounted for — the `else:` among them.
+    expect(report.total).toBe(5)
+  })
+
+  it('still folds a plain if/elif/else into one block', () => {
+    expect(types(['if x:', '    print(1)', 'elif y:', '    print(2)', 'else:', '    print(3)', ''].join('\n'))).toContain(
+      'controls_if'
+    )
+  })
+})
+
+/**
+ * A COMMENT IS PART OF THE LINE IT IS ON (#1068).
+ *
+ * `tokenize` stops at a trailing `#` and hands the code back alone, so every
+ * recogniser matched the line and dropped the rest of it. No block holds a
+ * statement and a comment about it, so a line carrying one stays raw.
+ */
+describe('a trailing comment survives (#1068)', () => {
+  it('on an assignment', () => {
+    roundTrips('x = 5  # how many times\n')
+  })
+
+  it('on a call that would otherwise be a block', () => {
+    roundTrips(['import time', '', 'time.sleep(1)  # pause', ''].join('\n'))
+  })
+
+  it('on a print', () => {
+    roundTrips("print('hi')  # say hello\n")
+  })
+
+  it('on a suite header, whose colon goes before the comment and not inside it', () => {
+    roundTrips(['if x:  # check', '    print(1)', ''].join('\n'))
+  })
+
+  it('adds the colon before the comment when the header lacks one', () => {
+    // The raw suite block supplies the colon a learner did not type; with a
+    // comment on the line it has to go before it, or it does nothing at all.
+    const ws = new Blockly.Workspace()
+    Blockly.serialization.workspaces.load(
+      {
+        blocks: {
+          languageVersion: 0,
+          blocks: [
+            {
+              type: 'snakie_python_suite',
+              fields: { CODE: 'if x  # check' },
+              inputs: { DO: { block: { type: 'text_print', inputs: {} } } }
+            }
+          ]
+        }
+      } as never,
+      ws
+    )
+    expect(generateProgram(ws).code.split('\n')[0]).toBe('if x:  # check')
+  })
+
+  it('does not mistake a hash inside a string for a comment', () => {
+    roundTrips("print('# not a comment')\n")
+    expect(types("print('# not a comment')\n")).toContain('text_print')
+  })
+
+  it('counts a commented line as raw, not recognised', () => {
+    expect(regenerate('x = 5  # how many\n').report.raw).toBe(1)
+  })
+})
+
+/**
+ * TWO WAYS THE CONVERTER USED TO WRITE CODE THAT WOULD NOT COMPILE (#1068).
+ */
+describe('the converter never produces a syntax error (#1068)', () => {
+  it('does not read == as an assignment', () => {
+    // The guard sliced the text up to the first `=`, which stops BEFORE the
+    // character it is looking for, so this came back as `x = = 5`.
+    roundTrips('x == 5\n')
+    expect(types('x == 5\n')).not.toContain('variables_set')
+  })
+
+  it('still reads a real assignment', () => {
+    expect(types('x = 5\n')).toContain('variables_set')
+  })
+
+  it('leaves the other comparisons alone', () => {
+    roundTrips('x != 5\n')
+    roundTrips('x <= 5\n')
+  })
+
+  it('does not let a comment inside brackets swallow the rest of the call', () => {
+    // The line break after the comment is folded into a space, so a comment left
+    // in place took the `2)` into itself and left an unclosed bracket behind.
+    const out = regenerate(['print(', '    1,  # first', '    2)', ''].join('\n')).code
+    expect(out).toContain('2)')
+    expect(out.trimEnd().endsWith(')')).toBe(false) // the comment rides at the end
+    expect(out).toContain('# first')
+  })
+})

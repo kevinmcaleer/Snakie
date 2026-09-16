@@ -1,5 +1,12 @@
 import type { BlocksWorkspace } from '../../../../shared/blocks-doc'
-import { isSuiteHeader, logicalLines, tokenize, type LogicalLine, type Token } from './python-tokens'
+import {
+  isSuiteHeader,
+  logicalLines,
+  tokenize,
+  trailingCommentAt,
+  type LogicalLine,
+  type Token
+} from './python-tokens'
 
 /**
  * PYTHON → BLOCKS (#1019, epic #1007, phase 5).
@@ -455,6 +462,14 @@ class Converter {
    * because reading a call's arguments starts a parse inside a parse.
    */
   private source = ''
+  /**
+   * The `elif`/`else` nodes an `if` above them has already taken (#1068).
+   *
+   * Identity, not a text test: only the chain that consumed an arm knows it did,
+   * and guessing from the text is what lost an `else` whose `if` had a comment
+   * between them. Nodes are unique objects, so one set serves the whole tree.
+   */
+  private readonly consumed = new Set<Stmt>()
 
   /** A chain of statement blocks, or null for an empty suite. */
   statements(nodes: readonly Stmt[]): BlockJson | null {
@@ -489,9 +504,23 @@ class Converter {
         this.report.recognised += 1
         continue
       }
-      // `elif`/`else` are not statements: they belong to the `if` above them and
-      // were consumed by it.
-      if (/^(elif|else)\b/.test(node.line.text) && built.length > 0) continue
+      // `elif`/`else` are not statements: they belong to the `if` above them.
+      //
+      // ASKED, NOT ASSUMED (#1068). This used to skip any line STARTING with
+      // `elif` or `else` on the reasoning that `ifChain` must already have taken
+      // it — and `ifChain` stops scanning at the first sibling that is neither,
+      // which a comment at column zero between the arms is:
+      //
+      //     if x:          the `else:` was never consumed, was skipped anyway,
+      //         a()        and its whole body went with it — silently, and
+      //     # otherwise    counted as a success, because `statement()` (which
+      //     else:          does the counting) was never reached.
+      //         b()
+      //
+      // `while … else:` and `for … else:` are real Python and were losing their
+      // else the same way. An arm nobody claimed now falls through to the raw
+      // suite below and keeps its header and its body verbatim.
+      if (this.consumed.has(node)) continue
       for (const block of this.statement(node, nodes)) built.push({ block, line: node.line })
     }
     if (built.length === 0) return null
@@ -563,6 +592,21 @@ class Converter {
     const recognised = (blocks: BlockJson[]): BlockJson[] => {
       this.report.recognised += 1
       return blocks
+    }
+
+    // --- a line that carries a comment is that whole line (#1068) ----------
+    //
+    // `tokenize` stops at a trailing `#` and hands back the code alone, so every
+    // recogniser below used to match the line and drop the rest of it — `x = 5
+    // # how many times` came back as `x = 5`, and the module header three files
+    // over promises the exact opposite about comments.
+    //
+    // No block holds a statement AND a comment about it, so recognising one at
+    // all would mean choosing which half to keep. Raw keeps both, verbatim,
+    // which is what the escape hatches are for.
+    if (trailingCommentAt(text) >= 0) {
+      if (isSuiteHeader(text) && node.body.length > 0) return [this.rawSuite(node)]
+      return [this.raw(node.line)]
     }
 
     // --- imports ---------------------------------------------------------
@@ -684,8 +728,14 @@ class Converter {
         }
       ])
     }
-    const assign = /^([A-Za-z_]\w*)\s*=\s*(.+)$/.exec(text)
-    if (assign && !/[=<>!]=/.test(text.slice(0, text.indexOf('=')))) {
+    // `=(?!=)` IS THE WHOLE GUARD (#1068). This used to read the `=` and then
+    // check `text.slice(0, text.indexOf('='))` for a comparison operator — a
+    // slice that stops BEFORE the character it is looking for, so `x == 5` was
+    // read as assigning `= 5` to `x` and regenerated as `x = = 5`, which is not
+    // Python at all. `!=`, `<=` and `>=` never reached the guard: `\s*` cannot
+    // eat the `!`, `<` or `>`, so the pattern had already failed on them.
+    const assign = /^([A-Za-z_]\w*)\s*=(?!=)\s*(.+)$/.exec(text)
+    if (assign) {
       return recognised([
         {
           type: 'variables_set',
@@ -720,11 +770,13 @@ class Converter {
       const next = siblings[i]
       if (/^elif\s+.+:$/.test(next.line.text)) {
         arms.push(next)
+        this.consumed.add(next)
         i += 1
         continue
       }
       if (next.line.text === 'else:') {
         elseArm = next
+        this.consumed.add(next)
         i += 1
       }
       break

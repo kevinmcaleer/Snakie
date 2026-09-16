@@ -137,6 +137,8 @@ export class MicroPythonGenerator extends Blockly.CodeGenerator {
   /** Blockly procedure name -> the Python identifier it settled on this pass. */
   private functionNames = new Map<string, string>()
   private workspaceRef: Blockly.Workspace | null = null
+  /** The program section, filled in by the pass that walked the workspace. */
+  body = ''
 
   constructor() {
     super('MicroPython')
@@ -242,6 +244,14 @@ export class MicroPythonGenerator extends Blockly.CodeGenerator {
     return [...this.functions.values()]
   }
 
+  /**
+   * Spoken for before this pass starts — the names the imports are going to
+   * bind (#1068). See the two passes in {@link generateProgram}.
+   */
+  reserve(names: Iterable<string>): void {
+    for (const name of names) this.taken.add(name)
+  }
+
   /** Reset for a fresh pass. Called by {@link generateProgram}. */
   override init(workspace: Blockly.Workspace): void {
     this.imports = new ImportManager()
@@ -296,11 +306,36 @@ export class MicroPythonGenerator extends Blockly.CodeGenerator {
  */
 export function generateProgram(workspace: Blockly.Workspace): GeneratedProgram {
   ensureBlocklyLocale()
+  // TWO PASSES, BECAUSE A NAME CANNOT BE TAKEN BACK (#1068).
+  //
+  // `ImportManager.boundNames()` is what stops a learner's variable called
+  // `time` replacing the module — but it can only report the imports declared
+  // SO FAR, and they keep arriving while blocks emit. A variable above the block
+  // that needs `import time` was named before anything had asked for it:
+  //
+  //     time = 0           import time      <- hoisted to the top, as always
+  //     time.sleep(1)  ->  time = 0         <- and now the module is an int
+  //                        time.sleep(1)       AttributeError, nowhere near
+  //                                            the block that caused it
+  //
+  // The first pass exists only to find out which names the imports will bind;
+  // its output is thrown away. The second is the real one, with those names
+  // already spoken for, so the variable comes out `time_` wherever it sits.
+  const survey = runPass(workspace, null)
+  const gen = runPass(workspace, survey.gen.imports.boundNames()).gen
+  return { ...assemble(sectionsOf(gen)), missing: blocksWithoutEmitters(workspace) }
+}
+
+/** One generation pass over `workspace`, with `reserved` names already taken. */
+function runPass(
+  workspace: Blockly.Workspace,
+  reserved: ReadonlySet<string> | null
+): { gen: MicroPythonGenerator } {
   const gen = new MicroPythonGenerator()
   installEmitters(gen)
   gen.init(workspace)
+  if (reserved) gen.reserve(reserved)
 
-  const missing = blocksWithoutEmitters(workspace)
   const chunks: string[] = []
   for (const block of workspace.getTopBlocks(true)) {
     if (block.outputConnection) continue // a naked value block generates nothing
@@ -316,9 +351,13 @@ export function generateProgram(workspace: Blockly.Workspace): GeneratedProgram 
       // stops anyone writing the result back to the file.
     }
   }
-  const body = chunks.join('')
+  gen.body = chunks.join('')
+  return { gen }
+}
 
-  // Setup is collected DURING the walk above, so it can only be rendered now.
+/** The three marked sections, in the order they are written. */
+function sectionsOf(gen: MicroPythonGenerator): string[] {
+  // Setup is collected DURING the walk, so it can only be rendered now.
   const setup = gen
     .setupLines()
     .map((b) => `${MARK}${b.blockId ?? ''}${MARK}${b.name} = ${b.expr}\n`)
@@ -328,7 +367,7 @@ export function generateProgram(workspace: Blockly.Workspace): GeneratedProgram 
   // runs it, and putting them first is also where a Python programmer looks.
   const functions = gen.functionCode().join('\n')
 
-  const sections = [
+  return [
     gen.imports.empty
       ? ''
       : // An import line is marked only when a block claimed it (#1018) — an
@@ -337,9 +376,8 @@ export function generateProgram(workspace: Blockly.Workspace): GeneratedProgram 
         `${gen.imports.render((line, blockId) => `${MARK}${blockId ?? ''}${MARK}${line}`)}\n`,
     functions,
     setup,
-    body
+    gen.body
   ].filter((s) => s !== '')
-  return { ...assemble(sections), missing }
 }
 
 /**

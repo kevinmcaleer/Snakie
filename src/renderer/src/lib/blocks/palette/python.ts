@@ -4,6 +4,7 @@ import type { MicroPythonGenerator } from '../generator'
 import type { BlockDefinition } from '../registry'
 import { FIELD_PYTHON_TYPE } from '../python-field'
 import { isAtomicExpression } from '../python-check'
+import { trailingCommentAt } from '../python-tokens'
 
 /**
  * THE ESCAPE HATCHES (#1018, epic #1007).
@@ -372,7 +373,18 @@ export const PYTHON_BLOCKS: BlockDefinition[] = [
       // A colon, whether or not they typed one: the body below is about to be
       // indented under this line, and without it that is a syntax error rather
       // than a suite.
-      const line = header.endsWith(':') ? header : `${header}:`
+      //
+      // BEFORE THE COMMENT, not after it (#1068). A header can carry one now
+      // that a line with a trailing comment stays raw — and `if x:  # check`
+      // ends in `k`, so the colon was going on the end and landing INSIDE the
+      // comment, where it does nothing and silently changed what they wrote.
+      const at = trailingCommentAt(header)
+      const code = at >= 0 ? header.slice(0, at).trimEnd() : header
+      const line = code.endsWith(':')
+        ? header
+        : at >= 0
+          ? `${code}:  ${header.slice(at)}`
+          : `${header}:`
       // `pass` for an empty body, for the same reason every other C-block does
       // it — an empty suite is not valid Python.
       return `${line}\n${gen.statementToCode(block, 'DO') || `${gen.INDENT}pass\n`}`

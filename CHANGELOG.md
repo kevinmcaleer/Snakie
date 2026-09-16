@@ -8,6 +8,49 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Four ways the Python→blocks converter changed your program** (#1068,
+  epic #1007). Each silent, each found by pointing the converter at Python a
+  learner or a lesson sheet would actually write:
+
+  - **An `else` nobody claimed was deleted, body and all.** The converter
+    skipped any line starting with `elif`/`else` on the reasoning that the `if`
+    above must have taken it — but an `if` stops looking at the first sibling
+    that is neither, which a comment at column zero between the arms is. So
+    `if:` / `# note` / `else:` lost the else branch entirely, and the conversion
+    report called it a clean run. `while … else:` and `for … else:` — real
+    Python that no `if` ever claims — went the same way. An arm nobody consumed
+    now keeps its header and its body.
+  - **A trailing comment was dropped from every line it recognised.**
+    `x = 5  # how many times` came back as `x = 5`, and `time.sleep(1)  # pause`
+    as a wait block with the pause forgotten. No block holds a statement *and* a
+    comment about it, so a line carrying one stays raw and keeps both.
+  - **`x == 5` was read as an assignment** and written back as `x = = 5`, which
+    is not Python. The guard sliced the line up to the first `=` — stopping one
+    character before the thing it was looking for.
+  - **A comment inside a bracketed call swallowed the rest of it.** The line
+    break after it is folded into a space, so
+
+    ```python
+    print(
+        1,  # first
+        2)
+    ```
+
+    became `print( 1,  # first 2)` — an unclosed bracket where valid Python used
+    to be. The comment now rides at the end of the line it was already being
+    folded onto.
+
+- **A variable can no longer shadow a module imported below it** (#1068,
+  epic #1007). A variable called `time` sitting above the block that needs
+  `import time` kept the name, and the import section — which is hoisted to the
+  top — then bound the module to a name the next line overwrote, so the program
+  died at the following `time.sleep` with an error nowhere near the block that
+  caused it. The guard could only ever see the imports declared so far; the
+  generator now makes a first pass to find out what the imports will bind, so
+  the variable comes out `time_` wherever it sits.
+
+### Fixed
+
 - **A `while True:` with a `break` no longer opens as an empty canvas**
   (#1068, epic #1007). `forever` and `break`/`continue` are defined with no next
   connection, on the true reasoning that nothing runs after them — but the
