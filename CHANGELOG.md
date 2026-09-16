@@ -8,6 +8,53 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Every block category has a colour of its own now** (epic #1007). The rule
+  behind the palette is a good one and it stays: a block wears the colour its
+  construct has in the **code mirror** beside it, so a number block is the blue
+  that `5` is in Monaco. Nothing else in this app can do that, and it is worth
+  more than copying Scratch's palette wholesale.
+
+  But it was applied to fifteen categories over nine tokens, and measured on the
+  hue wheel the result was worse than the duplicates suggest:
+
+  ```
+     8°  logic, functions        (kw)      ─┐ one degree apart
+     9°  parts                   (pinPower)─┘
+    39°  hardware, wait, control (gold)    ─┐ three degrees apart
+    42°  text, lists, plugins    (str)     ─┘
+    89°  python                  (com)
+   107°  modules, variables      (ident)
+   152°  turtle                  (green)
+   197°  instruments, maths      (num)
+  ```
+
+  Fifteen drawers in about six telling-apart-able colours — and two of the
+  clashes were between *different* tokens, so the rule was not even buying the
+  distinctness it cost. A learner could not tell a Text block from a Hardware
+  one.
+
+  A category can now declare a `hue`, and `withHue` moves it round the wheel
+  while keeping the token's saturation and lightness **exactly** — which is what
+  holds the palette together as one palette, rather than fifteen hand-picked
+  hexes that drift apart the first time the design changes. Every vivid category
+  is at least 20° from every other, pinned by a test.
+
+  Four anchors keep their token untouched: **maths** (`num` is literally the
+  colour a number is in the mirror — the clearest case of the whole idea),
+  **turtle** (`green`), **parts** (`pinPower`, the board's power dot) and the
+  near-greys **variables** and **python**, which take no hue space at all.
+  **Hardware** moves 6° off the GPIO dot, far enough to clear `str` and not far
+  enough to break the resemblance to the pin it drives.
+
+  Two things the move taught, both now tests: a hue on a near-grey token is
+  silently a no-op, because saturation is preserved — Modules hit that and had
+  to change base token; and five categories in the blues is five nobody can tell
+  apart, because the eye separates far less per degree there, so Lists gave up
+  its place beside Text for the empty warm-green gap.
+
+
+### Changed
+
 - **The blocks are shaped like MakeCode and Scratch now, because they are
   rendered like them** (epic #1007, #573's design direction). The canvas moves
   from Blockly's `thrasos` renderer to **`zelos`** — which is Blockly's own port

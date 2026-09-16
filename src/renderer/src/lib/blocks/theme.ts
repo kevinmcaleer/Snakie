@@ -129,10 +129,60 @@ export function readThemeTokens(el: Element | null): ThemeTokens {
  * issues later in the epic fill these in — this is the list they populate, and
  * it lives here so the colour and the category can never disagree.
  */
+/**
+ * ONE COLOUR PER CATEGORY, and it did not used to be.
+ *
+ * The original idea here is a good one and it stays: a block wears the colour
+ * its construct has in the CODE MIRROR beside it, so a number block is the blue
+ * that `5` is in Monaco. Nothing else in this app can do that, and it is worth
+ * more than copying Scratch's palette wholesale.
+ *
+ * But it was applied to fifteen categories over nine tokens, and measured on the
+ * hue wheel the result was worse than the duplicates suggest:
+ *
+ * ```
+ *    8°  logic, functions      (kw)     ─┐ one degree apart
+ *    9°  parts                 (pinPower)┘
+ *   39°  hardware, wait, control (gold)  ─┐ three degrees apart
+ *   42°  text, lists, plugins  (str)     ─┘
+ *   89°  python                (com)
+ *  107°  modules, variables    (ident)
+ *  152°  turtle                (green)
+ *  197°  instruments, maths    (num)
+ * ```
+ *
+ * Fifteen drawers in about six telling-apart-able colours, and two of the
+ * clashes were between DIFFERENT tokens — so the rule was not even buying the
+ * distinctness it cost. A learner cannot tell a Text block from a Hardware one.
+ *
+ * So `hue` moves a category around the wheel while {@link withHue} keeps the
+ * token's saturation and lightness exactly, which is what holds the palette
+ * together as one palette. Categories with no `hue` wear their token as before.
+ *
+ * WHAT KEPT ITS TOKEN, and why those four:
+ *
+ *  - **maths** is the anchor worth keeping — `num` is literally the colour a
+ *    number is in the mirror, and it is the clearest case of the whole idea.
+ *    `text` could not keep `str` beside it: the warm end only fits the two board
+ *    colours, and `str` was already three degrees off the GPIO dot, so that
+ *    anchor was invisible before it moved.
+ *  - **turtle** is `green`, the pen colour, and owns that end of the wheel.
+ *  - **parts** is `pinPower` and **hardware** is `pinGpio`: the two dot colours
+ *    off the board diagrams, so a wired part's blocks match its pin. Hardware
+ *    moves 6° to clear `str`, which is not enough to break the resemblance.
+ *  - **variables** (`ident`) and **python** (`com`) are near-greys — they take
+ *    no hue space at all and are told apart by lightness, so they are left
+ *    alone and cost nothing.
+ *
+ * Everything else is spread at 20° or more. The order below is still the
+ * learning order, not the wheel order.
+ */
 export const BLOCK_CATEGORIES = [
   { id: 'turtle', name: 'Turtle', token: 'green' },
-  { id: 'hardware', name: 'Hardware', token: 'pinGpio' },
-  { id: 'instruments', name: 'Instruments', token: 'num' },
+  // 6° off the GPIO dot, purely to clear `str` at 42°. Still reads as the pin.
+  { id: 'hardware', name: 'Hardware', token: 'pinGpio', hue: 33 },
+  // Teal: the scope/plot family, clear of maths' 197° without leaving the blues.
+  { id: 'instruments', name: 'Instruments', token: 'num', hue: 175 },
   // The parts on the breadboard bring their own blocks (#1017), grouped one
   // drawer per part. It sits next to Hardware because that is what it IS — the
   // difference is only that nobody hand-wrote these.
@@ -150,25 +200,46 @@ export const BLOCK_CATEGORIES = [
   {
     id: 'modules',
     name: 'Modules',
-    token: 'ident',
+    // Violet — and based on `num` rather than `ident` ON PURPOSE. `withHue`
+    // keeps saturation, so a hue put on a near-grey stays a near-grey: Modules
+    // would have come out the same colour as Variables however far round the
+    // wheel it was sent. It needs a saturated token to move at all.
+    token: 'num',
+    hue: 295,
     hint: 'Import a module and the blocks it offers appear here.'
   },
   // Wait gets a category of its own rather than a corner of Control (#1011).
   // It is the single most-used block in any hardware lesson — every blink,
   // every debounce, every "now do the next thing" — and a beginner should not
   // have to know that waiting is a kind of control flow to find it.
-  { id: 'wait', name: 'Wait', token: 'gold' },
-  { id: 'control', name: 'Control', token: 'gold' },
-  { id: 'logic', name: 'Logic', token: 'kw' },
+  // Yellow — Scratch puts events here, and waiting is the closest thing to one.
+  { id: 'wait', name: 'Wait', token: 'gold', hue: 53 },
+  // Olive-gold: next to Wait on the wheel because they were one drawer, far
+  // enough from it to be a different one.
+  { id: 'control', name: 'Control', token: 'gold', hue: 76 },
+  // Indigo. `kw` sat one degree off `pinPower`, so the keyword anchor was
+  // already invisible — this buys distinctness the old value never had.
+  { id: 'logic', name: 'Logic', token: 'kw', hue: 265 },
   { id: 'math', name: 'Maths', token: 'num' },
-  { id: 'text', name: 'Text', token: 'str' },
-  { id: 'lists', name: 'Lists', token: 'str' },
+  // Blue. `str` sat three degrees off the GPIO dot, so the string anchor was
+  // already invisible, and the warm end only fits the two board colours.
+  { id: 'text', name: 'Text', token: 'str', hue: 225 },
+  // The warm-green gap. Lists began beside Text — a list is a row of things —
+  // but five categories in the blues is five nobody can tell apart: the eye
+  // separates far less per degree there than it does around the rest of the
+  // wheel, so the crowded end gives one up to the empty one.
+  { id: 'lists', name: 'Lists', token: 'str', hue: 113 },
   { id: 'variables', name: 'Variables', token: 'ident' },
-  { id: 'functions', name: 'Functions', token: 'kw' },
+  // Magenta, a step round from Logic: both are `kw` in the mirror, and keeping
+  // them adjacent says so without making them the same block.
+  { id: 'functions', name: 'Functions', token: 'kw', hue: 320 },
   {
     id: 'plugins',
     name: 'Plugins',
     token: 'str',
+    // Pink, and deliberately the odd one out: a plugin's blocks are the only
+    // ones on the canvas that did not ship with Snakie.
+    hue: 345,
     hint: 'A Python plugin can add blocks here — see Writing plugins.'
   },
   { id: 'python', name: 'Python', token: 'com' }
@@ -176,6 +247,13 @@ export const BLOCK_CATEGORIES = [
   id: string
   name: string
   token: keyof ThemeTokens
+  /**
+   * Move this category to its own hue, keeping the token's saturation and
+   * lightness exactly (see {@link withHue} and the note above the table).
+   *
+   * Absent means "wear the token as it is", which is what the four anchors do.
+   */
+  hue?: number
   /**
    * What an EMPTY category says (#1017).
    *
@@ -236,6 +314,20 @@ const STOCK_STYLE_ALIASES: Record<string, BlockCategoryId> = {
   hat_blocks: 'control'
 }
 
+/**
+ * A category's colour: its token, moved to its own hue when it declares one.
+ *
+ * Exported because the toolbox and the tests both need to ask the same question
+ * the theme asks, and a second copy of this rule is a second palette.
+ */
+export function categoryColour(
+  tokens: ThemeTokens,
+  category: { token: keyof ThemeTokens; hue?: number }
+): string {
+  const colour = tokens[category.token]
+  return category.hue === undefined ? colour : withHue(colour, category.hue)
+}
+
 export function buildSoftShellTheme(tokens: ThemeTokens): SoftShellThemeSpec {
   const blockStyles: SoftShellThemeSpec['blockStyles'] = {}
   const categoryStyles: SoftShellThemeSpec['categoryStyles'] = {}
@@ -250,7 +342,7 @@ export function buildSoftShellTheme(tokens: ThemeTokens): SoftShellThemeSpec {
   })
 
   for (const category of BLOCK_CATEGORIES) {
-    const colour = tokens[category.token]
+    const colour = categoryColour(tokens, category)
     categoryStyles[categoryStyleName(category.id)] = { colour }
     blockStyles[`${category.id}_blocks`] = {
       colourPrimary: colour,
@@ -279,7 +371,7 @@ export function buildSoftShellTheme(tokens: ThemeTokens): SoftShellThemeSpec {
   // The stock names, pointed at the same colours as the categories they map to.
   for (const [stockStyle, category] of Object.entries(STOCK_STYLE_ALIASES)) {
     const entry = BLOCK_CATEGORIES.find((c) => c.id === category)
-    if (entry) blockStyles[stockStyle] = shades(tokens[entry.token])
+    if (entry) blockStyles[stockStyle] = shades(categoryColour(tokens, entry))
   }
 
   return {
@@ -379,6 +471,45 @@ export function greyOf(colour: string): string {
   const y = Math.round(0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2])
   const h = Math.min(255, Math.max(0, y)).toString(16).padStart(2, '0')
   return `#${h}${h}${h}`
+}
+
+/**
+ * The same colour, at a different hue (#1007's palette collisions).
+ *
+ * Saturation and lightness are kept EXACTLY, and that is the whole point: Soft
+ * Shell's depth is what makes the palette look like one palette, so a category
+ * that needs its own hue should move around the wheel without becoming brighter
+ * or flatter than the tokens beside it. Rotating a token's hue keeps a derived
+ * colour in the family; picking a fresh hex does not.
+ *
+ * Anything that is not a 6-digit hex comes back unchanged, like {@link mixHex}.
+ */
+export function withHue(colour: string, hue: number): string {
+  const c = parseHex(colour)
+  if (!c) return colour
+  const [r, g, b] = c.map((v) => v / 255)
+  const mx = Math.max(r, g, b)
+  const mn = Math.min(r, g, b)
+  const d = mx - mn
+  const l = (mx + mn) / 2
+  const sat = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1))
+  // Standard HSL → RGB, with the hue replaced and S/L carried over untouched.
+  const h = ((hue % 360) + 360) % 360
+  const chroma = (1 - Math.abs(2 * l - 1)) * sat
+  const x = chroma * (1 - Math.abs(((h / 60) % 2) - 1))
+  const m = l - chroma / 2
+  const seg: [number, number, number] =
+    h < 60 ? [chroma, x, 0]
+    : h < 120 ? [x, chroma, 0]
+    : h < 180 ? [0, chroma, x]
+    : h < 240 ? [0, x, chroma]
+    : h < 300 ? [x, 0, chroma]
+    : [chroma, 0, x]
+  const ch = (v: number): string =>
+    Math.round(Math.min(255, Math.max(0, (v + m) * 255)))
+      .toString(16)
+      .padStart(2, '0')
+  return `#${ch(seg[0])}${ch(seg[1])}${ch(seg[2])}`
 }
 
 export function mixHex(a: string, b: string, t: number): string {
