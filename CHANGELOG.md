@@ -6,6 +6,36 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **CircuitPython got the simulator's no-op stubs, and nothing said so** (#1038,
+  epics #1007 and #209). `micropython/instruments.py` decided whether it had
+  hardware by trying `from machine import Pin, PWM` and catching the failure:
+  `except ImportError` **meant** "we are headless under CPython in the Snakie
+  simulator, so be inert". While MicroPython was the only Python on a board,
+  that was true.
+
+  CircuitPython has no `machine` either. So a real CircuitPython board landed in
+  the same branch and got the simulator's stubs — `Led(15).on()` returned
+  successfully, the LED did not light, and there was no traceback and no
+  warning. A silent wrong answer on real hardware is worse than a crash, and it
+  is exactly what epic #209 exists to prevent. It needed no blocks to reach:
+  `from snakie import Led` in the Code workspace was enough.
+
+  The library now **asks** rather than infers — `sys.implementation.name`, the
+  same signal the IDE's own runtime probe uses. On CircuitPython the `Pin` and
+  `PWM` stand-ins raise on construction, so the error lands on the
+  `Pin(15, Pin.OUT)` line in the learner's own program and names the
+  replacement (`board` with `digitalio`/`pwmio`/`analogio`). Six more paths that
+  used to return silently — in `Buzzer`, `Rangefinder`, `Display` (I²C and SPI)
+  and `Servo` — go through the same check.
+
+  **The CPython path is unchanged**, deliberately and under test: staying inert
+  is the whole point of the simulator. So is a MicroPython build with no
+  `machine` of its own, which the WASM port really is.
+
+  `instruments.py` is now `0.11.0`, so the IDE offers boards the update.
+
 ### Changed
 
 - **The CircuitPython audit: where the asterisk goes** (#1033, epic #1007).

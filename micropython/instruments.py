@@ -77,19 +77,68 @@ target. ``control`` stores the LATEST payload per target; poll it in your loop::
 
 import sys
 
+# WHICH PYTHON IS THIS (#1038, epic #209)?
+#
+# This library drives pins through MicroPython's `machine`, and for a long time
+# it worked out whether it had hardware by trying that import and catching the
+# failure: `except ImportError` MEANT "we are running headless under CPython in
+# the Snakie simulator, so be inert". While MicroPython was the only Python on a
+# board, that was true.
+#
+# CircuitPython has no `machine` either. So a real CircuitPython board landed in
+# the same branch and got the simulator's no-op stubs — `Led(15).on()` returned
+# successfully, the LED did not light, and nothing said a word. A silent wrong
+# answer on real hardware is worse than a crash, and it is exactly what epic
+# #209 exists to prevent.
+#
+# So ASK, rather than infer. `sys.implementation.name` is the same signal the
+# IDE's own runtime probe uses (`RUNTIME_PROBE_PY` in `src/shared/dialect.ts`),
+# and it is the only one that tells the three runtimes apart.
+_IMPL = getattr(sys.implementation, "name", "cpython")
+
+_NO_MACHINE = (
+    "This needs MicroPython's `machine` module, which CircuitPython does not "
+    "have. Snakie's `snakie`/`instruments` library drives pins through it. On "
+    "CircuitPython, use `board` with `digitalio`, `pwmio` or `analogio`."
+)
+
+
+def _no_machine():
+    """Called wherever `machine` turned out to be missing.
+
+    Under CPython this returns, and the caller stays inert — that is the
+    simulator, and being inert is the whole point of it. On CircuitPython it
+    RAISES, because there the caller is standing in front of real hardware it
+    cannot drive, and saying nothing would be a lie.
+
+    Every `except ImportError` in this file that guards a `machine` import calls
+    this before giving up, so the two runtimes can never be confused again.
+    """
+    if _IMPL == "circuitpython":
+        raise NotImplementedError(_NO_MACHINE)
+
+
 # Real machine.Pin / machine.PWM on a board; tiny no-op stubs under CPython (the
 # Snakie simulator runs exported device code headless). Re-exported so generated
 # code can fall back to `from instruments import Pin, PWM` and still run in the
 # simulator, where the Servo emits SNK telemetry to drive the 3-D model anyway.
+#
+# The import stays guarded rather than keyed off `_IMPL`: the MicroPython WASM
+# port has no `machine` of its own (the IDE injects a simulated one), so a build
+# that reports `micropython` and cannot import it is a case that really happens.
 try:
     from machine import Pin, PWM  # noqa: F401 - re-exported for generated code
-except ImportError:  # pragma: no cover - CPython simulator has no `machine`
+except ImportError:  # pragma: no cover - no `machine` on this runtime
 
     class Pin:  # noqa: N801 - mirror machine.Pin's name
         OUT = 1
         IN = 0
 
         def __init__(self, n, *args, **kwargs):
+            # On CircuitPython this raises, and it raises HERE — on the
+            # `Pin(15, Pin.OUT)` line the learner can see in their own program,
+            # rather than a hundred lines later as a value that is wrong.
+            _no_machine()
             self.id = n
 
         def value(self, *args):
@@ -97,6 +146,7 @@ except ImportError:  # pragma: no cover - CPython simulator has no `machine`
 
     class PWM:  # noqa: N801 - mirror machine.PWM's name
         def __init__(self, pin, *args, **kwargs):
+            _no_machine()
             self.pin = pin
 
         def freq(self, *args):
@@ -113,7 +163,7 @@ except ImportError:  # pragma: no cover - CPython simulator has no `machine`
 # against the copy installed on the board and offers a one-click UPDATE when they
 # differ (a legacy copy with no __version__ reads as out-of-date). Keep the
 # `__version__ = "X.Y.Z"` literal form so the IDE can parse it without importing.
-__version__ = "0.10.0"
+__version__ = "0.11.0"
 
 # The sentinel that prefixes every telemetry line. Kept short + ASCII so it is
 # cheap to print and easy for the IDE to detect / strip.
@@ -827,6 +877,7 @@ class Buzzer:
         try:
             from machine import Pin, PWM
         except ImportError:
+            _no_machine()  # raises on CircuitPython; inert under CPython (#1038)
             return
         self._pwm = PWM(Pin(int(n)))
 
@@ -995,6 +1046,7 @@ class Rangefinder:
         try:
             from machine import Pin
         except ImportError:
+            _no_machine()  # raises on CircuitPython; inert under CPython (#1038)
             return
         self._trig = Pin(int(trig), Pin.OUT)
         self._echo = Pin(int(echo), Pin.IN)
@@ -1015,6 +1067,7 @@ class Rangefinder:
             import machine
             import time
         except ImportError:
+            _no_machine()  # raises on CircuitPython; inert under CPython (#1038)
             return None
         self._trig.value(0)
         time.sleep_us(2) if hasattr(time, "sleep_us") else time.sleep(0.000002)
@@ -1427,6 +1480,7 @@ class Display:
         try:
             from machine import Pin, I2C
         except ImportError:
+            _no_machine()  # raises on CircuitPython (#1038)
             return  # no hardware (CPython) — inert; text() still echoes telemetry
         if block is None:
             # A cross-bus pair (e.g. SDA on I²C1, SCL on I²C0) — the hardware would
@@ -1462,6 +1516,7 @@ class Display:
             from machine import Pin, SPI
         except ImportError:
             self._oled = None
+            _no_machine()  # raises on CircuitPython (#1038)
             return  # no hardware (CPython) — inert; text() still echoes telemetry
         if block is None:
             self._oled = None  # cross-bus SCK/MOSI — guide instead of a cryptic error
@@ -1586,6 +1641,7 @@ class Servo:
         try:
             from machine import Pin, PWM
         except ImportError:
+            _no_machine()  # raises on CircuitPython; inert under CPython (#1038)
             return
         self._pwm = PWM(Pin(int(n)))
         self._pwm.freq(self._freq)
