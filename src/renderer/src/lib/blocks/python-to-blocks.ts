@@ -855,16 +855,41 @@ class Converter {
     }
 
     // --- imports ---------------------------------------------------------
+    //
+    // AT MODULE SCOPE ONLY (#1071). An import block is HOISTED — the generator
+    // gathers every one of them into the import section at the top, which is
+    // right for the `import time` a learner drags in and catastrophic for an
+    // import that is nested on purpose:
+    //
+    //   try:                          import struct
+    //       import ustruct as struct  import ustruct as struct
+    //   except ImportError:      →
+    //       import struct             try:
+    //                                     pass
+    //                                 except ImportError:
+    //                                     pass
+    //
+    // That idiom exists precisely BECAUSE one of the two may not be there, and
+    // hoisting both turns a file that runs into one that raises on line 1 —
+    // while the arms it came from become `pass`. A lazy import inside a
+    // function is the same mistake more quietly: it was written there to keep
+    // it off the start-up path.
+    //
+    // `this.depth` is the same guard `def` already uses below, for the same
+    // reason. Nested, the line stays raw and regenerates exactly where it was.
+    const atModuleScope = this.depth === 0
     const importAs = /^import\s+([A-Za-z_][\w.]*)\s+as\s+([A-Za-z_]\w*)$/.exec(text)
-    if (importAs) {
+    if (importAs && atModuleScope) {
       return recognised([
         { type: 'snakie_python_import_as', fields: { MODULE: importAs[1], ALIAS: importAs[2] } }
       ])
     }
     const plain = /^import\s+([A-Za-z_][\w.]*)$/.exec(text)
-    if (plain) return recognised([{ type: 'snakie_python_import', fields: { MODULE: plain[1] } }])
+    if (plain && atModuleScope) {
+      return recognised([{ type: 'snakie_python_import', fields: { MODULE: plain[1] } }])
+    }
     const from = /^from\s+([A-Za-z_][\w.]*)\s+import\s+(.+)$/.exec(text)
-    if (from && !from[2].includes('*')) {
+    if (from && atModuleScope && !from[2].includes('*')) {
       const names = from[2].split(',').map((n) => n.trim())
       if (names.every((n) => /^[A-Za-z_]\w*$/.test(n))) {
         // One block per name: the block holds one, and two imports of one module
