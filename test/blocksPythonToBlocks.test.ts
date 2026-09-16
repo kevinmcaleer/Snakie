@@ -886,3 +886,221 @@ describe('the converter never produces a syntax error (#1068)', () => {
     expect(out).toContain('# first')
   })
 })
+
+/**
+ * A CHAINED COMPARISON IS NOT A TREE OF THEM (#1071, finding 1).
+ * =============================================================================
+ *
+ * The one finding in #1071 that was a WRONG ANSWER rather than a refusal.
+ * `0 <= n <= 59` means `0 <= n and n <= 59` in Python; folded left it became
+ * `(0 <= n) <= 59`, which compares a bool against a number. `(0 <= 70) <= 59`
+ * is `True <= 59` — `True` — so a guard meant to reject 70 accepted it, and the
+ * conversion reported a clean run while doing it.
+ *
+ * The fix is a refusal, not a translation: the line stays raw and regenerates
+ * verbatim. These tests pin both halves — that the chain is refused, and that
+ * everything shaped LIKE a chain but isn't one still becomes real blocks.
+ */
+describe('a chained comparison is refused rather than flattened (#1071)', () => {
+  it('keeps `0 <= n <= 59` as written', () => {
+    roundTrips('if not 0 <= n <= 59:\n    print(1)\n')
+  })
+
+  it('builds no comparison block for it at all', () => {
+    // The wrong answer was a `logic_compare` whose A was another one. Neither
+    // may appear: one of them IS the bug.
+    expect(types('x = 0 <= n <= 59\n')).not.toContain('logic_compare')
+  })
+
+  it('still builds a real block for a single comparison', () => {
+    expect(types('if n < 59:\n    print(1)\n')).toContain('logic_compare')
+    roundTrips('if n < 59:\n    print(1)\n')
+  })
+
+  it('leaves `and` of two comparisons alone — that is not a chain', () => {
+    const t = types('if 0 <= n and n <= 59:\n    print(1)\n')
+    expect(t).toContain('logic_operation')
+    expect(t.filter((x) => x === 'logic_compare')).toHaveLength(2)
+    roundTrips('if 0 <= n and n <= 59:\n    print(1)\n')
+  })
+
+  it('honours brackets, because then the nesting is what the source says', () => {
+    // `(a < b) < c` really does compare a bool: only ONE operator is at this
+    // level, so the nested compare is a faithful reading, not a flattened chain.
+    const t = types('x = (a < b) < c\n')
+    expect(t.filter((y) => y === 'logic_compare')).toHaveLength(2)
+    roundTrips('x = (a < b) < c\n')
+  })
+
+  it('refuses a longer chain too', () => {
+    roundTrips('if a < b < c < d:\n    print(1)\n')
+    expect(types('x = a < b < c < d\n')).not.toContain('logic_compare')
+  })
+})
+
+/**
+ * A TYPED SOCKET IS NEVER FILLED WITH THE WRONG THING (#1071, findings 2–3).
+ * =============================================================================
+ *
+ * Six of the `.py` files this repository ships used to come back **unloadable**.
+ * Tracing them together — which is what #1071 asked for before a fourth
+ * one-operator-at-a-time patch — showed one cause in four costumes: a block of
+ * one type put into a socket that accepts another, which makes
+ * `Blockly.serialization.workspaces.load` throw and abandon the WHOLE
+ * workspace. One `+=` on a string cost the learner every block in the file.
+ *
+ * Each case below is taken from a real shipped file. The rule is the same in
+ * all of them: if it cannot fit, the expression stays raw and regenerates
+ * verbatim — an uglier block, and the program intact.
+ */
+describe('a block never lands in a socket that would reject it (#1071)', () => {
+  /** Would Blockly accept the workspace this source converts to? */
+  function loads(source: string): boolean {
+    const { workspace } = pythonToBlocks(source)
+    try {
+      Blockly.serialization.workspaces.load(workspace as never, new Blockly.Workspace())
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  it('`s += "x"` — text into math_change.DELTA (micropython/modules/buzzer.py)', () => {
+    expect(loads('s = \'\'\ns += "x"\n')).toBe(true)
+    // The `+=` line is raw, so its double quotes survive verbatim; the
+    // assignment above it is a real block and renders in house style.
+    roundTrips('s = \'\'\ns += "x"\n')
+    expect(types('s += "x"\n')).not.toContain('math_change')
+  })
+
+  it('`x = a + "b"` — text into math_arithmetic.B (micropython/instruments.py)', () => {
+    expect(loads('x = a + "b"\n')).toBe(true)
+    roundTrips('x = a + "b"\n')
+  })
+
+  it('`"%.1f" % v` — text into math_modulo.DIVIDEND (grove_ultrasonic_demo.py)', () => {
+    expect(loads('x = "%.1f" % v\n')).toBe(true)
+    roundTrips('x = "%.1f" % v\n')
+  })
+
+  it('`a and "b"` — text into logic_operation.B (examples/ultrasonic_test.py)', () => {
+    expect(loads('x = a and "b"\n')).toBe(true)
+    roundTrips('x = a and "b"\n')
+  })
+
+  it('`abs(x) and y` — a Number into logic_operation.A (sg90/servo.py)', () => {
+    expect(loads('x = abs(n) and y\n')).toBe(true)
+    roundTrips('x = abs(n) and y\n')
+  })
+
+  it('`not "x"` — text into logic_negate.BOOL', () => {
+    expect(loads('x = not "s"\n')).toBe(true)
+    roundTrips('x = not "s"\n')
+  })
+
+  it('`2 ** "x"` — text into the power block', () => {
+    expect(loads('x = 2 ** "s"\n')).toBe(true)
+    roundTrips('x = 2 ** "s"\n')
+  })
+
+  it('still builds the real blocks when the operands do fit', () => {
+    expect(types('n += 1\n')).toContain('math_change')
+    expect(types('x = a + 1\n')).toContain('math_arithmetic')
+    expect(types('x = a % 2\n')).toContain('math_modulo')
+    expect(types('x = a and b\n')).toContain('logic_operation')
+    expect(types('x = not a\n')).toContain('logic_negate')
+  })
+
+  it('lets an unknown operand through — a name could be anything at runtime', () => {
+    // The table is deliberately silent about variables, calls and raw values,
+    // because Blockly leaves their output unchecked for the same reason.
+    expect(types('x = a + b\n')).toContain('math_arithmetic')
+    expect(types('total += values[i]\n')).toContain('math_change')
+  })
+})
+
+/**
+ * NO BRACKETS ROUND A SUBSCRIPT (#1071, finding 4).
+ *
+ * `total += values[i]` came back `total += (values[i])`. Cosmetic, but it is
+ * still somebody's source being rewritten, and a subscript of a name binds
+ * exactly as tightly as the call that was already recognised beside it.
+ */
+describe('a subscript needs no brackets (#1071)', () => {
+  it('leaves `values[i]` alone', () => {
+    roundTrips('total = 0\ntotal += values[i]\n')
+  })
+
+  it('leaves a dotted and a doubled subscript alone', () => {
+    roundTrips('x = self.data[i] + 1\n')
+    roundTrips('x = grid[y][x] + 1\n')
+  })
+
+  it('still brackets anything it cannot read', () => {
+    // A subscript whose own index is a call stays loose: the rule only widens
+    // to the unambiguous case.
+    roundTrips('x = (values[f(i)]) + 1\n')
+  })
+})
+
+/**
+ * AN IMPORT IS HOISTED, SO ONLY A MODULE-SCOPE ONE MAY BECOME A BLOCK (#1071).
+ * =============================================================================
+ *
+ * The un-traced cause behind one of #1071's thirteen files, and the second
+ * WRONG ANSWER in that list rather than a refusal.
+ *
+ * An import block is hoisted: the generator gathers every one into the import
+ * section at the top. That is right for the `import time` a learner drags in,
+ * and it destroys the one idiom every portable MicroPython driver opens with:
+ *
+ * ```python
+ * try:
+ *     import ustruct as struct     # the board's
+ * except ImportError:
+ *     import struct                # CPython's, so the file is import-safe
+ * ```
+ *
+ * Both arms used to be hoisted to module scope and both arms replaced with
+ * `pass` — so a file written *because* one of the two may be missing became a
+ * file that raises `ImportError` on line 1 and never starts. The conversion
+ * reported a clean run while doing it.
+ *
+ * `examples/parts/snakie-standard/icm20948/icm20948.py` is the shipped file
+ * this was found in.
+ */
+describe('only a module-scope import becomes an import block (#1071)', () => {
+  it('keeps a try/except import fallback exactly as written', () => {
+    roundTrips(
+      [
+        'try:',
+        '    import ustruct as struct',
+        'except ImportError:',
+        '    import struct',
+        ''
+      ].join('\n')
+    )
+  })
+
+  it('builds no import block for either arm', () => {
+    const t = types('try:\n    import ustruct as struct\nexcept ImportError:\n    import struct\n')
+    expect(t).not.toContain('snakie_python_import')
+    expect(t).not.toContain('snakie_python_import_as')
+  })
+
+  it('leaves a lazy import inside a function where it was written', () => {
+    // Deliberately off the start-up path. Hoisting it is a quieter version of
+    // the same mistake.
+    roundTrips('def f():\n    import time\n    return time\n')
+  })
+
+  it('leaves a nested `from … import …` alone too', () => {
+    roundTrips('if fast:\n    from machine import Pin\n')
+  })
+
+  it('still makes a real block for an import at module scope', () => {
+    expect(types('import time\n')).toContain('snakie_python_import')
+    expect(types('import ustruct as struct\n')).toContain('snakie_python_import_as')
+    expect(types('from machine import Pin\n')).toContain('snakie_python_from_import')
+  })
+})

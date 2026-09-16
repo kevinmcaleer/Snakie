@@ -762,6 +762,77 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A driver's `try: import ustruct / except: import struct` fallback no longer
+  becomes a file that cannot start** (#1071, epic #1007). An import block is
+  *hoisted* — the generator gathers every one into the import section at the
+  top, which is right for the `import time` a learner drags in and catastrophic
+  for an import that is nested on purpose:
+
+  ```python
+  try:                              import struct
+      import ustruct as struct      import ustruct as struct
+  except ImportError:          →
+      import struct                 try:
+                                        pass
+                                    except ImportError:
+                                        pass
+  ```
+
+  That idiom exists precisely *because* one of the two may not be there, so
+  hoisting both turns a file that runs into one that raises `ImportError` on
+  line 1 — while the arms it came from are replaced with `pass`. The conversion
+  reported a clean run while doing it. A lazy import inside a function was the
+  same mistake more quietly: it was written off the start-up path deliberately.
+
+  Only a module-scope import becomes an import block now — the same depth guard
+  `def` already used, for the same reason. Nested, the line stays raw and
+  regenerates exactly where it was. This was the un-traced cause behind
+  `examples/parts/snakie-standard/icm20948/icm20948.py`, one of #1071's thirteen.
+
+
+- **A chained comparison no longer changes what your program means** (#1071,
+  epic #1007). Python reads `0 <= n <= 59` as `0 <= n and n <= 59`. The
+  converter folded it left into `(0 <= n) <= 59`, which compares a **bool**
+  against 59 — and `(0 <= 70) <= 59` is `True <= 59`, which is `True`. A guard
+  written to reject 70 accepted it, and the conversion reported a clean run
+  while doing it. This was the one finding in #1071 that was a wrong answer
+  rather than a refusal, so a chain is now refused outright: the line stays raw
+  and regenerates verbatim. `(a < b) < c` is untouched — the brackets mean only
+  one operator is at that level, so the nested comparison is what the source
+  actually says. Recognising chains properly, as the `and` of their links, is
+  worth doing one day; being wrong about them was not worth a day.
+
+- **Six of the `.py` files we ship opened as an empty canvas** (#1071). Tracing
+  them together — which is what the issue asked for, rather than a fourth
+  one-operator-at-a-time patch — found one cause wearing four costumes: the
+  converter putting a block of one type into a socket that accepts another.
+
+  ```
+  "%.1f" % value      text → math_modulo.DIVIDEND   wants Number
+  s += "x"            text → math_change.DELTA      wants Number
+  x = a + "b"         text → math_arithmetic.B      wants Number
+  x = a and "b"       text → logic_operation.B      wants Boolean
+  abs(x) and y        abs  → logic_operation.A      wants Boolean
+  ```
+
+  `Blockly.serialization.workspaces.load` throws on the first of these and
+  abandons the **whole** workspace, so one `+=` on a string cost the learner
+  every block in the file. The converter is deliberately Blockly-free so it can
+  be unit tested in node — but it does not need to ask Blockly anything, because
+  it knows what it just built. Each typed socket is now filled only by something
+  that fits it, and a mismatch keeps the expression raw. Unknown always fits: a
+  variable or a call could be anything at runtime, which is why Blockly leaves
+  their output unchecked too. A new corpus test pins **no shipped file
+  unloadable** as a floor; it catches seven without the fix.
+
+- **No more brackets around a subscript** (#1071). `total += values[i]` came
+  back `total += (values[i])` — cosmetic, but it is still somebody's source
+  being rewritten. A subscript of a name binds exactly as tightly as the call
+  that was already recognised beside it. Anything less clear-cut still gets its
+  brackets, because a wrong-looking bracket is a blemish and a missing one is a
+  wrong answer.
+
+
 - **`wait N milliseconds` now runs on CircuitPython** (#1041, epic #209). It
   emitted `time.sleep_ms(…)`, which CircuitPython does not have — the only
   dialect-specific block outside hardware. It gets a per-dialect template, the

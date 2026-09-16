@@ -53,6 +53,63 @@ export interface BlockJson {
   y?: number
 }
 
+/**
+ * SOCKET TYPES, SO WE STOP BUILDING WORKSPACES BLOCKLY REFUSES TO LOAD (#1071).
+ * =============================================================================
+ *
+ * Six of the `.py` files this repository ships used to come back **unloadable**,
+ * and tracing them turned up one cause wearing four different hats:
+ *
+ * ```
+ *   "%.1f" % value      text   → math_modulo.DIVIDEND   wants Number
+ *   s += "x"            text   → math_change.DELTA      wants Number
+ *   x = a + "b"         text   → math_arithmetic.B      wants Number
+ *   x = a and "b"       text   → logic_operation.B      wants Boolean
+ *   abs(x) and y        abs    → logic_operation.A      wants Boolean
+ * ```
+ *
+ * Every one is the converter putting a block of one type into a socket that
+ * accepts another. `Blockly.serialization.workspaces.load` throws on the first
+ * of them and abandons the whole workspace, so a single `+=` on a string used
+ * to cost the learner every block in the file.
+ *
+ * It had been fixed twice before, one operator at a time — `snakie_forever` in
+ * #1069, `%` on a string in #1068 — and #1071 asked for the structural answer
+ * before a fourth instance. This is it: the converter cannot ask Blockly about
+ * socket types (it is deliberately Blockly-free so it can be unit tested in
+ * node), but it does not need to. It KNOWS what it just built.
+ *
+ * So each typed socket is filled only by something that fits it, and a mismatch
+ * refuses the whole expression — which sends the line to a raw Python block that
+ * regenerates it verbatim. An uglier block, and the learner's program intact.
+ *
+ * Absent from the table means UNKNOWN, and unknown always fits: a variable, a
+ * call, a raw value block could be anything at runtime, which is exactly why
+ * Blockly leaves their output unchecked too.
+ */
+type SocketType = 'String' | 'Number' | 'Boolean'
+
+const OUTPUT_TYPE = new Map<string, SocketType>([
+  ['text', 'String'],
+  ['text_join', 'String'],
+  ['math_number', 'Number'],
+  ['math_arithmetic', 'Number'],
+  ['math_modulo', 'Number'],
+  ['math_round', 'Number'],
+  ['snakie_math_abs', 'Number'],
+  ['text_length', 'Number'],
+  ['logic_boolean', 'Boolean'],
+  ['logic_compare', 'Boolean'],
+  ['logic_negate', 'Boolean'],
+  ['logic_operation', 'Boolean']
+])
+
+/** Can this block sit in a socket that accepts `want`? Unknown always can. */
+function fitsSocket(block: BlockJson, want: SocketType): boolean {
+  const got = OUTPUT_TYPE.get(block.type)
+  return got === undefined || got === want
+}
+
 /** What the conversion did, for the report #1032 shows before committing to it. */
 export interface ConversionReport {
   /** Lines that became a block of their own kind. */
@@ -848,16 +905,41 @@ class Converter {
     }
 
     // --- imports ---------------------------------------------------------
+    //
+    // AT MODULE SCOPE ONLY (#1071). An import block is HOISTED — the generator
+    // gathers every one of them into the import section at the top, which is
+    // right for the `import time` a learner drags in and catastrophic for an
+    // import that is nested on purpose:
+    //
+    //   try:                          import struct
+    //       import ustruct as struct  import ustruct as struct
+    //   except ImportError:      →
+    //       import struct             try:
+    //                                     pass
+    //                                 except ImportError:
+    //                                     pass
+    //
+    // That idiom exists precisely BECAUSE one of the two may not be there, and
+    // hoisting both turns a file that runs into one that raises on line 1 —
+    // while the arms it came from become `pass`. A lazy import inside a
+    // function is the same mistake more quietly: it was written there to keep
+    // it off the start-up path.
+    //
+    // `this.depth` is the same guard `def` already uses below, for the same
+    // reason. Nested, the line stays raw and regenerates exactly where it was.
+    const atModuleScope = this.depth === 0
     const importAs = /^import\s+([A-Za-z_][\w.]*)\s+as\s+([A-Za-z_]\w*)$/.exec(text)
-    if (importAs) {
+    if (importAs && atModuleScope) {
       return recognised([
         { type: 'snakie_python_import_as', fields: { MODULE: importAs[1], ALIAS: importAs[2] } }
       ])
     }
     const plain = /^import\s+([A-Za-z_][\w.]*)$/.exec(text)
-    if (plain) return recognised([{ type: 'snakie_python_import', fields: { MODULE: plain[1] } }])
+    if (plain && atModuleScope) {
+      return recognised([{ type: 'snakie_python_import', fields: { MODULE: plain[1] } }])
+    }
     const from = /^from\s+([A-Za-z_][\w.]*)\s+import\s+(.+)$/.exec(text)
-    if (from && !from[2].includes('*')) {
+    if (from && atModuleScope && !from[2].includes('*')) {
       const names = from[2].split(',').map((n) => n.trim())
       if (names.every((n) => /^[A-Za-z_]\w*$/.test(n))) {
         // One block per name: the block holds one, and two imports of one module
@@ -958,13 +1040,21 @@ class Converter {
     }
     const change = /^([A-Za-z_]\w*)\s*\+=\s*(.+)$/.exec(text)
     if (change) {
-      return recognised([
-        {
-          type: 'math_change',
-          fields: { VAR: { id: this.variable(change[1]) } },
-          inputs: { DELTA: { block: this.expression(change[2]) } }
-        }
-      ])
+      // `+=` on a STRING is concatenation, and `math_change`'s DELTA takes a
+      // Number (#1071). `s += "x"` used to build a `text` block into it, which
+      // made the whole workspace unloadable — so a delta that cannot be a
+      // number keeps the line raw, and it regenerates verbatim.
+      const delta = this.expression(change[2])
+      if (fitsSocket(delta, 'Number')) {
+        return recognised([
+          {
+            type: 'math_change',
+            fields: { VAR: { id: this.variable(change[1]) } },
+            inputs: { DELTA: { block: delta } }
+          }
+        ])
+      }
+      return [this.raw(node.line)]
     }
     // `=(?!=)` IS THE WHOLE GUARD (#1068). This used to read the `=` and then
     // check `text.slice(0, text.indexOf('='))` for a comparison operator — a
@@ -1250,7 +1340,7 @@ class Converter {
       type: 'logic_operation',
       fields: { OP: 'OR' },
       inputs: { A: { block: a }, B: { block: b } }
-    }), (t, i) => this.parseAnd(t, i))
+    }), (t, i) => this.parseAnd(t, i), 'Boolean')
   }
 
   private parseAnd(tokens: readonly Token[], at: number): { block: BlockJson; next: number } | null {
@@ -1258,13 +1348,14 @@ class Converter {
       type: 'logic_operation',
       fields: { OP: 'AND' },
       inputs: { A: { block: a }, B: { block: b } }
-    }), (t, i) => this.parseNot(t, i))
+    }), (t, i) => this.parseNot(t, i), 'Boolean')
   }
 
   private parseNot(tokens: readonly Token[], at: number): { block: BlockJson; next: number } | null {
     if (tokens[at]?.kind === 'keyword' && tokens[at].text === 'not') {
       const inner = this.parseNot(tokens, at + 1)
       if (!inner) return null
+      if (!fitsSocket(inner.block, 'Boolean')) return null
       return {
         block: { type: 'logic_negate', inputs: { BOOL: { block: inner.block } } },
         next: inner.next
@@ -1273,6 +1364,23 @@ class Converter {
     return this.parseComparison(tokens, at)
   }
 
+  /**
+   * A comparison — but never a CHAIN of them (#1071).
+   *
+   * `binary` is left-associative, which is right for `+` and wrong for this:
+   * Python reads `0 <= n <= 59` as `0 <= n and n <= 59`, and folding it left
+   * gives `(0 <= n) <= 59`, which compares a BOOL against 59. That is not a
+   * blemish, it is a different program — `(0 <= 70) <= 59` is `True <= 59`,
+   * which is `True`, so a guard that should have rejected 70 lets it through.
+   *
+   * So a chain is refused outright: `null` here sends the whole expression to a
+   * raw value block, which regenerates the line verbatim and means exactly what
+   * the learner wrote. Recognising chains properly — as the `and` of their
+   * links — is worth doing one day; being wrong about them is not worth a day.
+   *
+   * `(a < b) < c` is untouched: the brackets are an atom, so only ONE operator
+   * is at this level and the nested compare is what the source actually says.
+   */
   private parseComparison(
     tokens: readonly Token[],
     at: number
@@ -1285,17 +1393,26 @@ class Converter {
       '>': 'GT',
       '>=': 'GTE'
     }
-    return this.binary(
-      tokens,
-      at,
-      Object.keys(COMPARE),
-      (a, b, op) => ({
+    const operators = Object.keys(COMPARE)
+    const isCompare = (tok: Token | undefined): boolean =>
+      Boolean(tok) && tok!.kind === 'op' && operators.includes(tok!.text)
+
+    const left = this.parseAdditive(tokens, at)
+    if (!left) return null
+    const op = tokens[left.next]
+    if (!isCompare(op)) return left
+    const right = this.parseAdditive(tokens, left.next + 1)
+    if (!right) return null
+    // The third operator at this level is what makes it a chain.
+    if (isCompare(tokens[right.next])) return null
+    return {
+      block: {
         type: 'logic_compare',
-        fields: { OP: COMPARE[op] },
-        inputs: { A: { block: a }, B: { block: b } }
-      }),
-      (t, i) => this.parseAdditive(t, i)
-    )
+        fields: { OP: COMPARE[op.text] },
+        inputs: { A: { block: left.block }, B: { block: right.block } }
+      },
+      next: right.next
+    }
   }
 
   private parseAdditive(
@@ -1311,7 +1428,8 @@ class Converter {
         fields: { OP: op === '+' ? 'ADD' : 'MINUS' },
         inputs: { A: { block: a }, B: { block: b } }
       }),
-      (t, i) => this.parseMultiplicative(t, i)
+      (t, i) => this.parseMultiplicative(t, i),
+      'Number'
     )
   }
 
@@ -1346,7 +1464,8 @@ class Converter {
               fields: { OP: op === '*' ? 'MULTIPLY' : 'DIVIDE' },
               inputs: { A: { block: a }, B: { block: b } }
             },
-      (t, i) => this.parsePower(t, i)
+      (t, i) => this.parsePower(t, i),
+      'Number'
     )
   }
 
@@ -1360,6 +1479,7 @@ class Converter {
       // Right-associative, like Python's own.
       const right = this.parsePower(tokens, left.next + 1)
       if (!right) return null
+      if (!fitsSocket(left.block, 'Number') || !fitsSocket(right.block, 'Number')) return null
       return {
         block: {
           type: 'math_arithmetic',
@@ -1375,15 +1495,27 @@ class Converter {
   /**
    * The shared left-associative loop every level above `power` is.
    *
-   * `build` may return NULL to decline the operator it was handed (#1068), which
-   * takes the whole expression raw. `%` is why: see {@link parseMultiplicative}.
+   * TWO WAYS TO DECLINE, and they answer different questions.
+   *
+   * `build` may return NULL to decline the operator it was handed (#1068),
+   * which takes the whole expression raw. `%` is why: beside a string it is
+   * formatting, not modulo — see {@link parseMultiplicative}.
+   *
+   * `operand` is the type both sockets of the block being built accept
+   * (#1071). A side that cannot fit refuses the whole expression rather than
+   * building a workspace Blockly will not load — see {@link fitsSocket}.
+   *
+   * The first is about what the OPERATOR means; the second about what the
+   * OPERANDS are. Either one declining keeps the line raw, which regenerates
+   * it verbatim.
    */
   private binary(
     tokens: readonly Token[],
     at: number,
     operators: readonly string[],
     build: (a: BlockJson, b: BlockJson, op: string) => BlockJson | null,
-    next: (tokens: readonly Token[], at: number) => { block: BlockJson; next: number } | null
+    next: (tokens: readonly Token[], at: number) => { block: BlockJson; next: number } | null,
+    operand?: SocketType
   ): { block: BlockJson; next: number } | null {
     let left = next(tokens, at)
     if (!left) return null
@@ -1393,6 +1525,11 @@ class Converter {
       if (tok.kind !== 'op' && tok.kind !== 'keyword') return left
       const right = next(tokens, left.next + 1)
       if (!right) return null
+      // The operands first: a side that cannot fit the socket is refused
+      // whatever the operator turns out to mean.
+      if (operand && (!fitsSocket(left.block, operand) || !fitsSocket(right.block, operand))) {
+        return null
+      }
       const built = build(left.block, right.block, tok.text)
       if (!built) return null
       left = { block: built, next: right.next }

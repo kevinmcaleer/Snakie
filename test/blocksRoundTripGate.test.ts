@@ -222,3 +222,43 @@ describe('the gate against the files this repo ships (#1068)', () => {
     expect(accepted / Math.max(files.length, 1)).toBeGreaterThan(0.7)
   })
 })
+
+/**
+ * NOT ONE SHIPPED FILE MAY BE UNLOADABLE (#1071).
+ * =============================================================================
+ *
+ * The floor #1071's finding 3 asked for, pinned over the real corpus — every
+ * `.py` this repository ships, `micropython/` and `examples/`.
+ *
+ * `unloadable` is the verdict that costs the most: Blockly refuses the whole
+ * workspace, so a single mistyped socket somewhere in a 400-line driver takes
+ * every block in it. Six files were in that state, all for the same reason, and
+ * this is the test that says never again — it is deliberately about `ok` vs
+ * `unloadable` and says nothing about `lossy`, which is a question about how
+ * MUCH became real blocks rather than whether the program survived.
+ */
+describe('no shipped .py converts to a workspace Blockly refuses (#1071)', () => {
+  it('holds for every .py in micropython/ and examples/', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { execSync } = await import('node:child_process')
+    const files = execSync("find micropython examples -name '*.py' -not -path '*__pycache__*'", {
+      encoding: 'utf8'
+    })
+      .trim()
+      .split('\n')
+      .filter(Boolean)
+
+    // A corpus that shrank to nothing would make this test pass by saying
+    // nothing, which is the failure mode a floor test exists to avoid.
+    expect(files.length).toBeGreaterThan(40)
+
+    const unloadable: string[] = []
+    for (const file of files) {
+      const source = readFileSync(file, 'utf8')
+      const { workspace } = pythonToBlocks(source)
+      const verdict = await verifyConversion(source, workspace)
+      if (!verdict.ok && verdict.reason === 'unloadable') unloadable.push(file)
+    }
+    expect(unloadable).toEqual([])
+  }, 120_000)
+})

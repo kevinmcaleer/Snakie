@@ -330,7 +330,15 @@ export function isAtomicExpression(text: string): boolean {
   if (t === '') return false
   if (/^(True|False|None)$/.test(t)) return true
   if (/^-?\d+(\.\d+)?$/.test(t)) return true
-  // A dotted name, optionally called once with no nested brackets of its own:
-  // `sensor`, `sensor.value`, `sensor.read()`, `tof.range(0)`.
-  return /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*(\([^()]*\))?$/.test(t)
+  // A dotted name, optionally called once, or subscripted — with no nested
+  // brackets of its own: `sensor`, `sensor.value`, `sensor.read()`,
+  // `tof.range(0)`, `values[i]`, `grid[y][x]`, `self.data[i]`.
+  //
+  // The subscript arm is #1071's finding 4: `total += values[i]` came back
+  // `total += (values[i])`, because a raw value block reports `Order.NONE` and
+  // every context therefore bracketed it. A subscript binds exactly as tightly
+  // as the call beside it here, so the brackets were never needed — and the
+  // default stays what it was for everything this cannot read, because a
+  // wrong-looking bracket is a blemish and a missing one is a wrong answer.
+  return /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*(\([^()]*\)|(\[[^[\]()]+\])+)?$/.test(t)
 }
