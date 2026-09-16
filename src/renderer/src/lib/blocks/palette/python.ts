@@ -47,6 +47,10 @@ import { isAtomicExpression } from '../python-check'
 export const PYTHON_STATEMENT = 'snakie_python_statement'
 export const PYTHON_VALUE = 'snakie_python_value'
 export const PYTHON_CALL = 'snakie_python_call'
+/** A RUN of consecutive comment lines, as one block (#1062). */
+export const PYTHON_COMMENT = 'snakie_python_comment'
+/** A suite we cannot read — the header verbatim, its body nested (#1063). */
+export const PYTHON_SUITE = 'snakie_python_suite'
 export const PYTHON_CALL_VALUE = 'snakie_python_call_value'
 
 /** The raw text a block's Python field holds, trimmed of nothing but the edges. */
@@ -208,6 +212,78 @@ function memberName(block: Blockly.Block, field: string, fallback: string): stri
 export function installPythonBlocks(): void {
   Blockly.Blocks[PYTHON_CALL] = callBlockMixin(false) as never
   Blockly.Blocks[PYTHON_CALL_VALUE] = callBlockMixin(true) as never
+  Blockly.Blocks[PYTHON_COMMENT] = commentBlockMixin() as never
+}
+
+/** What a fresh comment block says. */
+const DEFAULT_COMMENT = '# a note'
+
+/**
+ * THE COMMENT BLOCK (#1062).
+ * ---------------------------------------------------------------------------
+ *
+ * A comment is not a statement, and a run of them is not a stack of statements.
+ * Converting a real module made that obvious: the file in #1062 opens with a
+ * thirty-line header — a rationale, then an ASCII table of a binary format —
+ * and each line became its own grey block. Thirty of them, indistinguishable,
+ * taller than the class they were describing.
+ *
+ * So a RUN OF CONSECUTIVE COMMENTS IS ONE BLOCK, one row per line. The block
+ * carries the lines VERBATIM, `#` and all, in `extraState`, for two reasons
+ * that are really the same one: #1019's acceptance property is that converting
+ * a program and generating it again gives back the same program, and a comment
+ * is the one thing in a file whose exact spacing is its content. Strip the `#`
+ * and a space for display and `#foo` comes back as `# foo`; keep the line as it
+ * is and the round trip is exact by construction. The ASCII table in that
+ * header survives, column alignment and all.
+ *
+ * The shape is built HERE rather than declared as JSON because the row count is
+ * the block's state — the same reason the call blocks above are.
+ */
+function commentBlockMixin(): Record<string, unknown> {
+  return {
+    lineCount_: 0,
+
+    init(this: Blockly.Block): void {
+      this.setStyle('python_blocks')
+      this.setPreviousStatement(true, null)
+      this.setNextStatement(true, null)
+      this.setTooltip(
+        'A note to whoever reads this program next — you, most likely. Written into the file as comments, and ignored when it runs.'
+      )
+      ;(this as unknown as { updateLines_: (l: readonly string[]) => void }).updateLines_([
+        DEFAULT_COMMENT
+      ])
+    },
+
+    saveExtraState(this: Blockly.Block): { lines: string[] } {
+      return { lines: commentLines(this) }
+    },
+
+    loadExtraState(this: Blockly.Block, state: { lines?: unknown }): void {
+      const raw = Array.isArray(state?.lines) ? state.lines.map((l) => String(l)) : []
+      ;(this as unknown as { updateLines_: (l: readonly string[]) => void }).updateLines_(
+        raw.length > 0 ? raw : [DEFAULT_COMMENT]
+      )
+    },
+
+    /** One editable row per line. Rebuilt whole — a run is never partly edited. */
+    updateLines_(this: Blockly.Block, lines: readonly string[]): void {
+      const self = this as unknown as { lineCount_: number }
+      for (let i = 0; i < (self.lineCount_ ?? 0); i++) this.removeInput(`L${i}`, true)
+      lines.forEach((line, i) => {
+        this.appendDummyInput(`L${i}`).appendField(new Blockly.FieldTextInput(line), `L${i}`)
+      })
+      self.lineCount_ = lines.length
+    }
+  }
+}
+
+/** The lines a comment block is holding, in order. */
+export function commentLines(block: Blockly.Block): string[] {
+  const out: string[] = []
+  for (let i = 0; block.getField(`L${i}`); i++) out.push(String(block.getFieldValue(`L${i}`) ?? ''))
+  return out
 }
 
 // ---------------------------------------------------------------------------
@@ -258,6 +334,63 @@ export const PYTHON_BLOCKS: BlockDefinition[] = [
       // because we cannot know what the learner's expression binds tighter than
       // and a missing bracket there is a wrong answer, not an untidy one.
       return [text, isAtomicExpression(text) ? Order.ATOMIC : Order.NONE]
+    }
+  },
+  // -------------------------------------------------------------- raw suite
+  //
+  // THE ESCAPE HATCH THAT KEEPS THE BODY (#1063).
+  //
+  // The raw STATEMENT block above is one line, which is right for one line and
+  // catastrophic for a header. `class Frame:` converted to a raw statement and
+  // its entire body — every method, every line of them — was dropped on the
+  // floor, silently, and the report counted the conversion a success. On the
+  // real module in #1062 that was 114 lines in and 36 back out.
+  //
+  // A suite we cannot read is still a suite. The header keeps its exact text
+  // and the body hangs off a statement socket, so `class`, `try`, `with`,
+  // `async def` and anything else the rules miss come back as the program that
+  // went in. #1018's promise was "at worst a slightly uglier block, and the
+  // generated code is still correct Python" — this is what makes that true.
+  {
+    type: PYTHON_SUITE,
+    category: 'python',
+    help: 'blocks-python',
+    json: {
+      message0: '%1',
+      args0: [pythonField('CODE', 'a Python block, e.g. class Thing:')],
+      message1: '%1',
+      args1: [{ type: 'input_statement', name: 'DO' }],
+      inputsInline: true,
+      previousStatement: null,
+      nextStatement: null,
+      tooltip:
+        'A piece of Python that opens a block — a class, a try, a with. The header is written exactly as you type it, and everything inside goes in indented under it.'
+    },
+    code: (block, gen) => {
+      const header = rawPython(block)
+      if (header === '') return ''
+      // A colon, whether or not they typed one: the body below is about to be
+      // indented under this line, and without it that is a syntax error rather
+      // than a suite.
+      const line = header.endsWith(':') ? header : `${header}:`
+      // `pass` for an empty body, for the same reason every other C-block does
+      // it — an empty suite is not valid Python.
+      return `${line}\n${gen.statementToCode(block, 'DO') || `${gen.INDENT}pass\n`}`
+    }
+  },
+  // ------------------------------------------------------------------ comment
+  {
+    type: PYTHON_COMMENT,
+    category: 'python',
+    help: 'blocks-python',
+    // No `json`: the row count is the block's state, so the shape is built in
+    // `installPythonBlocks` — see `commentBlockMixin`.
+    toolbox: { extraState: { lines: [DEFAULT_COMMENT] } },
+    code: (block) => {
+      // Verbatim, so the exact spacing a comment carries as its content — an
+      // aligned table, an indented example — comes back the way it went in.
+      const lines = commentLines(block).filter((l) => l !== '')
+      return lines.length === 0 ? '' : `${lines.join('\n')}\n`
     }
   },
   // ------------------------------------------------------------------ imports

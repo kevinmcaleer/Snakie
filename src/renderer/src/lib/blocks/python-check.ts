@@ -106,6 +106,25 @@ interface Scan {
  * two facts — am I inside a string, and how deep am I — and a regex cannot know
  * either.
  */
+/**
+ * What a string literal is replaced by, one character for one (#1062).
+ *
+ * NOT A SPACE, and that distinction cost a whole file. A string is a TERM —
+ * `x in " ."` is a finished thought — but blanked to spaces the line trimmed to
+ * `x in`, which the trailing-operator rule below reads as somebody who stopped
+ * typing mid-expression. One such line anywhere in a module made `lintOk` false
+ * for the whole file, and #1037's gate then refused to convert ANY of it: the
+ * canvas stayed empty and nothing said why.
+ *
+ * An underscore is an identifier character, so a blanked string reads as the
+ * term it is, and it is still one character per character — every rule here
+ * indexes `bare` against `depth` by position.
+ *
+ * Comments stay blanked to spaces: a comment really is not code, and a line
+ * that is only a comment should reach no rule at all.
+ */
+const STRING_STANDIN = '_'
+
 function scan(text: string): Scan {
   const open: string[] = []
   const depth: number[] = []
@@ -136,7 +155,7 @@ function scan(text: string): Scan {
       const end = closingQuote(text, i + quote.length, quote)
       const stop = end === -1 ? text.length : end + quote.length
       for (let k = i; k < stop; k++) {
-        bare += ' '
+        bare += STRING_STANDIN
         depth.push(open.length)
       }
       if (end === -1) openQuote = quote

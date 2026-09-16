@@ -66,6 +66,8 @@ export interface Conversion {
 interface Stmt {
   line: LogicalLine
   body: Stmt[]
+  /** Set only on a folded run of comment lines (#1062). */
+  comment?: readonly LogicalLine[]
 }
 
 // ---------------------------------------------------------------------------
@@ -143,7 +145,7 @@ export function pythonToBlocks(source: string): Conversion {
   // about Python — a function is not a step in the program, it is a thing the
   // program can do. The generator hoists their code above the body either way.
   const roots = [...state.definitions, ...(stack ? [stack] : [])]
-  const positioned = roots.map((block, i) => ({ ...block, x: 40, y: 40 + i * 240 }))
+  const positioned = stackRoots(roots)
   identify(positioned)
   const workspace: BlocksWorkspace = {
     blocks: { languageVersion: 0, blocks: positioned }
@@ -155,6 +157,177 @@ export function pythonToBlocks(source: string): Conversion {
     }))
   }
   return { workspace, report: state.report }
+}
+
+/**
+ * WHERE THE ROOTS GO (#1062).
+ * ---------------------------------------------------------------------------
+ *
+ * They used to be a fixed 240px apart, which is fine for the programs this was
+ * written against and wrong for a real module. A class with eight methods is
+ * well over a thousand pixels tall, so the next four `def`s were drawn ON TOP
+ * of it — and blocks overlapping blocks is the one thing a block canvas must
+ * never do, because the whole premise is that what you see is the structure.
+ *
+ * So each root is placed under the measured bottom of the one before it. The
+ * measurement is an ESTIMATE, because this module is pure — it emits Blockly's
+ * serialisation as plain JSON and has never loaded Blockly, which is what lets
+ * the whole converter be unit-tested in node. It counts rows instead, which it
+ * can do exactly, and multiplies by the row height the Soft Shell renderer
+ * actually uses.
+ *
+ * THE CONSTANTS ARE MEASURED, not guessed. Rendering the turtle starter — one
+ * `repeat` holding two statements — in the real canvas gives a root exactly
+ * 176px tall, which is 48 + 2x48 + 32: one row for the header, one per block in
+ * the mouth, and the arm underneath. That is what `ROW_HEIGHT` and
+ * `MOUTH_BOTTOM` below are.
+ *
+ * Where it is still an estimate, it errs UPWARDS, and the gutter is wide. Being
+ * a little too far apart costs a scroll; being too close costs the overlap this
+ * exists to remove, and only one of those is a bug.
+ */
+
+/** Where the first root goes, and the left margin for all of them. */
+const ROOT_ORIGIN = 40
+
+/** Clear space between one root's bottom and the next root's top. */
+const ROOT_GUTTER = 48
+
+/**
+ * One statement row, in px — `MIN_BLOCK_HEIGHT` plus the top and bottom strips
+ * from `lib/blocks/renderer.ts`, rounded up.
+ */
+const ROW_HEIGHT = 48
+
+/** The arm under a C-block's mouth. Measured: see above. */
+const MOUTH_BOTTOM = 32
+
+/** The hat a `def` wears — real height above its first row, and only it has one. */
+const HAT_HEIGHT = 32
+
+/** Lay the roots out in one column, each clear of the one above it. */
+function stackRoots(roots: readonly BlockJson[]): BlockJson[] {
+  let y = ROOT_ORIGIN
+  return roots.map((block) => {
+    const placed = { ...block, x: ROOT_ORIGIN, y }
+    y += rootHeight(block) + ROOT_GUTTER
+    return placed
+  })
+}
+
+/** How tall a root renders, including everything chained below it. */
+function rootHeight(block: BlockJson): number {
+  const hat = block.type.startsWith('procedures_def') ? HAT_HEIGHT : 0
+  return hat + chainHeight(block)
+}
+
+/** A block and its `next` chain. */
+function chainHeight(block: BlockJson | undefined): number {
+  let total = 0
+  for (let b: BlockJson | undefined = block; b; b = b.next?.block) total += blockHeight(b)
+  return total
+}
+
+/** One block: its own row(s), plus any statement bodies it holds open. */
+function blockHeight(block: BlockJson): number {
+  // A comment block is one row PER LINE — which is the whole point of #1062's
+  // folding, and the case that would break a per-block estimate worst.
+  const lines = (block.extraState as { lines?: unknown[] } | undefined)?.lines
+  let total = Array.isArray(lines) && lines.length > 0 ? lines.length * ROW_HEIGHT : ROW_HEIGHT
+  for (const input of Object.values(block.inputs ?? {})) {
+    const inner = input.block
+    // A VALUE socket sits on the row that is already counted; only a STATEMENT
+    // body adds height, and it brings the arm under the mouth with it.
+    if (inner && isStatementBody(inner)) total += chainHeight(inner) + MOUTH_BOTTOM
+  }
+  return total
+}
+
+/**
+ * Does this block sit in a statement socket rather than a value one?
+ *
+ * Read off the block itself rather than the input name, because the converter
+ * writes several body inputs (`DO`, `ELSE`, `STACK`…) and a rule could add
+ * another. A block with a `next` chain is certainly a statement; a lone one is
+ * decided by its type, and the raw value block is the only shape that can be
+ * confused for one.
+ */
+function isStatementBody(block: BlockJson): boolean {
+  return block.next !== undefined || block.type !== 'snakie_python_value'
+}
+
+/**
+ * A node standing for a RUN of consecutive comment lines (#1062), in place of
+ * the several statement nodes they arrived as.
+ */
+interface CommentRun extends Stmt {
+  comment: readonly LogicalLine[]
+}
+
+/** Is this line nothing but a comment? */
+function isCommentLine(line: LogicalLine): boolean {
+  return line.text.startsWith('#')
+}
+
+/**
+ * Fold each run of consecutive comment siblings into one node (#1062).
+ *
+ * WHY THIS IS WORTH DOING AT ALL. A real module's header is prose — the file in
+ * #1062 opens with thirty lines of rationale and an ASCII table — and one grey
+ * block per line made the canvas taller than the class being described, with
+ * thirty indistinguishable shapes at the top of it. A comment is not a step in
+ * the program, and a paragraph is not thirty steps.
+ *
+ * CONSECUTIVE, and siblings only: a node's body is already one indent level, so
+ * a comment inside a function never joins the one above the `def`. A blank line
+ * does not break a run, because `logicalLines` has already dropped blank lines —
+ * and a paragraph split by a blank line is still one paragraph.
+ */
+function groupComments(nodes: readonly Stmt[]): Stmt[] {
+  const out: Stmt[] = []
+  let run: LogicalLine[] = []
+  const flush = (): void => {
+    if (run.length === 0) return
+    // ONE of them is not a run. A lone comment stays a comment block all the
+    // same — one shape for one idea, whether it is one line or thirty.
+    out.push({ line: run[0], body: [], comment: run } as CommentRun)
+    run = []
+  }
+  for (const node of nodes) {
+    if (isCommentLine(node.line) && node.body.length === 0) {
+      run.push(node.line)
+      continue
+    }
+    flush()
+    out.push(node)
+  }
+  flush()
+  return out
+}
+
+/** A parameter list, split and trimmed. Empty for `()`. */
+function splitParams(params: string): string[] {
+  return params
+    .split(',')
+    .map((p) => p.trim())
+    .filter((p) => p !== '')
+}
+
+/**
+ * Can Blockly's `procedures_def` hold this parameter list faithfully? (#1063)
+ *
+ * Its parameters are bare NAMES — they become workspace variables — so that is
+ * all it can express. A default (`flip_x=None`), a type annotation, `*args` or
+ * `**kwargs` has nowhere to live on the block.
+ *
+ * This used to be a `.filter()`, which meant the ones it could not hold were
+ * simply dropped: `def load(path, flip_x=None, flip_y=None)` came back as
+ * `def load(path)`. A signature is not decoration — every call to that function
+ * still passed three arguments — so a `def` we cannot model faithfully stays a
+ * raw suite with its header verbatim instead. Uglier, and correct.
+ */
+function modellableParams(params: string): boolean {
+  return splitParams(params).every((p) => /^[A-Za-z_]\w*$/.test(p))
 }
 
 /** Build the indentation tree. A header owns every line indented past it. */
@@ -248,6 +421,20 @@ class Converter {
   /** `def` blocks, which are top-level hats rather than links in a chain. */
   readonly definitions: BlockJson[] = []
   /**
+   * How deep inside a suite we are (#1063). 0 is the module's own top level.
+   *
+   * A `def` at the top level is a DEFINITION — Blockly models it as a hat with
+   * no connections, collected into {@link definitions} and laid out as a root
+   * of its own, which is also the truth about Python.
+   *
+   * A `def` INSIDE something is a method, and hoisting it out of its `class`
+   * was the second half of #1063's data loss: the class kept its header and its
+   * methods walked off to become twelve top-level functions, each generated
+   * un-indented and none of them attached to the object they belong to. A hat
+   * cannot nest, so a nested `def` stays where it is as a raw suite instead.
+   */
+  private depth = 0
+  /**
    * The text the expression parser is currently reading, so an argument can be
    * sliced out of it verbatim. Saved and restored around every nested parse,
    * because reading a call's arguments starts a parse inside a parse.
@@ -257,7 +444,22 @@ class Converter {
   /** A chain of statement blocks, or null for an empty suite. */
   statements(nodes: readonly Stmt[]): BlockJson | null {
     const blocks: BlockJson[] = []
-    for (const node of nodes) {
+    // A RUN OF COMMENTS IS ONE BLOCK (#1062). Grouped before anything else
+    // looks at them, because the grouping is about consecutive SIBLINGS and
+    // this is the only place that sees a whole body at once.
+    const grouped = groupComments(nodes)
+    for (const node of grouped) {
+      if (node.comment) {
+        this.report.total += node.comment.length
+        this.report.recognised += node.comment.length
+        blocks.push({
+          // The literal, like the raw blocks above: this module is imported by the
+          // palette, so it must not import back.
+          type: 'snakie_python_comment',
+          extraState: { lines: node.comment.map((l) => l.text) }
+        })
+        continue
+      }
       // `pass` exists only to fill an empty suite, and an empty suite in blocks
       // is an empty socket — so carrying it over would add a block that means
       // "nothing" and then generate `pass` a second time.
@@ -274,6 +476,21 @@ class Converter {
     if (blocks.length === 0) return null
     for (let i = blocks.length - 1; i > 0; i--) blocks[i - 1].next = { block: blocks[i] }
     return blocks[0]
+  }
+
+  /**
+   * Convert a nested BODY, one level deeper (#1063).
+   *
+   * Everything that opens a suite goes through here rather than calling
+   * `statements` directly, so `depth` cannot get out of step with the tree.
+   */
+  private nested(nodes: readonly Stmt[]): BlockJson | null {
+    this.depth += 1
+    try {
+      return this.statements(nodes)
+    } finally {
+      this.depth -= 1
+    }
   }
 
   /** One statement → one or more blocks (a `from x import a, b` makes two). */
@@ -369,7 +586,7 @@ class Converter {
     if (/^if\s+.+:$/.test(text)) return recognised([this.ifChain(node, siblings)])
 
     const def = /^def\s+([A-Za-z_]\w*)\(([^)]*)\):$/.exec(text)
-    if (def) {
+    if (def && this.depth === 0 && modellableParams(def[2])) {
       this.definitions.push(this.definition(def[1], def[2], node))
       // No block in the chain: it is a root of its own, collected above.
       return recognised([])
@@ -383,11 +600,16 @@ class Converter {
     }
     const ret = /^return\s+(.+)$/.exec(text)
     if (ret) {
-      // Blockly models a function's return as the `def`'s own RETURN socket, so
-      // a `return` in the middle of a body is the conditional-return block.
-      return recognised([
-        { type: 'procedures_ifreturn', inputs: { VALUE: { block: this.expression(ret[1]) } } }
-      ])
+      // A `return` THAT IS NOT THE LAST STATEMENT (#1063). `definition()` takes
+      // a trailing one as the `def`'s RETURN socket, which is how Blockly models
+      // a function's result; everything else lands here.
+      //
+      // It used to become `procedures_ifreturn`, whose code is
+      // `if <COND>: return <VALUE>` — and with nothing in COND the generator
+      // wrote `if False:`. Every early return in the program became dead code,
+      // quietly, which is a worse outcome than any ugly block. A raw statement
+      // says `return x` and means it.
+      return [this.raw(node.line)]
     }
     const change = /^([A-Za-z_]\w*)\s*\+=\s*(.+)$/.exec(text)
     if (change) {
@@ -415,6 +637,14 @@ class Converter {
     if (call) return recognised([call])
 
     // --- anything else ----------------------------------------------------
+    //
+    // A SUITE WE CANNOT READ STILL HAS A BODY (#1063). This used to return the
+    // header line as a raw statement and walk away from `node.body` — so a
+    // `class` lost every method inside it, a `try` lost everything it guarded,
+    // and the report counted that a success. The raw SUITE block keeps the
+    // header verbatim and nests the body under it, which is the difference
+    // between an uglier program and a shorter one.
+    if (isSuiteHeader(text) && node.body.length > 0) return [this.rawSuite(node)]
     return [this.raw(node.line)]
   }
 
@@ -441,14 +671,14 @@ class Converter {
     arms.forEach((arm, n) => {
       const cond = /^(?:if|elif)\s+(.+):$/.exec(arm.line.text)![1]
       block.inputs![`IF${n}`] = { block: this.expression(cond) }
-      const body = this.statements(arm.body)
+      const body = this.nested(arm.body)
       if (body) block.inputs![`DO${n}`] = { block: body }
       // Each extra arm is a line of its own in the source, and the `if` block
       // is one block — so the count has to be kept honest by hand.
       if (n > 0) this.report.total += 1, this.report.recognised += 1
     })
     if (elseArm) {
-      const body = this.statements(elseArm.body)
+      const body = this.nested(elseArm.body)
       if (body) block.inputs!.ELSE = { block: body }
       this.report.total += 1
       this.report.recognised += 1
@@ -465,15 +695,13 @@ class Converter {
 
   /** `def name(a, b):` → a procedure definition, with its body. */
   private definition(name: string, params: string, node: Stmt): BlockJson {
-    const args = params
-      .split(',')
-      .map((p) => p.trim())
-      .filter((p) => /^[A-Za-z_]\w*$/.test(p))
+    // Every one of these is a bare name — `modellableParams` is what let us in.
+    const args = splitParams(params)
     // A trailing `return` becomes the definition's RETURN socket, which is the
     // shape Blockly models a function's result with.
     const last = node.body[node.body.length - 1]
     const returns = last && /^return\s+(.+)$/.exec(last.line.text)
-    const body = this.statements(returns ? node.body.slice(0, -1) : node.body)
+    const body = this.nested(returns ? node.body.slice(0, -1) : node.body)
     const block: BlockJson = {
       type: returns ? 'procedures_defreturn' : 'procedures_defnoreturn',
       fields: { NAME: name },
@@ -492,7 +720,7 @@ class Converter {
 
   /** Attach a suite to a block's statement input. */
   private withBody(block: BlockJson, input: string, node: Stmt): BlockJson {
-    const body = this.statements(node.body)
+    const body = this.nested(node.body)
     if (body) block.inputs = { ...(block.inputs ?? {}), [input]: { block: body } }
     return block
   }
@@ -505,6 +733,25 @@ class Converter {
       type: shape === 'value' ? 'snakie_python_value' : 'snakie_python_statement',
       fields: { CODE: line.text }
     }
+  }
+
+  /**
+   * A raw SUITE block: the header verbatim, its body converted underneath.
+   *
+   * The header keeps its trailing colon, unlike a one-line raw statement,
+   * because it IS the colon that makes the lines below it a body — and the
+   * generator re-indents them under it.
+   */
+  private rawSuite(node: Stmt): BlockJson {
+    this.report.raw += 1
+    this.report.rawLines.push(node.line.line)
+    const block: BlockJson = {
+      type: 'snakie_python_suite',
+      fields: { CODE: node.line.text }
+    }
+    const body = this.nested(node.body)
+    if (body) block.inputs = { DO: { block: body } }
+    return block
   }
 
   /** A raw VALUE block for an expression we could not read. */
