@@ -189,6 +189,21 @@ app.whenReady().then(() => {
   // Same one-click install flow, for the turtle graphics library (issue #1003).
   ipcMain.handle('instruments:turtleSource', () => readTurtleLibrarySource())
 
+  // The Turtle instrument's drawn picture, buffered here (not in either
+  // renderer) so it survives crossing between the docked instrument and its
+  // detached OS window (#205) — undocking/redocking used to remount a fresh
+  // component with an empty canvas, losing everything drawn so far even
+  // though the picture was still "there". Both the docked instrument and its
+  // popout read/write the SAME buffer on every repaint, so whichever one
+  // mounts next picks up exactly where the other left off. Opaque to main
+  // (never parsed here — just held and handed back), reset only when a
+  // caller explicitly writes a cleared state (the instrument's CLEAR key).
+  let turtleStateSnapshot: unknown = null
+  ipcMain.handle('instruments:turtleStateGet', () => turtleStateSnapshot)
+  ipcMain.handle('instruments:turtleStateSet', (_e, state: unknown) => {
+    turtleStateSnapshot = state
+  })
+
   // Open an external URL in the user's default browser (used by clickable
   // plugin status-bar links). Only http(s) URLs are honoured.
   ipcMain.handle('app:openExternal', (_e, url: string) => {

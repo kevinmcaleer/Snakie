@@ -8,6 +8,7 @@ import {
   formatCoord,
   headingToRadians,
   INITIAL_TURTLE_STATE,
+  isTurtleState,
   reduceTurtle,
   worldToCanvas,
   type TurtleState
@@ -66,9 +67,35 @@ export function TurtleInstrument({
   )
   useTelemetryStream(onReading)
 
+  // Restore the last-drawn picture on mount (issue: undocking/redocking used to
+  // remount a fresh component with an empty canvas, losing everything drawn so
+  // far even though the picture was still "there"). `turtleStateGet` reads a
+  // buffer shared between the docked instrument and its detached popup (the
+  // main process on desktop, the editor window's closure on web — see
+  // `src/main/index.ts` / `web/install-web-api.ts`), so whichever one mounts
+  // next picks up exactly where the other left off. A malformed/absent buffer
+  // (first-ever open, an older Snakie version) is just ignored — the "no
+  // drawing yet" panel stays up until the next real reading, as before.
+  useEffect(() => {
+    let cancelled = false
+    void window.api.instruments
+      .turtleStateGet()
+      .then((persisted) => {
+        if (cancelled || !isTurtleState(persisted)) return
+        stateRef.current = persisted
+        setStarted(true)
+        dirty.current = true
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const handleClear = useCallback(() => {
     stateRef.current = { ...stateRef.current, segments: [] }
     dirty.current = true
+    void window.api.instruments.turtleStateSet(stateRef.current).catch(() => undefined)
   }, [])
 
   useEffect(() => {
@@ -147,6 +174,12 @@ export function TurtleInstrument({
         pen: s.pen,
         segments: s.segments.length
       })
+
+      // Write-through on every repaint (bounded to the rAF cadence, not the raw
+      // telemetry rate) so the docked instrument and its detached popup — or a
+      // freshly re-docked instrument — always pick up the latest picture, even
+      // once the program has stopped printing and nothing else would trigger it.
+      void window.api.instruments.turtleStateSet(s).catch(() => undefined)
     }
 
     resize()

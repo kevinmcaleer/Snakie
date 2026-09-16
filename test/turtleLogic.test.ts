@@ -3,6 +3,7 @@ import {
   formatCoord,
   headingToRadians,
   INITIAL_TURTLE_STATE,
+  isTurtleState,
   MAX_SEGMENTS,
   reduceTurtle,
   worldToCanvas,
@@ -187,5 +188,56 @@ describe('formatCoord', () => {
   it('formats a non-finite value as an em dash', () => {
     expect(formatCoord(NaN)).toBe('—')
     expect(formatCoord(Infinity)).toBe('—')
+  })
+})
+
+describe('isTurtleState', () => {
+  it('accepts the initial state', () => {
+    expect(isTurtleState(INITIAL_TURTLE_STATE)).toBe(true)
+  })
+
+  it('accepts a state with segments', () => {
+    const state: TurtleState = {
+      x: 5,
+      y: -3,
+      heading: 90,
+      pen: false,
+      visible: true,
+      segments: [{ x1: 0, y1: 0, x2: 5, y2: -3, colour: 'white', width: 2 }]
+    }
+    expect(isTurtleState(state)).toBe(true)
+  })
+
+  it('rejects null and undefined', () => {
+    expect(isTurtleState(null)).toBe(false)
+    expect(isTurtleState(undefined)).toBe(false)
+  })
+
+  it('rejects a non-object', () => {
+    expect(isTurtleState('nope')).toBe(false)
+    expect(isTurtleState(42)).toBe(false)
+  })
+
+  it('rejects a state missing a required field', () => {
+    const rest: Record<string, unknown> = { ...INITIAL_TURTLE_STATE }
+    delete rest.heading
+    expect(isTurtleState(rest)).toBe(false)
+  })
+
+  it('rejects a state with a non-finite coordinate', () => {
+    expect(isTurtleState({ ...INITIAL_TURTLE_STATE, x: NaN })).toBe(false)
+  })
+
+  it('rejects a state whose segments is not an array', () => {
+    expect(isTurtleState({ ...INITIAL_TURTLE_STATE, segments: 'nope' })).toBe(false)
+  })
+
+  it('rejects a state with a malformed segment', () => {
+    expect(
+      isTurtleState({
+        ...INITIAL_TURTLE_STATE,
+        segments: [{ x1: 0, y1: 0, x2: 1, y2: 1, colour: 'white' /* missing width */ }]
+      })
+    ).toBe(false)
   })
 })

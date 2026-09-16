@@ -243,6 +243,8 @@ if (!w.api) {
       librarySource: P(''),
       umbrellaSource: P(''),
       turtleSource: P(''),
+      turtleStateGet: P(null),
+      turtleStateSet: P(undefined),
       openWindow: P(undefined),
       closeWindow: noop,
       requestWindowPayload: P(null),

@@ -140,3 +140,42 @@ export function formatCoord(n: number): string {
   const r = Math.round(n * 10) / 10
   return Number.isInteger(r) ? String(r) : r.toFixed(1)
 }
+
+function isFiniteNumber(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v)
+}
+
+function isSegment(v: unknown): v is TurtleSegment {
+  if (typeof v !== 'object' || v === null) return false
+  const s = v as Record<string, unknown>
+  return (
+    isFiniteNumber(s.x1) &&
+    isFiniteNumber(s.y1) &&
+    isFiniteNumber(s.x2) &&
+    isFiniteNumber(s.y2) &&
+    typeof s.colour === 'string' &&
+    isFiniteNumber(s.width)
+  )
+}
+
+/**
+ * Type-guard a persisted/round-tripped value (e.g. read back over IPC from the
+ * cross-window turtle-state buffer, issue: undocking lost the drawn picture) as
+ * a well-formed {@link TurtleState}. Rejects anything malformed (a stale shape
+ * from an older Snakie version, a corrupt buffer, `null`) rather than crash
+ * rendering on a bad restore — the caller falls back to
+ * {@link INITIAL_TURTLE_STATE} in that case. Pure + unit-testable.
+ */
+export function isTurtleState(v: unknown): v is TurtleState {
+  if (typeof v !== 'object' || v === null) return false
+  const s = v as Record<string, unknown>
+  return (
+    isFiniteNumber(s.x) &&
+    isFiniteNumber(s.y) &&
+    isFiniteNumber(s.heading) &&
+    typeof s.pen === 'boolean' &&
+    typeof s.visible === 'boolean' &&
+    Array.isArray(s.segments) &&
+    s.segments.every(isSegment)
+  )
+}
