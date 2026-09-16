@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import { parseBlocksManifest } from '../src/shared/blocks-manifest'
 import {
+  classNameFromApi,
   derivedManifestFor,
   guessClassName,
   moduleOf,
   placedPartBlocks,
+  placedPartModules,
   wiringFor
 } from '../src/renderer/src/lib/blocks/part-blocks'
 import type { PartDefinition } from '../src/shared/part'
@@ -392,5 +394,78 @@ blocks:
     const out = placedPartBlocks(robot, [{ id: 'std', parts: [broken] }], gp, parseBlocksManifest)
     expect(out[0].derived).toBe(true)
     expect(out[0].warnings.join('\n')).toContain('could not be read')
+  })
+})
+
+/**
+ * THE GUESS, UPGRADED TO A FACT (#1048).
+ *
+ * `guessClassName` is right for most drivers and visibly wrong for the rest.
+ * Once a module's source can be found and parsed, the wired part's block can
+ * carry the class the driver actually declares — so these are about picking the
+ * right one when a driver declares several, and about falling back cleanly when
+ * the file is nowhere.
+ */
+describe('classNameFromApi', () => {
+  it('is null for a module that declares no class', () => {
+    expect(classNameFromApi('vl53l0x', [])).toBeNull()
+  })
+
+  it('takes the only class, whatever the convention guessed', () => {
+    expect(classNameFromApi('passive_buzzer', [{ name: 'Buzzer' }])).toBe('Buzzer')
+  })
+
+  it('prefers the class the convention pointed at, case-insensitively', () => {
+    expect(classNameFromApi('ssd1306', [{ name: 'SSD1306' }, { name: 'SSD1306_I2C' }])).toBe(
+      'SSD1306'
+    )
+  })
+
+  it('takes the last class when none matches — a driver names the usable one last', () => {
+    expect(classNameFromApi('display', [{ name: 'FrameBuffer' }, { name: 'Screen' }])).toBe('Screen')
+  })
+})
+
+describe('placedPartModules', () => {
+  const libraries = [{ id: 'std', parts: [i2cSensor, oneWire] }]
+
+  it('names each placed part′s driver module once', () => {
+    const robot: RobotDefinition = {
+      parts: [
+        { id: 'tof1', lib: 'std', part: 'vl53l0x' },
+        { id: 'tof2', lib: 'std', part: 'vl53l0x' },
+        { id: 'buz1', lib: 'std', part: 'buzzer' }
+      ],
+      connections: []
+    }
+    expect(placedPartModules(robot, libraries)).toEqual(['vl53l0x', 'passive_buzzer'])
+  })
+
+  it('is empty for no robot, and skips a part the libraries no longer have', () => {
+    expect(placedPartModules(null, libraries)).toEqual([])
+    expect(
+      placedPartModules({ parts: [{ id: 'x', lib: 'std', part: 'gone' }], connections: [] }, libraries)
+    ).toEqual([])
+  })
+})
+
+describe('placedPartBlocks with a readable driver', () => {
+  const libraries = [{ id: 'std', parts: [i2cSensor] }]
+  const robot: RobotDefinition = {
+    parts: [{ id: 'tof1', lib: 'std', part: 'vl53l0x' }],
+    connections: [
+      { id: 'w1', from: 'tof1.SDA', to: 'board.GP4' },
+      { id: 'w2', from: 'tof1.SCL', to: 'board.GP5' }
+    ]
+  }
+
+  it('writes the class the driver declares onto the block', () => {
+    const out = placedPartBlocks(robot, libraries, gp, parseBlocksManifest, () => 'Sensor')
+    expect(out[0].manifest.blocks[0].args?.[0].default).toBe('Sensor')
+  })
+
+  it('keeps the conventional guess when the driver could not be read', () => {
+    const out = placedPartBlocks(robot, libraries, gp, parseBlocksManifest, () => undefined)
+    expect(out[0].manifest.blocks[0].args?.[0].default).toBe('VL53L0X')
   })
 })

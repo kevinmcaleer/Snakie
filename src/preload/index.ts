@@ -639,6 +639,15 @@ const modules = {
    * error (resolves to an empty array) so the manager degrades gracefully when a
    * board is busy / disconnected mid-probe.
    */
+  /**
+   * The source of a bundled module, by basename (#1048).
+   *
+   * The Blocks workspace's last tier for "what does this import contain?" —
+   * after the project folder and the board. `''` when we do not ship it, so the
+   * caller's "not here, try the next one" needs no special case.
+   */
+  bundledSource: (file: string): Promise<string> =>
+    unwrap(ipcRenderer.invoke('modules:bundledSource', file)),
   probeInstalled: async (importNames: string[]): Promise<string[]> => {
     if (importNames.length === 0) return []
     // Build one snippet that probes each name and prints `<sentinel> <name>` for

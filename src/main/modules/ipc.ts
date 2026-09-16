@@ -2,7 +2,7 @@ import { ipcMain, BrowserWindow } from 'electron'
 import type { IpcResult } from '../device/types'
 import { MODULES, type ModuleDef } from '../../shared/modules-catalog'
 import type { RuntimeInfo } from '../../shared/dialect'
-import { planForId, type ModuleInstallPlan } from './resolve'
+import { planForId, readBundledModuleSource, type ModuleInstallPlan } from './resolve'
 
 /**
  * IPC for the per-module installer (issue #120).
@@ -53,6 +53,15 @@ export function registerModulesIpc(): void {
   // preload already holds that on the live session and passes it down.
   ipcMain.handle('modules:installPlan', (_e, id: string, runtime?: RuntimeInfo | null) =>
     wrap<ModuleInstallPlan>(async () => planForId(id, { runtime }))
+  )
+
+  // The SOURCE of a bundled module, by basename (#1048) — the last tier of the
+  // Blocks workspace's "what does this import contain?" lookup, after the
+  // project folder and the board. Read-only, basename-guarded by
+  // `readBundledModuleSource`, and `''` for anything missing, so the caller's
+  // "not here, try the next one" needs no special case.
+  ipcMain.handle('modules:bundledSource', (_e, file: string) =>
+    wrap<string>(async () => readBundledModuleSource(String(file)))
   )
 
   // A driver/library was installed onto the board from SOME window (e.g. the Board
