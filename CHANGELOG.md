@@ -21,134 +21,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   #962, for the same reason. A fact that has to be retyped goes quietly wrong,
   and the plans had rotted for twelve and thirty-three minor versions unnoticed.
 
-- **Right-click help works again in a blocks file.** Right-clicking a variable
-  or a class name offered Monaco's bare default menu — no **Help for symbol**,
-  no **Refactor…**, no **Tidy this file**.
-
-  The blocks split mounts a *second* Monaco, the Python pane beside the canvas.
-  It was written after those three actions and never carried them over, and it
-  did not matter until #1034 made that pane editable and #1008 made a `.py` with
-  a blocks footer open in the split **even from the Code workspace** — at which
-  point the pane became where a learner does their typing, without the menu
-  written for exactly that gesture.
-
-  The list now lives in `editor-actions.ts` and both editors install it, the
-  same move `monaco-theme.ts` already made for the theme and for the same
-  reason. A test pins that both call it, because what broke was not behaviour
-  inside either editor: it was one of them never calling it at all.
-
-- **A variable slot is the same size as the slots beside it now.** In
-  `from (modulino) import (ModulinoMotors)` both holes are **fields**, drawn at
-  34px. In `set motors to (ModulinoMotors())` the hole is a whole **value
-  block**, and it was drawn at 48 — the same kind of gap in the same kind of
-  sentence, half again as tall.
-
-  The cause was `TOP_ROW_MIN_HEIGHT`/`BOTTOM_ROW_MIN_HEIGHT`, raised to 8 in the
-  renderer pass on the reasoning that a 12px corner needs somewhere to land.
-  They apply to *every* block's top and bottom row — including a value block
-  sitting in a socket — so the cost was paid somewhere nobody was looking. Back
-  at Zelos's own 4, the value block is 40 against the field's 34, which is just
-  the block's border round its field and reads as the same thing.
-
-  Statement blocks barely notice: they are sized by `MIN_BLOCK_HEIGHT` and their
-  contents, so they go 58 → 56 and the roominess stays.
-
-- **The Python mirror no longer pins an unreadable header when you scroll.**
-  Monaco's sticky scroll keeps the enclosing `def`/`class`/`if` at the top of
-  the pane, and it could not work here: every editor theme paints
-  `editor.background` **transparent** on purpose, so the CSS ruled paper shows
-  through and scrolls with the text — and Monaco derives the sticky header's
-  fill from that same colour. The pinned lines came out see-through, with the
-  code scrolling underneath showing straight through them, both halves
-  illegible.
-
-  The main editor has had sticky scroll off since it was written; the mirror
-  (`PythonPane`) was created without that option and so had it on. It is off in
-  both now, with the reason recorded next to it — giving it an opaque surface of
-  its own (`editorStickyScroll.background`) is what turning it back on would
-  take.
-
-### Changed
-
-- **Every block category has a colour of its own now** (epic #1007). The rule
-  behind the palette is a good one and it stays: a block wears the colour its
-  construct has in the **code mirror** beside it, so a number block is the blue
-  that `5` is in Monaco. Nothing else in this app can do that, and it is worth
-  more than copying Scratch's palette wholesale.
-
-  But it was applied to fifteen categories over nine tokens, and measured on the
-  hue wheel the result was worse than the duplicates suggest:
-
-  ```
-     8°  logic, functions        (kw)      ─┐ one degree apart
-     9°  parts                   (pinPower)─┘
-    39°  hardware, wait, control (gold)    ─┐ three degrees apart
-    42°  text, lists, plugins    (str)     ─┘
-    89°  python                  (com)
-   107°  modules, variables      (ident)
-   152°  turtle                  (green)
-   197°  instruments, maths      (num)
-  ```
-
-  Fifteen drawers in about six telling-apart-able colours — and two of the
-  clashes were between *different* tokens, so the rule was not even buying the
-  distinctness it cost. A learner could not tell a Text block from a Hardware
-  one.
-
-  A category can now declare a `hue`, and `withHue` moves it round the wheel
-  while keeping the token's saturation and lightness **exactly** — which is what
-  holds the palette together as one palette, rather than fifteen hand-picked
-  hexes that drift apart the first time the design changes. Every vivid category
-  is at least 20° from every other, pinned by a test.
-
-  Four anchors keep their token untouched: **maths** (`num` is literally the
-  colour a number is in the mirror — the clearest case of the whole idea),
-  **turtle** (`green`), **parts** (`pinPower`, the board's power dot) and the
-  near-greys **variables** and **python**, which take no hue space at all.
-  **Hardware** moves 6° off the GPIO dot, far enough to clear `str` and not far
-  enough to break the resemblance to the pin it drives.
-
-  Two things the move taught, both now tests: a hue on a near-grey token is
-  silently a no-op, because saturation is preserved — Modules hit that and had
-  to change base token; and five categories in the blues is five nobody can tell
-  apart, because the eye separates far less per degree there, so Lists gave up
-  its place beside Text for the empty warm-green gap.
-
-
-### Changed
-
-- **The blocks are shaped like MakeCode and Scratch now, because they are
-  rendered like them** (epic #1007, #573's design direction). The canvas moves
-  from Blockly's `thrasos` renderer to **`zelos`** — which is Blockly's own port
-  of `scratch-blocks`.
-
-  This had been approached twice by hand, rounding corners and adding padding a
-  few pixels at a time, and it kept not arriving. The reason is that the three
-  things that make those editors look the way they do are not constants on
-  `thrasos` at all:
-
-  - **Value inputs were EXTERNAL.** A block plugged into a socket sat *outside*
-    its parent, past the right edge, joined by a puzzle tab — so `set x to (5)`
-    drew as two blocks touching, with the `5` visibly shorter than the row it
-    belonged to. No amount of padding fixes that, because the child was not
-    inside anything. Zelos uses inline inputs: the `5` sits *within* its parent
-    with even space around it.
-  - **Only two corners were round.** The outline arced the left-hand pair and
-    drew the right-hand pair square, and a value block was a plain rectangle
-    with a tab on it. All four are arcs now, booleans are hexagons and reporters
-    are pills — the Scratch vocabulary a child arrives already knowing.
-  - **The notch was a sharp trapezoid.** It is the soft bump now.
-
-  Sizes are consistent rather than incidental: every value block is **48px**,
-  every statement block **64px**, and a plugged-in value has the same 8px of
-  parent around it wherever it appears. Before, a variable was 38px inside a
-  48px row in one place and a 54px row in another.
-
-  Stock Zelos is already generous, so only five constants are overridden, each
-  making it rounder or roomier than Scratch rather than re-deriving it — the
-  12px corner radius, the notch offset that has to clear it, a pill radius on
-  field boxes, 8px top and bottom rows, and a 20px C-block mouth.
-
+## [0.68.8] - 2026-09-16
 
 ### Added
 
@@ -579,6 +452,86 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Every block category has a colour of its own now** (epic #1007). The rule
+  behind the palette is a good one and it stays: a block wears the colour its
+  construct has in the **code mirror** beside it, so a number block is the blue
+  that `5` is in Monaco. Nothing else in this app can do that, and it is worth
+  more than copying Scratch's palette wholesale.
+
+  But it was applied to fifteen categories over nine tokens, and measured on the
+  hue wheel the result was worse than the duplicates suggest:
+
+  ```
+     8°  logic, functions        (kw)      ─┐ one degree apart
+     9°  parts                   (pinPower)─┘
+    39°  hardware, wait, control (gold)    ─┐ three degrees apart
+    42°  text, lists, plugins    (str)     ─┘
+    89°  python                  (com)
+   107°  modules, variables      (ident)
+   152°  turtle                  (green)
+   197°  instruments, maths      (num)
+  ```
+
+  Fifteen drawers in about six telling-apart-able colours — and two of the
+  clashes were between *different* tokens, so the rule was not even buying the
+  distinctness it cost. A learner could not tell a Text block from a Hardware
+  one.
+
+  A category can now declare a `hue`, and `withHue` moves it round the wheel
+  while keeping the token's saturation and lightness **exactly** — which is what
+  holds the palette together as one palette, rather than fifteen hand-picked
+  hexes that drift apart the first time the design changes. Every vivid category
+  is at least 20° from every other, pinned by a test.
+
+  Four anchors keep their token untouched: **maths** (`num` is literally the
+  colour a number is in the mirror — the clearest case of the whole idea),
+  **turtle** (`green`), **parts** (`pinPower`, the board's power dot) and the
+  near-greys **variables** and **python**, which take no hue space at all.
+  **Hardware** moves 6° off the GPIO dot, far enough to clear `str` and not far
+  enough to break the resemblance to the pin it drives.
+
+  Two things the move taught, both now tests: a hue on a near-grey token is
+  silently a no-op, because saturation is preserved — Modules hit that and had
+  to change base token; and five categories in the blues is five nobody can tell
+  apart, because the eye separates far less per degree there, so Lists gave up
+  its place beside Text for the empty warm-green gap.
+
+
+
+- **The blocks are shaped like MakeCode and Scratch now, because they are
+  rendered like them** (epic #1007, #573's design direction). The canvas moves
+  from Blockly's `thrasos` renderer to **`zelos`** — which is Blockly's own port
+  of `scratch-blocks`.
+
+  This had been approached twice by hand, rounding corners and adding padding a
+  few pixels at a time, and it kept not arriving. The reason is that the three
+  things that make those editors look the way they do are not constants on
+  `thrasos` at all:
+
+  - **Value inputs were EXTERNAL.** A block plugged into a socket sat *outside*
+    its parent, past the right edge, joined by a puzzle tab — so `set x to (5)`
+    drew as two blocks touching, with the `5` visibly shorter than the row it
+    belonged to. No amount of padding fixes that, because the child was not
+    inside anything. Zelos uses inline inputs: the `5` sits *within* its parent
+    with even space around it.
+  - **Only two corners were round.** The outline arced the left-hand pair and
+    drew the right-hand pair square, and a value block was a plain rectangle
+    with a tab on it. All four are arcs now, booleans are hexagons and reporters
+    are pills — the Scratch vocabulary a child arrives already knowing.
+  - **The notch was a sharp trapezoid.** It is the soft bump now.
+
+  Sizes are consistent rather than incidental: every value block is **48px**,
+  every statement block **64px**, and a plugged-in value has the same 8px of
+  parent around it wherever it appears. Before, a variable was 38px inside a
+  48px row in one place and a 54px row in another.
+
+  Stock Zelos is already generous, so only five constants are overridden, each
+  making it rounder or roomier than Scratch rather than re-deriving it — the
+  12px corner radius, the notch offset that has to clear it, a pill radius on
+  field boxes, 8px top and bottom rows, and a 20px C-block mouth.
+
+
+
 - **Comments are grey, and they are quiet** (#1062). #1062's folding made a
   file's header one block instead of thirty, but it still rendered as thirty
   bordered text inputs — a wall with one outline round it. Comment blocks now
@@ -905,6 +858,54 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   interrupting the REPL, on real hardware and in the browser simulator alike.
 
 ### Fixed
+
+- **Right-click help works again in a blocks file.** Right-clicking a variable
+  or a class name offered Monaco's bare default menu — no **Help for symbol**,
+  no **Refactor…**, no **Tidy this file**.
+
+  The blocks split mounts a *second* Monaco, the Python pane beside the canvas.
+  It was written after those three actions and never carried them over, and it
+  did not matter until #1034 made that pane editable and #1008 made a `.py` with
+  a blocks footer open in the split **even from the Code workspace** — at which
+  point the pane became where a learner does their typing, without the menu
+  written for exactly that gesture.
+
+  The list now lives in `editor-actions.ts` and both editors install it, the
+  same move `monaco-theme.ts` already made for the theme and for the same
+  reason. A test pins that both call it, because what broke was not behaviour
+  inside either editor: it was one of them never calling it at all.
+
+- **A variable slot is the same size as the slots beside it now.** In
+  `from (modulino) import (ModulinoMotors)` both holes are **fields**, drawn at
+  34px. In `set motors to (ModulinoMotors())` the hole is a whole **value
+  block**, and it was drawn at 48 — the same kind of gap in the same kind of
+  sentence, half again as tall.
+
+  The cause was `TOP_ROW_MIN_HEIGHT`/`BOTTOM_ROW_MIN_HEIGHT`, raised to 8 in the
+  renderer pass on the reasoning that a 12px corner needs somewhere to land.
+  They apply to *every* block's top and bottom row — including a value block
+  sitting in a socket — so the cost was paid somewhere nobody was looking. Back
+  at Zelos's own 4, the value block is 40 against the field's 34, which is just
+  the block's border round its field and reads as the same thing.
+
+  Statement blocks barely notice: they are sized by `MIN_BLOCK_HEIGHT` and their
+  contents, so they go 58 → 56 and the roominess stays.
+
+- **The Python mirror no longer pins an unreadable header when you scroll.**
+  Monaco's sticky scroll keeps the enclosing `def`/`class`/`if` at the top of
+  the pane, and it could not work here: every editor theme paints
+  `editor.background` **transparent** on purpose, so the CSS ruled paper shows
+  through and scrolls with the text — and Monaco derives the sticky header's
+  fill from that same colour. The pinned lines came out see-through, with the
+  code scrolling underneath showing straight through them, both halves
+  illegible.
+
+  The main editor has had sticky scroll off since it was written; the mirror
+  (`PythonPane`) was created without that option and so had it on. It is off in
+  both now, with the reason recorded next to it — giving it an opaque surface of
+  its own (`editorStickyScroll.background`) is what turning it back on would
+  take.
+
 
 - **A driver's `try: import ustruct / except: import struct` fallback no longer
   becomes a file that cannot start** (#1071, epic #1007). An import block is
@@ -7724,7 +7725,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.56.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.68.8...HEAD
+[0.68.8]: https://github.com/kevinmcaleer/Snakie/compare/v0.56.0...v0.68.8
 [0.56.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.55.0...v0.56.0
 [0.55.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.51.1...v0.55.0
 [0.51.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.51.0...v0.51.1
