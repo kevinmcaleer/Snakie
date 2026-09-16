@@ -8,6 +8,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The block shelf no longer appears in Build** (#1066). Build's preset
+  collapses the centre column to nothing so the URDF editor can have the screen
+  — but with a blocks file open the canvas stayed mounted in that zero-width
+  column, and Blockly's toolbox takes no hint from a host with no width. The
+  shelf painted itself straight over Build's robot tree and its Export buttons.
+  Electronics collapses the centre the same way and had the same bug waiting in
+  it. The canvas now belongs to the two workspaces that are *about* the program;
+  elsewhere a blocks file opens as ordinary code, which is all those workspaces
+  can usefully show of it.
+
 - **An I²C scan from a program now reaches the I²C Detect instrument** (#1067).
   Drag the I²C block out, press Run, and the panel opened by itself — then sat
   there saying *"Pick the bus + pins, then SCAN"* with FOUND 0 while the program
