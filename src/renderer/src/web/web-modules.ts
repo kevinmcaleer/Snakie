@@ -147,6 +147,9 @@ export function createWebModulesApi(): Record<string, unknown> {
     catalog: async (): Promise<ModuleDef[]> => MODULES,
     installPlan: (id: string): Promise<InstallPlan> => planFor(id),
 
+    /** Port of the preload's bundled-source read (#1048), off the inlined table. */
+    bundledSource: async (file: string): Promise<string> => bundledSource(file) ?? '',
+
     /** Port of the preload's batched import probe, over the web device. */
     probeInstalled: async (importNames: string[]): Promise<string[]> => {
       if (importNames.length === 0) return []
