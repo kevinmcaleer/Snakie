@@ -8,6 +8,38 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Python → blocks: the converter** (#1019, epic #1007, phase 5). The spike
+  asked where a Python AST comes from in the renderer. All three candidates were
+  checked rather than guessed, and all three lose: the bundled MicroPython WASM
+  has no `ast` module and its `compile()` returns an object whose only attribute
+  is `__class__`; the CPython plugin host is desktop-only, which is the opposite
+  of where the classrooms are; a real JS parser is a megabyte of WASM on top of a
+  Blockly chunk we already apologise for.
+
+  **So there is no AST, and there does not need to be one.** Python is
+  line-oriented with significant indentation, the subset that matters is one we
+  define, and #1018's raw-Python blocks are a per-line fallback that is always
+  correct. The reader is a lexer and an indentation tree — pure TypeScript,
+  identical on desktop and web, unit-tested in node against the real generator.
+
+  The correctness property is not "produces nice blocks" but **converting a
+  program and generating it again gives back the same program**. Under that rule
+  a conversion that understood nothing and produced a stack of grey blocks still
+  passes, which is exactly the guarantee the escape hatches were built for —
+  recognition becomes a quality gradient on top of a guarantee rather than a
+  thing that can fail. A program of nothing but unknown drivers, f-strings,
+  comprehensions and starred arguments round-trips exactly.
+
+  It reads back the three import forms, `while True:`, `for _ in range(n):`,
+  for-each, while/until, if/elif/else, `def`/`return`, `break`, assignment and
+  `+=`, literals, names, arithmetic, comparisons and boolean operators — and the
+  whole turtle palette, from the palette's **own declarations** rather than a
+  table restating them, so a block that changes its function name changes both
+  sides at once. The decision and its reasoning are written up in
+  `docs/blockly-epic.md` §5.
+
+  No entry point yet: this is the engine, and the doors are #1032/#1034.
+
 - **The escape hatches: nothing is impossible in the Blocks workspace any more**
   (#1018, epic #1007, phase 4). #1017 makes the palette grow with the parts
   library and the plugin ecosystem; these blocks remove the ceiling entirely.
