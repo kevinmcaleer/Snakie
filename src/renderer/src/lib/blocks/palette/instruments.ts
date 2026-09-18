@@ -222,7 +222,7 @@ const HARDWARE_INSTRUMENT_BLOCKS: BlockDefinition[] = [
     },
     imports: [
       { module: 'machine', name: 'ADC' },
-      { module: 'snakie', name: 'Pin' },
+      { module: 'machine', name: 'Pin' },
       ...NEEDS_INST
     ],
     code: (block, gen) => {
@@ -246,7 +246,7 @@ const HARDWARE_INSTRUMENT_BLOCKS: BlockDefinition[] = [
       tooltip:
         'Send a pin’s PWM frequency and duty to the Oscilloscope, and use the duty (0 to 1) here.'
     },
-    imports: [{ module: 'snakie', name: 'PWM' }, { module: 'snakie', name: 'Pin' }, ...NEEDS_INST],
+    imports: [{ module: 'machine', name: 'PWM' }, { module: 'machine', name: 'Pin' }, ...NEEDS_INST],
     code: (block, gen) => {
       const name = pwm(gen, pinOf(block), block)
       return [`${INST}.read_pwm(${name}, ch=${pyString(`pwm${pinOf(block)}`)})`, Order.FUNCTION_CALL]
@@ -266,7 +266,7 @@ const HARDWARE_INSTRUMENT_BLOCKS: BlockDefinition[] = [
       tooltip:
         "List everything plugged into the I²C wires. This one pauses for a moment — don't put it in a fast loop."
     },
-    imports: [{ module: 'machine', name: 'I2C' }, { module: 'snakie', name: 'Pin' }, ...NEEDS_INST],
+    imports: [{ module: 'machine', name: 'I2C' }, { module: 'machine', name: 'Pin' }, ...NEEDS_INST],
     code: (block, gen) => `${INST}.i2c_scan(${i2c(gen, block)})\n`
   },
   {

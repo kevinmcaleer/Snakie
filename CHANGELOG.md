@@ -6,6 +6,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The hardware blocks take `Pin` and `PWM` from `machine`, not `snakie`.**
+  `set pin`, `read pin`, the PWM and ADC blocks and the I²C blocks all used to
+  open a program with `from snakie import Pin` — which needed `/lib/snakie.py`
+  and `/lib/instruments.py` on the board to resolve, for a class that was never
+  Snakie's own: `snakie.py` re-exports what `instruments.py` got from
+  `from machine import Pin, PWM`, so it was `machine.Pin` the whole way down,
+  behind a name that cost two library files.
+
+  It now says what it means. A program built out of the raw-pin, PWM, ADC and
+  I²C blocks runs on a stock MicroPython board with nothing installed at all,
+  and it opens with the line every MicroPython tutorial and datasheet writes —
+  which is the line a learner graduating to text should already recognise.
+
+  `Led`, `Servo` and `Buzzer` are genuinely Snakie's, so those blocks still pull
+  the library in, and now say so honestly: `from machine import Pin, PWM` beside
+  `from snakie import Servo`, each half naming what it is for. Nothing about the
+  generated calls changed, `snakie.py` still re-exports `Pin`/`PWM` for programs
+  that already import them, and the analogue read is now one line shorter — ADC
+  was always from `machine`, and its `Pin` joins it there.
+
 ### Fixed
 
 - **Two epic plans stopped claiming a version that had stopped being true.**

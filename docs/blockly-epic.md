@@ -542,6 +542,15 @@ this is not an emergency and does not have to be solved before #1034 ships.
 
 ### 9.4 The hardware palette does not emit `machine` — and that is the problem
 
+> **Superseded in part.** The audit below describes the palette as it stood when
+> §9 was written. `Pin` and `PWM` now come from `machine` directly — they were
+> only ever `machine`'s own classes handed on by `instruments.py`, and taking
+> them from the umbrella cost a library install for no benefit. Only `Led`,
+> `Servo` and `Buzzer` — the classes that exist nowhere else — still import from
+> `snakie`. A program built from the raw-pin, PWM, ADC and I²C blocks now runs on
+> a stock MicroPython board with nothing installed. The silent-stub bug the rest
+> of this section is about was fixed separately, in #1038.
+
 #1033 assumed the hardware palette is `machine.Pin` / `machine.PWM` /
 `machine.ADC`. It is not. Only **three** of 98 blocks import `machine` directly
 (`snakie_adc_read`, `snakie_inst_read_adc`, `snakie_inst_i2c_scan`, for `ADC`

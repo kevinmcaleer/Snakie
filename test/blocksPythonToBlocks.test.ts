@@ -644,7 +644,7 @@ describe('the terminal-type list matches the real blocks (#1068)', () => {
  */
 describe('a call on a hoisted object (#1058)', () => {
   it('reads an LED back as an LED block', () => {
-    const src = ['from snakie import Led, Pin', '', 'led_15 = Led(pin=Pin(15, Pin.OUT))', '', 'led_15.set(True)', ''].join('\n')
+    const src = ['from machine import Pin', '', 'from snakie import Led', '', 'led_15 = Led(pin=Pin(15, Pin.OUT))', '', 'led_15.set(True)', ''].join('\n')
     expect(types(src)).toContain('snakie_led_set')
     roundTrips(src)
   })
@@ -670,14 +670,14 @@ describe('a call on a hoisted object (#1058)', () => {
     // `pin_14.value()` says nothing about the resistor; getting it wrong would
     // rewrite the learner's wiring.
     for (const pull of ['Pin(14, Pin.IN, Pin.PULL_UP)', 'Pin(14, Pin.IN, Pin.PULL_DOWN)', 'Pin(14, Pin.IN)']) {
-      roundTrips(['from snakie import Pin', '', `pin_14 = ${pull}`, '', 'print(pin_14.value())', ''].join('\n'))
+      roundTrips(['from machine import Pin', '', `pin_14 = ${pull}`, '', 'print(pin_14.value())', ''].join('\n'))
     }
   })
 
   it('tells a pin WRITE from a pin READ, which are both `.value`', () => {
     // They share a receiver and a function name and differ only in shape, so
     // the rule table has to key on more than `module.fn`.
-    const src = ['from snakie import Pin', '', 'pin_15 = Pin(15, Pin.OUT)', '', 'pin_15.value(1)', 'pin_15.toggle()', ''].join('\n')
+    const src = ['from machine import Pin', '', 'pin_15 = Pin(15, Pin.OUT)', '', 'pin_15.value(1)', 'pin_15.toggle()', ''].join('\n')
     expect(types(src)).toContain('snakie_pin_write')
     expect(types(src)).toContain('snakie_led_toggle')
     roundTrips(src)
@@ -686,7 +686,9 @@ describe('a call on a hoisted object (#1058)', () => {
   it('lets one object back several blocks', () => {
     // `buzzer_16` is the receiver of both `tone` and `stop`.
     const src = [
-      'from snakie import Buzzer, PWM, Pin, Servo',
+      'from machine import PWM, Pin',
+      '',
+      'from snakie import Buzzer, Servo',
       '',
       'servo_0 = Servo(PWM(Pin(0)), pin=0)',
       'buzzer_16 = Buzzer(PWM(Pin(16)))',
@@ -707,7 +709,9 @@ describe('a call on a hoisted object (#1058)', () => {
       [
         'from time import sleep',
         '',
-        'from snakie import Led, Pin',
+        'from machine import Pin',
+        '',
+        'from snakie import Led',
         '',
         'led_15 = Led(pin=Pin(15, Pin.OUT))',
         '',

@@ -29,9 +29,22 @@ import type * as Blockly from 'blockly/core'
  *     a PWM claim on GP0, and everything downstream works with no changes. That
  *     second `pin=0` is not redundant: it is what `instruments.py` reports as
  *     SERVO telemetry so the Robot View can drive the mapped joint.
- *  3. **It has to be the code we would teach.** Which is why these target the
- *     friendly `snakie` umbrella rather than raw `machine` — it is the import a
- *     Snakie lesson uses, and it can't be shadowed by a vendor `servo` module.
+ *  3. **It has to be the code we would teach.** Which for `Led`, `Servo` and
+ *     `Buzzer` means the friendly `snakie` umbrella — those classes only exist
+ *     there, and the import can't be shadowed by a vendor `servo` module.
+ *
+ * RAW IO COMES FROM `machine`, NOT `snakie`. `Pin`, `PWM`, `ADC` and `I2C` are
+ * the board's own types; `snakie.py` only ever re-exported the first two
+ * (`micropython/instruments.py` does `from machine import Pin, PWM` and hands
+ * them straight on), so `from snakie import Pin` was the same class behind a
+ * name that costs a library. Taking them from `machine` means a program built
+ * only from the raw-pin, PWM, ADC and I²C blocks runs on a stock MicroPython
+ * board with nothing installed — no `/lib/snakie.py`, no `/lib/instruments.py`
+ * — and it is the import every MicroPython tutorial and datasheet writes, so a
+ * learner who graduates to text has already read it a hundred times. Only the
+ * blocks that really need `Led`/`Servo`/`Buzzer` still pull the library in, and
+ * they now say so honestly: `from machine import Pin, PWM` + `from snakie
+ * import Servo` names exactly what each half is for.
  *
  * ONE OBJECT PER PIN, hoisted into the setup section by the generator's `setup`
  * key. Two "turn the LED on" blocks on GP15 share one `Led`; a third on GP16
@@ -104,7 +117,7 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
     },
     imports: [
       { module: 'snakie', name: 'Led' },
-      { module: 'snakie', name: 'Pin' }
+      { module: 'machine', name: 'Pin' }
     ],
     code: (block, gen) => {
       const name = led(gen, pinOf(block), block)
@@ -138,7 +151,7 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
       nextStatement: null,
       tooltip: 'Flip an LED: on becomes off, off becomes on. The heart of a blink.'
     },
-    imports: [{ module: 'snakie', name: 'Pin' }],
+    imports: [{ module: 'machine', name: 'Pin' }],
     code: (block, gen) => {
       // `Led` has no toggle, and reading `Led`'s private pin back would be worse
       // than using the Pin the learner can already see in the setup line.
@@ -182,7 +195,7 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
       nextStatement: null,
       tooltip: 'Drive a pin high or low directly — for anything that is not an LED.'
     },
-    imports: [{ module: 'snakie', name: 'Pin' }],
+    imports: [{ module: 'machine', name: 'Pin' }],
     code: (block, gen) =>
       `${digitalPin(gen, pinOf(block), block)}.value(${block.getFieldValue('VALUE')})\n`
   },
@@ -223,7 +236,7 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
       tooltip:
         'The little LED on the board itself — no wiring needed. The first program most people write.'
     },
-    imports: [{ module: 'snakie', name: 'Pin' }],
+    imports: [{ module: 'machine', name: 'Pin' }],
     code: (block, gen) => {
       // The token is the BOARD's, not a guess: a Pico W's onboard LED hangs off
       // the wireless chip and is `Pin("LED")` with no GPIO number at all, while a
@@ -274,7 +287,7 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
       output: 'Number',
       tooltip: 'The value on a pin right now: 1 when it is high, 0 when it is low.'
     },
-    imports: [{ module: 'snakie', name: 'Pin' }],
+    imports: [{ module: 'machine', name: 'Pin' }],
     code: (block, gen) => [
       `${inputPin(gen, pinOf(block), block.getFieldValue('PULL'), block)}.value()`,
       Order.FUNCTION_CALL
@@ -305,7 +318,7 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
       tooltip:
         'True while a button on this pin is held down. Pull-up is the usual wiring: the button connects the pin to ground.'
     },
-    imports: [{ module: 'snakie', name: 'Pin' }],
+    imports: [{ module: 'machine', name: 'Pin' }],
     code: (block, gen) => {
       const pull = block.getFieldValue('PULL')
       const name = inputPin(gen, pinOf(block), pull, block)
@@ -348,8 +361,8 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
     },
     toolbox: { inputs: { PERCENT: { shadow: { type: 'math_number', fields: { NUM: 50 } } } } },
     imports: [
-      { module: 'snakie', name: 'PWM' },
-      { module: 'snakie', name: 'Pin' }
+      { module: 'machine', name: 'PWM' },
+      { module: 'machine', name: 'Pin' }
     ],
     code: (block, gen) => {
       const name = pwm(gen, pinOf(block), block)
@@ -387,8 +400,8 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
     },
     toolbox: { inputs: { HZ: { shadow: { type: 'math_number', fields: { NUM: 1000 } } } } },
     imports: [
-      { module: 'snakie', name: 'PWM' },
-      { module: 'snakie', name: 'Pin' }
+      { module: 'machine', name: 'PWM' },
+      { module: 'machine', name: 'Pin' }
     ],
     code: (block, gen) =>
       `${pwm(gen, pinOf(block), block)}.freq(${gen.valueToCode(block, 'HZ', Order.NONE) || '1000'})\n`
@@ -428,13 +441,13 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
       tooltip:
         'Measure the voltage on an analogue pin — a dial, a light sensor, a battery. Only some pins can do this.'
     },
-    // NOT from `snakie`: the umbrella re-exports Led, Servo, Buzzer, Pin and PWM
-    // and nothing else, so `from snakie import ADC` would be an ImportError on
-    // the board. `machine` is where ADC lives and where every MicroPython
-    // tutorial gets it.
+    // `ADC` was never on the `snakie` umbrella (it re-exports Led, Servo,
+    // Buzzer, Pin and PWM and nothing else), so this block always came from
+    // `machine` — and now its `Pin` does too, which is how the whole analogue
+    // read runs with no library installed.
     imports: [
       { module: 'machine', name: 'ADC' },
-      { module: 'snakie', name: 'Pin' }
+      { module: 'machine', name: 'Pin' }
     ],
     code: (block, gen) => {
       const name = adc(gen, pinOf(block), block)
@@ -472,8 +485,8 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
     },
     toolbox: { inputs: { ANGLE: { shadow: { type: 'math_number', fields: { NUM: 90 } } } } },
     imports: [
-      { module: 'snakie', name: 'PWM' },
-      { module: 'snakie', name: 'Pin' },
+      { module: 'machine', name: 'PWM' },
+      { module: 'machine', name: 'Pin' },
       { module: 'snakie', name: 'Servo' }
     ],
     code: (block, gen) => {
@@ -523,8 +536,8 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
     },
     imports: [
       { module: 'snakie', name: 'Buzzer' },
-      { module: 'snakie', name: 'PWM' },
-      { module: 'snakie', name: 'Pin' }
+      { module: 'machine', name: 'PWM' },
+      { module: 'machine', name: 'Pin' }
     ],
     code: (block, gen) => {
       const freq = gen.valueToCode(block, 'FREQ', Order.NONE) || '440'
@@ -552,8 +565,8 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
     },
     imports: [
       { module: 'snakie', name: 'Buzzer' },
-      { module: 'snakie', name: 'PWM' },
-      { module: 'snakie', name: 'Pin' }
+      { module: 'machine', name: 'PWM' },
+      { module: 'machine', name: 'Pin' }
     ],
     code: (block, gen) => `${buzzer(gen, pinOf(block), block)}.stop()\n`
   },
@@ -580,7 +593,7 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
     },
     imports: [
       { module: 'machine', name: 'I2C' },
-      { module: 'snakie', name: 'Pin' }
+      { module: 'machine', name: 'Pin' }
     ],
     code: (block, gen) => [`${i2c(gen, block)}.scan()`, Order.FUNCTION_CALL]
   },
@@ -602,7 +615,7 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
     },
     imports: [
       { module: 'machine', name: 'I2C' },
-      { module: 'snakie', name: 'Pin' }
+      { module: 'machine', name: 'Pin' }
     ],
     // `in`, not `== scan()[0]`: a bus with two devices on it must still find
     // the one being asked about, whichever order it came back in.
