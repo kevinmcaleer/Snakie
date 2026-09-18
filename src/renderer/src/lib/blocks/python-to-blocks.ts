@@ -869,6 +869,13 @@ function mentions(text: string, name: string): boolean {
   return new RegExp(`(^|[^A-Za-z0-9_])${escapeRe(name)}([^A-Za-z0-9_]|$)`).test(text)
 }
 
+/** Drop up to `width` leading spaces — the body indent, and never more. */
+function dedent(text: string, width: number): string {
+  let i = 0
+  while (i < width && (text[i] === ' ' || text[i] === '\t')) i += 1
+  return text.slice(i)
+}
+
 function escapeRe(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
@@ -1660,6 +1667,10 @@ class Converter {
     const call = this.callStatement(text)
     if (call) return recognised([call])
 
+    // --- a description standing on its own (W4, #1091) --------------------
+    const described = this.docstring(node.line)
+    if (described) return recognised([described])
+
     // --- anything else ----------------------------------------------------
     //
     // A SUITE WE CANNOT READ STILL HAS A BODY (#1063). This used to return the
@@ -1820,6 +1831,43 @@ class Converter {
     const id = `v_${this.variables.size}_${name.replace(/[^A-Za-z0-9_]/g, '')}`
     this.variables.set(name, id)
     return id
+  }
+
+  /**
+   * A LONE STRING LITERAL STANDING AS A STATEMENT (W4, #1091, epic #1086).
+   *
+   * 2,174 raw lines across 48 of 73 projects: every docstring in a
+   * well-documented program, which is most of why a class-heavy file opened as a
+   * wall of grey.
+   *
+   * Cheaper than it looks, because the lexer already folds a triple-quoted
+   * literal into ONE logical line and keeps the line count honest — so a
+   * thirty-line module header arrives here as a single unrecognised statement
+   * rather than thirty of them. What was missing is only this recogniser and a
+   * block that renders several lines without collapsing them.
+   *
+   * ASKED OF THE TOKENIZER rather than of a regex: a literal followed by
+   * anything else starts and ends with the right quotes and is not a docstring,
+   * and one containing a `#` holds something a regex would take for a comment.
+   * Exactly one string token on the line, and nothing else.
+   *
+   * A `def`'s LEADING docstring never reaches here — `definition()` has already
+   * taken it as the block's comment bubble, because the bubble and the docstring
+   * say the same thing about the same function (`docstring.ts`). This is for the
+   * ones with no bubble to live in: a module's, a class's, and every shape
+   * `docstring.ts` declines because it could not write it back exactly.
+   *
+   * THE CONTINUATION LINES GIVE BACK THE BODY INDENT. `logicalLines` strips the
+   * indent from the FIRST physical line only; everything after it is the literal
+   * verbatim. The generator re-indents whatever this block emits by the depth it
+   * sits at, so handing the lines back as they were would indent them twice.
+   */
+  private docstring(line: LogicalLine): BlockJson | null {
+    const tokens = tokenize(line.text)
+    if (!tokens || tokens.length !== 1 || tokens[0].kind !== 'string') return null
+    const physical = line.text.split('\n')
+    const lines = [physical[0], ...physical.slice(1).map((l) => dedent(l, line.indent))]
+    return { type: 'snakie_python_docstring', extraState: { lines } }
   }
 
   /**
@@ -2788,6 +2836,12 @@ function isTextBlock(block: BlockJson): boolean {
  * would come back changed.
  */
 function readStringLiteral(literal: string): string | null {
+  // A TRIPLE-QUOTED LITERAL IS NOT A `text` BLOCK (#1091). The pattern below is
+  // happy to read `"""hello"""` as the text `""hello""`, and the generator then
+  // quotes that again: `banner = """hello"""` came back `banner = '""hello""'`.
+  // A silent rewrite, and one the round-trip gate forgives, because a string is
+  // a placeholder in a line signature. Raw regenerates it verbatim.
+  if (/^("""|''')/.test(literal)) return null
   const m = /^(['"])(.*)\1$/s.exec(literal)
   if (!m) return null
   if (m[2].includes('\\')) return null

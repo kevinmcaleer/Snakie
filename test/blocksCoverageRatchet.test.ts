@@ -48,8 +48,8 @@ import { installCorePalette } from '../src/renderer/src/lib/blocks/palette'
  * headroom between a floor and the measurement is never a mystery.
  */
 
-/** Recognised lines / logical lines. 53.31% at W0, 72.61% at W1, 76.73% at W3. */
-const STATEMENT_FLOOR = 76
+/** Recognised lines / logical lines. 53.31% at W0, 72.61% at W1, 77.47% at W4. */
+const STATEMENT_FLOOR = 77
 
 /**
  * Value sockets holding a real block. 53.88% at W0, 72.41% at W10, 71.58% at W3.

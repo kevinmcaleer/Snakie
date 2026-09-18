@@ -87,7 +87,17 @@ export function categoryContents(
 ): Record<string, unknown>[] {
   // Out of dialect means out of the FLYOUT (#1039). The block stays registered —
   // an existing program that uses it still opens and still generates.
-  const blocks = blocksInCategory(category.id).filter((b) => inScope(b.scope, dialect))
+  //
+  // READING IS NOT TOOLBOX SURFACE (`docs/blocks-coverage-epic.md` §4.5). Epic
+  // #1086 teaches the reader to emit blocks for MicroPython nobody would put in
+  // a ten-year-old's first drawer — a module docstring, a `class`, a `try`.
+  // Whether each of those should ALSO be draggable is a curriculum decision, and
+  // the default is no: the toolbox is curated, the reader is comprehensive, and
+  // conflating the two would undo #1007's framing. `hidden` is how a definition
+  // says which it is.
+  const blocks = blocksInCategory(category.id).filter(
+    (b) => !b.hidden && inScope(b.scope, dialect)
+  )
   const loose = blocks.filter((b) => !b.group)
   const groups = new Map<string, { name: string; blocks: BlockDefinition[] }>()
   for (const def of blocks) {

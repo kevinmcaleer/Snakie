@@ -98,6 +98,7 @@ const READ_DIRECTLY: Record<string, string> = {
   snakie_python_suite: 'class Thing:\n    def go(self):\n        print(1)\n',
   snakie_python_value: 'x = [v for v in things]\n',
   snakie_python_comment: '# a note\n',
+  snakie_python_docstring: '"""What this program does."""\n',
   snakie_python_blank: 'x = 1\n\ny = 2\n',
   snakie_python_import: 'import time\n',
   snakie_python_import_as: 'import ujson as json\n',

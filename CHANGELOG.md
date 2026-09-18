@@ -8,6 +8,39 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Docstrings and multi-line strings read as a block** (#1091, epic #1086).
+  2,174 raw lines across 48 of 73 projects: every docstring in a well-documented
+  program was a grey block, which is most of why a class-heavy file opened as a
+  wall.
+
+  Cheaper than it looked. The lexer has always folded a triple-quoted literal
+  into **one** logical line and kept its line count honest, so a thirty-line
+  module header arrived as a single unrecognised statement rather than thirty of
+  them. What was missing was a recogniser for a bare string expression and a
+  block that renders several lines without collapsing them — closer to the
+  comment block (which already holds a run of lines verbatim) than to `text`,
+  whose field is one line and whose emitter re-quotes its contents.
+
+  Byte-for-byte, which for prose is the only bar worth having: internal blank
+  lines, an indented example inside the description, and the quote style somebody
+  chose all come back as they went in. A `def`'s leading docstring is unchanged —
+  it is still the block's own comment bubble, because the bubble and the
+  docstring say the same thing about the same function.
+
+  The block is registered but **not** in the flyout. `BlockDefinition.hidden` is
+  new, and says what §4.5 of the delivery plan argues: the toolbox is curated and
+  the reader is comprehensive, and they are not the same list. It stays
+  registered whichever way that goes, because `workspace-check.ts` refuses to
+  open a file containing a block type this build does not know.
+
+  Also fixed: `banner = """hello"""` regenerated as `banner = \'""hello""\'`. The
+  expression reader was happy to read a triple-quoted literal as the text
+  `""hello""` and the generator quoted that again — a silent rewrite, and one the
+  round-trip gate forgives, because a string is a placeholder in a line
+  signature.
+
+  Statement coverage over the fixture corpus: **76.73% → 77.47%**.
+
 - **A real block for an early or bare `return`** (#1090, epic #1086). 2,359 raw
   lines across 57 of 73 projects — grey *on purpose*, which is the part worth
   remembering:

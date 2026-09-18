@@ -171,6 +171,20 @@ export interface BlockDefinition {
     checks?: Readonly<Record<string, SocketType>>
   }
   /**
+   * REGISTERED BUT NOT LISTED IN THE FLYOUT (epic #1086 §4.5).
+   *
+   * A block the reader can emit but the toolbox does not offer. `class`, `try`,
+   * a module docstring and `async def` belong in the reader's vocabulary and not
+   * in a first drawer — the toolbox is curated and the reader is comprehensive,
+   * and they are not the same list.
+   *
+   * It must stay REGISTERED whichever way this goes: the generator looks an
+   * emitter up by type, and `workspace-check.ts` refuses to open a file
+   * containing a type this build does not know. The same reasoning as the two
+   * procedure caller blocks, which are registered and never listed.
+   */
+  hidden?: boolean
+  /**
    * The part this block belongs to (#1017) — so USING one can offer to install
    * that part's driver, the same consent-first banner the Board View shows when
    * the part is placed.

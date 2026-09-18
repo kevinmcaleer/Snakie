@@ -55,6 +55,8 @@ export const PYTHON_BLANK = 'snakie_python_blank'
 /** A suite we cannot read — the header verbatim, its body nested (#1063). */
 export const PYTHON_SUITE = 'snakie_python_suite'
 export const PYTHON_CALL_VALUE = 'snakie_python_call_value'
+/** A triple-quoted string standing on its own as a statement (W4, #1091). */
+export const PYTHON_DOCSTRING = 'snakie_python_docstring'
 
 /** The raw text a block's Python field holds, trimmed of nothing but the edges. */
 export const rawPython = (block: Blockly.Block, field = 'CODE'): string =>
@@ -216,10 +218,19 @@ export function installPythonBlocks(): void {
   Blockly.Blocks[PYTHON_CALL] = callBlockMixin(false) as never
   Blockly.Blocks[PYTHON_CALL_VALUE] = callBlockMixin(true) as never
   Blockly.Blocks[PYTHON_COMMENT] = commentBlockMixin() as never
+  Blockly.Blocks[PYTHON_DOCSTRING] = linesBlockMixin({
+    style: 'comment_blocks',
+    tooltip:
+      'A description, written into your program as a triple-quoted string. Python reads it as the documentation for the thing it sits at the top of, and ignores it when the program runs.',
+    defaults: [DEFAULT_DOCSTRING]
+  }) as never
 }
 
 /** What a fresh comment block says. */
 const DEFAULT_COMMENT = '# a note'
+
+/** What a fresh docstring block says. */
+const DEFAULT_DOCSTRING = '"""What this does."""'
 
 /**
  * THE COMMENT BLOCK (#1062).
@@ -244,22 +255,43 @@ const DEFAULT_COMMENT = '# a note'
  * the block's state — the same reason the call blocks above are.
  */
 function commentBlockMixin(): Record<string, unknown> {
+  return linesBlockMixin({
+    // Its OWN grey (#1062), not the Python category's — see `comment_blocks` in
+    // `theme.ts`. A note about the program should not carry the same visual
+    // weight as the program.
+    style: 'comment_blocks',
+    tooltip:
+      'A note to whoever reads this program next — you, most likely. Written into the file as comments, and ignored when it runs.',
+    defaults: [DEFAULT_COMMENT]
+  })
+}
+
+/**
+ * THE SHAPE A RUN OF LINES TAKES (#1062, generalised for W4 / #1091).
+ *
+ * One block, one row per line, the lines held VERBATIM in `extraState`. Shared
+ * by the comment block and the docstring block because they are the same problem
+ * twice: a paragraph is not a stack of statements, and #1019's acceptance
+ * property is that converting a program and generating it again gives back the
+ * same program — for prose, whose exact spacing IS its content, the only way to
+ * be sure of that is to keep the characters rather than to parse them.
+ */
+function linesBlockMixin(spec: {
+  style: string
+  tooltip: string
+  defaults: readonly string[]
+}): Record<string, unknown> {
   return {
     lineCount_: 0,
 
     init(this: Blockly.Block): void {
-      // Its OWN grey (#1062), not the Python category's — see `comment_blocks`
-      // in `theme.ts`. A note about the program should not carry the same
-      // visual weight as the program.
-      this.setStyle('comment_blocks')
+      this.setStyle(spec.style)
       this.setPreviousStatement(true, null)
       this.setNextStatement(true, null)
-      this.setTooltip(
-        'A note to whoever reads this program next — you, most likely. Written into the file as comments, and ignored when it runs.'
+      this.setTooltip(spec.tooltip)
+      ;(this as unknown as { updateLines_: (l: readonly string[]) => void }).updateLines_(
+        spec.defaults
       )
-      ;(this as unknown as { updateLines_: (l: readonly string[]) => void }).updateLines_([
-        DEFAULT_COMMENT
-      ])
     },
 
     saveExtraState(this: Blockly.Block): { lines: string[] } {
@@ -269,7 +301,7 @@ function commentBlockMixin(): Record<string, unknown> {
     loadExtraState(this: Blockly.Block, state: { lines?: unknown }): void {
       const raw = Array.isArray(state?.lines) ? state.lines.map((l) => String(l)) : []
       ;(this as unknown as { updateLines_: (l: readonly string[]) => void }).updateLines_(
-        raw.length > 0 ? raw : [DEFAULT_COMMENT]
+        raw.length > 0 ? raw : spec.defaults
       )
     },
 
@@ -422,6 +454,38 @@ export const PYTHON_BLOCKS: BlockDefinition[] = [
       // Verbatim, so the exact spacing a comment carries as its content — an
       // aligned table, an indented example — comes back the way it went in.
       const lines = commentLines(block).filter((l) => l !== '')
+      return lines.length === 0 ? '' : `${lines.join('\n')}\n`
+    }
+  },
+  // ------------------------------------------------------------------ docstring
+  //
+  // A DESCRIPTION, AS A BLOCK (W4, #1091, epic #1086).
+  //
+  // 2,174 raw lines across 48 of 73 projects — every docstring in a
+  // well-documented program was a grey block, which is most of why a class-heavy
+  // file opened as a wall.
+  //
+  // A `def`'s LEADING docstring is not this block: it is the block's own comment
+  // bubble, because Blockly's bubble and a Python docstring say the same thing
+  // about the same function (see `docstring.ts`). This is for the ones with no
+  // bubble to live in — a module's, a class's, and any shape `docstring.ts`
+  // declines because it could not write it back exactly.
+  //
+  // CLOSER TO THE COMMENT BLOCK THAN TO `text`, and deliberately so: `text`
+  // holds one line in a field and its emitter re-quotes the contents, which
+  // would turn `'''x'''` into `"x"` and a four-line description into one. Prose
+  // is kept as characters.
+  //
+  // NOT IN THE FLYOUT (§4.5). A learner writing a description uses the `?`
+  // bubble on their function; this is the reader's vocabulary.
+  {
+    type: PYTHON_DOCSTRING,
+    category: 'python',
+    help: 'blocks-python',
+    hidden: true,
+    toolbox: { extraState: { lines: [DEFAULT_DOCSTRING] } },
+    code: (block) => {
+      const lines = commentLines(block)
       return lines.length === 0 ? '' : `${lines.join('\n')}\n`
     }
   },
