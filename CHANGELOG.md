@@ -618,6 +618,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A bracket the language did not need no longer holds back a whole file.**
+
+  ```python
+  distance_to_object = (elapsed_microseconds * 0.343) / 2
+  ```
+
+  One line of an ultrasonic sensor program, and not one block in the file it was
+  in would open. `maths.ts` writes the minimal correct parenthesisation — `a * b
+  / c`, never `(a * b) / c`, because that is what a learner who assembled those
+  blocks meant — so the line came back one bracket lighter, the round-trip gate
+  read it as a different program and refused the conversion, and the canvas kept
+  showing the blocks from before the last edit with a banner saying so.
+
+  The gate has never been a text comparison: it already forgives the import
+  section, whitespace, hoisting, quote style and protected-name renames, as "the
+  generator rendering the program in its own house style". A redundant bracket
+  belongs on that list — it is not a line dropped, re-nested or mangled, which is
+  what the gate exists to catch — so the line signature now drops the brackets
+  Python's own precedence already implies.
+
+  The rule is the one `maths.ts` generates by, read backwards: a bracket can go
+  when what is inside binds tighter than the operators on either side of it, or
+  binds equally and sits on the side that associates. `a - (b - c)`, `(a + b) /
+  2`, `(a ** b) ** c`, `(a + b).real`, `(a + b)[0]` and `-(a + b)` all keep
+  theirs, because none of them is the same program without. It reads the operator
+  immediately before the bracket and the one immediately after and nothing else:
+  anything it cannot account for keeps its brackets, so the worst case is a
+  conversion the gate already refused.
+
 - **A pin dropdown no longer says `GPled`.** A hardware block whose pin field
   holds a learner's own NAME for a pin (#1097) rendered its dropdown as `GP` +
   the name — a label naming no pin on any board, sitting on the block a child had
