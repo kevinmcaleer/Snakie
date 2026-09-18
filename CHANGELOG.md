@@ -585,6 +585,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **White lettering on the blank-line block.** It is 2.9:1 on the comment grey,
+  where the ink that fill can readably carry is black at 7.2:1 — the second
+  place in the palette where the look was chosen over the contrast, after the
+  hardware amber.
+
+  Set as `--snakie-block-text` on the label rather than as a `fill`, because the
+  rule that paints block text reads that property and its `:not()`s carry its
+  specificity past anything reasonable to write beside it — so this overrides the
+  VALUE it reads instead of racing it. Not a category `ink` either: that is keyed
+  by fill, and this block shares its fill with the comment block, which keeps its
+  readable black.
+
 - **White lettering on the hardware blocks**, asked for over the black the amber
   can actually carry. It is the one block in the palette whose text does not
   clear WCAG AA — white on `#d99541` is 2.5:1 — and it is written down as such

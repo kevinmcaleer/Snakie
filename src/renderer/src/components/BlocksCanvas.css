@@ -63,6 +63,18 @@
 .blocks-canvas__host .blocklySvg .blocklyText.snakie-field-note,
 .blocks-canvas__host .blocklyFlyout .blocklyText.snakie-field-note {
   font-style: italic;
+  /* WHITE, ASKED FOR, AND BELOW AA — 2.9:1 on the comment grey, where the ink
+     the fill can carry is black at 7.2:1.
+     
+     SET AS THE PROPERTY, NOT AS `fill`. The rule above paints from
+     `--snakie-block-text`, and its `:not()`s carry it past anything reasonable
+     to write here — so this overrides the VALUE it reads rather than trying to
+     out-specify it. A custom property resolves against the element's own
+     computed value, so setting it on the text element is enough.
+
+     Not a category `ink` (theme.ts) either: that is keyed by FILL, and this
+     block shares its fill with the comment block, which keeps its black. */
+  --snakie-block-text: #fff;
 }
 
 .blocks-canvas__host .blocklyFlyoutLabelText,
