@@ -76,6 +76,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Calling your own function is a function block again, not raw Python.** A
+  `def` in the code pane became a proper Functions block, and every call to it
+  came back as a grey raw-Python block — so the drawer handed you a definition
+  you could not call, in a program that plainly did call it.
+
+  `forwards()` under a `def forwards():` is now a caller block, with its
+  arguments carried across, and `double(3)` inside something else is the value
+  caller. It stays raw exactly where no caller block would be right — a call with
+  the wrong number of arguments, a statement call to a function that returns, a
+  name this program does not define, or a call to a `def` whose parameters
+  Blockly cannot hold and which is therefore not a function block either. Each of
+  those would otherwise load with a socket left empty, or name a definition block
+  that does not exist, and regenerate as a program you did not write.
+
+- **A blank line between two comment paragraphs stopped disappearing.** A run of
+  consecutive comments folds into one block, and a blank line did not break that
+  run — which was harmless while blank lines were dropped on the way in, and ate
+  the gap once they were not. Two paragraphs are two runs now, with the blank
+  line still between them. (Introduced by the blank-line fix below, in the same
+  unreleased batch.)
+
 - **You can put blank lines in the Python again.** The code pane is editable, its
   text is turned back into blocks when you pause, and the file is regenerated
   from those blocks — and `logicalLines` dropped every blank line on the way

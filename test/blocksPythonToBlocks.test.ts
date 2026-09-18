@@ -88,6 +88,44 @@ describe('the round trip — what comes out is what went in', () => {
     )
   })
 
+  it('reads a call to the program\u2019s own function as a CALLER block', () => {
+    // THE BUG THIS FIXES. The `def` became a proper function block and the call
+    // under it came back as a raw Python block — so the Functions drawer gave a
+    // learner a definition they could not call, in a program that plainly did.
+    const src = 'def hello():\n    print(1)\n\nhello()\n'
+    expect(types(src)).toContain('procedures_callnoreturn')
+    expect(types(src)).not.toContain('snakie_python_statement')
+    roundTrips(src)
+  })
+
+  it('and carries the arguments across', () => {
+    const src = 'def wiggle(a, b):\n    print(a)\n\nwiggle(1, max(2, 3))\n'
+    expect(types(src)).toContain('procedures_callnoreturn')
+    roundTrips(src)
+  })
+
+  it('a call that RETURNS is the value caller', () => {
+    const src = 'def double(n):\n    return n * 2\n\nprint(double(3))\n'
+    expect(types(src)).toContain('procedures_callreturn')
+    roundTrips(src)
+  })
+
+  describe('and stays raw where no caller block would be right', () => {
+    // Each of these would load with a socket empty or no matching definition
+    // block at all, and regenerate as a program the learner did not write.
+    const staysRaw = (src: string): void => {
+      expect(types(src)).toContain('snakie_python_statement')
+      roundTrips(src)
+    }
+    it('the wrong number of arguments', () =>
+      staysRaw('def wiggle(a, b):\n    print(a)\n\nwiggle(1)\n'))
+    it('a statement call to a function that returns', () =>
+      staysRaw('def double(n):\n    return n * 2\n\ndouble(3)\n'))
+    it('a name this program does not define', () => staysRaw('frobnicate()\n'))
+    it('a def whose parameters Blockly cannot hold', () =>
+      staysRaw('def load(path, flip=None):\n    print(path)\n\nload(1, 2)\n'))
+  })
+
   it('holds for a microsecond wait, which reads back as its own block', () => {
     // `time.sleep_us(10)` is the HC-SR04 trigger pulse and a dozen other
     // datasheet waits. Without a rule for it, it came back as a raw Python

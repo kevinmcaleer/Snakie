@@ -63,6 +63,13 @@ describe('a gap the learner typed comes back', () => {
   it('two of them', () => roundTrips('print(1)\n\n\nprint(2)\n'))
   it('inside a loop body', () => roundTrips('while True:\n    print(1)\n\n    print(2)\n'))
   it('in front of a comment', () => roundTrips('print(1)\n\n# why\nprint(2)\n'))
+  it('BETWEEN two comments, which are two paragraphs and not one', () =>
+    // A run of comment siblings folds into ONE block (#1062), and a blank line
+    // used not to break that run — which was harmless while blank lines were
+    // dropped and silently ate this one once they were not.
+    roundTrips('# one\n\n# two\nprint(1)\n'))
+  it('and a run of comments with no gap is still one block', () =>
+    roundTrips('# one\n# two\nprint(1)\n'))
   it('at the very top, where no section stands above it', () =>
     roundTrips('\nprint(1)\n'))
   it('and between two groups of real work', () =>

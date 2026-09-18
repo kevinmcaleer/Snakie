@@ -442,9 +442,14 @@ function isCommentLine(line: LogicalLine): boolean {
  * the program, and a paragraph is not thirty steps.
  *
  * CONSECUTIVE, and siblings only: a node's body is already one indent level, so
- * a comment inside a function never joins the one above the `def`. A blank line
- * does not break a run, because `logicalLines` has already dropped blank lines —
- * and a paragraph split by a blank line is still one paragraph.
+ * a comment inside a function never joins the one above the `def`.
+ *
+ * A BLANK LINE BREAKS THE RUN. It did not use to, on the reasoning that
+ * `logicalLines` dropped blank lines anyway and a paragraph split by one is
+ * still a paragraph. Blank lines are carried now, and a run folded across one
+ * has nowhere to put it: two comment paragraphs came back as one block and the
+ * gap between them was gone the next time the program was regenerated. Two
+ * paragraphs are two runs, with the learner's blank line still between them.
  */
 function groupComments(nodes: readonly Stmt[]): Stmt[] {
   const out: Stmt[] = []
@@ -458,6 +463,7 @@ function groupComments(nodes: readonly Stmt[]): Stmt[] {
   }
   for (const node of nodes) {
     if (isCommentLine(node.line) && node.body.length === 0) {
+      if ((node.line.blankBefore ?? 0) > 0) flush()
       run.push(node.line)
       continue
     }
@@ -466,6 +472,53 @@ function groupComments(nodes: readonly Stmt[]): Stmt[] {
   }
   flush()
   return out
+}
+
+/**
+ * A call's ARGUMENTS, split on the commas that are actually separators.
+ *
+ * `splitParams` splits on every comma, which is right for a parameter list of
+ * bare names and wrong for `wiggle(f(1, 2), 3)`. Returns null when the brackets
+ * or quotes do not balance, which is the caller's signal to leave the line raw
+ * rather than guess at it.
+ */
+function splitArgs(args: string): string[] | null {
+  const out: string[] = []
+  let depth = 0
+  let quote: string | null = null
+  let buffer = ''
+  for (let i = 0; i < args.length; i++) {
+    const ch = args[i]
+    if (quote) {
+      if (ch === '\\') {
+        buffer += ch + (args[i + 1] ?? '')
+        i += 1
+        continue
+      }
+      if (ch === quote) quote = null
+      buffer += ch
+      continue
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch
+      buffer += ch
+      continue
+    }
+    if (ch === '(' || ch === '[' || ch === '{') depth += 1
+    if (ch === ')' || ch === ']' || ch === '}') depth -= 1
+    if (depth < 0) return null
+    if (ch === ',' && depth === 0) {
+      out.push(buffer.trim())
+      buffer = ''
+      continue
+    }
+    buffer += ch
+  }
+  if (depth !== 0 || quote) return null
+  const last = buffer.trim()
+  if (last !== '') out.push(last)
+  // A trailing comma leaves an empty slot, which is not an argument.
+  return out.every((a) => a !== '') ? out : null
 }
 
 /** A parameter list, split and trimmed. Empty for `()`. */
@@ -617,7 +670,9 @@ function convert(
   consumable: ReadonlySet<string> | null
 ): Converter {
   const state = new Converter(hoisted, consumable)
-  state.stack = state.statements(tree(lines))
+  const nodes = tree(lines)
+  state.indexDefinitions(nodes)
+  state.stack = state.statements(nodes)
   return state
 }
 
@@ -764,6 +819,24 @@ class Converter {
    */
   private hoistedAbove = false
   /**
+   * The functions this program defines AS BLOCKS, by name.
+   *
+   * A call to one of them is `procedures_callnoreturn`, the block Blockly builds
+   * per definition — which is the whole point of the Functions drawer. Without
+   * this, `forwards()` under a perfectly good `def forwards():` came back as a
+   * raw Python block: correct, and not a block a learner could author another of.
+   *
+   * COLLECTED UP FRONT, from the tree, rather than as the defs are converted: a
+   * function may be called from inside another function defined above it, which
+   * is ordinary Python and would otherwise depend on which one was walked first.
+   *
+   * Only the ones that really become procedure blocks are in here. A `def` whose
+   * parameters Blockly cannot hold stays a raw suite, and a call to it has to
+   * stay raw too — a caller block for a definition block that does not exist is
+   * a workspace Blockly refuses to load.
+   */
+  private readonly definedHere = new Map<string, { params: string[]; returns: boolean }>()
+  /**
    * The text the expression parser is currently reading, so an argument can be
    * sliced out of it verbatim. Saved and restored around every nested parse,
    * because reading a call's arguments starts a parse inside a parse.
@@ -777,6 +850,65 @@ class Converter {
    * between them. Nodes are unique objects, so one set serves the whole tree.
    */
   private readonly consumed = new Set<Stmt>()
+
+  /**
+   * Record every top-level `def` this program will model as a procedure block.
+   *
+   * The same two tests `statement` applies when it converts one, asked here so
+   * a call can be recognised before its definition has been walked. Anything
+   * that will stay a raw suite is deliberately left out — see `definedHere`.
+   */
+  indexDefinitions(nodes: readonly Stmt[]): void {
+    for (const node of nodes) {
+      const def = /^def\s+([A-Za-z_]\w*)\(([^)]*)\):$/.exec(node.line.text)
+      if (!def || !modellableParams(def[2])) continue
+      const last = node.body[node.body.length - 1]
+      this.definedHere.set(def[1], {
+        params: splitParams(def[2]),
+        // The same rule `definition` uses: a TRAILING `return <expr>` becomes
+        // the block's RETURN socket, and that is what makes it a `defreturn`.
+        returns: Boolean(last && /^return\s+(.+)$/.test(last.line.text))
+      })
+    }
+  }
+
+  /**
+   * `wiggle(1, 2)` → the caller block for a function this program defines.
+   *
+   * `shape` is where the call stands: a statement on its own line, or a value
+   * inside something else. They are different blocks — `procedures_callreturn`
+   * has an output and cannot sit in a statement chain — and the definition
+   * decides which one exists, so a mismatch has no block at all and stays raw:
+   *
+   *   - a statement call to a function that RETURNS (`double(3)` with the answer
+   *     thrown away) — legal Python, and `procedures_callnoreturn` is not the
+   *     block for it;
+   *   - a value call to one that does not.
+   *
+   * ARITY IS CHECKED, because the caller's sockets come from the definition: a
+   * call with the wrong number of arguments would load with sockets left empty
+   * and regenerate as a call with arguments missing, which is the learner's
+   * program silently changed. Raw keeps it exactly as written.
+   */
+  private procedureCall(text: string, shape: 'statement' | 'value'): BlockJson | null {
+    const call = /^([A-Za-z_]\w*)\s*\((.*)\)$/.exec(text.trim())
+    if (!call) return null
+    const defined = this.definedHere.get(call[1])
+    if (!defined) return null
+    if (defined.returns !== (shape === 'value')) return null
+    const args = splitArgs(call[2])
+    if (!args || args.length !== defined.params.length) return null
+    const block: BlockJson = {
+      type: defined.returns ? 'procedures_callreturn' : 'procedures_callnoreturn',
+      extraState: { name: call[1], ...(defined.params.length > 0 ? { params: defined.params } : {}) }
+    }
+    if (args.length > 0) {
+      block.inputs = Object.fromEntries(
+        args.map((arg, i) => [`ARG${i}`, { block: this.expression(arg) }])
+      )
+    }
+    return block
+  }
 
   /**
    * Push one spacer block per blank line standing above `line`.
@@ -1146,6 +1278,14 @@ class Converter {
       ])
     }
 
+    // --- a call to a function THIS program defines ------------------------
+    //
+    // Before the rule table below, which is about calls into `time`, `machine`
+    // and the instrument libraries. A name the learner defined wins over a name
+    // a module happens to share.
+    const defined = this.procedureCall(text, 'statement')
+    if (defined) return recognised([defined])
+
     // --- a recognised call, standing on its own ---------------------------
     const call = this.callStatement(text)
     if (call) return recognised([call])
@@ -1387,6 +1527,12 @@ class Converter {
    */
   expression(text: string): BlockJson {
     const trimmed = text.trim()
+    // A CALL TO ONE OF THIS PROGRAM'S OWN FUNCTIONS, before the parser, which
+    // would otherwise read `double(3)` as a call it does not recognise and hand
+    // back a raw value block. Only a `def` that RETURNS has a value caller, so
+    // this declines everything else and the parser carries on as before.
+    const defined = this.procedureCall(trimmed, 'value')
+    if (defined) return defined
     const tokens = tokenize(trimmed)
     if (!tokens || tokens.length === 0) return this.rawValue(trimmed)
     const outer = this.source
