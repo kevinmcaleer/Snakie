@@ -26,16 +26,24 @@ import type { BlockDefinition } from '../registry'
  * either. It is the datasheet's own unit.
  *
  * AND READING THE CLOCK BELONGS HERE TOO, because the other half of timing a
- * pulse is measuring one. `ticks_us` is the counter; `ticks between` is how you
- * subtract two readings of it.
+ * pulse is measuring one. `ticks_ms` and `ticks_us` are the counters; `ticks
+ * between` is how you subtract two readings of either.
  *
- * THE TWO SHIP TOGETHER ON PURPOSE. MicroPython's tick counters WRAP — they
- * count up to an unspecified limit and start again — so `end - start` is right
- * almost always and catastrophically wrong on the wrap, which is a bug that
- * appears once an hour on a Pico and never in a lesson. `ticks_diff` exists to
- * do that subtraction correctly and is the only supported way to do it. A
- * `ticks_us` block on its own would be a block whose obvious use is a bug, so
- * the drawer offers the pair.
+ * BOTH COUNTERS, for the same reason there are three waits: they are two
+ * different MicroPython functions and a unit dropdown would hide the one thing
+ * we want a learner to notice. `ticks_ms` is the one nearly every program
+ * actually uses — "has half a second gone by yet" is the shape of every
+ * non-blocking loop, every debounce and every timeout — and `ticks_us` is for
+ * the pulse widths a datasheet quotes. Milliseconds first, as the waits are.
+ *
+ * THEY SHIP WITH `ticks between` ON PURPOSE. MicroPython's tick counters WRAP —
+ * they count up to an unspecified limit and start again — so `end - start` is
+ * right almost always and catastrophically wrong on the wrap, which is a bug
+ * that appears once an hour on a Pico and never in a lesson. `ticks_diff` exists
+ * to do that subtraction correctly and is the only supported way to do it. A
+ * counter block on its own would be a block whose obvious use is a bug, so the
+ * drawer offers them together — and one `ticks between` serves both counters,
+ * because `ticks_diff` does not care which of them produced its arguments.
  */
 export const WAIT_BLOCKS: BlockDefinition[] = [
   {
@@ -126,6 +134,32 @@ export const WAIT_BLOCKS: BlockDefinition[] = [
   },
 
   // ------------------------------------------------------------------- ticks
+  {
+    type: 'snakie_ticks_ms',
+    category: 'wait',
+    help: 'ref-timing',
+    json: {
+      message0: 'millisecond ticks',
+      output: 'Number',
+      tooltip:
+        'A counter that ticks up every millisecond. Read it before and after something to find out how long it took, or compare it against an earlier reading to do something every so often without stopping the program \u2014 with the \u201cticks from \u2026 to \u2026\u201d block, which handles the counter running out and starting again.'
+    },
+    imports: [{ module: 'time' }],
+    code: () => ['time.ticks_ms()', Order.FUNCTION_CALL],
+    /**
+     * CIRCUITPYTHON HAS NO `ticks_ms` (epic #209), as it has no `ticks_us`.
+     *
+     * Same substitution as the microsecond counter below and for the same
+     * reason — `time.monotonic()` is a float in seconds that loses resolution
+     * the longer the board stays up, which is the wrong property for timing
+     * anything — floor-divided to milliseconds so the block hands back the unit
+     * its label promises on either board.
+     */
+    circuitpython: {
+      imports: [{ module: 'time' }],
+      code: () => ['time.monotonic_ns() // 1000000', Order.MULTIPLICATIVE]
+    }
+  },
   {
     type: 'snakie_ticks_us',
     category: 'wait',

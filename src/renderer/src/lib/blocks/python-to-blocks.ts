@@ -323,6 +323,7 @@ const BUILT_IN_RULES: CallRule[] = [
   { module: 'time', fn: 'sleep', type: 'snakie_wait_seconds', args: ['SECS'] },
   { module: 'time', fn: 'sleep_ms', type: 'snakie_wait_ms', args: ['MS'] },
   { module: 'time', fn: 'sleep_us', type: 'snakie_wait_us', args: ['US'] },
+  { module: 'time', fn: 'ticks_ms', type: 'snakie_ticks_ms', shape: 'value' },
   { module: 'time', fn: 'ticks_us', type: 'snakie_ticks_us', shape: 'value' },
   // `ticks_diff(end, start)` — the LATER reading first, which is why the sockets
   // come back the other way round from the arguments.
