@@ -125,7 +125,8 @@ describe('wait (#1011)', () => {
       'snakie_wait_ms',
       'snakie_wait_us',
       // Reading the clock is the other half of timing a pulse, so it lives in
-      // the timing drawer too.
+      // the timing drawer too — milliseconds first, as the waits are.
+      'snakie_ticks_ms',
       'snakie_ticks_us',
       'snakie_ticks_diff'
     ])

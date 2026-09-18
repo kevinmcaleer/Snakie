@@ -8,6 +8,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`millisecond ticks`, beside the microsecond one it already had.** The Wait
+  drawer shipped `ticks_us` and `ticks between` (#1011) and stopped there, on the
+  argument that microseconds are the unit a datasheet quotes. That is true of the
+  WAITS and false of the COUNTERS: `ticks_ms` is what nearly every real program
+  reads, because "has half a second gone by yet" is the shape of every
+  non-blocking loop, every debounce and every timeout, and none of them want
+  microseconds. `start = time.ticks_ms()` opened as a grey blob.
+
+  Two blocks rather than one with a unit dropdown, for the reason the drawer has
+  three separate waits: `time.ticks_ms()` and `time.ticks_us()` are two different
+  MicroPython functions, and the whole point of the mirror is that the generated
+  code is the code a learner will later write. One `ticks between` still serves
+  both, because `ticks_diff` does not care which counter produced its arguments.
+
+  CircuitPython has neither, so both come off `time.monotonic_ns()` — floor
+  divided to the unit the label promises. `time.monotonic()` is a float in
+  seconds that loses resolution the longer the board stays up, which is the wrong
+  property for timing anything.
+
+  Over the fixture corpus: value sockets holding a real block 72.44% → 73.17%,
+  and one more file (`buttons_debounce.py`) opens with no grey in it at all, 6 of
+  43 → 7. Both ratchet floors are raised to match — a number seven points above
+  its gate is a gate that has stopped gating.
+
+  Two things stay grey on purpose, and `test/blocksTicks.test.ts` says why: a
+  bare `ticks_ms()` off a `from time import ticks_ms` (the block writes
+  `time.ticks_ms()`, so reading it would rewrite the line and orphan the import),
+  and a clock reading thrown away on a statement of its own.
+
 - **`async def` and `await` read as blocks** (#1096, epic #1086). 570 raw lines
   across 15 projects — the narrowest workstream in the epic, which is why it was
   scheduled last, and the cheapest of the ones that needed new blocks now that

@@ -52,21 +52,30 @@ import { installCorePalette } from '../src/renderer/src/lib/blocks/palette'
 const STATEMENT_FLOOR = 97
 
 /**
- * Value sockets holding a real block. 53.88% at W0, 72.41% at W10, 71.58% at W3.
+ * Value sockets holding a real block. 53.88% at W0, 72.41% at W10, 71.58% at W3,
+ * 73.17% with `ticks_ms`.
  *
- * ARGUED DOWN, on purpose and out loud, and for the same reason each time. W3
- * (#1090) turned every `return <expr>` from a grey STATEMENT into a real block
- * with that expression in a socket; W7 (#1094) did the same for `raise <expr>`
- * and W9 (#1096) for `await <expr>`. Several hundred expressions that were never
- * measured joined the denominator, and some of them (`return found.get(name)`,
- * `raise RuntimeError("bad file")`, `await asyncio.sleep(period)`) are genuinely
- * grey values. Nothing got worse; more of the file is being counted. Statement
- * coverage moved 72.61% → 97.94% across the same changes.
+ * ARGUED DOWN ONCE, on purpose and out loud, and for the same reason each time.
+ * W3 (#1090) turned every `return <expr>` from a grey STATEMENT into a real
+ * block with that expression in a socket; W7 (#1094) did the same for `raise
+ * <expr>` and W9 (#1096) for `await <expr>`. Several hundred expressions that
+ * were never measured joined the denominator, and some of them (`return
+ * found.get(name)`, `raise RuntimeError("bad file")`, `await
+ * asyncio.sleep(period)`) are genuinely grey values. Nothing got worse; more of
+ * the file is being counted. Statement coverage moved 72.61% → 97.94% across the
+ * same changes.
  */
-const SOCKET_FLOOR = 71
+const SOCKET_FLOOR = 73
 
-/** Files that open with no grey at all. 4.65% at W0, 9.30% at W6. */
-const CLEAN_FILE_FLOOR = 9
+/**
+ * Files that open with no grey at all. 4.65% at W0, 9.30% at W6, 16.28% now.
+ *
+ * The last two came from fixes rather than workstreams — the `name pin` binding
+ * (a pin whose methods have no blocks of their own) and `ticks_ms` — which is
+ * the argument for raising the floor rather than leaving the headroom: a number
+ * seven points above its gate is a gate that has stopped gating.
+ */
+const CLEAN_FILE_FLOOR = 16
 
 const FIXTURES = join(__dirname, 'fixtures', 'coverage')
 
