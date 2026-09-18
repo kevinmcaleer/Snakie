@@ -8,6 +8,7 @@ import {
   setPinAliases,
   type PinDirection
 } from './board-pins'
+import { refreshPinFields } from './pin-field'
 import { blockDefinition } from './registry'
 
 /**
@@ -196,7 +197,14 @@ export function applyPinWarnings(workspace: Blockly.Workspace): void {
   // because this already runs on every workspace change and already holds the
   // workspace — so the menu and the warnings can never be looking at different
   // sets of names.
-  setPinAliases(pinAliasesIn(workspace))
+  //
+  // AND THE FIELDS ALREADY ON SCREEN HAVE TO BE TOLD. A dropdown works out its
+  // label while Blockly draws the block and has no reason to do it again, so on
+  // the path that matters most — opening a file, where every block is drawn
+  // before this line has read a single `name pin` off it — each pin field was
+  // rendered against an empty name list. That is how a learner's `led` came out
+  // as `GPled` and stayed there while the menu behind it was right all along.
+  if (setPinAliases(pinAliasesIn(workspace))) refreshPinFields(workspace)
   const warnings = pinConflicts(collectPinClaims(workspace))
   for (const block of workspace.getAllBlocks(false)) {
     if (!blockDefinition(block.type)?.pin) continue
