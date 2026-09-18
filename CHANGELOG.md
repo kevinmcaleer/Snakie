@@ -8,6 +8,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A microseconds block on the Wait shelf** (#1011, epic #1007). `wait N
+  microseconds` → `time.sleep_us(N)`, beside the seconds and milliseconds blocks.
+
+  The waits that need microseconds are the ones you cannot write any other way:
+  an HC-SR04's 10 µs trigger pulse, a WS2812's reset gap, the setup time on a
+  shift register. `sleep_ms(0)` is not those, and `sleep(0.00001)` is unreadable.
+  It is the datasheet's own unit, so it is the block's unit — the shadow value
+  defaults to **10**, which is the trigger pulse exactly.
+
+  A third block rather than a unit dropdown on the existing one, for the reason
+  the shelf was built with two: `sleep`, `sleep_ms` and `sleep_us` are three
+  different MicroPython functions, and the mirror exists to show the code a
+  learner will later write. On CircuitPython, which has no `sleep_us` any more
+  than it has `sleep_ms`, a literal converts to seconds at build time
+  (`time.sleep(0.00001)`) and anything else keeps the division. Worth knowing:
+  CircuitPython's `time.sleep()` does not really resolve microseconds, so that
+  translation is a floor rather than a promise — a property of the runtime, not
+  of the translation, and better than a block that does nothing on their board.
+
+  `time.sleep_us(10)` typed into the Python pane now reads back as this block
+  rather than a raw Python block, so it is a block you can author more of.
+
 - **Name a pin, and use the name everywhere** (epic #1007). `GP15` is what the
   board calls the hole. `motor_left` is what you call it, and on a robot with six
   of them the name is the only one of the two anybody can keep straight.

@@ -122,17 +122,21 @@ describe('wait (#1011)', () => {
   it('has a category of its own, not a corner of Control', () => {
     expect(blocksInCategory('wait').map((b) => b.type)).toEqual([
       'snakie_wait_seconds',
-      'snakie_wait_ms'
+      'snakie_wait_ms',
+      'snakie_wait_us'
     ])
   })
 
-  it('generates the two different MicroPython calls, not one with a unit', () => {
+  it('generates the three different MicroPython calls, not one with a unit', () => {
     expect(
       lines([{ type: 'snakie_wait_seconds', id: 'w', inputs: { SECS: { block: num(0.5) } } }])
     ).toEqual(['import time', '', 'time.sleep(0.5)', ''])
     expect(
       lines([{ type: 'snakie_wait_ms', id: 'w', inputs: { MS: { block: num(250) } } }])
     ).toEqual(['import time', '', 'time.sleep_ms(250)', ''])
+    expect(
+      lines([{ type: 'snakie_wait_us', id: 'w', inputs: { US: { block: num(10) } } }])
+    ).toEqual(['import time', '', 'time.sleep_us(10)', ''])
   })
 
   it('imports `time` once however many waits there are', () => {
@@ -969,10 +973,15 @@ describe('waiting, on either runtime (#1041)', () => {
   ]
   const number = (n: number): unknown => ({ type: 'math_number', id: 'n', fields: { NUM: n } })
 
+  const waitUs = (value: unknown): unknown[] => [
+    { type: 'snakie_wait_us', id: 'w', inputs: { US: { block: value } } }
+  ]
+
   it('keeps the MicroPython idiom on MicroPython', () => {
     // `sleep_ms` is what every tutorial writes, and the mirror is meant to show
     // the code a learner will meet elsewhere.
     expect(gen(waitMs(number(500))).code).toContain('time.sleep_ms(500)')
+    expect(gen(waitUs(number(10))).code).toContain('time.sleep_us(10)')
   })
 
   it('converts a literal to seconds on CircuitPython, which has no sleep_ms', () => {
@@ -983,11 +992,21 @@ describe('waiting, on either runtime (#1041)', () => {
     expect(cp(waitMs(number(2000)))).toContain('time.sleep(2)')
   })
 
+  it('and a microsecond literal the same way, over a million', () => {
+    // `sleep_us` is missing on CircuitPython for the same reason `sleep_ms` is.
+    // Worth saying: `time.sleep()` there does not really resolve microseconds,
+    // so this is a floor rather than a promise — a property of the runtime, not
+    // of the translation, and better than a block that does nothing.
+    expect(cp(waitUs(number(10)))).toContain('time.sleep(0.00001)')
+    expect(cp(waitUs(number(1000000)))).toContain('time.sleep(1)')
+  })
+
   it('keeps the division when the value is not a literal', () => {
     // The only form still correct when the value changes.
-    const fromVariable = cp(waitMs({ type: 'math_arithmetic', id: 'a', fields: { OP: 'ADD' },
-      inputs: { A: { block: number(100) }, B: { block: { ...(number(50) as object), id: 'n2' } } } }))
-    expect(fromVariable).toContain('/ 1000')
+    const expression = { type: 'math_arithmetic', id: 'a', fields: { OP: 'ADD' },
+      inputs: { A: { block: number(100) }, B: { block: { ...(number(50) as object), id: 'n2' } } } }
+    expect(cp(waitMs(expression))).toContain('/ 1000')
+    expect(cp(waitUs(expression))).toContain('/ 1000000')
   })
 
   it('the seconds block is already right on both', () => {

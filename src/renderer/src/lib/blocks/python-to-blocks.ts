@@ -222,6 +222,7 @@ export type { CallReceiver, ArgField }
 const BUILT_IN_RULES: CallRule[] = [
   { module: 'time', fn: 'sleep', type: 'snakie_wait_seconds', args: ['SECS'] },
   { module: 'time', fn: 'sleep_ms', type: 'snakie_wait_ms', args: ['MS'] },
+  { module: 'time', fn: 'sleep_us', type: 'snakie_wait_us', args: ['US'] },
   { fn: 'print', type: 'text_print', args: ['TEXT'] },
   { fn: 'len', type: 'text_length', args: ['VALUE'], shape: 'value' },
   { fn: 'abs', type: 'snakie_math_abs', args: ['NUM'], shape: 'value' },

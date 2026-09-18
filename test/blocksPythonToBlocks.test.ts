@@ -88,6 +88,15 @@ describe('the round trip — what comes out is what went in', () => {
     )
   })
 
+  it('holds for a microsecond wait, which reads back as its own block', () => {
+    // `time.sleep_us(10)` is the HC-SR04 trigger pulse and a dozen other
+    // datasheet waits. Without a rule for it, it came back as a raw Python
+    // block: still correct, and not a block a learner could author another of.
+    const src = ['import time', '', 'time.sleep_us(10)', ''].join('\n')
+    expect(types(src)).toContain('snakie_wait_us')
+    roundTrips(src)
+  })
+
   it('holds for arithmetic, comparisons and logic', () => {
     roundTrips(
       [
@@ -617,6 +626,7 @@ describe('the terminal-type list matches the real blocks (#1068)', () => {
     'snakie_python_suite',
     'snakie_wait_ms',
     'snakie_wait_seconds',
+    'snakie_wait_us',
     'text_print',
     'variables_set'
   ]
