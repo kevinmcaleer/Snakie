@@ -966,6 +966,58 @@ describe('a whole first program (#1011)', () => {
   })
 })
 
+describe('a function with an answer (#1011)', () => {
+  it('returns None while its socket is empty, rather than not returning', () => {
+    // THE BUG THIS FIXES. Dropping the returning `def` block out of the drawer
+    // put `def do_something():\n    pass` in the mirror — a block with a
+    // `return` row drawn on it and a function that does not return. Every other
+    // empty value socket in the palette substitutes a placeholder rather than
+    // deleting the construct around it (`if False:`, `range(0)`, `for … in []`);
+    // this one deleted the `return` line.
+    expect(gen([{ type: 'procedures_defreturn', id: 'd', fields: { NAME: 'do something' } }]).code).toBe(
+      'def do_something():\n    return None\n'
+    )
+  })
+
+  it('and the answer the moment anything is plugged in', () => {
+    expect(
+      gen([
+        {
+          type: 'procedures_defreturn',
+          id: 'd',
+          fields: { NAME: 'double' },
+          inputs: { RETURN: { block: { type: 'math_number', id: 'n', fields: { NUM: 2 } } } }
+        }
+      ]).code
+    ).toBe('def double():\n    return 2\n')
+  })
+})
+
+describe('rounding to decimal places (#1011)', () => {
+  it('is its own block, because `math_round` has nowhere to put the places', () => {
+    expect(
+      lines([
+        {
+          type: 'text_print',
+          id: 'p',
+          inputs: {
+            TEXT: {
+              block: {
+                type: 'snakie_math_round_places',
+                id: 'r',
+                inputs: {
+                  NUM: { block: num(12.345) },
+                  PLACES: { block: { ...(num(1) as object), id: 'n1' } }
+                }
+              }
+            }
+          }
+        }
+      ])
+    ).toEqual(['print(round(12.345, 1))', ''])
+  })
+})
+
 describe('waiting, on either runtime (#1041)', () => {
   const cp = (blocks: unknown[]): string => {
     const ws = new Blockly.Workspace()

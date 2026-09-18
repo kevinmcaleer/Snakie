@@ -126,6 +126,22 @@ describe('the round trip — what comes out is what went in', () => {
       staysRaw('def load(path, flip=None):\n    print(path)\n\nload(1, 2)\n'))
   })
 
+  it('reads a two-argument round back as a block, not raw Python', () => {
+    // `round(x, 1)` is how every sensor reading is printed, and `math_round`
+    // has one socket and a nearest/up/down dropdown — so it used to be the one
+    // thing in an otherwise fully converted function that stayed grey.
+    const src = 'def d():\n    return round(5 / 10, 1)\n'
+    const { report } = pythonToBlocks(src)
+    expect(report.raw).toBe(0)
+    expect(types(src)).toContain('snakie_math_round_places')
+    roundTrips(src)
+  })
+
+  it('and a one-argument round is still the nearest-whole block', () => {
+    expect(types('print(round(1.23))\n')).toContain('math_round')
+    roundTrips('print(round(1.23))\n')
+  })
+
   it('holds for a measured pulse, ticks and all', () => {
     // `ticks_diff(end, start)` reads back with its sockets swapped, so the round
     // trip is the test that the swap happens in both directions and not one.
