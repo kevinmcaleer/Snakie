@@ -87,6 +87,115 @@ export function onboardLedToken(): string | null {
 }
 
 /**
+ * NAMED PINS.
+ * ---------------------------------------------------------------------------
+ *
+ * `GP15` is what the board calls the hole. `motor_left_speed` is what the
+ * LEARNER calls it, and on a robot with six of them it is the only one of the
+ * two anybody can keep straight. A `name pin` block declares one; every pin
+ * dropdown then offers it by name, and the generated Python assigns it once and
+ * refers to it everywhere after:
+ *
+ *     motor_left_speed = 15
+ *     pwm_motor_left_speed = PWM(Pin(motor_left_speed))
+ *
+ * WHY THE ASSIGNMENT RATHER THAN SUBSTITUTING 15 EVERYWHERE. Rewiring a robot
+ * then means editing one line instead of hunting six, which is the entire point
+ * of naming a thing — and it is what `parse-pins.ts` already reads: its
+ * `buildPinVarMap` resolves `motor_left_speed = 15` and puts the identifier
+ * inside `Pin(...)` back through it, so the Board View lights the right badge
+ * with no changes at all.
+ *
+ * THE NAME IS THE FIELD'S VALUE. A pin field normally holds a GPIO number as a
+ * string; for a named pin it holds the name. {@link FieldPin} already accepts
+ * any value and already falls back for one it cannot find in its options — both
+ * written for the "file saved on another board" case, and both exactly what
+ * this needs. So nothing about the field changes; only what the options are.
+ */
+
+/** A pin the learner has given a name. */
+export interface PinAlias {
+  /** The identifier as typed, e.g. `motor_left_speed`. Also the field's value. */
+  name: string
+  /** The GPIO it stands for. */
+  gpio: number
+}
+
+/**
+ * The block type that declares one.
+ *
+ * Here rather than in the hardware palette because this module is what reads
+ * them off a workspace, and the palette already imports this module — naming it
+ * the other way round would be a cycle.
+ */
+export const PIN_ALIAS_BLOCK = 'snakie_name_pin'
+
+let aliases: readonly PinAlias[] = []
+
+/**
+ * Tell the pin dropdowns which names this program declares.
+ *
+ * The canvas pushes, exactly as it does for the board's pins and for the same
+ * reason: a Blockly field's option list is built inside Blockly's own event
+ * handling, with no React near it. UI ONLY — code generation reads the
+ * workspace through {@link pinAliasesIn} instead, so a generated program never
+ * depends on which module-level cache happened to be warm.
+ */
+export function setPinAliases(next: readonly PinAlias[]): void {
+  aliases = [...next]
+}
+
+/** The names currently offered by the dropdowns. */
+export function pinAliases(): readonly PinAlias[] {
+  return aliases
+}
+
+/**
+ * The names a WORKSPACE declares, read off its `name pin` blocks.
+ *
+ * The source of truth for everything that must be correct rather than merely
+ * current: code generation, the pin-conflict pass, and the canvas's own push
+ * into {@link setPinAliases}. A blank name is not a declaration, and the FIRST
+ * block to claim a name keeps it — two blocks naming the same thing two
+ * different pins is a mistake the conflict pass reports, not one this silently
+ * resolves by picking the last one it happened to walk past.
+ */
+export function pinAliasesIn(workspace: {
+  getBlocksByType: (type: string, ordered: boolean) => { getFieldValue: (n: string) => unknown }[]
+}): PinAlias[] {
+  const out: PinAlias[] = []
+  const seen = new Set<string>()
+  for (const block of workspace.getBlocksByType(PIN_ALIAS_BLOCK, true)) {
+    const name = String(block.getFieldValue('NAME') ?? '').trim()
+    const gpio = Number(block.getFieldValue('PIN'))
+    if (!name || seen.has(name) || !Number.isFinite(gpio)) continue
+    seen.add(name)
+    out.push({ name, gpio })
+  }
+  return out
+}
+
+/**
+ * The GPIO a pin-field value stands for, or `null` when it names nothing.
+ *
+ * A plain number passes straight through, so every caller can hand its field
+ * value here without first asking which kind it is holding. `null` means a name
+ * nothing declares — a `name pin` block the learner deleted out from under a
+ * block still set to it — which is a warning, not a crash: see
+ * `pin-conflicts.ts`.
+ */
+export function resolvePinGpio(value: string, declared: readonly PinAlias[] = aliases): number | null {
+  const trimmed = value.trim()
+  if (/^\d+$/.test(trimmed)) return Number(trimmed)
+  return declared.find((a) => a.name === trimmed)?.gpio ?? null
+}
+
+/** Is this field value a NAME rather than a GPIO number? */
+export function isPinName(value: string): boolean {
+  return !/^\d+$/.test(value.trim())
+}
+
+/**
  * The dropdown options for a role: `[label, value]` pairs, GPIO as the value.
  *
  * `capability` filters — `adc` for the analogue blocks, `pwm` for brightness and
@@ -98,7 +207,21 @@ export function onboardLedToken(): string | null {
 export function pinOptionsFor(capability?: string): [string, string][] {
   const pins = current.filter((p) => !capability || capable(p, capability))
   const usable = pins.length > 0 ? pins : current
-  return usable.map((p) => [p.label, String(p.gpio)])
+  // NAMED PINS FIRST, and filtered by the same rule: a name standing for GP15
+  // has GP15's capabilities, so it belongs in the PWM menu and not in the ADC
+  // one. Listed above the numbers because a learner who has bothered to name a
+  // pin is reaching for the name — and the GPIO stays in the label, so the
+  // menu never hides which hole it actually is.
+  const named: [string, string][] = pinAliases()
+    .filter((a) => {
+      const pin = current.find((p) => p.gpio === a.gpio)
+      // A name for a pin this board hasn't got still shows: dropping it would
+      // silently rewrite a robot built for another board. `pin-conflicts.ts`
+      // is what says so.
+      return !pin || !capability || capable(pin, capability)
+    })
+    .map((a) => [`${a.name} (${pinLabel(a.gpio)})`, a.name])
+  return [...named, ...usable.map((p): [string, string] => [p.label, String(p.gpio)])]
 }
 
 /** Does `pin` claim `capability` — or claim nothing at all, which is not a no? */
@@ -106,8 +229,20 @@ function capable(pin: BlockPin, capability: string): boolean {
   return pin.capabilities.length === 0 || pin.capabilities.includes(capability)
 }
 
-/** The label for a GPIO, for a warning message. Falls back to `GP<n>`. */
-export function pinLabel(gpio: string | number): string {
+/**
+ * The label for a pin-field value, for a warning message.
+ *
+ * A GPIO reads as the board's silk label; a NAME reads as itself plus the pin
+ * it stands for (`motor_left_speed (GP15)`), because a warning about a named
+ * pin has to say both — the name is what the learner sees on the block, and the
+ * GPIO is what is actually clashing. Falls back to `GP<n>`.
+ */
+export function pinLabel(gpio: string | number, declared: readonly PinAlias[] = aliases): string {
+  const raw = String(gpio)
+  if (isPinName(raw)) {
+    const match = declared.find((a) => a.name === raw.trim())
+    return match ? `${match.name} (${pinLabel(match.gpio, [])})` : raw
+  }
   const n = Number(gpio)
   return current.find((p) => p.gpio === n)?.label ?? `GP${gpio}`
 }
@@ -144,8 +279,16 @@ export function ledPinToken(ledLabel: string | null | undefined): string | null 
  * RP2040 family this defaults to and visibly wrong anywhere else — better than
  * silently generating a pin that is not the one the learner picked.
  */
-export function circuitPythonPin(gpio: string | number): string {
-  const n = Number(gpio)
+export function circuitPythonPin(
+  gpio: string | number,
+  declared: readonly PinAlias[] = aliases
+): string {
+  // A NAMED PIN RESOLVES TO THE HOLE (#1082). CircuitPython addresses pins by
+  // attribute — `board.GP15` — not by a number a variable could hold, so the
+  // name cannot survive into the generated line the way it does on the
+  // MicroPython side. It resolves here rather than further up so every
+  // CircuitPython emitter gets it from one place.
+  const n = resolvePinGpio(String(gpio), declared) ?? Number(gpio)
   const pin = boardPins().find((p) => p.gpio === n)
   return `board.${pin?.label ?? `GP${n}`}`
 }

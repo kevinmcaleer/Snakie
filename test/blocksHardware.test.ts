@@ -550,7 +550,11 @@ describe('the hardware category (#1012)', () => {
       'snakie_buzzer_stop',
       // The bus #1012 did not cover and #1057 added.
       'snakie_i2c_scan',
-      'snakie_i2c_present'
+      'snakie_i2c_present',
+      // LAST in the drawer on purpose: naming pins is what you reach for once
+      // you have enough of them to lose track, and the first block a beginner
+      // opening this drawer should meet is still "turn LED on".
+      'snakie_name_pin'
     ])
   })
 
