@@ -10,6 +10,48 @@
  * themes for free; the scoped rules further down add the gradients, bevels and
  * textures tokens can't express (mirrored skeuomorph ⇄ dark).
  * ------------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------------
+ * THE BLOCK PALETTE (#1098, #1099).
+ *
+ * ONE SET OF COLOURS FOR BOTH SKINS — only the canvas behind them changes. That
+ * is what Scratch and MakeCode do, and it is the fix for the thing that made the
+ * old scheme look wrong: the block fills used to be the SYNTAX HIGHLIGHT tokens
+ * (`--kw`, `--num`, `--ident`…), which are FOREGROUND colours picked to be
+ * readable ON the editor background. Re-used as fills they inverted with the
+ * skin — light blocks in the dark theme, dark blocks on parchment — and their
+ * lightness scattered from 20% to 81% within a single skin.
+ *
+ * ONE DEPTH, MEASURED IN LUMINANCE RATHER THAN IN HSL LIGHTNESS. Every colour
+ * below sits at a relative luminance of 0.15, so white text is 5.2:1 on every
+ * block — which clears WCAG AA for normal text (block text is 12px/600, so the
+ * 3.0:1 large-bold exemption does not apply). Equal HSL lightness would NOT do
+ * this: a yellow and a blue at the same L are nowhere near the same brightness,
+ * which is exactly why Scratch's own yellow carries white text at 1.9:1.
+ *
+ * The hues are spread ~24° apart, anchored where the brand palette already has
+ * an opinion: parts on its red, hardware on the GPIO amber, wait on its yellow,
+ * turtle on its green, variables on its blue (#1098).
+ * ------------------------------------------------------------------------- */
+:root {
+  --block-parts: #c63923;
+  --block-hardware: #985f1b;
+  --block-wait: #766d15;
+  --block-control: #4e7715;
+  --block-lists: #227d16;
+  --block-turtle: #167d38;
+  --block-instruments: #157965;
+  --block-variables: #1a7595;
+  --block-math: #2b66da;
+  --block-text: #6158e1;
+  --block-logic: #8c45de;
+  --block-modules: #b223c9;
+  --block-functions: #c22298;
+  --block-plugins: #cd2457;
+  /* The one that is deliberately not a colour: raw Python is the escape hatch,
+     and it should recede rather than announce itself as another category. */
+  --block-python: #676e60;
+}
+
 :root {
   /**
    * The ink that goes ON the gold gradient (#956).

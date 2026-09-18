@@ -525,17 +525,23 @@ export function pythonToBlocks(source: string): Conversion {
   // looking is not.
   const probe = convert(lines, hoisted, null, aliases)
   const consumable = new Set([...probe.claimed].filter((name) => !probe.rawNames.has(name)))
-  // A NAME IS ALL-OR-NOTHING TOO (W10, #1097). Reading `led = Pin(25, Pin.OUT)`
-  // as the `name pin` block puts `led` in the SETUP section, where the generator
-  // owns the name — so any other use of it has to be a block that goes through
-  // the name, or the generator mints `led_` beside it and the program drives
-  // nothing. `led.on()` is exactly that case: ordinary MicroPython with no block
-  // of its own.
+  // A NAME IS NOT ALL-OR-NOTHING — not any more, and the reason is worth keeping.
   //
-  // So a name mentioned by a line we could not read is not a name: the
-  // declaration stays an ordinary assignment, `led` stays an ordinary variable,
-  // and the file reads exactly as it did before W10. Uglier, and correct.
-  const named = new Map([...aliases].filter(([name]) => !probe.rawNames.has(name)))
+  // It used to be. Reading `led = Pin(25, Pin.OUT)` as the `name pin` block puts
+  // `led` in the SETUP section, and the generator's collision rule then minted
+  // `led_` for a VARIABLE of the same name — so `led.on()` beside it, ordinary
+  // MicroPython with no block of its own, came back `led_.on()`. The reader
+  // defended against that by dropping the name entirely whenever any use of it
+  // was unreadable, which meant the single commonest program there is —
+  // `led = Pin(25, Pin.OUT)` then `led.on()` / `led.off()` — never got the
+  // block, and came back as *set led to (grey blob)*.
+  //
+  // The generator now treats a declared pin and a variable of that name as ONE
+  // binding (`boundName`), because that is what they are, so there is nothing
+  // left to defend against: the declaration is always the `name pin` block, and
+  // every other mention — a hardware block, a generic call, a raw line — says
+  // `led` and means it.
+  const named = aliases
   // The probe read every hoisted call it could and swallowed no constructors —
   // it was only ever a question. So whenever it read ANY, the real pass has to
   // run: to swallow the constructors of the objects that came out fully
@@ -3085,10 +3091,9 @@ class Converter {
     if (this.hoisted.has(text) && (this.consumable === null || this.consumable.has(text))) {
       return null
     }
-    // A NAME THE SETUP SECTION WILL OWN (W10, #1097) is not a variable either:
-    // the `name pin` block writes `led = Pin(25, Pin.OUT)` up there, and a
-    // workspace variable of the same name comes back as `led_`.
-    if (this.aliases.has(text)) return null
+    // A name the `name pin` block declares is NOT refused here (#1097): the
+    // generator binds a declared pin and a variable of that name to one
+    // identifier, so `led.on()` reads as a call on `led` and writes `led.on()`.
     return { type: 'variables_get', fields: { VAR: { id: this.variable(text) } } }
   }
 
