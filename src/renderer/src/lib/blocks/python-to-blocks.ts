@@ -1,6 +1,7 @@
 import type { BlocksWorkspace } from '../../../../shared/blocks-doc'
 import type { ArgField, CallReceiver } from './registry'
 import { docstringComment } from './docstring'
+import { isReservedName, sanitise } from './names'
 import {
   isSuiteHeader,
   logicalLines,
@@ -177,6 +178,32 @@ const TERMINAL_TYPES = new Set(['snakie_forever', 'controls_flow_statements'])
  * it is what socket coverage counts against itself.
  */
 const GREY_VALUE_TYPES = new Set(['snakie_python_value', 'snakie_python_call_value'])
+
+/**
+ * THE ESCAPE HATCHES THE READER CAN NOW EMIT (W1, #1088, epic #1086).
+ * ---------------------------------------------------------------------------
+ *
+ * All four have shipped since #1018, sitting in the Python drawer for a human to
+ * drag, and the reader has never produced one of them. That is the single
+ * biggest gap in the corpus and it costs nothing to close: 7,662 raw lines
+ * across 66 of 73 projects, with nothing added to the palette.
+ *
+ * The literals rather than an import, like the raw blocks above: the palette
+ * imports this module, so this module must not import back.
+ */
+const PYTHON_CALL = 'snakie_python_call'
+const PYTHON_CALL_VALUE = 'snakie_python_call_value'
+const PYTHON_ATTR_GET = 'snakie_python_attr_get'
+const PYTHON_ATTR_SET = 'snakie_python_attr_set'
+
+/**
+ * The most argument sockets a call block will grow to — `MAX_ARGS` in
+ * `palette/python.ts`, restated here for the same reason as the types above.
+ *
+ * A call with more arguments than the block can hold is not that block, so it
+ * stays raw and regenerates verbatim, which is the rule everywhere else here.
+ */
+const MAX_CALL_ARGS = 8
 
 /**
  * Blocks the generator lifts OUT of the body into a section of its own.
@@ -613,6 +640,51 @@ export interface Hoisted {
   matches: readonly { rule: CallRule; fields: Readonly<Record<string, string>> }[]
 }
 
+/**
+ * Every name the import lines in this file BIND (W1, #1088).
+ *
+ * `import machine` binds `machine`; `import ujson as json` binds `json`;
+ * `from machine import Pin, PWM` binds both. The generator's import manager owns
+ * those names — they are in its `taken` set before a single variable is minted —
+ * so a `variables_get` for one of them comes back RENAMED:
+ * `machine.lightsleep(10)` read as a generic call regenerated as
+ * `machine_.lightsleep(10)`, a program that no longer runs.
+ *
+ * And the round-trip gate cannot see it. Names are placeholders in a line
+ * signature, deliberately, so that `id` → `id_` does not hold the blocks back —
+ * which means a renamed module reads as the same program. The guard has to be
+ * here, before the block is built.
+ *
+ * So a module is not an object, and a call into one is either a rule the reader
+ * knows or a raw line. That is exactly what it was before W1; nothing regresses.
+ */
+function importedNames(lines: readonly LogicalLine[]): Set<string> {
+  const out = new Set<string>()
+  for (const line of lines) {
+    const as = /^import\s+([A-Za-z_][\w.]*)\s+as\s+([A-Za-z_]\w*)$/.exec(line.text)
+    if (as) {
+      out.add(as[2])
+      continue
+    }
+    const plain = /^import\s+([A-Za-z_][\w.]*)(\s*,\s*[A-Za-z_][\w.]*)*$/.exec(line.text)
+    if (plain) {
+      for (const name of line.text.slice('import'.length).split(',')) {
+        // `import os.path` binds `os`, which is the name that would collide.
+        out.add(name.trim().split('.')[0])
+      }
+      continue
+    }
+    const from = /^from\s+[A-Za-z_][\w.]*\s+import\s+(.+)$/.exec(line.text)
+    if (!from) continue
+    for (const part of from[1].split(',')) {
+      const name = part.trim().split(/\s+as\s+/)
+      const bound = (name[1] ?? name[0]).trim()
+      if (/^[A-Za-z_]\w*$/.test(bound)) out.add(bound)
+    }
+  }
+  return out
+}
+
 /** `led_15 = Led(...)` → `led_15`. Null for anything that is not an assignment. */
 export function constructorName(text: string): string | null {
   return /^([A-Za-z_]\w*)\s*=\s*\S/.test(text) ? /^([A-Za-z_]\w*)/.exec(text)![1] : null
@@ -716,7 +788,7 @@ function convert(
   hoisted: ReadonlyMap<string, Hoisted>,
   consumable: ReadonlySet<string> | null
 ): Converter {
-  const state = new Converter(hoisted, consumable)
+  const state = new Converter(hoisted, consumable, importedNames(lines))
   const nodes = tree(lines)
   state.indexDefinitions(nodes)
   state.stack = state.statements(nodes)
@@ -838,12 +910,17 @@ class Converter {
   /** Hoisted names still mentioned by a RAW block — their constructor must stay. */
   readonly rawNames = new Set<string>()
 
+  /** Names an import line in this file binds — see {@link importedNames}. */
+  private readonly imported: ReadonlySet<string>
+
   constructor(
     hoisted: ReadonlyMap<string, Hoisted> = new Map(),
-    consumable: ReadonlySet<string> | null = null
+    consumable: ReadonlySet<string> | null = null,
+    imported: ReadonlySet<string> = new Set()
   ) {
     this.hoisted = hoisted
     this.consumable = consumable
+    this.imported = imported
   }
   /** Variable name → the id the workspace declares it under. */
   readonly variables = new Map<string, string>()
@@ -1345,6 +1422,16 @@ class Converter {
       ])
     }
 
+    // --- assigning to something ON an object ------------------------------
+    //
+    // `self.speed = speed` is **2,649 raw lines across 45 projects**, and
+    // `obj.attr = x` another 727: between them the second-largest gap in the
+    // corpus, and `snakie_python_attr_set` has been in the Python drawer since
+    // #1018. AFTER the plain assignment above, which is the commoner shape and
+    // reads better as a `set <variable>` block.
+    const attribute = this.attributeAssign(text)
+    if (attribute) return recognised([attribute])
+
     // --- a call to a function THIS program defines ------------------------
     //
     // Before the rule table below, which is about calls into `time`, `machine`
@@ -1519,17 +1606,104 @@ class Converter {
     return id
   }
 
+  /**
+   * `a.b = x` → the block that sets an attribute (W1, #1088).
+   *
+   * The TARGET is read with the same chain everything else uses, and has to come
+   * back as an attribute read for this to be that block: `self.speed` is an
+   * attribute, `self.legs[0]` is a subscript (W8's, #1095) and `speed` is a
+   * plain variable, which the assignment above has already taken.
+   *
+   * The `=` is found through the lexer rather than with `indexOf`, so a `=`
+   * inside a string or a keyword argument cannot be mistaken for the one that
+   * assigns — and `==`, `!=`, `<=`, `>=` and every augmented assign lex as
+   * operators of their own and simply are not this.
+   *
+   * AUGMENTED ASSIGNS ARE DELIBERATELY NOT HERE. `self.total += 1` has no block:
+   * `math_change` needs a workspace VARIABLE, and writing it as
+   * `self.total = self.total + 1` would be rewriting somebody's line. It stays
+   * raw, where it regenerates exactly as written.
+   */
+  private attributeAssign(text: string): BlockJson | null {
+    const tokens = tokenize(text)
+    if (!tokens) return null
+    let depth = 0
+    for (let i = 0; i < tokens.length; i++) {
+      const tok = tokens[i]
+      if (tok.kind === 'open') depth += 1
+      else if (tok.kind === 'close') depth -= 1
+      if (depth !== 0 || tok.kind !== 'op' || tok.text !== '=') continue
+      const target = this.readChain(text, tokens.slice(0, i))
+      if (!target || target.next !== i) return null
+      if (target.block.type !== PYTHON_ATTR_GET) return null
+      const value = text.slice(tok.end).trim()
+      if (value === '') return null
+      return {
+        type: PYTHON_ATTR_SET,
+        fields: target.block.fields,
+        inputs: { ...target.block.inputs, VALUE: { block: this.expression(value) } }
+      }
+    }
+    return null
+  }
+
   /** A whole line that is one recognised call, as a statement block. */
   private callStatement(text: string): BlockJson | null {
     const tokens = tokenize(text)
     if (!tokens) return null
     const call = readCall(tokens, text)
-    if (!call || call.rest.length > 0) return null
-    // A call on a hoisted object first (#1058) — `led_15.set(True)`. Its
-    // "module" is an object this file declared, not a module at all.
-    const onObject = this.receiverCall(call, 'statement')
-    if (onObject) return onObject
-    return this.matchCall(call, 'statement')
+    if (call && call.rest.length === 0) {
+      // A call on a hoisted object first (#1058) — `led_15.set(True)`. Its
+      // "module" is an object this file declared, not a module at all.
+      const onObject = this.receiverCall(call, 'statement')
+      if (onObject) return onObject
+      const known = this.matchCall(call, 'statement')
+      if (known) return known
+    }
+    return this.methodCall(text, tokens)
+  }
+
+  /**
+   * A line that is nothing but a method call on an object (W1, #1088).
+   *
+   * **2,782 raw lines across 66 of 73 projects**, plus another 1,478 for the
+   * `self.x.y()` form — the largest single gap in the corpus, and the block for
+   * it has been in the Python drawer since #1018.
+   *
+   * Read as a VALUE and then re-shaped, because the chain that produces it is
+   * the same chain an expression uses: `self.display.text(...)` is an attribute
+   * read with a call on the end of it, whichever side of an `=` it is on. The
+   * two call blocks differ only in whether they have an output or a pair of
+   * statement connections, so the last link becomes the statement one and
+   * everything nested under it is already right.
+   *
+   * Everything above has had its chance first — see `parseAtom`.
+   */
+  private methodCall(text: string, tokens: readonly Token[]): BlockJson | null {
+    const read = this.readChain(text, tokens)
+    if (!read || read.next !== tokens.length) return null
+    if (read.block.type !== PYTHON_CALL_VALUE) return null
+    return { ...read.block, type: PYTHON_CALL }
+  }
+
+  /**
+   * Read a postfix chain out of a whole line, with `source` pointed at that line
+   * so an argument can be sliced from it verbatim.
+   *
+   * Saved and restored, like {@link expression} does, because a line's own parse
+   * may start a nested one for each of its arguments.
+   */
+  private readChain(
+    text: string,
+    tokens: readonly Token[]
+  ): { block: BlockJson; next: number } | null {
+    const outer = this.source
+    this.source = text
+    try {
+      return this.parseAtom(tokens, 0)
+    } finally {
+      this.source = outer
+    }
   }
 
   /**
@@ -1941,24 +2115,142 @@ class Converter {
     }
 
     if (tok.kind === 'name') {
+      // THE ORDER HERE IS THE WHOLE OF W1'S RISK (#1088). A rule, a hoisted
+      // object, or a function this program defines must all still win over the
+      // generic reading below — otherwise `led_15.set(True)` quietly regresses
+      // from a real LED block to a grey call block, and NEITHER half of the
+      // ratchet catches it: coverage is unchanged (both are recognised) and
+      // round-trip is unchanged (both generate the same line). It has its own
+      // test instead, in `blocksPythonObjects.test.ts`.
       const call = readCall(tokens, this.source, at)
       if (call) {
         const onObject = this.receiverCall(call, 'value')
-        if (onObject) return { block: onObject, next: call.next }
-        const block = this.matchCall(call, 'value')
-        if (block) return { block, next: call.next }
-        return null // a call we do not know: the whole expression goes raw
+        if (onObject) return this.chain({ block: onObject, next: call.next }, tokens)
+        const known = this.matchCall(call, 'value')
+        if (known) return this.chain({ block: known, next: call.next }, tokens)
+        const own = this.procedureCall(this.callText(tokens, at, call.next), 'value')
+        if (own) return this.chain({ block: own, next: call.next }, tokens)
       }
-      // A plain name, not followed by a dot or a bracket, is a variable.
+      // A NAME, AND THEN WHATEVER IS DOTTED ONTO IT. This is what used to bail:
+      // `self.angle` in an expression took the entire enclosing statement to
+      // grey, and `obj.read()` with it.
       const after = tokens[at + 1]
-      if (after && (after.text === '.' || after.text === '(' || after.text === '[')) return null
-      return {
-        block: { type: 'variables_get', fields: { VAR: { id: this.variable(tok.text) } } },
-        next: at + 1
-      }
+      // A call we could not place stays raw — a bare `foo(1)` has no object to
+      // be a method OF, so there is no generic block for it. So does a
+      // subscript, which is W8's (#1095).
+      if (after && (after.text === '(' || after.text === '[')) return null
+      const base = this.name(tok.text)
+      if (!base) return null
+      return this.chain({ block: base, next: at + 1 }, tokens)
     }
 
     return null
+  }
+
+  /**
+   * A bare name as a value block, or null when reading it would rename it.
+   *
+   * `names.ts` deliberately renames a variable that would shadow something
+   * load-bearing — `id` becomes `id_`, and PEP 8 agrees — which is the right
+   * answer for a name a learner typed into a block and the WRONG one for a name
+   * we are reading back out of their file. `bytes.decode(x)` read as blocks
+   * would regenerate as `bytes_.decode(x)`: a program that no longer runs, and
+   * one the round-trip gate forgives, because it compares token SHAPES and a
+   * renamed name is the same shape.
+   *
+   * So a name that would not survive the trip is refused here, and the line it
+   * is in stays raw and regenerates verbatim. The same answer a number whose
+   * written form the block cannot hold already gets.
+   */
+  private name(text: string): BlockJson | null {
+    if (isReservedName(text) || sanitise(text) !== text) return null
+    // A MODULE IS NOT AN OBJECT — see {@link importedNames}.
+    if (this.imported.has(text)) return null
+    // A HOISTED OBJECT IS ALL OR NOTHING (#1058), and this is where W1 could
+    // have broken that. `led_15.frobnicate()` read as a generic call block is a
+    // use of `led_15` that no longer looks unreadable — so the constructor gets
+    // swallowed, `led_15.set(True)` beside it hoists a SECOND `Led` on the same
+    // pin under a collision-avoiding name, and two objects drive one pin.
+    //
+    // A use we cannot read as the block that wrote it keeps the object alive,
+    // which is what it did before W1 and what the rule has always meant.
+    if (this.hoisted.has(text)) return null
+    return { type: 'variables_get', fields: { VAR: { id: this.variable(text) } } }
+  }
+
+  /** The source text of the call `readCall` just read, for `procedureCall`. */
+  private callText(tokens: readonly Token[], at: number, next: number): string {
+    return this.source.slice(tokens[at].start, tokens[next - 1].end)
+  }
+
+  /**
+   * `.attr` and `.method(...)`, for as long as the tokens keep going (W1, #1088).
+   *
+   * The two blocks this builds — `snakie_python_attr_get` and
+   * `snakie_python_call_value` — have shipped since #1018 and take an OBJECT
+   * SOCKET, which is what makes a chain work at all: the reading of `self.x` is
+   * the object that `.y()` is then called on, so `self.display.text(...)` is two
+   * blocks nested rather than a shape nobody modelled.
+   *
+   * Null rather than a partial read, per the rule everywhere here: half a chain
+   * would be half a line, and the whole line going raw regenerates it verbatim.
+   */
+  private chain(
+    start: { block: BlockJson; next: number },
+    tokens: readonly Token[]
+  ): { block: BlockJson; next: number } | null {
+    let cur = start
+    for (;;) {
+      const dot = tokens[cur.next]
+      if (!dot || dot.kind !== 'op' || dot.text !== '.') return cur
+      const member = tokens[cur.next + 1]
+      if (!member || member.kind !== 'name') return null
+      const open = tokens[cur.next + 2]
+      if (open?.kind === 'open' && open.text === '(') {
+        const read = readArgs(tokens, this.source, cur.next + 2)
+        // A TRAILING COMMA IS THE LEARNER'S TEXT. The block has one socket per
+        // argument and nowhere to record that there was a comma after the last
+        // of them, so `thing.configure(1, 2,)` would come back `(1, 2)` — a
+        // silent rewrite, and one the round-trip gate refuses to commit, which
+        // would cost the file its whole conversion rather than this line.
+        if (!read || read.trailingComma) return null
+        const block = this.callBlock(PYTHON_CALL_VALUE, cur.block, member.text, read.args)
+        if (!block) return null
+        cur = { block, next: read.next }
+        continue
+      }
+      cur = {
+        block: {
+          type: PYTHON_ATTR_GET,
+          fields: { NAME: member.text },
+          inputs: { OBJ: { block: cur.block } }
+        },
+        next: cur.next + 2
+      }
+    }
+  }
+
+  /**
+   * One of the two call blocks, filled in — the object in its socket, the method
+   * in its field, the arguments in the sockets it grows for them.
+   *
+   * RECOGNISE THE STATEMENT, SOCKET THE REST (§4.2 of the delivery plan). An
+   * argument we cannot read becomes a grey value block inside a real call block,
+   * which is why `self.display.text(f"{temp:.1f}", 0, 0)` needs this and nothing
+   * else — the f-string sits in a socket and regenerates verbatim.
+   */
+  private callBlock(
+    type: string,
+    object: BlockJson,
+    method: string,
+    args: readonly string[]
+  ): BlockJson | null {
+    if (args.length > MAX_CALL_ARGS) return null
+    const inputs: Record<string, { block: BlockJson }> = { OBJ: { block: object } }
+    args.forEach((arg, i) => {
+      inputs[`ARG${i}`] = { block: this.expression(arg) }
+    })
+    return { type, fields: { METHOD: method }, extraState: { args: args.length }, inputs }
   }
 }
 
@@ -1991,13 +2283,37 @@ function readCall(
     // `a.b.c(...)` is a call on something we have no name for; leave it raw.
     if (tokens[i]?.text === '.') return null
   }
-  if (tokens[i]?.kind !== 'open' || tokens[i].text !== '(') return null
-  i += 1
+  const read = readArgs(tokens, source, i)
+  if (!read) return null
+  return { module, fn, args: read.args, next: read.next, rest: tokens.slice(read.next) }
+}
 
+/**
+ * The argument list of a call whose `(` is at `at`: the texts, and where the
+ * `)` left off.
+ *
+ * Split out of {@link readCall} for W1 (#1088), which reads a chain of calls —
+ * `self.display.text(...)` — rather than the one-deep `module.fn(...)` that
+ * function is shaped for.
+ *
+ * The arguments come back as SLICES OF THE ORIGINAL LINE, not as re-joined
+ * tokens. `f'{x}'` lexes as a name and a string, and no spacing rule puts those
+ * back together the way they were typed — so the text a raw block ends up
+ * holding has to be the text the learner wrote, character for character.
+ */
+function readArgs(
+  tokens: readonly Token[],
+  source: string,
+  at: number
+): { args: string[]; next: number; trailingComma: boolean } | null {
+  if (tokens[at]?.kind !== 'open' || tokens[at].text !== '(') return null
+  let i = at + 1
   const args: string[] = []
   let depth = 0
   let from: number | null = null
   let to = 0
+  /** A `,` with nothing after it — legal Python, and not an argument. */
+  let trailingComma = false
   const flush = (): void => {
     if (from !== null) args.push(source.slice(from, to).trim())
     from = null
@@ -2005,9 +2321,9 @@ function readCall(
   while (i < tokens.length) {
     const tok = tokens[i]
     if (depth === 0 && tok.kind === 'close' && tok.text === ')') {
+      trailingComma = from === null && args.length > 0
       flush()
-      i += 1
-      return { module, fn, args, next: i, rest: tokens.slice(i) }
+      return { args, next: i + 1, trailingComma }
     }
     if (depth === 0 && tok.kind === 'op' && tok.text === ',') {
       // A trailing comma before `)` is legal and contributes no argument.

@@ -177,6 +177,27 @@ export class MicroPythonGenerator extends Blockly.CodeGenerator {
     // 4 spaces. `black` and `ruff` both insist, and more to the point it is what
     // every Python tutorial the learner will meet next uses.
     this.INDENT = '    '
+    // THE BRACKETS THAT PYTHON DOES NOT NEED (#1088, epic #1086).
+    //
+    // `valueToCode` adds brackets whenever the inner expression binds at least
+    // as tightly as the socket it is going into, which is the safe default and
+    // is wrong for the pairs below — `a.b` inside another `.` or a call is
+    // exactly what a dotted chain IS. Without this, W1's reading of
+    // `self.forward.freq(1000)` regenerated as `(self.forward).freq(1000)`:
+    // valid Python, a different line, and one the round-trip gate rightly
+    // refuses to commit.
+    //
+    // The same list Blockly's own Python generator carries, for the same
+    // reasons. `and`/`or` are associative, so a nest of them is one chain.
+    this.ORDER_OVERRIDES = [
+      [Order.FUNCTION_CALL, Order.MEMBER],
+      [Order.FUNCTION_CALL, Order.FUNCTION_CALL],
+      [Order.MEMBER, Order.MEMBER],
+      [Order.MEMBER, Order.FUNCTION_CALL],
+      [Order.LOGICAL_NOT, Order.LOGICAL_NOT],
+      [Order.LOGICAL_AND, Order.LOGICAL_AND],
+      [Order.LOGICAL_OR, Order.LOGICAL_OR]
+    ]
   }
 
   /**

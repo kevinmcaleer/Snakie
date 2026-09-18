@@ -48,11 +48,11 @@ import { installCorePalette } from '../src/renderer/src/lib/blocks/palette'
  * headroom between a floor and the measurement is never a mystery.
  */
 
-/** Recognised lines / logical lines. Baseline 53.31% (W0). */
-const STATEMENT_FLOOR = 53
+/** Recognised lines / logical lines. 53.31% at W0, 72.61% after W1. */
+const STATEMENT_FLOOR = 72
 
-/** Value sockets holding a real block / value sockets filled. Baseline 53.88%. */
-const SOCKET_FLOOR = 53
+/** Value sockets holding a real block. 53.88% at W0, 68.86% after W1. */
+const SOCKET_FLOOR = 68
 
 /** Files that open with no grey at all, as a percentage. Baseline 4.65%. */
 const CLEAN_FILE_FLOOR = 4

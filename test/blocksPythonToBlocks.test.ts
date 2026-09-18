@@ -316,13 +316,29 @@ describe('what it recognises', () => {
 
 describe('what it keeps as raw Python, and says so', () => {
   it('reports the lines it could not read', () => {
+    // `assert` is one of the constructs epic #1086 declines on purpose — 890
+    // lines in the corpus and almost all of them pytest — so it is a line that
+    // stays raw however far the reader comes.
     const { report } = regenerate(
-      ['import turtle', '', 'turtle.forward(100)', 'thing.calibrate(*args)', ''].join('\n')
+      ['import turtle', '', 'turtle.forward(100)', 'assert thing.ready', ''].join('\n')
     )
     expect(report.raw).toBe(1)
     expect(report.rawLines).toEqual([4])
     expect(report.recognised).toBe(2)
     expect(report.total).toBe(3)
+  })
+
+  it('does not lose a line to one argument it cannot read (#1088)', () => {
+    // §4.2 of the delivery plan, as a test: `rawValue()` does not increment
+    // `report.raw`, so a real block with a grey value in one socket is a
+    // RECOGNISED line. It is what makes W1 cheap — fix the statement and the
+    // expression stops mattering — and it is why f-strings appear in 44 projects
+    // and account for five raw lines between them.
+    const { report } = regenerate('thing.calibrate(*args)\n')
+    expect(report.raw).toBe(0)
+    expect(report.recognised).toBe(1)
+    expect(report.rawSockets).toBe(1)
+    expect(types('thing.calibrate(*args)\n')).toContain('snakie_python_call')
   })
 
   it('keeps a whole expression raw rather than half of it', () => {
@@ -346,7 +362,9 @@ describe('what it keeps as raw Python, and says so', () => {
   })
 
   it('counts a fully unreadable program honestly', () => {
-    const { report } = regenerate('a[0] = 1\nb.c.d()\n')
+    // Both deliberately out of scope for epic #1086 — see §3.5 — so this test is
+    // about the counting rather than about these two constructs.
+    const { report } = regenerate('assert ok\nassert speed < 100\n')
     expect(report.recognised).toBe(0)
     expect(report.raw).toBe(2)
   })
@@ -656,10 +674,10 @@ describe('a terminal block that is not last becomes a raw one (#1068)', () => {
 
   it('counts the demoted block as raw, not recognised', () => {
     const { report } = regenerate(['while True:', '    print(1)', 'led.off()', ''].join('\n'))
-    // The demoted `while True:` on line 1, and `led.off()` — which nothing
-    // recognises — on line 3.
-    expect(report.raw).toBe(2)
-    expect(report.rawLines).toEqual([1, 3])
+    // The demoted `while True:` on line 1, and only that: `led.off()` is a
+    // method call on an object, which W1 (#1088) reads as a real call block.
+    expect(report.raw).toBe(1)
+    expect(report.rawLines).toEqual([1])
   })
 
   it('reports raw lines in ascending order', () => {

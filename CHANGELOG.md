@@ -8,6 +8,49 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Blocks reads `obj.method()` and `obj.attr`** (#1088, epic #1086). The single
+  largest gap in the corpus, closed with **nothing added to the palette**.
+  `snakie_python_call`, `snakie_python_call_value`, `snakie_python_attr_get` and
+  `snakie_python_attr_set` have all shipped since #1018, sitting in the Python
+  drawer for a person to drag; the reader simply never emitted one, because
+  `parseAtom` gave up on any name followed by a dot and `callStatement` only
+  matched a ten-rule table.
+
+  ```python
+  self.speed = speed                        # was grey, now a "set . to" block
+  self.display.text(f"{t:.1f}", 0, 0)       # was grey, now a call block
+  if self.running:                          # the WHOLE if used to go grey
+  ```
+
+  **7,662 raw lines across 66 of 73 projects.** Over the fixture corpus the
+  ratchet moves from **53.31% of statements to 72.61%**, and sockets from 53.88%
+  to 68.86%.
+
+  Three things must still win over the generic reading, and none of them is
+  something the ratchet could catch — a generic call block is "recognised" too,
+  and it generates the same line — so they are asserted block type by block type
+  in `test/blocksPythonObjects.test.ts`: a registered rule (`turtle.forward`), a
+  hoisted hardware object (`led_15.set(True)`, #1058), and a call to a function
+  the program itself defines.
+
+  Three things are deliberately refused, because reading them would rewrite
+  somebody's file in a way the round-trip gate forgives — it compares token
+  shapes, and a renamed name is the same shape:
+
+  - **a module is not an object.** `machine.lightsleep(10)` as a generic call
+    made `machine` a workspace variable, and the import manager already owns that
+    name, so it regenerated as `machine_.lightsleep(10)`.
+  - **a name the generator protects.** `bytes.decode(data)` would come back
+    `bytes_.decode(data)`.
+  - **a hoisted object with one unreadable use.** Claiming `led_15.frobnicate()`
+    would make the constructor look fully accounted for, and `led_15.set(True)`
+    beside it would then hoist a second `Led` on the same pin.
+
+  Also fixed along the way: the generator now carries Blockly's `ORDER_OVERRIDES`
+  for member access and calls, so a dotted chain no longer regenerates as
+  `(self.forward).freq(1000)` — which is valid Python, a different line, and one
+  the round-trip gate rightly refused to commit.
+
 - **A coverage ratchet for the Blocks reader** (#1087, epic #1086). The number
   epic #1086 is about, asserted in CI so it cannot quietly go back down:
   `test/fixtures/coverage/` is forty-three real MicroPython programs spanning the
