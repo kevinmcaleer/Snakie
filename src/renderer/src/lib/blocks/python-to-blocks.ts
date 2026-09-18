@@ -675,6 +675,26 @@ interface CommentRun extends Stmt {
   comment: readonly LogicalLine[]
 }
 
+/**
+ * Is the line above this one a DECORATOR? (W6, #1093)
+ *
+ * A decorated `def` must not be hoisted into the functions section, because the
+ * decorator stays where it is and the two would be separated: `@app.route("/")`
+ * came back with its `def` lifted above it, so the decorator decorated whatever
+ * happened to follow and the route was gone. And the round-trip gate cannot see
+ * it — the gate compares a BAG of line signatures, deliberately, so that the
+ * generator's hoisting is not mistaken for a rewrite, and a line that moved
+ * without changing is exactly what it forgives.
+ *
+ * So a decorated `def` reads as the stackable method block instead, which stays
+ * in the chain immediately under the decorator, whether the decorator itself was
+ * one we understood or a raw line.
+ */
+function decoratedAbove(node: Stmt, siblings: readonly Stmt[]): boolean {
+  const before = siblings[siblings.indexOf(node) - 1]
+  return Boolean(before && before.line.text.startsWith('@') && before.body.length === 0)
+}
+
 /** Is this line nothing but a comment? */
 function isCommentLine(line: LogicalLine): boolean {
   return line.text.startsWith('#')
@@ -1196,7 +1216,12 @@ class Converter {
   indexDefinitions(nodes: readonly Stmt[]): void {
     for (const node of nodes) {
       const def = /^def\s+([A-Za-z_]\w*)\(([^)]*)\):$/.exec(node.line.text)
-      if (!def || !modellableParams(def[2])) continue
+      // THE SAME TEST `recognise` APPLIES, decorator and all. A `def` under a
+      // decorator does not become a procedure block, and registering it here
+      // anyway would build a CALLER block for a definition that does not exist —
+      // a workspace Blockly refuses to load, which costs the learner every block
+      // in the file.
+      if (!def || !modellableParams(def[2]) || decoratedAbove(node, nodes)) continue
       const last = node.body[node.body.length - 1]
       this.definedHere.set(def[1], {
         params: splitParams(def[2]),
@@ -1707,8 +1732,39 @@ class Converter {
     }
     if (/^if\s+.+:$/.test(text)) return recognised([this.ifChain(node, siblings)])
 
+    // --- classes and methods (W6, #1093) ----------------------------------
+    //
+    // THE BIGGEST THEME IN THE CORPUS: 32.8% of all grey lines once W1's `self.`
+    // assignments and calls are counted with it. Before this a `class` came back
+    // as a raw suite with its whole body nested under a grey header — correct,
+    // and a wall.
+    const klass = /^class\s+([A-Za-z_]\w*)\s*(\(.*\))?\s*:$/.exec(text)
+    if (klass) {
+      return recognised([
+        this.withBody(
+          {
+            type: 'snakie_class',
+            fields: { NAME: klass[1], BASES: klass[2] ?? '' }
+          },
+          'BODY',
+          node
+        )
+      ])
+    }
+    // A DECORATOR BELONGS TO THE `def` UNDER IT, so it is read with it rather
+    // than as a block of its own — a decorator block could be dragged away from
+    // the thing it decorates, and would mean nothing where it landed. Only the
+    // three the method block has a setting for; anything else is somebody's own
+    // decorator and stays raw, header and body together.
+    const decorator = /^@(property|staticmethod|classmethod)$/.exec(text)
+    if (decorator) {
+      const decorated = this.decorated(node, siblings, decorator[1])
+      if (decorated) return recognised(decorated)
+    }
+    const method = /^def\s+([A-Za-z_]\w*)\((.*)\)\s*:$/.exec(text)
+
     const def = /^def\s+([A-Za-z_]\w*)\(([^)]*)\):$/.exec(text)
-    if (def && this.depth === 0 && modellableParams(def[2])) {
+    if (def && this.depth === 0 && modellableParams(def[2]) && !decoratedAbove(node, siblings)) {
       this.definitions.push(this.definition(def[1], def[2], node))
       // And the generator will write it into a section of its own, with a blank
       // line after it — which is the gap the learner typed under the `def`. See
@@ -1718,6 +1774,16 @@ class Converter {
       // No block in the chain: it is a root of its own, collected above.
       return recognised([])
     }
+    // A `def` THAT IS NOT A TOP-LEVEL PROCEDURE (W6, #1093). Two kinds land
+    // here: a method inside a class, and a `def` whose signature Blockly's
+    // procedure block cannot hold (`def load(path, flip_x=None)` — see
+    // `modellableParams`, and #1063 for what dropping those parameters cost).
+    //
+    // Both become the same stackable block, which is the shape a hat cannot be:
+    // `procedures_defnoreturn` has no previous or next connection, so it can
+    // never sit inside a class's body. Its parameter list is a FIELD, so any
+    // signature comes back exactly as written.
+    if (method) return recognised([this.method(node, method[1], method[2], 'NONE')])
 
     // --- simple statements -----------------------------------------------
     if (text === 'break' || text === 'continue') {
@@ -1774,7 +1840,9 @@ class Converter {
     if (named) return recognised([named])
 
     const assign = /^([A-Za-z_]\w*)\s*=(?!=)\s*(.+)$/.exec(text)
-    if (assign) {
+    // `self = …` would declare `self` as a workspace variable through the back
+    // door — see {@link name}. Nobody writes it, and a raw line says so.
+    if (assign && assign[1] !== 'self') {
       return recognised([
         {
           type: 'variables_set',
@@ -1815,6 +1883,43 @@ class Converter {
     // Null, and the caller turns it into the raw block or the raw SUITE that
     // keeps the body — see {@link unrecognised}.
     return null
+  }
+
+  /**
+   * `@property` + the `def` under it → one method block (W6, #1093).
+   *
+   * The decorator line and the `def` line are two logical lines and one idea, so
+   * the second is CONSUMED — by identity, the way `ifChain` takes its `elif` and
+   * `else` arms, because guessing from the text is what lost an `else` in #1068.
+   * Its line still has to be counted by hand: `statements()` skips a consumed
+   * node without counting it, on the reasoning that whoever consumed it did.
+   *
+   * Null when the next sibling is not a `def` we can hold, which leaves the
+   * decorator as an ordinary raw line with the `def` under it — exactly what
+   * both were before.
+   */
+  private decorated(
+    node: Stmt,
+    siblings: readonly Stmt[],
+    decorator: string
+  ): BlockJson[] | null {
+    const next = siblings[siblings.indexOf(node) + 1]
+    if (!next || this.consumed.has(next)) return null
+    const def = /^def\s+([A-Za-z_]\w*)\((.*)\)\s*:$/.exec(next.line.text)
+    if (!def) return null
+    this.consumed.add(next)
+    this.report.total += 1
+    this.report.recognised += 1
+    return [this.method(next, def[1], def[2], decorator)]
+  }
+
+  /** `def name(params):` as a STACKABLE block, with its body under it. */
+  private method(node: Stmt, name: string, params: string, decorator: string): BlockJson {
+    return this.withBody(
+      { type: 'snakie_method', fields: { NAME: name, PARAMS: params.trim(), DECORATOR: decorator } },
+      'BODY',
+      node
+    )
   }
 
   /** `if` / `elif` / `else`, gathered from the siblings that follow. */
@@ -2701,6 +2806,12 @@ class Converter {
    * written form the block cannot hold already gets.
    */
   private name(text: string): BlockJson | null {
+    // `self` IS NOT A VARIABLE (W6, #1093, and §4.3 of the delivery plan).
+    // Blockly variables are global to the workspace and renameable from a
+    // dropdown, so a learner renaming `self` in one method would rename it in
+    // twelve and generate a class that no longer works. It gets a block of its
+    // own, which is also how it reads best: *set (self) . speed to (speed)*.
+    if (text === 'self') return { type: 'snakie_self' }
     if (isReservedName(text) || sanitise(text) !== text) return null
     // A MODULE IS NOT AN OBJECT — see {@link importedNames}.
     if (this.imported.has(text)) return null

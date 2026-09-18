@@ -95,7 +95,13 @@ const READ_DIRECTLY: Record<string, string> = {
   snakie_return: 'def go(n):\n    if n < 0:\n        return\n    print(n)\n',
   // --- the escape hatches (#1018), which W1 taught the reader to emit
   snakie_python_statement: 'assert ok\n',
-  snakie_python_suite: 'class Thing:\n    def go(self):\n        print(1)\n',
+  // A suite nothing claims: `while … else:` is real Python, and the `else` arm
+  // belongs to no recogniser, so it keeps its header and its body.
+  snakie_python_suite: 'while x:\n    print(1)\nelse:\n    print(2)\n',
+  // --- structure (W6, #1093)
+  snakie_class: 'class Thing:\n    def go(self):\n        print(1)\n',
+  snakie_method: 'class Thing:\n    def go(self):\n        print(1)\n',
+  snakie_self: 'class Thing:\n    def go(self):\n        self.x = 1\n',
   snakie_python_value: 'x = [v for v in things]\n',
   snakie_python_comment: '# a note\n',
   snakie_python_docstring: '"""What this program does."""\n',

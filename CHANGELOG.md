@@ -8,6 +8,47 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Classes, methods and `@property` read as blocks** (#1093, epic #1086). The
+  single biggest theme in the corpus — **32.8% of all grey lines** once W1's
+  `self.` assignments and calls are counted with it: 2,692 raw lines of nested
+  `def` across 53 projects, 604 `class` headers across 46, 340 decorators across
+  29. The old reader's own placeholder text admitted it: the raw-suite block's
+  prompt is literally *"a Python block, e.g. class Thing:"*.
+
+  The shape is set by Blockly rather than by the reader. `procedures_defnoreturn`
+  is a **hat**, and a hat cannot nest — which is exactly why #1063 stopped
+  hoisting methods out of their class and left the whole thing as a raw suite (a
+  class was losing its header while its twelve methods walked off to become
+  twelve top-level functions). So three new blocks:
+
+  - **`class`**, with a statement input, so a body can live inside it, and the
+    base classes as a field from the start — `(Wheels)`, `(Base, Mixin)`,
+    `(Base, metaclass=Meta)` — because retrofitting inheritance would mean
+    migrating saved workspaces.
+  - **method**, an ordinary stackable block rather than a hat, so it can sit in
+    that input, with `@property` / `@staticmethod` / `@classmethod` as a setting
+    on it rather than a block of its own that could be dragged away. Its
+    parameter list is a **field**, so `def load(self, path, flip_x=None)`,
+    `*args` and a type annotation all come back exactly as written — a signature
+    `procedures_def` could never hold, and #1063 records what dropping one cost.
+  - **`self`**, a block of its own. Blockly variables are global to the workspace
+    and renameable from a dropdown, so a learner renaming `self` in one method
+    would rename it in twelve and generate a class that no longer works.
+
+  All three are registered and **not** in the flyout: a class belongs in the
+  reader's vocabulary, not in a ten-year-old's first drawer (§4.5). Whether that
+  changes is a curriculum decision and one field on each definition.
+
+  Also fixed, and it predates this workstream: a **decorated top-level `def` was
+  being hoisted away from its decorator**. `@app.route("/")` came back with its
+  `def` lifted into the functions section above it, so the decorator decorated
+  whatever happened to follow and the route was gone — and the round-trip gate
+  cannot see it, because it compares a *bag* of line signatures precisely so that
+  the generator's hoisting is not mistaken for a rewrite.
+
+  Statement coverage over the fixture corpus: **78.79% → 87.92%**, and files that
+  open with no grey at all go from 3 of 43 to 4.
+
 - **A statement with a comment on the end is still a block** (#1092, epic
   #1086). The cheapest line in the epic and one of the widest: **1,532 raw lines
   across 55 of 73 projects**, grey for nothing but having a note on the end.
