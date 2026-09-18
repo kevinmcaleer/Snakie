@@ -1,3 +1,4 @@
+import { commentDocstring } from '../docstring'
 import { Order } from '../generator'
 import type { MicroPythonGenerator } from '../generator'
 import type { BlockDefinition } from '../registry'
@@ -35,6 +36,23 @@ function body(block: Blockly.Block, name: string, gen: MicroPythonGenerator): st
   return gen.statementToCode(block, name) || `${gen.INDENT}pass\n`
 }
 
+/**
+ * THE BLOCK'S DESCRIPTION, AS A DOCSTRING.
+ *
+ * Blockly's comment bubble and a Python docstring say the same thing about the
+ * same function, so a `def` block writes its bubble out as the first line of the
+ * body and `python-to-blocks.ts` reads it straight back in. See `docstring.ts`
+ * for why the reading half only ever accepts what it can reproduce exactly.
+ *
+ * `getCommentText` is on the rendered block, not the definition, so a workspace
+ * loaded from a file carries it: Blockly serialises the bubble as the block's
+ * `icons.comment`.
+ */
+function docstring(block: Blockly.Block, gen: MicroPythonGenerator): string {
+  const line = commentDocstring(block.getCommentText?.() ?? null)
+  return line === null ? '' : `${gen.INDENT}${line}\n`
+}
+
 export const FUNCTION_BLOCKS: BlockDefinition[] = [
   {
     type: 'procedures_defnoreturn',
@@ -42,9 +60,13 @@ export const FUNCTION_BLOCKS: BlockDefinition[] = [
     help: 'ref-functions',
     code: (block, gen) => {
       const name = gen.functionName(block.getFieldValue('NAME') ?? 'do_something')
+      // The docstring goes FIRST, where Python looks for one, and the `pass`
+      // filler is only needed when there is neither it nor a body.
+      const doc = docstring(block, gen)
+      const stack = doc ? gen.statementToCode(block, 'STACK') : body(block, 'STACK', gen)
       gen.defineFunction(
         block.id,
-        `def ${name}(${params(block, gen).join(', ')}):\n${body(block, 'STACK', gen)}`
+        `def ${name}(${params(block, gen).join(', ')}):\n${doc}${stack}`
       )
       return ''
     }
@@ -72,7 +94,10 @@ export const FUNCTION_BLOCKS: BlockDefinition[] = [
       const answer = gen.valueToCode(block, 'RETURN', Order.NONE) || 'None'
       // The body first, THEN the return. No `pass` branch any more: a `def` that
       // always ends in `return` can never have an empty body to fill.
-      const inner = gen.statementToCode(block, 'STACK') + `${gen.INDENT}return ${answer}\n`
+      const inner =
+        docstring(block, gen) +
+        gen.statementToCode(block, 'STACK') +
+        `${gen.INDENT}return ${answer}\n`
       gen.defineFunction(block.id, `def ${name}(${params(block, gen).join(', ')}):\n${inner}`)
       return ''
     }

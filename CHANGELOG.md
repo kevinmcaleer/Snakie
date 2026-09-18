@@ -8,6 +8,33 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A function's docstring is its block's description, both ways** (epic #1007).
+  Blockly's comment bubble and a Python docstring say the same thing about the
+  same function, so they are now one thing in two notations:
+
+  ```python
+  def distance():                            ┌────────────────────────┐
+      """Returns the distance."""      <->     │ Returns the distance.  │
+      ...                                    └───────────┬────────────┘
+                                                   to ( distance )
+  ```
+
+  Type the docstring in the code pane and the bubble fills in; write the bubble
+  and the docstring appears, on the first line where Python looks for one. One
+  line stays on one line; more than one gets the summary on the opening line and
+  the closing quotes on their own, which are the two shapes PEP 257 describes.
+  Before this a docstring came back as a raw Python block sitting at the top of
+  the function body — a true rendering of the line and a poor rendering of what
+  the line is *for*.
+
+  **It is only ever a description when it can be put back exactly.** Moving a
+  line out of a program and into a block's metadata is the most dangerous thing
+  a decompiler can do, so the conversion is not "parse a docstring" but "parse
+  it, write it back out, and accept it only if the result is character for
+  character what was there". A `'''` docstring, a file indented with two spaces,
+  `"""a""" + b`, a string that is not the first line — each fails that check and
+  stays the raw block it always was, which is uglier and cannot be wrong.
+
 - **A `round … to … decimal places` block** (#1011, epic #1007). `math_round`
   picks nearest, up or down and has one socket, so `round(distance / 10, 1)` —
   the form nearly every sensor reading is printed in — could not be built at all

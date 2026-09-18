@@ -1,5 +1,6 @@
 import type { BlocksWorkspace } from '../../../../shared/blocks-doc'
 import type { ArgField, CallReceiver } from './registry'
+import { docstringComment } from './docstring'
 import {
   isSuiteHeader,
   logicalLines,
@@ -48,6 +49,12 @@ export interface BlockJson {
   fields?: Record<string, unknown>
   inputs?: Record<string, { block?: BlockJson; shadow?: BlockJson }>
   extraState?: unknown
+  /**
+   * Blockly's own serialisation for a block's attachments — the comment bubble
+   * is `icons.comment`, which is how a `def`'s docstring comes across as the
+   * block's description (see `docstring.ts`).
+   */
+  icons?: Record<string, unknown>
   next?: { block: BlockJson }
   x?: number
   y?: number
@@ -1360,16 +1367,31 @@ class Converter {
   private definition(name: string, params: string, node: Stmt): BlockJson {
     // Every one of these is a bare name — `modellableParams` is what let us in.
     const args = splitParams(params)
+    // A LEADING DOCSTRING IS THE BLOCK'S DESCRIPTION, not a statement in the
+    // body — one idea in two notations, so it becomes the comment bubble rather
+    // than a raw Python block sitting at the top of the function. Only when it
+    // can be written back out exactly; see `docstring.ts`.
+    const first = node.body[0]
+    const described = first && first.body.length === 0 ? docstringComment(first.line.text) : null
+    const statements = described === null ? node.body : node.body.slice(1)
     // A trailing `return` becomes the definition's RETURN socket, which is the
     // shape Blockly models a function's result with.
-    const last = node.body[node.body.length - 1]
+    const last = statements[statements.length - 1]
     const returns = last && /^return\s+(.+)$/.exec(last.line.text)
-    const body = this.nested(returns ? node.body.slice(0, -1) : node.body)
+    const body = this.nested(returns ? statements.slice(0, -1) : statements)
     const block: BlockJson = {
       type: returns ? 'procedures_defreturn' : 'procedures_defnoreturn',
       fields: { NAME: name },
       extraState: { params: args.map((a) => ({ name: a, id: this.variable(a) })) },
       inputs: {}
+    }
+    if (described !== null) {
+      this.report.total += 1
+      this.report.recognised += 1
+      // Blockly's own serialisation for the bubble. `pinned: false` leaves it
+      // closed, so a long description does not cover the canvas the moment a
+      // file opens — the `?` on the block opens it.
+      block.icons = { comment: { text: described, pinned: false, height: 80, width: 160 } }
     }
     if (body) block.inputs!.STACK = { block: body }
     if (returns) {
