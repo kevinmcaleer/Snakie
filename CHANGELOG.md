@@ -8,6 +8,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A delivery plan for reading the MicroPython people actually write** (epic
+  #1086). `docs/blocks-coverage-epic.md` — the follow-on to #1007, which shipped
+  the Blocks workspace and a reader for *the subset our own generator emits*.
+
+  Measured rather than guessed. Running the real `pythonToBlocks()` with the full
+  palette installed over 688 non-vendored MicroPython files (73 projects, 57,097
+  logical lines) says the reader renders **54.7% of lines as blocks**, and just
+  **34 of 688 files** open with no grey raw-Python block at all.
+
+  The finding that shapes the plan: **the two largest gaps need no new blocks.**
+  `snakie_python_call`, `snakie_python_attr_get` and `snakie_python_attr_set`
+  have shipped since #1018 as escape hatches for a person to drag — the reader
+  simply never emits them, because `parseAtom` bails on any name followed by `.`
+  and `callStatement` only matches a ten-rule table. Wiring those up is 8,065
+  lines, or 54.7% → 68.8%, with nothing added to the palette. Classes are the
+  single biggest theme after that, at 32.8% of all grey lines.
+
+  Eleven sub-issues, #1087–#1097, in four phases. The ratchet (#1087) lands
+  first, because a coverage number that is not asserted in CI is a number that
+  goes quietly wrong — and it needs **two** measures, not one: `rawValue()` never
+  increments `report.raw`, so `echo = Pin(0, Pin.IN)` reports itself fully
+  recognised while rendering as *set echo to (grey blob)* (#1097).
+
 - **A function's docstring is its block's description, both ways** (epic #1007).
   Blockly's comment bubble and a Python docstring say the same thing about the
   same function, so they are now one thing in two notations:
