@@ -55,12 +55,24 @@ export const FUNCTION_BLOCKS: BlockDefinition[] = [
     help: 'ref-functions',
     code: (block, gen) => {
       const name = gen.functionName(block.getFieldValue('NAME') ?? 'get_something')
-      const answer = gen.valueToCode(block, 'RETURN', Order.NONE)
-      // The body first, THEN the return — and `pass` only when there is neither,
-      // because `def f(): return 1` needs no filler.
-      const stack = gen.statementToCode(block, 'STACK')
-      const tail = answer ? `${gen.INDENT}return ${answer}\n` : ''
-      const inner = stack + tail || `${gen.INDENT}pass\n`
+      // AN EMPTY SOCKET IS `None`, NOT NO RETURN AT ALL.
+      //
+      // This used to drop the whole `return` line while the socket was empty, so
+      // dropping the returning `def` block out of the drawer put
+      // `def do_something():\n    pass` in the mirror — a block with a `return`
+      // row on it and a function that does not return, which is precisely the
+      // disagreement between the two halves that the mirror exists to rule out.
+      //
+      // Every other empty value socket in this palette substitutes a placeholder
+      // rather than deleting the construct around it: `if` with nothing in it is
+      // `if False:`, `repeat` is `range(0)`, `for each` is over `[]`. The
+      // learner reached for the block that has an answer, so the answer is
+      // `None` until they say otherwise — and it fills in the moment they plug
+      // anything into the socket.
+      const answer = gen.valueToCode(block, 'RETURN', Order.NONE) || 'None'
+      // The body first, THEN the return. No `pass` branch any more: a `def` that
+      // always ends in `return` can never have an empty body to fill.
+      const inner = gen.statementToCode(block, 'STACK') + `${gen.INDENT}return ${answer}\n`
       gen.defineFunction(block.id, `def ${name}(${params(block, gen).join(', ')}):\n${inner}`)
       return ''
     }

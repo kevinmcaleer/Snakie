@@ -223,10 +223,17 @@ const BUILT_IN_RULES: CallRule[] = [
   { module: 'time', fn: 'sleep', type: 'snakie_wait_seconds', args: ['SECS'] },
   { module: 'time', fn: 'sleep_ms', type: 'snakie_wait_ms', args: ['MS'] },
   { module: 'time', fn: 'sleep_us', type: 'snakie_wait_us', args: ['US'] },
+  { module: 'time', fn: 'ticks_us', type: 'snakie_ticks_us', shape: 'value' },
+  // `ticks_diff(end, start)` — the LATER reading first, which is why the sockets
+  // come back the other way round from the arguments.
+  { module: 'time', fn: 'ticks_diff', type: 'snakie_ticks_diff', args: ['TO', 'FROM'], shape: 'value' },
   { fn: 'print', type: 'text_print', args: ['TEXT'] },
   { fn: 'len', type: 'text_length', args: ['VALUE'], shape: 'value' },
   { fn: 'abs', type: 'snakie_math_abs', args: ['NUM'], shape: 'value' },
-  { fn: 'round', type: 'math_round', args: ['NUM'], shape: 'value' }
+  { fn: 'round', type: 'math_round', args: ['NUM'], shape: 'value' },
+  // `round(x, 1)` — two arguments, so it cannot be `math_round` and needs the
+  // block that has a socket for the places.
+  { fn: 'round', type: 'snakie_math_round_places', args: ['NUM', 'PLACES'], shape: 'value' }
 ]
 
 const REGISTERED: CallRule[] = []
@@ -1441,11 +1448,7 @@ class Converter {
     // "module" is an object this file declared, not a module at all.
     const onObject = this.receiverCall(call, 'statement')
     if (onObject) return onObject
-    const rule = rules().find(
-      (r) => r.fn === call.fn && (r.module ?? '') === (call.module ?? '') && (r.shape ?? 'statement') === 'statement'
-    )
-    if (!rule) return null
-    return this.buildCall(rule, call.args)
+    return this.matchCall(call, 'statement')
   }
 
   /**
@@ -1502,6 +1505,34 @@ class Converter {
   }
 
   /** Fill a rule's block from the argument texts. */
+  /**
+   * The block for a call, from the first rule that can actually hold it.
+   *
+   * EVERY MATCHING RULE IS TRIED, not just the first one found. One function can
+   * be two blocks depending on how many arguments it is given — `round(x)` is
+   * "round to the nearest whole number" and `round(x, 1)` is "round to 1 decimal
+   * place", which `math_round` has nowhere to put. Stopping at the first rule
+   * whose name matched meant the second block could never be reached, and the
+   * two-argument form stayed raw Python inside an otherwise converted program.
+   *
+   * {@link buildCall} is what does the rejecting — a rule whose argument count
+   * does not line up returns null rather than dropping an argument — so this
+   * only has to keep asking.
+   */
+  private matchCall(
+    call: { module?: string; fn: string; args: string[] },
+    shape: 'statement' | 'value'
+  ): BlockJson | null {
+    for (const rule of rules()) {
+      if (rule.fn !== call.fn) continue
+      if ((rule.module ?? '') !== (call.module ?? '')) continue
+      if ((rule.shape ?? 'statement') !== shape) continue
+      const block = this.buildCall(rule, call.args)
+      if (block) return block
+    }
+    return null
+  }
+
   private buildCall(rule: CallRule, args: readonly string[]): BlockJson | null {
     const names = rule.args ?? []
     // A call with the wrong number of arguments is not this block, whatever it
@@ -1822,16 +1853,8 @@ class Converter {
       if (call) {
         const onObject = this.receiverCall(call, 'value')
         if (onObject) return { block: onObject, next: call.next }
-        const rule = rules().find(
-          (r) =>
-            r.fn === call.fn &&
-            (r.module ?? '') === (call.module ?? '') &&
-            (r.shape ?? 'statement') === 'value'
-        )
-        if (rule) {
-          const block = this.buildCall(rule, call.args)
-          if (block) return { block, next: call.next }
-        }
+        const block = this.matchCall(call, 'value')
+        if (block) return { block, next: call.next }
         return null // a call we do not know: the whole expression goes raw
       }
       // A plain name, not followed by a dot or a bracket, is a variable.

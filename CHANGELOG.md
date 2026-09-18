@@ -8,6 +8,46 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A `round … to … decimal places` block** (#1011, epic #1007). `math_round`
+  picks nearest, up or down and has one socket, so `round(distance / 10, 1)` —
+  the form nearly every sensor reading is printed in — could not be built at all
+  and came back as raw Python inside an otherwise fully converted function. It is
+  its own block rather than a second socket on `math_round`, whose up and down
+  options go through `math.ceil`/`math.floor` and have nowhere to put a number of
+  places.
+
+  The call table can now hold **two rules for one function name**: the matcher
+  used to stop at the first rule whose name matched and give up if its argument
+  count did not line up, so a second block for the same function could never be
+  reached. `round(x)` is still the nearest-whole block; `round(x, 1)` is the new
+  one.
+
+- **Reading the clock: `microsecond ticks` and `ticks from … to …`** (#1011,
+  epic #1007). The other half of timing a pulse is measuring one, so the Wait
+  drawer now reads the clock as well as waiting on it:
+
+  ```python
+  start = time.ticks_us()
+  print(time.ticks_diff(time.ticks_us(), start))
+  ```
+
+  **The two ship together on purpose.** MicroPython's tick counters *wrap* — they
+  count up to an unspecified limit and start again — so `end - start` is right
+  almost always and catastrophically wrong on the wrap, a bug that shows up once
+  an hour on a Pico and never in a lesson. `ticks_diff` is the only supported way
+  to do that subtraction, so a `ticks_us` block on its own would be a block whose
+  obvious use is a bug.
+
+  The `ticks from … to …` block takes its readings in the order you think in,
+  and swaps them for the call, which takes the *later* one first — which is most
+  of the reason it is a block rather than a note telling people to be careful.
+
+  On CircuitPython, which has neither function, `microsecond ticks` is
+  `time.monotonic_ns() // 1000` (not `time.monotonic()`, which is a float in
+  seconds and loses resolution the longer the board is up — the wrong property
+  for timing a pulse), and the difference is a plain subtraction, because that
+  counter does not wrap.
+
 - **A microseconds block on the Wait shelf** (#1011, epic #1007). `wait N
   microseconds` → `time.sleep_us(N)`, beside the seconds and milliseconds blocks.
 
@@ -75,6 +115,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the fix rather than a silent substitution of some other pin.
 
 ### Fixed
+
+- **A function with an answer says so in the Python.** Dropping the returning
+  `def` block out of the Functions drawer put `def do_something():` / `pass` in
+  the mirror — a block with a `return` row drawn on it beside a function that
+  does not return, which is exactly the disagreement between the two halves the
+  mirror exists to rule out. (The block itself was always drawn correctly; it was
+  the generated Python that was missing it.)
+
+  An empty return socket is now `return None`, and fills in the moment anything
+  is plugged into it. That is what every other empty value socket in the palette
+  already does — `if` with nothing in it is `if False:`, `repeat` is `range(0)`,
+  `for each` is over `[]` — and this one was the odd one out in deleting the
+  construct around the hole instead of filling it.
 
 - **Calling your own function is a function block again, not raw Python.** A
   `def` in the code pane became a proper Functions block, and every call to it

@@ -108,6 +108,40 @@ export const MATHS_BLOCKS: BlockDefinition[] = [
     }
   },
   {
+    // TWO-ARGUMENT `round`, which `math_round` cannot hold: its dropdown picks
+    // nearest/up/down and it has one socket, so `round(x, 1)` — the form every
+    // sensor reading is printed with — came back as raw Python and could not be
+    // built at all. Kept as its own block rather than a second socket on
+    // `math_round`, whose up and down options go through `math.ceil`/`floor` and
+    // have nowhere to put a number of places.
+    type: 'snakie_math_round_places',
+    category: 'math',
+    help: 'ref-builtins',
+    json: {
+      message0: 'round %1 to %2 decimal places',
+      args0: [
+        { type: 'input_value', name: 'NUM', check: 'Number' },
+        { type: 'input_value', name: 'PLACES', check: 'Number' }
+      ],
+      inputsInline: true,
+      output: 'Number',
+      tooltip:
+        'Round a number to a number of decimal places. 1 place turns 12.345 into 12.3 — which is how a distance or a temperature is usually shown.'
+    },
+    toolbox: {
+      inputs: {
+        NUM: { shadow: { type: 'math_number', fields: { NUM: 12.345 } } },
+        PLACES: { shadow: { type: 'math_number', fields: { NUM: 1 } } }
+      }
+    },
+    code: (block, gen) => [
+      `round(${gen.valueToCode(block, 'NUM', Order.NONE) || '0'}, ${
+        gen.valueToCode(block, 'PLACES', Order.NONE) || '0'
+      })`,
+      Order.FUNCTION_CALL
+    ]
+  },
+  {
     type: 'snakie_math_abs',
     category: 'math',
     help: 'ref-builtins',
