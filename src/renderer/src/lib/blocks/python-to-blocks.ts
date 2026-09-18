@@ -94,7 +94,7 @@ export interface BlockJson {
  * call, a raw value block could be anything at runtime, which is exactly why
  * Blockly leaves their output unchecked too.
  */
-type SocketType = 'String' | 'Number' | 'Boolean'
+type SocketType = 'String' | 'Number' | 'Boolean' | 'Array'
 
 const OUTPUT_TYPE = new Map<string, SocketType>([
   ['text', 'String'],
@@ -108,7 +108,15 @@ const OUTPUT_TYPE = new Map<string, SocketType>([
   ['logic_boolean', 'Boolean'],
   ['logic_compare', 'Boolean'],
   ['logic_negate', 'Boolean'],
-  ['logic_operation', 'Boolean']
+  ['logic_operation', 'Boolean'],
+  // `controls_forEach`'s LIST socket checks Array, and a `text` in it is the
+  // same class of unloadable workspace the table above exists for (#1087):
+  // `for name in "EDCDEEE":` is ordinary Python — iterating a string — and it
+  // took the whole file's canvas down with it.
+  ['lists_create_with', 'Array'],
+  ['lists_repeat', 'Array'],
+  ['lists_sort', 'Array'],
+  ['lists_split', 'Array']
 ])
 
 /** Can this block sit in a socket that accepts `want`? Unknown always can. */
@@ -127,6 +135,22 @@ export interface ConversionReport {
   rawLines: number[]
   /** Total logical lines read. */
   total: number
+  /**
+   * VALUE SOCKETS, COUNTED SEPARATELY (W0, epic #1086).
+   *
+   * `rawValue()` never increments {@link raw} — only `raw()` does — so a
+   * statement that becomes a real block with an unreadable EXPRESSION in one of
+   * its sockets counts as recognised. That asymmetry is deliberate and is what
+   * makes most of epic #1086 cheap (see `docs/blocks-coverage-epic.md` §4.2),
+   * but it leaves `echo = Pin(0, Pin.IN)` reporting a clean line while it
+   * renders as *set echo to (grey blob)*.
+   *
+   * So sockets get their own number. One per value socket the conversion
+   * filled, and how many of those came back grey.
+   */
+  sockets: number
+  /** Of those, the ones holding a grey Python value block. */
+  rawSockets: number
 }
 
 export interface Conversion {
@@ -144,6 +168,15 @@ export interface Conversion {
  * loses a next connection fails a test rather than a learner's canvas.
  */
 const TERMINAL_TYPES = new Set(['snakie_forever', 'controls_flow_statements'])
+
+/**
+ * The value blocks that are the FALLBACK rather than a reading (W0, epic #1086).
+ *
+ * A socket holding one of these regenerates its text verbatim and is correct —
+ * that is the guarantee — but it is not a block the learner can take apart, so
+ * it is what socket coverage counts against itself.
+ */
+const GREY_VALUE_TYPES = new Set(['snakie_python_value', 'snakie_python_call_value'])
 
 /**
  * Blocks the generator lifts OUT of the body into a section of its own.
@@ -775,7 +808,14 @@ function identifyBlock(block: BlockJson, path: string): void {
 }
 
 class Converter {
-  readonly report: ConversionReport = { recognised: 0, raw: 0, rawLines: [], total: 0 }
+  readonly report: ConversionReport = {
+    recognised: 0,
+    raw: 0,
+    rawLines: [],
+    total: 0,
+    sockets: 0,
+    rawSockets: 0
+  }
   /** The module-level chain, filled in by {@link convert}. */
   stack: BlockJson | null = null
   /** Hoisted objects this file declares, by name (#1058). */
@@ -879,9 +919,14 @@ class Converter {
       const last = node.body[node.body.length - 1]
       this.definedHere.set(def[1], {
         params: splitParams(def[2]),
-        // The same rule `definition` uses: a TRAILING `return <expr>` becomes
-        // the block's RETURN socket, and that is what makes it a `defreturn`.
-        returns: Boolean(last && /^return\s+(.+)$/.test(last.line.text))
+        // The same rule `definition` uses, down to the comment: a TRAILING
+        // `return <expr>` becomes the block's RETURN socket, and that is what
+        // makes it a `defreturn`. One carrying a trailing comment does not
+        // (#1087), and the two must agree or a caller block is built for a
+        // definition of the other shape.
+        returns: Boolean(
+          last && trailingCommentAt(last.line.text) < 0 && /^return\s+(.+)$/.test(last.line.text)
+        )
       })
     }
   }
@@ -1184,17 +1229,25 @@ class Converter {
     }
     const forEach = /^for\s+([A-Za-z_]\w*)\s+in\s+(.+):$/.exec(text)
     if (forEach) {
-      return recognised([
-        this.withBody(
-          {
-            type: 'controls_forEach',
-            fields: { VAR: { id: this.variable(forEach[1]) } },
-            inputs: { LIST: { block: this.expression(forEach[2]) } }
-          },
-          'DO',
-          node
-        )
-      ])
+      // The thing being iterated has to FIT the LIST socket, which checks Array
+      // (#1087). `for name in "EDCDEEE":` iterates a string — ordinary Python —
+      // and a `text` block in there is a workspace Blockly refuses to load, so
+      // it used to cost the learner every block in the file rather than one.
+      const list = this.expression(forEach[2])
+      if (fitsSocket(list, 'Array')) {
+        return recognised([
+          this.withBody(
+            {
+              type: 'controls_forEach',
+              fields: { VAR: { id: this.variable(forEach[1]) } },
+              inputs: { LIST: { block: list } }
+            },
+            'DO',
+            node
+          )
+        ])
+      }
+      return [this.rawSuite(node)]
     }
     const whileNot = /^while\s+not\s+(.+):$/.exec(text)
     if (whileNot) {
@@ -1377,7 +1430,13 @@ class Converter {
     // A trailing `return` becomes the definition's RETURN socket, which is the
     // shape Blockly models a function's result with.
     const last = statements[statements.length - 1]
-    const returns = last && /^return\s+(.+)$/.exec(last.line.text)
+    // NOT ONE THAT CARRIES A COMMENT (#1087). `statement()` refuses a line with
+    // a trailing comment because no block holds both halves — and this path
+    // never asked, so `return width * 0.0343 / 2  # centimetres` put the
+    // expression in the RETURN socket and dropped the comment on the floor.
+    // Silently, and counted as a success.
+    const trailing = last && trailingCommentAt(last.line.text) < 0 ? last : undefined
+    const returns = trailing && /^return\s+(.+)$/.exec(trailing.line.text)
     const body = this.nested(returns ? statements.slice(0, -1) : statements)
     const block: BlockJson = {
       type: returns ? 'procedures_defreturn' : 'procedures_defnoreturn',
@@ -1579,6 +1638,17 @@ class Converter {
    * expression is never lost and never rewritten.
    */
   expression(text: string): BlockJson {
+    // ONE CALL, ONE SOCKET. This is the single door every value socket is
+    // filled through, which is what makes the socket half of W0's ratchet a
+    // count rather than a walk of the finished workspace — see
+    // {@link ConversionReport.sockets}.
+    this.report.sockets += 1
+    const block = this.readExpression(text)
+    if (GREY_VALUE_TYPES.has(block.type)) this.report.rawSockets += 1
+    return block
+  }
+
+  private readExpression(text: string): BlockJson {
     const trimmed = text.trim()
     // A CALL TO ONE OF THIS PROGRAM'S OWN FUNCTIONS, before the parser, which
     // would otherwise read `double(3)` as a call it does not recognise and hand

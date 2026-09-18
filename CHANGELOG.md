@@ -8,6 +8,45 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A coverage ratchet for the Blocks reader** (#1087, epic #1086). The number
+  epic #1086 is about, asserted in CI so it cannot quietly go back down:
+  `test/fixtures/coverage/` is forty-three real MicroPython programs spanning the
+  buckets the epic measured, and `test/blocksCoverageRatchet.test.ts` floors three
+  numbers over them and round-trips every file.
+
+  **Three numbers, not one**, and the second is the point. `rawValue()` never
+  increments `report.raw` — only `raw()` does — so `echo = Pin(0, Pin.IN)` reports
+  itself fully recognised while rendering as *set echo to (grey blob)*. Statement
+  coverage alone would stay blind to that while three workstreams fixed thousands
+  of lines of exactly that shape, and the epic would look like it had barely
+  moved. So `ConversionReport` now counts value **sockets** as well as statements,
+  and the ratchet floors statement coverage, socket coverage and the share of
+  files that open with no grey at all. The baseline the floors were set from:
+  **53.31% of statements, 53.88% of sockets, 2 of 43 files clean.**
+
+  Writing it down found four faults in the reader before a single workstream
+  started, which is roughly the argument for writing it first:
+
+  - `for name in "EDCDEEE":` — iterating a string, ordinary Python — built a
+    `text` block into `controls_forEach`'s LIST socket, which checks Array.
+    Blockly refused the whole workspace, so one line cost the learner every block
+    in the file. Same class of fault as #1071, same answer: the socket table now
+    knows about Array, and a list that will not fit leaves the loop raw.
+  - `return width * 0.0343 / 2  # centimetres` as the last line of a function
+    dropped the comment on the floor. `statement()` refuses a line carrying a
+    trailing comment because no block holds both halves; the `def`'s RETURN
+    socket never asked.
+  - `volts = raw * 3.3 / 65535` regenerated as `(raw * 3.3) / 65535`, which the
+    round-trip gate reads as a different program — so the blocks silently stopped
+    following anyone who wrote one of the commonest lines in a sensor program.
+    `+ - * /` are left-associative and `**` is right-associative, and the
+    arithmetic blocks now say so, which drops the brackets on the side that
+    associates.
+
+  The real corpus cannot live in the repo, so it stays available as an
+  environment-gated pass in the same file:
+  `SNAKIE_CORPUS=~/MicroPython npx vitest run test/blocksCoverageRatchet`.
+
 - **A delivery plan for reading the MicroPython people actually write** (epic
   #1086). `docs/blocks-coverage-epic.md` — the follow-on to #1007, which shipped
   the Blocks workspace and a reader for *the subset our own generator emits*.

@@ -48,8 +48,27 @@ export const MATHS_BLOCKS: BlockDefinition[] = [
     },
     code: (block, gen) => {
       const [op, order] = ARITHMETIC[block.getFieldValue('OP')] ?? ['+', Order.ADDITIVE]
-      const a = gen.valueToCode(block, 'A', order) || '0'
-      const b = gen.valueToCode(block, 'B', order) || '0'
+      // THE SIDE THAT ASSOCIATES NEEDS NO BRACKETS (#1087, epic #1086).
+      //
+      // Blockly parenthesises whenever the inner order is at least as tight as
+      // the outer one, because `valueToCode` cannot see WHICH socket it is
+      // filling — and `a - (b - c)` really is not `a - b - c`. Here we can see
+      // it. `+ - * /` are left-associative, so the LEFT operand at the same
+      // precedence is exactly what the source said and the brackets are noise;
+      // `**` is right-associative, so it is the right operand instead.
+      //
+      // Asking for one step LOOSER on that side is what says so: an inner block
+      // at the same precedence no longer trips `outer <= inner`, and anything
+      // genuinely looser still does.
+      //
+      // Not cosmetic. `volts = raw * 3.3 / 65535` came back as
+      // `(raw * 3.3) / 65535`, which the round-trip gate reads as a different
+      // program — so the blocks were held back from a learner who wrote one of
+      // the commonest lines in a sensor program, with nothing said.
+      const loose = order + 1
+      const rightAssociative = op === '**'
+      const a = gen.valueToCode(block, 'A', rightAssociative ? order : loose) || '0'
+      const b = gen.valueToCode(block, 'B', rightAssociative ? loose : order) || '0'
       return [`${a} ${op} ${b}`, order]
     }
   },
@@ -64,7 +83,10 @@ export const MATHS_BLOCKS: BlockDefinition[] = [
       }
     },
     code: (block, gen) => {
-      const a = gen.valueToCode(block, 'DIVIDEND', Order.MULTIPLICATIVE) || '0'
+      // Left-associative, so the dividend needs no brackets at its own
+      // precedence — see `math_arithmetic` above for why that is asked for by
+      // requesting one step looser.
+      const a = gen.valueToCode(block, 'DIVIDEND', Order.MULTIPLICATIVE + 1) || '0'
       const b = gen.valueToCode(block, 'DIVISOR', Order.MULTIPLICATIVE) || '1'
       return [`${a} % ${b}`, Order.MULTIPLICATIVE]
     }
