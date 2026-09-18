@@ -664,7 +664,17 @@ function blockHeight(block: BlockJson): number {
  * apart. Measured against the real canvas; see the comment above.
  */
 function isStatementBody(input: string): boolean {
-  return input === 'ELSE' || input === 'STACK' || /^DO\d*$/.test(input)
+  // `BODY` is the class and method blocks (W6), `TRY` and `FINALLY` the `try`
+  // block (W7). A body the estimator cannot see is a root measured short, and a
+  // root measured short is one the next root is drawn on top of.
+  return (
+    input === 'ELSE' ||
+    input === 'STACK' ||
+    input === 'BODY' ||
+    input === 'TRY' ||
+    input === 'FINALLY' ||
+    /^DO\d*$/.test(input)
+  )
 }
 
 /**
@@ -1732,6 +1742,21 @@ class Converter {
     }
     if (/^if\s+.+:$/.test(text)) return recognised([this.ifChain(node, siblings)])
 
+    // --- try / with / raise (W7, #1094) -----------------------------------
+    if (text === 'try:') return recognised([this.tryChain(node, siblings)])
+    const withHead = /^with\s+(.+):$/.exec(text)
+    if (withHead) {
+      return recognised([
+        this.withBody({ type: 'snakie_with', fields: { ITEMS: withHead[1].trim() } }, 'BODY', node)
+      ])
+    }
+    const raise = /^raise(?:\s+(.+))?$/.exec(text)
+    if (raise) {
+      const block: BlockJson = { type: 'snakie_raise' }
+      if (raise[1] !== undefined) block.inputs = { VALUE: { block: this.expression(raise[1]) } }
+      return recognised([block])
+    }
+
     // --- classes and methods (W6, #1093) ----------------------------------
     //
     // THE BIGGEST THEME IN THE CORPUS: 32.8% of all grey lines once W1's `self.`
@@ -1967,6 +1992,77 @@ class Converter {
       }
     }
     return block
+  }
+
+  /**
+   * `try` / `except` / `else` / `finally`, gathered from the siblings (W7, #1094).
+   *
+   * THE SAME MACHINERY AS `ifChain`, and for the same reason it was written that
+   * way: an arm is a SIBLING LINE, not a child, and the header that claims one
+   * has to mark it consumed or it is converted twice or not at all. That is the
+   * #1068 failure mode exactly, and the `else:` of a `try` is the same token as
+   * a loop's — whichever header claims it must say so.
+   *
+   * THE ARMS ARE ASKED FOR IN ORDER and the scan stops at the first sibling that
+   * is not one, so a comment at column zero between two arms ends the chain
+   * rather than being skipped past — which is the bug #1068 records.
+   */
+  private tryChain(node: Stmt, siblings: readonly Stmt[]): BlockJson {
+    const block: BlockJson = { type: 'snakie_try', fields: {}, inputs: {} }
+    const attach = (input: string, arm: Stmt): void => {
+      const body = this.nested(arm.body)
+      if (body) block.inputs![input] = { block: body }
+    }
+    attach('TRY', node)
+    const excepts: string[] = []
+    let elseArm: Stmt | null = null
+    let finallyArm: Stmt | null = null
+    let i = siblings.indexOf(node) + 1
+    while (i < siblings.length) {
+      const next = siblings[i]
+      const text = next.line.text
+      const except = /^except\b\s*(.*?)\s*:$/.exec(text)
+      if (except && elseArm === null && finallyArm === null) {
+        this.claimArm(next)
+        block.fields![`EXCEPT${excepts.length}`] = except[1]
+        attach(`DO${excepts.length}`, next)
+        excepts.push(except[1])
+        i += 1
+        continue
+      }
+      // `else` only after an `except`, which is what Python allows, and
+      // `finally` last.
+      if (text === 'else:' && excepts.length > 0 && elseArm === null && finallyArm === null) {
+        elseArm = next
+        this.claimArm(next)
+        attach('ELSE', next)
+        i += 1
+        continue
+      }
+      if (text === 'finally:' && finallyArm === null) {
+        finallyArm = next
+        this.claimArm(next)
+        attach('FINALLY', next)
+        i += 1
+        continue
+      }
+      break
+    }
+    block.extraState = {
+      excepts,
+      hasElse: elseArm !== null,
+      hasFinally: finallyArm !== null
+    }
+    if (Object.keys(block.fields!).length === 0) delete block.fields
+    if (Object.keys(block.inputs!).length === 0) delete block.inputs
+    return block
+  }
+
+  /** Take an arm: mark it consumed and count its line, as `ifChain` does. */
+  private claimArm(arm: Stmt): void {
+    this.consumed.add(arm)
+    this.report.total += 1
+    this.report.recognised += 1
   }
 
   /** `def name(a, b):` → a procedure definition, with its body. */

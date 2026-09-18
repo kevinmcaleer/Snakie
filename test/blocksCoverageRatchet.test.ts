@@ -48,20 +48,22 @@ import { installCorePalette } from '../src/renderer/src/lib/blocks/palette'
  * headroom between a floor and the measurement is never a mystery.
  */
 
-/** Recognised lines / logical lines. 53.31% at W0, 78.79% at W5, 87.92% at W6. */
-const STATEMENT_FLOOR = 87
+/** Recognised lines / logical lines. 53.31% at W0, 87.92% at W6, 92.49% at W7. */
+const STATEMENT_FLOOR = 92
 
 /**
  * Value sockets holding a real block. 53.88% at W0, 72.41% at W10, 71.58% at W3.
  *
- * ARGUED DOWN ONCE, on purpose and out loud. W3 (#1090) turned every
- * `return <expr>` from a grey STATEMENT into a real block with that expression
- * in a socket — so a few hundred expressions that were never measured joined the
- * denominator, and some of them (`return found.get(name)`, `return (a, b, c)`)
- * are genuinely grey values. Nothing got worse; more of the file is being
- * counted. Statement coverage moved 72.61% → 76.73% in the same change.
+ * ARGUED DOWN TWICE, on purpose and out loud, and for the same reason both
+ * times. W3 (#1090) turned every `return <expr>` from a grey STATEMENT into a
+ * real block with that expression in a socket, and W7 (#1094) did the same for
+ * `raise <expr>` — so several hundred expressions that were never measured
+ * joined the denominator, and some of them (`return found.get(name)`,
+ * `raise RuntimeError("bad file")`) are genuinely grey values. Nothing got
+ * worse; more of the file is being counted. Statement coverage moved 72.61% →
+ * 92.49% across the same changes.
  */
-const SOCKET_FLOOR = 71
+const SOCKET_FLOOR = 70
 
 /** Files that open with no grey at all. 4.65% at W0, 9.30% at W6. */
 const CLEAN_FILE_FLOOR = 9

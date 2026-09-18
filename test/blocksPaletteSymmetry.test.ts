@@ -102,6 +102,10 @@ const READ_DIRECTLY: Record<string, string> = {
   snakie_class: 'class Thing:\n    def go(self):\n        print(1)\n',
   snakie_method: 'class Thing:\n    def go(self):\n        print(1)\n',
   snakie_self: 'class Thing:\n    def go(self):\n        self.x = 1\n',
+  // --- error handling and resources (W7, #1094)
+  snakie_try: 'try:\n    print(1)\nexcept OSError as e:\n    print(e)\n',
+  snakie_with: 'with open(path) as handle:\n    print(handle)\n',
+  snakie_raise: 'raise RuntimeError("no wifi")\n',
   snakie_python_value: 'x = [v for v in things]\n',
   snakie_python_comment: '# a note\n',
   snakie_python_docstring: '"""What this program does."""\n',

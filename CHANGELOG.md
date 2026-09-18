@@ -8,6 +8,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`try`/`except`/`finally`, `raise` and `with` read as blocks** (#1094, epic
+  #1086). 1,271 raw lines of `try` across 40 projects, 322 of `raise` across 26,
+  198 of `with` across 27 — all of them line-shaped headers, which is why none of
+  them is an argument for a parser.
+
+  `try` is an **arm chain** and reuses `if`/`elif`/`else`'s machinery, for the
+  reason that machinery was written: an arm is a *sibling* line, not a child, and
+  the header that claims one must mark it consumed or it is converted twice or
+  not at all. The `else:` of a `try` is the same token as a loop's, and #1068 is
+  the record of what happens when nobody says who claimed it. Several `except`
+  arms, an `else` and a `finally` all come back; so do a bare `except:`, a tuple
+  of exception types, and the `as e` binding that appears in 34 of 73 projects on
+  its own.
+
+  **The nested-import idiom still generates exactly what was written.**
+  `try: import ujson as json / except ImportError: import json` exists precisely
+  because one of the two may be missing — the reader refuses to hoist a nested
+  import for that reason (#1071), and recognising `try` does not change it.
+
+  `with` keeps its whole head as one field, deliberately: `with open(a) as f,
+  open(b) as g:` is two context managers and two bindings, and a socket plus a
+  name field would model the common case and silently lose that one. `raise`
+  takes an optional value socket, so a bare re-raise inside an `except` is the
+  empty block — the same shape the return block took in #1090.
+
+  Statement coverage over the fixture corpus: **87.92% → 92.49%**, which is the
+  93% the delivery plan's Tier 3 predicted.
+
 - **Classes, methods and `@property` read as blocks** (#1093, epic #1086). The
   single biggest theme in the corpus — **32.8% of all grey lines** once W1's
   `self.` assignments and calls are counted with it: 2,692 raw lines of nested

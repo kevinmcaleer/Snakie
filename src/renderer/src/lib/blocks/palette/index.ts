@@ -12,7 +12,7 @@ import { CONTROL_BLOCKS } from './control'
 import { HARDWARE_BLOCKS } from './hardware'
 import { instrumentBlocks } from './instruments'
 import { FUNCTION_BLOCKS } from './functions'
-import { STRUCTURE_BLOCKS } from './structure'
+import { STRUCTURE_BLOCKS, installStructureBlocks } from './structure'
 import { LIST_BLOCKS } from './lists'
 import { LOGIC_BLOCKS } from './logic'
 import { MATHS_BLOCKS } from './maths'
@@ -67,6 +67,8 @@ export function installCorePalette(): void {
   // `controls_if`, they must exist in `Blockly.Blocks` before anything tries to
   // build one.
   installPythonBlocks()
+  // And the `try` block, whose arms come and go for the same reason.
+  installStructureBlocks()
   defineBlocks([
     ...TURTLE_BLOCKS,
     // HARDWARE IS SCOPED BY WHAT IT CAN GENERATE (#1039 → #1040). Nine of the
