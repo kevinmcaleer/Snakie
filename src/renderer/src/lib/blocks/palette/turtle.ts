@@ -192,6 +192,16 @@ export const TURTLE_BLOCKS: BlockDefinition[] = [
     category: 'turtle',
     instrument: TURTLE_INSTRUMENT,
     help: 'inst-turtle',
+    // The one plain call in this file that had no `read` (#1089). Every other
+    // turtle block gets its rule from `callWithNumber`, which declares both
+    // halves together; this one is spelled out, and had only one of them.
+    read: {
+      module: 'turtle',
+      fn: 'goto',
+      args: ['X', 'Y'],
+      shape: 'statement',
+      checks: { X: 'Number', Y: 'Number' }
+    },
     json: {
       message0: 'go to x %1 y %2',
       args0: [num('X'), num('Y')],

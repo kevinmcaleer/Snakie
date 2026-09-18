@@ -141,22 +141,28 @@ describe('a description becomes a docstring', () => {
 describe('what stays exactly as it was', () => {
   // Moving a line out of the program and into metadata is the most dangerous
   // thing a decompiler does. `docstring.ts` re-renders what it read and refuses
-  // anything that does not come back character for character, so each of these
-  // stays the raw block it always was — uglier, and impossible to get wrong.
-  const staysRaw = (src: string): void => {
+  // anything that does not come back character for character, so none of these
+  // becomes the block's DESCRIPTION — the line stays in the program, where it
+  // was, and regenerates exactly.
+  //
+  // What it stays AS moved in W4 (#1091): a lone string statement is now the
+  // docstring block rather than a grey raw one. That is a rendering change and
+  // not a semantic one — the line is still a line of the program, still in the
+  // same place, still character for character what was typed.
+  const staysInPlace = (src: string, as: string): void => {
     expect(description(src)).toBeUndefined()
-    expect(types(src)).toContain('snakie_python_statement')
+    expect(types(src)).toContain(as)
     expect(regenerate(src)).toBe(src)
   }
 
   it("a `'''` docstring, which this generator does not write", () =>
-    staysRaw("def go():\n    '''Drive forwards.'''\n    print(1)\n"))
+    staysInPlace("def go():\n    '''Drive forwards.'''\n    print(1)\n", 'snakie_python_docstring'))
 
   it('a string that is only the start of an expression', () =>
-    staysRaw('def go():\n    """a""" + "b"\n    print(1)\n'))
+    staysInPlace('def go():\n    """a""" + "b"\n    print(1)\n', 'snakie_python_statement'))
 
   it('a string statement that is not the first line', () =>
-    staysRaw('def go():\n    print(1)\n    """later"""\n'))
+    staysInPlace('def go():\n    print(1)\n    """later"""\n', 'snakie_python_docstring'))
 
   it('and a function with no docstring is untouched', () => {
     const src = 'def go():\n    print(1)\n'

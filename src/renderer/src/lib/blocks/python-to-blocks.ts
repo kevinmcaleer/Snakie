@@ -1,6 +1,7 @@
 import type { BlocksWorkspace } from '../../../../shared/blocks-doc'
-import type { ArgField, CallReceiver } from './registry'
+import type { ArgField, CallReceiver, SocketType } from './registry'
 import { docstringComment } from './docstring'
+import { isReservedName, sanitise } from './names'
 import {
   isSuiteHeader,
   logicalLines,
@@ -94,8 +95,6 @@ export interface BlockJson {
  * call, a raw value block could be anything at runtime, which is exactly why
  * Blockly leaves their output unchecked too.
  */
-type SocketType = 'String' | 'Number' | 'Boolean'
-
 const OUTPUT_TYPE = new Map<string, SocketType>([
   ['text', 'String'],
   ['text_join', 'String'],
@@ -108,7 +107,17 @@ const OUTPUT_TYPE = new Map<string, SocketType>([
   ['logic_boolean', 'Boolean'],
   ['logic_compare', 'Boolean'],
   ['logic_negate', 'Boolean'],
-  ['logic_operation', 'Boolean']
+  ['logic_operation', 'Boolean'],
+  ['snakie_is_none', 'Boolean'],
+  ['snakie_list_contains', 'Boolean'],
+  // `controls_forEach`'s LIST socket checks Array, and a `text` in it is the
+  // same class of unloadable workspace the table above exists for (#1087):
+  // `for name in "EDCDEEE":` is ordinary Python — iterating a string — and it
+  // took the whole file's canvas down with it.
+  ['lists_create_with', 'Array'],
+  ['lists_repeat', 'Array'],
+  ['lists_sort', 'Array'],
+  ['lists_split', 'Array']
 ])
 
 /** Can this block sit in a socket that accepts `want`? Unknown always can. */
@@ -127,6 +136,22 @@ export interface ConversionReport {
   rawLines: number[]
   /** Total logical lines read. */
   total: number
+  /**
+   * VALUE SOCKETS, COUNTED SEPARATELY (W0, epic #1086).
+   *
+   * `rawValue()` never increments {@link raw} — only `raw()` does — so a
+   * statement that becomes a real block with an unreadable EXPRESSION in one of
+   * its sockets counts as recognised. That asymmetry is deliberate and is what
+   * makes most of epic #1086 cheap (see `docs/blocks-coverage-epic.md` §4.2),
+   * but it leaves `echo = Pin(0, Pin.IN)` reporting a clean line while it
+   * renders as *set echo to (grey blob)*.
+   *
+   * So sockets get their own number. One per value socket the conversion
+   * filled, and how many of those came back grey.
+   */
+  sockets: number
+  /** Of those, the ones holding a grey Python value block. */
+  rawSockets: number
 }
 
 export interface Conversion {
@@ -146,6 +171,41 @@ export interface Conversion {
 const TERMINAL_TYPES = new Set(['snakie_forever', 'controls_flow_statements'])
 
 /**
+ * The value blocks that are the FALLBACK rather than a reading (W0, epic #1086).
+ *
+ * A socket holding one of these regenerates its text verbatim and is correct —
+ * that is the guarantee — but it is not a block the learner can take apart, so
+ * it is what socket coverage counts against itself.
+ */
+const GREY_VALUE_TYPES = new Set(['snakie_python_value', 'snakie_python_call_value'])
+
+/**
+ * THE ESCAPE HATCHES THE READER CAN NOW EMIT (W1, #1088, epic #1086).
+ * ---------------------------------------------------------------------------
+ *
+ * All four have shipped since #1018, sitting in the Python drawer for a human to
+ * drag, and the reader has never produced one of them. That is the single
+ * biggest gap in the corpus and it costs nothing to close: 7,662 raw lines
+ * across 66 of 73 projects, with nothing added to the palette.
+ *
+ * The literals rather than an import, like the raw blocks above: the palette
+ * imports this module, so this module must not import back.
+ */
+const PYTHON_CALL = 'snakie_python_call'
+const PYTHON_CALL_VALUE = 'snakie_python_call_value'
+const PYTHON_ATTR_GET = 'snakie_python_attr_get'
+const PYTHON_ATTR_SET = 'snakie_python_attr_set'
+
+/**
+ * The most argument sockets a call block will grow to — `MAX_ARGS` in
+ * `palette/python.ts`, restated here for the same reason as the types above.
+ *
+ * A call with more arguments than the block can hold is not that block, so it
+ * stays raw and regenerates verbatim, which is the rule everywhere else here.
+ */
+const MAX_CALL_ARGS = 8
+
+/**
  * Blocks the generator lifts OUT of the body into a section of its own.
  *
  * The import blocks: they sit in the chain like any statement, and the generator
@@ -160,7 +220,11 @@ const TERMINAL_TYPES = new Set(['snakie_forever', 'controls_flow_statements'])
 const HOISTED_TYPES = new Set([
   'snakie_python_import',
   'snakie_python_import_as',
-  'snakie_python_from_import'
+  'snakie_python_from_import',
+  // A `name pin` block is hoisted the same way (W10, #1097): it generates
+  // nothing where it stands and its assignment goes into the setup section,
+  // which the generator already puts a blank line after.
+  'snakie_name_pin'
 ])
 
 /** A statement and the suite indented under it. */
@@ -191,6 +255,35 @@ export interface CallRule {
   receiver?: CallReceiver
   /** Positional arguments that are fields rather than sockets, by index. */
   argFields?: Readonly<Record<number, ArgField>>
+  /**
+   * THE CALL IS A METHOD ON ANY OBJECT, and this is the socket it goes in (W2,
+   * #1089).
+   *
+   * Neither of the two shapes above: `module` is a literal module name and
+   * `receiver` is an object the generator itself hoisted, and `xs.append(v)` is
+   * a method on whatever the learner happens to have called their list. So the
+   * receiver becomes a SOCKET — `snakie_list_append`'s LIST — and the argument
+   * list is what is left.
+   */
+  on?: string
+  /**
+   * Fields this rule fixes on the block it builds.
+   *
+   * `snakie_math_min_max` is one block with a `smallest`/`largest` dropdown, so
+   * `min(a, b)` and `max(a, b)` are two rules producing the same block type with
+   * different `OP`s. Without this the reader could only ever produce one of them.
+   */
+  fields?: Readonly<Record<string, string>>
+  /**
+   * Socket name → the type that socket CHECKS, for the sockets that check one.
+   *
+   * The #1071 rule, applied to palette-registered rules: a block built with a
+   * `text` in a socket that wants Number is a workspace `Blockly.serialization`
+   * throws on, and the throw costs the learner every block in the file rather
+   * than the one line. A rule whose argument cannot fit declines, and the line
+   * stays raw.
+   */
+  checks?: Readonly<Record<string, SocketType>>
 }
 
 /**
@@ -216,7 +309,7 @@ export interface CallRule {
  * and only then convert again dropping the constructors that are fully
  * accounted for. Two passes over a lexer is cheap; a deleted line is not.
  */
-export type { CallReceiver, ArgField }
+export type { CallReceiver, ArgField, SocketType }
 
 /**
  * The calls this recognises, beyond the ones the palettes register themselves.
@@ -274,7 +367,12 @@ export function registerCallRules(rules: readonly CallRule[]): void {
  * two blocks.
  */
 function ruleKey(rule: CallRule): string {
-  return `${rule.receiver?.name ?? rule.module ?? ''}.${rule.fn}/${rule.shape ?? 'statement'}`
+  // A method-on-any-object rule (W2) shares nothing with a bare call of the same
+  // name — `xs.append(v)` and a hypothetical `append(v)` are different lines —
+  // so the receiver socket is part of the identity too.
+  const receiver = rule.on ? `*${rule.on}` : (rule.receiver?.name ?? rule.module ?? '')
+  const fields = rule.fields ? `:${Object.entries(rule.fields).sort().join(',')}` : ''
+  return `${receiver}.${rule.fn}/${rule.shape ?? 'statement'}${fields}`
 }
 
 /** Every rule, palette-registered ones first so a palette can override. */
@@ -282,9 +380,120 @@ function rules(): CallRule[] {
   return [...REGISTERED, ...BUILT_IN_RULES]
 }
 
+/**
+ * Every block type some rule can produce (W2, #1089).
+ *
+ * For `test/blocksPaletteSymmetry.test.ts`, which holds the palette and the
+ * reader to being two halves of one thing: a block a learner can drag out of the
+ * toolbox should be a block that comes back when they reopen their file, and any
+ * exception to that should be a listed, argued one rather than an oversight.
+ */
+export function readableBlockTypes(): Set<string> {
+  return new Set([...rules().map((rule) => rule.type), ...ALIASES.map((rule) => rule.type)])
+}
+
 /** Forget the registered rules — for tests, which must not leak into each other. */
 export function resetCallRules(): void {
   REGISTERED.length = 0
+  ALIASES.length = 0
+}
+
+// ---------------------------------------------------------------------------
+// Declarations (W10, #1097)
+// ---------------------------------------------------------------------------
+
+/**
+ * A BLOCK WHOSE WHOLE PYTHON OUTPUT IS AN ASSIGNMENT (W10, #1097, epic #1086).
+ *
+ * `CallRule` describes a CALL, and `snakie_name_pin` does not write one: it
+ * writes `echo = Pin(0, Pin.IN)` and nothing else. So it is the one hardware
+ * block that could never have a `read` rule, and a pin somebody named came back
+ * as *set echo to (grey blob)* — a line the coverage ratchet counts as fully
+ * recognised, which is exactly why W0 measures sockets separately.
+ *
+ * IT IS ALSO THE KEYSTONE FOR THE REST OF THE HARDWARE ROUND TRIP. #1058 reads
+ * a hardware block back off its constructor, but only when the object's name is
+ * one the GENERATOR wrote — `pin_15`, `led_15`, `servo_3` — because the pin has
+ * to come out of the name. Relaxing that on its own is unsafe: with an arbitrary
+ * name, a `snakie_pin_write` holding `PIN=15` regenerates as
+ * `pin_15 = Pin(15, Pin.OUT)` and silently renames the learner's `led`.
+ *
+ * This block is what resolves it, because it is the block that HOLDS THE NAME —
+ * and pin fields have always accepted a name as well as a number
+ * (`isPinName`/`resolvePinGpio` in `board-pins.ts`). So a declaration read as
+ * this block lets every call on that object be read as the hardware block it is,
+ * with the learner's own name in the pin field, and regenerate unchanged.
+ */
+export interface AliasRule {
+  /** The block type that declares the name. */
+  type: string
+  /** The field holding the learner's name. */
+  nameField: string
+  /** The field holding the pin — a number here, a name everywhere else. */
+  pinField: string
+  /** The field holding the mode. */
+  modeField: string
+  /** Mode value → the exact expression the block writes, `{PIN}` for the number. */
+  modes: Readonly<Record<string, string>>
+  /**
+   * The {@link CallReceiver} name whose calls a name declared this way may serve.
+   *
+   * `echo = Pin(0, Pin.IN)` is the same object `pin_0 = Pin(0, Pin.IN)` would
+   * have been, so every `pin` rule applies to it — with the NAME in the pin
+   * field instead of the number.
+   */
+  receiver: string
+}
+
+const ALIASES: AliasRule[] = []
+
+/** Let a palette declare how its naming block reads back. */
+export function registerAliasRules(rules: readonly AliasRule[]): void {
+  for (const rule of rules) {
+    const at = ALIASES.findIndex((r) => r.type === rule.type)
+    if (at === -1) ALIASES.push(rule)
+    else ALIASES[at] = rule
+  }
+}
+
+/** One name a program declares for a pin, as read off its declaration line. */
+interface Alias {
+  rule: AliasRule
+  /** The pin number the constructor names. */
+  pin: string
+  /** Which of the rule's modes the constructor is. */
+  mode: string
+}
+
+/**
+ * Every name this file declares for a pin, by name.
+ *
+ * MATCHED CHARACTER FOR CHARACTER against what the block writes, exactly as
+ * {@link hoistedObjects} is: a constructor somebody wrote their own way is not
+ * this block's, and reading it back as one would rewrite their line.
+ */
+function declaredAliases(lines: readonly LogicalLine[]): Map<string, Alias> {
+  const out = new Map<string, Alias>()
+  if (ALIASES.length === 0) return out
+  for (const line of lines) {
+    const m = /^([A-Za-z_]\w*)\s*=\s*(\S.*)$/.exec(line.text)
+    if (!m) continue
+    const found = matchAlias(m[2].trim())
+    if (found) out.set(m[1], found)
+  }
+  return out
+}
+
+/** Which naming block, if any, writes exactly `expr`? */
+function matchAlias(expr: string): Alias | null {
+  for (const rule of ALIASES) {
+    for (const [mode, template] of Object.entries(rule.modes)) {
+      const pattern = new RegExp(`^${escapeRe(template).replace('\\{PIN\\}', '(\\d+)')}$`)
+      const found = pattern.exec(expr)
+      if (found) return { rule, pin: found[1], mode }
+    }
+  }
+  return null
 }
 
 // ---------------------------------------------------------------------------
@@ -294,21 +503,46 @@ export function resetCallRules(): void {
 /** Turn Python into a blocks workspace. Never throws; never refuses. */
 export function pythonToBlocks(source: string): Conversion {
   const lines = logicalLines(source)
+  // Every name this file gives a pin (W10, #1097) — read before anything else,
+  // because it is what lets a hoisted object have a name the learner chose.
+  const aliases = declaredAliases(lines)
   // Which hoisted objects this file even HAS (#1058) — the constructor lines
   // that match a receiver rule's template exactly.
-  const hoisted = hoistedObjects(lines, rules())
+  //
+  // ASKED TWICE, and the first answer is what stops W10 undoing #1058. A name
+  // the GENERATOR wrote — `pin_15` — is already a hoisted object whose
+  // constructor is consumed and whose pin comes out of its name, and it also
+  // happens to be a line a `name pin` block would write. Reading it as BOTH gave
+  // the file two objects on one pin: the learner's `pin_15` and the blocks' own
+  // hoisted copy, renamed `pin_15_` to dodge the collision. So the generator's
+  // own names are taken off the alias list before anything else looks at it.
+  for (const name of hoistedObjects(lines, rules()).keys()) aliases.delete(name)
+  const hoisted = hoistedObjects(lines, rules(), aliases)
   // THE FIRST PASS IS A QUESTION, NOT AN ANSWER. It asks which of those objects
   // actually became blocks, and which are still named by a raw block — because a
   // constructor may only be consumed when every use of its object was
   // understood. Guessing that from the text would be guessing; converting and
   // looking is not.
-  const probe = convert(lines, hoisted, null)
+  const probe = convert(lines, hoisted, null, aliases)
   const consumable = new Set([...probe.claimed].filter((name) => !probe.rawNames.has(name)))
+  // A NAME IS ALL-OR-NOTHING TOO (W10, #1097). Reading `led = Pin(25, Pin.OUT)`
+  // as the `name pin` block puts `led` in the SETUP section, where the generator
+  // owns the name — so any other use of it has to be a block that goes through
+  // the name, or the generator mints `led_` beside it and the program drives
+  // nothing. `led.on()` is exactly that case: ordinary MicroPython with no block
+  // of its own.
+  //
+  // So a name mentioned by a line we could not read is not a name: the
+  // declaration stays an ordinary assignment, `led` stays an ordinary variable,
+  // and the file reads exactly as it did before W10. Uglier, and correct.
+  const named = new Map([...aliases].filter(([name]) => !probe.rawNames.has(name)))
   // The probe read every hoisted call it could and swallowed no constructors —
   // it was only ever a question. So whenever it read ANY, the real pass has to
   // run: to swallow the constructors of the objects that came out fully
-  // understood, and to leave the rest of the program exactly as it was.
-  const state = probe.claimed.size > 0 ? convert(lines, hoisted, consumable) : probe
+  // understood, and to leave the rest of the program exactly as it was. A file
+  // with names in it has to run again for the same reason.
+  const again = probe.claimed.size > 0 || aliases.size > 0
+  const state = again ? convert(lines, hoisted, consumable, named) : probe
   const stack = state.stack
   // Definitions are TOP-LEVEL blocks, not links in the chain: Blockly models a
   // `def` as a hat with no previous or next connection, which is also the truth
@@ -430,7 +664,17 @@ function blockHeight(block: BlockJson): number {
  * apart. Measured against the real canvas; see the comment above.
  */
 function isStatementBody(input: string): boolean {
-  return input === 'ELSE' || input === 'STACK' || /^DO\d*$/.test(input)
+  // `BODY` is the class and method blocks (W6), `TRY` and `FINALLY` the `try`
+  // block (W7). A body the estimator cannot see is a root measured short, and a
+  // root measured short is one the next root is drawn on top of.
+  return (
+    input === 'ELSE' ||
+    input === 'STACK' ||
+    input === 'BODY' ||
+    input === 'TRY' ||
+    input === 'FINALLY' ||
+    /^DO\d*$/.test(input)
+  )
 }
 
 /**
@@ -439,6 +683,26 @@ function isStatementBody(input: string): boolean {
  */
 interface CommentRun extends Stmt {
   comment: readonly LogicalLine[]
+}
+
+/**
+ * Is the line above this one a DECORATOR? (W6, #1093)
+ *
+ * A decorated `def` must not be hoisted into the functions section, because the
+ * decorator stays where it is and the two would be separated: `@app.route("/")`
+ * came back with its `def` lifted above it, so the decorator decorated whatever
+ * happened to follow and the route was gone. And the round-trip gate cannot see
+ * it — the gate compares a BAG of line signatures, deliberately, so that the
+ * generator's hoisting is not mistaken for a rewrite, and a line that moved
+ * without changing is exactly what it forgives.
+ *
+ * So a decorated `def` reads as the stackable method block instead, which stays
+ * in the chain immediately under the decorator, whether the decorator itself was
+ * one we understood or a raw line.
+ */
+function decoratedAbove(node: Stmt, siblings: readonly Stmt[]): boolean {
+  const before = siblings[siblings.indexOf(node) - 1]
+  return Boolean(before && before.line.text.startsWith('@') && before.body.length === 0)
 }
 
 /** Is this line nothing but a comment? */
@@ -580,6 +844,51 @@ export interface Hoisted {
   matches: readonly { rule: CallRule; fields: Readonly<Record<string, string>> }[]
 }
 
+/**
+ * Every name the import lines in this file BIND (W1, #1088).
+ *
+ * `import machine` binds `machine`; `import ujson as json` binds `json`;
+ * `from machine import Pin, PWM` binds both. The generator's import manager owns
+ * those names — they are in its `taken` set before a single variable is minted —
+ * so a `variables_get` for one of them comes back RENAMED:
+ * `machine.lightsleep(10)` read as a generic call regenerated as
+ * `machine_.lightsleep(10)`, a program that no longer runs.
+ *
+ * And the round-trip gate cannot see it. Names are placeholders in a line
+ * signature, deliberately, so that `id` → `id_` does not hold the blocks back —
+ * which means a renamed module reads as the same program. The guard has to be
+ * here, before the block is built.
+ *
+ * So a module is not an object, and a call into one is either a rule the reader
+ * knows or a raw line. That is exactly what it was before W1; nothing regresses.
+ */
+function importedNames(lines: readonly LogicalLine[]): Set<string> {
+  const out = new Set<string>()
+  for (const line of lines) {
+    const as = /^import\s+([A-Za-z_][\w.]*)\s+as\s+([A-Za-z_]\w*)$/.exec(line.text)
+    if (as) {
+      out.add(as[2])
+      continue
+    }
+    const plain = /^import\s+([A-Za-z_][\w.]*)(\s*,\s*[A-Za-z_][\w.]*)*$/.exec(line.text)
+    if (plain) {
+      for (const name of line.text.slice('import'.length).split(',')) {
+        // `import os.path` binds `os`, which is the name that would collide.
+        out.add(name.trim().split('.')[0])
+      }
+      continue
+    }
+    const from = /^from\s+[A-Za-z_][\w.]*\s+import\s+(.+)$/.exec(line.text)
+    if (!from) continue
+    for (const part of from[1].split(',')) {
+      const name = part.trim().split(/\s+as\s+/)
+      const bound = (name[1] ?? name[0]).trim()
+      if (/^[A-Za-z_]\w*$/.test(bound)) out.add(bound)
+    }
+  }
+  return out
+}
+
 /** `led_15 = Led(...)` → `led_15`. Null for anything that is not an assignment. */
 export function constructorName(text: string): string | null {
   return /^([A-Za-z_]\w*)\s*=\s*\S/.test(text) ? /^([A-Za-z_]\w*)/.exec(text)![1] : null
@@ -588,6 +897,60 @@ export function constructorName(text: string): string | null {
 /** Does `text` use `name` as a whole word? */
 function mentions(text: string, name: string): boolean {
   return new RegExp(`(^|[^A-Za-z0-9_])${escapeRe(name)}([^A-Za-z0-9_]|$)`).test(text)
+}
+
+/**
+ * A `def` header, with the `async` W9 (#1096) made a setting rather than a shape.
+ *
+ * Groups: the `async` keyword or undefined, the name, the parameter list.
+ */
+const DEF_HEADER = /^(async\s+)?def\s+([A-Za-z_]\w*)\((.*)\)\s*:$/
+
+/** Every augmented-assign operator the block has a setting for (W8, #1095). */
+const AUGMENTED = new Set([
+  '+=',
+  '-=',
+  '*=',
+  '/=',
+  '//=',
+  '%=',
+  '**=',
+  '&=',
+  '|=',
+  '^=',
+  '<<=',
+  '>>='
+])
+
+/**
+ * Where the `=` that ASSIGNS is, or -1 (W8, #1095).
+ *
+ * The LAST one at bracket depth zero: `a = b = 0` is one value going into two
+ * names, so everything before the last `=` is the target.
+ *
+ * Asked of the lexer, which is what makes the old `=(?!=)` guard unnecessary
+ * rather than merely preserved. `==`, `!=`, `<=`, `>=` and every augmented
+ * assign lex as operators of their own and simply are not this token — where the
+ * regex it replaces once read `x == 5` as assigning `= 5` to `x` and regenerated
+ * it as `x = = 5`, which is not Python at all (#1068).
+ */
+function topLevelAssign(tokens: readonly Token[]): number {
+  let depth = 0
+  let at = -1
+  for (let i = 0; i < tokens.length; i++) {
+    const tok = tokens[i]
+    if (tok.kind === 'open') depth += 1
+    else if (tok.kind === 'close') depth -= 1
+    else if (depth === 0 && tok.kind === 'op' && tok.text === '=') at = i
+  }
+  return at
+}
+
+/** Drop up to `width` leading spaces — the body indent, and never more. */
+function dedent(text: string, width: number): string {
+  let i = 0
+  while (i < width && (text[i] === ' ' || text[i] === '\t')) i += 1
+  return text.slice(i)
 }
 
 function escapeRe(text: string): string {
@@ -606,7 +969,8 @@ function escapeRe(text: string): string {
  */
 export function hoistedObjects(
   lines: readonly LogicalLine[],
-  rs: readonly CallRule[]
+  rs: readonly CallRule[],
+  aliases: ReadonlyMap<string, Alias> = new Map()
 ): Map<string, Hoisted> {
   const receivers = rs.filter((r) => r.receiver)
   const out = new Map<string, Hoisted>()
@@ -625,6 +989,23 @@ export function hoistedObjects(
       if (!fields) continue
       pin = pinMatch[1]
       matches.push({ rule, fields })
+    }
+    // A NAME THE LEARNER CHOSE (W10, #1097). The generator's own `pin_15` wins,
+    // above, because its constructor is consumed and its pin comes out of its
+    // name; anything else can still be a hoisted object if a `name pin` block
+    // would have written exactly that line — and then the PIN FIELD HOLDS THE
+    // NAME, which is what stops regeneration renaming somebody's `echo` to
+    // `pin_0`.
+    const alias = matches.length === 0 ? aliases.get(name) : undefined
+    if (alias) {
+      for (const rule of receivers) {
+        const rec = rule.receiver!
+        if (rec.name !== alias.rule.receiver) continue
+        const fields = matchCtor(rec, alias.pin, expr.trim())
+        if (!fields) continue
+        pin = name
+        matches.push({ rule, fields })
+      }
     }
     if (matches.length > 0) out.set(name, { pin, matches })
   }
@@ -681,9 +1062,10 @@ function matchCtor(
 function convert(
   lines: readonly LogicalLine[],
   hoisted: ReadonlyMap<string, Hoisted>,
-  consumable: ReadonlySet<string> | null
+  consumable: ReadonlySet<string> | null,
+  aliases: ReadonlyMap<string, Alias> = new Map()
 ): Converter {
-  const state = new Converter(hoisted, consumable)
+  const state = new Converter(hoisted, consumable, importedNames(lines), aliases)
   const nodes = tree(lines)
   state.indexDefinitions(nodes)
   state.stack = state.statements(nodes)
@@ -775,7 +1157,14 @@ function identifyBlock(block: BlockJson, path: string): void {
 }
 
 class Converter {
-  readonly report: ConversionReport = { recognised: 0, raw: 0, rawLines: [], total: 0 }
+  readonly report: ConversionReport = {
+    recognised: 0,
+    raw: 0,
+    rawLines: [],
+    total: 0,
+    sockets: 0,
+    rawSockets: 0
+  }
   /** The module-level chain, filled in by {@link convert}. */
   stack: BlockJson | null = null
   /** Hoisted objects this file declares, by name (#1058). */
@@ -798,12 +1187,21 @@ class Converter {
   /** Hoisted names still mentioned by a RAW block — their constructor must stay. */
   readonly rawNames = new Set<string>()
 
+  /** Names an import line in this file binds — see {@link importedNames}. */
+  private readonly imported: ReadonlySet<string>
+  /** Names this file gives a pin (W10, #1097), by name. */
+  private readonly aliases: ReadonlyMap<string, Alias>
+
   constructor(
     hoisted: ReadonlyMap<string, Hoisted> = new Map(),
-    consumable: ReadonlySet<string> | null = null
+    consumable: ReadonlySet<string> | null = null,
+    imported: ReadonlySet<string> = new Set(),
+    aliases: ReadonlyMap<string, Alias> = new Map()
   ) {
     this.hoisted = hoisted
     this.consumable = consumable
+    this.imported = imported
+    this.aliases = aliases
   }
   /** Variable name → the id the workspace declares it under. */
   readonly variables = new Map<string, string>()
@@ -875,13 +1273,23 @@ class Converter {
   indexDefinitions(nodes: readonly Stmt[]): void {
     for (const node of nodes) {
       const def = /^def\s+([A-Za-z_]\w*)\(([^)]*)\):$/.exec(node.line.text)
-      if (!def || !modellableParams(def[2])) continue
+      // THE SAME TEST `recognise` APPLIES, decorator and all. A `def` under a
+      // decorator does not become a procedure block, and registering it here
+      // anyway would build a CALLER block for a definition that does not exist —
+      // a workspace Blockly refuses to load, which costs the learner every block
+      // in the file.
+      if (!def || !modellableParams(def[2]) || decoratedAbove(node, nodes)) continue
       const last = node.body[node.body.length - 1]
       this.definedHere.set(def[1], {
         params: splitParams(def[2]),
-        // The same rule `definition` uses: a TRAILING `return <expr>` becomes
-        // the block's RETURN socket, and that is what makes it a `defreturn`.
-        returns: Boolean(last && /^return\s+(.+)$/.test(last.line.text))
+        // The same rule `definition` uses, down to the comment: a TRAILING
+        // `return <expr>` becomes the block's RETURN socket, and that is what
+        // makes it a `defreturn`. One carrying a trailing comment does not
+        // (#1087), and the two must agree or a caller block is built for a
+        // definition of the other shape.
+        returns: Boolean(
+          last && trailingCommentAt(last.line.text) < 0 && /^return\s+(.+)$/.test(last.line.text)
+        )
       })
     }
   }
@@ -986,7 +1394,15 @@ class Converter {
       // writes it back out from that block — so keeping it here would generate
       // it twice. Only ever a name the pass before this one proved is fully
       // accounted for.
-      if (this.consumable?.has(constructorName(node.line.text) ?? '')) {
+      //
+      // UNLESS THE LINE IS A NAME (W10, #1097). `echo = Pin(0, Pin.IN)` is both
+      // a hoisted object's constructor AND the `name pin` block itself, and the
+      // block is what carries the learner's name forward — swallow it and
+      // regeneration writes `pin_0 = Pin(0, Pin.IN)` instead, quietly renaming
+      // their pin. The generator's own `pin_15` has no name to lose, so it is
+      // still consumed.
+      const declared = constructorName(node.line.text)
+      if (declared && this.consumable?.has(declared) && !this.aliases.has(declared)) {
         this.report.total += 1
         this.report.recognised += 1
         continue
@@ -1065,18 +1481,23 @@ class Converter {
     this.report.recognised -= 1
     this.report.raw += 1
     this.report.rawLines.push(line.line)
+    // A NOTE ON THE BLOCK COMES WITH IT (W5, #1092). The raw blocks hold their
+    // whole line as text, bubble and all, and the suite emitter already knows to
+    // put its colon BEFORE a trailing comment rather than inside one (#1068).
+    // Leaving it behind would drop a comment the learner wrote, which the
+    // round-trip gate would refuse to commit — costing the file its conversion
+    // rather than this line.
+    const note = commentOn(block)
     if (block.type === 'snakie_forever') {
       return {
         type: 'snakie_python_suite',
-        fields: { CODE: 'while True:' },
+        fields: { CODE: `while True:${note}` },
         ...(block.inputs ? { inputs: block.inputs } : {})
       }
     }
     // `break` / `continue`, whose whole content is the keyword itself.
-    return {
-      type: 'snakie_python_statement',
-      fields: { CODE: String((block.fields as { FLOW?: string } | undefined)?.FLOW ?? '').toLowerCase() }
-    }
+    const flow = String((block.fields as { FLOW?: string } | undefined)?.FLOW ?? '').toLowerCase()
+    return { type: 'snakie_python_statement', fields: { CODE: `${flow}${note}` } }
   }
 
   /**
@@ -1094,29 +1515,163 @@ class Converter {
     }
   }
 
-  /** One statement → one or more blocks (a `from x import a, b` makes two). */
+  /**
+   * One statement → one or more blocks (a `from x import a, b` makes two).
+   *
+   * The COUNTING half. {@link recognise} below is the recognising half, and the
+   * split is what lets W5 (#1092) read a line, fail, and fall back to raw
+   * without the report counting the attempt twice.
+   */
   private statement(node: Stmt, siblings: readonly Stmt[]): BlockJson[] {
     this.report.total += 1
     const text = node.line.text
-    const recognised = (blocks: BlockJson[]): BlockJson[] => {
+    // --- A LINE THAT CARRIES A COMMENT (#1068, then W5 of #1086) -----------
+    //
+    // `tokenize` stops at a trailing `#` and hands back the code alone, so every
+    // recogniser used to match the line and silently drop the rest of it —
+    // `x = 5  # how many times` came back as `x = 5`. #1068 answered that by
+    // refusing the line outright, which was right when no block could hold both
+    // halves: **1,532 raw lines across 55 of 73 projects**, for nothing but
+    // having a note on the end.
+    //
+    // A block CAN hold both now. Blockly's own comment bubble is a field every
+    // block has, the `def` block has used it for docstrings since #1007, and the
+    // generator writes it back onto the end of the block's first line.
+    const at = trailingCommentAt(text)
+    if (at >= 0) {
+      const commented = this.commented(node, siblings, at)
+      if (commented) {
+        this.report.recognised += 1
+        return commented
+      }
+      return this.unrecognised(node)
+    }
+    const blocks = this.recognise(node, siblings)
+    if (blocks) {
       this.report.recognised += 1
       return blocks
     }
+    return this.unrecognised(node)
+  }
 
-    // --- a line that carries a comment is that whole line (#1068) ----------
-    //
-    // `tokenize` stops at a trailing `#` and hands back the code alone, so every
-    // recogniser below used to match the line and drop the rest of it — `x = 5
-    // # how many times` came back as `x = 5`, and the module header three files
-    // over promises the exact opposite about comments.
-    //
-    // No block holds a statement AND a comment about it, so recognising one at
-    // all would mean choosing which half to keep. Raw keeps both, verbatim,
-    // which is what the escape hatches are for.
-    if (trailingCommentAt(text) >= 0) {
-      if (isSuiteHeader(text) && node.body.length > 0) return [this.rawSuite(node)]
-      return [this.raw(node.line)]
-    }
+  /**
+   * The fallback that never fails: the line verbatim, with its body under it if
+   * it opens one.
+   *
+   * A SUITE WE CANNOT READ STILL HAS A BODY (#1063). This used to return the
+   * header line as a raw statement and walk away from `node.body` — so a `class`
+   * lost every method inside it, a `try` lost everything it guarded, and the
+   * report counted that a success. The raw SUITE block keeps the header verbatim
+   * and nests the body under it, which is the difference between an uglier
+   * program and a shorter one.
+   */
+  private unrecognised(node: Stmt): BlockJson[] {
+    if (isSuiteHeader(node.line.text) && node.body.length > 0) return [this.rawSuite(node)]
+    return [this.raw(node.line)]
+  }
+
+  /**
+   * A STATEMENT WITH A NOTE ON THE END OF IT (W5, #1092, epic #1086).
+   *
+   * The cheapest line in the epic and one of the widest: `x = 5  # how many
+   * times` is one of the commonest shapes in teaching code, and it was grey in
+   * 55 of 73 projects for no reason but the comment.
+   *
+   * Read the code alone, then hang the comment on the block Blockly's own way —
+   * the comment bubble, which every block has and which `def` has carried a
+   * docstring in since #1007. The generator puts it back on the end of the
+   * block's first line.
+   *
+   * THE NODE IS EDITED AND PUT BACK rather than copied, because `ifChain` finds
+   * its `elif`/`else` arms by IDENTITY among the siblings: a copy has no place
+   * in that list, and the arms it went looking for would be somebody else's.
+   *
+   * Null for anything that cannot carry it, and then the whole line stays raw
+   * and regenerates with both halves — which is what #1068 did for every line.
+   */
+  private commented(node: Stmt, siblings: readonly Stmt[], at: number): BlockJson[] | null {
+    const text = node.line.text
+    const code = text.slice(0, at).trimEnd()
+    // A line that is ONLY a comment is not this: `groupComments` has already
+    // folded runs of those into one block of their own.
+    if (code === '') return null
+    const note = text.slice(at)
+    const original = node.line
+    const blocks = this.trial(() => {
+      node.line = { ...original, text: code }
+      try {
+        const read = this.recognise(node, siblings)
+        // ONE BLOCK, or there is no single place for the note to live: a
+        // `from x import a, b` is two blocks and both of them are hoisted
+        // anyway, and a `def` is NONE, because it becomes a root of its own.
+        return read && read.length === 1 ? read : null
+      } finally {
+        node.line = original
+      }
+    })
+    if (!blocks) return null
+    const block = blocks[0]
+    // A BLOCK THAT GENERATES NOTHING WHERE IT STANDS cannot carry it. The import
+    // blocks and the `name pin` block are lifted into sections of their own, so
+    // the note would travel with them — away from the line it is about — or be
+    // dropped on the floor. Raw keeps it exactly where it was written.
+    if (HOISTED_TYPES.has(block.type)) return null
+    // And a block whose bubble is already spoken for: a `def`'s docstring is the
+    // same field, and one of the two would have to lose.
+    if (block.icons) return null
+    return [{ ...block, icons: { comment: { text: note, pinned: false, height: 40, width: 220 } } }]
+  }
+
+  /**
+   * Run a recogniser that MAY DECLINE, and leave nothing behind when it does.
+   *
+   * {@link recognise} is not a pure function and cannot be: it declares
+   * variables, collects `def` blocks into a section of their own, marks the
+   * `elif`/`else` arms an `if` has taken, and keeps the report honest about the
+   * extra lines a multi-arm `if` costs. All of that is wanted when the answer is
+   * yes.
+   *
+   * W5 (#1092) is the first caller that asks a question it is willing to have
+   * answered no — "would this line be a block, if it did not have a comment on
+   * the end?" — and a no that left those marks behind is worse than no answer at
+   * all. `def go():  # the main loop` collected a definition block and then fell
+   * back to raw, so the function came out TWICE: once as the raw suite holding
+   * the line, and once as the hat the trial had already pushed.
+   */
+  private trial(run: () => BlockJson[] | null): BlockJson[] | null {
+    const report = { ...this.report, rawLines: this.report.rawLines.length }
+    const definitions = this.definitions.length
+    const variables = [...this.variables]
+    const claimed = [...this.claimed]
+    const rawNames = [...this.rawNames]
+    const consumed = [...this.consumed]
+    const out = run()
+    if (out !== null) return out
+    this.report.total = report.total
+    this.report.recognised = report.recognised
+    this.report.raw = report.raw
+    this.report.rawLines.length = report.rawLines
+    this.report.sockets = report.sockets
+    this.report.rawSockets = report.rawSockets
+    this.definitions.length = definitions
+    restore(this.variables, variables)
+    restore(this.claimed, claimed)
+    restore(this.rawNames, rawNames)
+    restore(this.consumed, consumed)
+    return null
+  }
+
+  /**
+   * The recognising half: the blocks this line IS, or null when nothing here
+   * knows it.
+   *
+   * Null rather than a raw block, so the caller owns both the counting and the
+   * fallback — and so {@link commented} can ask the same question about a line
+   * with its comment taken off and fall back cleanly when the answer is no.
+   */
+  private recognise(node: Stmt, siblings: readonly Stmt[]): BlockJson[] | null {
+    const text = node.line.text
+    const recognised = (blocks: BlockJson[]): BlockJson[] => blocks
 
     // --- imports ---------------------------------------------------------
     //
@@ -1166,6 +1721,13 @@ class Converter {
         )
       }
     }
+    // AN IMPORT NONE OF THOSE COULD TAKE (W8, #1095) — nested, starred, or
+    // several modules on one line. It writes its line exactly where it stands,
+    // which for the nested ones is the whole point: that idiom exists because
+    // one of the two imports may be missing.
+    if (/^(import|from)\s/.test(text)) {
+      return recognised([{ type: 'snakie_python_import_here', fields: { CODE: text } }])
+    }
 
     // --- suites ----------------------------------------------------------
     if (text === 'while True:') {
@@ -1184,17 +1746,25 @@ class Converter {
     }
     const forEach = /^for\s+([A-Za-z_]\w*)\s+in\s+(.+):$/.exec(text)
     if (forEach) {
-      return recognised([
-        this.withBody(
-          {
-            type: 'controls_forEach',
-            fields: { VAR: { id: this.variable(forEach[1]) } },
-            inputs: { LIST: { block: this.expression(forEach[2]) } }
-          },
-          'DO',
-          node
-        )
-      ])
+      // The thing being iterated has to FIT the LIST socket, which checks Array
+      // (#1087). `for name in "EDCDEEE":` iterates a string — ordinary Python —
+      // and a `text` block in there is a workspace Blockly refuses to load, so
+      // it used to cost the learner every block in the file rather than one.
+      const list = this.expression(forEach[2])
+      if (fitsSocket(list, 'Array')) {
+        return recognised([
+          this.withBody(
+            {
+              type: 'controls_forEach',
+              fields: { VAR: { id: this.variable(forEach[1]) } },
+              inputs: { LIST: { block: list } }
+            },
+            'DO',
+            node
+          )
+        ])
+      }
+      return null
     }
     const whileNot = /^while\s+not\s+(.+):$/.exec(text)
     if (whileNot) {
@@ -1226,8 +1796,71 @@ class Converter {
     }
     if (/^if\s+.+:$/.test(text)) return recognised([this.ifChain(node, siblings)])
 
+    // --- try / with / raise (W7, #1094) -----------------------------------
+    if (text === 'try:') return recognised([this.tryChain(node, siblings)])
+    const withHead = /^(async\s+)?with\s+(.+):$/.exec(text)
+    if (withHead) {
+      return recognised([
+        this.withBody(
+          {
+            type: 'snakie_with',
+            fields: { ITEMS: withHead[2].trim(), KIND: withHead[1] ? 'ASYNC' : 'SYNC' }
+          },
+          'BODY',
+          node
+        )
+      ])
+    }
+    // `await <expr>` ON A LINE OF ITS OWN (W9, #1096). The value form is in the
+    // expression parser, where `data = await sensor.read()` needs it.
+    const awaited = /^await\s+(.+)$/.exec(text)
+    if (awaited) {
+      return recognised([
+        { type: 'snakie_await', inputs: { VALUE: { block: this.expression(awaited[1]) } } }
+      ])
+    }
+    const raise = /^raise(?:\s+(.+))?$/.exec(text)
+    if (raise) {
+      const block: BlockJson = { type: 'snakie_raise' }
+      if (raise[1] !== undefined) block.inputs = { VALUE: { block: this.expression(raise[1]) } }
+      return recognised([block])
+    }
+
+    // --- classes and methods (W6, #1093) ----------------------------------
+    //
+    // THE BIGGEST THEME IN THE CORPUS: 32.8% of all grey lines once W1's `self.`
+    // assignments and calls are counted with it. Before this a `class` came back
+    // as a raw suite with its whole body nested under a grey header — correct,
+    // and a wall.
+    const klass = /^class\s+([A-Za-z_]\w*)\s*(\(.*\))?\s*:$/.exec(text)
+    if (klass) {
+      return recognised([
+        this.withBody(
+          {
+            type: 'snakie_class',
+            fields: { NAME: klass[1], BASES: klass[2] ?? '' }
+          },
+          'BODY',
+          node
+        )
+      ])
+    }
+    // A DECORATOR BELONGS TO THE `def` UNDER IT, so it is read with it rather
+    // than as a block of its own — a decorator block could be dragged away from
+    // the thing it decorates, and would mean nothing where it landed. Only the
+    // three the method block has a setting for; anything else is somebody's own
+    // decorator and stays raw, header and body together.
+    const decorator = /^@(property|staticmethod|classmethod)$/.exec(text)
+    if (decorator) {
+      const decorated = this.decorated(node, siblings, decorator[1])
+      if (decorated) return recognised(decorated)
+    }
+    const method = DEF_HEADER.exec(text)
+
     const def = /^def\s+([A-Za-z_]\w*)\(([^)]*)\):$/.exec(text)
-    if (def && this.depth === 0 && modellableParams(def[2])) {
+    // An `async def` never takes this branch — the pattern has no `async` in it —
+    // because `procedures_def` has nowhere to put the keyword (W9, #1096).
+    if (def && this.depth === 0 && modellableParams(def[2]) && !decoratedAbove(node, siblings)) {
       this.definitions.push(this.definition(def[1], def[2], node))
       // And the generator will write it into a section of its own, with a blank
       // line after it — which is the gap the learner typed under the `def`. See
@@ -1237,6 +1870,16 @@ class Converter {
       // No block in the chain: it is a root of its own, collected above.
       return recognised([])
     }
+    // A `def` THAT IS NOT A TOP-LEVEL PROCEDURE (W6, #1093). Two kinds land
+    // here: a method inside a class, and a `def` whose signature Blockly's
+    // procedure block cannot hold (`def load(path, flip_x=None)` — see
+    // `modellableParams`, and #1063 for what dropping those parameters cost).
+    //
+    // Both become the same stackable block, which is the shape a hat cannot be:
+    // `procedures_defnoreturn` has no previous or next connection, so it can
+    // never sit inside a class's body. Its parameter list is a FIELD, so any
+    // signature comes back exactly as written.
+    if (method) return recognised([this.method(node, method, 'NONE')])
 
     // --- simple statements -----------------------------------------------
     if (text === 'break' || text === 'continue') {
@@ -1244,25 +1887,44 @@ class Converter {
         { type: 'controls_flow_statements', fields: { FLOW: text.toUpperCase() } }
       ])
     }
-    const ret = /^return\s+(.+)$/.exec(text)
+    const ret = /^return(?:\s+(.+))?$/.exec(text)
     if (ret) {
-      // A `return` THAT IS NOT THE LAST STATEMENT (#1063). `definition()` takes
-      // a trailing one as the `def`'s RETURN socket, which is how Blockly models
-      // a function's result; everything else lands here.
+      // A `return` THAT IS NOT THE LAST STATEMENT (#1063, then W3 of #1086).
+      // `definition()` takes a trailing one as the `def`'s RETURN socket, which
+      // is how Blockly models a function's result; everything else lands here.
       //
       // It used to become `procedures_ifreturn`, whose code is
       // `if <COND>: return <VALUE>` — and with nothing in COND the generator
       // wrote `if False:`. Every early return in the program became dead code,
-      // quietly, which is a worse outcome than any ugly block. A raw statement
-      // says `return x` and means it.
-      return [this.raw(node.line)]
+      // quietly, so #1063 pulled it back to a raw block. #1090 is the block that
+      // was actually missing: no condition, an optional value, and a next
+      // connection, because a guard clause has a whole function after it.
+      const block: BlockJson = { type: 'snakie_return' }
+      if (ret[1] !== undefined) block.inputs = { VALUE: { block: this.expression(ret[1]) } }
+      return recognised([block])
     }
+    // --- `global` / `nonlocal` (W8, #1095) --------------------------------
+    const scope = /^(global|nonlocal)\s+(.+)$/.exec(text)
+    if (scope && /^[A-Za-z_]\w*(\s*,\s*[A-Za-z_]\w*)*$/.test(scope[2].trim())) {
+      return recognised([
+        {
+          type: 'snakie_python_scope',
+          fields: { SCOPE: scope[1], NAMES: scope[2].trim() }
+        }
+      ])
+    }
+
     const change = /^([A-Za-z_]\w*)\s*\+=\s*(.+)$/.exec(text)
-    if (change) {
+    if (change && !isReservedName(change[1])) {
       // `+=` on a STRING is concatenation, and `math_change`'s DELTA takes a
       // Number (#1071). `s += "x"` used to build a `text` block into it, which
-      // made the whole workspace unloadable — so a delta that cannot be a
-      // number keeps the line raw, and it regenerates verbatim.
+      // made the whole workspace unloadable, so it kept the line raw.
+      //
+      // IT FALLS THROUGH NOW RATHER THAN DECLINING (W8, #1095). The
+      // augmented-assign block a few lines below has a socket that checks
+      // nothing, which is the honest shape for an operator that means four
+      // different things depending on what is on either side of it — so a delta
+      // that is not a number is still a block, just not this one.
       const delta = this.expression(change[2])
       if (fitsSocket(delta, 'Number')) {
         return recognised([
@@ -1273,24 +1935,27 @@ class Converter {
           }
         ])
       }
-      return [this.raw(node.line)]
     }
-    // `=(?!=)` IS THE WHOLE GUARD (#1068). This used to read the `=` and then
-    // check `text.slice(0, text.indexOf('='))` for a comparison operator — a
-    // slice that stops BEFORE the character it is looking for, so `x == 5` was
-    // read as assigning `= 5` to `x` and regenerated as `x = = 5`, which is not
-    // Python at all. `!=`, `<=` and `>=` never reached the guard: `\s*` cannot
-    // eat the `!`, `<` or `>`, so the pattern had already failed on them.
-    const assign = /^([A-Za-z_]\w*)\s*=(?!=)\s*(.+)$/.exec(text)
-    if (assign) {
-      return recognised([
-        {
-          type: 'variables_set',
-          fields: { VAR: { id: this.variable(assign[1]) } },
-          inputs: { VALUE: { block: this.expression(assign[2]) } }
-        }
-      ])
-    }
+    // THE `x == 5` TRAP IS NOW THE LEXER'S PROBLEM (#1068, then W8 of #1086).
+    // The recogniser used to be a regex with a `=(?!=)` guard, because an
+    // earlier one read `x == 5` as assigning `= 5` to `x` and regenerated it as
+    // `x = = 5`. `topLevelAssign` asks the tokenizer instead: `==` is one token
+    // and is not the `=` that assigns, and neither is any augmented operator.
+    // --- a name for a pin (W10, #1097) ------------------------------------
+    //
+    // BEFORE the plain assignment below, which would otherwise read
+    // `echo = Pin(0, Pin.IN)` as *set echo to (grey blob)* — a line the coverage
+    // number counts as fully recognised and a learner sees as a grey wall.
+    const named = this.aliasDeclaration(text)
+    if (named) return recognised([named])
+
+    // --- every augmented assign but the one above (W8, #1095) -------------
+    const augmented = this.augmentedAssign(text)
+    if (augmented) return recognised([augmented])
+
+    // --- assignment, in all the shapes it comes in ------------------------
+    const assigned = this.assignment(text)
+    if (assigned) return recognised([assigned])
 
     // --- a call to a function THIS program defines ------------------------
     //
@@ -1304,16 +1969,60 @@ class Converter {
     const call = this.callStatement(text)
     if (call) return recognised([call])
 
+    // --- a description standing on its own (W4, #1091) --------------------
+    const described = this.docstring(node.line)
+    if (described) return recognised([described])
+
     // --- anything else ----------------------------------------------------
     //
-    // A SUITE WE CANNOT READ STILL HAS A BODY (#1063). This used to return the
-    // header line as a raw statement and walk away from `node.body` — so a
-    // `class` lost every method inside it, a `try` lost everything it guarded,
-    // and the report counted that a success. The raw SUITE block keeps the
-    // header verbatim and nests the body under it, which is the difference
-    // between an uglier program and a shorter one.
-    if (isSuiteHeader(text) && node.body.length > 0) return [this.rawSuite(node)]
-    return [this.raw(node.line)]
+    // Null, and the caller turns it into the raw block or the raw SUITE that
+    // keeps the body — see {@link unrecognised}.
+    return null
+  }
+
+  /**
+   * `@property` + the `def` under it → one method block (W6, #1093).
+   *
+   * The decorator line and the `def` line are two logical lines and one idea, so
+   * the second is CONSUMED — by identity, the way `ifChain` takes its `elif` and
+   * `else` arms, because guessing from the text is what lost an `else` in #1068.
+   * Its line still has to be counted by hand: `statements()` skips a consumed
+   * node without counting it, on the reasoning that whoever consumed it did.
+   *
+   * Null when the next sibling is not a `def` we can hold, which leaves the
+   * decorator as an ordinary raw line with the `def` under it — exactly what
+   * both were before.
+   */
+  private decorated(
+    node: Stmt,
+    siblings: readonly Stmt[],
+    decorator: string
+  ): BlockJson[] | null {
+    const next = siblings[siblings.indexOf(node) + 1]
+    if (!next || this.consumed.has(next)) return null
+    const def = DEF_HEADER.exec(next.line.text)
+    if (!def) return null
+    this.consumed.add(next)
+    this.report.total += 1
+    this.report.recognised += 1
+    return [this.method(next, def, decorator)]
+  }
+
+  /** `def name(params):` as a STACKABLE block, with its body under it. */
+  private method(node: Stmt, header: RegExpExecArray, decorator: string): BlockJson {
+    return this.withBody(
+      {
+        type: 'snakie_method',
+        fields: {
+          NAME: header[2],
+          PARAMS: header[3].trim(),
+          DECORATOR: decorator,
+          KIND: header[1] ? 'ASYNC' : 'SYNC'
+        }
+      },
+      'BODY',
+      node
+    )
   }
 
   /** `if` / `elif` / `else`, gathered from the siblings that follow. */
@@ -1363,6 +2072,77 @@ class Converter {
     return block
   }
 
+  /**
+   * `try` / `except` / `else` / `finally`, gathered from the siblings (W7, #1094).
+   *
+   * THE SAME MACHINERY AS `ifChain`, and for the same reason it was written that
+   * way: an arm is a SIBLING LINE, not a child, and the header that claims one
+   * has to mark it consumed or it is converted twice or not at all. That is the
+   * #1068 failure mode exactly, and the `else:` of a `try` is the same token as
+   * a loop's — whichever header claims it must say so.
+   *
+   * THE ARMS ARE ASKED FOR IN ORDER and the scan stops at the first sibling that
+   * is not one, so a comment at column zero between two arms ends the chain
+   * rather than being skipped past — which is the bug #1068 records.
+   */
+  private tryChain(node: Stmt, siblings: readonly Stmt[]): BlockJson {
+    const block: BlockJson = { type: 'snakie_try', fields: {}, inputs: {} }
+    const attach = (input: string, arm: Stmt): void => {
+      const body = this.nested(arm.body)
+      if (body) block.inputs![input] = { block: body }
+    }
+    attach('TRY', node)
+    const excepts: string[] = []
+    let elseArm: Stmt | null = null
+    let finallyArm: Stmt | null = null
+    let i = siblings.indexOf(node) + 1
+    while (i < siblings.length) {
+      const next = siblings[i]
+      const text = next.line.text
+      const except = /^except\b\s*(.*?)\s*:$/.exec(text)
+      if (except && elseArm === null && finallyArm === null) {
+        this.claimArm(next)
+        block.fields![`EXCEPT${excepts.length}`] = except[1]
+        attach(`DO${excepts.length}`, next)
+        excepts.push(except[1])
+        i += 1
+        continue
+      }
+      // `else` only after an `except`, which is what Python allows, and
+      // `finally` last.
+      if (text === 'else:' && excepts.length > 0 && elseArm === null && finallyArm === null) {
+        elseArm = next
+        this.claimArm(next)
+        attach('ELSE', next)
+        i += 1
+        continue
+      }
+      if (text === 'finally:' && finallyArm === null) {
+        finallyArm = next
+        this.claimArm(next)
+        attach('FINALLY', next)
+        i += 1
+        continue
+      }
+      break
+    }
+    block.extraState = {
+      excepts,
+      hasElse: elseArm !== null,
+      hasFinally: finallyArm !== null
+    }
+    if (Object.keys(block.fields!).length === 0) delete block.fields
+    if (Object.keys(block.inputs!).length === 0) delete block.inputs
+    return block
+  }
+
+  /** Take an arm: mark it consumed and count its line, as `ifChain` does. */
+  private claimArm(arm: Stmt): void {
+    this.consumed.add(arm)
+    this.report.total += 1
+    this.report.recognised += 1
+  }
+
   /** `def name(a, b):` → a procedure definition, with its body. */
   private definition(name: string, params: string, node: Stmt): BlockJson {
     // Every one of these is a bare name — `modellableParams` is what let us in.
@@ -1377,7 +2157,13 @@ class Converter {
     // A trailing `return` becomes the definition's RETURN socket, which is the
     // shape Blockly models a function's result with.
     const last = statements[statements.length - 1]
-    const returns = last && /^return\s+(.+)$/.exec(last.line.text)
+    // NOT ONE THAT CARRIES A COMMENT (#1087). `statement()` refuses a line with
+    // a trailing comment because no block holds both halves — and this path
+    // never asked, so `return width * 0.0343 / 2  # centimetres` put the
+    // expression in the RETURN socket and dropped the comment on the floor.
+    // Silently, and counted as a success.
+    const trailing = last && trailingCommentAt(last.line.text) < 0 ? last : undefined
+    const returns = trailing && /^return\s+(.+)$/.exec(trailing.line.text)
     const body = this.nested(returns ? statements.slice(0, -1) : statements)
     const block: BlockJson = {
       type: returns ? 'procedures_defreturn' : 'procedures_defnoreturn',
@@ -1460,17 +2246,258 @@ class Converter {
     return id
   }
 
+  /**
+   * A LONE STRING LITERAL STANDING AS A STATEMENT (W4, #1091, epic #1086).
+   *
+   * 2,174 raw lines across 48 of 73 projects: every docstring in a
+   * well-documented program, which is most of why a class-heavy file opened as a
+   * wall of grey.
+   *
+   * Cheaper than it looks, because the lexer already folds a triple-quoted
+   * literal into ONE logical line and keeps the line count honest — so a
+   * thirty-line module header arrives here as a single unrecognised statement
+   * rather than thirty of them. What was missing is only this recogniser and a
+   * block that renders several lines without collapsing them.
+   *
+   * ASKED OF THE TOKENIZER rather than of a regex: a literal followed by
+   * anything else starts and ends with the right quotes and is not a docstring,
+   * and one containing a `#` holds something a regex would take for a comment.
+   * Exactly one string token on the line, and nothing else.
+   *
+   * A `def`'s LEADING docstring never reaches here — `definition()` has already
+   * taken it as the block's comment bubble, because the bubble and the docstring
+   * say the same thing about the same function (`docstring.ts`). This is for the
+   * ones with no bubble to live in: a module's, a class's, and every shape
+   * `docstring.ts` declines because it could not write it back exactly.
+   *
+   * THE CONTINUATION LINES GIVE BACK THE BODY INDENT. `logicalLines` strips the
+   * indent from the FIRST physical line only; everything after it is the literal
+   * verbatim. The generator re-indents whatever this block emits by the depth it
+   * sits at, so handing the lines back as they were would indent them twice.
+   */
+  private docstring(line: LogicalLine): BlockJson | null {
+    const tokens = tokenize(line.text)
+    if (!tokens || tokens.length !== 1 || tokens[0].kind !== 'string') return null
+    const physical = line.text.split('\n')
+    const lines = [physical[0], ...physical.slice(1).map((l) => dedent(l, line.indent))]
+    return { type: 'snakie_python_docstring', extraState: { lines } }
+  }
+
+  /**
+   * `echo = Pin(0, Pin.IN)` → the block that names a pin (W10, #1097).
+   *
+   * Read off the pre-scan rather than matched again here, so the name this line
+   * declares and the name a call on it is read against cannot disagree.
+   */
+  private aliasDeclaration(text: string): BlockJson | null {
+    const m = /^([A-Za-z_]\w*)\s*=(?!=)\s*(.+)$/.exec(text)
+    if (!m) return null
+    const alias = this.aliases.get(m[1])
+    // The same line has to still BE the declaration: a name can be reassigned,
+    // and only the line that matches the block's own constructor is this block.
+    if (!alias || matchAlias(m[2].trim())?.mode !== alias.mode) return null
+    return {
+      type: alias.rule.type,
+      fields: {
+        [alias.rule.pinField]: alias.pin,
+        [alias.rule.nameField]: m[1],
+        [alias.rule.modeField]: alias.mode
+      }
+    }
+  }
+
+  /**
+   * `a.b = x` → the block that sets an attribute (W1, #1088), and `xs[i] = v` →
+   * the block that sets a list item (W2, #1089).
+   *
+   * The TARGET is read with the same chain everything else uses, and has to come
+   * back as an attribute read for this to be that block: `self.speed` is an
+   * attribute, `self.legs[0]` is a subscript (W8's, #1095) and `speed` is a
+   * plain variable, which the assignment above has already taken.
+   *
+   * The `=` is found through the lexer rather than with `indexOf`, so a `=`
+   * inside a string or a keyword argument cannot be mistaken for the one that
+   * assigns — and `==`, `!=`, `<=`, `>=` and every augmented assign lex as
+   * operators of their own and simply are not this.
+   *
+   * AUGMENTED ASSIGNS ARE DELIBERATELY NOT HERE. `self.total += 1` has no block:
+   * `math_change` needs a workspace VARIABLE, and writing it as
+   * `self.total = self.total + 1` would be rewriting somebody's line. It stays
+   * raw, where it regenerates exactly as written.
+   */
+  private assignment(text: string): BlockJson | null {
+    const tokens = tokenize(text)
+    if (!tokens) return null
+    // THE LAST TOP-LEVEL `=` IS THE ONE THAT ASSIGNS. `a = b = 0` is one value
+    // going into two names, so everything before the last `=` is the target.
+    const at = topLevelAssign(tokens)
+    if (at === -1) return null
+    const target = text.slice(0, tokens[at].start).trim()
+    const value = text.slice(tokens[at].end).trim()
+    if (target === '' || value === '') return null
+
+    // A PLAIN NAME, which is the great majority of lines and reads best as the
+    // Variables drawer's own block. `self = …` is refused: it would declare
+    // `self` as a workspace variable through the back door (see {@link name}).
+    if (/^[A-Za-z_]\w*$/.test(target)) {
+      if (target === 'self' || isReservedName(target)) return null
+      return {
+        type: 'variables_set',
+        fields: { VAR: { id: this.variable(target) } },
+        inputs: { VALUE: { block: this.expression(value) } }
+      }
+    }
+
+    // SOMETHING ON AN OBJECT, or a position in a list — the two the palette has
+    // real blocks for. `self.speed = speed` is 2,649 raw lines across 45
+    // projects on its own (W1, #1088).
+    const read = this.readChain(text, tokens.slice(0, at))
+    if (read && read.next === at) {
+      if (read.block.type === PYTHON_ATTR_GET) {
+        return {
+          type: PYTHON_ATTR_SET,
+          fields: read.block.fields,
+          inputs: { ...read.block.inputs, VALUE: { block: this.expression(value) } }
+        }
+      }
+      if (read.block.type === 'snakie_list_get') {
+        return {
+          type: 'snakie_list_set',
+          inputs: { ...read.block.inputs, VALUE: { block: this.expression(value) } }
+        }
+      }
+    }
+
+    // ANYTHING ELSE the left-hand side can legally be (W8, #1095): several names
+    // at once, a chained assignment, a subscript the list block cannot count
+    // back. The target goes in as TEXT, because a tuple target is several names,
+    // a subscript is an expression with an index in it and a chain is two
+    // targets — modelling any one of them as sockets would lose the others.
+    return {
+      type: 'snakie_python_assign',
+      fields: { TARGET: target },
+      inputs: { VALUE: { block: this.expression(value) } }
+    }
+  }
+
+  /**
+   * `total *= 2`, `s += "x"`, `flags |= BIT` → the augmented-assign block.
+   *
+   * AFTER `math_change`, which is `+=` on a plain name with a NUMBER delta and
+   * is deliberately that narrow: its DELTA socket checks Number, so `s += "x"` —
+   * ordinary string concatenation — used to build a `text` block into it and make
+   * the whole workspace unloadable (#1071). This block's socket checks nothing,
+   * which is the honest answer.
+   */
+  private augmentedAssign(text: string): BlockJson | null {
+    const tokens = tokenize(text)
+    if (!tokens) return null
+    let depth = 0
+    for (let i = 0; i < tokens.length; i++) {
+      const tok = tokens[i]
+      if (tok.kind === 'open') depth += 1
+      else if (tok.kind === 'close') depth -= 1
+      if (depth !== 0 || tok.kind !== 'op' || !AUGMENTED.has(tok.text)) continue
+      const target = text.slice(0, tok.start).trim()
+      const value = text.slice(tok.end).trim()
+      // The target has to be something that can be assigned to, and the cheapest
+      // honest test is that the reader can read it as a value: a name, an
+      // attribute, a subscript. `a < b -= c` is not a line anybody wrote, and a
+      // raw block says so.
+      if (target === '' || value === '') return null
+      const read = this.readChain(text, tokens.slice(0, i))
+      if (!read || read.next !== i) return null
+      return {
+        type: 'snakie_python_augmented',
+        fields: { TARGET: target, OP: tok.text },
+        inputs: { VALUE: { block: this.expression(value) } }
+      }
+    }
+    return null
+  }
+
   /** A whole line that is one recognised call, as a statement block. */
   private callStatement(text: string): BlockJson | null {
     const tokens = tokenize(text)
     if (!tokens) return null
     const call = readCall(tokens, text)
-    if (!call || call.rest.length > 0) return null
-    // A call on a hoisted object first (#1058) — `led_15.set(True)`. Its
-    // "module" is an object this file declared, not a module at all.
-    const onObject = this.receiverCall(call, 'statement')
+    if (call && call.rest.length === 0) {
+      // A call on a hoisted object first (#1058) — `led_15.set(True)`. Its
+      // "module" is an object this file declared, not a module at all.
+      const onObject = this.receiverCall(call, 'statement')
+      if (onObject) return onObject
+      const known = this.matchCall(call, 'statement')
+      if (known) return known
+    }
+    const onObject = this.objectCallStatement(text, tokens)
     if (onObject) return onObject
-    return this.matchCall(call, 'statement')
+    return this.methodCall(text, tokens)
+  }
+
+  /**
+   * A statement that is a palette block's method call on an object (W2, #1089).
+   *
+   * `xs.append(v)`: the chain up to the last dot is the receiver, and the call
+   * on the end of it is the rule. Read by hand rather than through
+   * {@link methodCall}, because the chain builds VALUE blocks and a rule of this
+   * shape may only exist as a statement.
+   */
+  private objectCallStatement(text: string, tokens: readonly Token[]): BlockJson | null {
+    for (let i = tokens.length - 1; i > 0; i--) {
+      const tok = tokens[i]
+      if (tok.kind !== 'op' || tok.text !== '.') continue
+      const member = tokens[i + 1]
+      if (!member || member.kind !== 'name') return null
+      const read = readArgs(tokens, text, i + 2)
+      if (!read || read.trailingComma || read.next !== tokens.length) return null
+      const object = this.readChain(text, tokens.slice(0, i))
+      if (!object || object.next !== i) return null
+      return this.objectCall(object.block, member.text, read.args, 'statement')
+    }
+    return null
+  }
+
+  /**
+   * A line that is nothing but a method call on an object (W1, #1088).
+   *
+   * **2,782 raw lines across 66 of 73 projects**, plus another 1,478 for the
+   * `self.x.y()` form — the largest single gap in the corpus, and the block for
+   * it has been in the Python drawer since #1018.
+   *
+   * Read as a VALUE and then re-shaped, because the chain that produces it is
+   * the same chain an expression uses: `self.display.text(...)` is an attribute
+   * read with a call on the end of it, whichever side of an `=` it is on. The
+   * two call blocks differ only in whether they have an output or a pair of
+   * statement connections, so the last link becomes the statement one and
+   * everything nested under it is already right.
+   *
+   * Everything above has had its chance first — see `parseAtom`.
+   */
+  private methodCall(text: string, tokens: readonly Token[]): BlockJson | null {
+    const read = this.readChain(text, tokens)
+    if (!read || read.next !== tokens.length) return null
+    if (read.block.type !== PYTHON_CALL_VALUE) return null
+    return { ...read.block, type: PYTHON_CALL }
+  }
+
+  /**
+   * Read a postfix chain out of a whole line, with `source` pointed at that line
+   * so an argument can be sliced from it verbatim.
+   *
+   * Saved and restored, like {@link expression} does, because a line's own parse
+   * may start a nested one for each of its arguments.
+   */
+  private readChain(
+    text: string,
+    tokens: readonly Token[]
+  ): { block: BlockJson; next: number } | null {
+    const outer = this.source
+    this.source = text
+    try {
+      return this.parseAtom(tokens, 0)
+    } finally {
+      this.source = outer
+    }
   }
 
   /**
@@ -1561,13 +2588,62 @@ class Converter {
     // looks like — better a raw block than one that silently drops an argument.
     if (args.length !== names.length) return null
     const block: BlockJson = { type: rule.type }
+    if (rule.fields) block.fields = { ...rule.fields }
     if (names.length > 0) {
       block.inputs = {}
-      names.forEach((name, i) => {
-        block.inputs![name] = { block: this.expression(args[i]) }
-      })
+      for (let i = 0; i < names.length; i++) {
+        const filled = this.expression(args[i])
+        // A socket that CHECKS a type and an argument that cannot fit it is not
+        // this block — see {@link CallRule.checks}.
+        const want = rule.checks?.[names[i]]
+        if (want && !fitsSocket(filled, want)) return null
+        block.inputs[names[i]] = { block: filled }
+      }
     }
     return block
+  }
+
+  /**
+   * `xs.append(v)` → the block the Lists drawer has always had (W2, #1089).
+   *
+   * The receiver is not a module and not something the generator hoisted: it is
+   * whatever the learner called their list, so it goes into a SOCKET. That is
+   * the one shape `registerCallRules` could not express before, and it is why
+   * `snakie_list_append` — 403 lines across 28 projects — was a block a child
+   * could drag out and never get back.
+   *
+   * BEFORE the generic call block from W1, which would otherwise claim every one
+   * of these and render `add v to xs` as `call append on xs with v`.
+   */
+  private objectCall(
+    object: BlockJson,
+    fn: string,
+    args: readonly string[],
+    shape: 'statement' | 'value'
+  ): BlockJson | null {
+    for (const rule of rules()) {
+      if (!rule.on || rule.fn !== fn) continue
+      if ((rule.shape ?? 'statement') !== shape) continue
+      const names = rule.args ?? []
+      if (args.length !== names.length) continue
+      const want = rule.checks?.[rule.on]
+      if (want && !fitsSocket(object, want)) continue
+      const inputs: Record<string, { block: BlockJson }> = { [rule.on]: { block: object } }
+      let fits = true
+      for (let i = 0; i < names.length && fits; i++) {
+        const filled = this.expression(args[i])
+        const check = rule.checks?.[names[i]]
+        if (check && !fitsSocket(filled, check)) fits = false
+        else inputs[names[i]] = { block: filled }
+      }
+      if (!fits) continue
+      return {
+        type: rule.type,
+        ...(rule.fields ? { fields: { ...rule.fields } } : {}),
+        inputs
+      }
+    }
+    return null
   }
 
   /**
@@ -1579,6 +2655,17 @@ class Converter {
    * expression is never lost and never rewritten.
    */
   expression(text: string): BlockJson {
+    // ONE CALL, ONE SOCKET. This is the single door every value socket is
+    // filled through, which is what makes the socket half of W0's ratchet a
+    // count rather than a walk of the finished workspace — see
+    // {@link ConversionReport.sockets}.
+    this.report.sockets += 1
+    const block = this.readExpression(text)
+    if (GREY_VALUE_TYPES.has(block.type)) this.report.rawSockets += 1
+    return block
+  }
+
+  private readExpression(text: string): BlockJson {
     const trimmed = text.trim()
     // A CALL TO ONE OF THIS PROGRAM'S OWN FUNCTIONS, before the parser, which
     // would otherwise read `double(3)` as a call it does not recognise and hand
@@ -1624,6 +2711,19 @@ class Converter {
   }
 
   private parseNot(tokens: readonly Token[], at: number): { block: BlockJson; next: number } | null {
+    // `await` BINDS TIGHTER THAN `not` AND LOOSER THAN A CALL (W9, #1096), which
+    // is where Python puts it — with the unary operators. `await` lexes as a
+    // NAME rather than a keyword, because the tokenizer's keyword list is the
+    // one the recognisers branch on and nothing else needed it there.
+    const tok = tokens[at]
+    if (tok?.kind === 'name' && tok.text === 'await') {
+      const inner = this.parseNot(tokens, at + 1)
+      if (!inner) return null
+      return {
+        block: { type: 'snakie_await_value', inputs: { VALUE: { block: inner.block } } },
+        next: inner.next
+      }
+    }
     if (tokens[at]?.kind === 'keyword' && tokens[at].text === 'not') {
       const inner = this.parseNot(tokens, at + 1)
       if (!inner) return null
@@ -1671,6 +2771,46 @@ class Converter {
 
     const left = this.parseAdditive(tokens, at)
     if (!left) return null
+
+    // `x is None` → the Logic drawer's own block (W2, #1089).
+    //
+    // Python has it and Blockly does not, which is why `snakie_is_none` exists —
+    // and until now it was a block a learner could drag out of the drawer and
+    // never get back, because nothing read it. `is NOT None` is deliberately not
+    // here: `logic_negate` around this block writes `not x is None`, which is
+    // the same test and a different line, and rewriting somebody's line is the
+    // one thing this module does not do.
+    const is = tokens[left.next]
+    if (is?.kind === 'keyword' && is.text === 'is' && tokens[left.next + 1]?.text === 'None') {
+      return {
+        block: { type: 'snakie_is_none', inputs: { VALUE: { block: left.block } } },
+        next: left.next + 2
+      }
+    }
+
+    // `v in xs` and `v not in xs` → `snakie_list_contains` with its setting
+    // (W2 #1089, then W8 #1095). `not in` is its OWN operator rather than a
+    // `not` around this block: `logic_negate` would write `not v in xs`, which
+    // is the same test and a different line.
+    const notIn =
+      is?.kind === 'keyword' &&
+      is.text === 'not' &&
+      tokens[left.next + 1]?.kind === 'keyword' &&
+      tokens[left.next + 1].text === 'in'
+    if ((is?.kind === 'keyword' && is.text === 'in') || notIn) {
+      const right = this.parseAdditive(tokens, left.next + (notIn ? 2 : 1))
+      if (!right) return null
+      if (!fitsSocket(right.block, 'Array')) return null
+      return {
+        block: {
+          type: 'snakie_list_contains',
+          fields: { MODE: notIn ? 'NOT_IN' : 'IN' },
+          inputs: { ITEM: { block: left.block }, LIST: { block: right.block } }
+        },
+        next: right.next
+      }
+    }
+
     const op = tokens[left.next]
     if (!isCompare(op)) return left
     const right = this.parseAdditive(tokens, left.next + 1)
@@ -1871,24 +3011,227 @@ class Converter {
     }
 
     if (tok.kind === 'name') {
+      // THE ORDER HERE IS THE WHOLE OF W1'S RISK (#1088). A rule, a hoisted
+      // object, or a function this program defines must all still win over the
+      // generic reading below — otherwise `led_15.set(True)` quietly regresses
+      // from a real LED block to a grey call block, and NEITHER half of the
+      // ratchet catches it: coverage is unchanged (both are recognised) and
+      // round-trip is unchanged (both generate the same line). It has its own
+      // test instead, in `blocksPythonObjects.test.ts`.
       const call = readCall(tokens, this.source, at)
       if (call) {
         const onObject = this.receiverCall(call, 'value')
-        if (onObject) return { block: onObject, next: call.next }
-        const block = this.matchCall(call, 'value')
-        if (block) return { block, next: call.next }
-        return null // a call we do not know: the whole expression goes raw
+        if (onObject) return this.chain({ block: onObject, next: call.next }, tokens)
+        const known = this.matchCall(call, 'value')
+        if (known) return this.chain({ block: known, next: call.next }, tokens)
+        const own = this.procedureCall(this.callText(tokens, at, call.next), 'value')
+        if (own) return this.chain({ block: own, next: call.next }, tokens)
       }
-      // A plain name, not followed by a dot or a bracket, is a variable.
+      // A NAME, AND THEN WHATEVER IS DOTTED ONTO IT. This is what used to bail:
+      // `self.angle` in an expression took the entire enclosing statement to
+      // grey, and `obj.read()` with it.
       const after = tokens[at + 1]
-      if (after && (after.text === '.' || after.text === '(' || after.text === '[')) return null
-      return {
-        block: { type: 'variables_get', fields: { VAR: { id: this.variable(tok.text) } } },
-        next: at + 1
-      }
+      // A call we could not place stays raw — a bare `foo(1)` has no object to
+      // be a method OF, so there is no generic block for it. A `[` is not
+      // refused here any more: {@link chain} reads a subscript, when the Lists
+      // block can say it back exactly (W2, #1089).
+      if (after && after.text === '(') return null
+      const base = this.name(tok.text)
+      if (!base) return null
+      return this.chain({ block: base, next: at + 1 }, tokens)
     }
 
     return null
+  }
+
+  /**
+   * A bare name as a value block, or null when reading it would rename it.
+   *
+   * `names.ts` deliberately renames a variable that would shadow something
+   * load-bearing — `id` becomes `id_`, and PEP 8 agrees — which is the right
+   * answer for a name a learner typed into a block and the WRONG one for a name
+   * we are reading back out of their file. `bytes.decode(x)` read as blocks
+   * would regenerate as `bytes_.decode(x)`: a program that no longer runs, and
+   * one the round-trip gate forgives, because it compares token SHAPES and a
+   * renamed name is the same shape.
+   *
+   * So a name that would not survive the trip is refused here, and the line it
+   * is in stays raw and regenerates verbatim. The same answer a number whose
+   * written form the block cannot hold already gets.
+   */
+  private name(text: string): BlockJson | null {
+    // `self` IS NOT A VARIABLE (W6, #1093, and §4.3 of the delivery plan).
+    // Blockly variables are global to the workspace and renameable from a
+    // dropdown, so a learner renaming `self` in one method would rename it in
+    // twelve and generate a class that no longer works. It gets a block of its
+    // own, which is also how it reads best: *set (self) . speed to (speed)*.
+    if (text === 'self') return { type: 'snakie_self' }
+    if (isReservedName(text) || sanitise(text) !== text) return null
+    // A MODULE IS NOT AN OBJECT — see {@link importedNames}.
+    if (this.imported.has(text)) return null
+    // A HOISTED OBJECT IS ALL OR NOTHING (#1058), and this is where W1 could
+    // have broken that. `led_15.frobnicate()` read as a generic call block is a
+    // use of `led_15` that no longer looks unreadable — so the constructor gets
+    // swallowed, `led_15.set(True)` beside it hoists a SECOND `Led` on the same
+    // pin under a collision-avoiding name, and two objects drive one pin.
+    //
+    // A use we cannot read as the block that wrote it keeps the object alive,
+    // which is what it did before W1 and what the rule has always meant.
+    //
+    // WHILE IT IS STILL IN PLAY, which is the probe pass and, on the real pass,
+    // the names that came out fully understood. A name the probe found an
+    // unreadable use of is an ordinary variable again by the time the real pass
+    // reaches it, and reading it as one is what keeps `led.on()` a block.
+    if (this.hoisted.has(text) && (this.consumable === null || this.consumable.has(text))) {
+      return null
+    }
+    // A NAME THE SETUP SECTION WILL OWN (W10, #1097) is not a variable either:
+    // the `name pin` block writes `led = Pin(25, Pin.OUT)` up there, and a
+    // workspace variable of the same name comes back as `led_`.
+    if (this.aliases.has(text)) return null
+    return { type: 'variables_get', fields: { VAR: { id: this.variable(text) } } }
+  }
+
+  /** The source text of the call `readCall` just read, for `procedureCall`. */
+  private callText(tokens: readonly Token[], at: number, next: number): string {
+    return this.source.slice(tokens[at].start, tokens[next - 1].end)
+  }
+
+  /**
+   * `.attr` and `.method(...)`, for as long as the tokens keep going (W1, #1088).
+   *
+   * The two blocks this builds — `snakie_python_attr_get` and
+   * `snakie_python_call_value` — have shipped since #1018 and take an OBJECT
+   * SOCKET, which is what makes a chain work at all: the reading of `self.x` is
+   * the object that `.y()` is then called on, so `self.display.text(...)` is two
+   * blocks nested rather than a shape nobody modelled.
+   *
+   * Null rather than a partial read, per the rule everywhere here: half a chain
+   * would be half a line, and the whole line going raw regenerates it verbatim.
+   */
+  private chain(
+    start: { block: BlockJson; next: number },
+    tokens: readonly Token[]
+  ): { block: BlockJson; next: number } | null {
+    let cur = start
+    for (;;) {
+      const head = tokens[cur.next]
+      if (head?.kind === 'open' && head.text === '[') {
+        const item = this.subscript(tokens, cur)
+        if (!item) return null
+        cur = item
+        continue
+      }
+      const dot = head
+      if (!dot || dot.kind !== 'op' || dot.text !== '.') return cur
+      const member = tokens[cur.next + 1]
+      if (!member || member.kind !== 'name') return null
+      const open = tokens[cur.next + 2]
+      if (open?.kind === 'open' && open.text === '(') {
+        const read = readArgs(tokens, this.source, cur.next + 2)
+        // A TRAILING COMMA IS THE LEARNER'S TEXT. The block has one socket per
+        // argument and nowhere to record that there was a comma after the last
+        // of them, so `thing.configure(1, 2,)` would come back `(1, 2)` — a
+        // silent rewrite, and one the round-trip gate refuses to commit, which
+        // would cost the file its whole conversion rather than this line.
+        if (!read || read.trailingComma) return null
+        // A PALETTE'S OWN RULE FIRST (W2, #1089) — `xs.append(v)` is the Lists
+        // drawer's block, not a generic call on an object.
+        const known = this.objectCall(cur.block, member.text, read.args, 'value')
+        if (known) {
+          cur = { block: known, next: read.next }
+          continue
+        }
+        const block = this.callBlock(PYTHON_CALL_VALUE, cur.block, member.text, read.args)
+        if (!block) return null
+        cur = { block, next: read.next }
+        continue
+      }
+      cur = {
+        block: {
+          type: PYTHON_ATTR_GET,
+          fields: { NAME: member.text },
+          inputs: { OBJ: { block: cur.block } }
+        },
+        next: cur.next + 2
+      }
+    }
+  }
+
+  /**
+   * `xs[i]` → the Lists drawer's `item n of xs`, when it can say it back (W2).
+   *
+   * ONE-BASED ON THE BLOCK, ZERO-BASED IN THE CODE — `lists.ts` chose that
+   * deliberately, so that a learner meets the off-by-one honestly with both
+   * sides on screen. Reading it back means undoing the same arithmetic, and only
+   * the two forms the generator can write are undoable:
+   *
+   *     xs[0]      → item 1 of xs        (a literal, counted back up)
+   *     xs[i - 1]  → item i of xs        (the `- 1` the generator wrote)
+   *
+   * `xs[i]` is NOT one of them: the block would have to hold `i + 1` and would
+   * regenerate as `xs[i + 1 - 1]`, which is somebody's line rewritten. It stays
+   * raw, and W8 (#1095) is where a general subscript block belongs.
+   */
+  private subscript(
+    tokens: readonly Token[],
+    cur: { block: BlockJson; next: number }
+  ): { block: BlockJson; next: number } | null {
+    let depth = 0
+    for (let i = cur.next; i < tokens.length; i++) {
+      const tok = tokens[i]
+      if (tok.kind === 'open') depth += 1
+      else if (tok.kind === 'close') {
+        depth -= 1
+        if (depth > 0) continue
+        if (tok.text !== ']') return null
+        const inside = this.source.slice(tokens[cur.next].end, tok.start).trim()
+        const index = this.oneBased(inside)
+        // LIST checks Array, so `"abc"[0]` is not this block — the same rule the
+        // socket table exists for (#1071).
+        if (!index || !fitsSocket(cur.block, 'Array')) return null
+        return {
+          block: {
+            type: 'snakie_list_get',
+            inputs: { LIST: { block: cur.block }, INDEX: { block: index } }
+          },
+          next: i + 1
+        }
+      }
+    }
+    return null
+  }
+
+  /** The INDEX socket for a zero-based Python subscript, or null — see above. */
+  private oneBased(text: string): BlockJson | null {
+    if (/^\d+$/.test(text)) return { type: 'math_number', fields: { NUM: Number(text) + 1 } }
+    const minusOne = /^(.+?)\s*-\s*1$/.exec(text)
+    if (!minusOne) return null
+    const index = this.expression(minusOne[1])
+    return fitsSocket(index, 'Number') ? index : null
+  }
+
+  /**
+   * One of the two call blocks, filled in — the object in its socket, the method
+   * in its field, the arguments in the sockets it grows for them.
+   *
+   * RECOGNISE THE STATEMENT, SOCKET THE REST (§4.2 of the delivery plan). An
+   * argument we cannot read becomes a grey value block inside a real call block,
+   * which is why `self.display.text(f"{temp:.1f}", 0, 0)` needs this and nothing
+   * else — the f-string sits in a socket and regenerates verbatim.
+   */
+  private callBlock(
+    type: string,
+    object: BlockJson,
+    method: string,
+    args: readonly string[]
+  ): BlockJson | null {
+    if (args.length > MAX_CALL_ARGS) return null
+    const inputs: Record<string, { block: BlockJson }> = { OBJ: { block: object } }
+    args.forEach((arg, i) => {
+      inputs[`ARG${i}`] = { block: this.expression(arg) }
+    })
+    return { type, fields: { METHOD: method }, extraState: { args: args.length }, inputs }
   }
 }
 
@@ -1921,13 +3264,37 @@ function readCall(
     // `a.b.c(...)` is a call on something we have no name for; leave it raw.
     if (tokens[i]?.text === '.') return null
   }
-  if (tokens[i]?.kind !== 'open' || tokens[i].text !== '(') return null
-  i += 1
+  const read = readArgs(tokens, source, i)
+  if (!read) return null
+  return { module, fn, args: read.args, next: read.next, rest: tokens.slice(read.next) }
+}
 
+/**
+ * The argument list of a call whose `(` is at `at`: the texts, and where the
+ * `)` left off.
+ *
+ * Split out of {@link readCall} for W1 (#1088), which reads a chain of calls —
+ * `self.display.text(...)` — rather than the one-deep `module.fn(...)` that
+ * function is shaped for.
+ *
+ * The arguments come back as SLICES OF THE ORIGINAL LINE, not as re-joined
+ * tokens. `f'{x}'` lexes as a name and a string, and no spacing rule puts those
+ * back together the way they were typed — so the text a raw block ends up
+ * holding has to be the text the learner wrote, character for character.
+ */
+function readArgs(
+  tokens: readonly Token[],
+  source: string,
+  at: number
+): { args: string[]; next: number; trailingComma: boolean } | null {
+  if (tokens[at]?.kind !== 'open' || tokens[at].text !== '(') return null
+  let i = at + 1
   const args: string[] = []
   let depth = 0
   let from: number | null = null
   let to = 0
+  /** A `,` with nothing after it — legal Python, and not an argument. */
+  let trailingComma = false
   const flush = (): void => {
     if (from !== null) args.push(source.slice(from, to).trim())
     from = null
@@ -1935,9 +3302,9 @@ function readCall(
   while (i < tokens.length) {
     const tok = tokens[i]
     if (depth === 0 && tok.kind === 'close' && tok.text === ')') {
+      trailingComma = from === null && args.length > 0
       flush()
-      i += 1
-      return { module, fn, args, next: i, rest: tokens.slice(i) }
+      return { args, next: i + 1, trailingComma }
     }
     if (depth === 0 && tok.kind === 'op' && tok.text === ',') {
       // A trailing comma before `)` is legal and contributes no argument.
@@ -1954,6 +3321,26 @@ function readCall(
   return null
 }
 
+/** Put a set or a map back exactly as it was — see {@link Converter.trial}. */
+function restore<T>(into: Set<T>, was: readonly T[]): void
+function restore<K, V>(into: Map<K, V>, was: readonly [K, V][]): void
+function restore(
+  into: { clear(): void; add?: (v: unknown) => unknown; set?: (k: unknown, v: unknown) => unknown },
+  was: readonly unknown[]
+): void {
+  into.clear()
+  for (const entry of was) {
+    if (into.add) into.add(entry)
+    else into.set!((entry as unknown[])[0], (entry as unknown[])[1])
+  }
+}
+
+/** A block's bubble as a trailing comment, with its two spaces, or ''. */
+function commentOn(block: BlockJson): string {
+  const text = (block.icons as { comment?: { text?: string } } | undefined)?.comment?.text
+  return text ? `  ${text}` : ''
+}
+
 /** Is this block a text literal? `%` beside one is formatting, not modulo. */
 function isTextBlock(block: BlockJson): boolean {
   return block.type === 'text'
@@ -1968,6 +3355,12 @@ function isTextBlock(block: BlockJson): boolean {
  * would come back changed.
  */
 function readStringLiteral(literal: string): string | null {
+  // A TRIPLE-QUOTED LITERAL IS NOT A `text` BLOCK (#1091). The pattern below is
+  // happy to read `"""hello"""` as the text `""hello""`, and the generator then
+  // quotes that again: `banner = """hello"""` came back `banner = '""hello""'`.
+  // A silent rewrite, and one the round-trip gate forgives, because a string is
+  // a placeholder in a line signature. Raw regenerates it verbatim.
+  if (/^("""|''')/.test(literal)) return null
   const m = /^(['"])(.*)\1$/s.exec(literal)
   if (!m) return null
   if (m[2].includes('\\')) return null

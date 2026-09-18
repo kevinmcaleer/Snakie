@@ -5,6 +5,8 @@ import type { BlockDefinition } from '../registry'
 import { toPythonIdentifier } from '../names'
 import { pyString } from '../py'
 import { adc, i2c, pinField, pinOf, pwm } from './hardware'
+import { registerCallRules, type CallRule } from '../python-to-blocks'
+import type { SocketType } from '../registry'
 import {
   INSTRUMENTS,
   type InstrumentBlockArg,
@@ -309,3 +311,54 @@ const HARDWARE_INSTRUMENT_BLOCKS: BlockDefinition[] = [
 export function instrumentBlocks(): BlockDefinition[] {
   return [...derivedInstrumentBlocks(), ...HARDWARE_INSTRUMENT_BLOCKS]
 }
+
+/**
+ * How an instrument block reads BACK out of Python (W2, #1089, epic #1086).
+ *
+ * Derived from the same descriptor the block and its emitter come from, so an
+ * instrument that changes its call changes both sides at once — which is the
+ * property this whole module was built for.
+ *
+ * ONLY THE PLAIN ONES, and the exclusions are not laziness. A descriptor arg may
+ * be a FIELD (a channel name typed on the block face), a KEYWORD (the learner's
+ * own series name, which becomes the Python keyword of the argument after it),
+ * or a LIST-WRAPPED socket (`screen(["Hello"])`). Each of those is a place where
+ * the text in the file and the sockets on the block are not one-to-one, and a
+ * rule that guessed would put a learner's series name in the wrong half of
+ * `plot(temp=21.4)`. A keyword argument only appears at all when it DIFFERS from
+ * the library default, so its absence is not even evidence of its value.
+ *
+ * The four hand-written hardware blocks are excluded for a different reason:
+ * their calls take an object the generator hoisted (`inst.read_adc(adc26, …)`),
+ * which is `CallReceiver`'s shape and belongs to #1012's machinery, not here.
+ */
+export function registerInstrumentReadRules(): void {
+  const rules: CallRule[] = []
+  for (const instrument of INSTRUMENTS) {
+    for (const def of instrument.blocks ?? []) {
+      const plain = def.args.every(
+        (arg) => !arg.keyword && !arg.list && (arg.kind === 'number' || arg.kind === 'boolean' || arg.kind === 'text')
+      )
+      if (!plain) continue
+      rules.push({
+        module: INST,
+        fn: def.fn,
+        type: def.type,
+        args: def.args.map((arg) => arg.name),
+        shape: 'statement',
+        checks: Object.fromEntries(
+          def.args.flatMap((arg): [string, SocketType][] =>
+            arg.kind === 'number'
+              ? [[arg.name, 'Number']]
+              : arg.kind === 'boolean'
+                ? [[arg.name, 'Boolean']]
+                : []
+          )
+        )
+      })
+    }
+  }
+  registerCallRules(rules)
+}
+
+registerInstrumentReadRules()

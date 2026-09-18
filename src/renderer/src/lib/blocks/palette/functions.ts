@@ -125,6 +125,46 @@ export const FUNCTION_BLOCKS: BlockDefinition[] = [
     help: 'ref-functions',
     code: (block, gen) => [callCode(block, gen), Order.FUNCTION_CALL]
   },
+  // -------------------------------------------------------------- return
+  //
+  // A REAL RETURN STATEMENT (W3, #1090, epic #1086).
+  //
+  // 2,359 raw lines across 57 of 73 projects, and the gap is a deliberate
+  // retreat rather than an oversight: a mid-function `return` USED to become
+  // `procedures_ifreturn` below, whose code is `if <COND>: return <VALUE>` — and
+  // with nothing in COND the generator wrote `if False:`, so every early return
+  // in the program silently became dead code. #1063 pulled it back to a raw
+  // block, which is honest and grey.
+  //
+  // This is the block that was missing. No condition, a value socket that may be
+  // empty, and — unlike `controls_flow_statements` — A NEXT CONNECTION: `return`
+  // mid-function is ordinary Python, and a block with nothing after it cannot
+  // hold the rest of a guard clause's function. The terminal-block rule (#1068)
+  // is about blocks that CANNOT be followed; this one can.
+  //
+  // AN EMPTY SOCKET IS A BARE `return`, not `return None`. Everywhere else in
+  // this palette an empty socket takes a placeholder, because the learner
+  // reached for a block that needs a value; here the empty block is itself a
+  // complete, common statement — the guard clause that leaves early with no
+  // answer — and writing `return None` would be putting words in their mouth.
+  {
+    type: 'snakie_return',
+    category: 'functions',
+    help: 'ref-functions',
+    json: {
+      message0: 'return %1',
+      args0: [{ type: 'input_value', name: 'VALUE' }],
+      inputsInline: true,
+      previousStatement: null,
+      nextStatement: null,
+      tooltip:
+        'Leave this function, and give back what is plugged in. With nothing plugged in it just leaves — which is what a check at the top of a function does when there is nothing to do.'
+    },
+    code: (block, gen) => {
+      const value = gen.valueToCode(block, 'VALUE', Order.NONE)
+      return value === '' ? 'return\n' : `return ${value}\n`
+    }
+  },
   {
     type: 'procedures_ifreturn',
     category: 'functions',

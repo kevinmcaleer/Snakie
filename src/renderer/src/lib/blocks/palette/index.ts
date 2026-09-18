@@ -12,6 +12,7 @@ import { CONTROL_BLOCKS } from './control'
 import { HARDWARE_BLOCKS } from './hardware'
 import { instrumentBlocks } from './instruments'
 import { FUNCTION_BLOCKS } from './functions'
+import { STRUCTURE_BLOCKS, installStructureBlocks } from './structure'
 import { LIST_BLOCKS } from './lists'
 import { LOGIC_BLOCKS } from './logic'
 import { MATHS_BLOCKS } from './maths'
@@ -66,6 +67,8 @@ export function installCorePalette(): void {
   // `controls_if`, they must exist in `Blockly.Blocks` before anything tries to
   // build one.
   installPythonBlocks()
+  // And the `try` block, whose arms come and go for the same reason.
+  installStructureBlocks()
   defineBlocks([
     ...TURTLE_BLOCKS,
     // HARDWARE IS SCOPED BY WHAT IT CAN GENERATE (#1039 → #1040). Nine of the
@@ -95,6 +98,9 @@ export function installCorePalette(): void {
     ...LIST_BLOCKS,
     ...VARIABLE_BLOCKS,
     ...FUNCTION_BLOCKS,
+    // Class, method and `self` (#1093). Registered, never listed — a class is
+    // the reader's vocabulary rather than a first drawer's; see §4.5.
+    ...STRUCTURE_BLOCKS,
     // Last, and last in the toolbox: the escape hatches (#1018) are where you
     // go when nothing above does what you need, and a palette is a curriculum.
     ...PYTHON_BLOCKS

@@ -8,6 +8,396 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`async def` and `await` read as blocks** (#1096, epic #1086). 570 raw lines
+  across 15 projects — the narrowest workstream in the epic, which is why it was
+  scheduled last, and the cheapest of the ones that needed new blocks now that
+  #1093 has landed.
+
+  Both are keyword prefixes on shapes the reader already handles, so `async def`
+  is one more **setting** on the method block that already carries `@property`,
+  and `async with` one more on the `with` block. `await` is the one thing that
+  needed blocks of its own, and it needed two — a statement and a value — for the
+  same reason `snakie_python_call` and `snakie_python_call_value` are two blocks:
+  a Blockly block has an output or a pair of statement connections, never both.
+
+  `asyncio` and `uasyncio` are treated alike because neither is treated specially:
+  a call into a module stays a grey value in a real `await` block, which is the
+  deliberate rule from #1088 (a module is not an object, and reading one as a
+  variable would come back renamed).
+
+  `async for` is deliberately left out. #1096 says to include it "if the modifier
+  approach generalises" — and it does not: `for each` is Blockly's own
+  `controls_forEach`, so a setting on it would mean redefining a stock block.
+  Nine projects, and the line stays a raw suite with its body in blocks under it.
+
+  Statement coverage over the fixture corpus: **96.32% → 97.94%**.
+
+- **Assignment and scope: tuple targets, subscripts, every augmented operator,
+  `global`, `not in`, nested imports** (#1095, epic #1086). Individually small,
+  and **2,333 lines across 36 projects** between them.
+
+  ```python
+  a, b = b, a            counts[name] = n      total //= 4
+  x = y = 0              s += "x"              global count
+  from machine import *  if name not in names: import ujson   # inside a def
+  ```
+
+  The assignment recogniser was a regex matching **a bare name only**, with a
+  `=(?!=)` guard that was load-bearing: an earlier version read `x == 5` as
+  assigning `= 5` to `x` and regenerated it as `x = = 5`. That guard is gone and
+  the lexer answers instead — `==` is one token, and so is every augmented
+  operator — so the regression test for it matters more rather than less, and it
+  is still there.
+
+  Four new blocks, each shaped by something the reader must not do:
+
+  - a **generic assignment** whose target is TEXT. A tuple target is several
+    names, a subscript is an expression with an index in it and a chain is two
+    targets; modelling any one as sockets would lose the others. `variables_set`
+    still takes every line that is a plain name, which is most of them.
+  - an **augmented assign whose socket checks nothing**. `math_change`'s DELTA
+    checks Number, so `s += "x"` — ordinary string concatenation — built a `text`
+    block into it and made the whole workspace unloadable (#1071), and the reader
+    had to decline the line. `+=` on a string, a list and a number are the same
+    statement, and a socket that claimed otherwise would be that bug again.
+  - **`global` / `nonlocal`**, two fields and no sockets.
+  - an **import that stays put**. The three import blocks are hoisted into the
+    section at the top, which is right for the `import time` a learner drags in
+    and catastrophic for one written inside a `try` on purpose — that idiom
+    exists *because* one of the two may be missing. #1095 asked for this to be a
+    decision rather than an accident, and this is the decision. It also takes
+    `from x import *` and `import a, b`.
+
+  `not in` became a setting on the "is in" block rather than a `not` wrapped
+  round it: `logic_negate` writes `not v in xs`, which is the same test and a
+  different line.
+
+  Statement coverage over the fixture corpus: **92.49% → 96.32%**.
+
+- **`try`/`except`/`finally`, `raise` and `with` read as blocks** (#1094, epic
+  #1086). 1,271 raw lines of `try` across 40 projects, 322 of `raise` across 26,
+  198 of `with` across 27 — all of them line-shaped headers, which is why none of
+  them is an argument for a parser.
+
+  `try` is an **arm chain** and reuses `if`/`elif`/`else`'s machinery, for the
+  reason that machinery was written: an arm is a *sibling* line, not a child, and
+  the header that claims one must mark it consumed or it is converted twice or
+  not at all. The `else:` of a `try` is the same token as a loop's, and #1068 is
+  the record of what happens when nobody says who claimed it. Several `except`
+  arms, an `else` and a `finally` all come back; so do a bare `except:`, a tuple
+  of exception types, and the `as e` binding that appears in 34 of 73 projects on
+  its own.
+
+  **The nested-import idiom still generates exactly what was written.**
+  `try: import ujson as json / except ImportError: import json` exists precisely
+  because one of the two may be missing — the reader refuses to hoist a nested
+  import for that reason (#1071), and recognising `try` does not change it.
+
+  `with` keeps its whole head as one field, deliberately: `with open(a) as f,
+  open(b) as g:` is two context managers and two bindings, and a socket plus a
+  name field would model the common case and silently lose that one. `raise`
+  takes an optional value socket, so a bare re-raise inside an `except` is the
+  empty block — the same shape the return block took in #1090.
+
+  Statement coverage over the fixture corpus: **87.92% → 92.49%**, which is the
+  93% the delivery plan's Tier 3 predicted.
+
+- **Classes, methods and `@property` read as blocks** (#1093, epic #1086). The
+  single biggest theme in the corpus — **32.8% of all grey lines** once W1's
+  `self.` assignments and calls are counted with it: 2,692 raw lines of nested
+  `def` across 53 projects, 604 `class` headers across 46, 340 decorators across
+  29. The old reader's own placeholder text admitted it: the raw-suite block's
+  prompt is literally *"a Python block, e.g. class Thing:"*.
+
+  The shape is set by Blockly rather than by the reader. `procedures_defnoreturn`
+  is a **hat**, and a hat cannot nest — which is exactly why #1063 stopped
+  hoisting methods out of their class and left the whole thing as a raw suite (a
+  class was losing its header while its twelve methods walked off to become
+  twelve top-level functions). So three new blocks:
+
+  - **`class`**, with a statement input, so a body can live inside it, and the
+    base classes as a field from the start — `(Wheels)`, `(Base, Mixin)`,
+    `(Base, metaclass=Meta)` — because retrofitting inheritance would mean
+    migrating saved workspaces.
+  - **method**, an ordinary stackable block rather than a hat, so it can sit in
+    that input, with `@property` / `@staticmethod` / `@classmethod` as a setting
+    on it rather than a block of its own that could be dragged away. Its
+    parameter list is a **field**, so `def load(self, path, flip_x=None)`,
+    `*args` and a type annotation all come back exactly as written — a signature
+    `procedures_def` could never hold, and #1063 records what dropping one cost.
+  - **`self`**, a block of its own. Blockly variables are global to the workspace
+    and renameable from a dropdown, so a learner renaming `self` in one method
+    would rename it in twelve and generate a class that no longer works.
+
+  All three are registered and **not** in the flyout: a class belongs in the
+  reader's vocabulary, not in a ten-year-old's first drawer (§4.5). Whether that
+  changes is a curriculum decision and one field on each definition.
+
+  Also fixed, and it predates this workstream: a **decorated top-level `def` was
+  being hoisted away from its decorator**. `@app.route("/")` came back with its
+  `def` lifted into the functions section above it, so the decorator decorated
+  whatever happened to follow and the route was gone — and the round-trip gate
+  cannot see it, because it compares a *bag* of line signatures precisely so that
+  the generator's hoisting is not mistaken for a rewrite.
+
+  Statement coverage over the fixture corpus: **78.79% → 87.92%**, and files that
+  open with no grey at all go from 3 of 43 to 4.
+
+- **A statement with a comment on the end is still a block** (#1092, epic
+  #1086). The cheapest line in the epic and one of the widest: **1,532 raw lines
+  across 55 of 73 projects**, grey for nothing but having a note on the end.
+
+  ```python
+  x = 5  # how many times      ← was a grey raw block
+  time.sleep(1)  # pause       ← so was this
+  if x:  # check first         ← and this took its whole body with it
+  ```
+
+  #1068 made the reader refuse such a line outright, and that was right at the
+  time: the lexer stops at the `#`, so every recogniser matched the code and
+  silently dropped the rest, and no block held both halves.
+
+  A block does hold both — **Blockly's comment bubble**, the field every block
+  already has and the one the `def` block has carried a docstring in since
+  #1007. So nothing about the file format changes: the reader hangs the note
+  there and the generator writes it back onto the end of the block's first line,
+  PEP 8's two spaces and all. A note about `while True:` goes on `while True:`,
+  not on the last line of its body.
+
+  Still raw, and each for a reason: a line whose code half is not a block at all;
+  an import or a `name pin`, because those are lifted into sections of their own
+  and the note would travel with them; a `from x import a, b`, which is two
+  blocks and one note; and a `def`, whose bubble is already its docstring.
+
+  The refactor underneath is worth a line of its own. The reader's recogniser is
+  now asked a question it is willing to have answered no — *would this line be a
+  block without the comment?* — and it is not a pure function: it declares
+  variables, collects `def` blocks into a section of their own, and marks the
+  `elif`/`else` arms an `if` has taken. A no that left those marks behind is
+  worse than no answer: `def go():  # the main loop` collected a definition and
+  then fell back to raw, so the function came out twice. Declining now rolls the
+  whole attempt back.
+
+  Statement coverage over the fixture corpus: **77.47% → 78.79%**, and files that
+  open with no grey at all go from 2 of 43 to 3.
+
+- **Docstrings and multi-line strings read as a block** (#1091, epic #1086).
+  2,174 raw lines across 48 of 73 projects: every docstring in a well-documented
+  program was a grey block, which is most of why a class-heavy file opened as a
+  wall.
+
+  Cheaper than it looked. The lexer has always folded a triple-quoted literal
+  into **one** logical line and kept its line count honest, so a thirty-line
+  module header arrived as a single unrecognised statement rather than thirty of
+  them. What was missing was a recogniser for a bare string expression and a
+  block that renders several lines without collapsing them — closer to the
+  comment block (which already holds a run of lines verbatim) than to `text`,
+  whose field is one line and whose emitter re-quotes its contents.
+
+  Byte-for-byte, which for prose is the only bar worth having: internal blank
+  lines, an indented example inside the description, and the quote style somebody
+  chose all come back as they went in. A `def`'s leading docstring is unchanged —
+  it is still the block's own comment bubble, because the bubble and the
+  docstring say the same thing about the same function.
+
+  The block is registered but **not** in the flyout. `BlockDefinition.hidden` is
+  new, and says what §4.5 of the delivery plan argues: the toolbox is curated and
+  the reader is comprehensive, and they are not the same list. It stays
+  registered whichever way that goes, because `workspace-check.ts` refuses to
+  open a file containing a block type this build does not know.
+
+  Also fixed: `banner = """hello"""` regenerated as `banner = \'""hello""\'`. The
+  expression reader was happy to read a triple-quoted literal as the text
+  `""hello""` and the generator quoted that again — a silent rewrite, and one the
+  round-trip gate forgives, because a string is a placeholder in a line
+  signature.
+
+  Statement coverage over the fixture corpus: **76.73% → 77.47%**.
+
+- **A real block for an early or bare `return`** (#1090, epic #1086). 2,359 raw
+  lines across 57 of 73 projects — grey *on purpose*, which is the part worth
+  remembering:
+
+  ```python
+  def angle(degrees):
+      if degrees < 0:
+          return          # this line was a grey raw block
+      servo.duty_u16(...)
+  ```
+
+  A mid-function `return` used to become `procedures_ifreturn`, whose generated
+  code is `if <COND>: return <VALUE>` — and with nothing in COND the generator
+  wrote `if False:`, so every early return in the program silently became dead
+  code. #1063 pulled the recognition back rather than keep shipping that.
+
+  `snakie_return` is the block that was actually missing: no condition, a value
+  socket that may be empty, and — unlike `break`/`continue` — a **next
+  connection**, because a guard clause has a whole function after it. An empty
+  socket is a bare `return`, not `return None`: everywhere else in the palette an
+  empty socket takes a placeholder because the learner reached for a block that
+  needs a value, and here the empty block is itself a complete, common statement.
+
+  A trailing `return <expr>` still becomes the `def` block's RETURN socket, which
+  is how Blockly models a function's result. Statement coverage over the fixture
+  corpus: **72.61% → 76.73%**.
+
+- **A pin you named comes back as the block that named it** (#1097, epic #1086).
+
+  ```
+  set echo to ( Pin(0, Pin.IN) )      ← before
+  name pin 0 as echo for input         ← now
+  ```
+
+  `snakie_name_pin` is the one hardware block whose whole Python output is an
+  *assignment* rather than a call, so it was the one block that could never carry
+  a `read` rule. The reader grew a declaration shape for it.
+
+  It is also the keystone for the rest of the hardware round trip, and that is
+  the real change. #1058 reads a hardware block back off its constructor, but the
+  pin has to come out of the OBJECT NAME — so only names the generator itself
+  wrote (`pin_15`, `led_15`, `servo_3`) ever matched, and the only difference
+  between a program that opened as hardware blocks and one that opened grey was
+  the variable name. Relaxing that alone would be unsafe: a `snakie_pin_write`
+  holding `PIN=15` regenerates as `pin_15 = Pin(15, Pin.OUT)` and silently
+  renames somebody's `led`. This block resolves it because it is the block that
+  *holds* the name, and pin fields have always accepted a name as well as a
+  number. So `led = Pin(15, Pin.OUT)` then `led.value(1)` now opens as
+  *name pin 15 as led* + *set pin led to 1*, and regenerates byte for byte.
+
+  **A name is all-or-nothing, as a hoisted object always was.** Reading the
+  declaration as the naming block puts `led` in the setup section, where the
+  generator owns the name — so `led.on()` beside it, ordinary MicroPython with no
+  block of its own, would come back `led_.on()` and drive nothing. A name
+  mentioned by a line the reader cannot read stays an ordinary variable, and the
+  file reads exactly as it did before. The generator's own `pin_15` is untouched:
+  it is still the consumed-constructor path, and reading it as *both* gave a file
+  two objects on one pin.
+
+  Socket coverage over the fixture corpus: **71.02% → 72.41%**. Statement
+  coverage does not move at all, which is the point #1097 made about #1087:
+  `pythonToBlocks('echo = Pin(0, Pin.IN)')` reported `recognised: 1, raw: 0`
+  while rendering as a grey blob, and only the second measure can see it.
+
+- **Every palette registers reader rules, not just hardware and turtle** (#1089,
+  epic #1086). `registerCallRules` has been the extension point since #1019 and
+  only two palettes ever called it — so the Lists, Maths, Logic and Instruments
+  drawers all shipped blocks a child could drag out, save, reopen, and find grey.
+
+  ```python
+  readings.append(value)     # add value to readings
+  x = random.randint(1, 6)   # a random number 1 to 6
+  x = min(a, b)              # smallest of a and b
+  if reading is None:        # reading is nothing
+  if name in names:          # name is in names
+  x = readings[0]            # item 1 of readings
+  ```
+
+  Three things the rule format could not express before, each added because a
+  real block needed it:
+
+  - **a method on any object.** `xs.append(v)` is not a call into a module and
+    not a call on something the generator hoisted — it is a method on whatever
+    the learner called their list, so the receiver becomes a socket.
+  - **a rule that fixes a field.** `snakie_math_min_max` is one block with a
+    `smallest`/`largest` dropdown, so `min` and `max` are two rules producing the
+    same block. Without this the reader could only ever have made one of them.
+  - **what a socket checks.** A `text` in a socket that wants Number is a
+    workspace Blockly throws on, which costs the learner every block in the file
+    rather than the one line — the #1071 rule, applied to palette rules.
+
+  `test/blocksPaletteSymmetry.test.ts` now holds the palette and the reader to
+  being two halves of one thing: **every block in the palette must be produced by
+  a rule, by a sample program in the test, or be a listed exception with a
+  reason**. There are twenty-four exceptions and each one is an argument — a
+  block that writes arithmetic rather than a call, two blocks that write the same
+  line, a call carrying a colour or a learner's own keyword, or a named
+  workstream that has not landed yet. Adding a block to the palette now costs
+  saying how it reads back, even when the answer is "it doesn't, and here is why".
+
+  Socket coverage over the fixture corpus: **68.86% → 71.02%**.
+
+- **Blocks reads `obj.method()` and `obj.attr`** (#1088, epic #1086). The single
+  largest gap in the corpus, closed with **nothing added to the palette**.
+  `snakie_python_call`, `snakie_python_call_value`, `snakie_python_attr_get` and
+  `snakie_python_attr_set` have all shipped since #1018, sitting in the Python
+  drawer for a person to drag; the reader simply never emitted one, because
+  `parseAtom` gave up on any name followed by a dot and `callStatement` only
+  matched a ten-rule table.
+
+  ```python
+  self.speed = speed                        # was grey, now a "set . to" block
+  self.display.text(f"{t:.1f}", 0, 0)       # was grey, now a call block
+  if self.running:                          # the WHOLE if used to go grey
+  ```
+
+  **7,662 raw lines across 66 of 73 projects.** Over the fixture corpus the
+  ratchet moves from **53.31% of statements to 72.61%**, and sockets from 53.88%
+  to 68.86%.
+
+  Three things must still win over the generic reading, and none of them is
+  something the ratchet could catch — a generic call block is "recognised" too,
+  and it generates the same line — so they are asserted block type by block type
+  in `test/blocksPythonObjects.test.ts`: a registered rule (`turtle.forward`), a
+  hoisted hardware object (`led_15.set(True)`, #1058), and a call to a function
+  the program itself defines.
+
+  Three things are deliberately refused, because reading them would rewrite
+  somebody's file in a way the round-trip gate forgives — it compares token
+  shapes, and a renamed name is the same shape:
+
+  - **a module is not an object.** `machine.lightsleep(10)` as a generic call
+    made `machine` a workspace variable, and the import manager already owns that
+    name, so it regenerated as `machine_.lightsleep(10)`.
+  - **a name the generator protects.** `bytes.decode(data)` would come back
+    `bytes_.decode(data)`.
+  - **a hoisted object with one unreadable use.** Claiming `led_15.frobnicate()`
+    would make the constructor look fully accounted for, and `led_15.set(True)`
+    beside it would then hoist a second `Led` on the same pin.
+
+  Also fixed along the way: the generator now carries Blockly's `ORDER_OVERRIDES`
+  for member access and calls, so a dotted chain no longer regenerates as
+  `(self.forward).freq(1000)` — which is valid Python, a different line, and one
+  the round-trip gate rightly refused to commit.
+
+- **A coverage ratchet for the Blocks reader** (#1087, epic #1086). The number
+  epic #1086 is about, asserted in CI so it cannot quietly go back down:
+  `test/fixtures/coverage/` is forty-three real MicroPython programs spanning the
+  buckets the epic measured, and `test/blocksCoverageRatchet.test.ts` floors three
+  numbers over them and round-trips every file.
+
+  **Three numbers, not one**, and the second is the point. `rawValue()` never
+  increments `report.raw` — only `raw()` does — so `echo = Pin(0, Pin.IN)` reports
+  itself fully recognised while rendering as *set echo to (grey blob)*. Statement
+  coverage alone would stay blind to that while three workstreams fixed thousands
+  of lines of exactly that shape, and the epic would look like it had barely
+  moved. So `ConversionReport` now counts value **sockets** as well as statements,
+  and the ratchet floors statement coverage, socket coverage and the share of
+  files that open with no grey at all. The baseline the floors were set from:
+  **53.31% of statements, 53.88% of sockets, 2 of 43 files clean.**
+
+  Writing it down found four faults in the reader before a single workstream
+  started, which is roughly the argument for writing it first:
+
+  - `for name in "EDCDEEE":` — iterating a string, ordinary Python — built a
+    `text` block into `controls_forEach`'s LIST socket, which checks Array.
+    Blockly refused the whole workspace, so one line cost the learner every block
+    in the file. Same class of fault as #1071, same answer: the socket table now
+    knows about Array, and a list that will not fit leaves the loop raw.
+  - `return width * 0.0343 / 2  # centimetres` as the last line of a function
+    dropped the comment on the floor. `statement()` refuses a line carrying a
+    trailing comment because no block holds both halves; the `def`'s RETURN
+    socket never asked.
+  - `volts = raw * 3.3 / 65535` regenerated as `(raw * 3.3) / 65535`, which the
+    round-trip gate reads as a different program — so the blocks silently stopped
+    following anyone who wrote one of the commonest lines in a sensor program.
+    `+ - * /` are left-associative and `**` is right-associative, and the
+    arithmetic blocks now say so, which drops the brackets on the side that
+    associates.
+
+  The real corpus cannot live in the repo, so it stays available as an
+  environment-gated pass in the same file:
+  `SNAKIE_CORPUS=~/MicroPython npx vitest run test/blocksCoverageRatchet`.
+
 - **A delivery plan for reading the MicroPython people actually write** (epic
   #1086). `docs/blocks-coverage-epic.md` — the follow-on to #1007, which shipped
   the Blocks workspace and a reader for *the subset our own generator emits*.

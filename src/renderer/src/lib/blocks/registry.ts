@@ -156,7 +156,34 @@ export interface BlockDefinition {
      * reading it back means mapping the Python text to the option value.
      */
     argFields?: Readonly<Record<number, ArgField>>
+    /**
+     * The call is a METHOD ON ANY OBJECT, and this is the socket it goes in
+     * (#1089).
+     *
+     * Neither of the two above: `module` is a literal module name and
+     * `receiver` is an object the generator hoisted, while `xs.append(v)` is a
+     * method on whatever the learner called their list.
+     */
+    on?: string
+    /** Fields this rule fixes — `min`/`max` are one block with two `OP`s. */
+    fields?: Readonly<Record<string, string>>
+    /** Socket name → the type that socket checks, for the ones that check. */
+    checks?: Readonly<Record<string, SocketType>>
   }
+  /**
+   * REGISTERED BUT NOT LISTED IN THE FLYOUT (epic #1086 §4.5).
+   *
+   * A block the reader can emit but the toolbox does not offer. `class`, `try`,
+   * a module docstring and `async def` belong in the reader's vocabulary and not
+   * in a first drawer — the toolbox is curated and the reader is comprehensive,
+   * and they are not the same list.
+   *
+   * It must stay REGISTERED whichever way this goes: the generator looks an
+   * emitter up by type, and `workspace-check.ts` refuses to open a file
+   * containing a type this build does not know. The same reasoning as the two
+   * procedure caller blocks, which are registered and never listed.
+   */
+  hidden?: boolean
   /**
    * The part this block belongs to (#1017) — so USING one can offer to install
    * that part's driver, the same consent-first banner the Board View shows when
@@ -245,6 +272,15 @@ export interface CallReceiver {
   /** For each `{FIELD}` in {@link ctor}: the exact Python each option writes. */
   options?: Readonly<Record<string, Readonly<Record<string, string>>>>
 }
+
+/**
+ * The types a Blockly socket can CHECK (#1071, extended for #1089).
+ *
+ * Lives here beside {@link CallReceiver} rather than in the reader, because a
+ * block definition is what declares a check and a reader rule is what has to
+ * honour it. Absent means UNCHECKED, and unchecked always fits.
+ */
+export type SocketType = 'String' | 'Number' | 'Boolean' | 'Array'
 
 /** An argument that is a field: the field it fills, and what each text means. */
 export interface ArgField {

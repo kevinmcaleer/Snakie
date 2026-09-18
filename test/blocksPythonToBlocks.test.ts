@@ -316,13 +316,29 @@ describe('what it recognises', () => {
 
 describe('what it keeps as raw Python, and says so', () => {
   it('reports the lines it could not read', () => {
+    // `assert` is one of the constructs epic #1086 declines on purpose — 890
+    // lines in the corpus and almost all of them pytest — so it is a line that
+    // stays raw however far the reader comes.
     const { report } = regenerate(
-      ['import turtle', '', 'turtle.forward(100)', 'thing.calibrate(*args)', ''].join('\n')
+      ['import turtle', '', 'turtle.forward(100)', 'assert thing.ready', ''].join('\n')
     )
     expect(report.raw).toBe(1)
     expect(report.rawLines).toEqual([4])
     expect(report.recognised).toBe(2)
     expect(report.total).toBe(3)
+  })
+
+  it('does not lose a line to one argument it cannot read (#1088)', () => {
+    // §4.2 of the delivery plan, as a test: `rawValue()` does not increment
+    // `report.raw`, so a real block with a grey value in one socket is a
+    // RECOGNISED line. It is what makes W1 cheap — fix the statement and the
+    // expression stops mattering — and it is why f-strings appear in 44 projects
+    // and account for five raw lines between them.
+    const { report } = regenerate('thing.calibrate(*args)\n')
+    expect(report.raw).toBe(0)
+    expect(report.recognised).toBe(1)
+    expect(report.rawSockets).toBe(1)
+    expect(types('thing.calibrate(*args)\n')).toContain('snakie_python_call')
   })
 
   it('keeps a whole expression raw rather than half of it', () => {
@@ -346,7 +362,9 @@ describe('what it keeps as raw Python, and says so', () => {
   })
 
   it('counts a fully unreadable program honestly', () => {
-    const { report } = regenerate('a[0] = 1\nb.c.d()\n')
+    // Both deliberately out of scope for epic #1086 — see §3.5 — so this test is
+    // about the counting rather than about these two constructs.
+    const { report } = regenerate('assert ok\nassert speed < 100\n')
     expect(report.recognised).toBe(0)
     expect(report.raw).toBe(2)
   })
@@ -656,10 +674,10 @@ describe('a terminal block that is not last becomes a raw one (#1068)', () => {
 
   it('counts the demoted block as raw, not recognised', () => {
     const { report } = regenerate(['while True:', '    print(1)', 'led.off()', ''].join('\n'))
-    // The demoted `while True:` on line 1, and `led.off()` — which nothing
-    // recognises — on line 3.
-    expect(report.raw).toBe(2)
-    expect(report.rawLines).toEqual([1, 3])
+    // The demoted `while True:` on line 1, and only that: `led.off()` is a
+    // method call on an object, which W1 (#1088) reads as a real call block.
+    expect(report.raw).toBe(1)
+    expect(report.rawLines).toEqual([1])
   })
 
   it('reports raw lines in ascending order', () => {
@@ -935,8 +953,33 @@ describe('a trailing comment survives (#1068)', () => {
     expect(types("print('# not a comment')\n")).toContain('text_print')
   })
 
-  it('counts a commented line as raw, not recognised', () => {
-    expect(regenerate('x = 5  # how many\n').report.raw).toBe(1)
+  it('counts a commented line as RECOGNISED now (W5, #1092)', () => {
+    // It was raw, and #1068's reasoning was right at the time: no block held a
+    // statement AND a comment about it, so recognising the line at all would
+    // have meant choosing which half to keep. A block does hold both now — the
+    // comment bubble every Blockly block has, which the `def` block has carried
+    // a docstring in since #1007 — so the line is a real block with a note on
+    // it, and the note comes back on the end of it.
+    const { report, code } = regenerate('x = 5  # how many\n')
+    expect(report.raw).toBe(0)
+    expect(report.recognised).toBe(1)
+    expect(code).toBe('x = 5  # how many\n')
+    expect(types('x = 5  # how many\n')).toContain('variables_set')
+  })
+
+  it('still keeps a line raw when the code half is not a block', () => {
+    // The fallback that #1068 made the whole rule is still the fallback: both
+    // halves, verbatim, in one raw block.
+    expect(types('assert ok  # really\n')).toEqual(['snakie_python_statement'])
+    roundTrips('assert ok  # really\n')
+  })
+
+  it('keeps an import with a comment raw, because the block is hoisted', () => {
+    // An import block generates nothing where it stands — the generator lifts
+    // every one of them into the section at the top — so a note on the line
+    // would travel with it, away from the line it is about.
+    expect(types('import time  # for the delays\n')).toEqual(['snakie_python_statement'])
+    roundTrips('import time  # for the delays\n')
   })
 })
 
@@ -1049,11 +1092,14 @@ describe('a block never lands in a socket that would reject it (#1071)', () => {
   }
 
   it('`s += "x"` — text into math_change.DELTA (micropython/modules/buzzer.py)', () => {
-    expect(loads('s = \'\'\ns += "x"\n')).toBe(true)
-    // The `+=` line is raw, so its double quotes survive verbatim; the
-    // assignment above it is a real block and renders in house style.
-    roundTrips('s = \'\'\ns += "x"\n')
-    expect(types('s += "x"\n')).not.toContain('math_change')
+    expect(loads("s = ''\ns += 'x'\n")).toBe(true)
+    roundTrips("s = ''\ns += 'x'\n")
+    // STILL NOT `math_change`, which is the #1071 property: its DELTA socket
+    // checks Number, and a `text` in it is a workspace Blockly refuses. W8
+    // (#1095) gave the line a block of its own whose socket checks nothing —
+    // `+=` on a string, a list and a number are the same statement.
+    expect(types("s += 'x'\n")).not.toContain('math_change')
+    expect(types("s += 'x'\n")).toContain('snakie_python_augmented')
   })
 
   it('`x = a + "b"` — text into math_arithmetic.B (micropython/instruments.py)', () => {
