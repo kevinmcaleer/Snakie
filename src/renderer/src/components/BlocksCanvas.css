@@ -47,6 +47,24 @@
   fill: var(--snakie-block-text, #fff);
 }
 
+/* A label that is a NOTE about the program rather than a step in it — the
+ * blank-line spacer. Italic, so a stack of real work does not read as half
+ * spacing; see `NOTE_FIELD_CLASS` in `palette/python.ts`.
+ *
+ * FOUR CLASSES, AND A SHORTHAND IS WHY. Blockly builds its text rule from the
+ * theme's `fontStyle` as the `font` SHORTHAND —
+ * `.<renderer>-renderer.<theme>-theme .blocklyText { font: 600 12pt … }` — and a
+ * shorthand RESETS every longhand it does not name, so it sets `font-style:
+ * normal` without ever mentioning it. At three classes it then beat the obvious
+ * two-class rule, and the label rendered upright with nothing to show why.
+ *
+ * The flyout is listed separately because its blocks are in their own SVG, not
+ * under the canvas's. */
+.blocks-canvas__host .blocklySvg .blocklyText.snakie-field-note,
+.blocks-canvas__host .blocklyFlyout .blocklyText.snakie-field-note {
+  font-style: italic;
+}
+
 .blocks-canvas__host .blocklyFlyoutLabelText,
 .blocks-canvas__host .blocklyTreeLabel {
   font-family: var(--font-ui);

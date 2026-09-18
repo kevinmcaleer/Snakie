@@ -228,7 +228,9 @@ export function readThemeTokens(el: Element | null): ThemeTokens {
  */
 export const BLOCK_CATEGORIES = [
   { id: 'turtle', name: 'Turtle', token: 'blockTurtle' },
-  { id: 'hardware', name: 'Hardware', token: 'blockHardware' },
+  // WHITE LETTERING, ASKED FOR AND KEPT — see {@link inkOn}. It is the one
+  // block in the palette whose text does not clear WCAG AA.
+  { id: 'hardware', name: 'Hardware', token: 'blockHardware', ink: '#ffffff' },
   { id: 'instruments', name: 'Instruments', token: 'blockInstruments' },
   // The parts on the breadboard bring their own blocks (#1017), grouped one
   // drawer per part. It sits next to Hardware because that is what it IS — the
@@ -285,6 +287,12 @@ export const BLOCK_CATEGORIES = [
    * dead drawer into the one instruction that fills it.
    */
   hint?: string
+  /**
+   * Lettering this category insists on, overriding what its fill can carry.
+   *
+   * Only `hardware` sets it, and {@link inkOn} is where the argument lives.
+   */
+  ink?: string
 }[]
 
 export type BlockCategoryId = (typeof BLOCK_CATEGORIES)[number]['id']
@@ -546,6 +554,41 @@ export function readableTextOn(fill: string): string {
   // darker half of the palette wants anyway.
   return onWhite >= onBlack ? '#ffffff' : '#000000'
 }
+
+/**
+ * THE INK A BLOCK ACTUALLY GETS, which is not always the readable one.
+ *
+ * {@link readableTextOn} answers what the fill can carry. A category may
+ * override it by declaring `ink` in {@link BLOCK_CATEGORIES}, and one does:
+ * **hardware**, which is the bright GPIO amber off the board diagrams and wears
+ * WHITE at 2.5:1 rather than the black that would be 8.3:1.
+ *
+ * THAT IS A CHOICE AND NOT AN OVERSIGHT, so it is written down rather than
+ * discovered. There is no bright amber that carries white at 4.5:1 — white needs
+ * a luminance at or under about 0.18 and the amber is 0.37, so anything that
+ * passes is the muted brown the amber was picked over. It is the same trade
+ * Scratch makes on its own yellow (white at 1.9:1), and `blocksContrast.test.ts`
+ * asserts the real number so that nobody later reads this palette as one that
+ * clears AA throughout.
+ *
+ * Keyed by FILL rather than by category because the renderer sees a painted
+ * block and not the drawer it came from. Safe because the palette is one set of
+ * colours for both skins and `FALLBACK_TOKENS` is asserted to match `index.css`.
+ */
+export function inkOn(fill: string): string {
+  return DECLARED_INK.get(fill.toLowerCase()) ?? readableTextOn(fill)
+}
+
+/** Fill → the ink its category insists on. Built once; the palette is fixed. */
+const DECLARED_INK = new Map<string, string>(
+  // `in` rather than a property read: BLOCK_CATEGORIES is `as const`, so `ink`
+  // is only on the members that declare one and this is how TypeScript is told.
+  BLOCK_CATEGORIES.flatMap((category) =>
+    'ink' in category
+      ? [[categoryColour(FALLBACK_TOKENS, category).toLowerCase(), category.ink] as [string, string]]
+      : []
+  )
+)
 
 /** The WCAG contrast ratio between two `#rrggbb` colours, 1 to 21. */
 export function contrastRatio(a: string, b: string): number {

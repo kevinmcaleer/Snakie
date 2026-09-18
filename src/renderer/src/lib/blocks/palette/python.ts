@@ -52,6 +52,15 @@ export const PYTHON_CALL = 'snakie_python_call'
 export const PYTHON_COMMENT = 'snakie_python_comment'
 /** The spacer that holds one blank line. See the block below for why it exists. */
 export const PYTHON_BLANK = 'snakie_python_blank'
+
+/**
+ * The class on a label that is a NOTE about the program rather than part of it.
+ *
+ * `BlocksCanvas.css` puts it in italics. It is a class rather than a `fontStyle`
+ * on the theme because Blockly's font style is per-WORKSPACE — there is one for
+ * the whole canvas — so anything per-block has to come through CSS.
+ */
+export const NOTE_FIELD_CLASS = 'snakie-field-note'
 /** A suite we cannot read — the header verbatim, its body nested (#1063). */
 export const PYTHON_SUITE = 'snakie_python_suite'
 export const PYTHON_CALL_VALUE = 'snakie_python_call_value'
@@ -507,7 +516,18 @@ export const PYTHON_BLOCKS: BlockDefinition[] = [
     category: 'python',
     help: 'blocks-python',
     json: {
-      message0: 'blank line',
+      // THE COMMENT BLOCK'S GREY, NOT THE PYTHON CATEGORY'S, and in italics —
+      // for the reason `snakie_python_comment` has its own grey (#1062): a
+      // blank line is a note about the SHAPE of the program rather than a step
+      // in it, and giving it the same visual weight as a statement makes a
+      // canvas of real work look like it is half spacing. A `style` inside
+      // `json` wins over the one the registry derives from `category`.
+      style: 'comment_blocks',
+      // `%1` rather than the words directly, because a bare `message0` string
+      // becomes a label this cannot put a class on — and the class is what
+      // carries the italics.
+      message0: '%1',
+      args0: [{ type: 'field_label', text: 'blank line', class: NOTE_FIELD_CLASS }],
       previousStatement: null,
       nextStatement: null,
       tooltip:
