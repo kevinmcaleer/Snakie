@@ -8,6 +8,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Reading the clock: `microsecond ticks` and `ticks from … to …`** (#1011,
+  epic #1007). The other half of timing a pulse is measuring one, so the Wait
+  drawer now reads the clock as well as waiting on it:
+
+  ```python
+  start = time.ticks_us()
+  print(time.ticks_diff(time.ticks_us(), start))
+  ```
+
+  **The two ship together on purpose.** MicroPython's tick counters *wrap* — they
+  count up to an unspecified limit and start again — so `end - start` is right
+  almost always and catastrophically wrong on the wrap, a bug that shows up once
+  an hour on a Pico and never in a lesson. `ticks_diff` is the only supported way
+  to do that subtraction, so a `ticks_us` block on its own would be a block whose
+  obvious use is a bug.
+
+  The `ticks from … to …` block takes its readings in the order you think in,
+  and swaps them for the call, which takes the *later* one first — which is most
+  of the reason it is a block rather than a note telling people to be careful.
+
+  On CircuitPython, which has neither function, `microsecond ticks` is
+  `time.monotonic_ns() // 1000` (not `time.monotonic()`, which is a float in
+  seconds and loses resolution the longer the board is up — the wrong property
+  for timing a pulse), and the difference is a plain subtraction, because that
+  counter does not wrap.
+
 - **A microseconds block on the Wait shelf** (#1011, epic #1007). `wait N
   microseconds` → `time.sleep_us(N)`, beside the seconds and milliseconds blocks.
 

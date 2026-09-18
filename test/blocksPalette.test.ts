@@ -123,7 +123,11 @@ describe('wait (#1011)', () => {
     expect(blocksInCategory('wait').map((b) => b.type)).toEqual([
       'snakie_wait_seconds',
       'snakie_wait_ms',
-      'snakie_wait_us'
+      'snakie_wait_us',
+      // Reading the clock is the other half of timing a pulse, so it lives in
+      // the timing drawer too.
+      'snakie_ticks_us',
+      'snakie_ticks_diff'
     ])
   })
 
@@ -1007,6 +1011,46 @@ describe('waiting, on either runtime (#1041)', () => {
       inputs: { A: { block: number(100) }, B: { block: { ...(number(50) as object), id: 'n2' } } } }
     expect(cp(waitMs(expression))).toContain('/ 1000')
     expect(cp(waitUs(expression))).toContain('/ 1000000')
+  })
+
+  it('reads the clock, in the same unit on both runtimes', () => {
+    const now = [{ type: 'text_print', id: 'p', inputs: { TEXT: { block: { type: 'snakie_ticks_us', id: 't' } } } }]
+    expect(gen(now).code).toContain('print(time.ticks_us())')
+    // `monotonic_ns`, not `monotonic`: the float one is in seconds and loses
+    // resolution the longer the board stays up, which is the wrong property for
+    // timing a pulse. Floored to microseconds so the block means the same thing
+    // on either board.
+    expect(cp(now)).toContain('print(time.monotonic_ns() // 1000)')
+  })
+
+  it('subtracts two readings the way each runtime needs', () => {
+    const measured = [
+      {
+        type: 'text_print',
+        id: 'p',
+        inputs: {
+          TEXT: {
+            block: {
+              type: 'snakie_ticks_diff',
+              id: 'd',
+              inputs: {
+                FROM: { block: number(1) },
+                TO: { block: { type: 'snakie_ticks_us', id: 't' } }
+              }
+            }
+          }
+        }
+      }
+    ]
+    // THE SOCKETS ARE THE OTHER WAY ROUND from the call. `ticks_diff` takes the
+    // LATER reading first, and the block asks `from … to …` because that is the
+    // order a learner thinks in — swapping them here is most of the point of
+    // the block existing.
+    expect(gen(measured).code).toContain('time.ticks_diff(time.ticks_us(), 1)')
+    // CircuitPython's counter does not wrap, so the subtraction `ticks_diff`
+    // exists to protect is simply right — and `//` binds tighter than `-`, so
+    // it needs no brackets.
+    expect(cp(measured)).toContain('print(time.monotonic_ns() // 1000 - 1)')
   })
 
   it('the seconds block is already right on both', () => {

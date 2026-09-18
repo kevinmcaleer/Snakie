@@ -126,6 +126,21 @@ describe('the round trip — what comes out is what went in', () => {
       staysRaw('def load(path, flip=None):\n    print(path)\n\nload(1, 2)\n'))
   })
 
+  it('holds for a measured pulse, ticks and all', () => {
+    // `ticks_diff(end, start)` reads back with its sockets swapped, so the round
+    // trip is the test that the swap happens in both directions and not one.
+    const src = [
+      'import time',
+      '',
+      'start = time.ticks_us()',
+      'print(time.ticks_diff(time.ticks_us(), start))',
+      ''
+    ].join('\n')
+    expect(types(src)).toContain('snakie_ticks_diff')
+    expect(types(src)).toContain('snakie_ticks_us')
+    roundTrips(src)
+  })
+
   it('holds for a microsecond wait, which reads back as its own block', () => {
     // `time.sleep_us(10)` is the HC-SR04 trigger pulse and a dozen other
     // datasheet waits. Without a rule for it, it came back as a raw Python

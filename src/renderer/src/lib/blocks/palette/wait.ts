@@ -5,7 +5,7 @@ import type { BlockDefinition } from '../registry'
  * WAIT (#1011, epic #1007).
  * =============================================================================
  *
- * Three blocks, and a category to themselves.
+ * Three waits and two clock readings, in a category of their own.
  *
  * That looks disproportionate until you count how often a hardware lesson uses
  * them: every blink, every "press the button, now let go", every "turn the servo
@@ -24,6 +24,18 @@ import type { BlockDefinition } from '../registry'
  * gap, the setup time on a shift register. `sleep_ms(0)` is not those, and
  * `sleep(0.00001)` is both unreadable and, on a busy board, not obviously that
  * either. It is the datasheet's own unit.
+ *
+ * AND READING THE CLOCK BELONGS HERE TOO, because the other half of timing a
+ * pulse is measuring one. `ticks_us` is the counter; `ticks between` is how you
+ * subtract two readings of it.
+ *
+ * THE TWO SHIP TOGETHER ON PURPOSE. MicroPython's tick counters WRAP — they
+ * count up to an unspecified limit and start again — so `end - start` is right
+ * almost always and catastrophically wrong on the wrap, which is a bug that
+ * appears once an hour on a Pico and never in a lesson. `ticks_diff` exists to
+ * do that subtraction correctly and is the only supported way to do it. A
+ * `ticks_us` block on its own would be a block whose obvious use is a bug, so
+ * the drawer offers the pair.
  */
 export const WAIT_BLOCKS: BlockDefinition[] = [
   {
@@ -110,6 +122,75 @@ export const WAIT_BLOCKS: BlockDefinition[] = [
       imports: [{ module: 'time' }],
       code: (block, gen) =>
         `time.sleep(${secondsFromMicros(gen.valueToCode(block, 'US', Order.NONE))})\n`
+    }
+  },
+
+  // ------------------------------------------------------------------- ticks
+  {
+    type: 'snakie_ticks_us',
+    category: 'wait',
+    help: 'ref-timing',
+    json: {
+      message0: 'microsecond ticks',
+      output: 'Number',
+      tooltip:
+        'A counter that ticks up every microsecond. Read it before and after something to find out how long it took \u2014 with the “ticks from … to …” block, which handles the counter running out and starting again.'
+    },
+    imports: [{ module: 'time' }],
+    code: () => ['time.ticks_us()', Order.FUNCTION_CALL],
+    /**
+     * CIRCUITPYTHON COUNTS IN NANOSECONDS AND DOES NOT WRAP (epic #209).
+     *
+     * `time.monotonic_ns()` is the integer counter there — `time.monotonic()` is
+     * a float in seconds and loses resolution as the board stays up, which is
+     * exactly the wrong property for timing a pulse. Floor-divided to
+     * microseconds so both dialects hand back the same unit, and so the block
+     * plugs into the same arithmetic on either board.
+     */
+    circuitpython: {
+      imports: [{ module: 'time' }],
+      code: () => ['time.monotonic_ns() // 1000', Order.MULTIPLICATIVE]
+    }
+  },
+  {
+    type: 'snakie_ticks_diff',
+    category: 'wait',
+    help: 'ref-timing',
+    json: {
+      // `from` then `to`, the order a learner thinks in, even though
+      // `ticks_diff` takes the later reading FIRST. Putting the sockets in
+      // datasheet order and swapping them in the emitter is the whole reason
+      // this is a block rather than a note telling people to be careful.
+      message0: 'ticks from %1 to %2',
+      args0: [
+        { type: 'input_value', name: 'FROM', check: 'Number' },
+        { type: 'input_value', name: 'TO', check: 'Number' }
+      ],
+      inputsInline: true,
+      output: 'Number',
+      tooltip:
+        'How many ticks passed between two readings of the clock. Use this rather than subtracting them yourself: the counter runs out and starts again, and this is the only way that keeps working when it does.'
+    },
+    imports: [{ module: 'time' }],
+    code: (block, gen) => [
+      `time.ticks_diff(${gen.valueToCode(block, 'TO', Order.NONE) || '0'}, ${
+        gen.valueToCode(block, 'FROM', Order.NONE) || '0'
+      })`,
+      Order.FUNCTION_CALL
+    ],
+    /**
+     * NOTHING TO CORRECT FOR ON CIRCUITPYTHON. `monotonic_ns` does not wrap, so
+     * the subtraction `ticks_diff` exists to protect is simply right there — and
+     * writing it out is what a CircuitPython tutorial does.
+     */
+    circuitpython: {
+      imports: [],
+      code: (block, gen) => [
+        `${gen.valueToCode(block, 'TO', Order.ADDITIVE) || '0'} - ${
+          gen.valueToCode(block, 'FROM', Order.ADDITIVE) || '0'
+        }`,
+        Order.ADDITIVE
+      ]
     }
   }
 ]
