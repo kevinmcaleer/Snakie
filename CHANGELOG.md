@@ -8,6 +8,43 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A pin you named comes back as the block that named it** (#1097, epic #1086).
+
+  ```
+  set echo to ( Pin(0, Pin.IN) )      ← before
+  name pin 0 as echo for input         ← now
+  ```
+
+  `snakie_name_pin` is the one hardware block whose whole Python output is an
+  *assignment* rather than a call, so it was the one block that could never carry
+  a `read` rule. The reader grew a declaration shape for it.
+
+  It is also the keystone for the rest of the hardware round trip, and that is
+  the real change. #1058 reads a hardware block back off its constructor, but the
+  pin has to come out of the OBJECT NAME — so only names the generator itself
+  wrote (`pin_15`, `led_15`, `servo_3`) ever matched, and the only difference
+  between a program that opened as hardware blocks and one that opened grey was
+  the variable name. Relaxing that alone would be unsafe: a `snakie_pin_write`
+  holding `PIN=15` regenerates as `pin_15 = Pin(15, Pin.OUT)` and silently
+  renames somebody's `led`. This block resolves it because it is the block that
+  *holds* the name, and pin fields have always accepted a name as well as a
+  number. So `led = Pin(15, Pin.OUT)` then `led.value(1)` now opens as
+  *name pin 15 as led* + *set pin led to 1*, and regenerates byte for byte.
+
+  **A name is all-or-nothing, as a hoisted object always was.** Reading the
+  declaration as the naming block puts `led` in the setup section, where the
+  generator owns the name — so `led.on()` beside it, ordinary MicroPython with no
+  block of its own, would come back `led_.on()` and drive nothing. A name
+  mentioned by a line the reader cannot read stays an ordinary variable, and the
+  file reads exactly as it did before. The generator's own `pin_15` is untouched:
+  it is still the consumed-constructor path, and reading it as *both* gave a file
+  two objects on one pin.
+
+  Socket coverage over the fixture corpus: **71.02% → 72.41%**. Statement
+  coverage does not move at all, which is the point #1097 made about #1087:
+  `pythonToBlocks('echo = Pin(0, Pin.IN)')` reported `recognised: 1, raw: 0`
+  while rendering as a grey blob, and only the second measure can see it.
+
 - **Every palette registers reader rules, not just hardware and turtle** (#1089,
   epic #1086). `registerCallRules` has been the extension point since #1019 and
   only two palettes ever called it — so the Lists, Maths, Logic and Instruments

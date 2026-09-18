@@ -12,7 +12,7 @@ import {
   resolvePinGpio
 } from '../board-pins'
 import { i2cBlockForPins } from '../../../components/display-logic'
-import { registerCallRules } from '../python-to-blocks'
+import { registerAliasRules, registerCallRules } from '../python-to-blocks'
 import type * as Blockly from 'blockly/core'
 
 /**
@@ -981,3 +981,46 @@ function cpAdc(gen: MicroPythonGenerator, pin: string, block: Blockly.Block): st
 registerCallRules(
   HARDWARE_BLOCKS.flatMap((block) => (block.read ? [{ ...block.read, type: block.type }] : []))
 )
+
+/**
+ * HOW A HUMAN-NAMED PIN READS BACK (W10, #1097, epic #1086).
+ *
+ * `snakie_name_pin` is the one hardware block whose whole Python output is an
+ * ASSIGNMENT rather than a call, so it is the one that could never carry a
+ * `read` rule — and `echo = Pin(0, Pin.IN)` came back as *set echo to (grey
+ * blob)* while `pin_0 = Pin(0, Pin.IN)` read perfectly. The only difference was
+ * the variable name.
+ *
+ * It is also the keystone for the rest of the hardware round trip. #1058 reads a
+ * hardware block off its constructor, but the pin has to come out of the OBJECT
+ * NAME, so only names the generator itself wrote (`pin_15`, `led_15`) ever
+ * matched. Relaxing that alone would be unsafe — a `snakie_pin_write` holding
+ * `PIN=15` regenerates as `pin_15 = Pin(15, Pin.OUT)` and renames the learner's
+ * `led`. This block is what resolves it, because it is the block that holds the
+ * name, and pin fields have always taken a name as well as a number.
+ *
+ * THE TEMPLATES ARE DERIVED FROM `pinConstructor`, not written out again: it is
+ * the function that decides what this block emits, so a change to it changes
+ * both halves at once or neither. The placeholder number is replaced rather than
+ * formatted in, because the pin is always the first number in the line.
+ */
+
+/** The number the templates are built with, then swapped for the placeholder. */
+const PIN_TEMPLATE_GPIO = 0
+
+registerAliasRules([
+  {
+    type: PIN_ALIAS_BLOCK,
+    nameField: 'NAME',
+    pinField: 'PIN',
+    modeField: 'DIRECTION',
+    receiver: 'pin',
+    modes: Object.fromEntries(
+      (['OUT', 'IN', 'PULL_UP', 'PULL_DOWN'] as const).map((direction) => [
+        direction,
+        pinConstructor(PIN_TEMPLATE_GPIO, direction).replace(String(PIN_TEMPLATE_GPIO), '{PIN}')
+      ])
+    )
+  }
+])
+

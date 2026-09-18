@@ -220,7 +220,11 @@ const MAX_CALL_ARGS = 8
 const HOISTED_TYPES = new Set([
   'snakie_python_import',
   'snakie_python_import_as',
-  'snakie_python_from_import'
+  'snakie_python_from_import',
+  // A `name pin` block is hoisted the same way (W10, #1097): it generates
+  // nothing where it stands and its assignment goes into the setup section,
+  // which the generator already puts a blank line after.
+  'snakie_name_pin'
 ])
 
 /** A statement and the suite indented under it. */
@@ -385,12 +389,111 @@ function rules(): CallRule[] {
  * exception to that should be a listed, argued one rather than an oversight.
  */
 export function readableBlockTypes(): Set<string> {
-  return new Set(rules().map((rule) => rule.type))
+  return new Set([...rules().map((rule) => rule.type), ...ALIASES.map((rule) => rule.type)])
 }
 
 /** Forget the registered rules — for tests, which must not leak into each other. */
 export function resetCallRules(): void {
   REGISTERED.length = 0
+  ALIASES.length = 0
+}
+
+// ---------------------------------------------------------------------------
+// Declarations (W10, #1097)
+// ---------------------------------------------------------------------------
+
+/**
+ * A BLOCK WHOSE WHOLE PYTHON OUTPUT IS AN ASSIGNMENT (W10, #1097, epic #1086).
+ *
+ * `CallRule` describes a CALL, and `snakie_name_pin` does not write one: it
+ * writes `echo = Pin(0, Pin.IN)` and nothing else. So it is the one hardware
+ * block that could never have a `read` rule, and a pin somebody named came back
+ * as *set echo to (grey blob)* — a line the coverage ratchet counts as fully
+ * recognised, which is exactly why W0 measures sockets separately.
+ *
+ * IT IS ALSO THE KEYSTONE FOR THE REST OF THE HARDWARE ROUND TRIP. #1058 reads
+ * a hardware block back off its constructor, but only when the object's name is
+ * one the GENERATOR wrote — `pin_15`, `led_15`, `servo_3` — because the pin has
+ * to come out of the name. Relaxing that on its own is unsafe: with an arbitrary
+ * name, a `snakie_pin_write` holding `PIN=15` regenerates as
+ * `pin_15 = Pin(15, Pin.OUT)` and silently renames the learner's `led`.
+ *
+ * This block is what resolves it, because it is the block that HOLDS THE NAME —
+ * and pin fields have always accepted a name as well as a number
+ * (`isPinName`/`resolvePinGpio` in `board-pins.ts`). So a declaration read as
+ * this block lets every call on that object be read as the hardware block it is,
+ * with the learner's own name in the pin field, and regenerate unchanged.
+ */
+export interface AliasRule {
+  /** The block type that declares the name. */
+  type: string
+  /** The field holding the learner's name. */
+  nameField: string
+  /** The field holding the pin — a number here, a name everywhere else. */
+  pinField: string
+  /** The field holding the mode. */
+  modeField: string
+  /** Mode value → the exact expression the block writes, `{PIN}` for the number. */
+  modes: Readonly<Record<string, string>>
+  /**
+   * The {@link CallReceiver} name whose calls a name declared this way may serve.
+   *
+   * `echo = Pin(0, Pin.IN)` is the same object `pin_0 = Pin(0, Pin.IN)` would
+   * have been, so every `pin` rule applies to it — with the NAME in the pin
+   * field instead of the number.
+   */
+  receiver: string
+}
+
+const ALIASES: AliasRule[] = []
+
+/** Let a palette declare how its naming block reads back. */
+export function registerAliasRules(rules: readonly AliasRule[]): void {
+  for (const rule of rules) {
+    const at = ALIASES.findIndex((r) => r.type === rule.type)
+    if (at === -1) ALIASES.push(rule)
+    else ALIASES[at] = rule
+  }
+}
+
+/** One name a program declares for a pin, as read off its declaration line. */
+interface Alias {
+  rule: AliasRule
+  /** The pin number the constructor names. */
+  pin: string
+  /** Which of the rule's modes the constructor is. */
+  mode: string
+}
+
+/**
+ * Every name this file declares for a pin, by name.
+ *
+ * MATCHED CHARACTER FOR CHARACTER against what the block writes, exactly as
+ * {@link hoistedObjects} is: a constructor somebody wrote their own way is not
+ * this block's, and reading it back as one would rewrite their line.
+ */
+function declaredAliases(lines: readonly LogicalLine[]): Map<string, Alias> {
+  const out = new Map<string, Alias>()
+  if (ALIASES.length === 0) return out
+  for (const line of lines) {
+    const m = /^([A-Za-z_]\w*)\s*=\s*(\S.*)$/.exec(line.text)
+    if (!m) continue
+    const found = matchAlias(m[2].trim())
+    if (found) out.set(m[1], found)
+  }
+  return out
+}
+
+/** Which naming block, if any, writes exactly `expr`? */
+function matchAlias(expr: string): Alias | null {
+  for (const rule of ALIASES) {
+    for (const [mode, template] of Object.entries(rule.modes)) {
+      const pattern = new RegExp(`^${escapeRe(template).replace('\\{PIN\\}', '(\\d+)')}$`)
+      const found = pattern.exec(expr)
+      if (found) return { rule, pin: found[1], mode }
+    }
+  }
+  return null
 }
 
 // ---------------------------------------------------------------------------
@@ -400,21 +503,46 @@ export function resetCallRules(): void {
 /** Turn Python into a blocks workspace. Never throws; never refuses. */
 export function pythonToBlocks(source: string): Conversion {
   const lines = logicalLines(source)
+  // Every name this file gives a pin (W10, #1097) — read before anything else,
+  // because it is what lets a hoisted object have a name the learner chose.
+  const aliases = declaredAliases(lines)
   // Which hoisted objects this file even HAS (#1058) — the constructor lines
   // that match a receiver rule's template exactly.
-  const hoisted = hoistedObjects(lines, rules())
+  //
+  // ASKED TWICE, and the first answer is what stops W10 undoing #1058. A name
+  // the GENERATOR wrote — `pin_15` — is already a hoisted object whose
+  // constructor is consumed and whose pin comes out of its name, and it also
+  // happens to be a line a `name pin` block would write. Reading it as BOTH gave
+  // the file two objects on one pin: the learner's `pin_15` and the blocks' own
+  // hoisted copy, renamed `pin_15_` to dodge the collision. So the generator's
+  // own names are taken off the alias list before anything else looks at it.
+  for (const name of hoistedObjects(lines, rules()).keys()) aliases.delete(name)
+  const hoisted = hoistedObjects(lines, rules(), aliases)
   // THE FIRST PASS IS A QUESTION, NOT AN ANSWER. It asks which of those objects
   // actually became blocks, and which are still named by a raw block — because a
   // constructor may only be consumed when every use of its object was
   // understood. Guessing that from the text would be guessing; converting and
   // looking is not.
-  const probe = convert(lines, hoisted, null)
+  const probe = convert(lines, hoisted, null, aliases)
   const consumable = new Set([...probe.claimed].filter((name) => !probe.rawNames.has(name)))
+  // A NAME IS ALL-OR-NOTHING TOO (W10, #1097). Reading `led = Pin(25, Pin.OUT)`
+  // as the `name pin` block puts `led` in the SETUP section, where the generator
+  // owns the name — so any other use of it has to be a block that goes through
+  // the name, or the generator mints `led_` beside it and the program drives
+  // nothing. `led.on()` is exactly that case: ordinary MicroPython with no block
+  // of its own.
+  //
+  // So a name mentioned by a line we could not read is not a name: the
+  // declaration stays an ordinary assignment, `led` stays an ordinary variable,
+  // and the file reads exactly as it did before W10. Uglier, and correct.
+  const named = new Map([...aliases].filter(([name]) => !probe.rawNames.has(name)))
   // The probe read every hoisted call it could and swallowed no constructors —
   // it was only ever a question. So whenever it read ANY, the real pass has to
   // run: to swallow the constructors of the objects that came out fully
-  // understood, and to leave the rest of the program exactly as it was.
-  const state = probe.claimed.size > 0 ? convert(lines, hoisted, consumable) : probe
+  // understood, and to leave the rest of the program exactly as it was. A file
+  // with names in it has to run again for the same reason.
+  const again = probe.claimed.size > 0 || aliases.size > 0
+  const state = again ? convert(lines, hoisted, consumable, named) : probe
   const stack = state.stack
   // Definitions are TOP-LEVEL blocks, not links in the chain: Blockly models a
   // `def` as a hat with no previous or next connection, which is also the truth
@@ -757,7 +885,8 @@ function escapeRe(text: string): string {
  */
 export function hoistedObjects(
   lines: readonly LogicalLine[],
-  rs: readonly CallRule[]
+  rs: readonly CallRule[],
+  aliases: ReadonlyMap<string, Alias> = new Map()
 ): Map<string, Hoisted> {
   const receivers = rs.filter((r) => r.receiver)
   const out = new Map<string, Hoisted>()
@@ -776,6 +905,23 @@ export function hoistedObjects(
       if (!fields) continue
       pin = pinMatch[1]
       matches.push({ rule, fields })
+    }
+    // A NAME THE LEARNER CHOSE (W10, #1097). The generator's own `pin_15` wins,
+    // above, because its constructor is consumed and its pin comes out of its
+    // name; anything else can still be a hoisted object if a `name pin` block
+    // would have written exactly that line — and then the PIN FIELD HOLDS THE
+    // NAME, which is what stops regeneration renaming somebody's `echo` to
+    // `pin_0`.
+    const alias = matches.length === 0 ? aliases.get(name) : undefined
+    if (alias) {
+      for (const rule of receivers) {
+        const rec = rule.receiver!
+        if (rec.name !== alias.rule.receiver) continue
+        const fields = matchCtor(rec, alias.pin, expr.trim())
+        if (!fields) continue
+        pin = name
+        matches.push({ rule, fields })
+      }
     }
     if (matches.length > 0) out.set(name, { pin, matches })
   }
@@ -832,9 +978,10 @@ function matchCtor(
 function convert(
   lines: readonly LogicalLine[],
   hoisted: ReadonlyMap<string, Hoisted>,
-  consumable: ReadonlySet<string> | null
+  consumable: ReadonlySet<string> | null,
+  aliases: ReadonlyMap<string, Alias> = new Map()
 ): Converter {
-  const state = new Converter(hoisted, consumable, importedNames(lines))
+  const state = new Converter(hoisted, consumable, importedNames(lines), aliases)
   const nodes = tree(lines)
   state.indexDefinitions(nodes)
   state.stack = state.statements(nodes)
@@ -958,15 +1105,19 @@ class Converter {
 
   /** Names an import line in this file binds — see {@link importedNames}. */
   private readonly imported: ReadonlySet<string>
+  /** Names this file gives a pin (W10, #1097), by name. */
+  private readonly aliases: ReadonlyMap<string, Alias>
 
   constructor(
     hoisted: ReadonlyMap<string, Hoisted> = new Map(),
     consumable: ReadonlySet<string> | null = null,
-    imported: ReadonlySet<string> = new Set()
+    imported: ReadonlySet<string> = new Set(),
+    aliases: ReadonlyMap<string, Alias> = new Map()
   ) {
     this.hoisted = hoisted
     this.consumable = consumable
     this.imported = imported
+    this.aliases = aliases
   }
   /** Variable name → the id the workspace declares it under. */
   readonly variables = new Map<string, string>()
@@ -1154,7 +1305,15 @@ class Converter {
       // writes it back out from that block — so keeping it here would generate
       // it twice. Only ever a name the pass before this one proved is fully
       // accounted for.
-      if (this.consumable?.has(constructorName(node.line.text) ?? '')) {
+      //
+      // UNLESS THE LINE IS A NAME (W10, #1097). `echo = Pin(0, Pin.IN)` is both
+      // a hoisted object's constructor AND the `name pin` block itself, and the
+      // block is what carries the learner's name forward — swallow it and
+      // regeneration writes `pin_0 = Pin(0, Pin.IN)` instead, quietly renaming
+      // their pin. The generator's own `pin_15` has no name to lose, so it is
+      // still consumed.
+      const declared = constructorName(node.line.text)
+      if (declared && this.consumable?.has(declared) && !this.aliases.has(declared)) {
         this.report.total += 1
         this.report.recognised += 1
         continue
@@ -1457,6 +1616,14 @@ class Converter {
     // read as assigning `= 5` to `x` and regenerated as `x = = 5`, which is not
     // Python at all. `!=`, `<=` and `>=` never reached the guard: `\s*` cannot
     // eat the `!`, `<` or `>`, so the pattern had already failed on them.
+    // --- a name for a pin (W10, #1097) ------------------------------------
+    //
+    // BEFORE the plain assignment below, which would otherwise read
+    // `echo = Pin(0, Pin.IN)` as *set echo to (grey blob)* — a line the coverage
+    // number counts as fully recognised and a learner sees as a grey wall.
+    const named = this.aliasDeclaration(text)
+    if (named) return recognised([named])
+
     const assign = /^([A-Za-z_]\w*)\s*=(?!=)\s*(.+)$/.exec(text)
     if (assign) {
       return recognised([
@@ -1650,6 +1817,29 @@ class Converter {
     const id = `v_${this.variables.size}_${name.replace(/[^A-Za-z0-9_]/g, '')}`
     this.variables.set(name, id)
     return id
+  }
+
+  /**
+   * `echo = Pin(0, Pin.IN)` → the block that names a pin (W10, #1097).
+   *
+   * Read off the pre-scan rather than matched again here, so the name this line
+   * declares and the name a call on it is read against cannot disagree.
+   */
+  private aliasDeclaration(text: string): BlockJson | null {
+    const m = /^([A-Za-z_]\w*)\s*=(?!=)\s*(.+)$/.exec(text)
+    if (!m) return null
+    const alias = this.aliases.get(m[1])
+    // The same line has to still BE the declaration: a name can be reassigned,
+    // and only the line that matches the block's own constructor is this block.
+    if (!alias || matchAlias(m[2].trim())?.mode !== alias.mode) return null
+    return {
+      type: alias.rule.type,
+      fields: {
+        [alias.rule.pinField]: alias.pin,
+        [alias.rule.nameField]: m[1],
+        [alias.rule.modeField]: alias.mode
+      }
+    }
   }
 
   /**
@@ -2337,7 +2527,18 @@ class Converter {
     //
     // A use we cannot read as the block that wrote it keeps the object alive,
     // which is what it did before W1 and what the rule has always meant.
-    if (this.hoisted.has(text)) return null
+    //
+    // WHILE IT IS STILL IN PLAY, which is the probe pass and, on the real pass,
+    // the names that came out fully understood. A name the probe found an
+    // unreadable use of is an ordinary variable again by the time the real pass
+    // reaches it, and reading it as one is what keeps `led.on()` a block.
+    if (this.hoisted.has(text) && (this.consumable === null || this.consumable.has(text))) {
+      return null
+    }
+    // A NAME THE SETUP SECTION WILL OWN (W10, #1097) is not a variable either:
+    // the `name pin` block writes `led = Pin(25, Pin.OUT)` up there, and a
+    // workspace variable of the same name comes back as `led_`.
+    if (this.aliases.has(text)) return null
     return { type: 'variables_get', fields: { VAR: { id: this.variable(text) } } }
   }
 

@@ -104,7 +104,9 @@ const READ_DIRECTLY: Record<string, string> = {
   snakie_python_call: 'display.show()\n',
   snakie_python_call_value: 'x = sensor.read()\n',
   snakie_python_attr_get: 'x = self.angle\n',
-  snakie_python_attr_set: 'self.angle = 0\n'
+  snakie_python_attr_set: 'self.angle = 0\n',
+  // --- a declaration rather than a call (W10, #1097)
+  snakie_name_pin: 'echo = Pin(0, Pin.IN)\n'
 }
 
 /**
@@ -145,7 +147,6 @@ const NO_READER: Record<string, string> = {
   snakie_adc_read: 'Writes the volts arithmetic inline, so the line is not a plain call.',
   snakie_i2c_scan: 'Takes a hoisted I²C bus built from two pin fields, not from the call text.',
   snakie_i2c_present: 'As `snakie_i2c_scan`, with an address comparison on top.',
-  snakie_name_pin: 'W10 (#1097) — a human-named pin is its own workstream.',
   snakie_inst_scope: 'Its channel is a keyword argument only written when it differs from the default.',
   snakie_inst_meter: 'As `snakie_inst_scope`.',
   snakie_inst_plot: 'The learner names their own series, which becomes the Python keyword itself.',
