@@ -953,8 +953,33 @@ describe('a trailing comment survives (#1068)', () => {
     expect(types("print('# not a comment')\n")).toContain('text_print')
   })
 
-  it('counts a commented line as raw, not recognised', () => {
-    expect(regenerate('x = 5  # how many\n').report.raw).toBe(1)
+  it('counts a commented line as RECOGNISED now (W5, #1092)', () => {
+    // It was raw, and #1068's reasoning was right at the time: no block held a
+    // statement AND a comment about it, so recognising the line at all would
+    // have meant choosing which half to keep. A block does hold both now — the
+    // comment bubble every Blockly block has, which the `def` block has carried
+    // a docstring in since #1007 — so the line is a real block with a note on
+    // it, and the note comes back on the end of it.
+    const { report, code } = regenerate('x = 5  # how many\n')
+    expect(report.raw).toBe(0)
+    expect(report.recognised).toBe(1)
+    expect(code).toBe('x = 5  # how many\n')
+    expect(types('x = 5  # how many\n')).toContain('variables_set')
+  })
+
+  it('still keeps a line raw when the code half is not a block', () => {
+    // The fallback that #1068 made the whole rule is still the fallback: both
+    // halves, verbatim, in one raw block.
+    expect(types('assert ok  # really\n')).toEqual(['snakie_python_statement'])
+    roundTrips('assert ok  # really\n')
+  })
+
+  it('keeps an import with a comment raw, because the block is hoisted', () => {
+    // An import block generates nothing where it stands — the generator lifts
+    // every one of them into the section at the top — so a note on the line
+    // would travel with it, away from the line it is about.
+    expect(types('import time  # for the delays\n')).toEqual(['snakie_python_statement'])
+    roundTrips('import time  # for the delays\n')
   })
 })
 

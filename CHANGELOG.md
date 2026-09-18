@@ -8,6 +8,44 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A statement with a comment on the end is still a block** (#1092, epic
+  #1086). The cheapest line in the epic and one of the widest: **1,532 raw lines
+  across 55 of 73 projects**, grey for nothing but having a note on the end.
+
+  ```python
+  x = 5  # how many times      ← was a grey raw block
+  time.sleep(1)  # pause       ← so was this
+  if x:  # check first         ← and this took its whole body with it
+  ```
+
+  #1068 made the reader refuse such a line outright, and that was right at the
+  time: the lexer stops at the `#`, so every recogniser matched the code and
+  silently dropped the rest, and no block held both halves.
+
+  A block does hold both — **Blockly's comment bubble**, the field every block
+  already has and the one the `def` block has carried a docstring in since
+  #1007. So nothing about the file format changes: the reader hangs the note
+  there and the generator writes it back onto the end of the block's first line,
+  PEP 8's two spaces and all. A note about `while True:` goes on `while True:`,
+  not on the last line of its body.
+
+  Still raw, and each for a reason: a line whose code half is not a block at all;
+  an import or a `name pin`, because those are lifted into sections of their own
+  and the note would travel with them; a `from x import a, b`, which is two
+  blocks and one note; and a `def`, whose bubble is already its docstring.
+
+  The refactor underneath is worth a line of its own. The reader's recogniser is
+  now asked a question it is willing to have answered no — *would this line be a
+  block without the comment?* — and it is not a pure function: it declares
+  variables, collects `def` blocks into a section of their own, and marks the
+  `elif`/`else` arms an `if` has taken. A no that left those marks behind is
+  worse than no answer: `def go():  # the main loop` collected a definition and
+  then fell back to raw, so the function came out twice. Declining now rolls the
+  whole attempt back.
+
+  Statement coverage over the fixture corpus: **77.47% → 78.79%**, and files that
+  open with no grey at all go from 2 of 43 to 3.
+
 - **Docstrings and multi-line strings read as a block** (#1091, epic #1086).
   2,174 raw lines across 48 of 73 projects: every docstring in a well-documented
   program was a grey block, which is most of why a class-heavy file opened as a

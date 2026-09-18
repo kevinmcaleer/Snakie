@@ -353,7 +353,8 @@ export class MicroPythonGenerator extends Blockly.CodeGenerator {
     // the generated Python, saved it to the file and sent it to the board — in
     // any program with a function and anything after it, which is most programs
     // that have a function at all.
-    const marked = code === '' ? '' : `${MARK}${block.id}${MARK}${code}`
+    const noted = withTrailingComment(block, code)
+    const marked = noted === '' ? '' : `${MARK}${block.id}${MARK}${noted}`
     if (thisOnly) return marked
     const next = block.nextConnection?.targetBlock() ?? null
     return marked + (next ? (this.blockToCode(next) as string) : '')
@@ -566,4 +567,46 @@ export function blocksWithoutEmitters(workspace: Blockly.Workspace): string[] {
     if (!blockDefinition(block.type)) missing.add(block.type)
   }
   return [...missing]
+}
+
+
+/**
+ * A BLOCK'S NOTE, ON THE END OF ITS FIRST LINE (W5, #1092, epic #1086).
+ *
+ * `x = 5  # how many times` is one of the commonest shapes in teaching code and
+ * it was a grey raw block in 55 of 73 projects, for nothing but having a note on
+ * the end. #1068 refused to recognise such a line at all, which was right while
+ * no block could hold both halves.
+ *
+ * A block can. Blockly's comment bubble is a field every block already has —
+ * `def` has carried a docstring in it since #1007 — and it serialises with the
+ * block, so nothing about the file format changes. This is the other half: what
+ * the bubble writes when the block emits.
+ *
+ * THE FIRST LINE, and only it. A C-block's code is its header plus everything in
+ * its mouth, and a note about `while True:` belongs on `while True:`, not on the
+ * last line of the body.
+ *
+ * ONE LINE ONLY. A multi-line bubble is a description — a paragraph somebody
+ * wrote about a block — and folding it onto the end of a line of code would
+ * change what they wrote. It stays a bubble and writes nothing.
+ *
+ * A `#` IS ADDED WHEN IT IS MISSING, because a bubble is free text and
+ * `  fix this later` is not Python. The reader always stores the comment
+ * verbatim, `#` and all, so a round trip never goes through that branch.
+ *
+ * A block that generated nothing where it stands — an import, a `def`, the
+ * `name pin` block — gets nothing, because there is no line for the note to sit
+ * on. The reader declines to put one there for the same reason.
+ */
+function withTrailingComment(block: Blockly.Block, code: string): string {
+  if (code === '') return code
+  const raw = (block.getCommentText?.() ?? '').trim()
+  if (raw === '' || raw.includes('\n')) return code
+  const note = raw.startsWith('#') ? raw : `# ${raw}`
+  const at = code.indexOf('\n')
+  const first = at === -1 ? code : code.slice(0, at)
+  const rest = at === -1 ? '' : code.slice(at)
+  // PEP 8's two spaces, which is also what `trailingCommentAt` will find there.
+  return `${first}  ${note}${rest}`
 }

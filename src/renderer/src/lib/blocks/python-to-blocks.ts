@@ -1399,18 +1399,23 @@ class Converter {
     this.report.recognised -= 1
     this.report.raw += 1
     this.report.rawLines.push(line.line)
+    // A NOTE ON THE BLOCK COMES WITH IT (W5, #1092). The raw blocks hold their
+    // whole line as text, bubble and all, and the suite emitter already knows to
+    // put its colon BEFORE a trailing comment rather than inside one (#1068).
+    // Leaving it behind would drop a comment the learner wrote, which the
+    // round-trip gate would refuse to commit — costing the file its conversion
+    // rather than this line.
+    const note = commentOn(block)
     if (block.type === 'snakie_forever') {
       return {
         type: 'snakie_python_suite',
-        fields: { CODE: 'while True:' },
+        fields: { CODE: `while True:${note}` },
         ...(block.inputs ? { inputs: block.inputs } : {})
       }
     }
     // `break` / `continue`, whose whole content is the keyword itself.
-    return {
-      type: 'snakie_python_statement',
-      fields: { CODE: String((block.fields as { FLOW?: string } | undefined)?.FLOW ?? '').toLowerCase() }
-    }
+    const flow = String((block.fields as { FLOW?: string } | undefined)?.FLOW ?? '').toLowerCase()
+    return { type: 'snakie_python_statement', fields: { CODE: `${flow}${note}` } }
   }
 
   /**
@@ -1428,29 +1433,163 @@ class Converter {
     }
   }
 
-  /** One statement → one or more blocks (a `from x import a, b` makes two). */
+  /**
+   * One statement → one or more blocks (a `from x import a, b` makes two).
+   *
+   * The COUNTING half. {@link recognise} below is the recognising half, and the
+   * split is what lets W5 (#1092) read a line, fail, and fall back to raw
+   * without the report counting the attempt twice.
+   */
   private statement(node: Stmt, siblings: readonly Stmt[]): BlockJson[] {
     this.report.total += 1
     const text = node.line.text
-    const recognised = (blocks: BlockJson[]): BlockJson[] => {
+    // --- A LINE THAT CARRIES A COMMENT (#1068, then W5 of #1086) -----------
+    //
+    // `tokenize` stops at a trailing `#` and hands back the code alone, so every
+    // recogniser used to match the line and silently drop the rest of it —
+    // `x = 5  # how many times` came back as `x = 5`. #1068 answered that by
+    // refusing the line outright, which was right when no block could hold both
+    // halves: **1,532 raw lines across 55 of 73 projects**, for nothing but
+    // having a note on the end.
+    //
+    // A block CAN hold both now. Blockly's own comment bubble is a field every
+    // block has, the `def` block has used it for docstrings since #1007, and the
+    // generator writes it back onto the end of the block's first line.
+    const at = trailingCommentAt(text)
+    if (at >= 0) {
+      const commented = this.commented(node, siblings, at)
+      if (commented) {
+        this.report.recognised += 1
+        return commented
+      }
+      return this.unrecognised(node)
+    }
+    const blocks = this.recognise(node, siblings)
+    if (blocks) {
       this.report.recognised += 1
       return blocks
     }
+    return this.unrecognised(node)
+  }
 
-    // --- a line that carries a comment is that whole line (#1068) ----------
-    //
-    // `tokenize` stops at a trailing `#` and hands back the code alone, so every
-    // recogniser below used to match the line and drop the rest of it — `x = 5
-    // # how many times` came back as `x = 5`, and the module header three files
-    // over promises the exact opposite about comments.
-    //
-    // No block holds a statement AND a comment about it, so recognising one at
-    // all would mean choosing which half to keep. Raw keeps both, verbatim,
-    // which is what the escape hatches are for.
-    if (trailingCommentAt(text) >= 0) {
-      if (isSuiteHeader(text) && node.body.length > 0) return [this.rawSuite(node)]
-      return [this.raw(node.line)]
-    }
+  /**
+   * The fallback that never fails: the line verbatim, with its body under it if
+   * it opens one.
+   *
+   * A SUITE WE CANNOT READ STILL HAS A BODY (#1063). This used to return the
+   * header line as a raw statement and walk away from `node.body` — so a `class`
+   * lost every method inside it, a `try` lost everything it guarded, and the
+   * report counted that a success. The raw SUITE block keeps the header verbatim
+   * and nests the body under it, which is the difference between an uglier
+   * program and a shorter one.
+   */
+  private unrecognised(node: Stmt): BlockJson[] {
+    if (isSuiteHeader(node.line.text) && node.body.length > 0) return [this.rawSuite(node)]
+    return [this.raw(node.line)]
+  }
+
+  /**
+   * A STATEMENT WITH A NOTE ON THE END OF IT (W5, #1092, epic #1086).
+   *
+   * The cheapest line in the epic and one of the widest: `x = 5  # how many
+   * times` is one of the commonest shapes in teaching code, and it was grey in
+   * 55 of 73 projects for no reason but the comment.
+   *
+   * Read the code alone, then hang the comment on the block Blockly's own way —
+   * the comment bubble, which every block has and which `def` has carried a
+   * docstring in since #1007. The generator puts it back on the end of the
+   * block's first line.
+   *
+   * THE NODE IS EDITED AND PUT BACK rather than copied, because `ifChain` finds
+   * its `elif`/`else` arms by IDENTITY among the siblings: a copy has no place
+   * in that list, and the arms it went looking for would be somebody else's.
+   *
+   * Null for anything that cannot carry it, and then the whole line stays raw
+   * and regenerates with both halves — which is what #1068 did for every line.
+   */
+  private commented(node: Stmt, siblings: readonly Stmt[], at: number): BlockJson[] | null {
+    const text = node.line.text
+    const code = text.slice(0, at).trimEnd()
+    // A line that is ONLY a comment is not this: `groupComments` has already
+    // folded runs of those into one block of their own.
+    if (code === '') return null
+    const note = text.slice(at)
+    const original = node.line
+    const blocks = this.trial(() => {
+      node.line = { ...original, text: code }
+      try {
+        const read = this.recognise(node, siblings)
+        // ONE BLOCK, or there is no single place for the note to live: a
+        // `from x import a, b` is two blocks and both of them are hoisted
+        // anyway, and a `def` is NONE, because it becomes a root of its own.
+        return read && read.length === 1 ? read : null
+      } finally {
+        node.line = original
+      }
+    })
+    if (!blocks) return null
+    const block = blocks[0]
+    // A BLOCK THAT GENERATES NOTHING WHERE IT STANDS cannot carry it. The import
+    // blocks and the `name pin` block are lifted into sections of their own, so
+    // the note would travel with them — away from the line it is about — or be
+    // dropped on the floor. Raw keeps it exactly where it was written.
+    if (HOISTED_TYPES.has(block.type)) return null
+    // And a block whose bubble is already spoken for: a `def`'s docstring is the
+    // same field, and one of the two would have to lose.
+    if (block.icons) return null
+    return [{ ...block, icons: { comment: { text: note, pinned: false, height: 40, width: 220 } } }]
+  }
+
+  /**
+   * Run a recogniser that MAY DECLINE, and leave nothing behind when it does.
+   *
+   * {@link recognise} is not a pure function and cannot be: it declares
+   * variables, collects `def` blocks into a section of their own, marks the
+   * `elif`/`else` arms an `if` has taken, and keeps the report honest about the
+   * extra lines a multi-arm `if` costs. All of that is wanted when the answer is
+   * yes.
+   *
+   * W5 (#1092) is the first caller that asks a question it is willing to have
+   * answered no — "would this line be a block, if it did not have a comment on
+   * the end?" — and a no that left those marks behind is worse than no answer at
+   * all. `def go():  # the main loop` collected a definition block and then fell
+   * back to raw, so the function came out TWICE: once as the raw suite holding
+   * the line, and once as the hat the trial had already pushed.
+   */
+  private trial(run: () => BlockJson[] | null): BlockJson[] | null {
+    const report = { ...this.report, rawLines: this.report.rawLines.length }
+    const definitions = this.definitions.length
+    const variables = [...this.variables]
+    const claimed = [...this.claimed]
+    const rawNames = [...this.rawNames]
+    const consumed = [...this.consumed]
+    const out = run()
+    if (out !== null) return out
+    this.report.total = report.total
+    this.report.recognised = report.recognised
+    this.report.raw = report.raw
+    this.report.rawLines.length = report.rawLines
+    this.report.sockets = report.sockets
+    this.report.rawSockets = report.rawSockets
+    this.definitions.length = definitions
+    restore(this.variables, variables)
+    restore(this.claimed, claimed)
+    restore(this.rawNames, rawNames)
+    restore(this.consumed, consumed)
+    return null
+  }
+
+  /**
+   * The recognising half: the blocks this line IS, or null when nothing here
+   * knows it.
+   *
+   * Null rather than a raw block, so the caller owns both the counting and the
+   * fallback — and so {@link commented} can ask the same question about a line
+   * with its comment taken off and fall back cleanly when the answer is no.
+   */
+  private recognise(node: Stmt, siblings: readonly Stmt[]): BlockJson[] | null {
+    const text = node.line.text
+    const recognised = (blocks: BlockJson[]): BlockJson[] => blocks
 
     // --- imports ---------------------------------------------------------
     //
@@ -1536,7 +1675,7 @@ class Converter {
           )
         ])
       }
-      return [this.rawSuite(node)]
+      return null
     }
     const whileNot = /^while\s+not\s+(.+):$/.exec(text)
     if (whileNot) {
@@ -1618,7 +1757,7 @@ class Converter {
           }
         ])
       }
-      return [this.raw(node.line)]
+      return null
     }
     // `=(?!=)` IS THE WHOLE GUARD (#1068). This used to read the `=` and then
     // check `text.slice(0, text.indexOf('='))` for a comparison operator — a
@@ -1673,14 +1812,9 @@ class Converter {
 
     // --- anything else ----------------------------------------------------
     //
-    // A SUITE WE CANNOT READ STILL HAS A BODY (#1063). This used to return the
-    // header line as a raw statement and walk away from `node.body` — so a
-    // `class` lost every method inside it, a `try` lost everything it guarded,
-    // and the report counted that a success. The raw SUITE block keeps the
-    // header verbatim and nests the body under it, which is the difference
-    // between an uglier program and a shorter one.
-    if (isSuiteHeader(text) && node.body.length > 0) return [this.rawSuite(node)]
-    return [this.raw(node.line)]
+    // Null, and the caller turns it into the raw block or the raw SUITE that
+    // keeps the body — see {@link unrecognised}.
+    return null
   }
 
   /** `if` / `elif` / `else`, gathered from the siblings that follow. */
@@ -2820,6 +2954,26 @@ function readArgs(
     i += 1
   }
   return null
+}
+
+/** Put a set or a map back exactly as it was — see {@link Converter.trial}. */
+function restore<T>(into: Set<T>, was: readonly T[]): void
+function restore<K, V>(into: Map<K, V>, was: readonly [K, V][]): void
+function restore(
+  into: { clear(): void; add?: (v: unknown) => unknown; set?: (k: unknown, v: unknown) => unknown },
+  was: readonly unknown[]
+): void {
+  into.clear()
+  for (const entry of was) {
+    if (into.add) into.add(entry)
+    else into.set!((entry as unknown[])[0], (entry as unknown[])[1])
+  }
+}
+
+/** A block's bubble as a trailing comment, with its two spaces, or ''. */
+function commentOn(block: BlockJson): string {
+  const text = (block.icons as { comment?: { text?: string } } | undefined)?.comment?.text
+  return text ? `  ${text}` : ''
 }
 
 /** Is this block a text literal? `%` beside one is formatting, not modulo. */
