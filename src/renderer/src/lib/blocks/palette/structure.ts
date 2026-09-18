@@ -105,7 +105,7 @@ export const STRUCTURE_BLOCKS: BlockDefinition[] = [
     help: 'ref-functions',
     hidden: true,
     json: {
-      message0: '%1 %2 ( %3 )',
+      message0: '%1 %2 %3 ( %4 )',
       args0: [
         {
           // `@property` AS A MODIFIER, not a block of its own (#1093). A
@@ -118,6 +118,19 @@ export const STRUCTURE_BLOCKS: BlockDefinition[] = [
             ['property', 'property'],
             ['static method', 'staticmethod'],
             ['class method', 'classmethod']
+          ]
+        },
+        {
+          // `async` IS THE SAME KIND OF MODIFIER (W9, #1096), which is the whole
+          // argument for scheduling async last: once W6 had built a method block
+          // with settings on it, `async def` was one more setting rather than a
+          // new shape. A block saved before this field existed has no `KIND` and
+          // gets the first option, which is what it always meant.
+          type: 'field_dropdown',
+          name: 'KIND',
+          options: [
+            ['def', 'SYNC'],
+            ['async def', 'ASYNC']
           ]
         },
         { type: 'field_input', name: 'NAME', text: 'go' },
@@ -140,8 +153,9 @@ export const STRUCTURE_BLOCKS: BlockDefinition[] = [
     code: (block, gen) => {
       const decorator = String(block.getFieldValue('DECORATOR') ?? 'NONE')
       const at = decorator === 'NONE' ? '' : `@${decorator}\n`
+      const async = block.getFieldValue('KIND') === 'ASYNC' ? 'async ' : ''
       const params = String(block.getFieldValue('PARAMS') ?? '').trim()
-      return `${at}def ${nameOf(block, 'NAME', 'go')}(${params}):\n${body(block, gen)}`
+      return `${at}${async}def ${nameOf(block, 'NAME', 'go')}(${params}):\n${body(block, gen)}`
     }
   },
   // ---------------------------------------------------------------------- self
@@ -199,8 +213,20 @@ export const STRUCTURE_BLOCKS: BlockDefinition[] = [
     help: 'ref-functions',
     hidden: true,
     json: {
-      message0: 'with %1',
-      args0: [{ type: 'field_input', name: 'ITEMS', text: 'open(path) as handle' }],
+      message0: '%1 %2',
+      args0: [
+        // The same modifier trick as the method block (W9, #1096): `async with`
+        // is 8 projects, and it is one setting rather than a second block.
+        {
+          type: 'field_dropdown',
+          name: 'KIND',
+          options: [
+            ['with', 'SYNC'],
+            ['async with', 'ASYNC']
+          ]
+        },
+        { type: 'field_input', name: 'ITEMS', text: 'open(path) as handle' }
+      ],
       message1: '%1',
       args1: [{ type: 'input_statement', name: 'BODY' }],
       inputsInline: true,
@@ -217,8 +243,51 @@ export const STRUCTURE_BLOCKS: BlockDefinition[] = [
     code: (block, gen) => {
       const items = String(block.getFieldValue('ITEMS') ?? '').trim()
       if (items === '') return ''
-      return `with ${items}:\n${body(block, gen)}`
+      const async = block.getFieldValue('KIND') === 'ASYNC' ? 'async ' : ''
+      return `${async}with ${items}:\n${body(block, gen)}`
     }
+  },
+  // ---------------------------------------------------------------------- await
+  //
+  // TWO SHAPES OF ONE KEYWORD (W9, #1096), which is the same pair
+  // `snakie_python_call` and `snakie_python_call_value` already are: `await` is
+  // a statement on a line of its own (`await asyncio.sleep(1)`) and an
+  // expression inside something else (`data = await sensor.read()`), and a
+  // Blockly block has an output or a pair of statement connections, never both.
+  {
+    type: 'snakie_await',
+    category: 'control',
+    help: 'ref-functions',
+    hidden: true,
+    json: {
+      message0: 'await %1',
+      args0: [{ type: 'input_value', name: 'VALUE' }],
+      inputsInline: true,
+      previousStatement: null,
+      nextStatement: null,
+      tooltip:
+        'Wait for something that takes time, and let the rest of the program run while it does. Only inside an `async def`.'
+    },
+    code: (block, gen) => `await ${gen.valueToCode(block, 'VALUE', Order.NONE) || 'None'}\n`
+  },
+  {
+    type: 'snakie_await_value',
+    category: 'control',
+    help: 'ref-functions',
+    hidden: true,
+    json: {
+      message0: 'await %1',
+      args0: [{ type: 'input_value', name: 'VALUE' }],
+      inputsInline: true,
+      output: null,
+      tooltip: 'Wait for something that takes time, and use what it gives back.'
+    },
+    // `await x` binds looser than a call and tighter than arithmetic; Python
+    // puts it at unary-operator level, which is what this is.
+    code: (block, gen) => [
+      `await ${gen.valueToCode(block, 'VALUE', Order.UNARY_SIGN) || 'None'}`,
+      Order.UNARY_SIGN
+    ]
   },
   // ---------------------------------------------------------------------- raise
   {

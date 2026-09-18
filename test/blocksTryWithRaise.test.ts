@@ -173,19 +173,25 @@ describe('the idiom that must not break', () => {
 describe('with', () => {
   it('reads one context manager and its binding', () => {
     const src = ['with open(path) as handle:', '    print(handle)', ''].join('\n')
-    expect(one(src, 'snakie_with')!.fields).toEqual({ ITEMS: 'open(path) as handle' })
+    expect(one(src, 'snakie_with')!.fields).toEqual({
+      ITEMS: 'open(path) as handle',
+      KIND: 'SYNC'
+    })
     roundTrips(src)
   })
 
   it('reads several on one line', () => {
     const src = ['with open(a) as f, open(b) as g:', '    print(f)', ''].join('\n')
-    expect(one(src, 'snakie_with')!.fields).toEqual({ ITEMS: 'open(a) as f, open(b) as g' })
+    expect(one(src, 'snakie_with')!.fields).toEqual({
+      ITEMS: 'open(a) as f, open(b) as g',
+      KIND: 'SYNC'
+    })
     roundTrips(src)
   })
 
   it('reads one with no binding at all', () => {
     const src = ['with lock:', '    print(1)', ''].join('\n')
-    expect(one(src, 'snakie_with')!.fields).toEqual({ ITEMS: 'lock' })
+    expect(one(src, 'snakie_with')!.fields).toEqual({ ITEMS: 'lock', KIND: 'SYNC' })
     roundTrips(src)
   })
 

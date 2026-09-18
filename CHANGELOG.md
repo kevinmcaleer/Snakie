@@ -8,6 +8,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`async def` and `await` read as blocks** (#1096, epic #1086). 570 raw lines
+  across 15 projects — the narrowest workstream in the epic, which is why it was
+  scheduled last, and the cheapest of the ones that needed new blocks now that
+  #1093 has landed.
+
+  Both are keyword prefixes on shapes the reader already handles, so `async def`
+  is one more **setting** on the method block that already carries `@property`,
+  and `async with` one more on the `with` block. `await` is the one thing that
+  needed blocks of its own, and it needed two — a statement and a value — for the
+  same reason `snakie_python_call` and `snakie_python_call_value` are two blocks:
+  a Blockly block has an output or a pair of statement connections, never both.
+
+  `asyncio` and `uasyncio` are treated alike because neither is treated specially:
+  a call into a module stays a grey value in a real `await` block, which is the
+  deliberate rule from #1088 (a module is not an object, and reading one as a
+  variable would come back renamed).
+
+  `async for` is deliberately left out. #1096 says to include it "if the modifier
+  approach generalises" — and it does not: `for each` is Blockly's own
+  `controls_forEach`, so a setting on it would mean redefining a stock block.
+  Nine projects, and the line stays a raw suite with its body in blocks under it.
+
+  Statement coverage over the fixture corpus: **96.32% → 97.94%**.
+
 - **Assignment and scope: tuple targets, subscripts, every augmented operator,
   `global`, `not in`, nested imports** (#1095, epic #1086). Individually small,
   and **2,333 lines across 36 projects** between them.

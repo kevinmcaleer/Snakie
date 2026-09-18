@@ -899,6 +899,13 @@ function mentions(text: string, name: string): boolean {
   return new RegExp(`(^|[^A-Za-z0-9_])${escapeRe(name)}([^A-Za-z0-9_]|$)`).test(text)
 }
 
+/**
+ * A `def` header, with the `async` W9 (#1096) made a setting rather than a shape.
+ *
+ * Groups: the `async` keyword or undefined, the name, the parameter list.
+ */
+const DEF_HEADER = /^(async\s+)?def\s+([A-Za-z_]\w*)\((.*)\)\s*:$/
+
 /** Every augmented-assign operator the block has a setting for (W8, #1095). */
 const AUGMENTED = new Set([
   '+=',
@@ -1791,10 +1798,25 @@ class Converter {
 
     // --- try / with / raise (W7, #1094) -----------------------------------
     if (text === 'try:') return recognised([this.tryChain(node, siblings)])
-    const withHead = /^with\s+(.+):$/.exec(text)
+    const withHead = /^(async\s+)?with\s+(.+):$/.exec(text)
     if (withHead) {
       return recognised([
-        this.withBody({ type: 'snakie_with', fields: { ITEMS: withHead[1].trim() } }, 'BODY', node)
+        this.withBody(
+          {
+            type: 'snakie_with',
+            fields: { ITEMS: withHead[2].trim(), KIND: withHead[1] ? 'ASYNC' : 'SYNC' }
+          },
+          'BODY',
+          node
+        )
+      ])
+    }
+    // `await <expr>` ON A LINE OF ITS OWN (W9, #1096). The value form is in the
+    // expression parser, where `data = await sensor.read()` needs it.
+    const awaited = /^await\s+(.+)$/.exec(text)
+    if (awaited) {
+      return recognised([
+        { type: 'snakie_await', inputs: { VALUE: { block: this.expression(awaited[1]) } } }
       ])
     }
     const raise = /^raise(?:\s+(.+))?$/.exec(text)
@@ -1833,9 +1855,11 @@ class Converter {
       const decorated = this.decorated(node, siblings, decorator[1])
       if (decorated) return recognised(decorated)
     }
-    const method = /^def\s+([A-Za-z_]\w*)\((.*)\)\s*:$/.exec(text)
+    const method = DEF_HEADER.exec(text)
 
     const def = /^def\s+([A-Za-z_]\w*)\(([^)]*)\):$/.exec(text)
+    // An `async def` never takes this branch — the pattern has no `async` in it —
+    // because `procedures_def` has nowhere to put the keyword (W9, #1096).
     if (def && this.depth === 0 && modellableParams(def[2]) && !decoratedAbove(node, siblings)) {
       this.definitions.push(this.definition(def[1], def[2], node))
       // And the generator will write it into a section of its own, with a blank
@@ -1855,7 +1879,7 @@ class Converter {
     // `procedures_defnoreturn` has no previous or next connection, so it can
     // never sit inside a class's body. Its parameter list is a FIELD, so any
     // signature comes back exactly as written.
-    if (method) return recognised([this.method(node, method[1], method[2], 'NONE')])
+    if (method) return recognised([this.method(node, method, 'NONE')])
 
     // --- simple statements -----------------------------------------------
     if (text === 'break' || text === 'continue') {
@@ -1976,18 +2000,26 @@ class Converter {
   ): BlockJson[] | null {
     const next = siblings[siblings.indexOf(node) + 1]
     if (!next || this.consumed.has(next)) return null
-    const def = /^def\s+([A-Za-z_]\w*)\((.*)\)\s*:$/.exec(next.line.text)
+    const def = DEF_HEADER.exec(next.line.text)
     if (!def) return null
     this.consumed.add(next)
     this.report.total += 1
     this.report.recognised += 1
-    return [this.method(next, def[1], def[2], decorator)]
+    return [this.method(next, def, decorator)]
   }
 
   /** `def name(params):` as a STACKABLE block, with its body under it. */
-  private method(node: Stmt, name: string, params: string, decorator: string): BlockJson {
+  private method(node: Stmt, header: RegExpExecArray, decorator: string): BlockJson {
     return this.withBody(
-      { type: 'snakie_method', fields: { NAME: name, PARAMS: params.trim(), DECORATOR: decorator } },
+      {
+        type: 'snakie_method',
+        fields: {
+          NAME: header[2],
+          PARAMS: header[3].trim(),
+          DECORATOR: decorator,
+          KIND: header[1] ? 'ASYNC' : 'SYNC'
+        }
+      },
       'BODY',
       node
     )
@@ -2679,6 +2711,19 @@ class Converter {
   }
 
   private parseNot(tokens: readonly Token[], at: number): { block: BlockJson; next: number } | null {
+    // `await` BINDS TIGHTER THAN `not` AND LOOSER THAN A CALL (W9, #1096), which
+    // is where Python puts it — with the unary operators. `await` lexes as a
+    // NAME rather than a keyword, because the tokenizer's keyword list is the
+    // one the recognisers branch on and nothing else needed it there.
+    const tok = tokens[at]
+    if (tok?.kind === 'name' && tok.text === 'await') {
+      const inner = this.parseNot(tokens, at + 1)
+      if (!inner) return null
+      return {
+        block: { type: 'snakie_await_value', inputs: { VALUE: { block: inner.block } } },
+        next: inner.next
+      }
+    }
     if (tokens[at]?.kind === 'keyword' && tokens[at].text === 'not') {
       const inner = this.parseNot(tokens, at + 1)
       if (!inner) return null

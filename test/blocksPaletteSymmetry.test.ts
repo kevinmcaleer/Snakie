@@ -105,6 +105,9 @@ const READ_DIRECTLY: Record<string, string> = {
   // --- error handling and resources (W7, #1094)
   snakie_try: 'try:\n    print(1)\nexcept OSError as e:\n    print(e)\n',
   snakie_with: 'with open(path) as handle:\n    print(handle)\n',
+  // --- async (W9, #1096)
+  snakie_await: 'async def go():\n    await sleeper()\n',
+  snakie_await_value: 'async def go():\n    data = await sensor.read()\n',
   snakie_raise: 'raise RuntimeError("no wifi")\n',
   // --- assignment and scope (W8, #1095)
   snakie_python_assign: 'a, b = b, a\n',
