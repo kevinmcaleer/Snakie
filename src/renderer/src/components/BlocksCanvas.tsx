@@ -10,6 +10,7 @@ import {
 import { generateProgram, type GeneratedProgram } from '../lib/blocks/generator'
 import { ledPinToken, setBoardPins } from '../lib/blocks/board-pins'
 import { applyPinWarnings } from '../lib/blocks/pin-conflicts'
+import { refreshPinFields } from '../lib/blocks/pin-field'
 import { applyPythonWarnings } from '../lib/blocks/python-warnings'
 // Installs the Monaco editor the escape-hatch fields open (#1018). Imported for
 // the side effect, and HERE rather than in the palette: the palette is built in
@@ -464,7 +465,7 @@ export function BlocksCanvas({
   useEffect(() => {
     const apply = (): void => {
       void loadSelectedBoard().then((board) => {
-        setBoardPins(
+        const swapped = setBoardPins(
           board.pins.map((p) => ({ gpio: p.gpio, label: p.label, capabilities: p.capabilities })),
           ledPinToken(board.ledLabel)
         )
@@ -472,7 +473,13 @@ export function BlocksCanvas({
         // a board swap has to re-run them or a stale "this board has no GP22"
         // outlives the board that didn't.
         const ws = wsRef.current
-        if (ws) applyPinWarnings(ws)
+        if (!ws) return
+        // And so do the LABELS. A board that calls GP0 `D1` renames what every
+        // pin dropdown in the program is showing, and a field works its label
+        // out while Blockly draws the block — so without this the old board's
+        // names sit on the canvas until something else happens to redraw them.
+        if (swapped) refreshPinFields(ws)
+        applyPinWarnings(ws)
       })
     }
     apply()

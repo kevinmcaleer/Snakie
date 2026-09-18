@@ -618,6 +618,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A pin dropdown no longer says `GPled`.** A hardware block whose pin field
+  holds a learner's own NAME for a pin (#1097) rendered its dropdown as `GP` +
+  the name — a label naming no pin on any board, sitting on the block a child had
+  just named themselves.
+
+  Two faults, each of which produced it on its own. `FieldPin.getText()` falls
+  back to `GP<value>` for a value the live options do not hold, which is right
+  for a pin this board has not got and nonsense for a name; it asks which kind of
+  value it is holding now. And nothing redrew the field once the names arrived: a
+  dropdown works its label out while Blockly draws the block and has no reason to
+  do it again, so on the path that matters most — opening a file, where every
+  block is drawn BEFORE `applyPinWarnings` has read a single `name pin` off the
+  loaded workspace — every pin field in the program was rendered against an empty
+  name list and stayed that way.
+
+  `setPinAliases` and `setBoardPins` now report whether anything really changed,
+  and the two places that change them redraw the pin fields when it did. The
+  second fault had reach beyond the reported symptom: a board swap renames pins
+  (`GP0` is `D1` on some boards) and every dropdown on the canvas kept showing
+  what the old board called them.
+
 - **A field's own text no longer goes white on white.** The rule that paints a
   block's lettering has to out-specify Blockly's `.blocklyText { fill: #fff }` —
   and out-specifying that rule also out-specified the field rules sitting beside

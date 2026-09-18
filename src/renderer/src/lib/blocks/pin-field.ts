@@ -2,7 +2,7 @@ import * as Blockly from 'blockly/core'
 // `RegistrableField` is the registry's own contract type and is not on the
 // `blockly/core` barrel, so it comes from the module that declares it.
 import type { RegistrableField } from 'blockly/core/field_registry'
-import { pinOptionsFor } from './board-pins'
+import { isPinName, pinOptionsFor } from './board-pins'
 
 /**
  * THE PIN FIELD (#1012, epic #1007).
@@ -65,14 +65,53 @@ export class FieldPin extends Blockly.FieldDropdown {
    * What the dropdown shows for the current value.
    *
    * Looks the label up in the LIVE options so a pin reads as `GP15` rather than
-   * `15`, and falls back to the raw value for a pin this board doesn't have —
-   * which is the case that must still render something legible.
+   * `15`, and falls back for a value the options do not hold — which is the case
+   * that must still render something legible.
+   *
+   * THE FALLBACK HAS TO ASK WHICH KIND OF VALUE IT IS HOLDING. `GP` is a GPIO
+   * prefix, and since #1097 this field can hold a learner's own NAME for a pin
+   * as well as a number. Prefixing one gave `GPled` — a label naming no pin on
+   * any board, sitting on the block a child had just named themselves. A name
+   * falls back to itself; only a number gets the prefix it belongs to.
    */
   override getText(): string {
     const value = this.getValue()
     if (value === null) return ''
     const match = pinOptionsFor(this.capability).find(([, v]) => v === value)
-    return match ? match[0] : `GP${value}`
+    if (match) return match[0]
+    return isPinName(value) ? value : `GP${value}`
+  }
+}
+
+/**
+ * Redraw every pin dropdown in a workspace, because the OPTIONS changed.
+ *
+ * A field's text comes out of {@link FieldPin.getText}, which reads the live
+ * option list — but Blockly computes it while it renders the block and has no
+ * reason to compute it again. So the option list and what is on screen come
+ * apart whenever the options arrive AFTER the blocks:
+ *
+ *   - opening a file. The canvas loads the workspace, and only then does
+ *     `applyPinWarnings` read the `name pin` blocks it now has and push the
+ *     names. Every block was drawn before that, against an empty name list —
+ *     which is exactly how `led` came out as `GPled` and stayed there.
+ *   - swapping the board, which renames pins (`GP0` is `D1` on some) and can
+ *     take one away entirely.
+ *
+ * Called from the two places that change the options, and only when they really
+ * did change: this walks the whole workspace, and the drag path runs it on every
+ * debounce.
+ */
+export function refreshPinFields(workspace: Blockly.Workspace): void {
+  for (const block of workspace.getAllBlocks(false)) {
+    for (const input of block.inputList) {
+      for (const field of input.fieldRow) {
+        // A headless workspace has nothing to draw, and `forceRerender` on an
+        // unrendered block is Blockly's own no-op — but the test workspaces are
+        // headless, so this is load-bearing rather than defensive.
+        if (field instanceof FieldPin) field.forceRerender()
+      }
+    }
   }
 }
 

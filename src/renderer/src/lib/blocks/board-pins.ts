@@ -63,10 +63,23 @@ let onboardLed: string | null = null
  *
  * Called by the canvas whenever the board selection changes. An empty list
  * resets to {@link FALLBACK_PINS} rather than leaving the dropdowns empty.
+ *
+ * Returns whether the pins really changed, for the same reason
+ * {@link setPinAliases} does: a board swap RENAMES pins — `GP0` is `D1` on some
+ * — and a dropdown already on screen is still showing what the old board called
+ * it until something redraws it.
  */
-export function setBoardPins(pins: readonly BlockPin[], onboardLedToken?: string | null): void {
-  current = pins.length > 0 ? pins : FALLBACK_PINS
+export function setBoardPins(
+  pins: readonly BlockPin[],
+  onboardLedToken?: string | null
+): boolean {
+  const next = pins.length > 0 ? pins : FALLBACK_PINS
+  const changed =
+    next.map((p) => `${p.gpio}:${p.label}`).join('|') !==
+    current.map((p) => `${p.gpio}:${p.label}`).join('|')
+  current = next
   onboardLed = onboardLedToken ?? null
+  return changed
 }
 
 /** The pins currently offered. */
@@ -175,9 +188,22 @@ let aliases: readonly PinAlias[] = []
  * handling, with no React near it. UI ONLY — code generation reads the
  * workspace through {@link pinAliasesIn} instead, so a generated program never
  * depends on which module-level cache happened to be warm.
+ *
+ * RETURNS WHETHER THE SET REALLY CHANGED, because a field that has already been
+ * drawn is showing the labels these names imply and will not work them out
+ * again — see `refreshPinFields` in `pin-field.ts`, which the caller runs on a
+ * true. This runs on every workspace change, including every frame of a drag,
+ * and redrawing every dropdown in the program that often would be a waste.
  */
-export function setPinAliases(next: readonly PinAlias[]): void {
+export function setPinAliases(next: readonly PinAlias[]): boolean {
+  const changed = key(next) !== key(aliases)
   aliases = [...next]
+  return changed
+}
+
+/** A comparable form of an alias list, for "did this actually change?". */
+function key(list: readonly PinAlias[]): string {
+  return list.map((a) => `${a.name}:${a.gpio}:${a.direction}`).join('|')
 }
 
 /** The names currently offered by the dropdowns. */
