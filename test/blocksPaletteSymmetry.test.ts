@@ -92,6 +92,7 @@ const READ_DIRECTLY: Record<string, string> = {
   procedures_defreturn: 'def double(n):\n    return n\n',
   procedures_callnoreturn: 'def go():\n    print(1)\n\ngo()\n',
   procedures_callreturn: 'def double(n):\n    return n\n\nx = double(2)\n',
+  snakie_return: 'def go(n):\n    if n < 0:\n        return\n    print(n)\n',
   // --- the escape hatches (#1018), which W1 taught the reader to emit
   snakie_python_statement: 'assert ok\n',
   snakie_python_suite: 'class Thing:\n    def go(self):\n        print(1)\n',

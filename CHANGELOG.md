@@ -8,6 +8,33 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A real block for an early or bare `return`** (#1090, epic #1086). 2,359 raw
+  lines across 57 of 73 projects — grey *on purpose*, which is the part worth
+  remembering:
+
+  ```python
+  def angle(degrees):
+      if degrees < 0:
+          return          # this line was a grey raw block
+      servo.duty_u16(...)
+  ```
+
+  A mid-function `return` used to become `procedures_ifreturn`, whose generated
+  code is `if <COND>: return <VALUE>` — and with nothing in COND the generator
+  wrote `if False:`, so every early return in the program silently became dead
+  code. #1063 pulled the recognition back rather than keep shipping that.
+
+  `snakie_return` is the block that was actually missing: no condition, a value
+  socket that may be empty, and — unlike `break`/`continue` — a **next
+  connection**, because a guard clause has a whole function after it. An empty
+  socket is a bare `return`, not `return None`: everywhere else in the palette an
+  empty socket takes a placeholder because the learner reached for a block that
+  needs a value, and here the empty block is itself a complete, common statement.
+
+  A trailing `return <expr>` still becomes the `def` block's RETURN socket, which
+  is how Blockly models a function's result. Statement coverage over the fixture
+  corpus: **72.61% → 76.73%**.
+
 - **A pin you named comes back as the block that named it** (#1097, epic #1086).
 
   ```

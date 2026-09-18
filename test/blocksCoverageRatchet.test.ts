@@ -48,11 +48,20 @@ import { installCorePalette } from '../src/renderer/src/lib/blocks/palette'
  * headroom between a floor and the measurement is never a mystery.
  */
 
-/** Recognised lines / logical lines. 53.31% at W0, 72.61% after W1. */
-const STATEMENT_FLOOR = 72
+/** Recognised lines / logical lines. 53.31% at W0, 72.61% at W1, 76.73% at W3. */
+const STATEMENT_FLOOR = 76
 
-/** Value sockets holding a real block. 53.88% at W0, 68.86% at W1, 72.41% at W10. */
-const SOCKET_FLOOR = 72
+/**
+ * Value sockets holding a real block. 53.88% at W0, 72.41% at W10, 71.58% at W3.
+ *
+ * ARGUED DOWN ONCE, on purpose and out loud. W3 (#1090) turned every
+ * `return <expr>` from a grey STATEMENT into a real block with that expression
+ * in a socket — so a few hundred expressions that were never measured joined the
+ * denominator, and some of them (`return found.get(name)`, `return (a, b, c)`)
+ * are genuinely grey values. Nothing got worse; more of the file is being
+ * counted. Statement coverage moved 72.61% → 76.73% in the same change.
+ */
+const SOCKET_FLOOR = 71
 
 /** Files that open with no grey at all, as a percentage. Baseline 4.65%. */
 const CLEAN_FILE_FLOOR = 4

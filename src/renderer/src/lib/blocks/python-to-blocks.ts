@@ -1579,18 +1579,21 @@ class Converter {
         { type: 'controls_flow_statements', fields: { FLOW: text.toUpperCase() } }
       ])
     }
-    const ret = /^return\s+(.+)$/.exec(text)
+    const ret = /^return(?:\s+(.+))?$/.exec(text)
     if (ret) {
-      // A `return` THAT IS NOT THE LAST STATEMENT (#1063). `definition()` takes
-      // a trailing one as the `def`'s RETURN socket, which is how Blockly models
-      // a function's result; everything else lands here.
+      // A `return` THAT IS NOT THE LAST STATEMENT (#1063, then W3 of #1086).
+      // `definition()` takes a trailing one as the `def`'s RETURN socket, which
+      // is how Blockly models a function's result; everything else lands here.
       //
       // It used to become `procedures_ifreturn`, whose code is
       // `if <COND>: return <VALUE>` — and with nothing in COND the generator
       // wrote `if False:`. Every early return in the program became dead code,
-      // quietly, which is a worse outcome than any ugly block. A raw statement
-      // says `return x` and means it.
-      return [this.raw(node.line)]
+      // quietly, so #1063 pulled it back to a raw block. #1090 is the block that
+      // was actually missing: no condition, an optional value, and a next
+      // connection, because a guard clause has a whole function after it.
+      const block: BlockJson = { type: 'snakie_return' }
+      if (ret[1] !== undefined) block.inputs = { VALUE: { block: this.expression(ret[1]) } }
+      return recognised([block])
     }
     const change = /^([A-Za-z_]\w*)\s*\+=\s*(.+)$/.exec(text)
     if (change) {
