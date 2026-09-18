@@ -34,19 +34,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   board calls the hole. `motor_left` is what you call it, and on a robot with six
   of them the name is the only one of the two anybody can keep straight.
 
-  A new **name pin** block in the Hardware drawer declares one. Every pin
-  dropdown then offers it — listed above the numbers, with the pin still in the
+  A new **name pin** block in the Hardware drawer declares one, as the **pin
+  object** and with the direction chosen on that block — `for output`, `for
+  input`, or `for input` with a pull-up or pull-down resistor. Every pin dropdown
+  then offers the name — listed above the numbers, with the pin still in the
   label (`motor_left (GP15)`) so the menu never hides which hole it is — and the
-  generated Python assigns it once and says the name from then on:
+  generated Python builds it once and uses that one object from then on:
 
   ```python
   from machine import PWM, Pin
 
-  motor_left = 15
-  pwm_motor_left = PWM(Pin(motor_left))
+  motor_left = Pin(15, Pin.OUT)
+  pwm_motor_left = PWM(motor_left)
 
   pwm_motor_left.duty_u16(int(50 * 65535 / 100))
   ```
+
+  The direction belongs on the naming block because the object does: `Pin(15)`
+  on its own is configured for nothing, and a pin driven the wrong way round does
+  nothing at all rather than failing. So naming a pin `for input` and then
+  writing to it now puts a warning on the writing block, which is the one new
+  failure the object form makes possible.
 
   Which means rewiring is one block, not six — the entire point of naming a
   thing. Every pin block takes a name: raw pins, PWM, ADC, servos, buzzers, LEDs

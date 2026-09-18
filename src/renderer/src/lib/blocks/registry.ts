@@ -65,7 +65,22 @@ export interface BlockDefinition {
    * only the block knows. The canvas uses these to flag two blocks fighting over
    * one pin, a pin the board doesn't have, and a pin that can't do the job.
    */
-  pin?: { field: string; role: string; needs?: string }
+  pin?: {
+    field: string
+    role: string
+    needs?: string
+    /**
+     * Which way this block drives the pin, when it cares.
+     *
+     * Only consulted for a NAMED pin, where the direction is chosen once on the
+     * `name pin` block and the object is built there — so a block that writes to
+     * a pin named `for input` does nothing at all, silently, which is the
+     * failure `pin-conflicts.ts` exists to catch. An unnamed pin builds its own
+     * object with the direction the block needs, so there is nothing to disagree
+     * with and this is left off.
+     */
+    direction?: 'in' | 'out'
+  }
   /**
    * This block belongs to an instrument (#1013) — the id from
    * `instruments-registry.ts`, e.g. `turtle`.
