@@ -7,6 +7,7 @@ import {
   buildSoftShellTheme,
   categoryColour,
   contrastRatio,
+  inkOn,
   readableTextOn,
   relativeLuminance,
   type ThemeTokens
@@ -118,20 +119,32 @@ const SKINS: [string, ThemeTokens][] = [
 const AA = 4.5
 
 /**
- * Categories that sit off the palette's depth on purpose, and carry their own
- * ink because of it.
+ * Categories that sit off the palette's depth on purpose.
  *
  * `hardware` is the bright GPIO amber off the board diagrams. Muted down to the
  * body of the palette it stopped looking like a hardware block, which is a real
- * cost for a robotics-first editor — so it keeps the amber and takes BLACK
- * lettering, at 8.3:1, better than anything on the depth gets. That is only
- * affordable because #1099 made the ink a property of each block's own fill:
- * before it, one light block meant white-on-amber at 2.5:1 across the canvas.
+ * cost for a robotics-first editor, so it keeps the amber.
  *
- * Adding an id here is a design decision, and the tests either side of it say
- * so: it must really be off the depth, and it must still clear AA.
+ * Adding an id here is a design decision, and the test below says so: it has to
+ * really be off the depth rather than have drifted there.
  */
 const OWN_INK = new Set(['hardware'])
+
+/**
+ * Categories whose lettering is BELOW WCAG AA, on purpose, because somebody
+ * chose the colour over the contrast.
+ *
+ * Spelled out here rather than left as an exemption inside a loop, so that a
+ * palette with a failing block cannot be mistaken for one that passes — and
+ * held to the NUMBER, so a colour edit that makes it worse still fails.
+ *
+ * `hardware` is white-on-amber at 2.5:1. {@link inkOn} carries the argument:
+ * there is no bright amber that takes white at 4.5:1 — white wants a luminance
+ * at or under about 0.18 and the amber is 0.37 — so the alternatives were the
+ * muted brown the amber was picked over, or black lettering, which was asked
+ * against. Scratch makes the same trade on its own yellow, at 1.9:1.
+ */
+const BELOW_AA: Record<string, number> = { hardware: 2.52 }
 
 describe('the block palette is one palette, in both skins', () => {
   it('paints a block the same colour whichever skin is on', () => {
@@ -187,47 +200,50 @@ describe('the block palette is one palette, in both skins', () => {
   })
 })
 
-describe('block text clears WCAG AA on every category, in both skins', () => {
+describe('block text is the ink the canvas really paints, in both skins', () => {
   for (const [name, tokens] of SKINS) {
     for (const category of BLOCK_CATEGORIES) {
       it(`${category.id} in ${name}`, () => {
+        // `inkOn`, not `readableTextOn`: the canvas paints what a category
+        // DECLARED where it declared one, and a test measuring the readable ink
+        // instead would pass while the blocks failed.
         const fill = categoryColour(tokens, category)
-        const ink = readableTextOn(fill)
-        expect({ id: category.id, ok: contrastRatio(fill, ink) >= AA }).toEqual({
-          id: category.id,
-          ok: true
-        })
+        const ratio = contrastRatio(fill, inkOn(fill))
+        const chosen = BELOW_AA[category.id]
+        if (chosen !== undefined) {
+          expect({ id: category.id, ratio: Math.round(ratio * 100) / 100 }).toEqual({
+            id: category.id,
+            ratio: chosen
+          })
+          return
+        }
+        expect({ id: category.id, ok: ratio >= AA }).toEqual({ id: category.id, ok: true })
       })
     }
   }
 
-  it('picks ONE ink for the palette, apart from the categories that opted out', () => {
-    // Not an accessibility requirement — a design one. A canvas where blocks
-    // take black or white text at random reads as two palettes photographed
-    // together. So the body of the palette carries one ink, and a category that
-    // wants its own says so in `OWN_INK` and gets `readableTextOn`'s answer.
+  it('paints ONE ink across the whole palette, which is what makes it look like one', () => {
+    // A canvas where blocks take black or white text at random reads as two
+    // palettes photographed together. Every block is white — the fourteen that
+    // can carry it because they sit at the palette's depth, and `hardware`
+    // because it says so.
     const inks = new Set(
-      SKINS.flatMap(([, tokens]) =>
-        BLOCK_CATEGORIES.filter((c) => !OWN_INK.has(c.id)).map((c) =>
-          readableTextOn(categoryColour(tokens, c))
-        )
-      )
+      SKINS.flatMap(([, tokens]) => BLOCK_CATEGORIES.map((c) => inkOn(categoryColour(tokens, c))))
     )
     expect([...inks]).toEqual(['#ffffff'])
   })
 
-  it('gives the opted-out categories the ink their own fill asks for', () => {
-    // Which is the point of #1099 and the reason an exception is affordable at
-    // all: the ink is a property of the block, published on its SVG group, not
-    // one colour chosen once for the canvas.
-    for (const id of OWN_INK) {
-      const category = BLOCK_CATEGORIES.find((c) => c.id === id)!
-      for (const [name, tokens] of SKINS) {
+  it('only overrides the ink where the fill could not readably carry it', () => {
+    // The guard on `BELOW_AA`. A declared ink that MATCHES what the fill can
+    // readably carry is configuration doing nothing; one that differs is a
+    // deliberate trade, and has to be written down as such. Nothing in between.
+    for (const [, tokens] of SKINS) {
+      for (const category of BLOCK_CATEGORIES) {
         const fill = categoryColour(tokens, category)
-        expect({ id, name, ratio: contrastRatio(fill, readableTextOn(fill)) >= AA }).toEqual({
-          id,
-          name,
-          ratio: true
+        if (inkOn(fill) === readableTextOn(fill)) continue
+        expect({ id: category.id, declared: category.id in BELOW_AA }).toEqual({
+          id: category.id,
+          declared: true
         })
       }
     }

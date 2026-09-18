@@ -585,6 +585,36 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **White lettering on the hardware blocks**, asked for over the black the amber
+  can actually carry. It is the one block in the palette whose text does not
+  clear WCAG AA — white on `#d99541` is 2.5:1 — and it is written down as such
+  rather than left to be discovered: `inkOn` in `theme.ts` carries the argument
+  and `blocksContrast.test.ts` asserts the real number, so a palette with a
+  failing block cannot be mistaken for one that passes.
+
+  There is no bright amber that takes white at 4.5:1. White wants a relative
+  luminance at or under about 0.18 and the amber is 0.37, so the alternatives
+  were the muted brown the amber was picked over, or black lettering. Scratch
+  makes the same trade on its own yellow, at 1.9:1.
+
+  A category can now declare its own `ink`, and a guard says it may only do so
+  where the fill could not readably carry it — a declared ink that matches
+  `readableTextOn` is configuration doing nothing.
+
+- **The blank-line block reads as a note rather than a step.** It takes the
+  comment block's grey and puts its label in italics. A blank line is about the
+  SHAPE of a program rather than something it does, and at the Python category's
+  weight a canvas of real work read as half spacing — a stack of solid blocks,
+  every other one of them nothing.
+
+  Two small mechanisms, both recorded because neither is obvious. The colour is
+  `json.style`, which the registry lets win over the one it derives from
+  `category`, so the block keeps its home in the Python drawer. The italics are a
+  CLASS on the label, because Blockly's font style is per-WORKSPACE — and the
+  rule needs four classes to land, since Blockly builds its text rule from the
+  theme as the `font` SHORTHAND, which resets `font-style` to normal without ever
+  naming it.
+
 - **Hardware blocks are the bright GPIO amber again.** Flattening every category
   to one luminance (#1098, #1099) muted it to a brown, and a hardware block that
   does not look like the pin dot on the board diagram is a real cost in a
