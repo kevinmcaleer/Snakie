@@ -96,15 +96,18 @@ export function onboardLedToken(): string | null {
  * dropdown then offers it by name, and the generated Python assigns it once and
  * refers to it everywhere after:
  *
- *     motor_left_speed = 15
- *     pwm_motor_left_speed = PWM(Pin(motor_left_speed))
+ *     motor_left_speed = Pin(15, Pin.OUT)
+ *     pwm_motor_left_speed = PWM(motor_left_speed)
  *
  * WHY THE ASSIGNMENT RATHER THAN SUBSTITUTING 15 EVERYWHERE. Rewiring a robot
  * then means editing one line instead of hunting six, which is the entire point
  * of naming a thing — and it is what `parse-pins.ts` already reads: its
- * `buildPinVarMap` resolves `motor_left_speed = 15` and puts the identifier
- * inside `Pin(...)` back through it, so the Board View lights the right badge
- * with no changes at all.
+ * `buildPinVarMap` resolves a `name = Pin(...)` line and puts the identifier
+ * back through it wherever it is used, so the Board View lights the right badge.
+ *
+ * THE NAME IS THE PIN OBJECT, not its number. The direction is chosen on the
+ * `name pin` block, once, and every block that uses the name uses that object
+ * rather than building a second one around the number.
  *
  * THE NAME IS THE FIELD'S VALUE. A pin field normally holds a GPIO number as a
  * string; for a named pin it holds the name. {@link FieldPin} already accepts
@@ -119,6 +122,38 @@ export interface PinAlias {
   name: string
   /** The GPIO it stands for. */
   gpio: number
+  /**
+   * How the `name pin` block configured it — the block's `DIRECTION` field.
+   *
+   * `OUT`, `IN`, `PULL_UP` or `PULL_DOWN`; the last two are inputs with their
+   * resistor. It is what goes in the constructor, and it is what
+   * `pin-conflicts.ts` checks a block's own direction against.
+   */
+  direction: PinDirection
+}
+
+/** The four ways a named pin can be configured. */
+export type PinDirection = 'OUT' | 'IN' | 'PULL_UP' | 'PULL_DOWN'
+
+/** Is this direction an input? The three that are not `OUT`. */
+export function isInputDirection(direction: PinDirection): boolean {
+  return direction !== 'OUT'
+}
+
+/**
+ * The constructor a named pin is built with: `Pin(4, Pin.OUT)`.
+ *
+ * A PIN OBJECT, not the bare number it used to be. `motor_left = 4` made every
+ * block that used it wrap the number again — `Pin(motor_left, Pin.OUT)` in one
+ * place, `PWM(Pin(motor_left))` in another — so the name stood for a pin NUMBER
+ * and the thing it named was built fresh each time, configured by whichever
+ * block got there. Naming it once, as the object, is what a person writing this
+ * by hand would do, and it puts the direction where the learner chose it.
+ */
+export function pinConstructor(gpio: number, direction: PinDirection): string {
+  if (direction === 'OUT') return `Pin(${gpio}, Pin.OUT)`
+  if (direction === 'IN') return `Pin(${gpio}, Pin.IN)`
+  return `Pin(${gpio}, Pin.IN, Pin.${direction})`
 }
 
 /**
@@ -170,7 +205,11 @@ export function pinAliasesIn(workspace: {
     const gpio = Number(block.getFieldValue('PIN'))
     if (!name || seen.has(name) || !Number.isFinite(gpio)) continue
     seen.add(name)
-    out.push({ name, gpio })
+    // `OUT` for a block saved before the field existed, which is also the
+    // commonest thing to name a pin for.
+    const raw = String(block.getFieldValue('DIRECTION') ?? 'OUT')
+    const direction = (['OUT', 'IN', 'PULL_UP', 'PULL_DOWN'] as const).find((d) => d === raw)
+    out.push({ name, gpio, direction: direction ?? 'OUT' })
   }
   return out
 }

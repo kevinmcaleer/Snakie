@@ -385,10 +385,21 @@ export function parsePins(source: string): UsedPins[] {
         bus = extractBusId(args)
         break
       }
-      case 'PWM':
+      case 'PWM': {
+        // `PWM(Pin(15))` → the wrapped Pin's arg. `PWM(motor_left)` — a named
+        // pin, or any hand-written program that built its Pin on an earlier
+        // line — has no inner `Pin(...)`, so fall back to the first argument
+        // and let the variable map below resolve it, exactly as ADC does.
         type = 'pwm'
-        pins = extractPins(args)
+        const wrapped = extractPins(args)
+        if (wrapped.length > 0) {
+          pins = wrapped
+        } else {
+          const first = args.match(/^\s*("([^"]*)"|'([^']*)'|[^,)\s]+)/)
+          pins = first ? [(first[2] ?? first[3] ?? first[1]).trim()] : []
+        }
         break
+      }
       case 'ADC': {
         // `ADC(Pin(26))` / `ADC(Pin('GP26'))` → the wrapped Pin's arg; the bare
         // `ADC(26)` form has no inner Pin(...) so fall back to the 1st argument.

@@ -8,23 +8,53 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A microseconds block on the Wait shelf** (#1011, epic #1007). `wait N
+  microseconds` → `time.sleep_us(N)`, beside the seconds and milliseconds blocks.
+
+  The waits that need microseconds are the ones you cannot write any other way:
+  an HC-SR04's 10 µs trigger pulse, a WS2812's reset gap, the setup time on a
+  shift register. `sleep_ms(0)` is not those, and `sleep(0.00001)` is unreadable.
+  It is the datasheet's own unit, so it is the block's unit — the shadow value
+  defaults to **10**, which is the trigger pulse exactly.
+
+  A third block rather than a unit dropdown on the existing one, for the reason
+  the shelf was built with two: `sleep`, `sleep_ms` and `sleep_us` are three
+  different MicroPython functions, and the mirror exists to show the code a
+  learner will later write. On CircuitPython, which has no `sleep_us` any more
+  than it has `sleep_ms`, a literal converts to seconds at build time
+  (`time.sleep(0.00001)`) and anything else keeps the division. Worth knowing:
+  CircuitPython's `time.sleep()` does not really resolve microseconds, so that
+  translation is a floor rather than a promise — a property of the runtime, not
+  of the translation, and better than a block that does nothing on their board.
+
+  `time.sleep_us(10)` typed into the Python pane now reads back as this block
+  rather than a raw Python block, so it is a block you can author more of.
+
 - **Name a pin, and use the name everywhere** (epic #1007). `GP15` is what the
   board calls the hole. `motor_left` is what you call it, and on a robot with six
   of them the name is the only one of the two anybody can keep straight.
 
-  A new **name pin** block in the Hardware drawer declares one. Every pin
-  dropdown then offers it — listed above the numbers, with the pin still in the
+  A new **name pin** block in the Hardware drawer declares one, as the **pin
+  object** and with the direction chosen on that block — `for output`, `for
+  input`, or `for input` with a pull-up or pull-down resistor. Every pin dropdown
+  then offers the name — listed above the numbers, with the pin still in the
   label (`motor_left (GP15)`) so the menu never hides which hole it is — and the
-  generated Python assigns it once and says the name from then on:
+  generated Python builds it once and uses that one object from then on:
 
   ```python
   from machine import PWM, Pin
 
-  motor_left = 15
-  pwm_motor_left = PWM(Pin(motor_left))
+  motor_left = Pin(15, Pin.OUT)
+  pwm_motor_left = PWM(motor_left)
 
   pwm_motor_left.duty_u16(int(50 * 65535 / 100))
   ```
+
+  The direction belongs on the naming block because the object does: `Pin(15)`
+  on its own is configured for nothing, and a pin driven the wrong way round does
+  nothing at all rather than failing. So naming a pin `for input` and then
+  writing to it now puts a warning on the writing block, which is the one new
+  failure the object form makes possible.
 
   Which means rewiring is one block, not six — the entire point of naming a
   thing. Every pin block takes a name: raw pins, PWM, ADC, servos, buzzers, LEDs
@@ -45,6 +75,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the fix rather than a silent substitution of some other pin.
 
 ### Fixed
+
+- **Calling your own function is a function block again, not raw Python.** A
+  `def` in the code pane became a proper Functions block, and every call to it
+  came back as a grey raw-Python block — so the drawer handed you a definition
+  you could not call, in a program that plainly did call it.
+
+  `forwards()` under a `def forwards():` is now a caller block, with its
+  arguments carried across, and `double(3)` inside something else is the value
+  caller. It stays raw exactly where no caller block would be right — a call with
+  the wrong number of arguments, a statement call to a function that returns, a
+  name this program does not define, or a call to a `def` whose parameters
+  Blockly cannot hold and which is therefore not a function block either. Each of
+  those would otherwise load with a socket left empty, or name a definition block
+  that does not exist, and regenerate as a program you did not write.
+
+- **A blank line between two comment paragraphs stopped disappearing.** A run of
+  consecutive comments folds into one block, and a blank line did not break that
+  run — which was harmless while blank lines were dropped on the way in, and ate
+  the gap once they were not. Two paragraphs are two runs now, with the blank
+  line still between them. (Introduced by the blank-line fix below, in the same
+  unreleased batch.)
 
 - **You can put blank lines in the Python again.** The code pane is editable, its
   text is turned back into blocks when you pause, and the file is regenerated

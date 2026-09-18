@@ -21,7 +21,9 @@ import { parsePins } from '../src/renderer/src/components/parse-pins'
  *
  * `GP15` is what the board calls the hole; `motor_left` is what the learner
  * calls it, and on a robot with six of them the name is the only one of the two
- * anybody can keep straight. A `name pin` block declares one.
+ * anybody can keep straight. A `name pin` block declares one — as the Pin OBJECT,
+ * configured once with the direction chosen on that block, so every other block
+ * uses the pin rather than rebuilding one around its number.
  *
  * FOUR THINGS HAVE TO HOLD AT ONCE, and they are what this suite is:
  *
@@ -58,11 +60,12 @@ const namePin = (
   gpio: string,
   name: string,
   id = 'n',
-  next?: Record<string, unknown>
+  next?: Record<string, unknown>,
+  direction = 'OUT'
 ): Record<string, unknown> => ({
   type: 'snakie_name_pin',
   id,
-  fields: { PIN: gpio, NAME: name },
+  fields: { PIN: gpio, NAME: name, DIRECTION: direction },
   ...(next ? { next: { block: next } } : {})
 })
 
@@ -73,29 +76,52 @@ const write = (pin: string, id = 'w'): Record<string, unknown> => ({
 })
 
 describe('the name pin block', () => {
-  it('assigns the pin once and says the name after', () => {
+  it('builds the pin once, as the object, and calls the name after', () => {
+    // THE POINT OF THE BLOCK. `motor_left = 15` made the name stand for a pin
+    // NUMBER, so every block that used it built its own pin around that number
+    // and configured it again. One object, named where the learner named it.
     expect(linesOf([namePin('15', 'motor_left', 'n', write('motor_left'))])).toEqual([
       'from machine import Pin',
       '',
-      'motor_left = 15',
-      'pin_motor_left = Pin(motor_left, Pin.OUT)',
+      'motor_left = Pin(15, Pin.OUT)',
       '',
-      'pin_motor_left.value(1)',
+      'motor_left.value(1)',
       ''
     ])
+  })
+
+  it('puts the direction the learner chose in the constructor', () => {
+    const ctor = (direction: string): string =>
+      codeOf([namePin('14', 'button', 'n', undefined, direction)]).split('\n')[2]
+    expect(ctor('OUT')).toBe('button = Pin(14, Pin.OUT)')
+    expect(ctor('IN')).toBe('button = Pin(14, Pin.IN)')
+    expect(ctor('PULL_UP')).toBe('button = Pin(14, Pin.IN, Pin.PULL_UP)')
+    expect(ctor('PULL_DOWN')).toBe('button = Pin(14, Pin.IN, Pin.PULL_DOWN)')
+  })
+
+  it('and a block saved before the direction existed reads as an output', () => {
+    // The commonest thing to name a pin for, and the only answer that keeps an
+    // older file generating what it generated yesterday.
+    const ws = workspaceOf([
+      { type: 'snakie_name_pin', id: 'n', fields: { PIN: '15', NAME: 'motor_left' } }
+    ])
+    expect(pinAliasesIn(ws)).toEqual([{ name: 'motor_left', gpio: 15, direction: 'OUT' }])
   })
 
   it('declares nothing where it stands', () => {
     // The whole block generates one hoisted line and nothing at the point it
     // sits, exactly like the import blocks. A learner should be able to park it
     // anywhere without a stray statement appearing mid-program.
-    const out = generateProgram(workspaceOf([namePin('15', 'motor_left')]))
-    expect(out.code).toBe('motor_left = 15\n')
+    expect(codeOf([namePin('15', 'motor_left')])).toBe(
+      'from machine import Pin\n\nmotor_left = Pin(15, Pin.OUT)\n'
+    )
   })
 
-  it('a blank name declares nothing at all', () => {
-    // Mid-retype: the field is empty for a keystroke, and `= 15` on a line of
-    // its own is a SyntaxError in the mirror the learner is looking at.
+  it('a blank name declares nothing at all \u2014 not even the import', () => {
+    // Mid-retype: the field is empty for a keystroke, and `= Pin(15, Pin.OUT)`
+    // on a line with nothing to its left is a SyntaxError in the mirror the
+    // learner is looking at. `Pin` is needed from the emitter rather than a
+    // static list so this case leaves no orphaned import behind either.
     expect(codeOf([namePin('15', '   ')])).toBe('')
   })
 })
@@ -103,7 +129,7 @@ describe('the name pin block', () => {
 describe('the assignment lands before the pin that reads it', () => {
   it('when the name block is ABOVE the block using it', () => {
     const code = codeOf([namePin('15', 'motor_left', 'n', write('motor_left'))])
-    expect(code.indexOf('motor_left = 15')).toBeLessThan(code.indexOf('Pin(motor_left'))
+    expect(code.indexOf('motor_left = Pin(')).toBeLessThan(code.indexOf('motor_left.value'))
   })
 
   it('and when it is BELOW it', () => {
@@ -112,13 +138,13 @@ describe('the assignment lands before the pin that reads it', () => {
     // after the `Pin(...)` whenever the learner parked the declaration at the
     // bottom — a NameError produced by dragging a block downwards.
     const code = codeOf([write('motor_left'), namePin('15', 'motor_left')])
-    expect(code.indexOf('motor_left = 15')).toBeLessThan(code.indexOf('Pin(motor_left'))
+    expect(code.indexOf('motor_left = Pin(')).toBeLessThan(code.indexOf('motor_left.value'))
   })
 
   it('and when nothing declares it, it is still the learner’s name', () => {
     // Substituting a pin we guessed at would drive the wrong hardware in silence.
     // A NameError is the honest outcome, and the warning below arrives first.
-    expect(codeOf([write('ghost')])).toContain('Pin(ghost, Pin.OUT)')
+    expect(codeOf([write('ghost')])).toContain('ghost.value(1)')
   })
 })
 
@@ -129,7 +155,7 @@ describe('the line belongs to the block that declared it', () => {
     // line — it is that block's only visible effect, so #1016's hover has to
     // light it up there.
     const out = generateProgram(workspaceOf([write('motor_left'), namePin('15', 'motor_left')]))
-    const line = out.code.split('\n').indexOf('motor_left = 15') + 1
+    const line = out.code.split('\n').indexOf('motor_left = Pin(15, Pin.OUT)') + 1
     expect(out.sourceMap.get(line)).toBe('n')
   })
 })
@@ -145,7 +171,9 @@ describe('every pin block takes a name', () => {
           inputs: { ANGLE: { block: { type: 'math_number', id: 'a', fields: { NUM: 90 } } } }
         })
       ])
-    ).toContain('servo_shoulder = Servo(PWM(Pin(shoulder)), pin=shoulder)')
+      // `pin=` STAYS A NUMBER: `instruments.py` reports it as SERVO telemetry
+      // and the Robot View maps that number to a joint.
+    ).toContain('servo_shoulder = Servo(PWM(shoulder), pin=0)')
   })
 
   it('a PWM', () => {
@@ -158,7 +186,7 @@ describe('every pin block takes a name', () => {
           inputs: { PERCENT: { block: { type: 'math_number', id: 'p', fields: { NUM: 50 } } } }
         })
       ])
-    ).toContain('pwm_lamp = PWM(Pin(lamp))')
+    ).toContain('pwm_lamp = PWM(lamp)')
   })
 
   it('an analogue read', () => {
@@ -172,7 +200,7 @@ describe('every pin block takes a name', () => {
           }
         })
       ])
-    ).toContain('adc_battery = ADC(Pin(battery))')
+    ).toContain('adc_battery = ADC(battery)')
   })
 
   it('an I²C bus — whose NUMBER still comes from the real GPIOs', () => {
@@ -201,7 +229,7 @@ describe('every pin block takes a name', () => {
         }
       })
     ])
-    expect(code).toContain('i2c_0 = I2C(0, sda=Pin(sda_line), scl=Pin(scl_line))')
+    expect(code).toContain('i2c_0 = I2C(0, sda=sda_line, scl=scl_line)')
   })
 
   it('and two blocks on one name share one object', () => {
@@ -211,8 +239,8 @@ describe('every pin block takes a name', () => {
         next: { block: write('motor_left', 'b') }
       })
     ])
-    expect(code.match(/Pin\(motor_left/g)).toHaveLength(1)
-    expect(code.match(/motor_left = 15/g)).toHaveLength(1)
+    expect(code.match(/motor_left = Pin\(/g)).toHaveLength(1)
+    expect(code.match(/motor_left\.value/g)).toHaveLength(2)
   })
 })
 
@@ -230,12 +258,39 @@ describe('a name that would shadow a module', () => {
       })
     ])
     expect(code).toContain('import time')
-    expect(code).toContain('time_ = 15')
-    expect(code).toContain('Pin(time_, Pin.OUT)')
+    expect(code).toContain('time_ = Pin(15, Pin.OUT)')
+    expect(code).toContain('time_.value(1)')
   })
 })
 
 describe('the Board View still sees the pin', () => {
+  it('reads the naming line itself as the connection', () => {
+    // `motor_left = Pin(15, Pin.OUT)` is a `Pin(...)` constructor line, so the
+    // badge comes straight off it — more directly than the number form managed.
+    const used = parsePins(codeOf([namePin('15', 'motor_left', 'n', write('motor_left'))]))
+    expect(used[0]).toMatchObject({ type: 'output', pins: ['15'], variable: 'motor_left' })
+  })
+
+  it('and resolves a named pin handed to a PWM', () => {
+    // `PWM(motor_left)` has no inner `Pin(...)` to match, so `parse-pins.ts`
+    // falls back to the first argument and resolves it — the same thing it
+    // already did for `ADC`. Without that the PWM badge went dark.
+    const used = parsePins(
+      codeOf([
+        namePin('15', 'lamp', 'n', {
+          type: 'snakie_pwm_duty',
+          id: 'd',
+          fields: { PIN: 'lamp' },
+          inputs: { PERCENT: { block: { type: 'math_number', id: 'p', fields: { NUM: 50 } } } }
+        })
+      ])
+    )
+    expect(used.map((u) => [u.type, u.pins])).toEqual([
+      ['output', ['15']],
+      ['pwm', ['15']]
+    ])
+  })
+
   it('resolves the name back to the GPIO it stands for', () => {
     // `parse-pins.ts` already had `buildPinVarMap` for exactly this shape, which
     // is why naming a pin costs the wiring diagram nothing.
@@ -246,14 +301,17 @@ describe('the Board View still sees the pin', () => {
 
 describe('the dropdowns', () => {
   it('offer the names first, with the pin still shown', () => {
-    setPinAliases([{ name: 'motor_left', gpio: 15 }])
+    setPinAliases([{ name: 'motor_left', gpio: 15, direction: 'OUT' }])
     expect(pinOptionsFor()[0]).toEqual(['motor_left (GP15)', 'motor_left'])
   })
 
   it('filter a name by what its pin can actually do', () => {
     // GP15 has no ADC on this board, so a name for it has no business in the
     // analogue menu — the name inherits the hole's capabilities.
-    setPinAliases([{ name: 'motor_left', gpio: 15 }, { name: 'battery', gpio: 26 }])
+    setPinAliases([
+      { name: 'motor_left', gpio: 15, direction: 'OUT' },
+      { name: 'battery', gpio: 26, direction: 'IN' }
+    ])
     expect(pinOptionsFor('adc').map(([, v]) => v)).not.toContain('motor_left')
     expect(pinOptionsFor('adc')[0]).toEqual(['battery (GP26)', 'battery'])
   })
@@ -262,7 +320,7 @@ describe('the dropdowns', () => {
     // Dropping it would silently rewire a robot built for another board. The
     // conflict pass is what says so.
     setBoardPins([{ gpio: 0, label: 'GP0', capabilities: ['digital'] }])
-    setPinAliases([{ name: 'motor_left', gpio: 15 }])
+    setPinAliases([{ name: 'motor_left', gpio: 15, direction: 'OUT' }])
     expect(pinOptionsFor().map(([, v]) => v)).toContain('motor_left')
   })
 
@@ -280,8 +338,8 @@ describe('reading the names off a workspace', () => {
       namePin('17', 'motor_right', 'c')
     ])
     expect(pinAliasesIn(ws)).toEqual([
-      { name: 'motor_left', gpio: 15 },
-      { name: 'motor_right', gpio: 17 }
+      { name: 'motor_left', gpio: 15, direction: 'OUT' },
+      { name: 'motor_right', gpio: 17, direction: 'OUT' }
     ])
   })
 
@@ -292,14 +350,16 @@ describe('reading the names off a workspace', () => {
 
 describe('resolving a field value', () => {
   it('passes a number through and looks a name up', () => {
-    const declared = [{ name: 'motor_left', gpio: 15 }]
+    const declared = [{ name: 'motor_left', gpio: 15, direction: 'OUT' } as const]
     expect(resolvePinGpio('15', declared)).toBe(15)
     expect(resolvePinGpio('motor_left', declared)).toBe(15)
     expect(resolvePinGpio('ghost', declared)).toBeNull()
   })
 
   it('and labels a name with the pin behind it', () => {
-    expect(pinLabel('motor_left', [{ name: 'motor_left', gpio: 15 }])).toBe('motor_left (GP15)')
+    expect(
+      pinLabel('motor_left', [{ name: 'motor_left', gpio: 15, direction: 'OUT' }])
+    ).toBe('motor_left (GP15)')
     expect(pinLabel('15', [])).toBe('GP15')
   })
 })
@@ -348,6 +408,35 @@ describe('the pin-conflict pass', () => {
       })
     ])
     expect(pinConflicts(collectPinClaims(ws)).get('a')).toContain("can't do adc")
+  })
+
+  it('catches a pin named one way and driven the other', () => {
+    // THE FAILURE THE OBJECT FORM INTRODUCES, and why the direction lives on the
+    // naming block rather than being guessed. `.value(1)` on a pin built as an
+    // input neither errors nor lights anything — it does nothing at all, which
+    // is the silent wrong answer this whole pass exists to catch.
+    const ws = workspaceOf([
+      namePin('4', 'motor_left', 'n', write('motor_left'), 'IN')
+    ])
+    expect(pinConflicts(collectPinClaims(ws)).get('w')).toContain('named as an input')
+  })
+
+  it('and the same the other way round', () => {
+    const ws = workspaceOf([
+      namePin('14', 'button', 'n', {
+        type: 'text_print',
+        id: 'p',
+        inputs: {
+          TEXT: { block: { type: 'snakie_pin_read', id: 'r', fields: { PIN: 'button', PULL: 'NONE' } } }
+        }
+      })
+    ])
+    expect(pinConflicts(collectPinClaims(ws)).get('r')).toContain('named as an output')
+  })
+
+  it('and says nothing when they agree', () => {
+    const ws = workspaceOf([namePin('4', 'motor_left', 'n', write('motor_left'), 'OUT')])
+    expect([...pinConflicts(collectPinClaims(ws)).keys()]).toEqual([])
   })
 
   it('leaves a plain numeric claim exactly as it was', () => {

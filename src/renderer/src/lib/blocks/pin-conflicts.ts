@@ -1,10 +1,12 @@
 import type * as Blockly from 'blockly/core'
 import {
   boardPins,
+  isInputDirection,
   pinAliasesIn,
   pinLabel,
   resolvePinGpio,
-  setPinAliases
+  setPinAliases,
+  type PinDirection
 } from './board-pins'
 import { blockDefinition } from './registry'
 
@@ -56,6 +58,18 @@ export interface PinClaim {
    * exactly the mistake this pass is for.
    */
   gpio?: number | null
+  /** Which way this block drives it, when the block's definition says. */
+  direction?: 'in' | 'out'
+  /**
+   * How the pin was configured where it was NAMED, when it was.
+   *
+   * Absent for a plain GPIO, which every block configures for itself. Present
+   * for a named one, where the object is built once and a block that drives it
+   * the other way does nothing at all — `.value(1)` on an input pin neither
+   * errors nor lights anything, which is the silent wrong answer this whole
+   * pass exists to catch.
+   */
+  declaredAs?: PinDirection
 }
 
 /**
@@ -98,6 +112,17 @@ export function pinConflicts(claims: readonly PinClaim[]): Map<string, string> {
       // look, and "used by 1 other block" does not.
       const others = [...new Set(sharing.map((c) => c.role))].sort()
       messages.push(`${pinLabel(claim.pin)} is also used by the ${others.join(' and ')}.`)
+    }
+
+    if (claim.declaredAs && claim.direction) {
+      const declaredIn = isInputDirection(claim.declaredAs)
+      if (declaredIn !== (claim.direction === 'in')) {
+        const was = declaredIn ? 'an input' : 'an output'
+        const wants = claim.direction === 'in' ? 'reads' : 'drives'
+        messages.push(
+          `${claim.pin.trim()} is named as ${was}, and this block ${wants} it. Change the “name pin” block, or pick another pin.`
+        )
+      }
     }
 
     const gpio = gpioOf(claim)
@@ -145,12 +170,15 @@ export function collectPinClaims(workspace: Blockly.Workspace): PinClaim[] {
     if (!spec) continue
     const pin = block.getFieldValue(spec.field)
     if (pin === null || pin === undefined) continue
+    const named = declared.find((a) => a.name === String(pin).trim())
     claims.push({
       blockId: block.id,
       pin: String(pin),
       role: spec.role,
       needs: spec.needs,
-      gpio: resolvePinGpio(String(pin), declared)
+      direction: spec.direction,
+      gpio: resolvePinGpio(String(pin), declared),
+      ...(named ? { declaredAs: named.direction } : {})
     })
   }
   return claims
