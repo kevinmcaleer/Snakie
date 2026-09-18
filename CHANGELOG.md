@@ -8,6 +8,48 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Assignment and scope: tuple targets, subscripts, every augmented operator,
+  `global`, `not in`, nested imports** (#1095, epic #1086). Individually small,
+  and **2,333 lines across 36 projects** between them.
+
+  ```python
+  a, b = b, a            counts[name] = n      total //= 4
+  x = y = 0              s += "x"              global count
+  from machine import *  if name not in names: import ujson   # inside a def
+  ```
+
+  The assignment recogniser was a regex matching **a bare name only**, with a
+  `=(?!=)` guard that was load-bearing: an earlier version read `x == 5` as
+  assigning `= 5` to `x` and regenerated it as `x = = 5`. That guard is gone and
+  the lexer answers instead — `==` is one token, and so is every augmented
+  operator — so the regression test for it matters more rather than less, and it
+  is still there.
+
+  Four new blocks, each shaped by something the reader must not do:
+
+  - a **generic assignment** whose target is TEXT. A tuple target is several
+    names, a subscript is an expression with an index in it and a chain is two
+    targets; modelling any one as sockets would lose the others. `variables_set`
+    still takes every line that is a plain name, which is most of them.
+  - an **augmented assign whose socket checks nothing**. `math_change`'s DELTA
+    checks Number, so `s += "x"` — ordinary string concatenation — built a `text`
+    block into it and made the whole workspace unloadable (#1071), and the reader
+    had to decline the line. `+=` on a string, a list and a number are the same
+    statement, and a socket that claimed otherwise would be that bug again.
+  - **`global` / `nonlocal`**, two fields and no sockets.
+  - an **import that stays put**. The three import blocks are hoisted into the
+    section at the top, which is right for the `import time` a learner drags in
+    and catastrophic for one written inside a `try` on purpose — that idiom
+    exists *because* one of the two may be missing. #1095 asked for this to be a
+    decision rather than an accident, and this is the decision. It also takes
+    `from x import *` and `import a, b`.
+
+  `not in` became a setting on the "is in" block rather than a `not` wrapped
+  round it: `logic_negate` writes `not v in xs`, which is the same test and a
+  different line.
+
+  Statement coverage over the fixture corpus: **92.49% → 96.32%**.
+
 - **`try`/`except`/`finally`, `raise` and `with` read as blocks** (#1094, epic
   #1086). 1,271 raw lines of `try` across 40 projects, 322 of `raise` across 26,
   198 of `with` across 27 — all of them line-shaped headers, which is why none of

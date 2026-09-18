@@ -132,19 +132,35 @@ export const LIST_BLOCKS: BlockDefinition[] = [
     category: 'lists',
     help: 'ref-types',
     json: {
-      message0: '%1 is in %2',
+      message0: '%1 %2 %3',
       args0: [
         { type: 'input_value', name: 'ITEM' },
+        {
+          // `not in` IS ITS OWN OPERATOR, not a `not` around this block (W8,
+          // #1095). Wrapping it in `logic_negate` writes `not x in xs`, which is
+          // the same test and a different line — and rewriting somebody's line
+          // is the one thing the reader does not do. A setting says it exactly.
+          //
+          // A block saved before this field existed has no `MODE` and gets the
+          // first option, which is what it always meant.
+          type: 'field_dropdown',
+          name: 'MODE',
+          options: [
+            ['is in', 'IN'],
+            ['is not in', 'NOT_IN']
+          ]
+        },
         { type: 'input_value', name: 'LIST', check: 'Array' }
       ],
       inputsInline: true,
       output: 'Boolean',
-      tooltip: 'True when the value appears somewhere in the list.'
+      tooltip: 'True when the value appears somewhere in the list — or, the other way round, when it does not.'
     },
     code: (block, gen) => {
       const item = gen.valueToCode(block, 'ITEM', Order.RELATIONAL) || 'None'
       const list = gen.valueToCode(block, 'LIST', Order.RELATIONAL) || '[]'
-      return [`${item} in ${list}`, Order.RELATIONAL]
+      const op = block.getFieldValue('MODE') === 'NOT_IN' ? 'not in' : 'in'
+      return [`${item} ${op} ${list}`, Order.RELATIONAL]
     }
   }
 ]

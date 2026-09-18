@@ -48,8 +48,8 @@ import { installCorePalette } from '../src/renderer/src/lib/blocks/palette'
  * headroom between a floor and the measurement is never a mystery.
  */
 
-/** Recognised lines / logical lines. 53.31% at W0, 87.92% at W6, 92.49% at W7. */
-const STATEMENT_FLOOR = 92
+/** Recognised lines / logical lines. 53.31% at W0, 92.49% at W7, 96.32% at W8. */
+const STATEMENT_FLOOR = 96
 
 /**
  * Value sockets holding a real block. 53.88% at W0, 72.41% at W10, 71.58% at W3.
@@ -63,7 +63,7 @@ const STATEMENT_FLOOR = 92
  * worse; more of the file is being counted. Statement coverage moved 72.61% →
  * 92.49% across the same changes.
  */
-const SOCKET_FLOOR = 70
+const SOCKET_FLOOR = 72
 
 /** Files that open with no grey at all. 4.65% at W0, 9.30% at W6. */
 const CLEAN_FILE_FLOOR = 9

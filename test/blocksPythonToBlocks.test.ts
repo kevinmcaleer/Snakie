@@ -1092,11 +1092,14 @@ describe('a block never lands in a socket that would reject it (#1071)', () => {
   }
 
   it('`s += "x"` — text into math_change.DELTA (micropython/modules/buzzer.py)', () => {
-    expect(loads('s = \'\'\ns += "x"\n')).toBe(true)
-    // The `+=` line is raw, so its double quotes survive verbatim; the
-    // assignment above it is a real block and renders in house style.
-    roundTrips('s = \'\'\ns += "x"\n')
-    expect(types('s += "x"\n')).not.toContain('math_change')
+    expect(loads("s = ''\ns += 'x'\n")).toBe(true)
+    roundTrips("s = ''\ns += 'x'\n")
+    // STILL NOT `math_change`, which is the #1071 property: its DELTA socket
+    // checks Number, and a `text` in it is a workspace Blockly refuses. W8
+    // (#1095) gave the line a block of its own whose socket checks nothing —
+    // `+=` on a string, a list and a number are the same statement.
+    expect(types("s += 'x'\n")).not.toContain('math_change')
+    expect(types("s += 'x'\n")).toContain('snakie_python_augmented')
   })
 
   it('`x = a + "b"` — text into math_arithmetic.B (micropython/instruments.py)', () => {

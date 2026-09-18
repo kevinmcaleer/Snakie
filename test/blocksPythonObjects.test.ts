@@ -197,10 +197,11 @@ describe('assigning to something on an object', () => {
     roundTrips(['if self.speed == 0:', '    print(1)', ''].join('\n'))
   })
 
-  it('leaves an augmented assign on an attribute alone', () => {
-    // `math_change` needs a workspace variable, and writing `self.total += 1` as
-    // `self.total = self.total + 1` would be rewriting somebody's line.
-    expect(types('self.total += 1\n')).toEqual(['snakie_python_statement'])
+  it('reads an augmented assign on an attribute (W8, #1095)', () => {
+    // `math_change` needs a workspace VARIABLE and cannot hold `self.total`, and
+    // writing the line as `self.total = self.total + 1` would be rewriting it.
+    // W8's augmented-assign block keeps the operator and the target as they are.
+    expect(types('self.total += 1\n')).toEqual(['snakie_python_augmented', 'math_number'])
     roundTrips('self.total += 1\n')
   })
 
@@ -217,7 +218,9 @@ describe('assigning to something on an object', () => {
       'math_number'
     ])
     roundTrips('self.rows[0] = 1\n')
-    expect(types('self.rows[index] = 1\n')).toEqual(['snakie_python_statement'])
+    // A bare `xs[i]` is neither form, so it is W8's generic assignment block
+    // with the target as text — still exact, just not the Lists block.
+    expect(types('self.rows[index] = 1\n')).toEqual(['snakie_python_assign', 'math_number'])
     roundTrips('self.rows[index] = 1\n')
   })
 })

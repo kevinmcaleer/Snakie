@@ -899,6 +899,46 @@ function mentions(text: string, name: string): boolean {
   return new RegExp(`(^|[^A-Za-z0-9_])${escapeRe(name)}([^A-Za-z0-9_]|$)`).test(text)
 }
 
+/** Every augmented-assign operator the block has a setting for (W8, #1095). */
+const AUGMENTED = new Set([
+  '+=',
+  '-=',
+  '*=',
+  '/=',
+  '//=',
+  '%=',
+  '**=',
+  '&=',
+  '|=',
+  '^=',
+  '<<=',
+  '>>='
+])
+
+/**
+ * Where the `=` that ASSIGNS is, or -1 (W8, #1095).
+ *
+ * The LAST one at bracket depth zero: `a = b = 0` is one value going into two
+ * names, so everything before the last `=` is the target.
+ *
+ * Asked of the lexer, which is what makes the old `=(?!=)` guard unnecessary
+ * rather than merely preserved. `==`, `!=`, `<=`, `>=` and every augmented
+ * assign lex as operators of their own and simply are not this token — where the
+ * regex it replaces once read `x == 5` as assigning `= 5` to `x` and regenerated
+ * it as `x = = 5`, which is not Python at all (#1068).
+ */
+function topLevelAssign(tokens: readonly Token[]): number {
+  let depth = 0
+  let at = -1
+  for (let i = 0; i < tokens.length; i++) {
+    const tok = tokens[i]
+    if (tok.kind === 'open') depth += 1
+    else if (tok.kind === 'close') depth -= 1
+    else if (depth === 0 && tok.kind === 'op' && tok.text === '=') at = i
+  }
+  return at
+}
+
 /** Drop up to `width` leading spaces — the body indent, and never more. */
 function dedent(text: string, width: number): string {
   let i = 0
@@ -1674,6 +1714,13 @@ class Converter {
         )
       }
     }
+    // AN IMPORT NONE OF THOSE COULD TAKE (W8, #1095) — nested, starred, or
+    // several modules on one line. It writes its line exactly where it stands,
+    // which for the nested ones is the whole point: that idiom exists because
+    // one of the two imports may be missing.
+    if (/^(import|from)\s/.test(text)) {
+      return recognised([{ type: 'snakie_python_import_here', fields: { CODE: text } }])
+    }
 
     // --- suites ----------------------------------------------------------
     if (text === 'while True:') {
@@ -1832,12 +1879,28 @@ class Converter {
       if (ret[1] !== undefined) block.inputs = { VALUE: { block: this.expression(ret[1]) } }
       return recognised([block])
     }
+    // --- `global` / `nonlocal` (W8, #1095) --------------------------------
+    const scope = /^(global|nonlocal)\s+(.+)$/.exec(text)
+    if (scope && /^[A-Za-z_]\w*(\s*,\s*[A-Za-z_]\w*)*$/.test(scope[2].trim())) {
+      return recognised([
+        {
+          type: 'snakie_python_scope',
+          fields: { SCOPE: scope[1], NAMES: scope[2].trim() }
+        }
+      ])
+    }
+
     const change = /^([A-Za-z_]\w*)\s*\+=\s*(.+)$/.exec(text)
-    if (change) {
+    if (change && !isReservedName(change[1])) {
       // `+=` on a STRING is concatenation, and `math_change`'s DELTA takes a
       // Number (#1071). `s += "x"` used to build a `text` block into it, which
-      // made the whole workspace unloadable — so a delta that cannot be a
-      // number keeps the line raw, and it regenerates verbatim.
+      // made the whole workspace unloadable, so it kept the line raw.
+      //
+      // IT FALLS THROUGH NOW RATHER THAN DECLINING (W8, #1095). The
+      // augmented-assign block a few lines below has a socket that checks
+      // nothing, which is the honest shape for an operator that means four
+      // different things depending on what is on either side of it — so a delta
+      // that is not a number is still a block, just not this one.
       const delta = this.expression(change[2])
       if (fitsSocket(delta, 'Number')) {
         return recognised([
@@ -1848,14 +1911,12 @@ class Converter {
           }
         ])
       }
-      return null
     }
-    // `=(?!=)` IS THE WHOLE GUARD (#1068). This used to read the `=` and then
-    // check `text.slice(0, text.indexOf('='))` for a comparison operator — a
-    // slice that stops BEFORE the character it is looking for, so `x == 5` was
-    // read as assigning `= 5` to `x` and regenerated as `x = = 5`, which is not
-    // Python at all. `!=`, `<=` and `>=` never reached the guard: `\s*` cannot
-    // eat the `!`, `<` or `>`, so the pattern had already failed on them.
+    // THE `x == 5` TRAP IS NOW THE LEXER'S PROBLEM (#1068, then W8 of #1086).
+    // The recogniser used to be a regex with a `=(?!=)` guard, because an
+    // earlier one read `x == 5` as assigning `= 5` to `x` and regenerated it as
+    // `x = = 5`. `topLevelAssign` asks the tokenizer instead: `==` is one token
+    // and is not the `=` that assigns, and neither is any augmented operator.
     // --- a name for a pin (W10, #1097) ------------------------------------
     //
     // BEFORE the plain assignment below, which would otherwise read
@@ -1864,28 +1925,13 @@ class Converter {
     const named = this.aliasDeclaration(text)
     if (named) return recognised([named])
 
-    const assign = /^([A-Za-z_]\w*)\s*=(?!=)\s*(.+)$/.exec(text)
-    // `self = …` would declare `self` as a workspace variable through the back
-    // door — see {@link name}. Nobody writes it, and a raw line says so.
-    if (assign && assign[1] !== 'self') {
-      return recognised([
-        {
-          type: 'variables_set',
-          fields: { VAR: { id: this.variable(assign[1]) } },
-          inputs: { VALUE: { block: this.expression(assign[2]) } }
-        }
-      ])
-    }
+    // --- every augmented assign but the one above (W8, #1095) -------------
+    const augmented = this.augmentedAssign(text)
+    if (augmented) return recognised([augmented])
 
-    // --- assigning to something ON an object ------------------------------
-    //
-    // `self.speed = speed` is **2,649 raw lines across 45 projects**, and
-    // `obj.attr = x` another 727: between them the second-largest gap in the
-    // corpus, and `snakie_python_attr_set` has been in the Python drawer since
-    // #1018. AFTER the plain assignment above, which is the commoner shape and
-    // reads better as a `set <variable>` block.
-    const attribute = this.memberAssign(text)
-    if (attribute) return recognised([attribute])
+    // --- assignment, in all the shapes it comes in ------------------------
+    const assigned = this.assignment(text)
+    if (assigned) return recognised([assigned])
 
     // --- a call to a function THIS program defines ------------------------
     //
@@ -2247,7 +2293,71 @@ class Converter {
    * `self.total = self.total + 1` would be rewriting somebody's line. It stays
    * raw, where it regenerates exactly as written.
    */
-  private memberAssign(text: string): BlockJson | null {
+  private assignment(text: string): BlockJson | null {
+    const tokens = tokenize(text)
+    if (!tokens) return null
+    // THE LAST TOP-LEVEL `=` IS THE ONE THAT ASSIGNS. `a = b = 0` is one value
+    // going into two names, so everything before the last `=` is the target.
+    const at = topLevelAssign(tokens)
+    if (at === -1) return null
+    const target = text.slice(0, tokens[at].start).trim()
+    const value = text.slice(tokens[at].end).trim()
+    if (target === '' || value === '') return null
+
+    // A PLAIN NAME, which is the great majority of lines and reads best as the
+    // Variables drawer's own block. `self = …` is refused: it would declare
+    // `self` as a workspace variable through the back door (see {@link name}).
+    if (/^[A-Za-z_]\w*$/.test(target)) {
+      if (target === 'self' || isReservedName(target)) return null
+      return {
+        type: 'variables_set',
+        fields: { VAR: { id: this.variable(target) } },
+        inputs: { VALUE: { block: this.expression(value) } }
+      }
+    }
+
+    // SOMETHING ON AN OBJECT, or a position in a list — the two the palette has
+    // real blocks for. `self.speed = speed` is 2,649 raw lines across 45
+    // projects on its own (W1, #1088).
+    const read = this.readChain(text, tokens.slice(0, at))
+    if (read && read.next === at) {
+      if (read.block.type === PYTHON_ATTR_GET) {
+        return {
+          type: PYTHON_ATTR_SET,
+          fields: read.block.fields,
+          inputs: { ...read.block.inputs, VALUE: { block: this.expression(value) } }
+        }
+      }
+      if (read.block.type === 'snakie_list_get') {
+        return {
+          type: 'snakie_list_set',
+          inputs: { ...read.block.inputs, VALUE: { block: this.expression(value) } }
+        }
+      }
+    }
+
+    // ANYTHING ELSE the left-hand side can legally be (W8, #1095): several names
+    // at once, a chained assignment, a subscript the list block cannot count
+    // back. The target goes in as TEXT, because a tuple target is several names,
+    // a subscript is an expression with an index in it and a chain is two
+    // targets — modelling any one of them as sockets would lose the others.
+    return {
+      type: 'snakie_python_assign',
+      fields: { TARGET: target },
+      inputs: { VALUE: { block: this.expression(value) } }
+    }
+  }
+
+  /**
+   * `total *= 2`, `s += "x"`, `flags |= BIT` → the augmented-assign block.
+   *
+   * AFTER `math_change`, which is `+=` on a plain name with a NUMBER delta and
+   * is deliberately that narrow: its DELTA socket checks Number, so `s += "x"` —
+   * ordinary string concatenation — used to build a `text` block into it and make
+   * the whole workspace unloadable (#1071). This block's socket checks nothing,
+   * which is the honest answer.
+   */
+  private augmentedAssign(text: string): BlockJson | null {
     const tokens = tokenize(text)
     if (!tokens) return null
     let depth = 0
@@ -2255,25 +2365,20 @@ class Converter {
       const tok = tokens[i]
       if (tok.kind === 'open') depth += 1
       else if (tok.kind === 'close') depth -= 1
-      if (depth !== 0 || tok.kind !== 'op' || tok.text !== '=') continue
-      const target = this.readChain(text, tokens.slice(0, i))
-      if (!target || target.next !== i) return null
+      if (depth !== 0 || tok.kind !== 'op' || !AUGMENTED.has(tok.text)) continue
+      const target = text.slice(0, tok.start).trim()
       const value = text.slice(tok.end).trim()
-      if (value === '') return null
-      // `xs[i] = v` → the Lists drawer's own block (W2, #1089). The target reads
-      // as `item i of xs`, and setting it is the same three sockets plus the
-      // value — which is exactly how the two blocks are defined.
-      if (target.block.type === 'snakie_list_get') {
-        return {
-          type: 'snakie_list_set',
-          inputs: { ...target.block.inputs, VALUE: { block: this.expression(value) } }
-        }
-      }
-      if (target.block.type !== PYTHON_ATTR_GET) return null
+      // The target has to be something that can be assigned to, and the cheapest
+      // honest test is that the reader can read it as a value: a name, an
+      // attribute, a subscript. `a < b -= c` is not a line anybody wrote, and a
+      // raw block says so.
+      if (target === '' || value === '') return null
+      const read = this.readChain(text, tokens.slice(0, i))
+      if (!read || read.next !== i) return null
       return {
-        type: PYTHON_ATTR_SET,
-        fields: target.block.fields,
-        inputs: { ...target.block.inputs, VALUE: { block: this.expression(value) } }
+        type: 'snakie_python_augmented',
+        fields: { TARGET: target, OP: tok.text },
+        inputs: { VALUE: { block: this.expression(value) } }
       }
     }
     return null
@@ -2638,15 +2743,23 @@ class Converter {
       }
     }
 
-    // `v in xs` → `snakie_list_contains`. `not in` stays raw for the same reason
-    // as `is not None`.
-    if (is?.kind === 'keyword' && is.text === 'in') {
-      const right = this.parseAdditive(tokens, left.next + 1)
+    // `v in xs` and `v not in xs` → `snakie_list_contains` with its setting
+    // (W2 #1089, then W8 #1095). `not in` is its OWN operator rather than a
+    // `not` around this block: `logic_negate` would write `not v in xs`, which
+    // is the same test and a different line.
+    const notIn =
+      is?.kind === 'keyword' &&
+      is.text === 'not' &&
+      tokens[left.next + 1]?.kind === 'keyword' &&
+      tokens[left.next + 1].text === 'in'
+    if ((is?.kind === 'keyword' && is.text === 'in') || notIn) {
+      const right = this.parseAdditive(tokens, left.next + (notIn ? 2 : 1))
       if (!right) return null
       if (!fitsSocket(right.block, 'Array')) return null
       return {
         block: {
           type: 'snakie_list_contains',
+          fields: { MODE: notIn ? 'NOT_IN' : 'IN' },
           inputs: { ITEM: { block: left.block }, LIST: { block: right.block } }
         },
         next: right.next

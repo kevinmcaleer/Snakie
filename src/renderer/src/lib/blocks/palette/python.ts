@@ -579,6 +579,51 @@ export const PYTHON_BLOCKS: BlockDefinition[] = [
         name: String(block.getFieldValue('NAME') ?? '').trim() || undefined
       })
   },
+  // ------------------------------------------------- an import that stays put
+  //
+  // AN IMPORT WHERE IT WAS WRITTEN (W8, #1095, epic #1086).
+  //
+  // The three blocks above are HOISTED: the generator gathers every one of them
+  // into the import section at the top, which is right for the `import time` a
+  // learner drags in and catastrophic for an import that is nested on purpose:
+  //
+  //   try:                          import struct
+  //       import ustruct as struct  import ustruct as struct
+  //   except ImportError:      →
+  //       import struct             try:
+  //                                     pass
+  //                                 except ImportError:
+  //                                     pass
+  //
+  // That idiom exists precisely BECAUSE one of the two may not be there, and
+  // hoisting both turns a file that runs into one that raises on line 1. A lazy
+  // import inside a function is the same mistake more quietly: it was written
+  // there to keep it off the start-up path.
+  //
+  // #1095 asks for that to be a decision rather than an accident, and this is
+  // the decision: a block that writes its line exactly where it stands. It also
+  // takes the shapes the hoisting blocks cannot hold — `from x import *`,
+  // `import a, b` — for the same reason, which is that they would have to be
+  // taken apart and put back together and this one never is.
+  {
+    type: 'snakie_python_import_here',
+    category: 'python',
+    help: 'ref-imports',
+    hidden: true,
+    json: {
+      message0: '%1',
+      args0: [pythonField('CODE', 'import something, right here')],
+      inputsInline: true,
+      previousStatement: null,
+      nextStatement: null,
+      tooltip:
+        'An import written exactly where this block sits, rather than moved to the top — for one inside a try, or inside a function, where it was put on purpose.'
+    },
+    code: (block) => {
+      const text = rawPython(block)
+      return text === '' ? '' : `${text}\n`
+    }
+  },
   // -------------------------------------------------------------------- calls
   {
     type: PYTHON_CALL,

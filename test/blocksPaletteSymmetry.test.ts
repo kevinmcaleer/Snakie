@@ -106,6 +106,11 @@ const READ_DIRECTLY: Record<string, string> = {
   snakie_try: 'try:\n    print(1)\nexcept OSError as e:\n    print(e)\n',
   snakie_with: 'with open(path) as handle:\n    print(handle)\n',
   snakie_raise: 'raise RuntimeError("no wifi")\n',
+  // --- assignment and scope (W8, #1095)
+  snakie_python_assign: 'a, b = b, a\n',
+  snakie_python_augmented: 'total *= 2\n',
+  snakie_python_scope: 'def go():\n    global total\n    total = 1\n',
+  snakie_python_import_here: 'def go():\n    import ujson\n    print(ujson)\n',
   snakie_python_value: 'x = [v for v in things]\n',
   snakie_python_comment: '# a note\n',
   snakie_python_docstring: '"""What this program does."""\n',
