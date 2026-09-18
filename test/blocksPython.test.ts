@@ -186,15 +186,16 @@ describe('the import blocks', () => {
         blocks: [
           {
             type: 'snakie_python_from_import',
-            fields: { MODULE: 'snakie', NAME: 'Pin' },
+            fields: { MODULE: 'machine', NAME: 'Pin' },
             next: { block: { type: 'snakie_pin_write', fields: { PIN: '15', STATE: 'HIGH' } } }
           }
         ]
       }
     })
-    // One `from snakie import Pin`, not two.
-    expect(out.code.match(/from snakie import/g)).toHaveLength(1)
-    expect(out.code).toContain('from snakie import Pin')
+    // One `from machine import Pin`, not two — the pin block needs the same
+    // name from the same module, which is the whole point of the merge.
+    expect(out.code.match(/from machine import/g)).toHaveLength(1)
+    expect(out.code).toContain('from machine import Pin')
   })
 
   it('generates nothing where it stands, and an empty module is ignored', () => {
@@ -235,7 +236,7 @@ describe('the import blocks', () => {
         blocks: [{ type: 'snakie_pin_write', id: 'pin', fields: { PIN: '15', STATE: 'HIGH' } }]
       }
     })
-    expect(out.code).toContain('from snakie import Pin')
+    expect(out.code).toContain('from machine import Pin')
     expect(out.sourceMap.get(1)).toBeUndefined()
   })
 })

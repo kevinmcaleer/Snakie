@@ -58,7 +58,9 @@ describe('digital out (#1012)', () => {
     expect(
       lines([{ type: 'snakie_led_set', id: 'l', fields: { PIN: '15', STATE: 'ON' } }])
     ).toEqual([
-      'from snakie import Led, Pin',
+      'from machine import Pin',
+      '',
+      'from snakie import Led',
       '',
       'led_15 = Led(pin=Pin(15, Pin.OUT))',
       '',
@@ -91,7 +93,7 @@ describe('digital out (#1012)', () => {
 
   it('toggle drives the Pin, since Led has no toggle', () => {
     expect(lines([{ type: 'snakie_led_toggle', id: 't', fields: { PIN: '15' } }])).toEqual([
-      'from snakie import Pin',
+      'from machine import Pin',
       '',
       'pin_15 = Pin(15, Pin.OUT)',
       '',
@@ -137,7 +139,7 @@ describe('digital in (#1012)', () => {
         }
       ])
     ).toEqual([
-      'from snakie import Pin',
+      'from machine import Pin',
       '',
       'pin_14 = Pin(14, Pin.IN, Pin.PULL_UP)',
       '',
@@ -218,7 +220,7 @@ describe('PWM and ADC (#1012)', () => {
         }
       ])
     ).toEqual([
-      'from snakie import PWM, Pin',
+      'from machine import PWM, Pin',
       '',
       'pwm_15 = PWM(Pin(15))',
       '',
@@ -240,9 +242,11 @@ describe('PWM and ADC (#1012)', () => {
     ).toBe('pwm_15.freq(50)')
   })
 
-  it('ADC comes from `machine`, because the snakie umbrella does not export it', () => {
-    // `from snakie import ADC` is an ImportError on the board: snakie.py
-    // re-exports Led, Servo, Buzzer, Pin and PWM, and nothing else.
+  it('takes ADC and Pin from `machine`, on one line', () => {
+    // `from snakie import ADC` was always an ImportError on the board (snakie.py
+    // re-exports Led, Servo, Buzzer, Pin and PWM, and nothing else) — and now
+    // `Pin` comes from `machine` too, so an analogue read needs no library at
+    // all and the two names share a single import line.
     expect(
       lines([
         {
@@ -256,9 +260,7 @@ describe('PWM and ADC (#1012)', () => {
         }
       ])
     ).toEqual([
-      'from machine import ADC',
-      '',
-      'from snakie import Pin',
+      'from machine import ADC, Pin',
       '',
       'adc_26 = ADC(Pin(26))',
       '',
@@ -297,7 +299,9 @@ describe('servo and buzzer (#1012)', () => {
         }
       ])
     ).toEqual([
-      'from snakie import PWM, Pin, Servo',
+      'from machine import PWM, Pin',
+      '',
+      'from snakie import Servo',
       '',
       'servo_0 = Servo(PWM(Pin(0)), pin=0)',
       '',
@@ -317,7 +321,9 @@ describe('servo and buzzer (#1012)', () => {
         }
       ])
     ).toEqual([
-      'from snakie import Buzzer, PWM, Pin',
+      'from machine import PWM, Pin',
+      '',
+      'from snakie import Buzzer',
       '',
       'buzzer_16 = Buzzer(PWM(Pin(16)))',
       '',
@@ -589,9 +595,7 @@ describe('the I²C bus (#1057)', () => {
         printing({ type: 'snakie_i2c_scan', id: 's', fields: { SDA: '4', SCL: '5' } })
       ])
     ).toEqual([
-      'from machine import I2C',
-      '',
-      'from snakie import Pin',
+      'from machine import I2C, Pin',
       '',
       'i2c_0 = I2C(0, sda=Pin(4), scl=Pin(5))',
       '',
@@ -610,9 +614,7 @@ describe('the I²C bus (#1057)', () => {
         })
       ])
     ).toEqual([
-      'from machine import I2C',
-      '',
-      'from snakie import Pin',
+      'from machine import I2C, Pin',
       '',
       'i2c_0 = I2C(0, sda=Pin(4), scl=Pin(5))',
       '',
