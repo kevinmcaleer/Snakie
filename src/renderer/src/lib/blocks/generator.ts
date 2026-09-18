@@ -207,7 +207,17 @@ export class MicroPythonGenerator extends Blockly.CodeGenerator {
     after: readonly string[] = []
   ): string {
     const existing = this.setupBindings.get(key)
-    if (existing) return existing.name
+    if (existing) {
+      // AN UNCLAIMED LINE CAN STILL BE CLAIMED. A setup line is normally a
+      // consequence of the block that wanted the object, so the first asker owns
+      // it and later ones share. A named pin (`motor_left_speed = 15`) is the
+      // exception: whichever block first USES the name registers the line
+      // anonymously, but the line belongs to the `name pin` block — that line is
+      // its whole visible effect, exactly as an import line is the import
+      // block's. So an owner may still step forward; a second one may not.
+      if (!existing.blockId && block) existing.blockId = block.id
+      return existing.name
+    }
     const name = toPythonIdentifier(sanitise(suggestedName), this.reservedNames())
     this.taken.add(name)
     this.setupBindings.set(key, { name, expr, blockId: block?.id ?? null, after: [...after] })

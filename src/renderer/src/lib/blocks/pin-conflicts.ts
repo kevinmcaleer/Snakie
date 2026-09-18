@@ -1,5 +1,11 @@
 import type * as Blockly from 'blockly/core'
-import { boardPins, pinLabel } from './board-pins'
+import {
+  boardPins,
+  pinAliasesIn,
+  pinLabel,
+  resolvePinGpio,
+  setPinAliases
+} from './board-pins'
 import { blockDefinition } from './registry'
 
 /**
@@ -30,12 +36,37 @@ import { blockDefinition } from './registry'
 export interface PinClaim {
   /** The block making the claim. */
   blockId: string
-  /** The GPIO, as the field holds it. */
+  /** The pin as the field holds it: a GPIO, or the learner's NAME for one. */
   pin: string
   /** What the block is doing with it, for the message: `servo`, `buzzer`, … */
   role: string
   /** The capability the block needs, if it needs a particular one. */
   needs?: string
+  /**
+   * The GPIO {@link pin} stands for; `null` when it names one nothing declares.
+   *
+   * Resolved by {@link collectPinClaims}, which has the workspace and therefore
+   * the `name pin` blocks. Omitted entirely by a caller holding plain numbers —
+   * then it is read off {@link pin} itself, so nothing that was true before
+   * named pins existed has to change.
+   *
+   * IT IS WHAT THE COMPARISONS USE, all of them. Two blocks on GP15 clash
+   * whether they got there as `15`, as `motor_left`, or as one of each: what
+   * clashes is the hole, and a learner who names the same pin twice has made
+   * exactly the mistake this pass is for.
+   */
+  gpio?: number | null
+}
+
+/**
+ * The GPIO a claim is really about.
+ *
+ * `gpio` when the collector resolved one, and otherwise read off the field value
+ * — which covers every caller written before names existed, all of whom hold
+ * plain numbers.
+ */
+function gpioOf(claim: PinClaim): number | null {
+  return claim.gpio !== undefined ? claim.gpio : resolvePinGpio(claim.pin, [])
 }
 
 /**
@@ -45,15 +76,23 @@ export interface PinClaim {
 export function pinConflicts(claims: readonly PinClaim[]): Map<string, string> {
   const out = new Map<string, string>()
   const byPin = new Map<string, PinClaim[]>()
+  // Grouped by the HOLE, not by what the field says. An undeclared name has no
+  // hole to group by, so it groups under itself — two blocks set to the same
+  // undeclared name are still one mistake, and neither is a clash with a real
+  // pin we cannot prove they meant.
+  const key = (claim: PinClaim): string => {
+    const gpio = gpioOf(claim)
+    return gpio === null ? `name:${claim.pin.trim()}` : String(gpio)
+  }
   for (const claim of claims) {
-    byPin.set(claim.pin, [...(byPin.get(claim.pin) ?? []), claim])
+    byPin.set(key(claim), [...(byPin.get(key(claim)) ?? []), claim])
   }
 
   const pins = boardPins()
   for (const claim of claims) {
     const messages: string[] = []
 
-    const sharing = (byPin.get(claim.pin) ?? []).filter((c) => c.blockId !== claim.blockId)
+    const sharing = (byPin.get(key(claim)) ?? []).filter((c) => c.blockId !== claim.blockId)
     if (sharing.length > 0) {
       // Named, not counted: "also used by the buzzer" tells a learner where to
       // look, and "used by 1 other block" does not.
@@ -61,10 +100,20 @@ export function pinConflicts(claims: readonly PinClaim[]): Map<string, string> {
       messages.push(`${pinLabel(claim.pin)} is also used by the ${others.join(' and ')}.`)
     }
 
-    const known = pins.find((p) => String(p.gpio) === claim.pin)
-    if (!known) {
+    const gpio = gpioOf(claim)
+    if (gpio === null) {
+      // A `name pin` block deleted out from under a block still set to its name.
+      // The generated line would raise `NameError`, so this says so before it is
+      // ever run — and says what to do about it.
+      messages.push(
+        `Nothing names ${claim.pin.trim()}. Add a “name pin” block for it, or pick a pin.`
+      )
+    }
+    const known = gpio === null ? undefined : pins.find((p) => p.gpio === gpio)
+    if (gpio !== null && !known) {
       messages.push(`This board has no ${pinLabel(claim.pin)}.`)
     } else if (
+      known &&
       claim.needs &&
       known.capabilities.length > 0 &&
       !known.capabilities.includes(claim.needs)
@@ -88,12 +137,21 @@ export function pinConflicts(claims: readonly PinClaim[]): Map<string, string> {
  */
 export function collectPinClaims(workspace: Blockly.Workspace): PinClaim[] {
   const claims: PinClaim[] = []
+  // Read once for the whole workspace rather than per claim: the names are a
+  // property of the program, and a block cannot change them by being looked at.
+  const declared = pinAliasesIn(workspace)
   for (const block of workspace.getAllBlocks(false)) {
     const spec = blockDefinition(block.type)?.pin
     if (!spec) continue
     const pin = block.getFieldValue(spec.field)
     if (pin === null || pin === undefined) continue
-    claims.push({ blockId: block.id, pin: String(pin), role: spec.role, needs: spec.needs })
+    claims.push({
+      blockId: block.id,
+      pin: String(pin),
+      role: spec.role,
+      needs: spec.needs,
+      gpio: resolvePinGpio(String(pin), declared)
+    })
   }
   return claims
 }
@@ -106,6 +164,11 @@ export function collectPinClaims(workspace: Blockly.Workspace): PinClaim[] {
  * teaches them to ignore warnings.
  */
 export function applyPinWarnings(workspace: Blockly.Workspace): void {
+  // The pin dropdowns offer the names this program declares. Pushed from here
+  // because this already runs on every workspace change and already holds the
+  // workspace — so the menu and the warnings can never be looking at different
+  // sets of names.
+  setPinAliases(pinAliasesIn(workspace))
   const warnings = pinConflicts(collectPinClaims(workspace))
   for (const block of workspace.getAllBlocks(false)) {
     if (!blockDefinition(block.type)?.pin) continue

@@ -138,6 +138,24 @@ export interface Conversion {
  */
 const TERMINAL_TYPES = new Set(['snakie_forever', 'controls_flow_statements'])
 
+/**
+ * Blocks the generator lifts OUT of the body into a section of its own.
+ *
+ * The import blocks: they sit in the chain like any statement, and the generator
+ * lifts them out into a section of its own with a blank line after it. So the gap
+ * under the last of them is a gap that is coming back whatever we do, and a
+ * spacer for it would make two.
+ *
+ * A top-level `def` is hoisted the same way and is NOT here, because it does not
+ * stay in the chain to be recognised — `statement` sets `hoistedAbove` directly
+ * when it collects one.
+ */
+const HOISTED_TYPES = new Set([
+  'snakie_python_import',
+  'snakie_python_import_as',
+  'snakie_python_from_import'
+])
+
 /** A statement and the suite indented under it. */
 interface Stmt {
   line: LogicalLine
@@ -736,6 +754,15 @@ class Converter {
    */
   private depth = 0
   /**
+   * A block the generator will hoist has already been converted at top level.
+   *
+   * Tracked rather than read off the chain being built, because a top-level
+   * `def` does not stay in that chain — it becomes a root block of its own, so
+   * by the time the line under it is converted there is nothing left in `built`
+   * to recognise it by. See {@link spacers}.
+   */
+  private hoistedAbove = false
+  /**
    * The text the expression parser is currently reading, so an argument can be
    * sliced out of it verbatim. Saved and restored around every nested parse,
    * because reading a call's arguments starts a parse inside a parse.
@@ -749,6 +776,37 @@ class Converter {
    * between them. Nodes are unique objects, so one set serves the whole tree.
    */
   private readonly consumed = new Set<Stmt>()
+
+  /**
+   * Push one spacer block per blank line standing above `line`.
+   *
+   * EXCEPT THE GAP UNDER THE IMPORTS, and that exception is the whole subtlety.
+   * Import blocks generate nothing where they stand — the generator hoists every
+   * one of them into a section of its own and writes a blank line after it. So
+   * the gap a learner typed under their imports is a gap the generator is going
+   * to write anyway, and a spacer for it would come back as two.
+   *
+   * The test is "is the body still empty" — nothing converted at top level so
+   * far is anything but hoisted — rather than "is this the first line", because a
+   * program may open with several imports and a `def` or two, and it is the gap
+   * under the LAST of them that the separator stands for. A program with nothing
+   * hoisted above its first line has no section above it, so its leading blank is
+   * the learner's and is kept. Inside a suite there are no sections at all, so
+   * every blank counts.
+   */
+  private spacers(line: LogicalLine, built: { block: BlockJson; line: LogicalLine }[]): void {
+    const blanks = line.blankBefore ?? 0
+    if (blanks === 0) return
+    const separator =
+      this.depth === 0 &&
+      this.hoistedAbove &&
+      built.every((b) => HOISTED_TYPES.has(b.block.type))
+    for (let i = separator ? 1 : 0; i < blanks; i++) {
+      // The literal, like the raw blocks: this module is imported by the palette
+      // and must not import back.
+      built.push({ block: { type: 'snakie_python_blank' }, line })
+    }
+  }
 
   /** A chain of statement blocks, or null for an empty suite. */
   statements(nodes: readonly Stmt[]): BlockJson | null {
@@ -764,6 +822,7 @@ class Converter {
       if (node.comment) {
         this.report.total += node.comment.length
         this.report.recognised += node.comment.length
+        this.spacers(node.line, built)
         built.push({
           block: {
             // The literal, like the raw blocks above: this module is imported by the
@@ -816,7 +875,15 @@ class Converter {
       // else the same way. An arm nobody claimed now falls through to the raw
       // suite below and keeps its header and its body verbatim.
       if (this.consumed.has(node)) continue
-      for (const block of this.statement(node, nodes)) built.push({ block, line: node.line })
+      // The blank lines above it, if any — and only now that we know the line
+      // itself survives. A blank kept in front of a statement that was consumed
+      // (a constructor the blocks carry, a `pass` filling an empty suite) would
+      // be a gap in front of nothing.
+      this.spacers(node.line, built)
+      for (const block of this.statement(node, nodes)) {
+        built.push({ block, line: node.line })
+        if (this.depth === 0 && HOISTED_TYPES.has(block.type)) this.hoistedAbove = true
+      }
     }
     if (built.length === 0) return null
     // A TERMINAL BLOCK CANNOT HOLD A CHAIN (#1068), and Blockly does not forgive
@@ -1015,6 +1082,11 @@ class Converter {
     const def = /^def\s+([A-Za-z_]\w*)\(([^)]*)\):$/.exec(text)
     if (def && this.depth === 0 && modellableParams(def[2])) {
       this.definitions.push(this.definition(def[1], def[2], node))
+      // And the generator will write it into a section of its own, with a blank
+      // line after it — which is the gap the learner typed under the `def`. See
+      // {@link spacers}; nothing else can see this, because the block does not
+      // stay in the chain being built.
+      this.hoistedAbove = true
       // No block in the chain: it is a root of its own, collected above.
       return recognised([])
     }

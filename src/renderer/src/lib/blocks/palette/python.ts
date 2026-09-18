@@ -50,6 +50,8 @@ export const PYTHON_VALUE = 'snakie_python_value'
 export const PYTHON_CALL = 'snakie_python_call'
 /** A RUN of consecutive comment lines, as one block (#1062). */
 export const PYTHON_COMMENT = 'snakie_python_comment'
+/** The spacer that holds one blank line. See the block below for why it exists. */
+export const PYTHON_BLANK = 'snakie_python_blank'
 /** A suite we cannot read — the header verbatim, its body nested (#1063). */
 export const PYTHON_SUITE = 'snakie_python_suite'
 export const PYTHON_CALL_VALUE = 'snakie_python_call_value'
@@ -422,6 +424,32 @@ export const PYTHON_BLOCKS: BlockDefinition[] = [
       const lines = commentLines(block).filter((l) => l !== '')
       return lines.length === 0 ? '' : `${lines.join('\n')}\n`
     }
+  },
+  // --------------------------------------------------------------- blank line
+  //
+  // A LINE OF NOTHING, which the blocks have to be able to hold for the same
+  // reason they hold a comment: the code pane is editable, its text is turned
+  // back into blocks, and the file is then regenerated FROM those blocks. Before
+  // this, `logicalLines` dropped every blank line — so pressing Enter to open up
+  // space, the ordinary way anybody makes room to write, put a gap in the pane
+  // that the next regeneration quietly closed again.
+  //
+  // ONE BLOCK PER BLANK LINE rather than a block with a count. A run of two (the
+  // gap PEP 8 asks for between top-level `def`s) is two blocks, which is more
+  // honest about what it is and leaves nothing to get out of step: there is no
+  // number that can disagree with the number of lines it writes.
+  {
+    type: PYTHON_BLANK,
+    category: 'python',
+    help: 'blocks-python',
+    json: {
+      message0: 'blank line',
+      previousStatement: null,
+      nextStatement: null,
+      tooltip:
+        'One empty line in the Python, to separate one part of your program from the next. It does nothing when the program runs.'
+    },
+    code: () => '\n'
   },
   // ------------------------------------------------------------------ imports
   //

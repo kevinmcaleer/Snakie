@@ -34,6 +34,17 @@ export interface LogicalLine {
   text: string
   /** Where it started, 1-based, for the report. */
   line: number
+  /**
+   * How many blank lines stood immediately above this one.
+   *
+   * KEPT, because a learner typing in the code pane uses them to think. Blank
+   * lines carry no meaning to Python and the generator has always inserted its
+   * own between sections — but the text in the pane is turned back into blocks
+   * and regenerated from them, so anything this does not record is something
+   * that disappears out from under the cursor a moment after it is typed.
+   * `python-to-blocks.ts` turns each run into a spacer block that writes it back.
+   */
+  blankBefore: number
 }
 
 /** What a token is. `keyword` is split out because the parser branches on it. */
@@ -144,9 +155,10 @@ const OPENERS: Record<string, string> = { '(': ')', '[': ']', '{': '}' }
  * a call split over three lines is one statement and treating it as three would
  * produce three blocks that each generate nonsense.
  *
- * Blank lines and their indentation are dropped: they carry no meaning, and the
- * generator's own blank lines between sections would otherwise look like
- * dedents.
+ * Blank lines are COUNTED rather than dropped — their indentation is not, since
+ * whitespace on an otherwise empty line would otherwise read as a dedent. The
+ * count lands on the line below as {@link LogicalLine.blankBefore}, so a
+ * conversion can put it back; nothing here treats it as structure.
  *
  * COMMENTS ARE KEPT, as their own line. They are somebody's writing, and a
  * conversion that silently deleted them would be a conversion nobody trusts;
@@ -157,6 +169,8 @@ export function logicalLines(source: string): LogicalLine[] {
   const text = source.replace(/\r\n?/g, '\n')
   let i = 0
   let lineNo = 1
+  /** Blank lines seen since the last line that was not one. */
+  let blanks = 0
 
   while (i < text.length) {
     // Measure the indent, then find where this logical line ends.
@@ -169,7 +183,10 @@ export function logicalLines(source: string): LogicalLine[] {
     if (text[i] === '\n') {
       i += 1
       lineNo += 1
-      continue // a blank line
+      // A blank line. Counted against the next line that is not one — and NOT
+      // reset here, so a run of them arrives as a run.
+      blanks += 1
+      continue
     }
 
     const parts: string[] = []
@@ -251,7 +268,10 @@ export function logicalLines(source: string): LogicalLine[] {
     const comment = folded.join(' ')
     const joined =
       folded.length === 0 ? code : code === '' ? comment : `${code}  ${comment}`
-    if (joined !== '') out.push({ indent, text: joined, line: startLine })
+    if (joined !== '') {
+      out.push({ indent, text: joined, line: startLine, blankBefore: blanks })
+      blanks = 0
+    }
   }
   return out
 }

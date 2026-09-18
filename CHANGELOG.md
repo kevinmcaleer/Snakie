@@ -6,6 +6,61 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Name a pin, and use the name everywhere** (epic #1007). `GP15` is what the
+  board calls the hole. `motor_left` is what you call it, and on a robot with six
+  of them the name is the only one of the two anybody can keep straight.
+
+  A new **name pin** block in the Hardware drawer declares one. Every pin
+  dropdown then offers it — listed above the numbers, with the pin still in the
+  label (`motor_left (GP15)`) so the menu never hides which hole it is — and the
+  generated Python assigns it once and says the name from then on:
+
+  ```python
+  from machine import PWM, Pin
+
+  motor_left = 15
+  pwm_motor_left = PWM(Pin(motor_left))
+
+  pwm_motor_left.duty_u16(int(50 * 65535 / 100))
+  ```
+
+  Which means rewiring is one block, not six — the entire point of naming a
+  thing. Every pin block takes a name: raw pins, PWM, ADC, servos, buzzers, LEDs
+  and both I²C pins (whose bus number still comes from the real GPIOs, because a
+  name does not change which hole it is).
+
+  **The assignment always lands above the `Pin(...)` that reads it**, whatever
+  order the blocks sit in — it is registered from the first block that uses the
+  name, not from the declaration, so parking the **name pin** block at the bottom
+  of the canvas cannot produce a `NameError`. The line still belongs to the
+  **name pin** block, so hovering it lights the line up.
+
+  The Board View needed no changes at all: `parse-pins.ts` already resolved
+  `motor_left = 15` and an identifier inside `Pin(...)`, so the wiring diagram and
+  the pin badges light up exactly as before. The pin-conflict pass resolves names
+  too — naming GP15 and then dropping an LED block on `15` is still two things on
+  one pin, and it still says so. A name nothing declares gets a warning naming
+  the fix rather than a silent substitution of some other pin.
+
+### Fixed
+
+- **You can put blank lines in the Python again.** The code pane is editable, its
+  text is turned back into blocks when you pause, and the file is regenerated
+  from those blocks — and `logicalLines` dropped every blank line on the way
+  through. So pressing Enter to make room to write, the ordinary way anybody
+  writes anything, opened a gap that closed itself again a moment later, moving
+  the cursor out from under what was being typed.
+
+  Blank lines are now counted and carried, as a **blank line** spacer block in
+  the Python drawer — one per line, so there is no number that can disagree with
+  the number of lines it writes. The one exception is the gap under a hoisted
+  section: the generator already writes a blank line after the imports and after
+  a top-level `def`, so the gap you typed there is the separator it was going to
+  write anyway, and a second would make that gap deepen by a line every time the
+  program went round.
+
 ### Changed
 
 - **The hardware blocks take `Pin` and `PWM` from `machine`, not `snakie`.**

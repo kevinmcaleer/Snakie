@@ -2,7 +2,14 @@ import { Order } from '../generator'
 import type { MicroPythonGenerator } from '../generator'
 import type { BlockDefinition } from '../registry'
 import { FIELD_PIN_TYPE } from '../pin-field'
-import { circuitPythonPin, onboardLedToken } from '../board-pins'
+import {
+  circuitPythonPin,
+  isPinName,
+  onboardLedToken,
+  pinAliasesIn,
+  PIN_ALIAS_BLOCK,
+  resolvePinGpio
+} from '../board-pins'
 import { i2cBlockForPins } from '../../../components/display-logic'
 import { registerCallRules } from '../python-to-blocks'
 import type * as Blockly from 'blockly/core'
@@ -495,10 +502,11 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
       // `parse-pins.ts` matches, so the Board View draws the wire; the `pin=` is
       // what `instruments.py` reports as SERVO telemetry, so the Robot View can
       // drive the mapped joint. Both, or one of the two views goes dark.
+      const at = pinToken(gen, pin, block)
       const name = gen.setup(
         `servo:${pin}`,
-        `servo_${pin}`,
-        `Servo(PWM(Pin(${pin})), pin=${pin})`,
+        `servo_${at}`,
+        `Servo(PWM(Pin(${at})), pin=${at})`,
         block
       )
       return `${name}.angle(${gen.valueToCode(block, 'ANGLE', Order.NONE) || '90'})\n`
@@ -623,21 +631,91 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
       `${i2cAddress(block)} in ${i2c(gen, block)}.scan()`,
       Order.RELATIONAL
     ]
-  }
+  },
+
+  // ------------------------------------------------------------------ name a pin
+  //
+  // A DECLARATION, not a step. It generates no line where it stands — the
+  // assignment it causes is hoisted into the setup section with the rest — which
+  // is the same shape the import blocks have, and for the same reason: what it
+  // does is make a name mean something for the whole program.
+  {
+    type: PIN_ALIAS_BLOCK,
+    // Nothing on CircuitPython. There a pin is `board.GP15`, an attribute rather
+    // than a number a variable can hold, so `circuitPythonPin` resolves the name
+    // at the point of use and this block has nothing left to emit.
+    circuitpython: { imports: [], code: () => '' },
+    category: 'hardware',
+    help: 'ref-pins',
+    json: {
+      message0: 'name pin %1 as %2',
+      args0: [
+        // NO CAPABILITY FILTER: the name is for the pin, and which jobs it can do
+        // is a question for the block that eventually uses it. Filtering here
+        // would hide GP26 from somebody naming their battery sense line.
+        pinField('PIN', undefined, 15),
+        { type: 'field_input', name: 'NAME', text: 'motor_left' }
+      ],
+      inputsInline: true,
+      previousStatement: null,
+      nextStatement: null,
+      tooltip:
+        'Give a pin a name you will recognise. Every pin dropdown then offers it, and your program says the name instead of the number — so rewiring means changing this one block.'
+    },
+    code: (block, gen) => {
+      const name = String(block.getFieldValue('NAME') ?? '').trim()
+      const gpio = Number(block.getFieldValue('PIN'))
+      // A BLANK NAME IS NOT A DECLARATION. A learner clearing the field to retype
+      // it should get a program that still runs, not `= 15` on a line of its own.
+      if (!name || !Number.isFinite(gpio)) return ''
+      // Registered with THIS block, so the line is attributed to it however the
+      // blocks are laid out — a block that already needed the name registered it
+      // anonymously, and `setup` lets the owner step forward.
+      gen.setup(`pin-alias:${name}`, name, String(gpio), block)
+      return ''
+    }
+  },
 ]
 
 // ---------------------------------------------------------------------------
 // The hoisted objects. One per pin per role, so two blocks on one pin share.
 // ---------------------------------------------------------------------------
 
+/**
+ * What to write where the pin goes: a GPIO number, or the learner's name for it.
+ *
+ * A named pin costs one assignment at the top (`motor_left_speed = 15`) and then
+ * reads as the name everywhere after. The assignment is registered HERE, from
+ * the first block that uses the name, rather than being left to the `name pin`
+ * block to emit — because the setup section is written in first-request order,
+ * and a learner is perfectly entitled to park the `name pin` block below the
+ * blocks that use it. Registering it from the point of use means the assignment
+ * can never land after the `Pin(...)` that reads it, whatever the layout. The
+ * `name pin` block claims the line when it emits (see `setup`), so the mirror
+ * still lights up on the block a learner actually chose.
+ *
+ * A NAME NOTHING DECLARES is written through unchanged — a `name pin` block
+ * deleted out from under a block still set to its name. That generates a
+ * `NameError`, which is the honest outcome: substituting some other pin would
+ * drive the wrong hardware silently, and `pin-conflicts.ts` puts a warning on
+ * the block before it ever runs.
+ */
+function pinToken(gen: MicroPythonGenerator, pin: string, block: Blockly.Block): string {
+  if (!isPinName(pin)) return pin
+  const gpio = resolvePinGpio(pin, pinAliasesIn(block.workspace))
+  return gpio === null ? pin : gen.setup(`pin-alias:${pin}`, pin, String(gpio))
+}
+
 /** `led_15 = Led(pin=Pin(15, Pin.OUT))` — the Snakie LED over a digital pin. */
 function led(gen: MicroPythonGenerator, pin: string, block: Blockly.Block): string {
-  return gen.setup(`led:${pin}`, `led_${pin}`, `Led(pin=Pin(${pin}, Pin.OUT))`, block)
+  const at = pinToken(gen, pin, block)
+  return gen.setup(`led:${pin}`, `led_${at}`, `Led(pin=Pin(${at}, Pin.OUT))`, block)
 }
 
 /** `pin_15 = Pin(15, Pin.OUT)` — a bare output pin. */
 function digitalPin(gen: MicroPythonGenerator, pin: string, block: Blockly.Block): string {
-  return gen.setup(`pin-out:${pin}`, `pin_${pin}`, `Pin(${pin}, Pin.OUT)`, block)
+  const at = pinToken(gen, pin, block)
+  return gen.setup(`pin-out:${pin}`, `pin_${at}`, `Pin(${at}, Pin.OUT)`, block)
 }
 
 /** `button_14 = Pin(14, Pin.IN, Pin.PULL_UP)` — an input with its resistor. */
@@ -651,7 +729,8 @@ function inputPin(
   // pull-down is two different configurations, and silently sharing the first
   // one would make the second block's dropdown a lie.
   const suffix = pull === 'NONE' ? '' : `, Pin.${pull}`
-  return gen.setup(`pin-in:${pin}:${pull}`, `pin_${pin}`, `Pin(${pin}, Pin.IN${suffix})`, block)
+  const at = pinToken(gen, pin, block)
+  return gen.setup(`pin-in:${pin}:${pull}`, `pin_${at}`, `Pin(${at}, Pin.IN${suffix})`, block)
 }
 
 /**
@@ -662,12 +741,14 @@ function inputPin(
  * reaches for — and two `ADC`s on one pin is a real bug, not a tidiness point.
  */
 export function adc(gen: MicroPythonGenerator, pin: string, block: Blockly.Block): string {
-  return gen.setup(`adc:${pin}`, `adc_${pin}`, `ADC(Pin(${pin}))`, block)
+  const at = pinToken(gen, pin, block)
+  return gen.setup(`adc:${pin}`, `adc_${at}`, `ADC(Pin(${at}))`, block)
 }
 
 /** `pwm_15 = PWM(Pin(15))`. Exported for #1014's `read_pwm`, as `adc` above. */
 export function pwm(gen: MicroPythonGenerator, pin: string, block: Blockly.Block): string {
-  return gen.setup(`pwm:${pin}`, `pwm_${pin}`, `PWM(Pin(${pin}))`, block)
+  const at = pinToken(gen, pin, block)
+  return gen.setup(`pwm:${pin}`, `pwm_${at}`, `PWM(Pin(${at}))`, block)
 }
 
 /**
@@ -690,11 +771,18 @@ export function pwm(gen: MicroPythonGenerator, pin: string, block: Blockly.Block
 export function i2c(gen: MicroPythonGenerator, block: Blockly.Block): string {
   const sda = pinOf(block, 'SDA')
   const scl = pinOf(block, 'SCL')
-  const bus = i2cBlockForPins(Number(sda), Number(scl)) ?? 0
+  // The BUS is decided by the real GPIOs — the RP2040 muxes its two I²C blocks
+  // onto fixed pin sets, and a name does not change which hole it is — while the
+  // generated line says whatever the learner called them.
+  const declared = pinAliasesIn(block.workspace)
+  const bus =
+    i2cBlockForPins(resolvePinGpio(sda, declared) ?? NaN, resolvePinGpio(scl, declared) ?? NaN) ?? 0
+  const sdaAt = pinToken(gen, sda, block)
+  const sclAt = pinToken(gen, scl, block)
   return gen.setup(
     `i2c:${bus}:${sda}:${scl}`,
     `i2c_${bus}`,
-    `I2C(${bus}, sda=Pin(${sda}), scl=Pin(${scl}))`,
+    `I2C(${bus}, sda=Pin(${sdaAt}), scl=Pin(${sclAt}))`,
     block
   )
 }
@@ -716,7 +804,8 @@ export function i2cAddress(block: Blockly.Block): string {
 
 /** `buzzer_16 = Buzzer(PWM(Pin(16)))`. */
 function buzzer(gen: MicroPythonGenerator, pin: string, block: Blockly.Block): string {
-  return gen.setup(`buzzer:${pin}`, `buzzer_${pin}`, `Buzzer(PWM(Pin(${pin})))`, block)
+  const at = pinToken(gen, pin, block)
+  return gen.setup(`buzzer:${pin}`, `buzzer_${at}`, `Buzzer(PWM(Pin(${at})))`, block)
 }
 
 /**
