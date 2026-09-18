@@ -117,6 +117,22 @@ const SKINS: [string, ThemeTokens][] = [
 /** WCAG AA for normal text. Block text is 12px/600, so 3.0:1 does not apply. */
 const AA = 4.5
 
+/**
+ * Categories that sit off the palette's depth on purpose, and carry their own
+ * ink because of it.
+ *
+ * `hardware` is the bright GPIO amber off the board diagrams. Muted down to the
+ * body of the palette it stopped looking like a hardware block, which is a real
+ * cost for a robotics-first editor — so it keeps the amber and takes BLACK
+ * lettering, at 8.3:1, better than anything on the depth gets. That is only
+ * affordable because #1099 made the ink a property of each block's own fill:
+ * before it, one light block meant white-on-amber at 2.5:1 across the canvas.
+ *
+ * Adding an id here is a design decision, and the tests either side of it say
+ * so: it must really be off the depth, and it must still clear AA.
+ */
+const OWN_INK = new Set(['hardware'])
+
 describe('the block palette is one palette, in both skins', () => {
   it('paints a block the same colour whichever skin is on', () => {
     // The thing that made the old scheme look wrong, stated as a test: the
@@ -136,9 +152,29 @@ describe('the block palette is one palette, in both skins', () => {
     expect(SKEUOMORPH.panel).not.toBe(DARK.panel)
   })
 
-  it('keeps every block at one depth, so one ink serves all of them', () => {
-    const lums = BLOCK_CATEGORIES.map((c) => relativeLuminance(categoryColour(DARK, c)))
+  it('keeps every block at one depth, bar the ones that say they are not', () => {
+    // One depth is what lets one ink serve a palette, so a colour that leaves it
+    // has to be a DECISION rather than a drift — which is what the list is: add
+    // a category to it and you are saying out loud that it carries its own ink.
+    const lums = BLOCK_CATEGORIES.filter((c) => !OWN_INK.has(c.id)).map((c) =>
+      relativeLuminance(categoryColour(DARK, c))
+    )
     expect(Math.max(...lums) - Math.min(...lums)).toBeLessThan(0.01)
+  })
+
+  it('has a reason for every category that left that depth', () => {
+    // The other half: a category on the list must actually be off the depth. A
+    // stale exemption is a category quietly exempt from the rule for nothing.
+    const body = BLOCK_CATEGORIES.filter((c) => !OWN_INK.has(c.id)).map((c) =>
+      relativeLuminance(categoryColour(DARK, c))
+    )
+    const depth = body.reduce((a, b) => a + b, 0) / body.length
+    for (const id of OWN_INK) {
+      const category = BLOCK_CATEGORIES.find((c) => c.id === id)
+      expect(category, `${id} is exempted but is not a category`).toBeDefined()
+      const away = Math.abs(relativeLuminance(categoryColour(DARK, category!)) - depth)
+      expect({ id, offDepth: away > 0.05 }).toEqual({ id, offDepth: true })
+    }
   })
 
   it('keeps FALLBACK_TOKENS in step with the stylesheet', () => {
@@ -165,16 +201,36 @@ describe('block text clears WCAG AA on every category, in both skins', () => {
     }
   }
 
-  it('picks ONE ink for the whole palette, which is what makes it look like one', () => {
-    // Not an accessibility requirement — a design one. A palette at a single
-    // luminance can carry a single ink, and a canvas where some blocks have
-    // black text and others white reads as two palettes photographed together.
+  it('picks ONE ink for the palette, apart from the categories that opted out', () => {
+    // Not an accessibility requirement — a design one. A canvas where blocks
+    // take black or white text at random reads as two palettes photographed
+    // together. So the body of the palette carries one ink, and a category that
+    // wants its own says so in `OWN_INK` and gets `readableTextOn`'s answer.
     const inks = new Set(
       SKINS.flatMap(([, tokens]) =>
-        BLOCK_CATEGORIES.map((c) => readableTextOn(categoryColour(tokens, c)))
+        BLOCK_CATEGORIES.filter((c) => !OWN_INK.has(c.id)).map((c) =>
+          readableTextOn(categoryColour(tokens, c))
+        )
       )
     )
     expect([...inks]).toEqual(['#ffffff'])
+  })
+
+  it('gives the opted-out categories the ink their own fill asks for', () => {
+    // Which is the point of #1099 and the reason an exception is affordable at
+    // all: the ink is a property of the block, published on its SVG group, not
+    // one colour chosen once for the canvas.
+    for (const id of OWN_INK) {
+      const category = BLOCK_CATEGORIES.find((c) => c.id === id)!
+      for (const [name, tokens] of SKINS) {
+        const fill = categoryColour(tokens, category)
+        expect({ id, name, ratio: contrastRatio(fill, readableTextOn(fill)) >= AA }).toEqual({
+          id,
+          name,
+          ratio: true
+        })
+      }
+    }
   })
 })
 

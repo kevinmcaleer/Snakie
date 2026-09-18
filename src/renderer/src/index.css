@@ -28,13 +28,22 @@
  * this: a yellow and a blue at the same L are nowhere near the same brightness,
  * which is exactly why Scratch's own yellow carries white text at 1.9:1.
  *
+ * WITH ONE DELIBERATE EXCEPTION. `--block-hardware` is the BRIGHT GPIO amber off
+ * the board diagrams, kept because that is what a hardware block should look
+ * like and a muted one at the palette's depth was not it. It sits far above the
+ * others, so it takes BLACK lettering rather than white — 8.3:1, better than
+ * anything else here gets — and it can, because #1099 made the ink a property of
+ * the block's own fill rather than one colour for the canvas. That is the whole
+ * point of `--snakie-block-text`: a palette is not obliged to be one depth, it
+ * is obliged to be readable.
+ *
  * The hues are spread ~24° apart, anchored where the brand palette already has
  * an opinion: parts on its red, hardware on the GPIO amber, wait on its yellow,
  * turtle on its green, variables on its blue (#1098).
  * ------------------------------------------------------------------------- */
 :root {
   --block-parts: #c63923;
-  --block-hardware: #985f1b;
+  --block-hardware: #d99541;
   --block-wait: #766d15;
   --block-control: #4e7715;
   --block-lists: #227d16;

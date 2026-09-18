@@ -585,6 +585,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Hardware blocks are the bright GPIO amber again.** Flattening every category
+  to one luminance (#1098, #1099) muted it to a brown, and a hardware block that
+  does not look like the pin dot on the board diagram is a real cost in a
+  robotics-first editor.
+
+  It keeps the amber and takes **black** lettering instead of white — 8.3:1,
+  better contrast than anything on the palette's depth gets — which is affordable
+  only because #1099 made the ink a property of each block's own fill rather than
+  one colour chosen for the whole canvas. Before that, one light block meant
+  white-on-amber at 2.5:1.
+
+  The depth rule still holds for the rest of the palette. A category that leaves
+  it is a named decision now (`OWN_INK` in `blocksContrast.test.ts`), and the
+  tests either side of the list check both halves: that it really is off the
+  depth, and that it still clears WCAG AA with the ink its fill asks for.
+
+
 - **One block palette, in both skins** (#1098, #1099). The blocks were painted
   from the Soft Shell **syntax-highlight** tokens — `--kw`, `--str`, `--num` and
   friends — which are FOREGROUND colours, picked to be legible *on* the editor
