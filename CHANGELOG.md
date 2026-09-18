@@ -8,6 +8,44 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Every palette registers reader rules, not just hardware and turtle** (#1089,
+  epic #1086). `registerCallRules` has been the extension point since #1019 and
+  only two palettes ever called it — so the Lists, Maths, Logic and Instruments
+  drawers all shipped blocks a child could drag out, save, reopen, and find grey.
+
+  ```python
+  readings.append(value)     # add value to readings
+  x = random.randint(1, 6)   # a random number 1 to 6
+  x = min(a, b)              # smallest of a and b
+  if reading is None:        # reading is nothing
+  if name in names:          # name is in names
+  x = readings[0]            # item 1 of readings
+  ```
+
+  Three things the rule format could not express before, each added because a
+  real block needed it:
+
+  - **a method on any object.** `xs.append(v)` is not a call into a module and
+    not a call on something the generator hoisted — it is a method on whatever
+    the learner called their list, so the receiver becomes a socket.
+  - **a rule that fixes a field.** `snakie_math_min_max` is one block with a
+    `smallest`/`largest` dropdown, so `min` and `max` are two rules producing the
+    same block. Without this the reader could only ever have made one of them.
+  - **what a socket checks.** A `text` in a socket that wants Number is a
+    workspace Blockly throws on, which costs the learner every block in the file
+    rather than the one line — the #1071 rule, applied to palette rules.
+
+  `test/blocksPaletteSymmetry.test.ts` now holds the palette and the reader to
+  being two halves of one thing: **every block in the palette must be produced by
+  a rule, by a sample program in the test, or be a listed exception with a
+  reason**. There are twenty-four exceptions and each one is an argument — a
+  block that writes arithmetic rather than a call, two blocks that write the same
+  line, a call carrying a colour or a learner's own keyword, or a named
+  workstream that has not landed yet. Adding a block to the palette now costs
+  saying how it reads back, even when the answer is "it doesn't, and here is why".
+
+  Socket coverage over the fixture corpus: **68.86% → 71.02%**.
+
 - **Blocks reads `obj.method()` and `obj.attr`** (#1088, epic #1086). The single
   largest gap in the corpus, closed with **nothing added to the palette**.
   `snakie_python_call`, `snakie_python_call_value`, `snakie_python_attr_get` and

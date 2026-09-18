@@ -1,5 +1,6 @@
 import { Order } from '../generator'
 import type { BlockDefinition } from '../registry'
+import { registerCallRules } from '../python-to-blocks'
 
 /**
  * LISTS (#1011, epic #1007).
@@ -52,6 +53,16 @@ export const LIST_BLOCKS: BlockDefinition[] = [
     type: 'snakie_list_append',
     category: 'lists',
     help: 'ref-types',
+    // A METHOD ON WHATEVER THE LEARNER CALLED THEIR LIST (#1089). Not a module
+    // and not an object the generator hoisted, so the receiver is a socket —
+    // see `CallRule.on`. 403 raw lines across 28 projects before this.
+    read: {
+      fn: 'append',
+      on: 'LIST',
+      args: ['ITEM'],
+      shape: 'statement',
+      checks: { LIST: 'Array' }
+    },
     json: {
       message0: 'add %1 to %2',
       args0: [
@@ -158,3 +169,26 @@ function countItems(block: { getInput(name: string): unknown }): number {
   while (block.getInput(`ADD${n}`)) n++
   return n
 }
+
+/**
+ * How these blocks read BACK out of Python (W2, #1089, epic #1086).
+ *
+ * `registerCallRules` has been the extension point since #1019 and only
+ * `hardware.ts` and `turtle.ts` ever called it — so every block in this drawer
+ * was one a child could drag out, save, reopen, and find grey. That asymmetry is
+ * a bug in its own right, and closing it for the whole palette is the real
+ * deliverable of W2.
+ *
+ * Derived from the block list rather than written out again, exactly as
+ * `turtle.ts` does it: a block that changes the call it writes changes both
+ * sides at once, or neither.
+ *
+ * THE THREE THAT ARE NOT CALLS are read by the expression parser instead, and
+ * `test/blocksPaletteSymmetry.test.ts` holds them to it: `xs[i]` and
+ * `xs[i] = v` are subscripts, and `v in xs` is an operator. `lists_length` has
+ * no rule of its own on purpose — `len(xs)` is already read as `text_length`,
+ * and one line of Python cannot be two blocks.
+ */
+registerCallRules(
+  LIST_BLOCKS.flatMap((block) => (block.read ? [{ ...block.read, type: block.type }] : []))
+)

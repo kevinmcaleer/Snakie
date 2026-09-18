@@ -1,4 +1,5 @@
 import { Order } from '../generator'
+import { registerCallRules } from '../python-to-blocks'
 import type { BlockDefinition } from '../registry'
 
 /**
@@ -115,6 +116,13 @@ export const MATHS_BLOCKS: BlockDefinition[] = [
     type: 'math_random_int',
     category: 'math',
     help: 'ref-builtins',
+    read: {
+      module: 'random',
+      fn: 'randint',
+      args: ['FROM', 'TO'],
+      shape: 'value',
+      checks: { FROM: 'Number', TO: 'Number' }
+    },
     toolbox: {
       inputs: {
         FROM: { shadow: { type: 'math_number', fields: { NUM: 1 } } },
@@ -266,3 +274,41 @@ const ARITHMETIC: Record<string, [string, number]> = {
   DIVIDE: ['/', Order.MULTIPLICATIVE],
   POWER: ['**', Order.EXPONENTIATION]
 }
+
+/**
+ * How these blocks read BACK out of Python (W2, #1089, epic #1086).
+ *
+ * `round`, `round(x, n)` and `abs` already had rules — they live in the reader's
+ * own built-in table, which is where the `time.sleep` family and `print` are.
+ * These are the ones that had none, so `random.randint(1, 6)` and `min(a, b)`
+ * were blocks a child could drag out of this drawer and never get back.
+ *
+ * `snakie_math_min_max` IS ONE BLOCK WITH A DROPDOWN, so it is two rules with
+ * the field fixed — which is the whole reason `CallRule.fields` exists. Without
+ * it the reader could only ever have produced one of the two.
+ *
+ * `snakie_map_range` has no rule on purpose: it writes arithmetic, not a call,
+ * and the expression parser already reads that arithmetic back as the nest of
+ * `math_arithmetic` blocks it literally is. A rule would have to pattern-match a
+ * five-socket expression to claim it, and being wrong about that would rewrite
+ * somebody's formula.
+ */
+registerCallRules([
+  ...MATHS_BLOCKS.flatMap((block) => (block.read ? [{ ...block.read, type: block.type }] : [])),
+  {
+    fn: 'min',
+    type: 'snakie_math_min_max',
+    args: ['A', 'B'],
+    shape: 'value',
+    fields: { OP: 'MIN' },
+    checks: { A: 'Number', B: 'Number' }
+  },
+  {
+    fn: 'max',
+    type: 'snakie_math_min_max',
+    args: ['A', 'B'],
+    shape: 'value',
+    fields: { OP: 'MAX' },
+    checks: { A: 'Number', B: 'Number' }
+  }
+])

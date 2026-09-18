@@ -203,9 +203,21 @@ describe('assigning to something on an object', () => {
     roundTrips('self.total += 1\n')
   })
 
-  it('leaves a subscript target alone — that is W8', () => {
-    expect(types('self.rows[0] = 1\n')).toEqual(['snakie_python_statement'])
+  it('leaves a subscript it cannot count back alone — that is W8', () => {
+    // W2 (#1089) reads the two forms the Lists blocks can write back exactly:
+    // `xs[0]` counts up to "item 1", and `xs[i - 1]` is the `- 1` the generator
+    // put there. A bare `xs[i]` is neither — the block would have to hold
+    // `i + 1` and would regenerate as `xs[i + 1 - 1]`.
+    expect(types('self.rows[0] = 1\n')).toEqual([
+      'snakie_list_set',
+      'snakie_python_attr_get',
+      'variables_get',
+      'math_number',
+      'math_number'
+    ])
     roundTrips('self.rows[0] = 1\n')
+    expect(types('self.rows[index] = 1\n')).toEqual(['snakie_python_statement'])
+    roundTrips('self.rows[index] = 1\n')
   })
 })
 

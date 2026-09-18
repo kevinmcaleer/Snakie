@@ -1,5 +1,5 @@
 import type { BlocksWorkspace } from '../../../../shared/blocks-doc'
-import type { ArgField, CallReceiver } from './registry'
+import type { ArgField, CallReceiver, SocketType } from './registry'
 import { docstringComment } from './docstring'
 import { isReservedName, sanitise } from './names'
 import {
@@ -95,8 +95,6 @@ export interface BlockJson {
  * call, a raw value block could be anything at runtime, which is exactly why
  * Blockly leaves their output unchecked too.
  */
-type SocketType = 'String' | 'Number' | 'Boolean' | 'Array'
-
 const OUTPUT_TYPE = new Map<string, SocketType>([
   ['text', 'String'],
   ['text_join', 'String'],
@@ -110,6 +108,8 @@ const OUTPUT_TYPE = new Map<string, SocketType>([
   ['logic_compare', 'Boolean'],
   ['logic_negate', 'Boolean'],
   ['logic_operation', 'Boolean'],
+  ['snakie_is_none', 'Boolean'],
+  ['snakie_list_contains', 'Boolean'],
   // `controls_forEach`'s LIST socket checks Array, and a `text` in it is the
   // same class of unloadable workspace the table above exists for (#1087):
   // `for name in "EDCDEEE":` is ordinary Python — iterating a string — and it
@@ -251,6 +251,35 @@ export interface CallRule {
   receiver?: CallReceiver
   /** Positional arguments that are fields rather than sockets, by index. */
   argFields?: Readonly<Record<number, ArgField>>
+  /**
+   * THE CALL IS A METHOD ON ANY OBJECT, and this is the socket it goes in (W2,
+   * #1089).
+   *
+   * Neither of the two shapes above: `module` is a literal module name and
+   * `receiver` is an object the generator itself hoisted, and `xs.append(v)` is
+   * a method on whatever the learner happens to have called their list. So the
+   * receiver becomes a SOCKET — `snakie_list_append`'s LIST — and the argument
+   * list is what is left.
+   */
+  on?: string
+  /**
+   * Fields this rule fixes on the block it builds.
+   *
+   * `snakie_math_min_max` is one block with a `smallest`/`largest` dropdown, so
+   * `min(a, b)` and `max(a, b)` are two rules producing the same block type with
+   * different `OP`s. Without this the reader could only ever produce one of them.
+   */
+  fields?: Readonly<Record<string, string>>
+  /**
+   * Socket name → the type that socket CHECKS, for the sockets that check one.
+   *
+   * The #1071 rule, applied to palette-registered rules: a block built with a
+   * `text` in a socket that wants Number is a workspace `Blockly.serialization`
+   * throws on, and the throw costs the learner every block in the file rather
+   * than the one line. A rule whose argument cannot fit declines, and the line
+   * stays raw.
+   */
+  checks?: Readonly<Record<string, SocketType>>
 }
 
 /**
@@ -276,7 +305,7 @@ export interface CallRule {
  * and only then convert again dropping the constructors that are fully
  * accounted for. Two passes over a lexer is cheap; a deleted line is not.
  */
-export type { CallReceiver, ArgField }
+export type { CallReceiver, ArgField, SocketType }
 
 /**
  * The calls this recognises, beyond the ones the palettes register themselves.
@@ -334,12 +363,29 @@ export function registerCallRules(rules: readonly CallRule[]): void {
  * two blocks.
  */
 function ruleKey(rule: CallRule): string {
-  return `${rule.receiver?.name ?? rule.module ?? ''}.${rule.fn}/${rule.shape ?? 'statement'}`
+  // A method-on-any-object rule (W2) shares nothing with a bare call of the same
+  // name — `xs.append(v)` and a hypothetical `append(v)` are different lines —
+  // so the receiver socket is part of the identity too.
+  const receiver = rule.on ? `*${rule.on}` : (rule.receiver?.name ?? rule.module ?? '')
+  const fields = rule.fields ? `:${Object.entries(rule.fields).sort().join(',')}` : ''
+  return `${receiver}.${rule.fn}/${rule.shape ?? 'statement'}${fields}`
 }
 
 /** Every rule, palette-registered ones first so a palette can override. */
 function rules(): CallRule[] {
   return [...REGISTERED, ...BUILT_IN_RULES]
+}
+
+/**
+ * Every block type some rule can produce (W2, #1089).
+ *
+ * For `test/blocksPaletteSymmetry.test.ts`, which holds the palette and the
+ * reader to being two halves of one thing: a block a learner can drag out of the
+ * toolbox should be a block that comes back when they reopen their file, and any
+ * exception to that should be a listed, argued one rather than an oversight.
+ */
+export function readableBlockTypes(): Set<string> {
+  return new Set(rules().map((rule) => rule.type))
 }
 
 /** Forget the registered rules — for tests, which must not leak into each other. */
@@ -1429,7 +1475,7 @@ class Converter {
     // corpus, and `snakie_python_attr_set` has been in the Python drawer since
     // #1018. AFTER the plain assignment above, which is the commoner shape and
     // reads better as a `set <variable>` block.
-    const attribute = this.attributeAssign(text)
+    const attribute = this.memberAssign(text)
     if (attribute) return recognised([attribute])
 
     // --- a call to a function THIS program defines ------------------------
@@ -1607,7 +1653,8 @@ class Converter {
   }
 
   /**
-   * `a.b = x` → the block that sets an attribute (W1, #1088).
+   * `a.b = x` → the block that sets an attribute (W1, #1088), and `xs[i] = v` →
+   * the block that sets a list item (W2, #1089).
    *
    * The TARGET is read with the same chain everything else uses, and has to come
    * back as an attribute read for this to be that block: `self.speed` is an
@@ -1624,7 +1671,7 @@ class Converter {
    * `self.total = self.total + 1` would be rewriting somebody's line. It stays
    * raw, where it regenerates exactly as written.
    */
-  private attributeAssign(text: string): BlockJson | null {
+  private memberAssign(text: string): BlockJson | null {
     const tokens = tokenize(text)
     if (!tokens) return null
     let depth = 0
@@ -1635,9 +1682,18 @@ class Converter {
       if (depth !== 0 || tok.kind !== 'op' || tok.text !== '=') continue
       const target = this.readChain(text, tokens.slice(0, i))
       if (!target || target.next !== i) return null
-      if (target.block.type !== PYTHON_ATTR_GET) return null
       const value = text.slice(tok.end).trim()
       if (value === '') return null
+      // `xs[i] = v` → the Lists drawer's own block (W2, #1089). The target reads
+      // as `item i of xs`, and setting it is the same three sockets plus the
+      // value — which is exactly how the two blocks are defined.
+      if (target.block.type === 'snakie_list_get') {
+        return {
+          type: 'snakie_list_set',
+          inputs: { ...target.block.inputs, VALUE: { block: this.expression(value) } }
+        }
+      }
+      if (target.block.type !== PYTHON_ATTR_GET) return null
       return {
         type: PYTHON_ATTR_SET,
         fields: target.block.fields,
@@ -1660,7 +1716,32 @@ class Converter {
       const known = this.matchCall(call, 'statement')
       if (known) return known
     }
+    const onObject = this.objectCallStatement(text, tokens)
+    if (onObject) return onObject
     return this.methodCall(text, tokens)
+  }
+
+  /**
+   * A statement that is a palette block's method call on an object (W2, #1089).
+   *
+   * `xs.append(v)`: the chain up to the last dot is the receiver, and the call
+   * on the end of it is the rule. Read by hand rather than through
+   * {@link methodCall}, because the chain builds VALUE blocks and a rule of this
+   * shape may only exist as a statement.
+   */
+  private objectCallStatement(text: string, tokens: readonly Token[]): BlockJson | null {
+    for (let i = tokens.length - 1; i > 0; i--) {
+      const tok = tokens[i]
+      if (tok.kind !== 'op' || tok.text !== '.') continue
+      const member = tokens[i + 1]
+      if (!member || member.kind !== 'name') return null
+      const read = readArgs(tokens, text, i + 2)
+      if (!read || read.trailingComma || read.next !== tokens.length) return null
+      const object = this.readChain(text, tokens.slice(0, i))
+      if (!object || object.next !== i) return null
+      return this.objectCall(object.block, member.text, read.args, 'statement')
+    }
+    return null
   }
 
   /**
@@ -1794,13 +1875,62 @@ class Converter {
     // looks like — better a raw block than one that silently drops an argument.
     if (args.length !== names.length) return null
     const block: BlockJson = { type: rule.type }
+    if (rule.fields) block.fields = { ...rule.fields }
     if (names.length > 0) {
       block.inputs = {}
-      names.forEach((name, i) => {
-        block.inputs![name] = { block: this.expression(args[i]) }
-      })
+      for (let i = 0; i < names.length; i++) {
+        const filled = this.expression(args[i])
+        // A socket that CHECKS a type and an argument that cannot fit it is not
+        // this block — see {@link CallRule.checks}.
+        const want = rule.checks?.[names[i]]
+        if (want && !fitsSocket(filled, want)) return null
+        block.inputs[names[i]] = { block: filled }
+      }
     }
     return block
+  }
+
+  /**
+   * `xs.append(v)` → the block the Lists drawer has always had (W2, #1089).
+   *
+   * The receiver is not a module and not something the generator hoisted: it is
+   * whatever the learner called their list, so it goes into a SOCKET. That is
+   * the one shape `registerCallRules` could not express before, and it is why
+   * `snakie_list_append` — 403 lines across 28 projects — was a block a child
+   * could drag out and never get back.
+   *
+   * BEFORE the generic call block from W1, which would otherwise claim every one
+   * of these and render `add v to xs` as `call append on xs with v`.
+   */
+  private objectCall(
+    object: BlockJson,
+    fn: string,
+    args: readonly string[],
+    shape: 'statement' | 'value'
+  ): BlockJson | null {
+    for (const rule of rules()) {
+      if (!rule.on || rule.fn !== fn) continue
+      if ((rule.shape ?? 'statement') !== shape) continue
+      const names = rule.args ?? []
+      if (args.length !== names.length) continue
+      const want = rule.checks?.[rule.on]
+      if (want && !fitsSocket(object, want)) continue
+      const inputs: Record<string, { block: BlockJson }> = { [rule.on]: { block: object } }
+      let fits = true
+      for (let i = 0; i < names.length && fits; i++) {
+        const filled = this.expression(args[i])
+        const check = rule.checks?.[names[i]]
+        if (check && !fitsSocket(filled, check)) fits = false
+        else inputs[names[i]] = { block: filled }
+      }
+      if (!fits) continue
+      return {
+        type: rule.type,
+        ...(rule.fields ? { fields: { ...rule.fields } } : {}),
+        inputs
+      }
+    }
+    return null
   }
 
   /**
@@ -1915,6 +2045,38 @@ class Converter {
 
     const left = this.parseAdditive(tokens, at)
     if (!left) return null
+
+    // `x is None` → the Logic drawer's own block (W2, #1089).
+    //
+    // Python has it and Blockly does not, which is why `snakie_is_none` exists —
+    // and until now it was a block a learner could drag out of the drawer and
+    // never get back, because nothing read it. `is NOT None` is deliberately not
+    // here: `logic_negate` around this block writes `not x is None`, which is
+    // the same test and a different line, and rewriting somebody's line is the
+    // one thing this module does not do.
+    const is = tokens[left.next]
+    if (is?.kind === 'keyword' && is.text === 'is' && tokens[left.next + 1]?.text === 'None') {
+      return {
+        block: { type: 'snakie_is_none', inputs: { VALUE: { block: left.block } } },
+        next: left.next + 2
+      }
+    }
+
+    // `v in xs` → `snakie_list_contains`. `not in` stays raw for the same reason
+    // as `is not None`.
+    if (is?.kind === 'keyword' && is.text === 'in') {
+      const right = this.parseAdditive(tokens, left.next + 1)
+      if (!right) return null
+      if (!fitsSocket(right.block, 'Array')) return null
+      return {
+        block: {
+          type: 'snakie_list_contains',
+          inputs: { ITEM: { block: left.block }, LIST: { block: right.block } }
+        },
+        next: right.next
+      }
+    }
+
     const op = tokens[left.next]
     if (!isCompare(op)) return left
     const right = this.parseAdditive(tokens, left.next + 1)
@@ -2136,9 +2298,10 @@ class Converter {
       // grey, and `obj.read()` with it.
       const after = tokens[at + 1]
       // A call we could not place stays raw — a bare `foo(1)` has no object to
-      // be a method OF, so there is no generic block for it. So does a
-      // subscript, which is W8's (#1095).
-      if (after && (after.text === '(' || after.text === '[')) return null
+      // be a method OF, so there is no generic block for it. A `[` is not
+      // refused here any more: {@link chain} reads a subscript, when the Lists
+      // block can say it back exactly (W2, #1089).
+      if (after && after.text === '(') return null
       const base = this.name(tok.text)
       if (!base) return null
       return this.chain({ block: base, next: at + 1 }, tokens)
@@ -2201,7 +2364,14 @@ class Converter {
   ): { block: BlockJson; next: number } | null {
     let cur = start
     for (;;) {
-      const dot = tokens[cur.next]
+      const head = tokens[cur.next]
+      if (head?.kind === 'open' && head.text === '[') {
+        const item = this.subscript(tokens, cur)
+        if (!item) return null
+        cur = item
+        continue
+      }
+      const dot = head
       if (!dot || dot.kind !== 'op' || dot.text !== '.') return cur
       const member = tokens[cur.next + 1]
       if (!member || member.kind !== 'name') return null
@@ -2214,6 +2384,13 @@ class Converter {
         // silent rewrite, and one the round-trip gate refuses to commit, which
         // would cost the file its whole conversion rather than this line.
         if (!read || read.trailingComma) return null
+        // A PALETTE'S OWN RULE FIRST (W2, #1089) — `xs.append(v)` is the Lists
+        // drawer's block, not a generic call on an object.
+        const known = this.objectCall(cur.block, member.text, read.args, 'value')
+        if (known) {
+          cur = { block: known, next: read.next }
+          continue
+        }
         const block = this.callBlock(PYTHON_CALL_VALUE, cur.block, member.text, read.args)
         if (!block) return null
         cur = { block, next: read.next }
@@ -2228,6 +2405,59 @@ class Converter {
         next: cur.next + 2
       }
     }
+  }
+
+  /**
+   * `xs[i]` → the Lists drawer's `item n of xs`, when it can say it back (W2).
+   *
+   * ONE-BASED ON THE BLOCK, ZERO-BASED IN THE CODE — `lists.ts` chose that
+   * deliberately, so that a learner meets the off-by-one honestly with both
+   * sides on screen. Reading it back means undoing the same arithmetic, and only
+   * the two forms the generator can write are undoable:
+   *
+   *     xs[0]      → item 1 of xs        (a literal, counted back up)
+   *     xs[i - 1]  → item i of xs        (the `- 1` the generator wrote)
+   *
+   * `xs[i]` is NOT one of them: the block would have to hold `i + 1` and would
+   * regenerate as `xs[i + 1 - 1]`, which is somebody's line rewritten. It stays
+   * raw, and W8 (#1095) is where a general subscript block belongs.
+   */
+  private subscript(
+    tokens: readonly Token[],
+    cur: { block: BlockJson; next: number }
+  ): { block: BlockJson; next: number } | null {
+    let depth = 0
+    for (let i = cur.next; i < tokens.length; i++) {
+      const tok = tokens[i]
+      if (tok.kind === 'open') depth += 1
+      else if (tok.kind === 'close') {
+        depth -= 1
+        if (depth > 0) continue
+        if (tok.text !== ']') return null
+        const inside = this.source.slice(tokens[cur.next].end, tok.start).trim()
+        const index = this.oneBased(inside)
+        // LIST checks Array, so `"abc"[0]` is not this block — the same rule the
+        // socket table exists for (#1071).
+        if (!index || !fitsSocket(cur.block, 'Array')) return null
+        return {
+          block: {
+            type: 'snakie_list_get',
+            inputs: { LIST: { block: cur.block }, INDEX: { block: index } }
+          },
+          next: i + 1
+        }
+      }
+    }
+    return null
+  }
+
+  /** The INDEX socket for a zero-based Python subscript, or null — see above. */
+  private oneBased(text: string): BlockJson | null {
+    if (/^\d+$/.test(text)) return { type: 'math_number', fields: { NUM: Number(text) + 1 } }
+    const minusOne = /^(.+?)\s*-\s*1$/.exec(text)
+    if (!minusOne) return null
+    const index = this.expression(minusOne[1])
+    return fitsSocket(index, 'Number') ? index : null
   }
 
   /**

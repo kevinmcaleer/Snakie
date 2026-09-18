@@ -51,8 +51,8 @@ import { installCorePalette } from '../src/renderer/src/lib/blocks/palette'
 /** Recognised lines / logical lines. 53.31% at W0, 72.61% after W1. */
 const STATEMENT_FLOOR = 72
 
-/** Value sockets holding a real block. 53.88% at W0, 68.86% after W1. */
-const SOCKET_FLOOR = 68
+/** Value sockets holding a real block. 53.88% at W0, 68.86% at W1, 71.02% at W2. */
+const SOCKET_FLOOR = 71
 
 /** Files that open with no grey at all, as a percentage. Baseline 4.65%. */
 const CLEAN_FILE_FLOOR = 4
