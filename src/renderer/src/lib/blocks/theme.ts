@@ -156,7 +156,7 @@ export const FALLBACK_TOKENS: ThemeTokens = {
   pinPower: '#d4553f',
   // The block palette, which is the SAME in both skins — see `index.css`.
   blockTurtle: '#167d38',
-  blockHardware: '#985f1b',
+  blockHardware: '#d99541',
   blockInstruments: '#157965',
   blockParts: '#c63923',
   blockModules: '#b223c9',

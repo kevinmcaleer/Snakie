@@ -585,6 +585,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Hardware blocks are the bright GPIO amber again.** Flattening every category
+  to one luminance (#1098, #1099) muted it to a brown, and a hardware block that
+  does not look like the pin dot on the board diagram is a real cost in a
+  robotics-first editor.
+
+  It keeps the amber and takes **black** lettering instead of white — 8.3:1,
+  better contrast than anything on the palette's depth gets — which is affordable
+  only because #1099 made the ink a property of each block's own fill rather than
+  one colour chosen for the whole canvas. Before that, one light block meant
+  white-on-amber at 2.5:1.
+
+  The depth rule still holds for the rest of the palette. A category that leaves
+  it is a named decision now (`OWN_INK` in `blocksContrast.test.ts`), and the
+  tests either side of the list check both halves: that it really is off the
+  depth, and that it still clears WCAG AA with the ink its fill asks for.
+
+
 - **One block palette, in both skins** (#1098, #1099). The blocks were painted
   from the Soft Shell **syntax-highlight** tokens — `--kw`, `--str`, `--num` and
   friends — which are FOREGROUND colours, picked to be legible *on* the editor
@@ -617,6 +634,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   plugin's blocks (#1017) are covered by the same two lines.
 
 ### Fixed
+
+- **A bracket the language did not need no longer holds back a whole file.**
+
+  ```python
+  distance_to_object = (elapsed_microseconds * 0.343) / 2
+  ```
+
+  One line of an ultrasonic sensor program, and not one block in the file it was
+  in would open. `maths.ts` writes the minimal correct parenthesisation — `a * b
+  / c`, never `(a * b) / c`, because that is what a learner who assembled those
+  blocks meant — so the line came back one bracket lighter, the round-trip gate
+  read it as a different program and refused the conversion, and the canvas kept
+  showing the blocks from before the last edit with a banner saying so.
+
+  The gate has never been a text comparison: it already forgives the import
+  section, whitespace, hoisting, quote style and protected-name renames, as "the
+  generator rendering the program in its own house style". A redundant bracket
+  belongs on that list — it is not a line dropped, re-nested or mangled, which is
+  what the gate exists to catch — so the line signature now drops the brackets
+  Python's own precedence already implies.
+
+  The rule is the one `maths.ts` generates by, read backwards: a bracket can go
+  when what is inside binds tighter than the operators on either side of it, or
+  binds equally and sits on the side that associates. `a - (b - c)`, `(a + b) /
+  2`, `(a ** b) ** c`, `(a + b).real`, `(a + b)[0]` and `-(a + b)` all keep
+  theirs, because none of them is the same program without. It reads the operator
+  immediately before the bracket and the one immediately after and nothing else:
+  anything it cannot account for keeps its brackets, so the worst case is a
+  conversion the gate already refused.
 
 - **A pin dropdown no longer says `GPled`.** A hardware block whose pin field
   holds a learner's own NAME for a pin (#1097) rendered its dropdown as `GP` +

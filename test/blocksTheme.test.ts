@@ -77,9 +77,14 @@ describe('buildSoftShellTheme (#1009)', () => {
     // brightness, which is why Scratch's own yellow carries white text at
     // 1.9:1. Equal luminance is also what makes one ink colour work on all of
     // them.
-    const vivid = BLOCK_CATEGORIES.map((c) => categoryColour(FALLBACK_TOKENS, c)).filter(
-      (colour) => hsl(colour).s > 30
-    )
+    //
+    // `hardware` is off the depth on purpose — it keeps the bright GPIO amber
+    // and carries black lettering instead of white. `blocksContrast.test.ts`
+    // owns that exception, both halves of it: that it really is off the depth,
+    // and that it still clears AA with the ink its own fill asks for.
+    const vivid = BLOCK_CATEGORIES.filter((c) => c.id !== 'hardware')
+      .map((c) => categoryColour(FALLBACK_TOKENS, c))
+      .filter((colour) => hsl(colour).s > 30)
     const lums = vivid.map(relativeLuminance)
     expect(Math.max(...lums) - Math.min(...lums)).toBeLessThan(0.01)
   })
