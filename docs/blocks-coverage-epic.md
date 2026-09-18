@@ -5,12 +5,14 @@
 > generator emits; measured against a real corpus that reader renders 54.7% of
 > lines as blocks and only 4.9% of files without a single grey fallback. This
 > epic is about the other half.
-> Owner: Kevin McAleer. Status: proposed. Epic #1086, with W0–W9 filed and
-> linked as sub-issues #1087–#1096.
+> Owner: Kevin McAleer. Status: **delivered** — all eleven workstreams landed;
+> see §10 for what the numbers did. Epic #1086, with W0–W10 filed and linked as
+> sub-issues #1087–#1097.
 
-Nine workstreams (W1–W9), measured before and after. This document is the
+Eleven workstreams (W0–W10), measured before and after. This document is the
 evidence, the design decisions the epic turns on, the per-workstream plans and
-the coverage ratchet that keeps the result from sliding back.
+the coverage ratchet that keeps the result from sliding back — and, in §10, what
+actually happened when they landed.
 
 ---
 
@@ -416,3 +418,101 @@ rather than dropping blocks, which is the existing rule and is unaffected.
 4. **Does W5 change the block format?** A comment field on every block is the
    right answer and touches the serialisation of every block type. Cheaper now
    than after three more workstreams have shipped.
+
+---
+
+## 10. What shipped, and what the numbers did
+
+All eleven workstreams landed, in the order §5 set. The fixture corpus in
+`test/fixtures/coverage/` — forty-three real MicroPython programs chosen to span
+the buckets in §3 — is what the numbers below are measured over; the personal
+corpus §2.1 describes cannot live in the repo, and stays available behind
+`SNAKIE_CORPUS=<dir>`.
+
+| After | Statements | Sockets | Files with no grey |
+| --- | ---: | ---: | ---: |
+| W0 — the ratchet, measuring what was already there | 53.31% | 53.88% | 2 / 43 |
+| W1 — objects | 72.61% | 68.86% | 2 / 43 |
+| W2 — palette-wide reader rules | 72.61% | 71.02% | 2 / 43 |
+| W10 — human-named pins | 72.61% | 72.41% | 2 / 43 |
+| W3 — `return` | 76.73% | 71.58% | 2 / 43 |
+| W4 — docstrings | 77.47% | 71.58% | 2 / 43 |
+| W5 — trailing comments | 78.79% | 71.47% | 3 / 43 |
+| W6 — classes and methods | 87.92% | 71.47% | 4 / 43 |
+| W7 — `try` / `with` / `raise` | 92.49% | 70.91% | 4 / 43 |
+| W8 — assignment and scope | 96.32% | 72.79% | 4 / 43 |
+| W9 — `async` | **97.94%** | **71.74%** | **4 / 43** |
+
+**Statement coverage beat the plan.** §3 projected 94% after Tier 4 and the
+fixture corpus reads 97.94%, which is worth treating as a fixture effect rather
+than a triumph: forty-three files chosen to span the buckets have a thinner tail
+than 688 files chosen by having been written.
+
+**Socket coverage moved much less, and the shape of that is the interesting
+part.** It is a RATIO, and three workstreams grew its denominator faster than its
+numerator by turning grey statements into real blocks with expressions in
+sockets: `return <expr>` (W3), `raise <expr>` (W7) and `await <expr>` (W9). Each
+of those is a file being measured more honestly rather than a file getting worse,
+and the floor in `blocksCoverageRatchet.test.ts` was argued down each time in a
+comment beside it. The alternative — never counting an expression the reader has
+not reached — is the blindness W0 exists to remove.
+
+**The fourteen lines still grey in the fixture corpus**, which is the most useful
+list in this document, because every one of them is a decision rather than a gap:
+
+- **a call into a MODULE** — `asyncio.run(main())`, `os.remove(path)`,
+  `turtle.done()`. W1's deliberate refusal: the import manager owns a module's
+  name, so reading it as a variable regenerates `machine_.lightsleep(10)`, and
+  the round-trip gate cannot see a renamed name.
+- **`print` with more than one argument** — `text_print` has one socket.
+- **`for name, value in rows:`** — a tuple loop target, which `controls_forEach`
+  cannot hold.
+- **`for name in "EDCDEEE":`** — a string in a socket that checks Array, declined
+  since #1087 found it taking a whole file's canvas down.
+- **a subscript with a variable index inside a larger target** —
+  `grid[y][x] ^= 1`, `coils[index].value(...)`. The Lists blocks are 1-based and
+  can only say back `xs[0]` and `xs[i - 1]` exactly.
+- **`del`**, which no workstream claimed.
+- **a `while True:` that is not last in its chain**, correctly demoted (#1068).
+
+### The open questions in §8, answered by what was built
+
+1. **93% of lines, or every file grey-free?** Lines. Files moved from 2 of 43 to
+   4, which is the honest shape of the answer: one exotic line in a long file
+   still shows, and the tail is made of the decisions listed above rather than of
+   work nobody has done.
+2. **Does the toolbox grow?** No. `BlockDefinition.hidden` was added for exactly
+   this, and `class`, method, `self`, `try`, `with`, `raise`, `await`, the
+   docstring block and W8's assignment blocks are all registered and unlisted.
+   §4.5's argument held: the toolbox is curated, the reader is comprehensive. One
+   field flips any of them if the curriculum decision goes the other way.
+3. **Whose corpus?** Still one person's, and now measured against a fixture that
+   is somebody else's guess at what spans it. §9.1 stands.
+4. **Did W5 change the block format?** No, and that is the nicest surprise in the
+   epic. A comment field on every block turned out to be a field every Blockly
+   block already has — the comment bubble the `def` block has carried a docstring
+   in since #1007 — so the serialisation of no block type changed.
+
+### What the ratchet found before a single workstream started
+
+Writing W0 first was the plan's most load-bearing decision, and it paid for
+itself immediately: four faults in the reader, found by the fixture corpus in the
+hour it took to write, and all four of a kind the coverage number alone would
+never have shown.
+
+- `for name in "EDCDEEE":` built a `text` block into a socket that checks Array,
+  and Blockly refused the whole workspace — one line costing every block in the
+  file.
+- A trailing `return x  # why` as a function's last line dropped the comment.
+- `raw * 3.3 / 65535` regenerated as `(raw * 3.3) / 65535`, which the round-trip
+  gate reads as a different program, so the blocks silently stopped following
+  anyone who wrote one of the commonest lines in a sensor program.
+- And later, in the same way: a decorated top-level `def` was hoisted away from
+  its decorator, and `banner = """hello"""` came back `banner = '""hello""'`.
+
+The last two share a property worth naming: **the round-trip gate compares a bag
+of line signatures, with names as placeholders, precisely so that the generator's
+hoisting and its renaming are not mistaken for rewrites — so a line that MOVED,
+or a name that CHANGED, is exactly what it cannot see.** Every workstream that
+touched hoisting or naming needed a test of its own for that reason, and they
+have one.
