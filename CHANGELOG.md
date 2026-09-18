@@ -554,7 +554,61 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   one pin, and it still says so. A name nothing declares gets a warning naming
   the fix rather than a silent substitution of some other pin.
 
+### Changed
+
+- **One block palette, in both skins** (#1098, #1099). The blocks were painted
+  from the Soft Shell **syntax-highlight** tokens — `--kw`, `--str`, `--num` and
+  friends — which are FOREGROUND colours, picked to be legible *on* the editor
+  background. Using them as block FILLS inverted the whole canvas with the skin
+  (pale blocks in the dark theme, dark ones on parchment) and scattered their
+  lightness from 20% to 81% inside a single skin, which is what made the canvas
+  read as over-contrasted and unfinished.
+
+  The blocks have a palette of their own now (`--block-*` in `index.css`), shared
+  by both skins, with only the canvas behind them changing — which is what
+  Scratch and MakeCode do, and the reason a Scratch canvas looks like one thing.
+  The fifteen categories walk the hue circle at a **single relative luminance**
+  rather than a single HSL lightness; luminance is what the eye and the WCAG
+  formula both measure, and holding it constant is what lets one ink colour serve
+  all fifteen. Variables takes the brand blue it was always meant to have
+  (#1098), instead of the near-black `--ident` that left white text on it at
+  **1.51:1**.
+
+  Eleven of the fifteen categories were under 3.0:1 in the dark skin — the floor
+  for large bold text, let alone the 4.5:1 for normal text. All fifteen clear
+  4.5:1 in both skins now, and `test/blocksContrast.test.ts` reads the tokens out
+  of `index.css` rather than keeping a copy, so editing one fails the test that
+  is meant to be guarding it.
+
+  Blockly gives a theme three fill colours per style and **no text colour at
+  all**, so `renderer.ts` publishes `--snakie-block-text` on each block's SVG
+  group, chosen from the fill Blockly actually painted. A custom property
+  inherits down the SVG tree, so a nested block overrides it for its own subtree
+  — no per-block class and nothing to redo when Blockly re-renders. A part's or a
+  plugin's blocks (#1017) are covered by the same two lines.
+
 ### Fixed
+
+- **A field's own text no longer goes white on white.** The rule that paints a
+  block's lettering has to out-specify Blockly's `.blocklyText { fill: #fff }` —
+  and out-specifying that rule also out-specified the field rules sitting beside
+  it in the same stylesheet, where zelos paints `#575E75` on an opaque white
+  rect. Every text field on the canvas went blank: a learner's `led` disappeared
+  out of its own `name pin` block while every label around it stayed perfect. The
+  block's lettering is ours to colour; what Blockly draws inside a field is
+  Blockly's.
+
+- **`name pin` is used for a pin whose methods have no blocks of their own.**
+  Reported against the shipped #1097 work: `led = Pin(25, Pin.OUT)` followed by
+  `led.on()` came back as *set led to (grey blob)* rather than the naming block.
+  `on()` and `off()` have no hardware block behind them, so they read as generic
+  call blocks — and a workspace variable called `led` would have been renamed
+  `led_` beside the `led = Pin(...)` the naming block writes into the setup
+  section, so the all-or-nothing rule dropped the name and the declaration fell
+  back to a plain assignment. The generator binds a declared pin and a variable
+  of that name to ONE identifier now, because that is what they are. A pin named
+  after an imported module still loses to the module — `time = Pin(15, Pin.OUT)`
+  must not take the name out from under `import time`.
 
 - **A function with an answer says so in the Python.** Dropping the returning
   `def` block out of the Functions drawer put `def do_something():` / `pass` in

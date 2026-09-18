@@ -1,5 +1,5 @@
 import * as Blockly from 'blockly/core'
-import { SOFT_SHELL_RENDERER } from './theme'
+import { BLOCK_TEXT_VAR, SOFT_SHELL_RENDERER, readableTextOn } from './theme'
 
 /**
  * THE SOFT SHELL BLOCK GEOMETRY (#573's design direction, epic #1007).
@@ -95,9 +95,48 @@ class SoftShellConstantProvider extends Blockly.zelos.ConstantProvider {
   }
 }
 
+/**
+ * THE BLOCK'S TEXT COLOUR, FROM THE BLOCK'S OWN FILL (#1099).
+ * ---------------------------------------------------------------------------
+ *
+ * Blockly injects `.blocklyText { fill: #fff }` and a theme cannot override it:
+ * `BlockStyle` carries three FILL colours and no text colour at all. So block
+ * text was white on every block in both skins, and measured against the
+ * categories **eleven of fifteen were below 3.0:1 in the dark skin**, with
+ * Variables at 1.51:1 — the one in the screenshot that reported this.
+ *
+ * READ OFF THE PATH, not off the style, and that is deliberate. By the time
+ * `super.applyColour` returns, the fill on the path is what Blockly ACTUALLY
+ * decided — after the shadow-block shade, after the disabled pattern, after
+ * anything a future Blockly does that this file has never heard of. Asking the
+ * element is asking the truth; re-deriving it from `this.style` would be a
+ * second copy of Blockly's rules, and the copy is the one that goes stale.
+ *
+ * WHY A CUSTOM PROPERTY rather than setting `fill` on each text element: a
+ * custom property inherits down the SVG tree, so every label on the block picks
+ * it up and a nested block overrides it for its own subtree — with no per-block
+ * class, no walk of the canvas, and nothing to re-run when Blockly re-renders.
+ * It also covers a part's or a plugin's blocks (#1017) for free, which is the
+ * acceptance criterion no hand-tuned per-category table could meet.
+ */
+class SoftShellPathObject extends Blockly.zelos.PathObject {
+  override applyColour(block: Blockly.BlockSvg): void {
+    super.applyColour(block)
+    // A fill this cannot parse — the hatch pattern on a disabled block is a
+    // `url(#…)` — falls back to the style's own colour rather than to a guess.
+    const painted = this.svgPath.getAttribute('fill') ?? ''
+    const fill = painted.startsWith('#') ? painted : this.style.colourPrimary
+    this.svgRoot.style.setProperty(BLOCK_TEXT_VAR, readableTextOn(fill))
+  }
+}
+
 class SoftShellRenderer extends Blockly.zelos.Renderer {
   protected override makeConstants_(): Blockly.zelos.ConstantProvider {
     return new SoftShellConstantProvider()
+  }
+
+  override makePathObject(root: SVGElement, style: Blockly.Theme.BlockStyle): Blockly.zelos.PathObject {
+    return new SoftShellPathObject(root, style, this.getConstants() as Blockly.zelos.ConstantProvider)
   }
 }
 

@@ -14,6 +14,39 @@
   font-family: var(--font-ui);
 }
 
+/* THE INK ON A BLOCK, FROM THE BLOCK'S OWN FILL (#1099).
+ *
+ * Blockly injects `.blocklyText { fill: #fff }` and a theme cannot override it:
+ * a `BlockStyle` carries three fill colours and no text colour at all. So block
+ * text was white on every block in both skins, and eleven of fifteen categories
+ * were under 3.0:1 in the dark one.
+ *
+ * `renderer.ts` publishes `--snakie-block-text` on each block's SVG group,
+ * picked from the fill Blockly actually painted. A custom property INHERITS down
+ * the SVG tree, so every label on the block reads it and a nested block
+ * overrides it for its own subtree — no per-block class, no walk of the canvas,
+ * and nothing to redo when Blockly re-renders. A part's or a plugin's blocks
+ * (#1017) are covered by the same two lines.
+ *
+ * FOUR CLASSES ON PURPOSE. Blockly's own rule is
+ * `.<renderer>-renderer.<theme>-theme .blocklyText`, which is three — so this
+ * has to out-specify it rather than merely come later in the cascade (Blockly
+ * PREPENDS its stylesheet to <head>, so source order is not ours to rely on).
+ *
+ * AND THE FIELDS ARE EXCLUDED, because out-specifying that rule also
+ * out-specifies the ones NEXT to it. Zelos paints a field's own lettering
+ * `#575E75` on an opaque white rect (`.blocklyEditableField>text`, four
+ * classes deep counting the element), and the first cut of this rule beat that
+ * too — so every text field on the canvas went white on white and a learner's
+ * `led` vanished out of its own `name pin` block. The block's lettering is ours
+ * to colour; what Blockly draws INSIDE a field is Blockly's. */
+.blocks-canvas__host
+  .blocklySvg
+  .blocklyBlockCanvas
+  .blocklyText:not(.blocklyEditableField *):not(.blocklyNonEditableField *) {
+  fill: var(--snakie-block-text, #fff);
+}
+
 .blocks-canvas__host .blocklyFlyoutLabelText,
 .blocks-canvas__host .blocklyTreeLabel {
   font-family: var(--font-ui);

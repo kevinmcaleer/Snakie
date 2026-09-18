@@ -4,6 +4,7 @@ import { ensureBlocklyLocale } from './locale'
 import { ImportManager, type PyImport } from './imports'
 import { sanitise, toPythonIdentifier } from './names'
 import { blockDefinition, registeredBlocks } from './registry'
+import { pinAliasesIn } from './board-pins'
 
 /**
  * THE MICROPYTHON GENERATOR (#1010, epic #1007).
@@ -162,6 +163,18 @@ export class MicroPythonGenerator extends Blockly.CodeGenerator {
   private setupBindings = new Map<string, SetupBinding>()
   /** Every name spoken for: modules, hoisted objects, user variables. */
   private taken = new Set<string>()
+  /** The pin names this workspace declares — see {@link boundName}. */
+  private pinNames: ReadonlySet<string> | null = null
+  /**
+   * The module names this pass was told about BEFORE it started (#1068's two
+   * passes), as distinct from everything it has handed out since.
+   *
+   * {@link boundName} needs the difference: a declared pin outranks another
+   * variable and never outranks a module, and by the time a `name pin` block
+   * emits, the import that binds `time` may not have been requested yet — which
+   * is the whole reason `generateProgram` runs twice.
+   */
+  private reservedModules = new Set<string>()
   /** Blockly variable id -> the Python identifier it settled on this pass. */
   private variableNames = new Map<string, string>()
   /** `def` blocks, in first-defined order: block id -> the whole definition. */
@@ -239,10 +252,53 @@ export class MicroPythonGenerator extends Blockly.CodeGenerator {
       if (!existing.blockId && block) existing.blockId = block.id
       return existing.name
     }
-    const name = toPythonIdentifier(sanitise(suggestedName), this.reservedNames())
+    const name = this.boundName(suggestedName)
     this.taken.add(name)
     this.setupBindings.set(key, { name, expr, blockId: block?.id ?? null, after: [...after] })
     return name
+  }
+
+  /**
+   * A NAME THE PROGRAM ITSELF DECLARED IS ONE BINDING, NOT TWO (#1097).
+   *
+   * `toPythonIdentifier` dodges a collision by counting up — `led` becomes
+   * `led_` when `led` is already spoken for — which is exactly right for two
+   * different things a learner happened to give the same name, and exactly
+   * wrong for two halves of ONE thing.
+   *
+   * A `name pin` block is the second kind. It writes `led = Pin(25, Pin.OUT)`
+   * into the setup section, and every other block that mentions that pin has to
+   * say `led` too: the generic call block reading back `led.on()` holds a
+   * VARIABLE called `led`, and letting that become `led_` produced
+   * `led_.on()` — a program that names a pin it never made. It is also what
+   * made the reader give up on the whole declaration and fall back to
+   * *set led to (Pin(25, Pin.OUT))*, which is the bug as a learner meets it.
+   *
+   * So a name this workspace declares as a pin is authoritative: both halves
+   * take it verbatim, and neither dodges the other.
+   */
+  private boundName(suggested: string): string {
+    const clean = sanitise(suggested)
+    // IT STILL LOSES TO A MODULE, and only to a module. A pin somebody called
+    // `time` must not take the name out from under `import time` — the module
+    // quietly stops being reachable and every `time.sleep()` in the program
+    // breaks. So the authority is over the names this pass HANDS OUT, not over
+    // the ones the imports bind, which is the same precedence `names.ts` has
+    // always given the module namespace.
+    const modules = this.imports.boundNames()
+    for (const name of this.reservedModules) modules.add(name)
+    if (this.declaredPins().has(clean) && !modules.has(clean)) return clean
+    return toPythonIdentifier(clean, this.reservedNames())
+  }
+
+  /** The pin names this workspace declares, read off its `name pin` blocks. */
+  private declaredPins(): ReadonlySet<string> {
+    if (this.pinNames) return this.pinNames
+    const workspace = this.workspaceRef
+    this.pinNames = new Set(
+      workspace ? pinAliasesIn(workspace).map((alias) => sanitise(alias.name)) : []
+    )
+    return this.pinNames
   }
 
   /**
@@ -257,7 +313,9 @@ export class MicroPythonGenerator extends Blockly.CodeGenerator {
     if (known) return known
     const model = this.workspaceRef?.getVariableMap().getVariableById(id) ?? null
     const raw = model?.getName?.() ?? fallbackName ?? id
-    const name = toPythonIdentifier(raw, this.reservedNames())
+    // A variable named after a pin this program declares IS that pin — see
+    // {@link boundName}.
+    const name = this.boundName(raw)
     this.taken.add(name)
     this.variableNames.set(id, name)
     return name
@@ -318,7 +376,10 @@ export class MicroPythonGenerator extends Blockly.CodeGenerator {
    * bind (#1068). See the two passes in {@link generateProgram}.
    */
   reserve(names: Iterable<string>): void {
-    for (const name of names) this.taken.add(name)
+    for (const name of names) {
+      this.taken.add(name)
+      this.reservedModules.add(name)
+    }
   }
 
   /** Reset for a fresh pass. Called by {@link generateProgram}. */
@@ -326,6 +387,8 @@ export class MicroPythonGenerator extends Blockly.CodeGenerator {
     this.imports = new ImportManager()
     this.setupBindings = new Map()
     this.variableNames = new Map()
+    this.pinNames = null
+    this.reservedModules = new Set()
     this.functions = new Map()
     this.functionNames = new Map()
     this.taken = new Set()

@@ -38,6 +38,13 @@ const ALLOWED_UNDEFINED = new Set<string>([
   // dark ink in BOTH themes. Renaming the background to a theme surface would put
   // dark text on a dark surface in the dark theme — so this is a hook, not a bug.
   '--paper',
+  // The ink on a block (#1099), published per block by `renderer.ts` from the
+  // fill Blockly actually painted — so it is set in JS on each block's SVG
+  // group, never in CSS, and there is nothing here to define. The `#fff`
+  // fallback is Blockly's own hardcoded block-text colour, which is what the
+  // canvas showed before this existed and is theme-neutral for the same reason:
+  // the BLOCK palette is one set of colours in both skins.
+  '--snakie-block-text',
 ])
 
 /** Walk a dir tree, returning absolute paths of files with the given extensions. */

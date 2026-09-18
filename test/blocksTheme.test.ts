@@ -8,8 +8,8 @@ import {
   greyOf,
   mixHex,
   readThemeTokens,
-  softShellWorkspaceOptions,
-  withHue
+  relativeLuminance,
+  softShellWorkspaceOptions
 } from '../src/renderer/src/lib/blocks/theme'
 
 /**
@@ -37,37 +37,33 @@ describe('buildSoftShellTheme (#1009)', () => {
     }
   })
 
-  it('keeps the four anchors on their token exactly', () => {
-    // Maths IS the idea: `num` is the colour a number has in the mirror beside
-    // it. Turtle owns green, parts wears the board's power dot, and variables
-    // and python are near-greys that cost no hue space.
-    expect(theme.categoryStyles['math_category'].colour).toBe(FALLBACK_TOKENS.num)
-    expect(theme.categoryStyles['turtle_category'].colour).toBe(FALLBACK_TOKENS.green)
-    expect(theme.categoryStyles['parts_category'].colour).toBe(FALLBACK_TOKENS.pinPower)
-    expect(theme.categoryStyles['variables_category'].colour).toBe(FALLBACK_TOKENS.ident)
-    expect(theme.categoryStyles['python_category'].colour).toBe(FALLBACK_TOKENS.com)
-  })
-
-  it('keeps hardware recognisably the GPIO dot, six degrees off it', () => {
-    // It moves only far enough to clear `str`, so a block and the pin it drives
-    // still read as the same colour.
-    const hardware = theme.categoryStyles['hardware_category'].colour
-    expect(hardware).not.toBe(FALLBACK_TOKENS.pinGpio)
-    expect(Math.abs(hueOf(hardware) - hueOf(FALLBACK_TOKENS.pinGpio))).toBeLessThanOrEqual(8)
-  })
-
-  it('moves a hue without changing the token\'s depth', () => {
-    // The palette holds together because saturation and lightness do not move.
-    const moved = withHue(FALLBACK_TOKENS.gold, 200)
-    const a = hsl(FALLBACK_TOKENS.gold)
-    const b = hsl(moved)
-    expect(Math.abs(a.s - b.s)).toBeLessThanOrEqual(1)
-    expect(Math.abs(a.l - b.l)).toBeLessThanOrEqual(1)
-    expect(hueOf(moved)).toBe(200)
+  it('paints every category from the block palette, not from a syntax token', () => {
+    // THE CONTRACT INVERSION #1099 DIAGNOSED. `--kw`, `--num`, `--ident` are
+    // FOREGROUND colours, picked to be readable *on* the editor background; used
+    // as block FILLS they inverted with the skin — pale blocks in the dark theme,
+    // dark ones on parchment — and their lightness ran from 20% to 81% within a
+    // single skin. The blocks have a palette of their own now.
+    const syntax = [
+      FALLBACK_TOKENS.kw,
+      FALLBACK_TOKENS.str,
+      FALLBACK_TOKENS.num,
+      FALLBACK_TOKENS.com,
+      FALLBACK_TOKENS.ident,
+      FALLBACK_TOKENS.green,
+      FALLBACK_TOKENS.gold,
+      FALLBACK_TOKENS.pinGpio,
+      FALLBACK_TOKENS.pinPower
+    ]
+    for (const c of BLOCK_CATEGORIES) {
+      expect({ id: c.id, borrowed: syntax.includes(categoryColour(FALLBACK_TOKENS, c)) }).toEqual({
+        id: c.id,
+        borrowed: false
+      })
+    }
   })
 
   it('gives every category a colour of its own', () => {
-    // The defect this table was fixed for: fifteen drawers over nine tokens,
+    // The defect the old table was fixed for: fifteen drawers over nine tokens,
     // and two of the clashes were between DIFFERENT tokens — `kw` sat one
     // degree off `pinPower`, `str` three degrees off `pinGpio`. A learner could
     // not tell a Text block from a Hardware one.
@@ -75,18 +71,17 @@ describe('buildSoftShellTheme (#1009)', () => {
     expect(new Set(colours).size).toBe(BLOCK_CATEGORIES.length)
   })
 
-  it('never puts a hue on a near-grey token, where it would do nothing', () => {
-    // `withHue` keeps saturation, which is what holds the palette together —
-    // and means a hue declared on `ident` or `com` is silently a no-op: the
-    // category comes out the same near-grey it started as, however far round
-    // the wheel it was sent. Modules hit exactly this and had to change token.
-    for (const c of BLOCK_CATEGORIES) {
-      // `satisfies` narrows each entry literally, so only the ones that declare
-      // a hue have the property at all.
-      if ((c as { hue?: number }).hue === undefined) continue
-      const { s: sat } = hsl(categoryColour(FALLBACK_TOKENS, c))
-      expect({ id: c.id, vivid: sat > 30 }).toEqual({ id: c.id, vivid: true })
-    }
+  it('keeps every block at the same DEPTH, measured as luminance', () => {
+    // What makes it read as one palette, and what equal HSL lightness could not
+    // do: a yellow and a blue at the same L are nowhere near the same
+    // brightness, which is why Scratch's own yellow carries white text at
+    // 1.9:1. Equal luminance is also what makes one ink colour work on all of
+    // them.
+    const vivid = BLOCK_CATEGORIES.map((c) => categoryColour(FALLBACK_TOKENS, c)).filter(
+      (colour) => hsl(colour).s > 30
+    )
+    const lums = vivid.map(relativeLuminance)
+    expect(Math.max(...lums) - Math.min(...lums)).toBeLessThan(0.01)
   })
 
   it('keeps the vivid categories at least 20° apart on the wheel', () => {
@@ -110,7 +105,7 @@ describe('buildSoftShellTheme (#1009)', () => {
 
   it('derives each block\'s three shades rather than hand-picking them', () => {
     const turtle = theme.blockStyles['turtle_blocks']
-    expect(turtle.colourPrimary).toBe(FALLBACK_TOKENS.green)
+    expect(turtle.colourPrimary).toBe(FALLBACK_TOKENS.blockTurtle)
     expect(turtle.colourSecondary).not.toBe(turtle.colourPrimary)
     expect(turtle.colourTertiary).not.toBe(turtle.colourPrimary)
     for (const v of Object.values(turtle)) expect(v).toMatch(/^#[0-9a-f]{6}$/i)
@@ -154,8 +149,10 @@ describe('mixHex (#1009)', () => {
   })
 
   it('returns the first colour unchanged for anything it cannot parse', () => {
-    // A silent misparse would produce a plausible-looking WRONG colour.
-    expect(mixHex('#abc', '#ffffff', 0.5)).toBe('#abc')
+    // A silent misparse would produce a plausible-looking WRONG colour. Three
+    // digits ARE parsed — `index.css` writes `--card: #fff` — so the shorthand
+    // is the same notation rather than an unknown one (#1099).
+    expect(mixHex('#fff', '#000000', 0)).toBe('#ffffff')
     expect(mixHex('rgb(1,2,3)', '#ffffff', 0.5)).toBe('rgb(1,2,3)')
   })
 })
@@ -182,9 +179,10 @@ describe('comments recede (#1062)', () => {
     expect(greyOf('#000000')).toBe('#000000')
   })
 
-  it('leaves anything that is not a 6-digit hex alone', () => {
+  it('leaves anything that is not a hex colour alone', () => {
     expect(greyOf('rebeccapurple')).toBe('rebeccapurple')
-    expect(greyOf('#abc')).toBe('#abc')
+    // …but the three-digit shorthand is a hex colour, and `index.css` uses it.
+    expect(greyOf('#fff')).toBe('#ffffff')
   })
 
   it('gives the comment block a style of its own, not the Python one', () => {
@@ -224,4 +222,3 @@ function hsl(hex: string): { h: number; s: number; l: number } {
   return { h: Math.round(h), s: Math.round((d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1))) * 100), l: Math.round(l * 100) }
 }
 
-const hueOf = (hex: string): number => hsl(hex).h

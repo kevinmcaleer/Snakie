@@ -149,16 +149,52 @@ describe('what must NOT change', () => {
     roundTrips(src)
   })
 
-  it('a name with a use we cannot read stays an ordinary variable', () => {
-    // ALL-OR-NOTHING, as for a hoisted object. Reading the declaration as the
-    // `name pin` block puts `led` in the SETUP section, where the generator owns
-    // the name — so a generic `led.on()` beside it would come back `led_.on()`
-    // and drive nothing. `on()` and `off()` are ordinary MicroPython with no
-    // block of their own, so the whole name goes back to being a variable.
+  it('keeps the name even when a use has no block of its own', () => {
+    // THE COMMONEST PROGRAM THERE IS, and it used to be the one case this
+    // workstream missed. `on()` and `off()` are ordinary MicroPython with no
+    // hardware block behind them, so they read as generic call blocks — and the
+    // name used to be dropped entirely whenever that happened, because a
+    // workspace variable called `led` would have been renamed `led_` beside the
+    // `led = Pin(...)` the naming block writes into the setup section. The
+    // declaration then fell back to *set led to (grey blob)*.
+    //
+    // The generator binds a declared pin and a variable of that name to ONE
+    // identifier now, because that is what they are, so there is nothing left
+    // to defend against.
     const src = `${IMPORT}led = Pin(25, Pin.OUT)\n\nled.on()\nled.off()\n`
-    expect(one(src, PIN_ALIAS_BLOCK)).toBeUndefined()
+    expect(one(src, PIN_ALIAS_BLOCK)).toBeDefined()
     expect(regenerate(src)).not.toContain('led_')
     roundTrips(src)
+  })
+
+  it('holds for the blink program, end to end', () => {
+    const src = [
+      'from machine import Pin',
+      'import time',
+      '',
+      'led = Pin(25, Pin.OUT)',
+      '',
+      'while True:',
+      '    led.on()',
+      '    time.sleep(0.5)',
+      '    led.off()',
+      '    time.sleep(0.5)',
+      ''
+    ].join('\n')
+    const { report } = pythonToBlocks(src)
+    expect(report.raw).toBe(0)
+    expect(report.rawSockets).toBe(0)
+    expect(one(src, PIN_ALIAS_BLOCK)).toBeDefined()
+  })
+
+  it('a pin named after a module still loses to the module', () => {
+    // The one precedence that does not change: a pin somebody called `time`
+    // must not take the name out from under `import time`, or every
+    // `time.sleep()` in the program breaks.
+    const src = ['from machine import Pin', 'import time', '', 'time = Pin(15, Pin.OUT)', ''].join(
+      '\n'
+    )
+    expect(regenerate(src)).not.toMatch(/^time = Pin/m)
   })
 
   it('names a pin that is only mentioned, never called', () => {

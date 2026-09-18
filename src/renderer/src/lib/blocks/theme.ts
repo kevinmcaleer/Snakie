@@ -59,6 +59,38 @@ export interface ThemeTokens {
   pinGpio: string
   /** The POWER pin dot — worn by the blocks a wired-up part brings with it. */
   pinPower: string
+  /**
+   * THE BLOCK PALETTE (#1098, #1099) — one colour per category, and the only
+   * colours on this canvas that are not borrowed from somewhere else.
+   *
+   * They used to be: a block wore the token its construct has in the CODE
+   * MIRROR, so a number block was the blue `5` is in Monaco. A lovely idea, and
+   * it had a contract inversion inside it — those tokens are FOREGROUND colours,
+   * picked to be readable *on* the editor background, and a foreground re-used
+   * as a fill inverts with the skin. The dark theme got light blocks with white
+   * text (eleven of fifteen categories below 3.0:1) and parchment got dark ones.
+   *
+   * So the palette is its own thing now: **one set of fills for both skins, with
+   * only the canvas behind them changing**, which is what Scratch and MakeCode
+   * do. Every one sits at the same measured LUMINANCE, so white text is 5.2:1 on
+   * all of them — see the note in `index.css` for why luminance and not HSL
+   * lightness.
+   */
+  blockTurtle: string
+  blockHardware: string
+  blockInstruments: string
+  blockParts: string
+  blockModules: string
+  blockWait: string
+  blockControl: string
+  blockLogic: string
+  blockMath: string
+  blockText: string
+  blockLists: string
+  blockVariables: string
+  blockFunctions: string
+  blockPlugins: string
+  blockPython: string
 }
 
 /** The custom property each token comes from. */
@@ -78,7 +110,22 @@ const TOKEN_VARS: Record<keyof ThemeTokens, string> = {
   com: '--com',
   ident: '--ident',
   pinGpio: '--pin-gpio',
-  pinPower: '--pin-power'
+  pinPower: '--pin-power',
+  blockTurtle: '--block-turtle',
+  blockHardware: '--block-hardware',
+  blockInstruments: '--block-instruments',
+  blockParts: '--block-parts',
+  blockModules: '--block-modules',
+  blockWait: '--block-wait',
+  blockControl: '--block-control',
+  blockLogic: '--block-logic',
+  blockMath: '--block-math',
+  blockText: '--block-text',
+  blockLists: '--block-lists',
+  blockVariables: '--block-variables',
+  blockFunctions: '--block-functions',
+  blockPlugins: '--block-plugins',
+  blockPython: '--block-python'
 }
 
 /**
@@ -106,7 +153,23 @@ export const FALLBACK_TOKENS: ThemeTokens = {
   com: '#6f7a63',
   ident: '#cdd4cb',
   pinGpio: '#d9a441',
-  pinPower: '#d4553f'
+  pinPower: '#d4553f',
+  // The block palette, which is the SAME in both skins — see `index.css`.
+  blockTurtle: '#167d38',
+  blockHardware: '#985f1b',
+  blockInstruments: '#157965',
+  blockParts: '#c63923',
+  blockModules: '#b223c9',
+  blockWait: '#766d15',
+  blockControl: '#4e7715',
+  blockLogic: '#8c45de',
+  blockMath: '#2b66da',
+  blockText: '#6158e1',
+  blockLists: '#227d16',
+  blockVariables: '#1a7595',
+  blockFunctions: '#c22298',
+  blockPlugins: '#cd2457',
+  blockPython: '#676e60'
 }
 
 /** Read the live Soft Shell tokens off `el` (normally the document root). */
@@ -130,66 +193,50 @@ export function readThemeTokens(el: Element | null): ThemeTokens {
  * it lives here so the colour and the category can never disagree.
  */
 /**
- * ONE COLOUR PER CATEGORY, and it did not used to be.
+ * ONE COLOUR PER CATEGORY, AND THE PALETTE IS ITS OWN THING (#1098, #1099).
  *
- * The original idea here is a good one and it stays: a block wears the colour
- * its construct has in the CODE MIRROR beside it, so a number block is the blue
- * that `5` is in Monaco. Nothing else in this app can do that, and it is worth
- * more than copying Scratch's palette wholesale.
+ * The original idea here was a good one and it is gone: a block wore the colour
+ * its construct has in the CODE MIRROR, so a number block was the blue `5` is in
+ * Monaco. Nothing else in this app can do that, and it was worth trying.
  *
- * But it was applied to fifteen categories over nine tokens, and measured on the
- * hue wheel the result was worse than the duplicates suggest:
+ * WHAT IT COST. Those tokens are FOREGROUND colours — `--kw`, `--num`, `--ident`
+ * are picked to be readable *on* the editor background — and a foreground used
+ * as a FILL inverts with the skin. The dark theme got pale blocks, parchment got
+ * dark ones, and within a single skin the lightness ran from 20% to 81%. Blockly
+ * paints block text white and a theme cannot change it, so eleven of the fifteen
+ * categories were under 3.0:1 in the dark skin and Variables was at 1.51:1 — a
+ * near-white block with near-white text on it, which is what reported #1099.
  *
- * ```
- *    8°  logic, functions      (kw)     ─┐ one degree apart
- *    9°  parts                 (pinPower)┘
- *   39°  hardware, wait, control (gold)  ─┐ three degrees apart
- *   42°  text, lists, plugins  (str)     ─┘
- *   89°  python                (com)
- *  107°  modules, variables    (ident)
- *  152°  turtle                (green)
- *  197°  instruments, maths    (num)
- * ```
+ * Two hues also collided so hard that the rule was not even buying the
+ * distinctness it cost: `logic`/`functions` (`kw`) sat one degree from `parts`
+ * (`pinPower`), and `hardware`/`wait`/`control` (`gold`) three degrees from
+ * `text`/`lists` (`str`). Fifteen drawers in about six telling-apart-able
+ * colours. A `hue:` per category was layered on to fix that, and it could not
+ * fix the near-greys at all: `withHue` keeps saturation, so a hue put on
+ * `ident` stays a near-grey however far round the wheel it is sent.
  *
- * Fifteen drawers in about six telling-apart-able colours, and two of the
- * clashes were between DIFFERENT tokens — so the rule was not even buying the
- * distinctness it cost. A learner cannot tell a Text block from a Hardware one.
+ * SO THE BLOCKS GET A PALETTE OF THEIR OWN — one set of fills for BOTH skins,
+ * with only the canvas behind them changing, which is what Scratch and MakeCode
+ * do and what makes their canvases read as one thing. It lives in `index.css`
+ * with the rest of the colour, at one measured luminance so that white text is
+ * 5.2:1 on every block, with the hues spread ~24° apart and anchored where the
+ * brand palette already has an opinion.
  *
- * So `hue` moves a category around the wheel while {@link withHue} keeps the
- * token's saturation and lightness exactly, which is what holds the palette
- * together as one palette. Categories with no `hue` wear their token as before.
- *
- * WHAT KEPT ITS TOKEN, and why those four:
- *
- *  - **maths** is the anchor worth keeping — `num` is literally the colour a
- *    number is in the mirror, and it is the clearest case of the whole idea.
- *    `text` could not keep `str` beside it: the warm end only fits the two board
- *    colours, and `str` was already three degrees off the GPIO dot, so that
- *    anchor was invisible before it moved.
- *  - **turtle** is `green`, the pen colour, and owns that end of the wheel.
- *  - **parts** is `pinPower` and **hardware** is `pinGpio`: the two dot colours
- *    off the board diagrams, so a wired part's blocks match its pin. Hardware
- *    moves 6° to clear `str`, which is not enough to break the resemblance.
- *  - **variables** (`ident`) and **python** (`com`) are near-greys — they take
- *    no hue space at all and are told apart by lightness, so they are left
- *    alone and cost nothing.
- *
- * Everything else is spread at 20° or more. The order below is still the
- * learning order, not the wheel order.
+ * The order below is still the LEARNING order, not the wheel order: a child
+ * opens the toolbox and the first thing they can reach should make the turtle
+ * move (#1013).
  */
 export const BLOCK_CATEGORIES = [
-  { id: 'turtle', name: 'Turtle', token: 'green' },
-  // 6° off the GPIO dot, purely to clear `str` at 42°. Still reads as the pin.
-  { id: 'hardware', name: 'Hardware', token: 'pinGpio', hue: 33 },
-  // Teal: the scope/plot family, clear of maths' 197° without leaving the blues.
-  { id: 'instruments', name: 'Instruments', token: 'num', hue: 175 },
+  { id: 'turtle', name: 'Turtle', token: 'blockTurtle' },
+  { id: 'hardware', name: 'Hardware', token: 'blockHardware' },
+  { id: 'instruments', name: 'Instruments', token: 'blockInstruments' },
   // The parts on the breadboard bring their own blocks (#1017), grouped one
   // drawer per part. It sits next to Hardware because that is what it IS — the
   // difference is only that nobody hand-wrote these.
   {
     id: 'parts',
     name: 'My parts',
-    token: 'pinPower',
+    token: 'blockParts',
     hint: 'Wire a part up in Electronics and its blocks appear here.'
   },
   // The modules this program IMPORTS (#1048), one drawer each.
@@ -200,60 +247,35 @@ export const BLOCK_CATEGORIES = [
   {
     id: 'modules',
     name: 'Modules',
-    // Violet — and based on `num` rather than `ident` ON PURPOSE. `withHue`
-    // keeps saturation, so a hue put on a near-grey stays a near-grey: Modules
-    // would have come out the same colour as Variables however far round the
-    // wheel it was sent. It needs a saturated token to move at all.
-    token: 'num',
-    hue: 295,
+    token: 'blockModules',
     hint: 'Import a module and the blocks it offers appear here.'
   },
   // Wait gets a category of its own rather than a corner of Control (#1011).
   // It is the single most-used block in any hardware lesson — every blink,
   // every debounce, every "now do the next thing" — and a beginner should not
   // have to know that waiting is a kind of control flow to find it.
-  // Yellow — Scratch puts events here, and waiting is the closest thing to one.
-  { id: 'wait', name: 'Wait', token: 'gold', hue: 53 },
-  // Olive-gold: next to Wait on the wheel because they were one drawer, far
-  // enough from it to be a different one.
-  { id: 'control', name: 'Control', token: 'gold', hue: 76 },
-  // Indigo. `kw` sat one degree off `pinPower`, so the keyword anchor was
-  // already invisible — this buys distinctness the old value never had.
-  { id: 'logic', name: 'Logic', token: 'kw', hue: 265 },
-  { id: 'math', name: 'Maths', token: 'num' },
-  // Blue. `str` sat three degrees off the GPIO dot, so the string anchor was
-  // already invisible, and the warm end only fits the two board colours.
-  { id: 'text', name: 'Text', token: 'str', hue: 225 },
-  // The warm-green gap. Lists began beside Text — a list is a row of things —
-  // but five categories in the blues is five nobody can tell apart: the eye
-  // separates far less per degree there than it does around the rest of the
-  // wheel, so the crowded end gives one up to the empty one.
-  { id: 'lists', name: 'Lists', token: 'str', hue: 113 },
-  { id: 'variables', name: 'Variables', token: 'ident' },
-  // Magenta, a step round from Logic: both are `kw` in the mirror, and keeping
-  // them adjacent says so without making them the same block.
-  { id: 'functions', name: 'Functions', token: 'kw', hue: 320 },
+  { id: 'wait', name: 'Wait', token: 'blockWait' },
+  { id: 'control', name: 'Control', token: 'blockControl' },
+  { id: 'logic', name: 'Logic', token: 'blockLogic' },
+  { id: 'math', name: 'Maths', token: 'blockMath' },
+  { id: 'text', name: 'Text', token: 'blockText' },
+  { id: 'lists', name: 'Lists', token: 'blockLists' },
+  // The brand blue (#1098). It used to wear `ident`, a near-grey in both skins,
+  // so the drawer read as black on parchment and as white in the dark — which
+  // is the screenshot that opened the issue.
+  { id: 'variables', name: 'Variables', token: 'blockVariables' },
+  { id: 'functions', name: 'Functions', token: 'blockFunctions' },
   {
     id: 'plugins',
     name: 'Plugins',
-    token: 'str',
-    // Pink, and deliberately the odd one out: a plugin's blocks are the only
-    // ones on the canvas that did not ship with Snakie.
-    hue: 345,
+    token: 'blockPlugins',
     hint: 'A Python plugin can add blocks here — see Writing plugins.'
   },
-  { id: 'python', name: 'Python', token: 'com' }
+  { id: 'python', name: 'Python', token: 'blockPython' }
 ] as const satisfies readonly {
   id: string
   name: string
   token: keyof ThemeTokens
-  /**
-   * Move this category to its own hue, keeping the token's saturation and
-   * lightness exactly (see {@link withHue} and the note above the table).
-   *
-   * Absent means "wear the token as it is", which is what the four anchors do.
-   */
-  hue?: number
   /**
    * What an EMPTY category says (#1017).
    *
@@ -315,17 +337,23 @@ const STOCK_STYLE_ALIASES: Record<string, BlockCategoryId> = {
 }
 
 /**
- * A category's colour: its token, moved to its own hue when it declares one.
+ * A category's colour: the token it declares, and nothing else.
  *
- * Exported because the toolbox and the tests both need to ask the same question
- * the theme asks, and a second copy of this rule is a second palette.
+ * It used to rotate that token to a `hue:` the category declared, because
+ * fifteen drawers were sharing nine syntax tokens and colliding (see the note
+ * above `BLOCK_CATEGORIES`). The palette is its own set of colours now, one per
+ * category, so there is nothing left to rotate — and a category that wants a
+ * different colour changes a token in `index.css` rather than a number here.
+ *
+ * Still exported, and still one function, because the toolbox and the tests both
+ * need to ask the same question the theme asks: a second copy of this rule would
+ * be a second palette.
  */
 export function categoryColour(
   tokens: ThemeTokens,
-  category: { token: keyof ThemeTokens; hue?: number }
+  category: { token: keyof ThemeTokens }
 ): string {
-  const colour = tokens[category.token]
-  return category.hue === undefined ? colour : withHue(colour, category.hue)
+  return tokens[category.token]
 }
 
 export function buildSoftShellTheme(tokens: ThemeTokens): SoftShellThemeSpec {
@@ -420,6 +448,19 @@ export function buildSoftShellTheme(tokens: ThemeTokens): SoftShellThemeSpec {
  */
 export const SOFT_SHELL_RENDERER = 'snakie-soft-shell'
 
+/**
+ * The custom property a block's own text colour is published on (#1099).
+ *
+ * The renderer sets it on each block's SVG group and `BlocksCanvas.css` reads it
+ * with `fill: var(…)`. A custom property INHERITS down the SVG tree, so a
+ * block's labels pick it up and a nested block overrides it for its own subtree
+ * — which is the whole mechanism, and it needs no per-block class, no walk of
+ * the canvas, and nothing that has to be re-run when Blockly re-renders.
+ *
+ * Named in one place because two files have to agree on the string.
+ */
+export const BLOCK_TEXT_VAR = '--snakie-block-text'
+
 export function softShellWorkspaceOptions(tokens: ThemeTokens): Partial<BlocklyOptions> {
   return {
     // Thrasos's row layout, wearing the Soft Shell geometry — rounder corners
@@ -474,42 +515,57 @@ export function greyOf(colour: string): string {
 }
 
 /**
- * The same colour, at a different hue (#1007's palette collisions).
+ * READABLE TEXT ON A FILL (#1099).
+ * ---------------------------------------------------------------------------
  *
- * Saturation and lightness are kept EXACTLY, and that is the whole point: Soft
- * Shell's depth is what makes the palette look like one palette, so a category
- * that needs its own hue should move around the wheel without becoming brighter
- * or flatter than the tokens beside it. Rotating a token's hue keeps a derived
- * colour in the family; picking a fresh hex does not.
+ * Blockly hardcodes `.blocklyText { fill: #fff }` and nothing computed a
+ * different one, so **block text was white on every block in both skins** —
+ * and measured against the categories, eleven of fifteen were below 3.0:1 in
+ * the dark skin, with Variables at 1.51:1.
  *
- * Anything that is not a 6-digit hex comes back unchanged, like {@link mixHex}.
+ * THE ROOT CAUSE IS A CONTRACT INVERSION, and it is worth naming because it
+ * explains why this is one function rather than fifteen hand-tuned colours: the
+ * Soft Shell tokens are SYNTAX HIGHLIGHT colours — foregrounds, picked to be
+ * readable ON the editor background — and the block theme uses them as block
+ * FILLS. In the dark skin those foregrounds are light by design, so the result
+ * was a light block with white text on it.
+ *
+ * So the text colour is derived from the fill instead of assumed: whichever of
+ * black and white contrasts better with it. That fixes every category in both
+ * skins at once, and — the part no per-category table could do — every block a
+ * part (#1017) or a plugin contributes, and every category added later.
+ *
+ * WCAG relative luminance, and the 4.5:1 bar that goes with it: block text is
+ * 12px at weight 600, which is *normal* text for WCAG, so the large-bold
+ * exemption of 3.0:1 does not apply.
  */
-export function withHue(colour: string, hue: number): string {
+export function readableTextOn(fill: string): string {
+  const onWhite = contrastRatio(fill, '#ffffff')
+  const onBlack = contrastRatio(fill, '#000000')
+  // Ties go to white, which is what Blockly did before this and what the
+  // darker half of the palette wants anyway.
+  return onWhite >= onBlack ? '#ffffff' : '#000000'
+}
+
+/** The WCAG contrast ratio between two `#rrggbb` colours, 1 to 21. */
+export function contrastRatio(a: string, b: string): number {
+  const [hi, lo] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x)
+  return (hi + 0.05) / (lo + 0.05)
+}
+
+/**
+ * WCAG 2.x relative luminance. Anything that is not a 6-digit hex reads as
+ * black, which is the safe end: it makes a colour we cannot parse ask for white
+ * text rather than silently claiming a contrast nobody measured.
+ */
+export function relativeLuminance(colour: string): number {
   const c = parseHex(colour)
-  if (!c) return colour
-  const [r, g, b] = c.map((v) => v / 255)
-  const mx = Math.max(r, g, b)
-  const mn = Math.min(r, g, b)
-  const d = mx - mn
-  const l = (mx + mn) / 2
-  const sat = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1))
-  // Standard HSL → RGB, with the hue replaced and S/L carried over untouched.
-  const h = ((hue % 360) + 360) % 360
-  const chroma = (1 - Math.abs(2 * l - 1)) * sat
-  const x = chroma * (1 - Math.abs(((h / 60) % 2) - 1))
-  const m = l - chroma / 2
-  const seg: [number, number, number] =
-    h < 60 ? [chroma, x, 0]
-    : h < 120 ? [x, chroma, 0]
-    : h < 180 ? [0, chroma, x]
-    : h < 240 ? [0, x, chroma]
-    : h < 300 ? [x, 0, chroma]
-    : [chroma, 0, x]
-  const ch = (v: number): string =>
-    Math.round(Math.min(255, Math.max(0, (v + m) * 255)))
-      .toString(16)
-      .padStart(2, '0')
-  return `#${ch(seg[0])}${ch(seg[1])}${ch(seg[2])}`
+  if (!c) return 0
+  const [r, g, b] = c.map((v) => {
+    const s = v / 255
+    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+  })
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }
 
 export function mixHex(a: string, b: string, t: number): string {
@@ -525,9 +581,17 @@ export function mixHex(a: string, b: string, t: number): string {
 }
 
 function parseHex(v: string): [number, number, number] | null {
-  const m = /^#([0-9a-f]{6})$/i.exec(v.trim())
+  // THREE DIGITS COUNT TOO (#1099). `index.css` writes `--card: #fff`, and a
+  // parser that only understood six silently reported it as BLACK — which made
+  // `readableTextOn` ask for white text on a white surface, and a contrast test
+  // measure 3.2:1 where the real figure is 6.5:1. Both notations are the same
+  // notation; anything else still comes back null, which is what keeps a
+  // misparse of some other format an obvious failure rather than a plausible
+  // wrong colour.
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(v.trim())
   if (!m) return null
-  const n = parseInt(m[1], 16)
+  const full = m[1].length === 3 ? m[1].replace(/./g, (c) => c + c) : m[1]
+  const n = parseInt(full, 16)
   return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff]
 }
 
