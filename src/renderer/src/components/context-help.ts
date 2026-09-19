@@ -69,7 +69,7 @@ const SHARED_HELP: Record<string, string> = (() => {
 const MICROPYTHON_HELP: Record<string, string> = (() => {
   const m: Record<string, string> = {}
   topic(m, ['machine', 'pin', 'adc', 'read_u16', 'pull_up', 'pull_down'], 'ref-pins')
-  topic(m, ['pwm', 'duty_u16'], 'ref-pwm')
+  topic(m, ['pwm', 'duty_u16', 'duty_ns', 'deinit'], 'ref-pwm')
   topic(m, ['i2c', 'softi2c'], 'ref-i2c')
   topic(m, ['spi', 'softspi'], 'ref-spi')
   topic(m, ['uart'], 'ref-uart')
