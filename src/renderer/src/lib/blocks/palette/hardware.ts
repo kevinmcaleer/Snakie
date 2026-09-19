@@ -9,6 +9,7 @@ import {
   pinAliasesIn,
   pinConstructor,
   PIN_ALIAS_BLOCK,
+  PWM_ALIAS_BLOCK,
   resolvePinGpio
 } from '../board-pins'
 import { i2cBlockForPins } from '../../../components/display-logic'
@@ -470,6 +471,76 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
 
   // ------------------------------------------------------------------------ ADC
   {
+    /**
+     * SET THE SPEED OF A PWM YOU NAMED — the block this whole trio exists for.
+     *
+     * `set brightness of [GP15 ▾] to [n] %` is the same arithmetic, and its
+     * label is why this one is here: a child building a rover should not have to
+     * work out that a motor is a dim LED. It also takes the PWM in a SOCKET, so
+     * two drive channels are two names rather than two pin numbers.
+     *
+     * NO `read` RULE, for the reason the brightness block has none: the percent
+     * is wrapped in `int(n * 65535 / 100)`, which is the lesson and cannot be
+     * unpicked into a socket by a table. `motor_a.duty_u16(…)` comes back as an
+     * ordinary line, which is honest about what it is.
+     */
+    type: 'snakie_pwm_duty_named',
+    category: 'hardware',
+    help: 'ref-pwm',
+    json: {
+      message0: 'set speed of %1 to %2 %%',
+      args0: [
+        { type: 'input_value', name: 'PWM' },
+        { type: 'input_value', name: 'PERCENT', check: 'Number' }
+      ],
+      inputsInline: true,
+      previousStatement: null,
+      nextStatement: null,
+      tooltip:
+        'Drive a named PWM from 0 to 100 per cent — a motor’s speed, or how bright an LED is.'
+    },
+    toolbox: { inputs: { PERCENT: { shadow: { type: 'math_number', fields: { NUM: 50 } } } } },
+    imports: [],
+    code: (block, gen) => {
+      const pwmName = gen.valueToCode(block, 'PWM', Order.MEMBER) || 'pwm'
+      const percent = gen.valueToCode(block, 'PERCENT', Order.MULTIPLICATIVE) || '0'
+      return `${pwmName}.duty_u16(int(${percent} * 65535 / 100))\n`
+    }
+  },
+  {
+    /** `motor_a.freq(1000)` — the frequency block, taking its PWM by name. */
+    type: 'snakie_pwm_freq_named',
+    category: 'hardware',
+    help: 'ref-pwm',
+    // This one CAN be tabled: the argument is the socket, with nothing wrapped
+    // around it — so a named PWM's frequency line comes back as this block.
+    read: {
+      fn: 'freq',
+      on: 'PWM',
+      onNamedPin: true,
+      args: ['HZ'] as const,
+      shape: 'statement' as const
+    },
+    json: {
+      message0: 'set frequency of %1 to %2 Hz',
+      args0: [
+        { type: 'input_value', name: 'PWM' },
+        { type: 'input_value', name: 'HZ', check: 'Number' }
+      ],
+      inputsInline: true,
+      previousStatement: null,
+      nextStatement: null,
+      tooltip:
+        'How many times a second a named PWM switches. Servos want 50; a motor is usually happier in the kilohertz.'
+    },
+    toolbox: { inputs: { HZ: { shadow: { type: 'math_number', fields: { NUM: 1000 } } } } },
+    imports: [],
+    code: (block, gen) =>
+      `${gen.valueToCode(block, 'PWM', Order.MEMBER) || 'pwm'}.freq(${
+        gen.valueToCode(block, 'HZ', Order.NONE) || '1000'
+      })\n`
+  },
+  {
     type: 'snakie_adc_read',
     circuitpython: {
       imports: CP_ADC,
@@ -697,6 +768,48 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
   // assignment it causes is hoisted into the setup section with the rest — which
   // is the same shape the import blocks have, and for the same reason: what it
   // does is make a name mean something for the whole program.
+  {
+    /**
+     * NAME A PWM, the way `name pin` names a pin (#1097's shape, for the object
+     * a motor actually runs on).
+     *
+     * A pin can be named; the PWM built on it could not, so every block that
+     * wanted one got `pwm_15` — a name the learner never chose, on an object
+     * they cannot refer to. `motor_a = PWM(Pin(15))` is what somebody writing
+     * this by hand would put, and it is what a rover's two drive channels need
+     * to be told apart by.
+     *
+     * IT EMITS NOTHING WHERE IT STANDS, exactly as `name pin` does: the line is
+     * registered into the setup section, so parking the block at the bottom of
+     * the canvas cannot produce a `NameError`, and the line is attributed to
+     * this block so hovering it lights the right row up.
+     */
+    type: PWM_ALIAS_BLOCK,
+    category: 'hardware',
+    help: 'ref-pwm',
+    json: {
+      message0: 'name PWM on pin %1 as %2',
+      // The PWM capability filter DOES belong here, unlike `name pin`'s: this
+      // block builds the PWM, so a pin that cannot do PWM cannot be named one.
+      args0: [pinField('PIN', 'pwm', 15), { type: 'field_input', name: 'NAME', text: 'motor_a' }],
+      inputsInline: true,
+      previousStatement: null,
+      nextStatement: null,
+      tooltip:
+        'Give a PWM output a name you will recognise — a motor channel, a servo line, an LED you dim. Blocks that set speed or frequency take the name, so rewiring means changing this one block.'
+    },
+    code: (block, gen) => {
+      const name = String(block.getFieldValue('NAME') ?? '').trim()
+      const gpio = Number(block.getFieldValue('PIN'))
+      // A BLANK NAME IS NOT A DECLARATION — as `name pin`. A learner clearing
+      // the field to retype it should still have a program that runs.
+      if (!name || !Number.isFinite(gpio)) return ''
+      gen.need({ module: 'machine', name: 'Pin' })
+      gen.need({ module: 'machine', name: 'PWM' })
+      gen.setup(`pwm-alias:${name}`, name, `PWM(Pin(${gpio}))`, block)
+      return ''
+    }
+  },
   {
     type: PIN_ALIAS_BLOCK,
     // Nothing on CircuitPython. There a pin is `board.GP15`, an attribute rather
@@ -1062,6 +1175,17 @@ registerCallRules(
 const PIN_TEMPLATE_GPIO = 0
 
 registerAliasRules([
+  {
+    // ONE MODE, because a PWM has no direction to choose — which is what makes
+    // `AliasRule` fit it unchanged: the template carries a single `{PIN}`, and
+    // `matchAlias` substitutes exactly one.
+    type: PWM_ALIAS_BLOCK,
+    nameField: 'NAME',
+    pinField: 'PIN',
+    modeField: '',
+    receiver: 'pwm',
+    modes: { PWM: 'PWM(Pin({PIN}))' }
+  },
   {
     type: PIN_ALIAS_BLOCK,
     nameField: 'NAME',

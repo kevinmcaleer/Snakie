@@ -224,7 +224,11 @@ const HOISTED_TYPES = new Set([
   // A `name pin` block is hoisted the same way (W10, #1097): it generates
   // nothing where it stands and its assignment goes into the setup section,
   // which the generator already puts a blank line after.
-  'snakie_name_pin'
+  'snakie_name_pin',
+  // And `name PWM`, for the same reason and by the same route. Leaving it out
+  // kept the learner's blank line AND the separator the generator writes, so a
+  // named PWM gained an empty line every time the file was opened.
+  'snakie_name_pwm'
 ])
 
 /** A statement and the suite indented under it. */
@@ -446,7 +450,13 @@ export interface AliasRule {
   nameField: string
   /** The field holding the pin — a number here, a name everywhere else. */
   pinField: string
-  /** The field holding the mode. */
+  /**
+   * The field holding the mode, or `''` for a block whose mode is not a choice.
+   *
+   * A pin is named `for output` or `for input`, which is four constructors and a
+   * dropdown. A PWM is named one way, so there is no field — and an empty name
+   * here is what says so, rather than a field called `''` on every block.
+   */
   modeField: string
   /** Mode value → the exact expression the block writes, `{PIN}` for the number. */
   modes: Readonly<Record<string, string>>
@@ -2322,7 +2332,11 @@ class Converter {
       fields: {
         [alias.rule.pinField]: alias.pin,
         [alias.rule.nameField]: m[1],
-        [alias.rule.modeField]: alias.mode
+        // A NAMING BLOCK WITH ONE MODE HAS NOWHERE TO PUT IT, and says so with
+        // an empty `modeField`: a PWM has no direction to choose, where a pin
+        // has four. Writing it anyway gave every such block a field called `""`
+        // — junk in the saved workspace, and a field Blockly has no home for.
+        ...(alias.rule.modeField ? { [alias.rule.modeField]: alias.mode } : {})
       }
     }
   }

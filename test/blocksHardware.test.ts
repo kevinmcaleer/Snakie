@@ -547,6 +547,11 @@ describe('the hardware category (#1012)', () => {
       'snakie_pin_pressed',
       'snakie_pwm_duty',
       'snakie_pwm_freq',
+      // Each named block sits beside its fielded twin, as `set pin` and its own
+      // socket version do: a learner scanning the drawer meets the two ways of
+      // saying one thing together.
+      'snakie_pwm_duty_named',
+      'snakie_pwm_freq_named',
       'snakie_adc_read',
       'snakie_servo_angle',
       'snakie_buzzer_tone',
@@ -554,9 +559,11 @@ describe('the hardware category (#1012)', () => {
       // The bus #1012 did not cover and #1057 added.
       'snakie_i2c_scan',
       'snakie_i2c_present',
-      // LAST in the drawer on purpose: naming pins is what you reach for once
-      // you have enough of them to lose track, and the first block a beginner
-      // opening this drawer should meet is still "turn LED on".
+      // LAST in the drawer on purpose: naming hardware is what you reach for
+      // once you have enough of it to lose track, and the first block a beginner
+      // opening this drawer should meet is still "turn LED on". The two naming
+      // blocks sit together, because they are the same idea twice.
+      'snakie_name_pwm',
       'snakie_name_pin'
     ])
   })
