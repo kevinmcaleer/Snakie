@@ -5,12 +5,12 @@ family: Motor
 package: THT
 pinSpacing: 2.54
 voltage: 6V
-version: 0.1.0
+version: 0.2.1
 pcbColor: "#0f5a2e"
-aspect: 0.5
+aspect: 0.518
 dimensions:
-  width: 22
-  height: 44
+  width: 36.6
+  height: 70.6
 shape:
   kind: rect
   cornerRadius: 0
@@ -117,6 +117,16 @@ shapes:
     z: 8
     cornerRadius: 0
 help: help.md
+mesh: model.stl
+meshUnits: mm
+meshRotation:
+  - 0
+  - -90
+  - -90
+meshOffset:
+  - 0
+  - 19.3
+  - 11.2
 electrical:
   model: consumer
   maxCurrentA: 0.25

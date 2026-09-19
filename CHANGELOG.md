@@ -8,6 +8,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **2WD Robot Car Chassis in the Standard library.** The clear-acrylic
+  "smart car" kit — 210 × 150 mm plate, two TT gear motors on T-brackets,
+  Ø65 mm wheels rising through the plate's side notches, a steel-ball caster
+  and a 4×AA battery box — as one part, in a new `Chassis` category. Its 3-D
+  model is generated from the kit's published dimensions by
+  `scripts/robot-chassis-mesh.mjs` (millimetres, wheels on z = 0, so a placed
+  chassis sits on the floor rather than in it); the part declares its three
+  ground contacts, mass and centre of mass, and brings out both motors and the
+  battery pack as pins, with the pack a 6 V source in the circuit sim. Ships a
+  top-down render of the same model as its image and a help article on wiring
+  it through an H-bridge.
+
+## [0.85.4] - 2026-09-19
+
+### Added
+
+- **3-D model for the Yellow TT Motor.** The Standard-library `tt-motor` part
+  now ships `model.stl` (mm) so it appears in the Robot View / build workspace
+  instead of a footprint box. The mesh is Adafruit's 3777 TT Motor from the
+  MIT-licensed [Adafruit_CAD_Parts](https://github.com/adafruit/Adafruit_CAD_Parts)
+  repository; the help article credits it. It ships with the `meshRotation` and
+  `meshOffset` that lay it flat the way it mounts in a chassis — axle horizontal
+  across X, body along Y, underside on `z = 0` — because the file as published
+  stands the motor on its end.
+
 - **⌘S / Ctrl+S saves the active file from anywhere in the window.** The
   shortcut already worked with the cursor in the code editor and, on the
   desktop, through the File menu's accelerator. Now a window-level listener
@@ -24,17 +49,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   top-down image, a mini-help article on how the holes connect, and a 3-D
   model (`model.stl`) for the Robot View.
 
-- **2WD Robot Car Chassis in the Standard library.** The clear-acrylic
-  "smart car" kit — 210 × 150 mm plate, two TT gear motors on T-brackets,
-  Ø65 mm wheels rising through the plate's side notches, a steel-ball caster
-  and a 4×AA battery box — as one part, in a new `Chassis` category. Its 3-D
-  model is generated from the kit's published dimensions by
-  `scripts/robot-chassis-mesh.mjs` (millimetres, wheels on z = 0, so a placed
-  chassis sits on the floor rather than in it); the part declares its three
-  ground contacts, mass and centre of mass, and brings out both motors and the
-  battery pack as pins, with the pack a 6 V source in the circuit sim. Ships a
-  top-down render of the same model as its image and a help article on wiring
-  it through an H-bridge.
+### Changed
+
+- **The Yellow TT Motor's footprint is now its real size**, 36.6 × 70.6 mm
+  (shaft tip to shaft tip by overall length) rather than the placeholder
+  22 × 44 mm. The 2-D artwork is drawn in normalised coordinates so it rescales
+  with the part; the change matters because the new 3-D model is placed at true
+  millimetre scale, and the old footprint disagreed with it by a third.
 
 ### Fixed
 
@@ -9820,7 +9841,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.84.1...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.85.4...HEAD
+[0.85.4]: https://github.com/kevinmcaleer/Snakie/compare/v0.84.1...v0.85.4
 [0.84.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.68.8...v0.84.1
 [0.68.8]: https://github.com/kevinmcaleer/Snakie/compare/v0.56.0...v0.68.8
 [0.56.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.55.0...v0.56.0
