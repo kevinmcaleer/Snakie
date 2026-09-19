@@ -886,6 +886,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Two more guards on the pin dropdown's label.** Tests only, behind the `GPled`
+  fix: the redraw is asserted by watching for the call that asks for one, because
+  `getText()` reads the live options every time it is called and so passes in a
+  headless workspace whether anything redrew the field or not — which is exactly
+  the gap the bug lived in. And the fallback is pinned for the other road to it,
+  the one a learner can take on purpose rather than by timing: a name for a pin
+  that cannot do the job (`sensor` on GP0, in an analogue block's menu) is not in
+  that dropdown's options at all, and used to read `GPsensor`.
+
 - **A bracket the language did not need no longer holds back a whole file.**
 
   ```python
