@@ -1714,6 +1714,26 @@ class Converter {
     block: BlockJson,
     line: LogicalLine
   ): void {
+    // AND THE GAP ABOVE A HOISTED LINE IS THE GENERATOR'S (#1164).
+    //
+    // The same argument as {@link cut}, one line earlier. A `name pin` does not
+    // generate where it stands — its assignment goes into the SETUP section —
+    // so a spacer standing above it in the chain does not stand above it in the
+    // file. It surfaces at the top of the BODY, which is to say BELOW the line
+    // it was written above: `import Pin` + a two-line gap + `motor_a = Pin(…)`
+    // came back with the gap moved under the assignment, one line wider, and a
+    // grey note floating over the `name pin` block on the canvas.
+    //
+    // `sectionsOf` writes one blank line between the imports and the setup, so
+    // the gap is still there — it is the second copy that has nowhere to be.
+    // Only the line's OWN blanks are taken: a gap in front of a line that is
+    // not hoisted is the learner's and is untouched, which is what keeps an
+    // ordinary `pin_15.value(1)` two paragraphs below its constructor.
+    if (this.depth === 0 && HOISTED_TYPES.has(block.type)) {
+      while (built.length > 0 && built[built.length - 1].block.type === 'snakie_python_blank') {
+        built.pop()
+      }
+    }
     built.push({ block, line })
     // A BLANK LINE IS NOT THE BODY STARTING (#1164). It writes nothing that
     // stands anywhere — it IS the gap — so counting it here latched
