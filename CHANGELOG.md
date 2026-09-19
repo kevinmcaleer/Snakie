@@ -8,6 +8,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Tuples, unpacking, and loops that name two things.** (#1121, epic #1119)
+  Nothing in the palette made or took apart a tuple, and four separate holes
+  came from that. There was no `(…)` literal, so a function that wants to hand
+  back an `(x, y)` could not say so. Unpacking was registered but *hidden* — the
+  reader could produce `a, b = f()` and a learner could not drag it. Tuple loop
+  targets did not exist at all: `for name, value in rows:` is one of the
+  fourteen lines `docs/blocks-coverage-epic.md` §10 listed as still grey,
+  precisely because `controls_forEach` cannot hold two names. And there was no
+  `enumerate` or `zip`, so "loop over the list and know which position I'm at" —
+  a first-week question — was answered with a counter kept by hand.
+
+  Five blocks: **tuple of … and …** (grows a socket at a time, and keeps the
+  comma on a one-element `(x,)`), **set … and … to …**, **for each … and … in
+  …**, **for each … at position … in …**, and **for each … and … in … and …**.
+
+  The position block puts the off-by-one **on the block** rather than picking
+  one quietly: *(first is 1)* generates `enumerate(xs, 1)` so the number matches
+  the Lists drawer, *(first is 0)* generates plain `enumerate(xs)`. That is the
+  same choice `lists.ts` made when it decided to write the `- 1` out rather than
+  renumber in silence.
+
+  `snakie_python_assign` is **superseded, not un-hidden**: two plain names go to
+  the friendly block, whose names are variable fields and so follow a rename,
+  and everything that shape cannot hold — three names or more, `self.x, self.y`,
+  a chain, a starred target — stays with the exact one.
+
 - **`ord`, `chr`, `isinstance` and a number in another base.** (#1130, epic
   #1119) #1118's *turn %1 into %2* covers the six types a learner meets first
   and has nowhere to put the rest. **letter code of** / **letter for code** are

@@ -130,6 +130,10 @@ const OUTPUT_TYPE = new Map<string, SocketType>([
   // `for name in "EDCDEEE":` is ordinary Python — iterating a string — and it
   // took the whole file's canvas down with it.
   ['lists_create_with', 'Array'],
+  // A TUPLE IS NOT AN `Array` (#1121). `controls_forEach`'s LIST socket checks
+  // Array and a tuple is perfectly iterable, but so is a string — the table
+  // says what a block DECLARES, and `snakie_tuple` declares nothing, so it fits
+  // everywhere the way a variable does.
   ['lists_repeat', 'Array'],
   ['lists_sort', 'Array'],
   ['lists_split', 'Array']
@@ -1825,6 +1829,70 @@ class Converter {
         )
       ])
     }
+    // TWO NAMES IN THE LOOP TARGET (#1121, epic #1119), which `controls_forEach`
+    // cannot hold — `docs/blocks-coverage-epic.md` §10 lists
+    // `for name, value in rows:` among the lines still grey for exactly that
+    // reason. `enumerate` and `zip` are tried first, because both are also a
+    // two-name loop over "something" and the general block would claim them and
+    // render the call as a grey socket.
+    const forTwo = /^for\s+([A-Za-z_]\w*)\s*,\s*([A-Za-z_]\w*)\s+in\s+(.+):$/.exec(text)
+    if (forTwo) {
+      const [, first, second, over] = forTwo
+      const enumerated = /^enumerate\((.+)\)$/.exec(over)
+      if (enumerated) {
+        // `enumerate(xs)` counts from 0 and `enumerate(xs, 1)` from 1, which is
+        // the block's own dropdown. Any other start — `enumerate(xs, 5)` — is
+        // not this block, and a raw suite says so rather than losing the 5.
+        const parts = splitArgs(enumerated[1])
+        const start = parts?.length === 1 ? 'ZERO' : parts?.length === 2 && parts[1].trim() === '1' ? 'ONE' : null
+        if (parts && start) {
+          return recognised([
+            this.withBody(
+              {
+                type: 'snakie_for_each_indexed',
+                fields: {
+                  START: start,
+                  VAR_INDEX: { id: this.variable(first) },
+                  VAR_ITEM: { id: this.variable(second) }
+                },
+                inputs: { LIST: { block: this.expression(parts[0]) } }
+              },
+              'DO',
+              node
+            )
+          ])
+        }
+      }
+      const zipped = /^zip\((.+)\)$/.exec(over)
+      const zipArgs = zipped ? splitArgs(zipped[1]) : null
+      if (zipArgs && zipArgs.length === 2) {
+        return recognised([
+          this.withBody(
+            {
+              type: 'snakie_for_each_zip',
+              fields: { VAR_A: { id: this.variable(first) }, VAR_B: { id: this.variable(second) } },
+              inputs: {
+                LIST_A: { block: this.expression(zipArgs[0]) },
+                LIST_B: { block: this.expression(zipArgs[1]) }
+              }
+            },
+            'DO',
+            node
+          )
+        ])
+      }
+      return recognised([
+        this.withBody(
+          {
+            type: 'snakie_for_each_two',
+            fields: { VAR_A: { id: this.variable(first) }, VAR_B: { id: this.variable(second) } },
+            inputs: { SEQ: { block: this.expression(over) } }
+          },
+          'DO',
+          node
+        )
+      ])
+    }
     const forEach = /^for\s+([A-Za-z_]\w*)\s+in\s+(.+):$/.exec(text)
     if (forEach) {
       // The thing being iterated has to FIT the LIST socket, which checks Array
@@ -2462,6 +2530,20 @@ class Converter {
           type: 'snakie_list_set',
           inputs: { ...read.block.inputs, VALUE: { block: this.expression(value) } }
         }
+      }
+    }
+
+    // EXACTLY TWO PLAIN NAMES → the friendly unpacking block (#1121). The one
+    // shape a learner meets — `x, y = position()`, `key, value = pair` — gets
+    // variable fields, so it follows a rename and cannot be typed wrong. Three
+    // names or more, an attribute target, a subscript or a starred one all fall
+    // through to the text-target block below, which is what that block is for.
+    const pair = /^([A-Za-z_]\w*)\s*,\s*([A-Za-z_]\w*)$/.exec(target)
+    if (pair && !isReservedName(pair[1]) && !isReservedName(pair[2])) {
+      return {
+        type: 'snakie_unpack',
+        fields: { VAR_A: { id: this.variable(pair[1]) }, VAR_B: { id: this.variable(pair[2]) } },
+        inputs: { VALUE: { block: this.expression(value) } }
       }
     }
 
@@ -3273,6 +3355,11 @@ class Converter {
     }
 
     if (tok.kind === 'open' && tok.text === '(') {
+      // A COMMA MAKES IT A TUPLE, not a bracketed expression (#1121). Checked
+      // before the parse, because `(x, y)` parses as `x` and then stops at the
+      // comma — which used to take the whole line raw.
+      const tuple = this.tupleLiteral(tokens, at)
+      if (tuple) return tuple
       const inner = this.parse(tokens, at + 1)
       if (!inner) return null
       const close = tokens[inner.next]
@@ -3359,6 +3446,60 @@ class Converter {
       return this.chain({ block: base, next: at + 1 }, tokens)
     }
 
+    return null
+  }
+
+  /**
+   * `(a, b)` → the tuple block, when the brackets really hold a tuple (#1121).
+   *
+   * Null for `(a + b)`, which is one expression in brackets and is read as
+   * itself — the comma at the TOP level of the brackets is the whole
+   * difference, and a comma nested inside a call or a list is not one.
+   *
+   * `(x,)` — a one-element tuple, which is what a driver wanting a one-byte
+   * buffer writes — is read too, and generates its comma back.
+   */
+  private tupleLiteral(
+    tokens: readonly Token[],
+    at: number
+  ): { block: BlockJson; next: number } | null {
+    let depth = 0
+    const parts: string[] = []
+    let from = tokens[at].end
+    for (let i = at; i < tokens.length; i++) {
+      const tok = tokens[i]
+      if (tok.kind === 'open') {
+        depth += 1
+        continue
+      }
+      if (tok.kind === 'close') {
+        depth -= 1
+        if (depth > 0) continue
+        if (tok.text !== ')') return null
+        const last = this.source.slice(from, tok.start).trim()
+        // A TRAILING COMMA IS MEANINGFUL HERE and only here: `(x,)` is a
+        // one-element tuple, while `(x, y,)` is the same pair with the
+        // learner's spare comma, which the block has nowhere to record.
+        if (last !== '') parts.push(last)
+        else if (parts.length !== 1) return null
+        if (parts.length === 0) return null
+        if (parts.length === 1 && last !== '') return null
+        return {
+          block: {
+            type: 'snakie_tuple',
+            extraState: { items: parts.length },
+            inputs: Object.fromEntries(
+              parts.map((part, n) => [`ADD${n}`, { block: this.expression(part) }])
+            )
+          },
+          next: i + 1
+        }
+      }
+      if (depth === 1 && tok.kind === 'op' && tok.text === ',') {
+        parts.push(this.source.slice(from, tok.start).trim())
+        from = tok.end
+      }
+    }
     return null
   }
 

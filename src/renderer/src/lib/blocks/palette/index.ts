@@ -14,6 +14,7 @@ import { instrumentBlocks } from './instruments'
 import { FUNCTION_BLOCKS } from './functions'
 import { STRUCTURE_BLOCKS, installStructureBlocks } from './structure'
 import { LIST_BLOCKS } from './lists'
+import { TUPLE_BLOCKS, installTupleBlocks } from './tuples'
 import { LOGIC_BLOCKS } from './logic'
 import { MATHS_BLOCKS } from './maths'
 import { TEXT_BLOCKS } from './text'
@@ -69,6 +70,9 @@ export function installCorePalette(): void {
   installPythonBlocks()
   // And the `try` block, whose arms come and go for the same reason.
   installStructureBlocks()
+  // And the literals that grow a socket at a time (#1119): a tuple, a
+  // dictionary, a buffer, a `print` with several things in it.
+  installTupleBlocks()
   defineBlocks([
     ...TURTLE_BLOCKS,
     // HARDWARE IS SCOPED BY WHAT IT CAN GENERATE (#1039 → #1040). Nine of the
@@ -96,6 +100,11 @@ export function installCorePalette(): void {
     ...MATHS_BLOCKS,
     ...TEXT_BLOCKS,
     ...LIST_BLOCKS,
+    // Tuples, unpacking and the multi-value loops (#1121, epic #1119). They
+    // spread across three drawers rather than gathering in one, because each
+    // belongs where a learner is standing when they want it: the literal in
+    // Lists, `set … and … to` in Variables, the loops in Control.
+    ...TUPLE_BLOCKS,
     ...VARIABLE_BLOCKS,
     ...FUNCTION_BLOCKS,
     // Class, method and `self` (#1093). Registered, never listed — a class is

@@ -67,6 +67,10 @@ const READ_DIRECTLY: Record<string, string> = {
   controls_repeat_ext: 'for _ in range(4):\n    print(1)\n',
   controls_whileUntil: 'while going:\n    print(1)\n',
   controls_forEach: 'for item in items:\n    print(item)\n',
+  // --- two names in the loop target (#1121)
+  snakie_for_each_two: 'for name, value in rows:\n    print(name)\n',
+  snakie_for_each_indexed: 'for i, item in enumerate(items):\n    print(i)\n',
+  snakie_for_each_zip: 'for a, b in zip(xs, ys):\n    print(a)\n',
   controls_if: 'if going:\n    print(1)\n',
   controls_flow_statements: 'while True:\n    break\n',
   // --- values
@@ -93,10 +97,14 @@ const READ_DIRECTLY: Record<string, string> = {
   snakie_list_get: 'x = readings[0]\n',
   snakie_list_set: 'readings[0] = 1\n',
   snakie_list_contains: 'found = name in names\n',
+  snakie_tuple: 'point = (x, y)\n',
   // --- variables and functions
   variables_get: 'x = y\n',
   variables_set: 'x = 1\n',
   math_change: 'x += 1\n',
+  // Exactly two plain names is the friendly block (#1121); everything else the
+  // left-hand side can be stays with the text-target one below.
+  snakie_unpack: 'x, y = position()\n',
   procedures_defnoreturn: 'def go():\n    print(1)\n',
   procedures_defreturn: 'def double(n):\n    return n\n',
   procedures_callnoreturn: 'def go():\n    print(1)\n\ngo()\n',
@@ -119,7 +127,11 @@ const READ_DIRECTLY: Record<string, string> = {
   snakie_await_value: 'async def go():\n    data = await sensor.read()\n',
   snakie_raise: 'raise RuntimeError("no wifi")\n',
   // --- assignment and scope (W8, #1095)
-  snakie_python_assign: 'a, b = b, a\n',
+  //
+  // SUPERSEDED FOR TWO PLAIN NAMES by `snakie_unpack` (#1121) and still the
+  // block for everything else a target can be: three names or more, an
+  // attribute target, a chain, a subscript the list block cannot count back.
+  snakie_python_assign: 'self.x, self.y = 0, 0\n',
   snakie_python_augmented: 'total *= 2\n',
   // `global x` alone is the Variables drawer's own block (#1118); the escape
   // hatch keeps what its variable field cannot hold — `nonlocal`, and several
