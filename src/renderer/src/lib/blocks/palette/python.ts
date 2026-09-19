@@ -96,6 +96,129 @@ const DEFAULT_ARGS = 1
 /** And the most it will grow to — past this the learner wants a variable. */
 const MAX_ARGS = 8
 
+/** The field holding argument `i`'s keyword NAME, and the `=` that follows it. */
+const argNameField = (i: number): string => `NAME${i}`
+const argEqualsField = (i: number): string => `EQ${i}`
+
+/**
+ * A KEYWORD ARGUMENT'S NAME BOX IS NOT THERE UNTIL IT HOLDS ONE (#1163).
+ * ---------------------------------------------------------------------------
+ *
+ * The same rule the `def` block's extra-parameters row follows, and it arrived
+ * the same way: #1134 gave every argument socket a name field so a learner
+ * could write `pixels.fill(colour=RED)` without dropping into a grey block, and
+ * shipped it VISIBLE — so every positional argument on every call block grew an
+ * empty white pill and a stray `=` in front of the value.
+ *
+ * On `pwm_motor_a.duty_u16(…)` that is what a learner sees first: *call
+ * duty_u16 on (pwm_motor_a) with ( ) = (…)* — a socket-shaped hole that takes
+ * nothing, on the widest block on the canvas. It is also a lie about the
+ * Python, which has no `=` in it.
+ *
+ * So the box and its `=` are hidden while the name is empty. A learner asks for
+ * them from the block's right-click menu (**Name the arguments…**, registered
+ * in `BlocksCanvas.tsx`), or a file being read gives one a value. Nothing about
+ * what the block GENERATES changes — `callArgs` builds the argument from the
+ * field's value, not from whether it is on screen — so a hidden empty box and
+ * no box at all write the same Python.
+ *
+ * REVEALING IS PER BLOCK AND LASTS UNTIL THE NEXT EDITOR CLOSES. The menu turns
+ * every hidden box on that block on at once, because the learner asking for one
+ * cannot point at which argument they meant; the moment any of those editors
+ * closes, the reveal lapses and each box is back to showing itself only if it
+ * has a name. So naming the second of three arguments leaves one box on screen,
+ * not three.
+ */
+type CallBlock = Blockly.Block & { argCount_?: number; namesShown_?: boolean }
+
+/** Show or hide one field, leaving the block to re-render once at the end. */
+function setFieldVisible(block: Blockly.Block, name: string, visible: boolean): void {
+  const field = block.getField(name)
+  if (!field || field.isVisible() === visible) return
+  field.setVisible(visible)
+}
+
+/**
+ * Put every argument's name box in the state the block's values ask for.
+ *
+ * `override` is the field currently being validated, whose value Blockly has
+ * NOT committed yet — asking the block for it would give the previous one and
+ * hide a box out from under somebody who has just typed into it.
+ */
+function applyArgNames(
+  block: Blockly.Block,
+  override?: { field: Blockly.Field; value: string }
+): void {
+  const self = block as CallBlock
+  const count = self.argCount_ ?? 0
+  for (let i = 0; i < count; i++) {
+    const field = block.getField(argNameField(i))
+    const raw =
+      override && field === override.field ? override.value : block.getFieldValue(argNameField(i))
+    const shown = String(raw ?? '').trim() !== '' || self.namesShown_ === true
+    setFieldVisible(block, argNameField(i), shown)
+    setFieldVisible(block, argEqualsField(i), shown)
+  }
+  ;(block as Blockly.BlockSvg).queueRender?.()
+}
+
+/** Does this block have argument name boxes at all? True for the two `call`s. */
+export function hasArgNames(block: Blockly.Block): boolean {
+  return (block as CallBlock).argCount_ !== undefined && !!block.getField(argNameField(0))
+}
+
+/** Is any of this block's argument name boxes still put away? */
+export function argNamesHidden(block: Blockly.Block): boolean {
+  const count = (block as CallBlock).argCount_ ?? 0
+  for (let i = 0; i < count; i++) {
+    if (!block.getField(argNameField(i))?.isVisible()) return true
+  }
+  return false
+}
+
+/** Turn every name box on this block on, and say which one to open first. */
+export function revealArgNames(block: Blockly.Block): Blockly.Field | null {
+  const self = block as CallBlock
+  self.namesShown_ = true
+  applyArgNames(block)
+  const count = self.argCount_ ?? 0
+  for (let i = 0; i < count; i++) {
+    if (String(block.getFieldValue(argNameField(i)) ?? '').trim() === '') {
+      return block.getField(argNameField(i))
+    }
+  }
+  return block.getField(argNameField(0))
+}
+
+/**
+ * The name box: a text input that carries its own visibility.
+ *
+ * A subclass rather than a validator alone, for the reason `ExtrasField` is one
+ * — the two halves of the rule fire at different moments. The validator runs on
+ * every committed value, including a workspace being deserialised, and only
+ * ever turns a box ON. `onFinishEditing_` runs once the editor closes, and that
+ * is where the block's reveal lapses and the empty boxes put themselves away.
+ */
+class ArgNameField extends Blockly.FieldTextInput {
+  constructor() {
+    super('', (value: string) => {
+      const block = this.getSourceBlock()
+      // No source block yet: a field is validated once while it is still being
+      // constructed, before `appendField` has attached it to anything.
+      if (block) applyArgNames(block, { field: this, value })
+      return value
+    })
+  }
+
+  override onFinishEditing_(value: string): void {
+    super.onFinishEditing_(value)
+    const block = this.getSourceBlock()
+    if (!block) return
+    ;(block as CallBlock).namesShown_ = false
+    applyArgNames(block, { field: this, value })
+  }
+}
+
 /** A `+` / `−` button, as an inline SVG data URI (the CSP allows `data:`). */
 function stepperIcon(sign: '+' | '−'): string {
   const glyph =
@@ -180,12 +303,19 @@ function callBlockMixin(valueShape: boolean): Record<string, unknown> {
           // `pixels.fill(colour=RED)`, `sleep_ms(ms=100)`, `Pin(15, Pin.OUT,
           // value=0)` — keyword arguments are everywhere in MicroPython library
           // APIs, and until now the only way to write one was to type the whole
-          // call into a grey block. Left empty the field costs a narrow box and
-          // the argument is positional, exactly as it has always been.
-          .appendField(new Blockly.FieldTextInput(''), `NAME${i}`)
-          .appendField('=')
+          // call into a grey block. Left empty the box is not on screen at all
+          // and the argument is positional, exactly as it has always been —
+          // see {@link applyArgNames}.
+          .appendField(new ArgNameField(), argNameField(i))
+          // NAMED, so the rule above can hide it with the box it belongs to. An
+          // `appendField('=')` builds an anonymous label there is no handle on.
+          .appendField(new Blockly.FieldLabel('='), argEqualsField(i))
       }
       self.argCount_ = target
+      // The boxes the row was just built with are empty, so they start put
+      // away; a block being deserialised turns each one back on as its value
+      // arrives. `updateArgs_` runs before the fields are loaded either way.
+      applyArgNames(this)
       // The buttons live on their own input at the end, so they stay to the
       // right of whatever the argument row currently is.
       if (this.getInput('STEP')) this.removeInput('STEP')
@@ -222,7 +352,7 @@ function callArgs(block: Blockly.Block, gen: MicroPythonGenerator): string {
     // falls back to `value` for anything that cleans down to nothing, which is
     // right for a LABEL somebody typed and catastrophic here — every positional
     // argument in the palette would have come out as `value=…`.
-    const typed = String(block.getFieldValue(`NAME${i}`) ?? '').trim()
+    const typed = String(block.getFieldValue(argNameField(i)) ?? '').trim()
     // Sanitised rather than trusted once it is non-empty: the field takes
     // anything, and `my colour=RED` is a SyntaxError in the mirror rather than
     // a block that merely looks wrong.

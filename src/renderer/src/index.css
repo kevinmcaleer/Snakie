@@ -2175,6 +2175,9 @@ body {
   gap: 0.35rem;
   text-transform: none;
   letter-spacing: normal;
+  /* The anchor for the simulated-device callout, which floats above the
+     dropdown it is about (#1163). */
+  position: relative;
   /* Grow to use the header's spare width (so the dropdown fills the space instead
    * of being a fixed narrow box), but shrink freely (min-width: 0) so the
    * Connect/Disconnect button is never pushed off-screen (issue #85). */

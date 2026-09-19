@@ -109,7 +109,9 @@ describe('layout envelope v4 → v5 migration (#1009)', () => {
 
   it('fills in the new workspace and the new ratio from the presets', () => {
     const state = loadLayoutState(store({ [LAYOUT_KEY]: v4 }))
-    expect(state.version).toBe(5)
+    // Upgraded to whatever the CURRENT envelope version is — this test is about
+    // the new workspace and ratio, not about which migration ran last.
+    expect(state.version).toBe(defaultLayoutState().version)
     expect(state.workspaces.blocks).toEqual(WORKSPACE_PRESETS.blocks)
     // Absent on a v4 code workspace — the preset is the normal answer here, not
     // the corruption case.
