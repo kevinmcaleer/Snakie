@@ -10,7 +10,7 @@
 import { getBlocksWorkspace } from '../blocks/workspace-registry'
 import { generateProgram } from '../blocks/generator'
 import { snakieMarkSvg } from '../../components/snakie-mark'
-import { PX_TO_PT, captureBlockStacks, svgToJpeg } from './capture'
+import { PX_TO_PT, captureBlockStacks, inlineFontCss, svgToJpeg } from './capture'
 import { captureWiringDiagram } from './wiring-capture'
 import type { DiagramArt, ProjectArt, StackArt } from './project-pdf'
 import type { PdfImageData } from './writer'
@@ -32,7 +32,9 @@ export function domProjectArt(opts: { functionIds?: readonly string[] } = {}): P
       // and the generated `.py` order them the same way (#1112). The caller
       // normally hands over the pass it already ran for the listing.
       const functions = opts.functionIds ?? generateProgram(workspace).functions
-      const captured = captureBlockStacks(workspace, functions)
+      // The app's webfont, inlined — Blockly's layout assumes it, and an
+      // `<img>`-rendered SVG cannot fetch it (see `capture.ts`).
+      const captured = captureBlockStacks(workspace, functions, await inlineFontCss())
       const out: StackArt[] = []
       for (const stack of captured) {
         out.push({
@@ -52,7 +54,7 @@ export function domProjectArt(opts: { functionIds?: readonly string[] } = {}): P
     },
 
     async wiring(): Promise<DiagramArt | null> {
-      const captured = await captureWiringDiagram(ART_BACKGROUND)
+      const captured = await captureWiringDiagram(ART_BACKGROUND, await inlineFontCss())
       if (!captured) return null
       return {
         width: captured.width * PX_TO_PT,

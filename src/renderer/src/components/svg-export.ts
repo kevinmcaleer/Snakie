@@ -239,6 +239,17 @@ export function serializeLiveSvg(
      * still measures as all of them, so the caller supplies the box it wants.
      */
     frame?: { x: number; y: number; width: number; height: number }
+    /**
+     * CSS to embed in the serialised file — in practice `@font-face` rules with
+     * their sources inlined as data URIs (#1112).
+     *
+     * An SVG rendered through an `<img>` (which is how {@link rasterise} works,
+     * and the only route the renderer's CSP allows) loads NO external resource,
+     * fonts included. Without this the app's webfont silently falls back to a
+     * wider one, and text laid out to fit a Blockly block runs off the end of
+     * it — white lettering on the page's parchment, which is #1099 again.
+     */
+    fontCss?: string
   } = {}
 ): { svg: string; width: number; height: number } | null {
   const content = svg.querySelector(contentSelector) as SVGGraphicsElement | null
@@ -271,6 +282,11 @@ export function serializeLiveSvg(
   clone.setAttribute('height', String(h))
   clone.setAttribute('preserveAspectRatio', 'xMidYMid meet')
   clone.setAttribute('xmlns', SVG_NS)
+  if (opts.fontCss) {
+    const style = document.createElementNS(SVG_NS, 'style')
+    style.textContent = opts.fontCss
+    clone.insertBefore(style, clone.firstChild)
+  }
   if (opts.background) {
     const rect = document.createElementNS(SVG_NS, 'rect')
     rect.setAttribute('x', String(x))

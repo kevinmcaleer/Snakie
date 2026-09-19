@@ -44,14 +44,21 @@ const MOUNT_TIMEOUT_MS = 12000
 const POLL_MS = 80
 
 /** Serialise a breadboard `<svg>`, framed tight to the parts. */
-export function serialiseWiring(svg: SVGSVGElement, background: string): CapturedDiagram | null {
+export function serialiseWiring(
+  svg: SVGSVGElement,
+  background: string,
+  fontCss = ''
+): CapturedDiagram | null {
   return serializeLiveSvg(svg, '.wc__content', {
     background,
     margin: 20,
     // The grid and the paper are view-derived full-canvas layers; the printed
     // page wants the drawing on parchment, not a screenshot of the mat.
     exclude: EXCLUDE,
-    bboxExclude: ['.wc__grid-layer', '.wc__paper']
+    bboxExclude: ['.wc__grid-layer', '.wc__paper'],
+    // Part labels and pin names are lettered in the app's webfont, which an
+    // `<img>`-rendered SVG cannot fetch — see `capture.ts`.
+    fontCss
   })
 }
 
@@ -94,11 +101,12 @@ async function settle(
  * an off-screen render otherwise. Null means "nothing to draw" — never a blank.
  */
 export async function captureWiringDiagram(
-  background = '#f6f1e6'
+  background = '#f6f1e6',
+  fontCss = ''
 ): Promise<CapturedDiagram | null> {
   const live = getWiringSvg()
   if (live) {
-    const captured = serialiseWiring(live, background)
+    const captured = serialiseWiring(live, background, fontCss)
     if (captured) return captured
   }
   if (typeof document === 'undefined') return null
@@ -114,7 +122,7 @@ export async function captureWiringDiagram(
     // the first frame — which would print a board with no parts on it.
     return await settle(() => {
       const svg = host.querySelector('svg.wc__svg') as SVGSVGElement | null
-      return svg ? serialiseWiring(svg, background) : null
+      return svg ? serialiseWiring(svg, background, fontCss) : null
     }, MOUNT_TIMEOUT_MS)
   } catch {
     return null
