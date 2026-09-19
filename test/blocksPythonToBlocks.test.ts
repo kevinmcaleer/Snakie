@@ -628,7 +628,7 @@ describe('a run of comments is one block (#1062)', () => {
   })
 })
 
-describe('the roots come out in the order the file has them (#1170)', () => {
+describe('the roots come out in the order the file has them', () => {
   /** Every root's `y`, which is the converter's statement of their order. */
   const spans = (source: string): [number, number][] => {
     const { workspace } = pythonToBlocks(source)
@@ -641,7 +641,8 @@ describe('the roots come out in the order the file has them (#1170)', () => {
    * `python-to-blocks.ts` and `test/blocksArrange.test.ts`.
    *
    * #1062 laid each root out under the ESTIMATED bottom of the one above it,
-   * out of constants read off a screenshot of the renderer of the day. #1170
+   * out of constants read off a screenshot of the renderer of the day. Moving to
+   * standard Blockly geometry
    * changed the renderer, every constant was wrong at once, and the same file
    * came out both far too spread out and overlapping. So the geometry moved to
    * the canvas, where a rendered block can be asked its real size, and what is

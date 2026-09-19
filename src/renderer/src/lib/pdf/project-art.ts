@@ -7,6 +7,7 @@
  * that runs in the app.
  */
 
+import type * as Blockly from 'blockly/core'
 import { getBlocksWorkspace } from '../blocks/workspace-registry'
 import { generateProgram } from '../blocks/generator'
 import { snakieMarkSvg } from '../../components/snakie-mark'
@@ -16,18 +17,30 @@ import { PRINT_BACKGROUND, captureWiring } from './wiring-capture'
 import type { DiagramArt, ProjectArt, StackArt } from './project-pdf'
 import type { PdfImageData } from './writer'
 
-/** The parchment every rasterised piece is drawn onto — JPEG has no alpha, so
- *  the background has to match the page or the art sits in a grey box. */
-const ART_BACKGROUND = '#f6f1e6'
+/** The page every rasterised piece is drawn onto — JPEG has no alpha, so the
+ *  background has to match the page or the art sits in a tinted box (#1170:
+ *  the page is white now, so this is too). */
+const ART_BACKGROUND = '#ffffff'
 
 /** The mark's raster size; it is placed at ~112pt, so this is comfortably 2×. */
 const LOGO_PX = 256
 
 /** The live app's art: the mounted Blockly workspace and the breadboard. */
-export function domProjectArt(opts: { functionIds?: readonly string[] } = {}): ProjectArt {
+export function domProjectArt(
+  opts: {
+    functionIds?: readonly string[]
+    /**
+     * The workspace to photograph — the canvas on screen, or the off-screen one
+     * `lib/pdf/blocks-source.ts` builds from the file when there isn't one.
+     * Omitted, the art falls back to whatever is registered; null means the
+     * project has no blocks at all.
+     */
+    workspace?: Blockly.WorkspaceSvg | null
+  } = {}
+): ProjectArt {
   return {
     async blockStacks(): Promise<readonly StackArt[]> {
-      const workspace = getBlocksWorkspace()
+      const workspace = opts.workspace === undefined ? getBlocksWorkspace() : opts.workspace
       if (!workspace) return []
       // The generator's own notion of which stacks are functions, so the pages
       // and the generated `.py` order them the same way (#1112). The caller

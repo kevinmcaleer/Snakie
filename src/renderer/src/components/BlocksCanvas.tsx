@@ -28,7 +28,12 @@ import {
 } from '../lib/blocks/palette/functions'
 import { argNamesHidden, hasArgNames, revealArgNames } from '../lib/blocks/palette/python'
 import { installSoftShellRenderer } from '../lib/blocks/renderer'
-import { arrangeWorkspaceRoots, rootsUnmoved, type RootPlacement } from '../lib/blocks/arrange'
+import {
+  arrangeWorkspaceRoots,
+  rootMoved,
+  rootsUnmoved,
+  type RootPlacement
+} from '../lib/blocks/arrange'
 import { installShelfFlyout, installZoomReset } from '../lib/blocks/zoom'
 import {
   dispatchNeedLibrary,
@@ -176,7 +181,7 @@ export interface BlocksCanvasProps {
    */
   reloadNonce?: number
   /**
-   * These blocks are Snakie's READING of somebody's Python (#1170), rather than
+   * These blocks are Snakie's READING of somebody's Python, rather than
    * an arrangement a learner made and saved.
    *
    * It decides one thing: whether the canvas may lay the top-level stacks out
@@ -262,7 +267,7 @@ export function BlocksCanvas({
    */
   const loadedFileRef = useRef<string | null>(null)
   /**
-   * Where the last arrange put each root (#1170), or `null` for a workspace we
+   * Where the last arrange put each root, or `null` for a workspace we
    * did not arrange — a stored layout somebody made themselves.
    *
    * Kept so a late measurement can tell its own arrangement from a learner's:
@@ -743,7 +748,7 @@ export function BlocksCanvas({
     const places = new Map<string, { x: number; y: number }>()
     const selected = sameFile ? (Blockly.getSelected()?.id ?? null) : null
     if (sameFile) {
-      // A ROOT WE PUT THERE IS NOT A ROOT THEY PUT THERE (#1170). On a derived
+      // A ROOT WE PUT THERE IS NOT A ROOT THEY PUT THERE. On a derived
       // file the previous positions are mostly our own arrangement, and putting
       // those back would pin the layout to whatever the program looked like
       // when it was first opened — so a function that has since grown would be
@@ -753,8 +758,7 @@ export function BlocksCanvas({
       const arranged = arrangedRef.current
       for (const block of ws.getTopBlocks(false)) {
         const at = block.getRelativeToSurfaceXY()
-        const ours = arranged?.get(block.id)
-        if (ours && ours.x === at.x && ours.y === at.y) continue
+        if (!rootMoved(at, arranged?.get(block.id))) continue
         places.set(block.id, { x: at.x, y: at.y })
       }
     }
@@ -767,7 +771,7 @@ export function BlocksCanvas({
     Blockly.Events.disable()
     try {
       Blockly.serialization.workspaces.load(workspace, ws)
-      // LAY THE ROOTS OUT, NOW THEY CAN BE MEASURED (#1170). The document only
+      // LAY THE ROOTS OUT, NOW THEY CAN BE MEASURED. The document only
       // numbers them — the program in one column with the functions beside it
       // is worked out here, from what Blockly actually drew. BEFORE the
       // re-serialise below, so the positions this writes are part of the
@@ -840,7 +844,7 @@ export function BlocksCanvas({
   }, [fileId, reloadNonce, peek, blocked, derived])
 
   /**
-   * MEASURE AGAIN ONCE THE FONT ARRIVES (#1170).
+   * MEASURE AGAIN ONCE THE FONT ARRIVES.
    *
    * The arrange above asks each block how big it is, and a block is only as big
    * as the text in it — so a canvas laid out while Plus Jakarta Sans is still

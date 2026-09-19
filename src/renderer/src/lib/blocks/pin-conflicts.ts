@@ -8,6 +8,7 @@ import {
   setPinAliases,
   type PinDirection
 } from './board-pins'
+import { syncHardwareVariables } from './hardware-names'
 import { refreshPinFields } from './pin-field'
 import { blockDefinition } from './registry'
 
@@ -205,6 +206,14 @@ export function applyPinWarnings(workspace: Blockly.Workspace): void {
   // rendered against an empty name list. That is how a learner's `led` came out
   // as `GPled` and stayed there while the menu behind it was right all along.
   if (setPinAliases(pinAliasesIn(workspace))) refreshPinFields(workspace)
+  // AND THE SOCKETS OFFER THEM TOO. A pin dropdown is a field and reads the
+  // list above; `set power of ( )` and `set pin ( ) to [high]` take their
+  // hardware in a SOCKET, where the menu is a variable dropdown — so a name the
+  // program declares has to exist as a variable or it cannot be pointed at at
+  // all. Here for the same reason the push above is: this already runs on every
+  // change and on the load, so what a declaration means can never be two
+  // different answers in two different menus.
+  syncHardwareVariables(workspace)
   const warnings = pinConflicts(collectPinClaims(workspace))
   for (const block of workspace.getAllBlocks(false)) {
     if (!blockDefinition(block.type)?.pin) continue

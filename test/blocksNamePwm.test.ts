@@ -313,7 +313,7 @@ describe('what stays an ordinary line, and why', () => {
     // The exact-match safety rule, as everywhere else: somebody wrote their own,
     // and reading it back as this block would rewrite it.
     //
-    // `freq=` USED TO BE THE EXAMPLE HERE and is now the block's own (#1170) —
+    // `freq=` USED TO BE THE EXAMPLE HERE and is now the block's own —
     // see the suite below. These are the shapes still past it: a second keyword
     // the block has nowhere to put, and a positional argument, which is not
     // what `freq=` means even though it lands in the same parameter.
@@ -412,7 +412,7 @@ describe('the duty line reads back as the block that wrote it (#1163)', () => {
 })
 
 /**
- * THE FREQUENCY ON THE DECLARATION (#1170).
+ * THE FREQUENCY ON THE DECLARATION.
  * =============================================================================
  *
  * `pwm_motor_a = PWM(motor_a, freq=1000)` is how nearly every robot tutorial
@@ -422,7 +422,7 @@ describe('the duty line reads back as the block that wrote it (#1163)', () => {
  * (50 × 65535 ÷ 100) into a whole number (int))*. One keyword argument at the
  * top of a file turned the whole of its hardware grey.
  */
-describe('a PWM declared with its frequency (#1170)', () => {
+describe('a PWM declared with its frequency', () => {
   it('is the naming block, with the Hz in its own field', () => {
     const src = `${IMPORT}motor_a = PWM(Pin(15), freq=1000)\n`
     expect(types(src)).toContain(PWM_ALIAS_BLOCK)

@@ -106,6 +106,32 @@ const FIT_ICON_PATH = 'M7 13V7h6M19 7h6v6M25 19v6h-6M13 25H7v-6'
 /** The class the stylesheet paints, and the marker that says we did this. */
 const FIT_ICON_CLASS = 'blocks-zoom-fit'
 
+/**
+ * THE BUTTON IS THE BOX, NOT THE INK.
+ *
+ * What Blockly's control held was an `<image>`, and an image is a rectangle: a
+ * press anywhere in its 32×32 landed on the button. Swapping it for a STROKED
+ * PATH quietly swapped the hit region too — SVG's default `visiblePainted`
+ * hit-tests the paint, and this glyph's paint is four 2px corner brackets with
+ * nothing in between. The control still looked like a button and still lit up
+ * on hover (a `<g>` is hovered by any child), so the only way to find out was
+ * to press the middle of it and have nothing happen. Which is what #1150's
+ * follow-up reports: "only the corners of the zoom icon respond".
+ *
+ * So put the rectangle back, as an invisible target the size of the control
+ * box, and let the glyph be only a glyph. `pointer-events: all` rather than a
+ * transparent fill because it says what it is for and does not depend on a
+ * `transparent` fill counting as painted.
+ *
+ * 32×32 at the origin is the control's own box — Blockly clips the `+`, `-` and
+ * reset sprites to exactly that rect — so the four controls end up with the
+ * same hit area as well as the same look.
+ */
+const CONTROL_BOX = 32
+
+/** The class the stylesheet gives `pointer-events: all`. */
+const FIT_TARGET_CLASS = 'blocks-zoom-target'
+
 /** What the control announces to a screen reader, in place of "Reset zoom". */
 const FIT_LABEL = 'Zoom to fit, or back to 100%'
 
@@ -146,6 +172,12 @@ export function installZoomReset(ws: Blockly.WorkspaceSvg): () => void {
   if (!control) return () => {}
 
   control.querySelector('image')?.remove()
+  // The hit target FIRST, so the glyph is painted over it rather than under it.
+  const target = Blockly.utils.dom.createSvgElement(
+    Blockly.utils.Svg.RECT,
+    { width: CONTROL_BOX, height: CONTROL_BOX, class: FIT_TARGET_CLASS },
+    control
+  )
   const icon = Blockly.utils.dom.createSvgElement(
     Blockly.utils.Svg.PATH,
     { d: FIT_ICON_PATH, class: FIT_ICON_CLASS },
@@ -171,6 +203,7 @@ export function installZoomReset(ws: Blockly.WorkspaceSvg): () => void {
     root.removeEventListener('pointerdown', activate, true)
     root.removeEventListener('keydown', activate, true)
     icon.remove()
+    target.remove()
     if (stockLabel !== null) control.setAttribute('aria-label', stockLabel)
   }
 }

@@ -188,7 +188,9 @@ export async function svgToJpeg(
   svg: string,
   outW: number,
   outH: number,
-  background = '#f6f1e6'
+  // The page's own ground (#1170) — a JPEG has no alpha, so art letterboxes
+  // onto whatever this is, and anything else shows as a box around it.
+  background = '#ffffff'
 ): Promise<PdfImageData> {
   const canvas = await rasterise(svg, outW, outH, RASTER_SCALE, background)
   const blob = await canvasToBlob(canvas, 'image/jpeg', 0.92)

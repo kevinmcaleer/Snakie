@@ -1,4 +1,8 @@
 import type { BlocksWorkspace } from '../../../../shared/blocks-doc'
+// The layout constants live with the layout (`arrange.ts`), which is the module
+// that actually places the roots. A `import type * as Blockly` is all that file
+// takes from Blockly, so this stays as pure and as node-testable as it was.
+import { ROOT_ORIGIN } from './arrange'
 import type { ArgField, CallReceiver, SocketType } from './registry'
 import { docstringComment } from './docstring'
 import { isReservedName, sanitise } from './names'
@@ -451,7 +455,7 @@ export function registerCallRules(rules: readonly CallRule[]): void {
 }
 
 /**
- * THE VOCABULARY CAN ARRIVE AFTER THE QUESTION (#1170).
+ * THE VOCABULARY CAN ARRIVE AFTER THE QUESTION.
  * ---------------------------------------------------------------------------
  *
  * Every rule above is registered as a SIDE EFFECT OF IMPORTING A PALETTE, and
@@ -589,7 +593,8 @@ export interface AliasRule {
   modes: Readonly<Record<string, string>>
   /**
    * The field holding a `{VALUE}` the constructor takes, or absent for a rule
-   * whose templates have none (W10's pins, and the PWM until #1170).
+   * whose templates have none (W10's pins, and the PWM until the frequency
+   * arrived on its naming block).
    *
    * `pwm_motor_a = PWM(motor_a, freq=1000)` is the single commonest way a robot
    * declares a drive channel, and it used to match no template at all — so the
@@ -817,7 +822,7 @@ export function pythonToBlocks(source: string): Conversion {
 }
 
 /**
- * WHERE THE ROOTS GO — ORDER HERE, GEOMETRY ON THE CANVAS (#1170).
+ * WHERE THE ROOTS GO — ORDER HERE, GEOMETRY ON THE CANVAS.
  * ---------------------------------------------------------------------------
  *
  * This used to be a LAYOUT: #1062 stacked each root under the measured bottom
@@ -828,7 +833,7 @@ export function pythonToBlocks(source: string): Conversion {
  * on the step, a fudge for the hat and one for an empty mouth: every one of
  * them measured against the renderer of the day.
  *
- * On the day #1170 moved the canvas to standard Blockly geometry, all of them
+ * On the day the canvas moved to standard Blockly geometry, all of them
  * were wrong at once and in both directions — a root the estimate called 520px
  * tall rendered 283, and a `def` it called 424 rendered 445, so the same file
  * had roots laid out most of a screen too far apart AND roots drawn on top of
@@ -846,18 +851,23 @@ export function pythonToBlocks(source: string): Conversion {
  * a consumer holding nothing but this JSON — the round-trip gate in
  * `round-trip.ts`, a unit test, a future export — reads the program in the
  * order it was written.
+ *
+ * TWO SESSIONS REACHED THIS CONCLUSION AT ONCE, which is worth recording. The
+ * other arrived as `root-column.ts`: it kept the estimate and had the canvas
+ * re-space the column afterwards, having measured the same failure from the
+ * other end — up to 512px of empty parchment after a long chain, and still 18px
+ * short on a `def` with a big body. Same evidence, same verdict. They are one
+ * module now (`arrange.ts`), because two passes laying out the same roots is a
+ * disagreement waiting to happen rather than a belt and braces.
  */
-
-/** Where the first root goes, and the left margin for all of them. */
-const ROOT_ORIGIN = 40
-
-/** The fixed step between one root and the next. See above: an order, not a size. */
-const ROOT_STEP = 400
 
 /** Lay the roots out top to bottom, in source order. */
 function stackRoots(roots: readonly BlockJson[]): BlockJson[] {
   return roots.map((block, i) => ({ ...block, x: ROOT_ORIGIN, y: ROOT_ORIGIN + i * ROOT_STEP }))
 }
+
+/** The fixed step between one root and the next. See above: an order, not a size. */
+const ROOT_STEP = 400
 
 /**
  * A node standing for a RUN of consecutive comment lines (#1062), in place of

@@ -8,7 +8,7 @@ import {
 } from '../src/renderer/src/lib/blocks/arrange'
 
 /**
- * WHERE THE ROOTS GO (#1170).
+ * WHERE THE ROOTS GO.
  * =============================================================================
  *
  * Two properties, and everything here is one of them:

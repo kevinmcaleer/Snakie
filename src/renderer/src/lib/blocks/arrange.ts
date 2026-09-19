@@ -1,7 +1,7 @@
 import type * as Blockly from 'blockly/core'
 
 /**
- * WHERE THE ROOTS GO (#1170, replacing #1062 and #1145).
+ * WHERE THE ROOTS GO, replacing #1062 and #1145.
  * =============================================================================
  *
  * A converted file arrives as several top-level stacks: whatever ran before the
@@ -25,7 +25,7 @@ import type * as Blockly from 'blockly/core'
  * loaded Blockly — so it counted rows and multiplied by hand-measured constants
  * (`ROW_HEIGHT = 56`, `NESTED_VALUE = 8`, a cap, a fudge for the hat…). Every
  * one of those numbers was measured against the renderer of the day, and every
- * one of them was wrong the moment the geometry changed: on the day #1170
+ * one of them was wrong the moment the geometry changed: on the day this
  * moved the canvas to standard Blockly, a root the estimate called 520px tall
  * rendered 283, and a `def` it called 424 rendered 445 — so the roots were laid
  * out both much too far apart AND, twice in the same file, overlapping.
@@ -34,6 +34,25 @@ import type * as Blockly from 'blockly/core'
  * and it includes the whole chain below the block, which is exactly the span a
  * root occupies. So the arithmetic below cannot drift from the renderer,
  * because there is nothing left to drift.
+ *
+ * THE SAME VERDICT ARRIVED TWICE, from two sessions and two directions, and
+ * this module is both. The other was `root-column.ts`, which kept the estimate
+ * and re-spaced the column after Blockly had drawn it; measured against the
+ * repo's own `examples/`, it found the estimate over-reserving by up to 512px
+ * after a long chain — half a screen of empty parchment, which a learner reads
+ * as blocks that failed to render — and still coming up 18px SHORT on a `def`
+ * with a big body. Its argument is the one worth keeping: a row count cannot be
+ * right for every block, because a folded comment run draws shorter rows than a
+ * statement, a `def`'s hat and empty mouth are their own arithmetic, and a
+ * block a plugin registered has a height nothing in the converter has ever
+ * seen. Two passes laying out the same roots is a disagreement waiting to
+ * happen, so there is one, and it is this.
+ *
+ * ONLY A DERIVED DOCUMENT IS LAID OUT. A file whose footer matched its code was
+ * arranged by the person who saved it, and tidying that up behind their back
+ * throws away work — including the case the previous pass could not see, where
+ * somebody spaced their stacks out deliberately without moving any of them
+ * sideways. `BlocksCanvas` owns that decision; see its `derived` prop.
  *
  * THE ALGORITHM IS PURE AND THE MEASURING IS NOT, which is why they are two
  * functions. {@link arrangeRoots} takes boxes and returns positions and is a
@@ -64,8 +83,14 @@ export interface RootPlacement {
 /** Where the first root goes, and the left margin for both columns. */
 export const ROOT_ORIGIN = 40
 
-/** Clear space between one root's bottom and the next root's top. */
-export const ROOT_GUTTER = 40
+/**
+ * Clear space between one root's bottom and the next root's top.
+ *
+ * 48, which is the number `root-column.ts` arrived at independently and
+ * verified against every file in `examples/`. Keeping it is cheaper than
+ * having two opinions about what a gutter is.
+ */
+export const ROOT_GUTTER = 48
 
 /**
  * Clear space between the program column and the functions column.
@@ -139,7 +164,17 @@ export function arrangeWorkspaceRoots(ws: Blockly.WorkspaceSvg): Map<string, Roo
 }
 
 /**
- * Is every root still exactly where {@link arrangeWorkspaceRoots} put it?
+ * How far from where we put it still counts as "nobody has moved this".
+ *
+ * Blockly rounds coordinates as it serialises, so a root placed at 299.25 can
+ * come back a hair off it; half a pixel forgives that and nothing else, since a
+ * drag moves a block by whole pixels of screen divided by the scale. Borrowed
+ * intact from `root-column.ts`, which found it the hard way.
+ */
+const MOVED_EPSILON = 0.5
+
+/**
+ * Is every root still where {@link arrangeWorkspaceRoots} put it?
  *
  * The test before re-arranging: a canvas nobody has touched may be measured
  * again, and one where a learner has dragged a function aside may not.
@@ -151,6 +186,12 @@ export function rootsUnmoved(ws: Blockly.WorkspaceSvg, applied: ReadonlyMap<stri
     const at = applied.get(block.id)
     if (!at) return false
     const now = block.getRelativeToSurfaceXY()
-    return now.x === at.x && now.y === at.y
+    return Math.abs(now.x - at.x) <= MOVED_EPSILON && Math.abs(now.y - at.y) <= MOVED_EPSILON
   })
+}
+
+/** The same forgiveness, for the caller that asks the same question of one root. */
+export function rootMoved(now: { x: number; y: number }, applied: RootPlacement | undefined): boolean {
+  if (!applied) return true
+  return Math.abs(now.x - applied.x) > MOVED_EPSILON || Math.abs(now.y - applied.y) > MOVED_EPSILON
 }

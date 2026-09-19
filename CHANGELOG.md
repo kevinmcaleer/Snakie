@@ -6,10 +6,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The PDF export always includes the blocks.** The blocks pages read the
+  Blockly canvas on screen and nothing else, and that canvas only exists while
+  the Blocks view is open. Press the print button from the Code workspace, from
+  Electronics or Build, or with the split collapsed to its Python-only view,
+  and the document went out with every other section in it and no blocks — and
+  nothing said so. The export now photographs the canvas on screen when there
+  is one, and otherwise builds the active file's blocks into an off-screen
+  workspace (the same footer-or-derived reading the Blocks view opens on, in
+  the same theme and renderer), prints them, and throws it away. A file whose
+  blocks this build cannot read is reported as "exported without the blocks"
+  in the status bar rather than quietly dropped.
+
 ### Added
 
 - **The functions get a column of their own, and nothing is drawn on top of
-  anything.** (#1170) Opening a MicroPython file in Blocks or Split laid every
+  anything.** Opening a MicroPython file in Blocks or Split laid every
   top-level stack out in one tall column — so a file that defines four
   functions opened with its program a screen and a half below the last of them,
   and you scrolled past everything to find where it starts. Worse, the column
@@ -27,7 +41,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   stays where you put it even as the code pane keeps re-converting around it.
 
 - **A PWM can be named with its frequency: `name PWM on pin [GP15 ▾] as
-  [motor_a] at [1000] Hz`.** (#1170) `pwm_motor_a = PWM(motor_a, freq=1000)` is
+  [motor_a] at [1000] Hz`.** `pwm_motor_a = PWM(motor_a, freq=1000)` is
   how nearly every robot tutorial opens, and it matched nothing this palette
   writes — so `pwm_motor_a` was not a name the blocks knew, and every
   `pwm_motor_a.duty_u16(int(50 * 65535 / 100))` under it came back as the
@@ -40,6 +54,56 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   saved before this field existed still writes the constructor it always wrote.
   The separate *set frequency of (…) to (…) Hz* block is still how you change it
   while the program runs; this is how you say what it starts at.
+
+- **Undo and redo in the Electronics view.** Wiring is drawing: you drag a part
+  where you think it goes, run a wire to the wrong pin, and delete one thing
+  while another was selected. Every one of those was permanent. The Part Editor
+  has had undo since #187 and the Build view since #338 — the board, where a
+  slip costs you a wire you then have to remember the ends of, had nothing.
+
+  Now it does. **⌘Z / Ctrl+Z** steps back and **⇧⌘Z / Ctrl+Y** steps forward,
+  from anywhere in the view, with a matching pair of buttons at the head of the
+  canvas toolbar so the feature is visible rather than folklore. It covers
+  everything the view does, because everything the view does goes through one
+  save: dropping a part, dragging it, wiring two pins, re-attaching or
+  recolouring a wire, rotating, renaming, duplicating, deleting, swapping the
+  board (the swap's dropped wires come back with it). One action is one step —
+  a drag is a single step, not one per pixel — and fifty steps are kept.
+
+  Two things had to be handled for that to be true rather than nearly true.
+  Every save echoes back through `robot:didChange` and the file is re-read, so
+  the document the view holds is a *new* object after each edit holding the same
+  wiring; comparing objects would have made half the undo stack no-ops that step
+  through nothing. So "did this change?" is asked of the YAML the file would
+  hold. And after a part is added, the main process stamps that part's Build
+  body reference into `robot.yml` — bookkeeping, not an edit, so it costs no
+  step, and an undo carries it forward rather than stripping it off and orphaning
+  the body in the Build view.
+
+- **A connections table to wire the project up from, and a white page to print
+  it on** (#1170). The document showed the wiring as a picture, and a picture is
+  a poor thing to wire FROM: following one curve out of a dozen across a page
+  and landing on the right pin is exactly the part a beginner gets wrong. The
+  page after the diagram now writes the same wiring out as a list — one row per
+  wire, the board's end first so you can count pins to it, the other end beside
+  it, the net it belongs to, and a box to tick as each one goes in. A wire in a
+  QWIIC or Grove bundle says which cable it is in, so nobody goes looking for
+  four separate jumper leads.
+
+  The rows are ordered the way the Board Viewer's own Markdown pinout export
+  orders them — GPIOs by number, the named rails after them, part-to-part wires
+  last — and `pinSortKey` is shared rather than copied, so a reader holding both
+  finds the same wire in the same place in each. A project with no wiring gets
+  no page, and a project whose board could not be captured still gets the table:
+  it is the one case where the reader would otherwise have no wiring at all.
+
+  **Every page is white now.** The document was printed on the app's warm
+  parchment, which is right on screen next to the editor's own furniture and
+  wrong on paper: a full-bleed tint on every page of a handout costs ink, comes
+  out a different colour from every printer, and made the board's own white
+  sheet sit in the page like a patch. The Soft Shell ink and accents stay; the
+  ground, the table bands and the letterbox every picture is drawn onto turn
+  white with it, so the wiring diagram now meets the page with no seam at all.
 
 - **Snakie says which board you are on, and opens with the board on screen.**
   (#1163) The web build connects its built-in simulator for you a moment after
@@ -1233,7 +1297,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - **A file no longer opens as grey `call` blocks depending on how fast a chunk
-  downloaded.** (#1170) Every rule the reader matches against is registered when
+  downloaded.** Every rule the reader matches against is registered when
   a palette module is imported, and the palettes arrive with the block canvas,
   which is loaded on demand — while the component that asks for the conversion
   is not. Lose that race and the file is converted against a reader that knows
@@ -1244,6 +1308,71 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
   The reader now says when its vocabulary has grown, and a file converted
   against a smaller one is simply converted again.
+
+- **The zoom-to-fit button answers a press anywhere on it, and the column of
+  blocks is spaced by what the blocks measure.** (#1150, #1062) Two reports from
+  the same canvas.
+
+  The fit control only responded at its **corners**. #1150 swapped Blockly's
+  sprite for a corner-bracket path, and an SVG path is hit-tested where it is
+  painted — which here is four 2px brackets with nothing in between. The control
+  still looked like a button and still lit up under the pointer, because a group
+  is hovered by any of its children, so the only way to find out was to press
+  the middle of it and have nothing happen. An invisible 32×32 rect now sits
+  under the glyph, matching the box Blockly clips `+` and `-` to, so all four
+  controls have the same hit area as well as the same look.
+
+  And the **very large gap between the imports and whatever the file does next**
+  — the one that reads as blocks that failed to render — is the last of #1062's
+  layout estimate. The converter is pure, so it places each stack by counting
+  rows and multiplying by a row height rather than by asking Blockly. Measured
+  against the real canvas on this repo's own examples, that ran up to **512px
+  long** after a long chain, and 18px SHORT on a `def` with a big body, which is
+  the overlap the estimate exists to prevent. A row count cannot be right for
+  every block: a folded comment run draws shorter rows than a statement, a
+  `def`'s hat and empty mouth are their own arithmetic, and a block a plugin
+  registered has a height nothing in the converter has ever seen.
+
+  So the canvas stops guessing. Once Blockly has drawn the workspace, every
+  stack's height is a fact, and the stacks are spaced by exactly one 48px gutter
+  — down from a spread of -18 to 512. A stack you dragged aside keeps its place
+  and drops out of the column, so the others close up around it rather than
+  re-stacking over the top of it.
+
+  (A second change in this same release reached the same conclusion from the
+  other end and removed the estimate outright; the two are now one pass, which
+  also puts the functions in a column of their own. See *The functions get a
+  column of their own* above.)
+
+- **A PWM you had named but not yet used was missing from the *set power of*
+  dropdown.** `motor_b_speed = PWM(Pin(7))` sat in the program, right under a
+  `motor_a_speed` that was on the menu, and the socket on *set power of ( ) to
+  [50] %* would not offer it.
+
+  The two blocks that take their hardware in a SOCKET rather than a dropdown
+  field — *set power of ( )* and *set pin ( ) to [high]* — hold a `variables_get`
+  there, so the menu on them is the workspace's list of VARIABLES. A declaration
+  is not one of those: it is a text field on the `name PWM` block. What put a
+  name on that list was the reader, which declares a variable for a name it finds
+  BEING USED — so a channel already driven somewhere in the file was offered and
+  the one declared beside it, not yet used, was not. A trap with no way out: to
+  get the name on the menu you had to use it, and to use it you needed the menu.
+  A `name PWM` block the learner had just DRAGGED was in the same position, with
+  nothing in the program able to point at what it had just named.
+
+  A name a program declares is now a name its blocks can reach: every `name pin`
+  and `name PWM` on the canvas gets a variable of that name, so it is on every
+  socket's menu and in the Variables drawer the moment it is declared. It shares
+  the identifier with the declaration deliberately — the generator already knows
+  these names are spoken for and leaves such a variable alone rather than
+  renaming it `motor_b_speed_`, which would have left the declaration and the
+  blocks using it pointing at two different objects — so the program that comes
+  out is unchanged. It tidies up after itself as well: a name field fires a
+  change per keystroke, so a variable this made, which no declaration claims any
+  more and no block uses, goes away again rather than leaving `m`, `mo`, `mot` in
+  the menus. One the learner made, or one that has found a use since, is never
+  touched, and the sync says nothing to the undo stack — so naming a motor cannot
+  dirty a file that was only opened.
 
 - **No more grey `blank line` block hanging under the imports, and no column of
   them where the functions were lifted out** (#1164). Opening a file that starts
@@ -1507,7 +1636,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- **The blocks are standard Blockly shapes again.** (#1170) The canvas rendered
+- **The blocks are standard Blockly shapes again.** The canvas rendered
   on Zelos — Blockly's port of `scratch-blocks` — for the Scratch and MakeCode
   feel, and on a real MicroPython file that choice was costing more than it
   bought. Zelos's floor is twice the standard one (48px a block against 24, and

@@ -662,9 +662,24 @@ function partSchematicPins(def: PartDefinition): { w: number; h: number; placed:
   return { w: lay.box.w, h: lay.box.h, placed }
 }
 
+/**
+ * Undo/redo over the wiring document, owned by the HOST (the Electronics pane
+ * keeps the stack — see {@link ./robot-history}). Absent ⇒ the host has no
+ * history and the canvas shows no undo controls, which is the popped-out Board
+ * View window today.
+ */
+export interface WiringHistory {
+  canUndo: boolean
+  canRedo: boolean
+  undo: () => void
+  redo: () => void
+}
+
 export interface WiringCanvasProps {
   robot: RobotDefinition
   onChange: (next: RobotDefinition) => void
+  /** Undo/redo for `onChange`'s document, when the host keeps one. */
+  history?: WiringHistory
   /**
    * The project folder — needed to read the Build model for the shared
    * hierarchy (#718). **Deliberately NOT optional**: both board hosts must
@@ -802,7 +817,7 @@ interface Drag {
   pinchWY?: number
 }
 
-export function WiringCanvas({ robot, onChange, folder, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, mat, usedByCode, smoking, onDropPart, onShowHelp, focusedChrome = false, voltage, live, highlight, nets, onHighlightNet }: WiringCanvasProps): JSX.Element {
+export function WiringCanvas({ robot, onChange, history, folder, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, mat, usedByCode, smoking, onDropPart, onShowHelp, focusedChrome = false, voltage, live, highlight, nets, onHighlightNet }: WiringCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
   // The focusable canvas root — focused when a part is selected so the Delete /
   // Backspace shortcut is scoped to THIS canvas (a selected part can't be nuked by
@@ -3325,6 +3340,38 @@ export function WiringCanvas({ robot, onChange, folder, joints = [], jointLimits
               : 'Drag from a pin to another pin to wire them.'}
           </span>
           <div className="wc__zoom">
+            {/* Undo / redo over the wiring document, when the host keeps a
+                history of it (the Electronics view does). Cmd/Ctrl+Z and
+                ⇧Cmd/Ctrl+Z do the same, from anywhere in the view. */}
+            {history && (
+              <>
+                <button
+                  type="button"
+                  className="wc__zoom-btn"
+                  onClick={history.undo}
+                  disabled={!history.canUndo}
+                  title={history.canUndo ? 'Undo (⌘Z / Ctrl+Z)' : 'Nothing to undo'}
+                  aria-label="Undo"
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <path d="M6 4L2.5 7 6 10M2.8 7h6.7a3.5 3.5 0 0 1 0 7H7" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className="wc__zoom-btn"
+                  onClick={history.redo}
+                  disabled={!history.canRedo}
+                  title={history.canRedo ? 'Redo (⇧⌘Z / Ctrl+Y)' : 'Nothing to redo'}
+                  aria-label="Redo"
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <path d="M10 4l3.5 3L10 10M13.2 7H6.5a3.5 3.5 0 0 0 0 7H9" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <span className="wc__zoom-sep" aria-hidden="true" />
+              </>
+            )}
             <button
               type="button"
               className="wc__zoom-btn"

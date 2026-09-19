@@ -17,7 +17,7 @@ import { BLOCK_TEXT_VAR, SOFT_SHELL_RENDERER, inkForBlock } from './theme'
  * reasoning that a child arrives already knowing the Scratch vocabulary: pill
  * reporters, hexagon booleans, everything inline. What that bought in
  * familiarity it spent in HEIGHT, and on a real MicroPython file the bill came
- * due all at once (#1170):
+ * due all at once:
  *
  *  - **Zelos's floor is twice standard Blockly's.** `MIN_BLOCK_HEIGHT` is 48
  *    against 24, and this file used to raise it again to 52. A four-line

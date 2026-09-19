@@ -1015,7 +1015,7 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
      * on that one pin object rather than on a second `Pin(15)` for the same
      * hole, which is what `pinObject` does everywhere else in this file.
      *
-     * AND THE FREQUENCY IS ON THE DECLARATION, OPTIONALLY (#1170).
+     * AND THE FREQUENCY IS ON THE DECLARATION, OPTIONALLY.
      *
      * `pwm_motor_a = PWM(motor_a, freq=1000)` is how nearly every robot
      * tutorial opens, and it used to match no template this palette has: so the

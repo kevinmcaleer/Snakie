@@ -103,7 +103,7 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   const file = openFiles.find((f) => f.id === activeId) ?? null
   const content = file?.content
   /**
-   * HOW MUCH PYTHON THE READER CURRENTLY KNOWS HOW TO READ (#1170).
+   * HOW MUCH PYTHON THE READER CURRENTLY KNOWS HOW TO READ.
    *
    * Every rule the conversion matches against is registered as a side effect of
    * importing a palette, and the palettes come in with `BlocksCanvas`, which is
@@ -259,7 +259,7 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   /** Bumped when a CODE edit rebuilt the workspace, so the canvas re-reads it. */
   const [reloadNonce, setReloadNonce] = useState(0)
   /**
-   * …and when the READER grew (#1170), which rebuilds it the same way.
+   * …and when the READER grew, which rebuilds it the same way.
    *
    * The canvas deliberately does not watch the workspace prop — that is the
    * uncontrolled seam that stops an edit echoing back and re-loading under the

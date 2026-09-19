@@ -4,7 +4,7 @@ import { installSoftShellRenderer, softShellConstants } from '../src/renderer/sr
 import { SOFT_SHELL_RENDERER } from '../src/renderer/src/lib/blocks/theme'
 
 /**
- * SOFT SHELL IS A SKIN, NOT A GEOMETRY (#1170).
+ * SOFT SHELL IS A SKIN, NOT A GEOMETRY.
  * =============================================================================
  *
  * The canvas rendered on Zelos for a while, tuned by hand — a rounder corner, a
@@ -15,7 +15,7 @@ import { SOFT_SHELL_RENDERER } from '../src/renderer/src/lib/blocks/theme'
  *    stayed measured for 4, so the drawer walked arcs bigger than the space the
  *    layout had reserved. A hairline off every block's bottom-right corner, and
  *    a sliver of canvas under every C-block's mouth.
- *  - #1170: a 52px floor on every block, and 16px of inline padding compounding
+ *  - And then the height: a 52px floor on every block, with 16px of inline padding compounding
  *    at each level of an expression, so `pwm.duty_u16(int(50 * 65535 / 100))`
  *    rendered about 90px tall.
  *
@@ -45,7 +45,7 @@ function stock(): Blockly.blockRendering.ConstantProvider {
   return constants
 }
 
-describe('the Soft Shell geometry is standard Blockly (#1170)', () => {
+describe('the Soft Shell geometry is standard Blockly', () => {
   it('changes no measurement Blockly ships', () => {
     const ours = geometry() as unknown as Record<string, unknown>
     const theirs = stock() as unknown as Record<string, unknown>
@@ -91,7 +91,7 @@ describe('the invariants a rounder corner used to break (#1158)', () => {
   })
 })
 
-describe('an expression does not grow with its nesting (#1170)', () => {
+describe('an expression does not grow with its nesting', () => {
   it('pads an inline socket by less than a row, so four levels is not four rows', () => {
     const c = geometry()
     // Zelos padded an inline input by 16 on each side — half a row per level,
