@@ -216,9 +216,15 @@ export function pressingActiveSegment(id: WorkspaceId, both: boolean): ActiveSeg
  *  workspace. A stored v4 envelope has neither — the missing workspace falls back
  *  to its preset and the missing ratio to each workspace's, both handled
  *  field-by-field by {@link sanitiseWorkspace}, so nothing the user arranged is
- *  disturbed. */
+ *  disturbed.
+ *  v6 (#1163): Code opens WITH the instrument dock. The preset change alone only
+ *  reaches someone who has never run Snakie, since every existing user has a
+ *  `dockOpen: false` of their own stored — and it is indistinguishable from the
+ *  old default nobody chose. So a pre-v6 envelope has the dock opened once, the
+ *  way v4 re-collapsed the solo workspaces; a deliberate close after that
+ *  persists like any other. */
 export interface LayoutState {
-  version: 5
+  version: 6
   active: WorkspaceId
   workspaces: Record<WorkspaceId, WorkspaceLayout>
 }
@@ -247,14 +253,19 @@ export const WORKSPACE_PRESETS: Record<WorkspaceId, WorkspaceLayout> = {
     vertical: [68, 32],
     blocksSplit: [...BLOCKS_VIEW_RATIOS.split]
   },
-  // Today's default layout, unchanged: files open, editor + console, no dock.
+  // Code: files open, editor + console, AND the instrument dock (#1163). The
+  // dock used to start closed behind a slim rail, which is a control you have to
+  // already know about — so the board peek, the instruments and the Pico 2 W
+  // they default to were all one click away from a user with no reason to press
+  // anything. Snakie is a MicroPython editor for physical boards; the board
+  // belongs on screen when it opens. Closing it still persists.
   code: {
     activityView: 'files',
     filesCollapsed: false,
     centreCollapsed: false,
     shellCollapsed: false,
     rightCollapsed: true,
-    dockOpen: false,
+    dockOpen: true,
     boardPaneOpen: false,
     // Files ~20% (≈ the design's 272px) — not the old 30% clamp. Console gets a
     // roomy ~45% so a couple of REPL lines are clearly visible by default, so the
@@ -444,7 +455,7 @@ export function defaultLayoutState(): LayoutState {
       blocksSplit: [...WORKSPACE_PRESETS[id].blocksSplit]
     }
   }
-  return { version: 5, active: 'code', workspaces }
+  return { version: 6, active: 'code', workspaces }
 }
 
 /** Storage surface the loader reads (injectable for tests). */
@@ -492,7 +503,7 @@ export function loadLayoutState(storage: StorageLike): LayoutState {
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<LayoutState>
       const ver = (parsed as { version?: number } | null)?.version
-      const known = typeof ver === 'number' && ver >= 1 && ver <= 5
+      const known = typeof ver === 'number' && ver >= 1 && ver <= 6
       if (parsed && known && parsed.workspaces) {
         const state = defaultLayoutState()
         // Any retired active workspace (`lab`/`data`/`datalab` — Data Lab was
@@ -531,6 +542,11 @@ export function loadLayoutState(storage: StorageLike): LayoutState {
             state.workspaces[id].filesCollapsed = WORKSPACE_PRESETS[id].filesCollapsed
           }
         }
+        // v5 → v6: the Code dock now starts OPEN (#1163). Every pre-v6 envelope
+        // stores the old default as though it were a choice, so the new preset
+        // would reach new installs only. Open it once — the reopen rail is right
+        // there, and a close after this is stored as v6 and left alone.
+        if (ver < 6) state.workspaces.code.dockOpen = true
         ensureUsableConsole(state)
         return state
       }

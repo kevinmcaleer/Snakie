@@ -73,8 +73,10 @@ describe('workspace presets (epic #259; +Robot mode #320)', () => {
     expect(code.filesCollapsed).toBe(false)
     expect(code.shellCollapsed).toBe(false)
     expect(code.rightCollapsed).toBe(true)
-    // Instrument dock: closed in Code + Board (the board is the star).
-    expect(code.dockOpen).toBe(false)
+    // Instrument dock: OPEN in Code (#1163) — Snakie opens with the board on
+    // screen rather than behind a rail nobody has a reason to press. Electronics
+    // still has none (the Board View is already the whole area there).
+    expect(code.dockOpen).toBe(true)
     expect(WORKSPACE_PRESETS.board.dockOpen).toBe(false)
     // Board: the embedded Board View pane opens with a real share beside the
     // code; the other workspaces keep it closed at 0.
@@ -261,7 +263,7 @@ describe('horizontal slot mapping — elided board/chat panels (#528)', () => {
 describe('loadLayoutState (corruption-safe, versioned)', () => {
   it('returns factory defaults with no stored state', () => {
     const s = loadLayoutState(storage())
-    expect(s.version).toBe(5)
+    expect(s.version).toBe(6)
     expect(s.active).toBe('code')
   })
 
@@ -282,7 +284,7 @@ describe('loadLayoutState (corruption-safe, versioned)', () => {
       }
     }
     const s = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(v1) }))
-    expect(s.version).toBe(5)
+    expect(s.version).toBe(6)
     expect(s.active).toBe('robot')
     // Code sizes reset to the corrected preset; the active view carries over.
     expect(s.workspaces.code.horizontal).toEqual(WORKSPACE_PRESETS.code.horizontal)
@@ -303,7 +305,7 @@ describe('loadLayoutState (corruption-safe, versioned)', () => {
       }
     }
     const s = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(v2) }))
-    expect(s.version).toBe(5)
+    expect(s.version).toBe(6)
     expect(s.workspaces.code.horizontal).toEqual(WORKSPACE_PRESETS.code.horizontal)
     expect(s.workspaces.code.vertical).toEqual(WORKSPACE_PRESETS.code.vertical)
     expect(WORKSPACE_PRESETS.code.horizontal).toEqual([20, 80, 0, 0])
@@ -328,7 +330,7 @@ describe('loadLayoutState (corruption-safe, versioned)', () => {
       }
     }
     const s = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(v3) }))
-    expect(s.version).toBe(5)
+    expect(s.version).toBe(6)
     expect(s.workspaces.robot.filesCollapsed).toBe(true)
     expect(s.workspaces.board.filesCollapsed).toBe(true)
     // Only that one flag is touched — Code (whose sidebar is open by design) and
@@ -345,6 +347,29 @@ describe('loadLayoutState (corruption-safe, versioned)', () => {
     const s = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(saved) }))
     expect(s.workspaces.robot.filesCollapsed).toBe(false)
     expect(s.workspaces.robot.activityView).toBe('help')
+  })
+
+  it('v5 → v6: the Code instrument dock is opened once (#1163)', () => {
+    // Every pre-v6 session stores `dockOpen: false` — the old preset, which
+    // nobody chose — so the new preset alone would reach new installs only.
+    const v5 = {
+      version: 5,
+      active: 'code',
+      workspaces: {
+        code: { ...WORKSPACE_PRESETS.code, dockOpen: false, vertical: [50, 50] }
+      }
+    }
+    const s = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(v5) }))
+    expect(s.workspaces.code.dockOpen).toBe(true)
+    // ONLY that flag — the geometry the user dragged is theirs and is left alone.
+    expect(s.workspaces.code.vertical).toEqual([50, 50])
+  })
+
+  it('v6 keeps a dock the user closed themselves (across a restart)', () => {
+    const saved = defaultLayoutState()
+    saved.workspaces.code.dockOpen = false
+    const s = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(saved) }))
+    expect(s.workspaces.code.dockOpen).toBe(false)
   })
 
   it('survives corrupt JSON and wrong shapes', () => {
