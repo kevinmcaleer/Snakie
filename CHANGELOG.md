@@ -784,6 +784,33 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Blocks are laid out in the order the file has them.** (#1145) A `def` leaves
+  the chain — Blockly models it as a hat, which has no previous or next
+  connection — and every hat used to be collected to the top of the canvas with
+  the rest of the program in one stack underneath. On a file that defines a
+  function halfway down, the canvas read backwards: the lines that run first
+  were below the function they call, and a comment written about a `def` sat a
+  screen away from what it is about.
+
+  The chain is cut where each hat came out of it, so the roots go down the
+  canvas in the order they go down the file: whatever ran before the `def`, then
+  the `def`, then whatever ran after. A comment stands with the code beneath it
+  again. The Python is untouched — the generator concatenates the top-level
+  stacks in canvas order and hoists the functions above them either way — and a
+  piece that is nothing but blank lines is held over rather than laid out as a
+  root of grey notes.
+
+- **A `def` no longer has the next block drawn on top of it.** The height
+  estimate that spaces the roots (#1062) was short on two rows only a definition
+  has: the mouth it wears even when it is empty, and the `return` socket under
+  it. `def frame(i)` out of `examples/sprites/blinking_eyes.py` renders 157px
+  and was reserved 80, so the next root was drawn 29px inside it. The estimate
+  was also a tenth short on EVERY row — a statement renders 54px against the 48
+  it assumed — and counted a socket inside a socket as free, though each one
+  grows the row it is on by a measured 8px. Across the example and runtime
+  modules that takes the overlaps from 70 to 11, all of them now in
+  thousand-line hardware drivers rather than in anything a learner opens.
+
 - **Naming a PWM on a pin you had already named generated nothing at all.**
   The pin dropdowns list the names a program declares above the numbers, so
   after *name pin GP15 as `motor_left`* the obvious next move is *name PWM on
