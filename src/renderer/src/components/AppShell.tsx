@@ -57,6 +57,7 @@ import { ShellPanel } from './ShellPanel'
 import { RightPanel } from './RightPanel'
 import { runMenuCommand } from '../lib/menuCommands'
 import { dispatchDeviceAction } from './device-bus'
+import { dispatchExportPdf } from './export-bus'
 import { dispatchOpenTool, onOpenTool } from './tools-bus'
 import { FLASH_BOARD_EVENT } from './board-finder-bus'
 import { BoardFinder } from './BoardFinder'
@@ -1462,6 +1463,9 @@ export function AppShell(): JSX.Element {
             reporter('save as', { notify: "Couldn't save the file." })
           )
         },
+        // The toolbar's print button owns the export (#1114) — busy state,
+        // status line and all — so the menu only pulls the trigger.
+        exportPdf: () => dispatchExportPdf(),
         // Through the tabs' own close, which prompts on a dirty buffer (#915).
         closeTab: () => dispatchCloseTab(),
         // --- Device (#918) -------------------------------------------------

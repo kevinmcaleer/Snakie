@@ -80,6 +80,7 @@ describe.each([
       'Open Folder…',
       'Save',
       'Save As…',
+      'Export to PDF…',
       'Close Tab',
       // macOS only: the window close, re-bound to ⇧⌘W because Close Tab took
       // the role's own ⌘W, and labelled so the sheet can name it.

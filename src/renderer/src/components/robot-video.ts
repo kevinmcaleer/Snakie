@@ -11,9 +11,10 @@
  * unavailable (e.g. stock Electron → .webm).
  */
 import { Muxer, ArrayBufferTarget } from 'mp4-muxer'
+import { SNAKIE_WEB_URL } from '../../../shared/links'
 
 /** Small bottom-left watermark drawn onto every recorded frame (#499). */
-const WATERMARK = 'Made with https://app.snakie.org'
+const WATERMARK = `Made with ${SNAKIE_WEB_URL}`
 function drawWatermark(ctx: OffscreenCanvasRenderingContext2D, w: number, h: number): void {
   const size = Math.max(11, Math.round(w / 60))
   ctx.font = `${size}px system-ui, sans-serif`

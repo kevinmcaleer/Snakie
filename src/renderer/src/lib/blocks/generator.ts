@@ -116,6 +116,16 @@ export interface GeneratedProgram {
    */
   missing: string[]
   /**
+   * The ids of the `def` blocks the generator HOISTED, in the order it emitted
+   * them (#1112).
+   *
+   * Exposed so that anything else presenting the program — the PDF export's
+   * blocks pages — can order functions before the main program from the SAME
+   * notion the code is built from, rather than inventing a second answer to
+   * "is this a function" that could drift from this one.
+   */
+  functions: string[]
+  /**
    * The ids of top-level blocks whose stack threw while generating (#1068).
    *
    * The same warning as {@link missing} and a different cause: there the type
@@ -385,6 +395,11 @@ export class MicroPythonGenerator extends Blockly.CodeGenerator {
     return [...this.functions.values()]
   }
 
+  /** The ids of the blocks those `def`s came from, same order. @internal */
+  functionBlockIds(): readonly string[] {
+    return [...this.functions.keys()]
+  }
+
   /**
    * Spoken for before this pass starts — the names the imports are going to
    * bind (#1068). See the two passes in {@link generateProgram}.
@@ -475,6 +490,7 @@ export function generateProgram(
   const pass = runPass(workspace, dialect, survey.gen.imports.boundNames())
   return {
     ...assemble(sectionsOf(pass.gen)),
+    functions: [...pass.gen.functionBlockIds()],
     missing: blocksWithoutEmitters(workspace),
     failed: pass.failed
   }
@@ -561,7 +577,9 @@ function sectionsOf(gen: MicroPythonGenerator): string[] {
  * leaves no gap behind it — and so the line numbers the map is built from are
  * the line numbers of the text that actually ships.
  */
-function assemble(sections: readonly string[]): Omit<GeneratedProgram, 'missing' | 'failed'> {
+function assemble(
+  sections: readonly string[]
+): Omit<GeneratedProgram, 'functions' | 'missing' | 'failed'> {
   const raw = sections.join('\n')
   const sourceMap = new Map<number, string>()
   const blockLines = new Map<string, number[]>()

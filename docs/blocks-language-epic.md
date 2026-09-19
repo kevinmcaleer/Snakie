@@ -24,7 +24,7 @@ first place?"** The two are not the same, and conflating them is the mistake
 this document exists to avoid.
 
 - A construct can be **readable and unbuildable**. `try`, `with`, `raise`,
-  `class`, tuple assignment and `global` are all registered today with
+  `class` and tuple assignment are all registered today with
   `hidden: true`, which is #1086 §4.5 working as designed: *"the toolbox is
   curated, the reader is comprehensive."* The reader emits them; no learner can
   drag one.
@@ -32,7 +32,7 @@ this document exists to avoid.
   (#1089) closed and `blocksPaletteSymmetry.test.ts` now guards.
 - And a construct can be **neither**, which is most of this audit: there is no
   dictionary block, no tuple block, no bitwise operator, no `bytearray`, no
-  slice, no string method, no comprehension, no type conversion.
+  slice, no string method and no comprehension.
 
 **The measure is therefore not corpus coverage.** #1086's ratchet counts lines
 of somebody's existing code. The question here is "how often does a learner have

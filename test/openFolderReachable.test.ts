@@ -58,10 +58,13 @@ describe('the duplicate is gone', () => {
     expect(TOOLBAR).not.toContain('handleOpenFolder')
   })
 
-  it('leaves the toolbar group with New and Save only', () => {
-    // Both survivors are the actions the issue explicitly kept.
+  it('leaves the toolbar group with the file actions #882 kept', () => {
+    // The two survivors of #882 are the actions the issue explicitly kept…
     expect(TOOLBAR).toContain('aria-label="New file"')
     expect(TOOLBAR).toContain('aria-label="Save active file"')
+    // …joined since by the print button, which #1114 asked for by name
+    // ("next to the New and Save icon"). Open Folder is still not among them.
+    expect(TOOLBAR).toContain('aria-label="Export the project as a PDF"')
   })
 })
 
