@@ -43,6 +43,7 @@ import {
 } from './part-body'
 import { cableRoute } from './cable-route'
 import { serializeLiveSvg, exportSvgString, downloadBlob, type ExportFmt } from './svg-export'
+import { registerWiringSvg } from './wiring-svg-registry'
 import { bomMarkdown, pinoutMarkdown } from '../../../shared/robot-docs'
 import {
   allConnectors,
@@ -788,6 +789,12 @@ interface Drag {
 
 export function WiringCanvas({ robot, onChange, folder, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, usedByCode, smoking, onDropPart, onShowHelp, focusedChrome = false, voltage, live, highlight, nets, onHighlightNet }: WiringCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
+  // Publish the breadboard so the PDF export can capture it without guessing at
+  // a selector (#1110). Registered after the first paint, when the ref is set.
+  useEffect(() => {
+    const svg = svgRef.current
+    return svg ? registerWiringSvg(svg) : undefined
+  }, [])
   // The focusable canvas root — focused when a part is selected so the Delete /
   // Backspace shortcut is scoped to THIS canvas (a selected part can't be nuked by
   // a Delete pressed in the code editor, and two board views don't cross-fire).

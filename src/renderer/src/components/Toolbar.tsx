@@ -3,6 +3,7 @@ import { reporter } from '../lib/report-error'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
+import { SNAKIE_MARK_BODY, SNAKIE_MARK_VIEWBOX } from './snakie-mark'
 import { useConsole } from '../store/console'
 import { onDeviceAction } from './device-bus'
 import { dispatchProgramRunState } from './editorBridge'
@@ -54,28 +55,14 @@ const SNAKE_LOGO = (
   <svg
     width="28"
     height="28"
-    viewBox="0 0 32 32"
+    viewBox={SNAKIE_MARK_VIEWBOX}
     className="toolbar__logo"
     aria-hidden="true"
     focusable="false"
-  >
-    <defs>
-      <linearGradient id="snakie-mark" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stopColor="#86df6f" />
-        <stop offset="1" stopColor="#369b2c" />
-      </linearGradient>
-    </defs>
-    <path
-      d="M10 27c0-4 6-3.5 6-8s-6-3.5-6-8 5.5-5 10-3.6"
-      fill="none"
-      stroke="url(#snakie-mark)"
-      strokeWidth="4.3"
-      strokeLinecap="round"
-    />
-    <circle cx="21" cy="7" r="3.7" fill="url(#snakie-mark)" stroke="#2f7a28" strokeWidth="0.7" />
-    <circle cx="22.1" cy="6.3" r="0.95" fill="#16240f" />
-    <path d="M24.4 8l3 .7m-3-.7l3-.9" stroke="#e23b2b" strokeWidth="1.1" strokeLinecap="round" />
-  </svg>
+    // The artwork itself lives in `snakie-mark.ts`, shared with the PDF
+    // export's cover (#1109) — a module constant, not user input.
+    dangerouslySetInnerHTML={{ __html: SNAKIE_MARK_BODY }}
+  />
 )
 
 /**
