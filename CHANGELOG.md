@@ -22,6 +22,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Yellow TT Motor** added to the standard parts library — the classic
+  yellow-gearbox 3–6 V brushed DC motor found on most budget robot chassis
+  kits, alongside the existing N20 motor part.
+
 - **A wire you drag now stays where you put it.** (#1173) A tester said it
   plainly: *"I can drag wires but they don't stay where I put them, leaves them
   covering electronics like other pins sometimes."* Dragging a wire's belly was
