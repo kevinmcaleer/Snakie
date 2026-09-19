@@ -1,5 +1,6 @@
 import { Order } from '../generator'
 import { pyString } from '../py'
+import { registerCallRules } from '../python-to-blocks'
 import type { BlockDefinition } from '../registry'
 
 /**
@@ -65,8 +66,63 @@ export const TEXT_BLOCKS: BlockDefinition[] = [
     help: 'ref-print',
     toolbox: { inputs: { TEXT: { shadow: { type: 'text', fields: { TEXT: 'hello' } } } } },
     code: (block, gen) => `print(${gen.valueToCode(block, 'TEXT', Order.NONE) || "''"})\n`
+  },
+  {
+    // LETTERS AND THEIR NUMBERS (#1130, epic #1119).
+    //
+    // `ord`/`chr` are here rather than in a Conversions drawer because this is
+    // where a learner is standing when they need them: a byte off a UART, a key
+    // from a keypad, a character out of a buffer. #1118's `snakie_cast` covers
+    // the six types a beginner meets first and has nowhere to put these — they
+    // are not a type change, they are the two halves of one lookup.
+    type: 'snakie_text_ord',
+    category: 'text',
+    help: 'ref-builtins',
+    read: { fn: 'ord', args: ['CHAR'], shape: 'value' },
+    json: {
+      message0: 'letter code of %1',
+      args0: [{ type: 'input_value', name: 'CHAR' }],
+      inputsInline: true,
+      output: 'Number',
+      tooltip:
+        'The number a single letter is stored as. "A" is 65. This is what a byte from a UART or a keypad really is.'
+    },
+    toolbox: { inputs: { CHAR: { shadow: { type: 'text', fields: { TEXT: 'A' } } } } },
+    code: (block, gen) => [
+      `ord(${gen.valueToCode(block, 'CHAR', Order.NONE) || "''"})`,
+      Order.FUNCTION_CALL
+    ]
+  },
+  {
+    type: 'snakie_text_chr',
+    category: 'text',
+    help: 'ref-builtins',
+    read: { fn: 'chr', args: ['CODE'], shape: 'value', checks: { CODE: 'Number' } },
+    json: {
+      message0: 'letter for code %1',
+      args0: [{ type: 'input_value', name: 'CODE', check: 'Number' }],
+      inputsInline: true,
+      output: 'String',
+      tooltip: 'The letter a number stands for. 65 is "A". The other half of "letter code of".'
+    },
+    toolbox: { inputs: { CODE: { shadow: { type: 'math_number', fields: { NUM: 65 } } } } },
+    code: (block, gen) => [
+      `chr(${gen.valueToCode(block, 'CODE', Order.NONE) || '0'})`,
+      Order.FUNCTION_CALL
+    ]
   }
 ]
+
+/**
+ * How the two letter-code blocks read BACK out of Python (#1130).
+ *
+ * Both are `registerCallRules` one-liners with `shape: 'value'`, the same shape
+ * the reader's own `len`/`abs`/`round` entries already have — which is the
+ * whole argument for filing them together rather than as their own workstream.
+ */
+registerCallRules(
+  TEXT_BLOCKS.flatMap((block) => (block.read ? [{ ...block.read, type: block.type }] : []))
+)
 
 /**
  * A Python string literal for `value`, single-quoted like `ruff` prefers.

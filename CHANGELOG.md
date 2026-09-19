@@ -8,6 +8,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`ord`, `chr`, `isinstance` and a number in another base.** (#1130, epic
+  #1119) #1118's *turn %1 into %2* covers the six types a learner meets first
+  and has nowhere to put the rest. **letter code of** / **letter for code** are
+  the two halves of one lookup — how a byte off a UART or a key from a keypad
+  is really worked with — and live in Text, where a learner is standing when
+  they need them. **%1 as a number in base %2** parses `int('3C', 16)`, the hex
+  string off a serial line, and is a block of its own rather than a second
+  socket on the cast block, where a base would be meaningful for one dropdown
+  option out of six. **%1 is a …** asks what a value *is*, which nothing in the
+  palette could do; its type is a dropdown, because `isinstance(x, int)` wants
+  `int` the type and no block in the palette produces one.
+
 - **`in` works on text and dictionaries, and `is not None` has a block.**
   (#1128, epic #1119) Membership existed in the palette exactly once and only
   for lists: the haystack socket carried `check: 'Array'`, so `"c" in text`,

@@ -1,4 +1,5 @@
 import { Order } from '../generator'
+import { registerCallRules } from '../python-to-blocks'
 import type { BlockDefinition } from '../registry'
 
 /**
@@ -199,8 +200,82 @@ export const LOGIC_BLOCKS: BlockDefinition[] = [
       const op = block.getFieldValue('MODE') === 'NOT_IN' ? 'not in' : 'in'
       return [`${item} ${op} ${list}`, Order.RELATIONAL]
     }
+  },
+  {
+    // NOTHING IN THE PALETTE ASKED WHAT A VALUE *IS* (#1130, epic #1119).
+    //
+    // #1118's `snakie_cast` changes a value's type; this asks about it, which
+    // is a different question and the one a program asks when it has been
+    // handed something it did not choose — a line off a UART, an argument to a
+    // helper, a value out of a config dictionary.
+    //
+    // THE TYPE IS A FIELD, NOT A SOCKET. `isinstance(x, int)` wants `int` the
+    // TYPE, and no block in the palette produces one — a socket here would be a
+    // hole a learner cannot fill. The dropdown carries the same six names
+    // `snakie_cast` offers, so the two blocks read as a pair.
+    type: 'snakie_isinstance',
+    category: 'logic',
+    help: 'ref-types',
+    read: {
+      fn: 'isinstance',
+      args: ['VALUE'],
+      shape: 'value',
+      argFields: {
+        1: {
+          field: 'KIND',
+          values: {
+            int: 'int',
+            float: 'float',
+            str: 'str',
+            bool: 'bool',
+            list: 'list',
+            dict: 'dict'
+          }
+        }
+      }
+    },
+    json: {
+      message0: '%1 is %2',
+      args0: [
+        { type: 'input_value', name: 'VALUE' },
+        {
+          type: 'field_dropdown',
+          name: 'KIND',
+          options: [
+            ['a whole number (int)', 'int'],
+            ['a decimal number (float)', 'float'],
+            ['text (str)', 'str'],
+            ['true or false (bool)', 'bool'],
+            ['a list', 'list'],
+            ['a dictionary', 'dict']
+          ]
+        }
+      ],
+      inputsInline: true,
+      output: 'Boolean',
+      tooltip:
+        'True when the value is of that kind. Python writes it isinstance(value, int) — useful when something hands you a value and you do not know what it is yet.'
+    },
+    code: (block, gen) => [
+      `isinstance(${gen.valueToCode(block, 'VALUE', Order.NONE) || 'None'}, ${
+        String(block.getFieldValue('KIND') ?? 'int')
+      })`,
+      Order.FUNCTION_CALL
+    ]
   }
 ]
+
+/**
+ * How `isinstance` reads back (#1130).
+ *
+ * The SECOND argument is a field, which is what `CallRule.argFields` is for —
+ * and `isinstance(x, MyClass)` names a type the dropdown cannot hold, so the
+ * rule declines it and the line stays raw rather than coming back as a block
+ * that says something else.
+ */
+registerCallRules(
+  LOGIC_BLOCKS.flatMap((block) => (block.read ? [{ ...block.read, type: block.type }] : []))
+)
 
 /** Blockly's operator field values, as Python writes them. */
 const COMPARISONS: Record<string, string> = {

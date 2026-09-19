@@ -476,6 +476,46 @@ export const MATHS_BLOCKS: BlockDefinition[] = [
       const shift = /^-?\d+$/.test(n) ? String(Number(n) - 1) : `(${n} - 1)`
       return [`(${value} >> ${shift}) & 1`, Order.BITWISE_AND]
     }
+  },
+  {
+    // PARSING A NUMBER THAT IS NOT IN BASE TEN (#1130, epic #1119).
+    //
+    // `int('3C', 16)` is how a hex string off a serial line becomes a number,
+    // and it pairs directly with the hex literal block above: one is a number
+    // you WRITE in hex, this is a number you were SENT in hex.
+    //
+    // NOT A SECOND SOCKET ON `snakie_cast`. That block's dropdown has six
+    // options and a base is meaningful for exactly one of them, so a socket
+    // there would be a hole that does nothing five times out of six — the kind
+    // of block that teaches nothing and looks broken. A block that says what it
+    // does is the smaller thing.
+    type: 'snakie_int_base',
+    category: 'math',
+    help: 'ref-bits',
+    read: { fn: 'int', args: ['TEXT', 'BASE'], shape: 'value', checks: { BASE: 'Number' } },
+    json: {
+      message0: '%1 as a number in base %2',
+      args0: [
+        { type: 'input_value', name: 'TEXT' },
+        { type: 'input_value', name: 'BASE', check: 'Number' }
+      ],
+      inputsInline: true,
+      output: 'Number',
+      tooltip:
+        'Read a number out of text that is written in another base. Base 16 is hex, so "3C" becomes 60; base 2 is binary.'
+    },
+    toolbox: {
+      inputs: {
+        TEXT: { shadow: { type: 'text', fields: { TEXT: '3C' } } },
+        BASE: { shadow: { type: 'math_number', fields: { NUM: 16 } } }
+      }
+    },
+    code: (block, gen) => [
+      `int(${gen.valueToCode(block, 'TEXT', Order.NONE) || "''"}, ${
+        gen.valueToCode(block, 'BASE', Order.NONE) || '10'
+      })`,
+      Order.FUNCTION_CALL
+    ]
   }
 ]
 

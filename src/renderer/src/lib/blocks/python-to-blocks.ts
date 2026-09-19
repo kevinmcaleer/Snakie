@@ -119,6 +119,11 @@ const OUTPUT_TYPE = new Map<string, SocketType>([
   ['logic_operation', 'Boolean'],
   ['snakie_is_none', 'Boolean'],
   ['snakie_identity', 'Boolean'],
+  ['snakie_isinstance', 'Boolean'],
+  // `ord` and `chr` (#1130): one answers with a number, the other with text.
+  ['snakie_text_ord', 'Number'],
+  ['snakie_text_chr', 'String'],
+  ['snakie_int_base', 'Number'],
   ['snakie_list_contains', 'Boolean'],
   // `controls_forEach`'s LIST socket checks Array, and a `text` in it is the
   // same class of unloadable workspace the table above exists for (#1087):
@@ -2704,22 +2709,40 @@ class Converter {
 
   private buildCall(rule: CallRule, args: readonly string[]): BlockJson | null {
     const names = rule.args ?? []
+    // AN ARGUMENT CAN BE A FIELD (#1130), as it long has been for a call on a
+    // hoisted object: `isinstance(x, int)` is *x is a [whole number]*, and the
+    // `int` is a dropdown rather than a socket — a socket there would mean a
+    // learner had to find a block that says `int` the TYPE, which nothing in
+    // the palette does. So the arity a rule expects is its sockets plus its
+    // fields, exactly as `objectCall` already counts it.
+    const argFields = rule.argFields ?? {}
     // A call with the wrong number of arguments is not this block, whatever it
     // looks like — better a raw block than one that silently drops an argument.
-    if (args.length !== names.length) return null
+    if (args.length !== names.length + Object.keys(argFields).length) return null
     const block: BlockJson = { type: rule.type }
-    if (rule.fields) block.fields = { ...rule.fields }
-    if (names.length > 0) {
-      block.inputs = {}
-      for (let i = 0; i < names.length; i++) {
-        const filled = this.expression(args[i])
-        // A socket that CHECKS a type and an argument that cannot fit it is not
-        // this block — see {@link CallRule.checks}.
-        const want = rule.checks?.[names[i]]
-        if (want && !fitsSocket(filled, want)) return null
-        block.inputs[names[i]] = { block: filled }
+    const fields: Record<string, string> = { ...(rule.fields ?? {}) }
+    const inputs: Record<string, { block: BlockJson }> = {}
+    let socket = 0
+    for (let i = 0; i < args.length; i++) {
+      const asField = argFields[i]
+      if (asField) {
+        // A value the dropdown cannot hold — `isinstance(x, MyClass)` — is not
+        // this block, and a raw line says so honestly.
+        const value = asField.values[args[i].trim()]
+        if (value === undefined) return null
+        fields[asField.field] = value
+        continue
       }
+      const name = names[socket++]
+      const filled = this.expression(args[i])
+      // A socket that CHECKS a type and an argument that cannot fit it is not
+      // this block — see {@link CallRule.checks}.
+      const want = rule.checks?.[name]
+      if (want && !fitsSocket(filled, want)) return null
+      inputs[name] = { block: filled }
     }
+    if (Object.keys(fields).length > 0) block.fields = fields
+    if (Object.keys(inputs).length > 0) block.inputs = inputs
     return block
   }
 
