@@ -272,7 +272,6 @@ const NO_READER: Record<string, string> = {
     '`pwm()`, which would build `pwm_motor_a = PWM(motor_a)`. The statement blocks settle that ' +
     'race with `onNamedPin`, whose pass runs first; the value side has no such pass, so only one ' +
     'of the pair may claim the line.',
-  snakie_adc_read: 'Writes the volts arithmetic inline, so the line is not a plain call.',
   snakie_i2c_scan: 'Takes a hoisted I²C bus built from two pin fields, not from the call text.',
   snakie_i2c_present: 'As `snakie_i2c_scan`, with an address comparison on top.',
   snakie_inst_scope: 'Its channel is a keyword argument only written when it differs from the default.',

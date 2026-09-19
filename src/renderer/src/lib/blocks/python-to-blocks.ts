@@ -383,6 +383,31 @@ export interface CallRule {
    * the reader so the 65535 is written down once per block that uses it.
    */
   percentOf?: Readonly<Record<string, number>>
+  /**
+   * THE SAME CALL WITH A CONVERSION ON THE END, AND THE DROPDOWN THAT SAYS SO
+   * (#1163).
+   *
+   * {@link percentOf} undoes arithmetic wrapped round an ARGUMENT. This undoes
+   * arithmetic wrapped round the READING: *read (GP26) as [volts]* writes
+   * `adc_26.read_u16() * 3.3 / 65535`, which is the same call as its `[a number
+   * 0-65535]` twin with a scale after it, chosen by a field rather than by a
+   * socket. So the rule reads the bare call, and this says what the scale looks
+   * like and which fields the block wears when it is there.
+   *
+   * Folded off the BUILT TREE rather than matched in text, exactly as the Lists
+   * drawer's `- 1` is folded back by {@link CallRule.oneBased}'s cousin in
+   * `parseAdditive`: precedence climbing has already grouped
+   * `((read * 3.3) / 65535)` for us, and folding there catches the reading
+   * wherever it sits — in a comparison, inside a bigger sum — rather than only
+   * when it is the whole of an expression.
+   */
+  scaledBy?: {
+    /** The multiplier and the divisor the generator writes, in that order. */
+    times: number
+    over: number
+    /** What the block's fields become when the line carries that scale. */
+    fields: Readonly<Record<string, string>>
+  }
 }
 
 /**
@@ -1190,6 +1215,51 @@ const DEF_HEADER = /^(async\s+)?def\s+([A-Za-z_]\w*)\((.*)\)\s*:$/
  * somebody wrote and stays it.
  */
 const ONE_BASED_PLUS_ONE = new Set(['snakie_list_index', 'snakie_text_find'])
+
+/** A `math_number`'s value, or null for any other block. */
+function numberValue(block: BlockJson | undefined): number | null {
+  if (!block || block.type !== 'math_number') return null
+  const num = Number((block.fields as { NUM?: unknown } | undefined)?.NUM)
+  return Number.isFinite(num) ? num : null
+}
+
+/** One of a block's value sockets, if it has one there. */
+function socketBlock(block: BlockJson, name: string): BlockJson | undefined {
+  return (block.inputs as Record<string, { block?: BlockJson }> | undefined)?.[name]?.block
+}
+
+/**
+ * `<reading> * 3.3 / 65535` → that reading, with the dropdown that says volts
+ * (#1163).
+ *
+ * The scale half of {@link CallRule.scaledBy}, folded off the tree the
+ * precedence climber has already built — the same move `parseAdditive` makes
+ * for the Lists drawer's `+ 1`, and for the same reason: a block whose face
+ * offers *volts* or *a number 0-65535* must not come back as arithmetic wrapped
+ * round a call the learner cannot see inside.
+ *
+ * `a` is the left side of a `/` and `b` its right, so the shape being tested is
+ * exactly the one the generator emits and nothing else. The reading must still
+ * be wearing the fields its own rule gave it — `read (GP26) as [volts]`
+ * multiplied by 3.3 all over again is arithmetic somebody wrote, and stays it.
+ */
+function foldScaledReading(a: BlockJson, b: BlockJson): BlockJson | null {
+  const over = numberValue(b)
+  if (over === null || a.type !== 'math_arithmetic') return null
+  if ((a.fields as { OP?: string } | undefined)?.OP !== 'MULTIPLY') return null
+  const reading = socketBlock(a, 'A')
+  const times = numberValue(socketBlock(a, 'B'))
+  if (!reading || times === null) return null
+  for (const rule of rules()) {
+    const scale = rule.scaledBy
+    if (!scale || rule.type !== reading.type) continue
+    if (scale.times !== times || scale.over !== over) continue
+    const worn = (reading.fields ?? {}) as Record<string, unknown>
+    if (Object.entries(rule.fields ?? {}).some(([key, value]) => worn[key] !== value)) continue
+    return { ...reading, fields: { ...worn, ...scale.fields } }
+  }
+  return null
+}
 
 /** The multiplicative operators, as `math_arithmetic`'s dropdown spells them. */
 const MULTIPLICATIVE_OP: Record<string, string> = {
@@ -3198,7 +3268,23 @@ class Converter {
     // many as the block has. One too many is not this block.
     if (call.args.length !== sockets.length + Object.keys(argFields).length) return null
 
-    const fields: Record<string, unknown> = { [rec.pinField]: object.pin, ...match.fields }
+    // THE RULE'S OWN FIXED FIELDS GO ON TOO (#1163). Every other path that
+    // builds a block from a rule honours `fields`; this one never did, because
+    // until now no rule had both a hoisted receiver and a field to fix. The
+    // first that did was `snakie_adc_read`, whose `UNIT` says whether the line
+    // carries the volts conversion — and left unset the dropdown fell to its
+    // FIRST option, which is `volts`, so `level = adc_26.read_u16()` came back
+    // as a block that regenerates `adc_26.read_u16() * 3.3 / 65535`. A silent
+    // rewrite of somebody's reading, and one the round-trip gate would have
+    // caught only because the arithmetic changes the line's shape.
+    //
+    // The ctor's own placeholders win over them: those are read off the
+    // learner's actual constructor, where these are the rule's constants.
+    const fields: Record<string, unknown> = {
+      [rec.pinField]: object.pin,
+      ...(rule.fields ?? {}),
+      ...match.fields
+    }
     const inputs: Record<string, { block: BlockJson }> = {}
     let socket = 0
     for (let i = 0; i < call.args.length; i++) {
@@ -3790,7 +3876,12 @@ class Converter {
             isTextBlock(a) || isTextBlock(b)
             ? null
             : { type: 'math_modulo', inputs: { DIVIDEND: { block: a }, DIVISOR: { block: b } } }
-          : {
+          : // A READING WITH ITS CONVERSION ON THE END is the block that wrote
+            // it, not a division wrapped round one (#1163) — see
+            // {@link foldScaledReading}. Left-associative climbing has already
+            // put `read * 3.3` in `a` and `65535` in `b`, which is the whole
+            // shape, so there is nothing to match in text.
+            (op === '/' ? foldScaledReading(a, b) : null) ?? {
               type: 'math_arithmetic',
               fields: { OP: MULTIPLICATIVE_OP[op] ?? 'MULTIPLY' },
               inputs: { A: { block: a }, B: { block: b } }
@@ -4610,6 +4701,13 @@ class Converter {
    * argument we cannot read becomes a grey value block inside a real call block,
    * which is why `self.display.text(f"{temp:.1f}", 0, 0)` needs this and nothing
    * else — the f-string sits in a socket and regenerates verbatim.
+   *
+   * A KEYWORD ARGUMENT GOES IN THE BOX THAT WRITES IT (#1163). #1134 gave each
+   * socket a name field so `pixels.fill(colour=RED)` could be BUILT; reading one
+   * back put `colour=RED` in a grey block inside the socket, so the block a
+   * learner had just made came back as something they could not have made. The
+   * name is the field's and the value is the socket's, which is the same split
+   * the generator writes — see {@link keywordArgument} for what is claimed.
    */
   private callBlock(
     type: string,
@@ -4619,16 +4717,53 @@ class Converter {
   ): BlockJson | null {
     if (args.length > MAX_CALL_ARGS) return null
     const inputs: Record<string, { block: BlockJson }> = { OBJ: { block: object } }
+    const fields: Record<string, string> = { METHOD: method }
     args.forEach((arg, i) => {
-      inputs[`ARG${i}`] = { block: this.expression(arg) }
+      const keyword = keywordArgument(arg)
+      if (keyword) fields[`NAME${i}`] = keyword.name
+      inputs[`ARG${i}`] = { block: this.expression(keyword?.value ?? arg) }
     })
-    return { type, fields: { METHOD: method }, extraState: { args: args.length }, inputs }
+    return { type, fields, extraState: { args: args.length }, inputs }
   }
 }
 
 // ---------------------------------------------------------------------------
 // Small readers
 // ---------------------------------------------------------------------------
+
+/**
+ * `colour=RED` → the name for the box and the value for the socket (#1163).
+ *
+ * The other half of #1134: a call block writes `${sanitise(name)}=${value}` when
+ * its name box holds something, and this is that line read back. Only a bare
+ * `name` followed by a single top-level `=` counts, which excludes rather a lot
+ * on purpose:
+ *
+ *  - `a == b`, `a != b`, `a <= b` — the tokenizer takes its operators longest
+ *    first, so none of them is an `=` and none of them is claimed.
+ *  - `x := 5` lexes as `:` then `=`, so the token after the name is not the one
+ *    this wants.
+ *  - `*args` and `**kwargs` start with an operator, not a name, and belong to
+ *    the spread blocks anyway.
+ *  - A Python keyword lexes as `keyword`, not `name`, so `f(class=1)` — which
+ *    is not Python either — is left alone.
+ *
+ * AND ONLY A NAME THAT SURVIVES `sanitise` UNCHANGED, which is the one thing the
+ * round-trip gate cannot catch for us: it compares the SHAPE of a line, with
+ * every name reduced to a placeholder, so a rewrite from `id=1` to `id_=1`
+ * would look identical to it and reach the learner's file.
+ */
+function keywordArgument(text: string): { name: string; value: string } | null {
+  const tokens = tokenize(text)
+  if (!tokens || tokens.length < 3) return null
+  const [name, equals] = tokens
+  if (name.kind !== 'name' || sanitise(name.text) !== name.text) return null
+  if (equals.kind !== 'op' || equals.text !== '=') return null
+  // Sliced from the source, as every argument here is: an f-string or a
+  // comprehension cannot be spaced back together the way it was written.
+  const value = text.slice(tokens[2].start, tokens[tokens.length - 1].end)
+  return value.trim() === '' ? null : { name: name.text, value }
+}
 
 /**
  * A call at `at`: `turtle.forward(100)` → module, fn, and the argument texts.

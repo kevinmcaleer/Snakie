@@ -56,6 +56,13 @@ export interface RobotPart {
 /** The electrical net of a wire — drives its colour. */
 export type RobotNet = 'vcc' | 'gnd' | 'signal'
 
+/** A point a wire is PINNED through on the canvas (#1173), in viewBox units —
+ *  the same coordinate space as {@link RobotPart.x}/`y`. */
+export interface RobotWaypoint {
+  x: number
+  y: number
+}
+
 /** One wire between two pins. Endpoints are `"<partId>.<Pin>"`, or
  *  `"board.<Pin>"` for the microcontroller. */
 export interface RobotConnection {
@@ -69,6 +76,16 @@ export interface RobotConnection {
   /** Cable id — the wires of a QWIIC/I2C cable share one id so they render as a
    *  tight bundle and select/delete together (#…). */
   cable?: string
+  /**
+   * Points the user PINNED the wire through (#1173), in canvas order from
+   * {@link from} to {@link to}. Absent / empty ⇒ the wire is routed
+   * automatically, exactly as it was before pinning existed.
+   *
+   * They are ABSOLUTE canvas coordinates, not offsets from either pad: a pin is
+   * a place on the board you routed the wire around (a gap between two parts,
+   * the clear edge of the mat), so it stays put when a part at either end moves.
+   */
+  waypoints?: RobotWaypoint[]
 }
 
 /**

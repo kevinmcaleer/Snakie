@@ -32,6 +32,8 @@ connections:
     to: board.GP4
     net: signal               # vcc | gnd | signal — drives the wire colour
     color: '#4ea1ff'          # optional explicit colour (signal wires get one)
+    waypoints:                # optional: points the wire is PINNED through,
+      - { x: 210, y: -60 }    # in canvas units, in order from `from` to `to`
 ```
 
 Wire endpoints are `"<partId>.<PinName>"`, or `"board.<PinName>"` for the
@@ -60,6 +62,13 @@ view.)
 - **Wire pins**: drag from a pin's dot to another pin's dot. Wires are
   **auto-routed around components** (with a margin between parallel runs): a
   rounded **noodle** in Breadboard, **orthogonal** (right-angle) lines in Schematic.
+- **Pin a wire where you want it** (#1173): drag the wire itself and it **stays**
+  where you let go — the point you dropped it at is *pinned*, and the wire is
+  routed through it in both views. Drop as many pins as the route needs (each one
+  joins the run in the leg it was dropped in), **drag a pin** to move it, and
+  **click a pin** to take it out again. A wire with no pins is auto-routed exactly
+  as before. The pins are saved with the wire in `robot.yml` as `waypoints:`, so a
+  route you laid out by hand is still there when the project is reopened.
 - **Schematic conventions**: the MCU is an IC block with **power on top**, a
   **single combined GND at the bottom** (the board's multiple grounds show as one
   terminal in Schematic but remain individual pads in Breadboard), signals on the

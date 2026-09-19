@@ -77,6 +77,39 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   The separate *set frequency of (…) to (…) Hz* block is still how you change it
   while the program runs; this is how you say what it starts at.
 
+- **A wire you drag now stays where you put it.** (#1173) A tester said it
+  plainly: *"I can drag wires but they don't stay where I put them, leaves them
+  covering electronics like other pins sometimes."* Dragging a wire's belly was
+  an elastic stretch — the noodle followed the cursor and then sprang back, with
+  a decaying wobble, to wherever its automatic route wanted it. You could move a
+  wire; you could not put one anywhere. And where it sprang back to was
+  regularly straight over the components and pads you had just dragged it off.
+
+  So letting go now **pins** the wire: the point you released it at is kept, and
+  the wire is routed through it. Drop as many pins as the route needs — each one
+  joins the run in the leg it was dropped in, so a wire that doubles back keeps
+  the shape you drew rather than jumping through its pins out of order. **Drag a
+  pin** to move it, and **click a pin to take it out again**, which is the other
+  half of the same gesture: a route you can place is only useful if you can also
+  unplace it. A wire with no pins is auto-routed exactly as it always was.
+
+  The pins are the wire's, not the view's, so both views honour them: the
+  Breadboard noodle bends through them with the pads' own tangents at each end
+  (a soldered joint still leaves its pad square-on), and the Schematic draws a
+  rectilinear route through them, still leaving each pin perpendicular to its
+  symbol. A pinned wire is left out of the orthogonal auto-router altogether —
+  the pins ARE the route that was asked for, so nothing gets to move them, and
+  the wires that are still auto-routed are not pushed onto other channels by one
+  that isn't.
+
+  They are saved with the wire in `robot.yml` as `waypoints:`, in canvas
+  coordinates, so a layout done by hand is still there when the project is
+  reopened — and, being absolute rather than relative to either pad, a pin stays
+  on the gap in the board it was put in when a part at either end moves. The
+  wobble is kept, but it is a settle now rather than a retreat: the wire
+  overshoots the point it was pinned to and rings down onto it, the way a real
+  lead pushed into place springs and settles.
+
 - **Undo and redo in the Electronics view.** Wiring is drawing: you drag a part
   where you think it goes, run a wire to the wrong pin, and delete one thing
   while another was selected. Every one of those was permanent. The Part Editor
@@ -1330,6 +1363,44 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
   The reader now says when its vocabulary has grown, and a file converted
   against a smaller one is simply converted again.
+
+- **An analogue reading comes back as the block that took it** (#1163). *read
+  (GP26) as [volts]* writes `adc_26.read_u16() * 3.3 / 65535` — 0-65535 is what
+  the hardware gives, volts is what was asked for, and the conversion sits on
+  the line where both are visible. That conversion is why the block sat out the
+  hardware round trip entirely: a rule describes a call, and this line is a call
+  inside a division. So the reading came back as arithmetic wrapped round a
+  block whose own dropdown already offered *volts* — with the block in the
+  middle of it set to the other option.
+
+  A rule can now name the conversion its block writes, and the reader folds it
+  back off the tree the expression parser has already built. Off the tree rather
+  than out of the text, so the reading comes back wherever it sits: on its own,
+  in an `if`, inside a bigger sum. A named PWM's *power as [per cent]* reads
+  back the same way, and for the same reason. Anything else stays the arithmetic
+  somebody wrote: a scale the block never writes, the same conversion applied
+  twice, or `reading * 3.3 / 65535` on something that is not a reading at all.
+
+  **A raw reading was also being read back as a volts one**, which is the sharper
+  half of this. Every path that builds a block from a rule honours the fields the
+  rule fixes — except the one for a call on an object the generator hoisted,
+  which never had a rule with a field to fix until now. Left unset, `UNIT` fell
+  to its dropdown's first option, so `level = adc_26.read_u16()` came back as a
+  block that regenerates `adc_26.read_u16() * 3.3 / 65535`.
+
+- **A keyword argument comes back as a name and a value** (#1163). #1134 gave
+  each argument socket on the **call** blocks a box for the keyword name in
+  front of it, so `pixels.fill(colour=RED)` could be built. Reading one back put
+  the whole `colour=RED` into a grey block inside the socket — so a block a
+  learner had just made came back as something they could not have made.
+
+  The name goes in the box and the value in the socket now, which is the same
+  split the block writes. Only a bare name followed by a single top-level `=` is
+  claimed: `a == b`, `a != b` and `a <= b` lex as one operator each and are left
+  alone, `x := 5` is not an `=` either, and `*args` and `**kwargs` start with an
+  operator rather than a name. A value the reader cannot model still goes in the
+  socket verbatim, so `xs.sort(key=lambda v: v)` comes back with `key` in the
+  box and the lambda beside it.
 
 - **The zoom-to-fit button answers a press anywhere on it, and the column of
   blocks is spaced by what the blocks measure.** (#1150, #1062) Two reports from

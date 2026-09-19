@@ -200,6 +200,23 @@ export interface BlockDefinition {
      * generator writes and nothing else.
      */
     percentOf?: Readonly<Record<string, number>>
+    /**
+     * The same call with a CONVERSION on the end, and the fields that say so
+     * (#1163).
+     *
+     * `percentOf` undoes arithmetic around an argument; this undoes arithmetic
+     * around the reading. *read (GP26) as [volts]* writes `adc_26.read_u16() *
+     * 3.3 / 65535` — the same call as its raw twin, with a scale after it that
+     * a dropdown picks. The rule reads the bare call; this says what the scale
+     * looks like and what the block wears when the line carries it.
+     */
+    scaledBy?: {
+      /** The multiplier and the divisor the generator writes, in that order. */
+      times: number
+      over: number
+      /** What the block's fields become when the line carries that scale. */
+      fields: Readonly<Record<string, string>>
+    }
   }
   /**
    * REGISTERED BUT NOT LISTED IN THE FLYOUT (epic #1086 §4.5).
