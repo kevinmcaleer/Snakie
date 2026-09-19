@@ -703,17 +703,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- **White lettering on the blank-line block.** It is 2.9:1 on the comment grey,
-  where the ink that fill can readably carry is black at 7.2:1 — the second
-  place in the palette where the look was chosen over the contrast, after the
-  hardware amber.
+- **White lettering on a note about the program** — the comment block, the
+  docstring block and the blank-line spacer, all three of which wear the one
+  grey that says "this is not a step". It used to be whichever of black and
+  white the fill could readably carry, and that grey is a different grey in each
+  skin (it is the `--com` syntax token with the colour taken out), so the
+  lettering flipped with the skin: white in the dark one, black on parchment.
 
-  Set as `--snakie-block-text` on the label rather than as a `fill`, because the
-  rule that paints block text reads that property and its `:not()`s carry its
-  specificity past anything reasonable to write beside it — so this overrides the
-  VALUE it reads instead of racing it. Not a category `ink` either: that is keyed
-  by fill, and this block shares its fill with the comment block, which keeps its
-  readable black.
+  Asked for, and below AA on parchment: white is 2.88:1 on that grey, where the
+  black it replaces is 7.28:1. The second place in the palette where the look was
+  chosen over the contrast, after the hardware amber.
+
+  Declared against the block STYLE rather than against the fill, which is what
+  makes one line cover both skins — and any later edit to `--com` — instead of
+  two greys pinned in a table. It also folds in the blank-line spacer's own
+  white, which was a CSS override of the fill-keyed ink and is now just the
+  style it already wore.
 
 - **White lettering on the hardware blocks**, asked for over the black the amber
   can actually carry. It is the one block in the palette whose text does not
