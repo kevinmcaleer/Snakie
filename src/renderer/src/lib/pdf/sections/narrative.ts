@@ -33,6 +33,10 @@ export const WIRING_INTRO =
   'Wire up the robot like the picture below; use DuPont cables or solder wires for a more ' +
   'permanent connection.'
 
+/** The connections table, which follows the wiring picture (#1170). */
+export const CONNECTIONS_INTRO =
+  'The same wiring, written out. Make one connection at a time and tick it off as you go:'
+
 /** The listing, for a project that was built out of blocks. */
 export const CODE_INTRO_WITH_BLOCKS =
   'You can also type the code below into the code workspace instead of using the blocks:'

@@ -61,8 +61,9 @@ export const CABLE_KEY = 'wire:cable'
 const DETAIL_MAX = 140
 
 /** The part with `id` in `lib`, or — when the library was renamed or removed —
- *  the first part of that id anywhere, which is nearly always the same part. */
-function findPart(
+ *  the first part of that id anywhere, which is nearly always the same part.
+ *  Shared with the connections table (#1170), which names the same parts. */
+export function findPart(
   libraries: readonly PartLibraryWithParts[],
   lib: string,
   id: string
