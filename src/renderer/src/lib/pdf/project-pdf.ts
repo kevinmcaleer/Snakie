@@ -4,8 +4,8 @@
  *
  * The order is #1105's, with the bill of materials #1157 put where a reader
  * needs it: title page, what you will need, blocks (functions first), the
- * MicroPython listing, the wiring diagram, and the "Made with Snakie" closing
- * page. Each section opens with a line of ordinary English saying what to do
+ * MicroPython listing, the wiring diagram, the connections table (#1170), and
+ * the "Made with Snakie" closing page. Each section opens with a line of ordinary English saying what to do
  * with it (`sections/narrative.ts`).
  *
  * Three things live HERE rather than in the section modules:
@@ -27,12 +27,14 @@ import type { PdfImageData } from './writer'
 import { drawClosingPage, drawTitlePage, resolveProjectName } from './sections/cover'
 import { type DrawableStack, drawBlocksPages } from './sections/blocks'
 import { type BomCatalog, buildBom, drawBomPages } from './sections/bom'
+import { buildConnections, drawConnectionsPages } from './sections/connections'
 import { codeForListing, drawListing } from './sections/listing'
 import {
   BLOCKS_INTRO,
   BOM_INTRO,
   CODE_INTRO,
   CODE_INTRO_WITH_BLOCKS,
+  CONNECTIONS_INTRO,
   WIRING_INTRO
 } from './sections/narrative'
 import { drawWiringPage, hasWiring, wiringSummary } from './sections/wiring'
@@ -256,6 +258,15 @@ export async function buildProjectPdf(
       { intro: WIRING_INTRO, summary: input.robot ? wiringSummary(input.robot) : undefined }
     )
   }
+
+  // The same wiring as a list to work down (#1170). It follows the picture
+  // rather than replacing it: the diagram says where a part sits, the table
+  // says which pin to count to — and it stands on its own for a project whose
+  // board could not be captured, which is the one case where the reader would
+  // otherwise have no wiring at all.
+  drawConnectionsPages(doc, buildConnections(input.robot, input.catalog), {
+    intro: CONNECTIONS_INTRO
+  })
 
   drawClosingPage(doc)
 
