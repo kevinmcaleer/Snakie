@@ -40,6 +40,17 @@ export interface GrowableOptions {
   tooltip: string
   /** A value block (an output) rather than a statement. */
   value?: boolean
+  /**
+   * What the FIRST socket is called, when it cannot be `ADD0` (#1125).
+   *
+   * `text_print` is the one block here that already existed with one socket, in
+   * every workspace anybody has ever saved — and that socket is called `TEXT`.
+   * Renaming it would make `Blockly.serialization` unable to place the block a
+   * learner plugged in, which does not warn: it throws, and the throw costs
+   * them every block in the file. So the first row keeps the old name and the
+   * rest grow beside it.
+   */
+  firstSocket?: string
   /** What the `+` button's hover text calls a row — "item", "byte", "value". */
   noun: string
   /**
@@ -113,7 +124,7 @@ export function growableMixin(options: GrowableOptions): Record<string, unknown>
       const names = (i: number): string[] =>
         options.pair
           ? [`${options.pair.keyPrefix}${i}`, `${options.pair.valuePrefix}${i}`]
-          : [`ADD${i}`]
+          : [i === 0 && options.firstSocket ? options.firstSocket : `ADD${i}`]
       for (let i = self.itemCount_ ?? 0; i > target; i--) {
         for (const name of names(i - 1)) this.removeInput(name, true)
       }
@@ -125,7 +136,7 @@ export function growableMixin(options: GrowableOptions): Record<string, unknown>
             .setCheck(null)
             .appendField(options.pair.between)
         } else {
-          this.appendValueInput(`ADD${i}`).setCheck(null).appendField(label)
+          this.appendValueInput(names(i)[0]).setCheck(null).appendField(label)
         }
       }
       self.itemCount_ = target

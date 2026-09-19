@@ -20,7 +20,7 @@ import { SLICE_BLOCKS } from './slices'
 import { BUFFER_BLOCKS } from './buffers'
 import { LOGIC_BLOCKS } from './logic'
 import { MATHS_BLOCKS } from './maths'
-import { TEXT_BLOCKS } from './text'
+import { TEXT_BLOCKS, installTextBlocks } from './text'
 import { TURTLE_BLOCKS } from './turtle'
 import { PYTHON_BLOCKS, installPythonBlocks } from './python'
 import { VARIABLE_BLOCKS } from './variables'
@@ -77,6 +77,9 @@ export function installCorePalette(): void {
   // dictionary, a buffer, a `print` with several things in it.
   installTupleBlocks()
   installDictBlocks()
+  // `print`, which grew from one socket to as many as you like (#1125) and so
+  // is no longer Blockly's own shape.
+  installTextBlocks()
   defineBlocks([
     ...TURTLE_BLOCKS,
     // HARDWARE IS SCOPED BY WHAT IT CAN GENERATE (#1039 → #1040). Nine of the

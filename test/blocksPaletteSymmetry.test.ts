@@ -112,6 +112,12 @@ const READ_DIRECTLY: Record<string, string> = {
   // arithmetic round a call — the rule reads the 0-based form and the parser
   // folds the `+ 1` back (#1124).
   snakie_text_find: "at = line.find(',') + 1\n",
+  // --- formatting (#1125). The reader claims exactly the f-strings these
+  // blocks write, and no other: everything else about the f-string grammar
+  // stays raw and regenerates verbatim.
+  snakie_format_places: 'shown = f"{temp:.1f}"\n',
+  snakie_format_pad: 'shown = f"{reading:>5}"\n',
+  snakie_format_base: 'shown = f"{addr:#x}"\n',
   // A LIST DISPLAY IS READ NOW (#1135). It used to be listed below as an
   // argued exception; the buffer block takes its list in a socket, so it had
   // to become real — and `readings = [1, 2, 3]` stopping being grey is worth

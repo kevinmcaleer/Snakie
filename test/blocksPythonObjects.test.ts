@@ -109,9 +109,22 @@ describe('a method call on an object', () => {
   it('sockets an argument it cannot read rather than losing the line', () => {
     // §4.2 of the delivery plan: recognise the statement, socket the rest. This
     // is the whole reason f-strings cost five raw lines in 44 projects.
-    const src = 'self.display.text(f"{temp:.1f}", 0, 0)\n'
+    //
+    // THE EXAMPLE HAD TO MOVE ON (#1125). It used to be `f"{temp:.1f}"`, which
+    // is now a real format block — the argument stopped being grey, which is
+    // the improvement that issue was for. An f-string with a CONVERSION in it
+    // is still nobody's block: `temp!r` is not an expression, and claiming the
+    // spec while leaving the value grey would regenerate a line nobody wrote.
+    const src = 'self.display.text(f"{temp!r}", 0, 0)\n'
     expect(types(src)).toContain('snakie_python_value')
     expect(types(src)[0]).toBe('snakie_python_call')
+    roundTrips(src)
+  })
+
+  it('takes a format block as an argument now, rather than a grey one (#1125)', () => {
+    const src = 'self.display.text(f"{temp:.1f}", 0, 0)\n'
+    expect(types(src)).toContain('snakie_format_places')
+    expect(types(src)).not.toContain('snakie_python_value')
     roundTrips(src)
   })
 

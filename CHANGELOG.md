@@ -8,6 +8,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`print` takes as many things as you like, and numbers can be formatted.**
+  (#1125, epic #1119) Two gaps that meet in the same line of a sensor program.
+
+  `print("x:", x, "y:", y)` is how everybody debugs, and `text_print` had one
+  socket — one of the fourteen lines `docs/blocks-coverage-epic.md` §10 listed
+  as still grey. It grows a socket at a time now, with the **+** stepper the
+  call blocks already use. **Its first socket is still called `TEXT`**, which is
+  the whole migration story: every workspace anybody has saved has one, and
+  Blockly does not warn about an input it cannot find — it throws, and the throw
+  costs the learner every block in the file.
+
+  And there was no way to say `{temp:.1f}`. The nearest block,
+  *round to n decimal places*, changes the **number**: it gives `23.1` where a
+  display wanted `23.10`. Three new blocks — **to `n` decimal places**,
+  **padded to `n`**, **as hex / as binary** — hand back **text**, so one block
+  serves `print`, `join` and a display alike.
+
+  `join` **folds a format block into its own f-string** rather than nesting one:
+  you get `f"temp: {t:.1f}"`, not `f"{f'{t:.1f}'}"`. The reader claims exactly
+  the f-strings these blocks write and no others; anything else — a conversion,
+  a literal alongside the slot, a spec the blocks cannot hold — stays raw and
+  regenerates verbatim.
+
 - **Working with text: case, trim, replace, split, join, starts-with, find.**
   (#1124, epic #1119) The Text drawer was four blocks, and its header recorded
   why: case conversion, substring, index-of, trim, replace and reverse were

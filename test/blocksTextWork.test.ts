@@ -58,7 +58,7 @@ describe('the drawer is still four blocks at a glance', () => {
     expect(loose.map((c) => c.type)).toEqual(['text', 'text_join', 'text_length', 'text_print'])
     const shelf = contents.find((c) => c.kind === 'category') as { name: string; contents: [] }
     expect(shelf.name).toBe('Working with text')
-    expect(shelf.contents.length).toBe(9)
+    expect(shelf.contents.length).toBe(12)
   })
 
   it('still has no `text_prompt` — there is no keyboard on the board', () => {

@@ -132,6 +132,12 @@ const OUTPUT_TYPE = new Map<string, SocketType>([
   ['snakie_text_split', 'Array'],
   ['snakie_text_edge', 'Boolean'],
   ['snakie_text_find', 'Number'],
+  // The format blocks (#1125) hand back TEXT, which is what lets one of them
+  // go into `print`, into `join`, or onto a display — one block, every
+  // destination.
+  ['snakie_format_places', 'String'],
+  ['snakie_format_pad', 'String'],
+  ['snakie_format_base', 'String'],
   ['snakie_int_base', 'Number'],
   // The list verbs (#1122). `sorted(xs)` is the only one that hands back a
   // LIST, which is what lets it go straight into a `for each`.
@@ -903,6 +909,39 @@ function splitArgs(args: string): string[] | null {
   if (last !== '') out.push(last)
   // A trailing comma leaves an empty slot, which is not an argument.
   return out.every((a) => a !== '') ? out : null
+}
+
+/**
+ * `f"{value:.2f}"` → which format block wrote it, and with what (#1125).
+ *
+ * Null for every other f-string, including one with any literal text in it.
+ * The three specs here are the three the blocks emit and nothing more: a spec
+ * this does not recognise belongs to a line somebody wrote by hand, and coming
+ * back as an approximation of it would be a rewrite.
+ */
+function readFormatString(
+  literal: string
+): { type: string; fields: Record<string, string>; expr: string } | null {
+  // DOUBLE QUOTES ONLY, which is what the blocks emit. `f'{t:.1f}'` is the same
+  // string and a different line, and a block has nowhere to record which quote
+  // the learner used — the same reason `0x3C` needed a field that holds text
+  // rather than a number (#1127).
+  if (!literal.startsWith('"')) return null
+  const body = readStringLiteral(literal)
+  if (body === null) return null
+  const slot = /^\{(.+):([^{}]+)\}$/.exec(body)
+  if (!slot) return null
+  const [, expr, spec] = slot
+  // An expression with a brace in it is a nested f-string or a dict display,
+  // neither of which these blocks can hold.
+  if (/[{}]/.test(expr) || expr.trim() === '') return null
+  const places = /^\.(\d+)f$/.exec(spec)
+  if (places) return { type: 'snakie_format_places', fields: { PLACES: places[1] }, expr }
+  const width = /^>(\d+)$/.exec(spec)
+  if (width) return { type: 'snakie_format_pad', fields: { WIDTH: width[1] }, expr }
+  const base = /^#([xb])$/.exec(spec)
+  if (base) return { type: 'snakie_format_base', fields: { BASE: base[1] }, expr }
+  return null
 }
 
 /**
@@ -2704,8 +2743,38 @@ class Converter {
     return null
   }
 
+  /**
+   * `print(a, b, c)` → the one block, with as many sockets as it needs (#1125).
+   *
+   * A `CallRule` names its sockets, so it cannot express "however many there
+   * are" — and one of the fourteen lines `docs/blocks-coverage-epic.md` §10
+   * lists as still grey is exactly this. The one-argument form stays with the
+   * rule in `BUILT_IN_RULES`, which keeps every existing reading unchanged;
+   * this claims the rest.
+   *
+   * THE FIRST SOCKET IS `TEXT`, matching the block — see `text.ts` for why that
+   * name could not move.
+   */
+  private printCall(text: string): BlockJson | null {
+    const tokens = tokenize(text)
+    if (!tokens || tokens[0]?.kind !== 'name' || tokens[0].text !== 'print') return null
+    if (tokens[1]?.text !== '(') return null
+    const read = readArgs(tokens, text, 1)
+    // A trailing comma is the learner's text, as it is on any other call, and
+    // a call that does not end the line is not this statement.
+    if (!read || read.trailingComma || read.next !== tokens.length) return null
+    if (read.args.length < 2) return null
+    const inputs: Record<string, { block: BlockJson }> = {}
+    read.args.forEach((arg, i) => {
+      inputs[i === 0 ? 'TEXT' : `ADD${i}`] = { block: this.expression(arg) }
+    })
+    return { type: 'text_print', extraState: { items: read.args.length }, inputs }
+  }
+
   /** A whole line that is one recognised call, as a statement block. */
   private callStatement(text: string): BlockJson | null {
+    const several = this.printCall(text)
+    if (several) return several
     const tokens = tokenize(text)
     if (!tokens) return null
     // A PIN THE LEARNER NAMED GOES TO THE BLOCK THAT TAKES A NAME, ahead of the
@@ -3556,6 +3625,34 @@ class Converter {
       // survive the trip stays a raw value block, which regenerates it exactly.
       if (String(n) !== written) return { block: this.rawValue(written), next: at + 1 }
       return { block: { type: 'math_number', fields: { NUM: n } }, next: at + 1 }
+    }
+
+    // AN f-STRING THAT IS NOTHING BUT ONE FORMATTED VALUE (#1125).
+    //
+    // `f"{t:.1f}"` is exactly what the format blocks write, and nothing else in
+    // the reader claims an f-string — the lexer sees a NAME and a STRING, and
+    // every other f-string stays raw and regenerates verbatim. Claiming the one
+    // shape the blocks themselves emit is what keeps a learner's own block from
+    // coming back grey; claiming more would mean parsing the f-string grammar,
+    // which is not this issue.
+    if (
+      tok.kind === 'name' &&
+      tok.text === 'f' &&
+      tokens[at + 1]?.kind === 'string' &&
+      tokens[at + 1].start === tok.end
+    ) {
+      const formatted = readFormatString(tokens[at + 1].text)
+      if (!formatted) return null
+      const value = this.readExpression(formatted.expr)
+      // ONLY WHEN THE VALUE ITSELF IS READABLE. `f"{values!r:>10}"` has a
+      // CONVERSION in it, and `values!r` is not an expression — reading the
+      // spec and leaving the rest grey would produce a block that regenerates
+      // a line the learner did not write. The whole f-string stays raw instead.
+      if (GREY_VALUE_TYPES.has(value.type)) return null
+      return {
+        block: { type: formatted.type, fields: formatted.fields, inputs: { VALUE: { block: value } } },
+        next: at + 2
+      }
     }
 
     if (tok.kind === 'string') {

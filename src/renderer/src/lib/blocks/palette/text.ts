@@ -1,5 +1,8 @@
+import * as Blockly from 'blockly/core'
 import { Order } from '../generator'
+import type { MicroPythonGenerator } from '../generator'
 import { pyString } from '../py'
+import { growableMixin, itemCount } from './growable'
 import { registerCallRules } from '../python-to-blocks'
 import type { BlockDefinition, BlockGroup } from '../registry'
 
@@ -69,6 +72,16 @@ export const TEXT_BLOCKS: BlockDefinition[] = [
       if (n === 0) return ["''", Order.ATOMIC]
       const parts: string[] = []
       for (let i = 0; i < n; i++) {
+        // A FORMAT BLOCK IS FOLDED INTO THIS f-STRING RATHER THAN NESTED IN IT
+        // (#1125). Left to itself, `to 1 decimal place` generates `f"{t:.1f}"`
+        // and this would wrap it as `f"{f'{t:.1f}'}"` — legal, and a line
+        // nobody would write. Asking the block for its PIECES instead gives
+        // `f"temp: {t:.1f}"`, whole.
+        const spec = formatOf(block.getInputTargetBlock(`ADD${i}`), gen)
+        if (spec) {
+          parts.push(`{${spec.expr}:${spec.spec}}`)
+          continue
+        }
         const raw = gen.valueToCode(block, `ADD${i}`, Order.NONE)
         if (!raw) continue
         parts.push(asFStringPart(raw))
@@ -88,11 +101,106 @@ export const TEXT_BLOCKS: BlockDefinition[] = [
     ]
   },
   {
+    // `print` GREW A SOCKET AT A TIME (#1125, epic #1119).
+    // `docs/blocks-coverage-epic.md` §10 lists *"`print` with more than one
+    // argument — `text_print` has one socket"* among the lines still grey, and
+    // `print("x:", x, "y:", y)` is how everybody debugs: it could neither be
+    // built nor read.
+    //
+    // ITS FIRST SOCKET IS STILL CALLED `TEXT`, which is the whole of the
+    // migration story. Every saved workspace has a `text_print` with a `TEXT`
+    // input in it, and `Blockly.serialization` does not warn about an input it
+    // cannot find — it throws, and the throw costs the learner every block in
+    // the file. The rows that grow are named beside it, and a block with no
+    // saved count gets one row, which is what it always had.
     type: 'text_print',
     category: 'text',
     help: 'ref-print',
     toolbox: { inputs: { TEXT: { shadow: { type: 'text', fields: { TEXT: 'hello' } } } } },
-    code: (block, gen) => `print(${gen.valueToCode(block, 'TEXT', Order.NONE) || "''"})\n`
+    code: (block, gen) => {
+      const parts: string[] = []
+      for (let i = 0; i < Math.max(1, itemCount(block)); i++) {
+        // AN EMPTY SOCKET CONTRIBUTES NOTHING rather than `''`, the way the
+        // call blocks treat one: a learner who pressed `+` once too often
+        // should get their `print` back, not a stray empty string in the
+        // console.
+        const code = gen.valueToCode(block, i === 0 ? 'TEXT' : `ADD${i}`, Order.NONE)
+        if (code) parts.push(code)
+      }
+      return `print(${parts.join(', ')})\n`
+    }
+  },
+  {
+    // FORMATTING IS ABOUT HOW A NUMBER LOOKS, not what it is (#1125).
+    //
+    // The nearest thing before this was `snakie_math_round_places`, which
+    // changes the NUMBER: it gives `23.1` where a display wanted `23.10`, and
+    // `23.0` where it wanted `23.00`. "Print the temperature to one decimal
+    // place" is the single most common formatting job in a sensor program and
+    // it had no block at all.
+    //
+    // A FORMAT BLOCK RETURNS TEXT, so it plugs into `join`, into `print`, into
+    // a display block — one block, every destination. It is emphatically not a
+    // `print` variant.
+    type: 'snakie_format_places',
+    category: 'text',
+    group: TEXT_MORE,
+    help: 'ref-print',
+    json: {
+      message0: '%1 to %2 decimal places',
+      args0: [
+        { type: 'input_value', name: 'VALUE' },
+        { type: 'field_number', name: 'PLACES', value: 1, min: 0, max: 10, precision: 1 }
+      ],
+      inputsInline: true,
+      output: 'String',
+      tooltip:
+        'A number written out with exactly that many decimal places — 23.10 rather than 23.1. It changes how the number LOOKS, not what it is.'
+    },
+    code: (block, gen) => [fString(formatOf(block, gen)), Order.ATOMIC]
+  },
+  {
+    type: 'snakie_format_pad',
+    category: 'text',
+    group: TEXT_MORE,
+    help: 'ref-print',
+    json: {
+      message0: '%1 padded to %2',
+      args0: [
+        { type: 'input_value', name: 'VALUE' },
+        { type: 'field_number', name: 'WIDTH', value: 5, min: 1, max: 40, precision: 1 }
+      ],
+      inputsInline: true,
+      output: 'String',
+      tooltip:
+        'A value written out at least that wide, with spaces in front of it. This is how a column of readings on a small screen stays lined up.'
+    },
+    code: (block, gen) => [fString(formatOf(block, gen)), Order.ATOMIC]
+  },
+  {
+    type: 'snakie_format_base',
+    category: 'text',
+    group: TEXT_MORE,
+    help: 'ref-bits',
+    json: {
+      message0: '%1 as %2',
+      args0: [
+        { type: 'input_value', name: 'VALUE' },
+        {
+          type: 'field_dropdown',
+          name: 'BASE',
+          options: [
+            ['hex', 'x'],
+            ['binary', 'b']
+          ]
+        }
+      ],
+      inputsInline: true,
+      output: 'String',
+      tooltip:
+        'A number written out in hex or in binary, with its 0x or 0b in front. For showing a register or an address the way a datasheet does.'
+    },
+    code: (block, gen) => [fString(formatOf(block, gen)), Order.ATOMIC]
   },
   {
     type: 'snakie_text_case',
@@ -409,6 +517,58 @@ function asFStringPart(code: string): string {
   const literal = /^'((?:[^'\\]|\\.)*)'$/.exec(code) ?? /^"((?:[^"\\]|\\.)*)"$/.exec(code)
   if (literal) return literal[1].replace(/([{}])/g, '$1$1').replace(/\\'/g, "'")
   return `{${code}}`
+}
+
+/** A value and the Python format spec that says how to write it out. */
+export interface FormatSpec {
+  expr: string
+  spec: string
+}
+
+/**
+ * The format spec one of the three format blocks asks for, or null (#1125).
+ *
+ * Exported as a FUNCTION OF THE BLOCK rather than baked into each emitter,
+ * because `text_join` needs the pieces — see the fold there. A block whose
+ * socket is empty still has a spec; an empty socket formats `0`, which is what
+ * the block looks like it means.
+ */
+export function formatOf(
+  block: Blockly.Block | null,
+  gen: MicroPythonGenerator
+): FormatSpec | null {
+  if (!block) return null
+  const value = (): string => gen.valueToCode(block, 'VALUE', Order.NONE) || '0'
+  switch (block.type) {
+    case 'snakie_format_places':
+      return { expr: value(), spec: `.${Number(block.getFieldValue('PLACES') ?? 1)}f` }
+    case 'snakie_format_pad':
+      return { expr: value(), spec: `>${Number(block.getFieldValue('WIDTH') ?? 5)}` }
+    case 'snakie_format_base':
+      return { expr: value(), spec: `#${String(block.getFieldValue('BASE') ?? 'x')}` }
+    default:
+      return null
+  }
+}
+
+/** One format spec as an f-string of its own, for a block standing alone. */
+function fString(spec: FormatSpec | null): string {
+  return spec ? `f"{${spec.expr}:${spec.spec}}"` : "''"
+}
+
+/** Register the blocks whose sockets come and go. */
+export function installTextBlocks(): void {
+  Blockly.Blocks['text_print'] = growableMixin({
+    style: 'text_blocks',
+    head: 'print',
+    defaults: 1,
+    first: '',
+    separator: 'and',
+    noun: 'value',
+    firstSocket: 'TEXT',
+    tooltip:
+      'Say something in the console. Press + to print several things at once — Python puts a space between them.'
+  }) as never
 }
 
 /** How many sockets the mutator has actually given this block. */
