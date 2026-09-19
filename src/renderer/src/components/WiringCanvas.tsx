@@ -51,7 +51,6 @@ import {
   type ExportFmt
 } from './svg-export'
 import { inlineFontCss } from './export-fonts'
-import { registerWiringSvg } from './wiring-svg-registry'
 import { bomMarkdown, pinoutMarkdown } from '../../../shared/robot-docs'
 import {
   allConnectors,
@@ -689,6 +688,14 @@ export interface WiringCanvasProps {
   boardPart?: PartDefinition | null
   /** Which representation to draw — driven by the board view's toggle. */
   renderMode: WiringRenderMode
+  /**
+   * The mat this canvas is drawn ON, when the host is not using the window's
+   * (#1168). The skins are CSS on an ancestor's `data-breadboard-bg`, but which
+   * way round the INK goes is a JS decision ({@link isDark} below), so a host
+   * that scopes the attribute to its own subtree — the PDF export, rendering
+   * one board on the white print mat — has to say so here too.
+   */
+  mat?: 'dark' | 'blueprint' | 'white'
   /** Board pads used by the parsed code, keyed by board pad index (combine view). */
   usedByCode?: UsedByCode
   /** Where magic smoke pours out — the terminals an ERC **error** implicates
@@ -795,14 +802,8 @@ interface Drag {
   pinchWY?: number
 }
 
-export function WiringCanvas({ robot, onChange, folder, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, usedByCode, smoking, onDropPart, onShowHelp, focusedChrome = false, voltage, live, highlight, nets, onHighlightNet }: WiringCanvasProps): JSX.Element {
+export function WiringCanvas({ robot, onChange, folder, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, mat, usedByCode, smoking, onDropPart, onShowHelp, focusedChrome = false, voltage, live, highlight, nets, onHighlightNet }: WiringCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
-  // Publish the breadboard so the PDF export can capture it without guessing at
-  // a selector (#1110). Registered after the first paint, when the ref is set.
-  useEffect(() => {
-    const svg = svgRef.current
-    return svg ? registerWiringSvg(svg) : undefined
-  }, [])
   // The focusable canvas root — focused when a part is selected so the Delete /
   // Backspace shortcut is scoped to THIS canvas (a selected part can't be nuked by
   // a Delete pressed in the code editor, and two board views don't cross-fire).
@@ -2537,11 +2538,12 @@ export function WiringCanvas({ robot, onChange, folder, joints = [], jointLimits
   // dark, which was true until the mat became a choice — on the white mat a
   // ground wire would be drawn white on white and simply disappear.
   // (Attribute reads are current: both the theme and the mat reach this window
-  // as a re-render.)
+  // as a re-render.) `mat` wins when the host set one — it is drawing on a mat
+  // of its own rather than the window's.
   const isDark =
     renderMode === 'schematic'
       ? document.documentElement.getAttribute('data-theme') === 'dark'
-      : document.documentElement.getAttribute('data-breadboard-bg') !== 'white'
+      : (mat ?? document.documentElement.getAttribute('data-breadboard-bg')) !== 'white'
 
   // Selected part + the screen position of its mini-toolbar (#176). Only placed
   // parts in the breadboard view are selectable/rotatable.

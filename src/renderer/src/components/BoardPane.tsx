@@ -44,7 +44,19 @@ import type {
 // flashing built-in defaults while the async library / board lists load (#615).
 let cachedLibraries: PartLibraryWithParts[] = []
 
-export function BoardPane(): JSX.Element {
+export interface BoardPaneProps {
+  /**
+   * Draw on THIS mat rather than the one Settings chose (#1168).
+   *
+   * The PDF export renders a board of its own to photograph, and wants the white
+   * print mat whatever the window is set to. Given a mat, the pane scopes
+   * `data-breadboard-bg` to its own element instead of the document root — so
+   * the window's own canvas, if one is open, is left exactly as it was.
+   */
+  mat?: 'dark' | 'blueprint' | 'white'
+}
+
+export function BoardPane({ mat }: BoardPaneProps = {}): JSX.Element {
   const { openFiles, activeId, currentFolder } = useWorkspace()
   const { pendingBoardSwap, clearBoardSwap } = useWorkspaceLayout()
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
@@ -58,11 +70,15 @@ export function BoardPane(): JSX.Element {
   // window didn't have it until this pane existed.
   const { breadboardBg } = useEditorSettings()
   useEffect(() => {
+    // A pane drawing on a mat of its OWN publishes it on its own element (see
+    // the render below) and must not touch the document's — that would restyle
+    // the canvas the learner is looking at.
+    if (mat) return
     document.documentElement.setAttribute(
       'data-breadboard-bg',
       breadboardBg === 'blueprint' || breadboardBg === 'white' ? breadboardBg : 'dark'
     )
-  }, [breadboardBg])
+  }, [breadboardBg, mat])
 
   // User-authored boards are loaded by `useBoards` inside BoardGraph now — one
   // loader, one set of refresh signals, so this pane and the code workspace's
@@ -70,6 +86,11 @@ export function BoardPane(): JSX.Element {
 
   // Installed part libraries (wiring canvas + add-to-project); refresh on save.
   const [libraries, setLibraries] = useState<PartLibraryWithParts[]>(() => cachedLibraries)
+  // Whether the list has come back AT ALL — which is not the same as it having
+  // anything in it, and is what "ready" below has to mean (#1168). Until it
+  // does, every placed part draws as `part library not installed`: a
+  // placeholder box with no pins, and so no wires between them.
+  const [librariesLoaded, setLibrariesLoaded] = useState(() => cachedLibraries.length > 0)
   useEffect(() => {
     const load = (): void => {
       window.api.parts.listLibraries()
@@ -82,6 +103,7 @@ export function BoardPane(): JSX.Element {
           setLibraries(l)
         })
         .catch(() => setLibraries([]))
+        .finally(() => setLibrariesLoaded(true))
     }
     load()
     window.addEventListener(PARTS_CHANGED_EVENT, load)
@@ -234,10 +256,20 @@ export function BoardPane(): JSX.Element {
   }, [])
 
   // Author a NEW board (a starter Microcontroller-family part in `my-parts`).
+  // EVERYTHING THE BOARD IS DRAWN FROM IS HERE (#1168). A reader can see this
+  // as "the pane has stopped filling in"; the PDF export needs it as a fact,
+  // because a capture taken before the libraries land photographs placeholder
+  // boxes and no wiring — which is what #1147 kept shipping.
+  const ready = robotLoaded && librariesLoaded
+
   return (
     <section
       className="board-pane"
       aria-label="Board View"
+      // Scoped mat (see {@link BoardPaneProps.mat}) — the CSS skins match on any
+      // ancestor, so this dresses THIS pane's canvas and nothing else.
+      data-breadboard-bg={mat}
+      data-board-ready={ready ? '' : undefined}
       style={{ height: '100%', minWidth: 0, position: 'relative' }}
     >
       <BoardGraph
@@ -248,6 +280,7 @@ export function BoardPane(): JSX.Element {
         onChangeRobot={saveRobot}
         folder={folder}
         libraries={libraries}
+        mat={mat}
         joints={joints}
         jointLimits={jointLimits}
         onAddToProject={addToProject}

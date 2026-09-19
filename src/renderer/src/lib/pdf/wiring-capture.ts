@@ -1,9 +1,8 @@
 /**
- * Getting the breadboard into the document (#1110).
+ * Getting the breadboard into the document (#1110, #1147, #1168).
  *
  * THE DECISION THIS ISSUE ASKED FOR, stated plainly: the export **renders the
- * diagram off-screen from the project model on demand**, and reuses the live
- * canvas when the Electronics view happens to be mounted.
+ * diagram off-screen from the project model on demand**, every time.
  *
  * The other two options were rejected:
  *
@@ -14,34 +13,38 @@
  *    tab, then press print again" is a worse answer than doing it for them,
  *    when the project model already has everything needed to draw it.
  *
- * `BoardPane` takes no props and feeds itself from the workspace store, so
- * mounting a second one into an off-screen host gives a real, laid-out canvas
- * without duplicating any of its plumbing here — but it has to be mounted by
- * the APP, inside its providers. This module used to open a React root of its
- * own, which is a tree of its own: the pane threw `useWorkspace must be used
- * within a WorkspaceProvider` on its first render, off where nothing could see
- * it, and every export made from Blocks or Code came out with no Electronics
- * page in it. `BoardCaptureHost` does the mounting now; see
+ * WHY NOT REUSE THE CANVAS ON SCREEN, which this module used to do when the
+ * Electronics view happened to be open: the printed page would then be dressed
+ * in whatever mat that window is set to — a dark or blueprint sheet, with the
+ * ink turned round to suit it — so the same project printed two different
+ * documents depending on which tab you pressed the button from. One board,
+ * rendered for the page on the white print mat, is the picture the document
+ * wants (#1168).
+ *
+ * `BoardPane` feeds itself from the workspace store, so mounting one into an
+ * off-screen host gives a real, laid-out canvas without duplicating any of its
+ * plumbing here — but it has to be mounted by the APP, inside its providers: a
+ * React root of its own is a TREE of its own, and the pane threw
+ * `useWorkspace must be used within a WorkspaceProvider` where nothing could
+ * see it. `BoardCaptureHost` does the mounting; see
  * `components/board-capture-registry.ts`.
+ *
+ * WAITING FOR A BOARD THAT IS ACTUALLY DRAWN (#1168). The pane fills itself in
+ * asynchronously — robot.yml, then the installed part libraries — and until the
+ * libraries land every placed part draws as a `part library not installed`
+ * placeholder: a box with NO PINS, and therefore no wires between them. A
+ * capture taken in that window is a picture of an empty bench, and it is
+ * perfectly stable while it lasts, so "measured the same twice" was not enough
+ * to rule it out. The pane says when it has everything (`data-board-ready`);
+ * only then does the stability check start.
  *
  * The one hard rule: this returns null rather than something blank. A blank
  * wiring page is worse than no wiring page, so an empty or unmeasurable canvas
  * is reported as "no diagram" and the section is left out (#1108).
- *
- * TWO PICTURES, ONE PASS (#1147). The document shows the board twice: the
- * drawing lifted onto the page's parchment, and the workspace's own sheet —
- * grid, mat and all — as `Export ▸ PDF document` writes it. Mounting the board
- * is the expensive half of this module, so both are serialised from whichever
- * canvas it got hold of rather than capturing twice.
  */
 
-import {
-  inlineImageHrefs,
-  serializeLiveSvg,
-  stageBackground
-} from '../../components/svg-export'
+import { inlineImageHrefs, serializeLiveSvg } from '../../components/svg-export'
 import { mountCaptureBoard } from '../../components/board-capture-registry'
-import { getWiringSvg } from '../../components/wiring-svg-registry'
 
 /** A serialised diagram at its natural CSS-pixel size. */
 export interface CapturedDiagram {
@@ -50,88 +53,36 @@ export interface CapturedDiagram {
   height: number
 }
 
-/** A serialised diagram that carries its own sheet colour (#1147). */
-export interface CapturedSheet extends CapturedDiagram {
-  /** The mat the board is drawn on, for the JPEG's letterbox to match. */
-  background: string
-}
-
-/** Both pictures of the board the document wants, from one pass (#1147). */
-export interface CapturedWiring {
-  /** The drawing alone, on the document's parchment. */
-  diagram: CapturedDiagram
-  /** The workspace's own sheet, exactly as `Export ▸ PDF document` prints it. */
-  sheet: CapturedSheet | null
-}
-
 /** Chrome and view-derived backdrops that should not bake into a printed page. */
 const EXCLUDE = ['.wc__sel-ring', '.wc__grid-layer', '.wc__paper']
 
-/** The sheet keeps the grid and the mat; only the selection ring is chrome. */
-const SHEET_EXCLUDE = ['.wc__sel-ring']
-/** The margin `WiringCanvas`'s own PDF export frames the board with. */
-const SHEET_MARGIN = 24
+/** The print mat: a plain white sheet, the same one Settings ▸ Appearance
+ *  offers for printing and screenshots. */
+export const PRINT_MAT = 'white'
+/** …and its colour, for the margin the frame leaves around the drawing. */
+export const PRINT_BACKGROUND = '#ffffff'
 
 /** How long to wait for an off-screen board to finish loading its libraries. */
-const MOUNT_TIMEOUT_MS = 12000
+const MOUNT_TIMEOUT_MS = 20000
 const POLL_MS = 80
 
 /** Serialise a breadboard `<svg>`, framed tight to the parts. */
 export function serialiseWiring(
   svg: SVGSVGElement,
-  background: string,
+  background = PRINT_BACKGROUND,
   fontCss = ''
 ): CapturedDiagram | null {
   return serializeLiveSvg(svg, '.wc__content', {
     background,
     margin: 20,
     // The grid and the paper are view-derived full-canvas layers; the printed
-    // page wants the drawing on parchment, not a screenshot of the mat.
+    // page wants the drawing on the sheet, not a screenshot of the mat.
     exclude: EXCLUDE,
     bboxExclude: ['.wc__grid-layer', '.wc__paper'],
     // Part labels and pin names are lettered in the app's webfont, which an
     // `<img>`-rendered SVG cannot fetch — see `export-fonts.ts`.
     fontCss
   })
-}
-
-/**
- * Serialise a breadboard `<svg>` AS THE WORKSPACE EXPORTS IT (#1147).
- *
- * The same call `WiringCanvas.doExport` makes: the grid and the paper stay,
- * the mat colour is read off the live stage, and the frame is the parts plus
- * the export's own 24px margin — so the page in the document and the file that
- * button writes are the same picture.
- *
- * Nothing forces a zoom-to-fit first, as the button does. It does not need to:
- * the grid and the paper are drawn to cover the PLACED CONTENT as well as the
- * viewport (`coverBounds`), precisely so an export fills to its edges whatever
- * the canvas is scrolled to.
- */
-export function serialiseWiringSheet(svg: SVGSVGElement, fontCss = ''): CapturedSheet | null {
-  const background = stageBackground(svg)
-  const res = serializeLiveSvg(svg, '.wc__content', {
-    background,
-    margin: SHEET_MARGIN,
-    exclude: SHEET_EXCLUDE,
-    // Frame to the parts, not the full-canvas grid/paper — they just fill it.
-    bboxExclude: ['.wc__grid-layer', '.wc__paper'],
-    fontCss
-  })
-  return res ? { ...res, background } : null
-}
-
-/** Both pictures of one canvas — the diagram, and the sheet beside it. */
-function captureBoth(
-  svg: SVGSVGElement,
-  background: string,
-  fontCss: string
-): CapturedWiring | null {
-  const diagram = serialiseWiring(svg, background, fontCss)
-  if (!diagram) return null
-  // The sheet is the extra page, not the section: a canvas that serialises one
-  // way but not the other still gets its diagram.
-  return { diagram, sheet: serialiseWiringSheet(svg, fontCss) }
 }
 
 /** A `<div>` parked off-screen, big enough for the canvas to lay out in. */
@@ -149,17 +100,16 @@ function offscreenHost(): HTMLDivElement {
 
 /** Resolve once `probe` returns the same non-null answer twice running. */
 async function settle(
-  probe: () => CapturedWiring | null,
-  timeoutMs: number
-): Promise<CapturedWiring | null> {
-  const deadline = Date.now() + timeoutMs
+  probe: () => CapturedDiagram | null,
+  deadline: number
+): Promise<CapturedDiagram | null> {
   let previous: string | null = null
   while (Date.now() < deadline) {
     const value = probe()
     if (value !== null) {
       // Size and serialised length, rather than the whole markup: the string is
       // large and this runs several times a second.
-      const fingerprint = `${value.diagram.width}x${value.diagram.height}:${value.diagram.svg.length}`
+      const fingerprint = `${value.width}x${value.height}:${value.svg.length}`
       if (fingerprint === previous) return value
       previous = fingerprint
     }
@@ -168,34 +118,32 @@ async function settle(
   return null
 }
 
-/** Carry the part photos into the capture — BOTH pictures of it. A no-op on
- *  the desktop, where the main process has already inlined them; on the web
- *  they are build assets named by URL, which the `<img>` the rasteriser uses
- *  cannot fetch, so the board would print without its own photograph. */
-async function withImages(w: CapturedWiring | null): Promise<CapturedWiring | null> {
-  if (!w) return null
-  return {
-    diagram: { ...w.diagram, svg: await inlineImageHrefs(w.diagram.svg) },
-    sheet: w.sheet ? { ...w.sheet, svg: await inlineImageHrefs(w.sheet.svg) } : null
+/** Resolve once the pane says it has its robot.yml AND its part libraries, or
+ *  null if it never does. Everything after this is a board actually drawn. */
+async function ready(host: HTMLElement, deadline: number): Promise<boolean> {
+  while (Date.now() < deadline) {
+    if (host.querySelector('[data-board-ready]')) return true
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS))
   }
+  return false
+}
+
+/** Carry the part photos into the capture. A no-op on the desktop, where the
+ *  main process has already inlined them; on the web they are build assets
+ *  named by URL, which the `<img>` the rasteriser uses cannot fetch, so the
+ *  board would print without its own photograph. */
+async function withImages(d: CapturedDiagram | null): Promise<CapturedDiagram | null> {
+  return d ? { ...d, svg: await inlineImageHrefs(d.svg) } : null
 }
 
 /**
- * The project's wiring, from the live canvas when there is one and from an
- * off-screen render otherwise. Null means "nothing to draw" — never a blank.
- *
- * Both pictures come out of ONE pass: mounting a second board is the expensive
- * part of this module, and the sheet page must never cost a second one.
+ * The project's wiring, rendered for the page. Null means "nothing to draw" —
+ * never a blank.
  */
 export async function captureWiring(
-  background = '#f6f1e6',
+  background = PRINT_BACKGROUND,
   fontCss = ''
-): Promise<CapturedWiring | null> {
-  const live = getWiringSvg()
-  if (live) {
-    const captured = captureBoth(live, background, fontCss)
-    if (captured) return withImages(captured)
-  }
+): Promise<CapturedDiagram | null> {
   if (typeof document === 'undefined') return null
 
   const host = offscreenHost()
@@ -204,16 +152,18 @@ export async function captureWiring(
     // The app renders the pane — inside its providers, reading the same
     // workspace the Electronics view reads. Null means there is no app tree to
     // render it in, which is "no diagram", not a failure.
-    unmount = mountCaptureBoard(host)
+    unmount = mountCaptureBoard(host, PRINT_MAT)
     if (!unmount) return null
-    // The board loads its part libraries and robot.yml asynchronously, so wait
-    // for a canvas that measures the same twice running rather than grabbing
-    // the first frame — which would print a board with no parts on it.
+    const deadline = Date.now() + MOUNT_TIMEOUT_MS
+    if (!(await ready(host, deadline))) return null
+    // Ready is not yet still: the parts are there, but their photos decode and
+    // the wires route over the next frames, so wait for a canvas that measures
+    // the same twice running.
     return await withImages(
       await settle(() => {
         const svg = host.querySelector('svg.wc__svg') as SVGSVGElement | null
-        return svg ? captureBoth(svg, background, fontCss) : null
-      }, MOUNT_TIMEOUT_MS)
+        return svg ? serialiseWiring(svg, background, fontCss) : null
+      }, deadline)
     )
   } catch {
     return null
