@@ -40,6 +40,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   matched its code opens exactly as you left it, and a stack you drag aside
   stays where you put it even as the code pane keeps re-converting around it.
 
+- **Settings ▸ Appearance ▸ Block shape — try all three Blockly geometries.**
+  Blockly ships three renderers and they are three vocabularies rather than
+  three settings of one dial, so which one suits a room is not a question the
+  app can answer on its own: a class arriving from Scratch wants the pills and
+  the hexagons, and somebody reading a forty-line robot file wants the compact
+  rows.
+
+  **Standard** is `thrasos`, the flat standard rows, and the default. **Classic**
+  is `geras`, Blockly's own default, the same geometry with a bevelled edge.
+  **Scratch** is `zelos`, the `scratch-blocks` port — pill reporters, hexagonal
+  booleans, roughly twice as tall. All three wear the same Soft Shell palette,
+  fonts and per-category lettering, so the choice is a SHAPE and nothing else,
+  and all three are stock: the hand-tuning that made the old canvas fragile is
+  not coming back on any of them.
+
+  An open canvas redraws as soon as you pick one. Blockly fixes its renderer
+  when a workspace is created and offers no setter, so this is the one
+  appearance setting that re-injects the canvas rather than restyling it — your
+  file, your scroll position and your arrangement come straight back. The
+  printed PDF follows the same setting, so a page matches the screen it was
+  printed from.
+
 - **A PWM can be named with its frequency: `name PWM on pin [GP15 ▾] as
   [motor_a] at [1000] Hz`.** `pwm_motor_a = PWM(motor_a, freq=1000)` is
   how nearly every robot tutorial opens, and it matched nothing this palette

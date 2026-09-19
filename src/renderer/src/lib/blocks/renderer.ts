@@ -1,5 +1,10 @@
 import * as Blockly from 'blockly/core'
-import { BLOCK_TEXT_VAR, SOFT_SHELL_RENDERER, inkForBlock } from './theme'
+import {
+  BLOCK_TEXT_VAR,
+  SOFT_SHELL_RENDERERS,
+  inkForBlock,
+  type BlockShape
+} from './theme'
 
 /**
  * THE SOFT SHELL BLOCK GEOMETRY (#573's design direction, epic #1007).
@@ -35,22 +40,30 @@ import { BLOCK_TEXT_VAR, SOFT_SHELL_RENDERER, inkForBlock } from './theme'
  *    every block and a sliver under every C-block's mouth. Two bugs to buy back
  *    what a bigger number broke.
  *
- * So the geometry is Blockly's own, unmodified — `thrasos`, which is the
- * standard row layout with a flat outline rather than `geras`'s bevel, and the
- * one that sits under the Soft Shell palette without arguing with it. The SKIN
- * is still entirely ours: the colours, the fonts and the lettering come from
- * `theme.ts` and from the one override below, and none of them touch a
+ * So the geometry is Blockly's own, unmodified — `thrasos` by default, which is
+ * the standard row layout with a flat outline rather than `geras`'s bevel, and
+ * the one that sits under the Soft Shell palette without arguing with it. The
+ * SKIN is still entirely ours: the colours, the fonts and the lettering come
+ * from `theme.ts` and from the one override below, and none of them touch a
  * measurement.
  *
- * WHAT IS OVERRIDDEN. One thing, and it is not a size: the colour of the text
- * on a block. See {@link SoftShellPathObject}.
+ * ALL THREE ARE OFFERED, because they are three vocabularies rather than three
+ * settings of one dial, and which suits a room is not a question this file can
+ * answer. Settings ▸ Appearance ▸ Block shape picks one; every shape gets the
+ * same Soft Shell skin on top of the stock geometry, so choosing is choosing a
+ * SHAPE and nothing else. See {@link BlockShape} in `theme.ts`.
  *
- * NOTHING ELSE SHOULD BE. Every constant Blockly ships is derived from the
- * others — a corner radius is also a notch offset, a bottom-row height and the
- * arc a drawer walks — so a number raised here is a number three other places
- * have already been measured against. That is what #1158 was, twice. If the
- * blocks need more room, the answer is the font and the padding in `theme.ts`,
- * which nothing measures against.
+ * WHAT IS OVERRIDDEN. One thing, and it is not a size: the colour of the text
+ * on a block. See {@link inkPathObject}.
+ *
+ * NOTHING ELSE SHOULD BE, on any of the three. Every constant Blockly ships is
+ * derived from the others — a corner radius is also a notch offset, a
+ * bottom-row height and the arc a drawer walks — so a number raised here is a
+ * number three other places have already been measured against. That is what
+ * #1158 was, twice, and it is the reason `scratch` is stock Zelos rather than
+ * the hand-tuned Zelos this file used to carry. If the blocks need more room,
+ * the answer is the font and the padding in `theme.ts`, which nothing measures
+ * against.
  */
 
 /**
@@ -86,34 +99,79 @@ export function softShellConstants(): Blockly.blockRendering.ConstantProvider {
  * It also covers a part's or a plugin's blocks (#1017) for free, which is the
  * acceptance criterion no hand-tuned per-category table could meet.
  */
-class SoftShellPathObject extends Blockly.blockRendering.PathObject {
-  override applyColour(block: Blockly.BlockSvg): void {
-    super.applyColour(block)
-    // A fill this cannot parse — the hatch pattern on a disabled block is a
-    // `url(#…)` — falls back to the style's own colour rather than to a guess.
-    const painted = this.svgPath.getAttribute('fill') ?? ''
-    const fill = painted.startsWith('#') ? painted : this.style.colourPrimary
-    // THE STYLE NAME AS WELL AS THE FILL, because one style has an opinion its
-    // fill cannot express: a comment wears white in both skins although its
-    // grey is a different grey in each. See `inkForBlock`.
-    this.svgRoot.style.setProperty(BLOCK_TEXT_VAR, inkForBlock(block.getStyleName(), fill))
-  }
+/**
+ * The ink override, applied to whichever `PathObject` a renderer uses.
+ *
+ * A MIXIN RATHER THAN A CLASS, because each of the three renderers has its own
+ * path object — `geras` draws the bevel in its, `zelos` the glow in its — and
+ * subclassing the base would throw those away. Taking the base as an argument
+ * puts the override on top of whatever Blockly's renderer already does.
+ */
+function inkPathObject<T extends new (...args: never[]) => Blockly.blockRendering.PathObject>(
+  Base: T
+): T {
+  return class extends (Base as new (...args: never[]) => Blockly.blockRendering.PathObject) {
+    override applyColour(block: Blockly.BlockSvg): void {
+      super.applyColour(block)
+      // A fill this cannot parse — the hatch pattern on a disabled block is a
+      // `url(#…)` — falls back to the style's own colour rather than to a guess.
+      const painted = this.svgPath.getAttribute('fill') ?? ''
+      const fill = painted.startsWith('#') ? painted : this.style.colourPrimary
+      // THE STYLE NAME AS WELL AS THE FILL, because one style has an opinion its
+      // fill cannot express: a comment wears white in both skins although its
+      // grey is a different grey in each. See `inkForBlock`.
+      this.svgRoot.style.setProperty(BLOCK_TEXT_VAR, inkForBlock(block.getStyleName(), fill))
+    }
+  } as unknown as T
 }
 
-class SoftShellRenderer extends Blockly.thrasos.Renderer {
+const StandardPathObject = inkPathObject(Blockly.blockRendering.PathObject)
+const ClassicPathObject = inkPathObject(Blockly.geras.PathObject)
+const ScratchPathObject = inkPathObject(Blockly.zelos.PathObject)
+
+class StandardRenderer extends Blockly.thrasos.Renderer {
   override makePathObject(
     root: SVGElement,
     style: Blockly.Theme.BlockStyle
   ): Blockly.blockRendering.PathObject {
-    return new SoftShellPathObject(root, style, this.getConstants())
+    return new StandardPathObject(root, style, this.getConstants())
   }
 }
 
+class ClassicRenderer extends Blockly.geras.Renderer {
+  override makePathObject(root: SVGElement, style: Blockly.Theme.BlockStyle): Blockly.geras.PathObject {
+    return new ClassicPathObject(root, style, this.getConstants() as Blockly.geras.ConstantProvider)
+  }
+}
+
+class ScratchRenderer extends Blockly.zelos.Renderer {
+  override makePathObject(root: SVGElement, style: Blockly.Theme.BlockStyle): Blockly.zelos.PathObject {
+    return new ScratchPathObject(root, style, this.getConstants() as Blockly.zelos.ConstantProvider)
+  }
+}
+
+/** Every shape Settings offers, by the name the workspace options ask for. */
+const RENDERERS: Readonly<Record<BlockShape, new (name: string) => Blockly.blockRendering.Renderer>> =
+  {
+    standard: StandardRenderer,
+    classic: ClassicRenderer,
+    scratch: ScratchRenderer
+  }
+
 /**
- * Teach Blockly the Soft Shell shape. Idempotent — Blockly's registry throws on
- * a duplicate name, and the canvas can be mounted more than once a session.
+ * Teach Blockly the Soft Shell shapes — all three, so switching one on in
+ * Settings never races a registration.
+ *
+ * Idempotent: Blockly's registry throws on a duplicate name, and the canvas can
+ * be mounted more than once a session.
  */
-export function installSoftShellRenderer(): void {
-  if (Blockly.registry.hasItem(Blockly.registry.Type.RENDERER, SOFT_SHELL_RENDERER)) return
-  Blockly.blockRendering.register(SOFT_SHELL_RENDERER, SoftShellRenderer)
+export function installSoftShellRenderers(): void {
+  for (const [shape, Renderer] of Object.entries(RENDERERS) as [
+    BlockShape,
+    new (name: string) => Blockly.blockRendering.Renderer
+  ][]) {
+    const name = SOFT_SHELL_RENDERERS[shape]
+    if (Blockly.registry.hasItem(Blockly.registry.Type.RENDERER, name)) continue
+    Blockly.blockRendering.register(name, Renderer)
+  }
 }

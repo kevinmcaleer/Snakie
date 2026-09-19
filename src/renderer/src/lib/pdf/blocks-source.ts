@@ -33,7 +33,8 @@ import { blocksDocumentFor } from '../blocks/document'
 import { ensureBlocklyLocale } from '../blocks/locale'
 import { installCorePalette } from '../blocks/palette'
 import { installBlockDefinitions } from '../blocks/registry'
-import { installSoftShellRenderer } from '../blocks/renderer'
+import { installSoftShellRenderers } from '../blocks/renderer'
+import { storedBlockShape } from '../../store/settings'
 import {
   type BlocklyThemeInput,
   buildSoftShellTheme,
@@ -98,7 +99,7 @@ export function offscreenBlocksSource(input: BlocksSourceInput): BlocksSource {
   ensureBlocklyLocale()
   installCorePalette()
   installBlockDefinitions()
-  installSoftShellRenderer()
+  installSoftShellRenderers()
   installShelfFlyout()
 
   // The canvas refuses a file it cannot read rather than clearing it (see the
@@ -123,7 +124,9 @@ export function offscreenBlocksSource(input: BlocksSourceInput): BlocksSource {
   try {
     const tokens = readThemeTokens(document.documentElement)
     ws = Blockly.inject(host, {
-      ...softShellWorkspaceOptions(tokens),
+      // The shape the canvas is set to, so a printed page matches the screen
+      // it was printed from.
+      ...softShellWorkspaceOptions(tokens, storedBlockShape()),
       // No shelf: nothing is going to drag a block onto this one. It also keeps
       // the flyout's block canvas out of the SVG the capture frames.
       toolbox: undefined,

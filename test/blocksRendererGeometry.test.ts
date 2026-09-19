@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import * as Blockly from 'blockly/core'
-import { installSoftShellRenderer, softShellConstants } from '../src/renderer/src/lib/blocks/renderer'
-import { SOFT_SHELL_RENDERER } from '../src/renderer/src/lib/blocks/theme'
+import { installSoftShellRenderers, softShellConstants } from '../src/renderer/src/lib/blocks/renderer'
+import {
+  DEFAULT_BLOCK_SHAPE,
+  SOFT_SHELL_RENDERER,
+  SOFT_SHELL_RENDERERS
+} from '../src/renderer/src/lib/blocks/theme'
 
 /**
  * SOFT SHELL IS A SKIN, NOT A GEOMETRY.
@@ -57,12 +61,28 @@ describe('the Soft Shell geometry is standard Blockly', () => {
     for (const key of numbers) expect([key, ours[key]]).toEqual([key, theirs[key]])
   })
 
-  it('registers under the name the workspace options ask for', () => {
-    installSoftShellRenderer()
-    expect(Blockly.registry.hasItem(Blockly.registry.Type.RENDERER, SOFT_SHELL_RENDERER)).toBe(true)
+  it('registers every shape Settings can ask for, under the names it asks by', () => {
+    installSoftShellRenderers()
+    // ALL THREE, not just the one in use: Settings can switch shape at any
+    // moment, and injecting against a renderer Blockly has never heard of
+    // throws.
+    for (const name of Object.values(SOFT_SHELL_RENDERERS)) {
+      expect([name, Blockly.registry.hasItem(Blockly.registry.Type.RENDERER, name)]).toEqual([
+        name,
+        true
+      ])
+    }
     // Idempotent: Blockly's registry throws on a duplicate name, and the canvas
-    // can be mounted more than once a session.
-    expect(() => installSoftShellRenderer()).not.toThrow()
+    // can be mounted more than once a session — and now re-mounts on a shape
+    // change as well.
+    expect(() => installSoftShellRenderers()).not.toThrow()
+  })
+
+  it('keeps the bare renderer name for the default shape', () => {
+    // It is in screenshots, in `docs/` and in the habit of anybody who has read
+    // `renderer.ts`; a rename would be churn with no reader.
+    expect(SOFT_SHELL_RENDERER).toBe('snakie-soft-shell')
+    expect(SOFT_SHELL_RENDERERS[DEFAULT_BLOCK_SHAPE]).toBe(SOFT_SHELL_RENDERER)
   })
 })
 

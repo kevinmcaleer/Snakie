@@ -27,7 +27,7 @@ import {
   setExtrasVisible
 } from '../lib/blocks/palette/functions'
 import { argNamesHidden, hasArgNames, revealArgNames } from '../lib/blocks/palette/python'
-import { installSoftShellRenderer } from '../lib/blocks/renderer'
+import { installSoftShellRenderers } from '../lib/blocks/renderer'
 import {
   arrangeWorkspaceRoots,
   rootMoved,
@@ -56,6 +56,7 @@ import { installVariablesDrawer } from '../lib/blocks/variables-drawer'
 import { installDuplicateShortcut } from '../lib/blocks/duplicate'
 import type { Dialect } from '../../../shared/dialect'
 import { useHelpDialect } from '../hooks/useHelpDialect'
+import { useEditorSettings } from '../store/settings'
 import { isStaleDeselect, putOutHighlight } from '../lib/blocks/highlight'
 import type { BlocksWorkspace } from '../../../shared/blocks-doc'
 import './BlocksCanvas.css'
@@ -317,6 +318,11 @@ export function BlocksCanvas({
    * because every block stays defined whether or not it is reachable.
    */
   const { dialect } = useHelpDialect()
+  // Which of Blockly's three geometries to draw in (Settings ▸ Appearance).
+  // Read here rather than passed down: it is a preference, not a property of
+  // the document, and every caller of this component would just be forwarding
+  // it.
+  const { blockShape } = useEditorSettings()
   /**
    * A REF as well, because the injection below must read the dialect WITHOUT
    * depending on it: re-injecting on a dialect change would tear the workspace
@@ -342,8 +348,14 @@ export function BlocksCanvas({
     return () => Blockly.dialog.setPrompt(undefined)
   }, [prompt])
 
-  // Inject once. The theme is applied separately below so a skin change never
-  // has to tear the workspace down.
+  // Inject once — and again if the BLOCK SHAPE changes, which is the one
+  // setting that cannot be applied to a live workspace: Blockly fixes its
+  // renderer when the workspace is created, and there is no setter for it. The
+  // teardown below is the same one a workspace switch already runs, and the
+  // load effect (keyed on the shape too) puts the file straight back.
+  //
+  // The SKIN is not like that: a theme is applied separately below, so turning
+  // the app dark never tears the canvas down.
   useEffect(() => {
     const host = hostRef.current
     if (!host || peek || blocked) return
@@ -352,9 +364,9 @@ export function BlocksCanvas({
     // hold one. Here rather than at module load, so a block a part or plugin
     // registers later (#1017) is installed by the next canvas that opens.
     installBlockDefinitions()
-    // And the Soft Shell geometry, which the options below name. Registering a
-    // renderer Blockly has never heard of throws during injection.
-    installSoftShellRenderer()
+    // And the Soft Shell geometries, which the options below name one of.
+    // Registering a renderer Blockly has never heard of throws during injection.
+    installSoftShellRenderers()
     // And the shelf that holds still while the canvas zooms (#1150). Also
     // before injection: the flyout class is read out of the registry as the
     // workspace is built.
@@ -362,7 +374,7 @@ export function BlocksCanvas({
 
     const tokens = readThemeTokens(document.documentElement)
     const ws = Blockly.inject(host, {
-      ...softShellWorkspaceOptions(tokens),
+      ...softShellWorkspaceOptions(tokens, blockShape),
       toolbox: buildToolbox(dialectRef.current),
       theme: Blockly.Theme.defineTheme(
         'snakie-soft-shell',
@@ -523,8 +535,13 @@ export function BlocksCanvas({
       ws.dispose()
       wsRef.current = null
       lastLoadedRef.current = ''
+      // The arrangement belonged to the workspace that just went away; a new
+      // one measures for itself, and the next load is a first load rather than
+      // a reload of a canvas that no longer exists.
+      arrangedRef.current = null
+      loadedFileRef.current = null
     }
-  }, [peek, blocked])
+  }, [peek, blocked, blockShape])
 
   // The pin dropdowns offer THIS board's pins (#1012). Loaded here rather than
   // by the blocks themselves because a Blockly field's option list is produced
@@ -841,7 +858,7 @@ export function BlocksCanvas({
     }
     // `workspace` is intentionally not a dependency — see the comment above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fileId, reloadNonce, peek, blocked, derived])
+  }, [fileId, reloadNonce, peek, blocked, derived, blockShape])
 
   /**
    * MEASURE AGAIN ONCE THE FONT ARRIVES.
@@ -875,7 +892,7 @@ export function BlocksCanvas({
     return () => {
       cancelled = true
     }
-  }, [fileId, reloadNonce, peek, blocked, derived])
+  }, [fileId, reloadNonce, peek, blocked, derived, blockShape])
 
   // Blockly sizes itself from its host and does not observe it, so a panel drag,
   // a workspace switch or a window resize leaves the canvas the wrong size with
