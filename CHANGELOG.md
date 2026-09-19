@@ -70,6 +70,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   conversion (`int('ff', 16)`) has a second argument and no socket for it, so it
   stays raw instead of quietly losing the 16.
 
+- **Read the power back, and turn a PWM off.** The PWM family could set a duty
+  and a frequency and do nothing else, so two everyday lines had no block at all:
+
+  ```
+  power of [GP15 ▾] as [per cent ▾]   → pwm_15.duty_u16() * 100 / 65535
+  power of ( motor_a ) as [0-65535 ▾] → motor_a.duty_u16()
+  turn PWM off on [GP15 ▾]            → pwm_15.deinit()
+  turn PWM ( motor_a ) off            → motor_a.deinit()
+  ```
+
+  **`deinit()` is not `duty_u16(0)`.** Setting the duty to zero stops the pulses
+  and keeps the slice; releasing the pin is what lets the next block drive it
+  high and low itself, and what leaves a rover reliably stopped. A program that
+  ends with its wheels still turning is most often missing one of these.
+
+  The read block's unit dropdown is `read [pin] as [volts ▾]`'s, word for word:
+  the same question asked at the other end of the same 16-bit range, so a learner
+  who has met one has met both. The per-cent form backs out of exactly the
+  conversion `set power` writes, magic number and all, so the two read as a pair.
+
+  **Only the socket-shaped read claims `x.duty_u16()` on the way back**, which is
+  the opposite way round from every other pair here. `name PWM` registers its
+  names against the `pwm` receiver, so a receiver rule on the fielded block would
+  claim `motor_a.duty_u16()` too — and that block regenerates through `pwm()`,
+  which would build `pwm_motor_a = PWM(motor_a)`. The statement blocks settle
+  that race with `onNamedPin`, whose pass runs first; the value side has no such
+  pass, so only one of the two may claim the line, and it is the one that writes
+  it back unchanged.
+
 - **Name a PWM, and set it directly.** A pin could be named since #1097; the PWM
   built on it could not — so every block that wanted one got `pwm_15`, a name the
   learner never chose on an object they had no way to refer to, and a rover's two
@@ -77,11 +106,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
   ```
   name PWM on pin [GP15 ▾] as [motor_a]     → motor_a = PWM(Pin(15))
-  set duty of ( motor_a ) to [75] %         → motor_a.duty_u16(int(75 * 65535 / 100))
+  set power of ( motor_a ) to [75] %        → motor_a.duty_u16(int(75 * 65535 / 100))
   set frequency of ( motor_a ) to [1000] Hz → motor_a.freq(1000)
+  power of ( motor_a ) as [0-65535 ▾]       → motor_a.duty_u16()
+  turn PWM ( motor_a ) off                  → motor_a.deinit()
   ```
 
-  **The label is half the point, and it is *set duty*, not *set speed*.** A motor
+  **The label is half the point, and it is *set power*, not *set speed*.** A motor
   block would have to promise something about the driver, and there is nothing to
   promise: one driver takes a PWM on its speed pin, another takes plain digital
   on/off, and a Modulino takes neither — it is an I²C device with its own
@@ -103,7 +134,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   output or for input, and a PWM has no direction to choose.
 
   `motor_a.duty_u16(…)` stays an ordinary line on the way back, for the reason
-  `set brightness` has never had a reader rule: the percent is wrapped in
+  the fielded `set power` has never had a reader rule: the percent is wrapped in
   `int(x * 65535 / 100)`, which is the lesson rather than something a table can
   unpick into a socket.
 
@@ -702,6 +733,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the fix rather than a silent substitution of some other pin.
 
 ### Changed
+
+- **`set brightness of [GP15 ▾] to [n] %` is now `set power of …`.** The block
+  drives a pin; whether that dims an LED or slows a motor is the wiring's
+  business, and the old label was a lie the moment the pin went to a motor
+  driver. The obvious fix — a `set speed` block beside a `set brightness` one —
+  is the one thing this palette cannot have: two blocks writing a byte-identical
+  line give the reader nothing to choose between them, so a learner's *set speed*
+  would come back as *set brightness* the next time the code pane synced.
+  *Power* is true of an LED, of a motor and of a heater alike, so one block
+  covers them all and the line it writes stays unambiguous. The unit is still the
+  duty cycle, and the tooltip says so. Its socket twin, added in this same
+  release, loses the word *duty* for the same reason.
+
+  Saved workspaces are untouched: the block's type id is unchanged, so this is a
+  label, not a migration.
 
 - **White lettering on a note about the program** — the comment block, the
   docstring block and the blank-line spacer, all three of which wear the one

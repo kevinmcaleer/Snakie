@@ -242,6 +242,52 @@ describe('PWM and ADC (#1012)', () => {
     ).toBe('pwm_15.freq(50)')
   })
 
+  it('reads the power back as a percentage, undoing the same conversion', () => {
+    // The mirror image of the `set power` line above, magic number and all, so a
+    // learner can put the two side by side and see one undo the other.
+    expect(
+      lines([
+        {
+          type: 'text_print',
+          id: 'p',
+          inputs: {
+            TEXT: {
+              block: {
+                type: 'snakie_pwm_read',
+                id: 'r',
+                fields: { PIN: '15', UNIT: 'PERCENT' }
+              }
+            }
+          }
+        }
+      ]).at(-2)
+    ).toBe('print(pwm_15.duty_u16() * 100 / 65535)')
+  })
+
+  it('reads the raw duty with no arithmetic around it', () => {
+    expect(
+      lines([
+        {
+          type: 'text_print',
+          id: 'p',
+          inputs: {
+            TEXT: {
+              block: { type: 'snakie_pwm_read', id: 'r', fields: { PIN: '15', UNIT: 'RAW' } }
+            }
+          }
+        }
+      ]).at(-2)
+    ).toBe('print(pwm_15.duty_u16())')
+  })
+
+  it('turns the PWM off by releasing the pin, not by setting the duty to zero', () => {
+    // `duty_u16(0)` stops the pulses and keeps the slice; `deinit()` gives the
+    // pin back. They are different things and only one of them is "off".
+    expect(lines([{ type: 'snakie_pwm_off', id: 'o', fields: { PIN: '15' } }]).at(-2)).toBe(
+      'pwm_15.deinit()'
+    )
+  })
+
   it('takes ADC and Pin from `machine`, on one line', () => {
     // `from snakie import ADC` was always an ImportError on the board (snakie.py
     // re-exports Led, Servo, Buzzer, Pin and PWM, and nothing else) — and now
@@ -547,11 +593,17 @@ describe('the hardware category (#1012)', () => {
       'snakie_pin_pressed',
       'snakie_pwm_duty',
       'snakie_pwm_freq',
+      // Reading the duty back, and releasing the pin — the other two halves of
+      // the PWM family, which had no blocks until now.
+      'snakie_pwm_read',
+      'snakie_pwm_off',
       // Each named block sits beside its fielded twin, as `set pin` and its own
       // socket version do: a learner scanning the drawer meets the two ways of
       // saying one thing together.
       'snakie_pwm_duty_named',
       'snakie_pwm_freq_named',
+      'snakie_pwm_read_named',
+      'snakie_pwm_off_named',
       'snakie_adc_read',
       'snakie_servo_angle',
       'snakie_buzzer_tone',
