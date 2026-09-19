@@ -35,3 +35,24 @@ angle(90)                  # centre
 ```
 
 Call `led.deinit()` to release the pin.
+
+## The blocks
+
+| Block | Python |
+| --- | --- |
+| `set power of [GP15 ▾] to [50] %` | `pwm_15.duty_u16(int(50 * 65535 / 100))` |
+| `set frequency of [GP15 ▾] to [1000] Hz` | `pwm_15.freq(1000)` |
+| `power of [GP15 ▾] as [per cent ▾]` | `pwm_15.duty_u16() * 100 / 65535` |
+| `turn PWM off on [GP15 ▾]` | `pwm_15.deinit()` |
+
+*Power* rather than *brightness* or *speed*: the block drives a pin, and whether
+that dims an LED or slows a motor is up to what you wired to it. The unit is the
+duty cycle either way.
+
+Each one has a twin that takes its PWM from a **socket** instead of a pin menu —
+drop in the name from a `name PWM on pin [GP5 ▾] as [motor_a]` block, and a
+rover's two drive channels are two names rather than two pin numbers.
+
+Setting the power to 0 stops the pulses. **Turning the PWM off releases the
+pin**, which is what you want at the end of a program, or before driving the same
+pin high and low yourself.

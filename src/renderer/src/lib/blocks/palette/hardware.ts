@@ -408,10 +408,10 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
       }
     },
     category: 'hardware',
-    pin: { field: 'PIN', role: 'brightness', needs: 'pwm' },
+    pin: { field: 'PIN', role: 'power', needs: 'pwm' },
     help: 'ref-pwm',
     json: {
-      message0: 'set brightness of %1 to %2 %%',
+      message0: 'set power of %1 to %2 %%',
       args0: [
         pinField('PIN', 'pwm', 15),
         { type: 'input_value', name: 'PERCENT', check: 'Number' }
@@ -419,7 +419,9 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
       inputsInline: true,
       previousStatement: null,
       nextStatement: null,
-      tooltip: 'Dim an LED (or drive a motor) from 0 to 100 per cent.'
+      tooltip:
+        'How hard this pin drives, 0 to 100 per cent. An LED dims; a motor driver that takes a ' +
+        'PWM on its speed pin slows down.'
     },
     toolbox: { inputs: { PERCENT: { shadow: { type: 'math_number', fields: { NUM: 50 } } } } },
     imports: [
@@ -469,10 +471,103 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
       `${pwm(gen, pinOf(block), block)}.freq(${gen.valueToCode(block, 'HZ', Order.NONE) || '1000'})\n`
   },
 
-  // ------------------------------------------------------------------------ ADC
   {
     /**
-     * SET THE DUTY OF A PWM YOU NAMED — the block this whole trio exists for.
+     * READ THE POWER BACK OFF A PIN.
+     *
+     * `duty_u16()` with no argument is the getter MicroPython has always had,
+     * and the palette had no block for it — so a program that ramped its own
+     * duty, or checked it before changing it, could be written by the blocks and
+     * never read back by them.
+     *
+     * THE UNIT DROPDOWN IS `snakie_adc_read`'s, word for word and deliberately:
+     * it is the same question asked at the other end of the same 16-bit range,
+     * and a learner who has met one should not have to learn the other.
+     */
+    type: 'snakie_pwm_read',
+    circuitpython: {
+      imports: CP_PWM,
+      // `duty_cycle` is a PROPERTY here rather than a call, and it holds the
+      // same 0-65535, so the per-cent arithmetic is the same arithmetic.
+      code: (block, gen) => {
+        const name = cpPwm(gen, pinOf(block), block)
+        if (block.getFieldValue('UNIT') === 'RAW') return [`${name}.duty_cycle`, Order.MEMBER]
+        return [`${name}.duty_cycle * 100 / 65535`, Order.MULTIPLICATIVE]
+      }
+    },
+    category: 'hardware',
+    pin: { field: 'PIN', role: 'power read', needs: 'pwm' },
+    help: 'ref-pwm',
+    json: {
+      message0: 'power of %1 as %2',
+      args0: [
+        pinField('PIN', 'pwm', 15),
+        {
+          type: 'field_dropdown',
+          name: 'UNIT',
+          options: [
+            ['per cent', 'PERCENT'],
+            ['a number 0-65535', 'RAW']
+          ]
+        }
+      ],
+      inputsInline: true,
+      output: 'Number',
+      tooltip: 'How hard this pin is driving right now — the duty it was last set to.'
+    },
+    imports: [
+      { module: 'machine', name: 'PWM' },
+      { module: 'machine', name: 'Pin' }
+    ],
+    code: (block, gen) => {
+      const name = pwm(gen, pinOf(block), block)
+      if (block.getFieldValue('UNIT') === 'RAW') return [`${name}.duty_u16()`, Order.FUNCTION_CALL]
+      // Back out of the conversion the `set power` block writes, in the same
+      // shape and with the same magic number, so the two read as a pair.
+      return [`${name}.duty_u16() * 100 / 65535`, Order.MULTIPLICATIVE]
+    }
+  },
+  {
+    /**
+     * TURN THE PWM OFF, and give the pin back.
+     *
+     * `duty_u16(0)` stops the pulses; `deinit()` releases the slice, which is
+     * the difference between a motor that is stopped and a motor the next block
+     * can drive as a plain digital pin. A program that ends with its wheels
+     * still turning is the classic first-robot moment, and until now the only
+     * block for it was *set power to 0* — which leaves the PWM running.
+     */
+    type: 'snakie_pwm_off',
+    circuitpython: {
+      imports: CP_PWM,
+      code: (block, gen) => `${cpPwm(gen, pinOf(block), block)}.deinit()\n`
+    },
+    read: {
+      fn: 'deinit',
+      args: [] as const,
+      receiver: { name: 'pwm', pinField: 'PIN', ctor: 'PWM(Pin({PIN}))' }
+    },
+    category: 'hardware',
+    pin: { field: 'PIN', role: 'power', needs: 'pwm' },
+    help: 'ref-pwm',
+    json: {
+      message0: 'turn PWM off on %1',
+      args0: [pinField('PIN', 'pwm', 15)],
+      inputsInline: true,
+      previousStatement: null,
+      nextStatement: null,
+      tooltip:
+        'Stop the pulses and release the pin. Use it to leave a motor stopped, or to hand the pin back before driving it high and low yourself.'
+    },
+    imports: [
+      { module: 'machine', name: 'PWM' },
+      { module: 'machine', name: 'Pin' }
+    ],
+    code: (block, gen) => `${pwm(gen, pinOf(block), block)}.deinit()\n`
+  },
+  {
+    /**
+     * SET THE POWER OF A PWM YOU NAMED — the block this whole family exists for.
      *
      * IT IS DELIBERATELY NOT A MOTOR BLOCK. A motor block would have to promise
      * something about the driver, and there is nothing to promise: one driver
@@ -483,7 +578,20 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
      * block says what it does to the PIN, and what that does to the motor is the
      * datasheet's business.
      *
-     * `set brightness of [GP15 ▾] to [n] %` is the same arithmetic off a pin
+     * WHY *POWER* AND NOT *DUTY*, *SPEED* OR *BRIGHTNESS*. The block used to say
+     * *duty*, which is exact and is jargon, and its fielded twin said
+     * *brightness*, which is friendly and is a lie the moment the pin is wired
+     * to a motor. The temptation is a pair — *set speed* beside *set
+     * brightness*, the same line under two names — and that is the one thing
+     * this palette cannot have: two blocks writing a byte-identical line give
+     * the reader nothing to choose between them, so the learner's *set speed*
+     * would come back as *set brightness* the next time the code pane synced.
+     * *Power* is the word that is true of every load — it dims an LED, it slows
+     * a motor, it drives a heater — so one block covers them all and the line it
+     * writes stays unambiguous. The unit is still the duty cycle, and the
+     * tooltip says so.
+     *
+     * `set power of [GP15 ▾] to [n] %` is the same arithmetic off a pin
      * dropdown. This one takes the PWM in a SOCKET, so a rover's two drive
      * channels are two names rather than two pin numbers.
      *
@@ -496,7 +604,7 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
     category: 'hardware',
     help: 'ref-pwm',
     json: {
-      message0: 'set duty of %1 to %2 %%',
+      message0: 'set power of %1 to %2 %%',
       args0: [
         { type: 'input_value', name: 'PWM' },
         { type: 'input_value', name: 'PERCENT', check: 'Number' }
@@ -505,7 +613,7 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
       previousStatement: null,
       nextStatement: null,
       tooltip:
-        'How much of each pulse a named PWM spends switched on, 0 to 100 per cent. What that does is the hardware’s business: an LED dims, a motor driver that takes a PWM speeds up.'
+        'How hard a named PWM drives, 0 to 100 per cent — the duty cycle. What that does is the hardware’s business: an LED dims, a motor driver that takes a PWM speeds up.'
     },
     toolbox: { inputs: { PERCENT: { shadow: { type: 'math_number', fields: { NUM: 50 } } } } },
     imports: [],
@@ -548,6 +656,87 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
         gen.valueToCode(block, 'HZ', Order.NONE) || '1000'
       })\n`
   },
+  {
+    /**
+     * READ THE POWER OF A PWM YOU NAMED — `snakie_pwm_read`'s socket twin.
+     *
+     * THIS ONE CARRIES THE `read` RULE AND THE FIELDED ONE DOES NOT, which is
+     * the opposite way round from every other pair here, and it is on purpose.
+     * `snakie_name_pwm` registers its names against the `pwm` receiver, so a
+     * receiver rule on the fielded block would ALSO claim `motor_a.duty_u16()`
+     * — and the fielded block regenerates through `pwm()`, which builds
+     * `pwm_motor_a = PWM(motor_a)` and is nonsense. The statement blocks settle
+     * that race with `onNamedPin`, whose pass runs first; there is no such pass
+     * on the value side, so the safe answer is for only one of the two to claim
+     * the line, and the one that regenerates it unchanged is this one.
+     *
+     * ONLY THE RAW FORM IS CLAIMED (`fields`), and that is honest: the per-cent
+     * form wraps the call in arithmetic, which the expression parser reads back
+     * as the arithmetic it literally is — with this block, set to *a number
+     * 0-65535*, in the middle of it. The program is identical either way.
+     */
+    type: 'snakie_pwm_read_named',
+    read: {
+      fn: 'duty_u16',
+      on: 'PWM',
+      args: [] as const,
+      shape: 'value' as const,
+      fields: { UNIT: 'RAW' }
+    },
+    category: 'hardware',
+    help: 'ref-pwm',
+    json: {
+      message0: 'power of %1 as %2',
+      args0: [
+        { type: 'input_value', name: 'PWM' },
+        {
+          type: 'field_dropdown',
+          name: 'UNIT',
+          options: [
+            ['per cent', 'PERCENT'],
+            ['a number 0-65535', 'RAW']
+          ]
+        }
+      ],
+      inputsInline: true,
+      output: 'Number',
+      tooltip: 'How hard a named PWM is driving right now — the duty it was last set to.'
+    },
+    imports: [],
+    code: (block, gen) => {
+      const name = gen.valueToCode(block, 'PWM', Order.MEMBER) || 'pwm'
+      if (block.getFieldValue('UNIT') === 'RAW') return [`${name}.duty_u16()`, Order.FUNCTION_CALL]
+      return [`${name}.duty_u16() * 100 / 65535`, Order.MULTIPLICATIVE]
+    }
+  },
+  {
+    /** `motor_a.deinit()` — the off block, taking its PWM by name. */
+    type: 'snakie_pwm_off_named',
+    category: 'hardware',
+    help: 'ref-pwm',
+    // Tabled exactly as `snakie_pwm_freq_named` is, and for the same reason: the
+    // receiver is the socket and there is nothing wrapped around the call.
+    read: {
+      fn: 'deinit',
+      on: 'PWM',
+      onNamedPin: true,
+      args: [] as const,
+      shape: 'statement' as const
+    },
+    json: {
+      message0: 'turn PWM %1 off',
+      args0: [{ type: 'input_value', name: 'PWM' }],
+      inputsInline: true,
+      previousStatement: null,
+      nextStatement: null,
+      tooltip:
+        'Stop the pulses on a named PWM and release its pin. A rover that ends its program still rolling is usually missing one of these.'
+    },
+    imports: [],
+    code: (block, gen) => `${gen.valueToCode(block, 'PWM', Order.MEMBER) || 'pwm'}.deinit()\n`
+  },
+
+  // ------------------------------------------------------------------------ ADC
   {
     type: 'snakie_adc_read',
     circuitpython: {
