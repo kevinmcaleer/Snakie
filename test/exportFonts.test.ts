@@ -93,6 +93,7 @@ describe("the Board Viewer's own image export", () => {
     // middle of that would let it through.
     const handler = WIRING.slice(WIRING.indexOf('const doExport'), WIRING.indexOf('const doExportMarkdown'))
     expect(handler.indexOf('await inlineFontCss()')).toBeLessThan(handler.indexOf('flushSync'))
-    expect(handler.slice(handler.indexOf('flushSync'))).not.toContain('await ')
+    const between = handler.slice(handler.indexOf('flushSync'), handler.lastIndexOf('flushSync'))
+    expect(between).not.toContain('await ')
   })
 })

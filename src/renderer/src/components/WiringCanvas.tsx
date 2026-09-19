@@ -47,6 +47,7 @@ import {
   exportSvgString,
   downloadBlob,
   stageBackground,
+  inlineImageHrefs,
   type ExportFmt
 } from './svg-export'
 import { inlineFontCss } from './export-fonts'
@@ -2267,7 +2268,11 @@ export function WiringCanvas({ robot, onChange, folder, joints = [], jointLimits
     if (!res) return
     const base =
       (robot.name?.trim() || 'board').replace(/[^\w.-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '').toLowerCase() || 'board'
-    exportSvgString(res.svg, fmt, res.width, res.height, base).catch((err) => {
+    // The part photos too: on the web build they are hashed build assets named
+    // by URL, which the sandboxed `<img>` cannot fetch — the board would export
+    // without its own picture. After the restore above, so this await is free.
+    const svgStr = await inlineImageHrefs(res.svg)
+    exportSvgString(svgStr, fmt, res.width, res.height, base).catch((err) => {
       // Don't fail silently — a swallowed rejection here is exactly what made
       // PNG/PDF "do nothing" before. Surface it so the cause is visible.
       console.error(`Board export (${fmt}) failed:`, err)

@@ -21,6 +21,8 @@
  * is the Board Viewer's own PNG/SVG/PDF menu as much as the printed document.
  */
 
+import { fetchAsDataUri } from './svg-export'
+
 /** The families the blocks canvas and the breadboard letter themselves in. */
 export const ART_FONT_FAMILIES = ['Plus Jakarta Sans', 'IBM Plex Mono'] as const
 
@@ -65,20 +67,6 @@ export function coversLatin(range: string): boolean {
   return false
 }
 
-/** Fetch `url` and return it as a `data:` URI, or null if it cannot be read. */
-async function asDataUri(url: string): Promise<string | null> {
-  try {
-    const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer())
-    let binary = ''
-    for (let i = 0; i < bytes.length; i += 8192) {
-      binary += String.fromCharCode(...bytes.subarray(i, i + 8192))
-    }
-    return `data:font/woff2;base64,${btoa(binary)}`
-  } catch {
-    return null
-  }
-}
-
 async function collectFontCss(families: readonly string[]): Promise<string> {
   if (typeof document === 'undefined') return ''
   const wanted = new Set(families.map((f) => familyKey(f)))
@@ -105,7 +93,7 @@ async function collectFontCss(families: readonly string[]): Promise<string> {
       if (seen.has(id)) continue
       const source = woff2Source(style.getPropertyValue('src'), sheet.href)
       if (!source) continue
-      const data = source.startsWith('data:') ? source : await asDataUri(source)
+      const data = source.startsWith('data:') ? source : await fetchAsDataUri(source, 'font/woff2')
       if (!data) continue
       seen.add(id)
       out.push(

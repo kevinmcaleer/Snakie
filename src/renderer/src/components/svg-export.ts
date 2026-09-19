@@ -14,6 +14,11 @@
  * 1:1 — independent of the on-screen pan/zoom. {@link exportSvgString} dispatches
  * an SVG string to the chosen format. Extracted from BoardGraph so the node-graph
  * and the breadboard share one pipeline.
+ *
+ * A serialised SVG has to be SELF-CONTAINED, because {@link rasterise} draws it
+ * through an `<img>` and a document loaded that way fetches nothing external.
+ * {@link inlineImageHrefs} carries the pictures; `export-fonts.ts` carries the
+ * lettering.
  */
 
 import { PdfWriter } from '../lib/pdf'
@@ -132,6 +137,73 @@ export function stageBackground(
   if (!parent) return fallback
   const bg = getComputedStyle(parent).backgroundColor
   return bg && !/rgba?\([^)]*,\s*0\s*\)/.test(bg) ? bg : fallback
+}
+
+/**
+ * Fetch `url` and return it as a `data:` URI, or null if it cannot be read.
+ *
+ * Shared with `export-fonts.ts`: an `<img>`-rendered SVG fetches nothing
+ * external, so every resource it names has to be carried inside it.
+ */
+export async function fetchAsDataUri(url: string, mime?: string): Promise<string | null> {
+  try {
+    const response = await fetch(url)
+    if (!response.ok) return null
+    const blob = await response.blob()
+    const bytes = new Uint8Array(await blob.arrayBuffer())
+    let binary = ''
+    for (let i = 0; i < bytes.length; i += 8192) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + 8192))
+    }
+    return `data:${mime || blob.type || 'application/octet-stream'};base64,${btoa(binary)}`
+  } catch {
+    return null
+  }
+}
+
+/** Undo the XML escaping {@link XMLSerializer} applies to an attribute value. */
+function unesc(s: string): string {
+  return s
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+}
+
+/**
+ * Replace every `<image>` href in a serialised SVG with a `data:` URI.
+ *
+ * On the DESKTOP this is a no-op: the main process inlines a part's photo when
+ * it reads the library, so `imageData` is already a `data:` URL. The WEB build
+ * emits those photos as hashed build assets and references them by URL
+ * (deliberately — they are a few MB, and the live canvas renders them fine), so
+ * without this the board's own picture is simply missing from an exported PNG,
+ * PDF or saved `.svg`: the sandboxed document the `<img>` loads cannot fetch it,
+ * and neither can a viewer opening the file later, wherever that URL pointed.
+ *
+ * Best-effort, like {@link inlineFontCss}: an image that will not load is left
+ * as it was rather than failing the export.
+ */
+export async function inlineImageHrefs(svgStr: string): Promise<string> {
+  const tags = svgStr.match(/<image\b[^>]*>/g)
+  if (!tags) return svgStr
+  const urls = new Set<string>()
+  for (const tag of tags) {
+    const m = /(?:xlink:)?href="([^"]*)"/.exec(tag)
+    if (m?.[1] && !m[1].startsWith('data:')) urls.add(m[1])
+  }
+  if (!urls.size) return svgStr
+  // Not cached: a part's photo can be re-imported mid-session, and an export is
+  // a rare, deliberate act — the HTTP cache is enough for a repeat.
+  const resolved = await Promise.all(
+    [...urls].map(async (u) => [u, await fetchAsDataUri(unesc(u))] as const)
+  )
+  let out = svgStr
+  for (const [url, data] of resolved) {
+    if (data) out = out.split(`href="${url}"`).join(`href="${data}"`)
+  }
+  return out
 }
 
 /** SVG presentation properties worth inlining so a serialized SVG paints alone. */
