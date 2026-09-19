@@ -235,6 +235,12 @@ async function syncBundledLibrary(src: string, dest: string): Promise<void> {
           .catch(reporter('parts: seed backfill write'))
         dirty = true
       }
+      // A backfilled key can NAME a file the bundle ships (a newly added `mesh:`
+      // is the case that bit: the local parts.yml gained `mesh: model.stl` but
+      // no model.stl came with it, so the Sync dialog offered "Upgrade to mesh"
+      // and the copy failed every time). Bring in any bundle file the folder
+      // lacks — never overwriting one that is there, per #750.
+      await copyMissingFiles(srcPart, destPart)
       hashes[folder] = hashText(changed ? text : localYml)
     } else if (localYml !== null) {
       // skip — already identical; record the baseline hash.
@@ -244,6 +250,23 @@ async function syncBundledLibrary(src: string, dest: string): Promise<void> {
 
   if (bundleVersion && dirty) {
     await writeSeedManifest(dest, { version: bundleVersion, parts: hashes })
+  }
+}
+
+/** Copy every file in `src` that has no namesake in `dest`; existing files are
+ *  left exactly as they are. Best-effort, one report per failed file. */
+async function copyMissingFiles(src: string, dest: string): Promise<void> {
+  let entries: Dirent[]
+  try {
+    entries = await fsp.readdir(src, { withFileTypes: true })
+  } catch {
+    return
+  }
+  for (const e of entries) {
+    if (!e.isFile()) continue
+    const target = join(dest, e.name)
+    if (existsSync(target)) continue
+    await fsp.copyFile(join(src, e.name), target).catch(reporter('parts: seed backfill asset'))
   }
 }
 
@@ -1025,7 +1048,14 @@ export function resolvePartAsset(libraryId: string, partId: string, filename: st
   if (!libId || !pId || !file) return null
   const partDir = join(partsDir(), libId, pId)
   if (!isContainedFile(partDir, file)) return null
-  return join(partDir, file)
+  const installed = join(partDir, file)
+  if (existsSync(installed) || libId !== STANDARD_LIBRARY_ID) return installed
+  // A Standard-library part whose installed copy names a file it does not hold
+  // (a backfilled `mesh:` from before the seeder copied assets along with the
+  // key). The bundle shipped in the app has it; serve that rather than failing.
+  const bundledDir = join(bundledStandardLibraryDir(), pId)
+  const bundled = join(bundledDir, file)
+  return isContainedFile(bundledDir, file) && existsSync(bundled) ? bundled : installed
 }
 
 /** Result of linking a 3-D mesh into a part folder (#741). Never throws across IPC. */

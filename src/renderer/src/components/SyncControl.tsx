@@ -39,6 +39,10 @@ export function SyncControl({ folder }: { folder: string | null | undefined }): 
   const [urdfText, setUrdfText] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
+  /** Per-row outcome text (a failure, mostly) shown INSIDE the dialog. The
+   *  status bar sits behind the scrim — and the pop-out board window has none —
+   *  so a click whose only feedback went there read as a dead button. */
+  const [notes, setNotes] = useState<Record<string, string>>({})
   const [nonce, setNonce] = useState(0)
   const loadSeqRef = useRef(0)
 
@@ -135,7 +139,10 @@ export function SyncControl({ folder }: { folder: string | null | undefined }): 
       if (!folder) return
       const row = robot.parts.find((p) => p.id === item.partId)
       const def = row && resolveDef(row.lib, row.part)
-      if (!row || !def?.mesh) return
+      // Every "nothing to do" below THROWS: a silent return here is the bug
+      // report this dialog exists to prevent (a button that does nothing).
+      if (!row) throw new Error(`${item.label} is no longer in the Electronics workspace.`)
+      if (!def?.mesh) throw new Error(`${item.label}'s library part no longer declares a 3-D model.`)
       const res = await window.api.robot
         .importPartMesh(`${folder.replace(/[/\\]$/, '')}/${urdfName}`, row.lib, def.id, def.mesh)
         .catch((err: unknown) => ({ error: errorMessage(err) }))
@@ -144,17 +151,23 @@ export function SyncControl({ folder }: { folder: string | null | undefined }): 
         // The SAME swallow as #787 fault 3, one screen along: a failed copy used
         // to make this button do nothing at all, with the placeholder it was
         // meant to replace still sitting there looking correct.
-        if (plan.problem) reportError('build: upgrade to mesh', plan.problem, { notify: plan.problem })
-        return
+        const problem = plan.problem ?? `Could not copy ${def.mesh} into the project.`
+        reportError('build: upgrade to mesh', problem)
+        throw new Error(problem)
       }
       const rel = plan.meshRel
       const scale = meshImportScale(def, 'maxDim' in res ? res.maxDim : undefined)
-      await queueUrdfEdit(folder, urdfName, (urdf) =>
+      const wrote = await queueUrdfEdit(folder, urdfName, (urdf) =>
         // The part's mesh orientation (#741) AND position (#788) travel with the
         // upgrade — the box it replaces needed neither, so this is the first
         // chance to apply them.
         swapLinkVisualToMesh(urdf, item.link, rel, scale, def.meshRotation, def.meshOffset)
       )
+      if (!wrote) {
+        throw new Error(
+          `The 3-D body "${item.link}" could not be rewritten in ${urdfName} — its <visual> was not found.`
+        )
+      }
     },
     [folder, robot, urdfName, resolveDef]
   )
@@ -220,7 +233,15 @@ export function SyncControl({ folder }: { folder: string | null | undefined }): 
 
   const run = (id: string, fn: () => Promise<void> | void): void => {
     setBusy(id)
-    void Promise.resolve(fn()).finally(() => setBusy(null))
+    setNotes((n) => (id in n ? Object.fromEntries(Object.entries(n).filter(([k]) => k !== id)) : n))
+    void Promise.resolve()
+      .then(fn)
+      .catch((err: unknown) => {
+        const msg = errorMessage(err)
+        reportError('sync', err, { notify: msg })
+        setNotes((n) => ({ ...n, [id]: msg }))
+      })
+      .finally(() => setBusy(null))
   }
 
   if (!folder) return null
@@ -263,6 +284,7 @@ export function SyncControl({ folder }: { folder: string | null | undefined }): 
                 {plan.map((item, i) => {
                   const id = `${item.kind}:${'link' in item ? item.link : item.partId}:${i}`
                   const running = busy === id
+                  const note = notes[id]
                   return (
                     <li key={id} className="esync__item">
                       {item.kind === 'missing-body' && (
@@ -318,6 +340,11 @@ export function SyncControl({ folder }: { folder: string | null | undefined }): 
                             </button>
                           </span>
                         </>
+                      )}
+                      {note && (
+                        <span className="esync__note" role="alert">
+                          {note}
+                        </span>
                       )}
                     </li>
                   )

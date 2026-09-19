@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **"Upgrade to mesh" in the Electronics ⇄ Build sync dialog looked dead.** When
+  a Standard-library part gained a 3-D model (the TT motor in 0.85.4), an
+  install whose copy of that part had been edited was backfilled with the new
+  `mesh:` key but never received the `model.stl` beside it, so the copy into
+  the project failed — and the only report went to the status bar, hidden
+  behind the dialog (and absent in the pop-out board window). Now the seeder
+  copies any bundle file the part folder lacks alongside a backfill, a
+  Standard-library asset missing from the install falls back to the bundled
+  copy, and every sync action reports its failure on its own row inside the
+  dialog instead of returning silently.
+
 ## [0.85.4] - 2026-09-19
 
 ### Added
