@@ -1614,20 +1614,18 @@ class Converter {
         this.report.recognised += 1
         continue
       }
-      // `pass` exists only to fill an empty suite, and an empty suite in blocks
-      // is an empty socket — so carrying it over would add a block that means
-      // "nothing" and then generate `pass` a second time.
+      // `pass` USED TO BE DROPPED HERE when it was the whole body of a suite:
+      // an empty suite in blocks is an empty socket, and every emitter writes
+      // its own `pass` for one, so carrying it over would have added a block
+      // meaning "nothing" and then written `pass` twice. (#1068 narrowed an
+      // earlier version that dropped it everywhere and lost lines with it.)
       //
-      // ONLY WHEN IT IS THE WHOLE BODY, though (#1068). Dropping it wherever it
-      // appeared lost a `pass` that was keeping company with real statements, or
-      // standing at the top level where no socket will put it back —
-      // `examples/hello_world.py` came back a line short. Every emitter writes
-      // `pass` for an empty body, so the one case this is for is still covered.
-      if (node.line.text === 'pass' && grouped.length === 1) {
-        this.report.total += 1
-        this.report.recognised += 1
-        continue
-      }
+      // #1133 GAVE `pass` A BLOCK, and that changes the arithmetic: a body
+      // holding one is not empty, so the emitter writes the learner's `pass`
+      // rather than its own — one either way. Dropping it now would mean a
+      // learner could drag `do nothing` into an empty `if`, save, reopen, and
+      // find the block gone, which is the asymmetry the palette/reader test
+      // exists to catch. So it is read like anything else, in `recognise`.
       // `elif`/`else` are not statements: they belong to the `if` above them.
       //
       // ASKED, NOT ASSUMED (#1068). This used to skip any line STARTING with
@@ -2131,7 +2129,19 @@ class Converter {
       if (target.type === 'snakie_list_get') {
         return recognised([{ type: 'snakie_list_remove_at', inputs: target.inputs }])
       }
+      // `del name` → the Variables drawer's own block (#1133). Only a plain
+      // name a variable FIELD can hold: `del a, b` and `del obj.attr` are real
+      // lines with no block, and they keep the grey one that regenerates them
+      // exactly.
+      if (target.type === 'variables_get') {
+        return recognised([{ type: 'snakie_forget', fields: target.fields }])
+      }
     }
+    // `pass`, said deliberately (#1133). The generator writes its own for an
+    // empty body; this is the one a learner put there, and reading it back as
+    // a real block is what stops it being the grey line in the middle of an
+    // otherwise complete program.
+    if (text === 'pass') return recognised([{ type: 'snakie_pass' }])
     const raise = /^raise(?:\s+(.+))?$/.exec(text)
     if (raise) {
       const block: BlockJson = { type: 'snakie_raise' }

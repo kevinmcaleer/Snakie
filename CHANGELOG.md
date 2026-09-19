@@ -8,6 +8,33 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`forget` and `do nothing` — and two decisions taken out loud.** (#1133,
+  epic #1119) `del` is listed in `docs/blocks-coverage-epic.md` §10 as the
+  statement *"no workstream claimed"*, and it is the only way to take a key out
+  of a dictionary. **forget `name`** is the variable case, with a variable field
+  like `global`'s; `del d['k']` and `del xs[0]` stay with the Dictionaries and
+  Lists blocks that say what they mean.
+
+  **do nothing** is `pass` said deliberately — sketching a structure before
+  filling it in, or an "if that goes wrong" meant to carry on quietly. It does
+  not fight the generator's own implicit `pass`: a body holding the block is not
+  empty, so one is written either way. `pass` used to be *dropped* when it was
+  the whole body of a suite, which would have made the block vanish on reopen;
+  it is read like anything else now.
+
+  Two things this issue asked to be decided rather than left:
+
+  - **No `assert` block.** §3.5 declined it for the reader on evidence — 890
+    lines across 8 projects, almost all `pytest` files, which is test code and
+    not device code — and authoring came out the same way. On a board an
+    `assert` stops the program with a traceback nobody is there to read, while
+    *if … then report a problem* says the same thing and says why, with two
+    blocks the palette has had since #1131.
+  - **`nonlocal` stays hidden.** #1118 gave `global` a block with a variable
+    field, which is a better answer than un-hiding the escape hatch would have
+    been. `nonlocal` needs a function inside a function, which nothing in the
+    curriculum reaches.
+
 - **Files on the board — log your readings, and read them back.** (#1132, epic
   #1119) `with` shipped hidden in #1094, and on a microcontroller it has one
   overwhelmingly common use: opening a file on the flash. Logging to `data.csv`

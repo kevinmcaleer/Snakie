@@ -257,7 +257,8 @@ describe('what it recognises', () => {
   })
 
   it('reads `while True:` as the forever block', () => {
-    expect(types('while True:\n    pass\n')).toEqual(['snakie_forever'])
+    // The `pass` is a block of its own since #1133 — see the test below.
+    expect(types('while True:\n    pass\n')).toEqual(['snakie_forever', 'snakie_pass'])
   })
 
   it('reads `for _ in range(n):` as repeat, and a named for as for-each', () => {
@@ -303,10 +304,19 @@ describe('what it recognises', () => {
     ])
   })
 
-  it('drops a `pass` that was only holding an empty suite open', () => {
-    // Carrying it over would add a block meaning "nothing" that then generates
-    // `pass` a second time.
-    expect(types('while True:\n    pass\n')).toEqual(['snakie_forever'])
+  it('keeps a `pass` that was holding an empty suite open (#1133)', () => {
+    // IT USED TO BE DROPPED, and the reasoning was sound while `pass` had no
+    // block: an empty suite in blocks is an empty socket, every emitter writes
+    // its own `pass` for one, so carrying it over would have written `pass`
+    // twice.
+    //
+    // #1133 gave `pass` a block, which changes the arithmetic — a body holding
+    // one is not empty, so the emitter writes the learner's and not its own.
+    // Dropping it now would mean dragging `do nothing` into an empty `if`,
+    // saving, reopening and finding it gone.
+    expect(types('while True:\n    pass\n')).toEqual(['snakie_forever', 'snakie_pass'])
+    const out = regenerate('while True:\n    pass\n')
+    expect(out.code).toBe('while True:\n    pass\n')
   })
 
   it('does not mistake a comparison for an assignment', () => {

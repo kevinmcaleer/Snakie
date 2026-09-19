@@ -129,6 +129,29 @@ export const CONTROL_BLOCKS: BlockDefinition[] = [
     }
   },
   {
+    // `pass`, SAID DELIBERATELY (#1133, epic #1119).
+    //
+    // The generator already writes one for an EMPTY body, which is what makes
+    // an unfinished `if` valid Python. This block is the other thing: saying
+    // "nothing happens here" on purpose — sketching a structure before filling
+    // it in, or an `except` that is meant to swallow the error.
+    //
+    // IT DOES NOT FIGHT THE IMPLICIT ONE. A body holding this block is not
+    // empty, so the generator writes the learner's `pass` and not its own; an
+    // empty body still gets the generator's. One `pass` either way.
+    type: 'snakie_pass',
+    category: 'control',
+    help: 'ref-flow',
+    json: {
+      message0: 'do nothing',
+      previousStatement: null,
+      nextStatement: null,
+      tooltip:
+        'Deliberately nothing. Useful for sketching out the shape of a program before you fill it in, or for an "if that goes wrong" that is meant to carry on quietly. Python writes it `pass`.'
+    },
+    code: () => 'pass\n'
+  },
+  {
     type: 'controls_flow_statements',
     category: 'control',
     help: 'ref-flow',

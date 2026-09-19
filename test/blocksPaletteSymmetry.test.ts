@@ -73,6 +73,10 @@ const READ_DIRECTLY: Record<string, string> = {
   snakie_for_each_zip: 'for a, b in zip(xs, ys):\n    print(a)\n',
   controls_if: 'if going:\n    print(1)\n',
   controls_flow_statements: 'while True:\n    break\n',
+  // The small statements (#1133). `assert` is deliberately NOT among them —
+  // it stays with the escape hatch below, and the argument is in `#1133`'s
+  // own entry there.
+  snakie_pass: 'if ready:\n    pass\n',
   // --- values
   math_number: 'x = 1\n',
   math_arithmetic: 'x = a + b\n',
@@ -133,6 +137,7 @@ const READ_DIRECTLY: Record<string, string> = {
   variables_get: 'x = y\n',
   variables_set: 'x = 1\n',
   math_change: 'x += 1\n',
+  snakie_forget: 'del score\n',
   // Exactly two plain names is the friendly block (#1121); everything else the
   // left-hand side can be stays with the text-target one below.
   snakie_unpack: 'x, y = position()\n',
@@ -142,6 +147,15 @@ const READ_DIRECTLY: Record<string, string> = {
   procedures_callreturn: 'def double(n):\n    return n\n\nx = double(2)\n',
   snakie_return: 'def go(n):\n    if n < 0:\n        return\n    print(n)\n',
   // --- the escape hatches (#1018), which W1 taught the reader to emit
+  //
+  // `assert` IS DELIBERATELY NOT A BLOCK (#1133, epic #1119). The evidence
+  // `docs/blocks-coverage-epic.md` §3.5 declined it on for the READER is that
+  // it is 890 lines across 8 projects, almost all `pytest` files — test code,
+  // not device code. Authoring is a different question and the answer came out
+  // the same: on a board an `assert` stops the program with a traceback nobody
+  // is there to read, while "if … then report a problem" — two blocks the
+  // palette already has, since #1131 — says the same thing and says WHY. It
+  // stays with the escape hatch, which regenerates it exactly.
   snakie_python_statement: 'assert ok\n',
   // A suite nothing claims: `while … else:` is real Python, and the `else` arm
   // belongs to no recogniser, so it keeps its header and its body.
@@ -172,6 +186,12 @@ const READ_DIRECTLY: Record<string, string> = {
   // hatch keeps what its variable field cannot hold — `nonlocal`, and several
   // names at once.
   snakie_global: 'def go():\n    global total\n    total = 1\n',
+  // STILL HIDDEN, AND NOW ON PURPOSE (#1133). #1118 gave `global` a block with
+  // a variable field, which is a better answer than un-hiding this one would
+  // have been. `nonlocal` is genuinely rare in device code — it needs a
+  // function inside a function, which nothing in the curriculum reaches — and
+  // "several names at once" is a line the escape hatch says exactly. The
+  // decision is recorded rather than left as a leftover.
   snakie_python_scope: 'def go():\n    nonlocal low, high\n    low = 1\n',
   snakie_python_import_here: 'def go():\n    import ujson\n    print(ujson)\n',
   snakie_python_value: 'x = [v for v in things]\n',
