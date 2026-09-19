@@ -22,6 +22,39 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A wire you drag now stays where you put it.** (#1173) A tester said it
+  plainly: *"I can drag wires but they don't stay where I put them, leaves them
+  covering electronics like other pins sometimes."* Dragging a wire's belly was
+  an elastic stretch — the noodle followed the cursor and then sprang back, with
+  a decaying wobble, to wherever its automatic route wanted it. You could move a
+  wire; you could not put one anywhere. And where it sprang back to was
+  regularly straight over the components and pads you had just dragged it off.
+
+  So letting go now **pins** the wire: the point you released it at is kept, and
+  the wire is routed through it. Drop as many pins as the route needs — each one
+  joins the run in the leg it was dropped in, so a wire that doubles back keeps
+  the shape you drew rather than jumping through its pins out of order. **Drag a
+  pin** to move it, and **click a pin to take it out again**, which is the other
+  half of the same gesture: a route you can place is only useful if you can also
+  unplace it. A wire with no pins is auto-routed exactly as it always was.
+
+  The pins are the wire's, not the view's, so both views honour them: the
+  Breadboard noodle bends through them with the pads' own tangents at each end
+  (a soldered joint still leaves its pad square-on), and the Schematic draws a
+  rectilinear route through them, still leaving each pin perpendicular to its
+  symbol. A pinned wire is left out of the orthogonal auto-router altogether —
+  the pins ARE the route that was asked for, so nothing gets to move them, and
+  the wires that are still auto-routed are not pushed onto other channels by one
+  that isn't.
+
+  They are saved with the wire in `robot.yml` as `waypoints:`, in canvas
+  coordinates, so a layout done by hand is still there when the project is
+  reopened — and, being absolute rather than relative to either pad, a pin stays
+  on the gap in the board it was put in when a part at either end moves. The
+  wobble is kept, but it is a settle now rather than a retreat: the wire
+  overshoots the point it was pinned to and rings down onto it, the way a real
+  lead pushed into place springs and settles.
+
 - **Undo and redo in the Electronics view.** Wiring is drawing: you drag a part
   where you think it goes, run a wire to the wrong pin, and delete one thing
   while another was selected. Every one of those was permanent. The Part Editor

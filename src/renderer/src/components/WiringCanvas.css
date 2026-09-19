@@ -324,6 +324,26 @@
   cursor: grabbing;
 }
 
+/* A point the wire is PINNED through (#1173): a hollow stud on the selected
+   wire — grab it to move the route, click it to un-pin. */
+.wc__wire-pin {
+  fill: var(--panel, #fff);
+  stroke: var(--accent, #e6ab30);
+  stroke-width: 2.2;
+  cursor: grab;
+}
+.wc__wire-pin:hover {
+  fill: var(--accent, #e6ab30);
+}
+.wc__wire-pin:active {
+  cursor: grabbing;
+}
+/* The same pins on an UNSELECTED wire: just enough to see the route was placed. */
+.wc__wire-stud {
+  fill: var(--accent, #e6ab30);
+  stroke: none;
+}
+
 .wc__zoom-pct {
   min-width: 2.6rem;
   text-align: center;

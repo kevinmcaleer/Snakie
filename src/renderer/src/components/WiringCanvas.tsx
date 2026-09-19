@@ -18,7 +18,8 @@ import {
   type RobotConnection,
   type RobotDefinition,
   type RobotNet,
-  type RobotPart
+  type RobotPart,
+  type RobotWaypoint
 } from '../../../shared/robot'
 import { isServoPart, servoBoardGpio, boundJoint, bindServoJoint } from './servo-bind'
 import type { BoardDefinition } from '../../../shared/board'
@@ -63,6 +64,14 @@ import {
 import { Board, BoardDefs } from './BoardGraph'
 import { McuSymbol, PartSchematicSymbol } from './SchematicSymbols'
 import { routeOrthogonal, toSvgPath, type RBox, type RSide, type RWire } from './ortho-router'
+import {
+  pinDropAction,
+  pinHitIndex,
+  pinInsertIndex,
+  pinnedNoodle,
+  pinnedOrtho,
+  polylineMidpoint
+} from './wire-pins'
 import { PART_DRAG_MIME, decodePartDrag } from './part-drag'
 import { classifyBusWire } from '../../../shared/bus-wires'
 import { partSignature, mountSignature, signaturesMatch } from '../../../shared/footprint-signature'
@@ -377,6 +386,16 @@ const DRAG_DEADZONE_PX = 3
 // Minimum clearance a Bézier wire leaves a pin along its outward normal (#182), so
 // noodles curve cleanly out of a pad even when the other end is on the far side.
 const WIRE_CLEARANCE = 40
+// Perpendicular lead out of a schematic pin before its wire turns — the orthogonal
+// router's default, shared with the hand-pinned routes so both leave a symbol the
+// same way (#1173).
+const SCHEMATIC_STUB = 14
+// How close (canvas units) a press has to be to a pinned point to grab it.
+const PIN_GRAB_R = 9
+// The settle after a pin lands: a fraction of the drag's throw, hard-capped, so a
+// long drag rings no harder than a short one.
+const PIN_SETTLE_K = 0.16
+const PIN_SETTLE_MAX = 14
 /** How far above the body a part's title sits when top-edge pin labels occupy
  *  the space immediately above it — clear of the label band rather than through
  *  it. (No top pins ⇒ the title stays snug at 7px.) */
@@ -788,7 +807,7 @@ export interface NetRow {
 }
 
 interface Drag {
-  kind: 'box' | 'pan' | 'wire' | 'pinch' | 'stretch'
+  kind: 'box' | 'pan' | 'wire' | 'pinch' | 'pin'
   /** box drag */
   boxKey?: string
   startX?: number
@@ -810,6 +829,9 @@ interface Drag {
   /** When set, this wire drag is RE-attaching an existing wire (its id) — the grabbed
    *  end moves to the released pin, or snaps back if dropped on empty space (#…). */
   reconnectId?: string
+  /** pin drag (#1173): the index of the EXISTING pin being moved, or undefined
+   *  when the drag started on the wire itself and will drop a new one. */
+  pinIndex?: number
   /** pinch (two-finger touch, #525): starting finger distance + view snapshot */
   pinchDist?: number
   pinchScale?: number
@@ -945,12 +967,15 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
     const r = rootRef.current?.getBoundingClientRect()
     return { w: r?.width ?? 800, h: r?.height ?? 600 }
   })
-  // Elastic wire wobble (#…): after a stretch drag releases, the pulled belly decays
-  // back to rest with a damped oscillation, driven by requestAnimationFrame ticks.
-  const wobbleRef = useRef<{ wireId: string; ox: number; oy: number; start: number } | null>(null)
+  // Wire settle (#1173): a dropped pin doesn't land dead — the wire overshoots it
+  // and rings down to rest with a damped oscillation, driven by requestAnimationFrame
+  // ticks, the way a real lead pushed into place springs and settles. (It used to be
+  // a snap-BACK: the belly you dragged wobbled all the way home to where the curve
+  // wanted it, which is why a wire never stayed where it was put.)
+  const wobbleRef = useRef<{ wireId: string; pinIndex: number; ox: number; oy: number; start: number } | null>(null)
   const wobbleRafRef = useRef<number | null>(null)
-  const startWobble = (wireId: string, ox: number, oy: number): void => {
-    wobbleRef.current = { wireId, ox, oy, start: performance.now() }
+  const startWobble = (wireId: string, pinIndex: number, ox: number, oy: number): void => {
+    wobbleRef.current = { wireId, pinIndex, ox, oy, start: performance.now() }
     const tick = (): void => {
       if (!wobbleRef.current) return
       if (performance.now() - wobbleRef.current.start > 650) wobbleRef.current = null
@@ -1807,6 +1832,67 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
   }
   const setConnectionColor = (id: string, color: string): void =>
     persist({ ...robot, connections: robot.connections.map((c) => (c.id === id ? { ...c, color } : c)) })
+
+  // --- pinned wire routing (#1173) ------------------------------------------
+  /** Snap a pinned point to the 2.54 mm grid when snap-to-grid is on, so a wire
+   *  routed down a channel lines up with the parts either side of it. */
+  const snapPin = (x: number, y: number): RobotWaypoint => {
+    const step = GRID_PITCH_MM * pxPerMm
+    if (!snapEnabled || !(step > 0)) return { x, y }
+    return { x: Math.round(x / step) * step, y: Math.round(y / step) * step }
+  }
+  /** Rewrite one wire's pin list (dropping the field entirely when it empties,
+   *  so an unpinned wire's robot.yml entry is exactly what it always was). */
+  const setWirePins = (id: string, pins: RobotWaypoint[]): void =>
+    persist({
+      ...robot,
+      connections: robot.connections.map((c) => {
+        if (c.id !== id) return c
+        if (pins.length) return { ...c, waypoints: pins.map((p) => ({ x: p.x, y: p.y })) }
+        // An unpinned wire carries NO `waypoints` key at all, so its robot.yml
+        // entry goes back to being exactly what it was before it was ever pinned.
+        const rest: RobotConnection = { ...c }
+        delete rest.waypoints
+        return rest
+      })
+    })
+  /** Pin the wire at `(x, y)` — inserted into the leg the point is nearest, so
+   *  the run keeps the shape it was dragged into. Returns where it landed. */
+  const addWirePin = (id: string, x: number, y: number): number => {
+    const c = robot.connections.find((w) => w.id === id)
+    const e = c && wireEnds(c)
+    if (!c || !e) return -1
+    const pins = c.waypoints ?? []
+    const at = pinInsertIndex(
+      { x: e.ax, y: e.ay, ox: e.aox, oy: e.aoy },
+      { x: e.bx, y: e.by, ox: e.box, oy: e.boy },
+      pins,
+      { x, y }
+    )
+    const next = [...pins]
+    next.splice(at, 0, snapPin(x, y))
+    setWirePins(id, next)
+    return at
+  }
+  /** Move an existing pin to a new place on the canvas. */
+  const moveWirePin = (id: string, index: number, x: number, y: number): void => {
+    const pins = robot.connections.find((w) => w.id === id)?.waypoints
+    if (!pins || !pins[index]) return
+    setWirePins(
+      id,
+      pins.map((p, i) => (i === index ? snapPin(x, y) : p))
+    )
+  }
+  /** Take a pin out again — a click on one un-pins it (the wire re-routes
+   *  through whatever pins are left, or springs back to automatic with none). */
+  const removeWirePin = (id: string, index: number): void => {
+    const pins = robot.connections.find((w) => w.id === id)?.waypoints
+    if (!pins || !pins[index]) return
+    setWirePins(
+      id,
+      pins.filter((_, i) => i !== index)
+    )
+  }
   // Remove a placed part AND any wires that reference it (no dangling endpoints).
   const removePart = (key: string): void => {
     // Never the microcontroller. It has no entry in `parts`, so the parts filter
@@ -1974,12 +2060,13 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
     }
     const d = dragRef.current
     if (!d) return
-    if (d.kind === 'stretch') {
-      // Elastic stretch: the wire's belly follows the cursor until release.
+    if (d.kind === 'pin') {
+      // Routing a wire by hand (#1173): the pinned point follows the cursor, and
+      // the wire is drawn through it live so you can see the route you're making.
       const w = toWorld(e)
       d.liveX = w.x
       d.liveY = w.y
-      if (Math.hypot(w.x - (d.startX ?? w.x), w.y - (d.startY ?? w.y)) > 3) d.moved = true
+      if (Math.hypot(w.x - (d.startX ?? w.x), w.y - (d.startY ?? w.y)) * view.scale > DRAG_DEADZONE_PX) d.moved = true
       force((n) => n + 1)
       return
     }
@@ -2041,12 +2128,30 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
     }
     const d = dragRef.current
     dragRef.current = null
-    if (d?.kind === 'stretch') {
-      // Release an elastic stretch → snap back with a decaying wobble (a no-move
-      // click already selected the wire on pointer-down, so nothing else to do).
-      if (d.moved && d.boxKey && d.liveX != null && d.liveY != null && d.startX != null && d.startY != null) {
-        // Wobble decays the FINAL drag delta back to zero.
-        startWobble(d.boxKey, d.liveX - d.startX, d.liveY - d.startY)
+    if (d?.kind === 'pin') {
+      // Let go of a wire → it STAYS (#1173). Dragging the wire itself drops a new
+      // pin where you released it; dragging an existing pin moves that one; and a
+      // click with no drag on a pin takes it out again (the wire re-routes through
+      // what's left). A click on the wire itself is just a select — done on
+      // pointer-down — so nothing happens here.
+      const act = pinDropAction(!!d.moved, d.pinIndex)
+      if (d.boxKey && d.liveX != null && d.liveY != null && d.startX != null && d.startY != null) {
+        let at = -1
+        if (act === 'move' && d.pinIndex != null) {
+          moveWirePin(d.boxKey, d.pinIndex, d.liveX, d.liveY)
+          at = d.pinIndex
+        } else if (act === 'add') {
+          at = addWirePin(d.boxKey, d.liveX, d.liveY)
+        } else if (act === 'remove' && d.pinIndex != null) {
+          removeWirePin(d.boxKey, d.pinIndex)
+        }
+        // Settle: a short ring-down about the point it was pinned to, scaled from
+        // (but much smaller than) the throw of the drag.
+        if (at >= 0) {
+          const ox = Math.max(-PIN_SETTLE_MAX, Math.min(PIN_SETTLE_MAX, (d.liveX - d.startX) * PIN_SETTLE_K))
+          const oy = Math.max(-PIN_SETTLE_MAX, Math.min(PIN_SETTLE_MAX, (d.liveY - d.startY) * PIN_SETTLE_K))
+          startWobble(d.boxKey, at, ox, oy)
+        }
       }
       force((n) => n + 1)
       return
@@ -2351,7 +2456,13 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
       )
       .join(',') +
     '|' +
-    robot.connections.map((c) => `${c.id}:${c.from}>${c.to}`).join(',')
+    robot.connections
+      .map(
+        (c) =>
+          `${c.id}:${c.from}>${c.to}` +
+          (c.waypoints?.length ? `@${c.waypoints.map((w) => `${Math.round(w.x)},${Math.round(w.y)}`).join(';')}` : '')
+      )
+      .join(',')
   const wireRoutes = useMemo<Map<string, { x: number; y: number }[]>>(() => {
     const isSchem = renderMode === 'schematic'
     // Breadboard wires are drawn as Bézier noodles straight from the pin anchors
@@ -2367,6 +2478,10 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
       .map((s) => ({ x: s.x + (s.bodyDX ?? 0), y: s.y + (s.bodyDY ?? 0), w: s.w, h: s.h }))
     const wires: RWire[] = []
     for (const c of robot.connections) {
+      // A hand-pinned wire (#1173) is routed through its pins, not by A* — and it
+      // is left out of the routing problem entirely so it doesn't push the wires
+      // that ARE auto-routed onto other channels.
+      if (c.waypoints?.length) continue
       const f = parseEndpoint(c.from)
       const t = parseEndpoint(c.to)
       const fs = subjByKey.get(f.key)
@@ -2382,7 +2497,7 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
         dst: { x: ts.x + ta.x, y: ts.y + ta.y, side: sideFromNormal(ta.ox, ta.oy) }
       })
     }
-    return routeOrthogonal(obstacles, wires, { margin: isSchem ? 12 : 6 })
+    return routeOrthogonal(obstacles, wires, { margin: isSchem ? 12 : 6, stub: SCHEMATIC_STUB })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeSig])
 
@@ -2436,9 +2551,24 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
   // either end's node moves (the anchors recompute each render). ----
   const wirePath = (
     c: RobotConnection,
-    pull?: { dx: number; dy: number }
+    pins: readonly RobotWaypoint[] = c.waypoints ?? []
   ): { d: string; mx: number; my: number } | null => {
+    // A PINNED wire (#1173) is routed by hand, in either view: the pins are the
+    // route that was asked for, so neither the orthogonal auto-router nor the
+    // cable detour below gets to move it.
     if (renderMode === 'schematic') {
+      if (pins.length) {
+        const pe = wireEnds(c)
+        if (!pe) return null
+        const pts = pinnedOrtho(
+          { x: pe.ax, y: pe.ay, ox: pe.aox, oy: pe.aoy },
+          { x: pe.bx, y: pe.by, ox: pe.box, oy: pe.boy },
+          pins,
+          SCHEMATIC_STUB
+        )
+        const mid = polylineMidpoint(pts)
+        return { d: toSvgPath(pts), mx: mid.x, my: mid.y }
+      }
       const pts = wireRoutes.get(c.id)
       if (!pts || pts.length < 2) return null
       const mid = pts[Math.floor(pts.length / 2)]
@@ -2446,6 +2576,14 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
     }
     const e = wireEnds(c)
     if (!e) return null
+    if (pins.length) {
+      return pinnedNoodle(
+        { x: e.ax, y: e.ay, ox: e.aox, oy: e.aoy },
+        { x: e.bx, y: e.by, ox: e.box, oy: e.boy },
+        pins,
+        WIRE_CLEARANCE
+      )
+    }
     const dx = e.bx - e.ax
     const dy = e.by - e.ay
     // Outward push along each pin's normal (clean exit off the pad), capped so
@@ -2473,7 +2611,7 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
     // its slack falls outside the boards, the way a real lead's does. Ordinary
     // pin-to-pin noodles keep the plain bezier — they're short hops between pads
     // on one board, where a detour would be noise.
-    if (c.cable && !pull) {
+    if (c.cable) {
       const obstacles = subjects.map((s) => ({ x: s.x, y: s.y, w: s.w, h: s.h }))
       const routed = cableRoute(
         { x: e.ax, y: e.ay, ox: e.aox, oy: e.aoy },
@@ -2484,21 +2622,79 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
     }
     const mx = (e.ax + e.bx) / 2
     const my = (e.ay + e.by) / 2
-    // Elastic pull (#…): move the belly by the drag DELTA (dx,dy) — not toward an
-    // absolute point — so it starts at 0 (no jump) and tracks the cursor. The Bézier
-    // midpoint is 0.75·(control-point offset), so scale by 1/0.75 to make the belly
-    // follow 1:1. The wobble animation feeds a decaying-oscillation delta here.
-    if (pull) {
-      const k = 1 / 0.75
-      c1x += pull.dx * k
-      c1y += pull.dy * k
-      c2x += pull.dx * k
-      c2y += pull.dy * k
-    }
     return { d: `M ${e.ax} ${e.ay} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${e.bx} ${e.by}`, mx, my }
   }
 
   const drag = dragRef.current
+
+  /**
+   * Press on a wire — or on one of its pins (#1173).
+   *
+   * Either way it selects the wire and arms a pin drag; what the release does
+   * depends on where it started and whether the pointer moved (see the `pin`
+   * branch of `onPointerUp`). The hit-test is by distance rather than by which
+   * element was under the pointer, so a pin can be grabbed on any wire — not
+   * only the selected one whose handles are drawn.
+   */
+  const beginPinDrag = (c: RobotConnection, ev: ReactPointerEvent<Element>): void => {
+    ;(ev.target as Element).setPointerCapture?.(ev.pointerId)
+    setSelectedWire(c.id)
+    setSelectedKey(null)
+    setRenameText(null)
+    rootRef.current?.focus()
+    const w = toWorld(ev)
+    const hit = pinHitIndex(c.waypoints ?? [], w, PIN_GRAB_R / Math.max(0.2, view.scale))
+    dragRef.current = {
+      kind: 'pin',
+      boxKey: c.id,
+      pinIndex: hit >= 0 ? hit : undefined,
+      startX: w.x,
+      startY: w.y,
+      liveX: w.x,
+      liveY: w.y
+    }
+    force((n) => n + 1)
+  }
+
+  /**
+   * A wire's pins AS DRAWN — the saved list, plus whatever the pointer is doing
+   * to it right now (#1173).
+   *
+   * While a pin is being dragged it shows at the cursor (snapped exactly as it
+   * will land, so the preview is the result); while the wire ITSELF is being
+   * dragged, the pin it is about to drop is previewed in the leg it will be
+   * spliced into; and for a moment after the release the pin it landed on rings
+   * down to rest.
+   */
+  const livePins = (c: RobotConnection): RobotWaypoint[] => {
+    const pins: RobotWaypoint[] = (c.waypoints ?? []).map((p) => ({ x: p.x, y: p.y }))
+    if (drag?.kind === 'pin' && drag.boxKey === c.id && drag.moved && drag.liveX != null && drag.liveY != null) {
+      const live = snapPin(drag.liveX, drag.liveY)
+      if (drag.pinIndex != null) {
+        if (pins[drag.pinIndex]) pins[drag.pinIndex] = live
+        return pins
+      }
+      const e = wireEnds(c)
+      if (!e) return pins
+      const at = pinInsertIndex(
+        { x: e.ax, y: e.ay, ox: e.aox, oy: e.aoy },
+        { x: e.bx, y: e.by, ox: e.box, oy: e.boy },
+        pins,
+        live
+      )
+      pins.splice(at, 0, live)
+      return pins
+    }
+    const wob = wobbleRef.current
+    const settling = wob && wob.wireId === c.id ? pins[wob.pinIndex] : undefined
+    if (wob && settling) {
+      const el = performance.now() - wob.start
+      const damp = Math.exp(-el / 150)
+      const osc = Math.cos(el / 42)
+      pins[wob.pinIndex] = { x: settling.x + wob.ox * damp * osc, y: settling.y + wob.oy * damp * osc }
+    }
+    return pins
+  }
 
   /**
    * Seated plugs: one shell per (cable, socket). A real lead ends in a housing
@@ -2766,27 +2962,7 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
                   }
                 }
               }
-              // Elastic pull (#…): an active stretch follows the cursor; after
-              // release the wobble decays the pulled belly back to rest.
-              let pull: { dx: number; dy: number } | undefined
-              if (
-                drag?.kind === 'stretch' &&
-                drag.moved &&
-                drag.boxKey === c.id &&
-                drag.liveX != null &&
-                drag.liveY != null &&
-                drag.startX != null &&
-                drag.startY != null
-              ) {
-                // Delta since the grab — starts at 0 (no jump), tracks the cursor.
-                pull = { dx: drag.liveX - drag.startX, dy: drag.liveY - drag.startY }
-              } else if (wobbleRef.current?.wireId === c.id) {
-                const el = performance.now() - wobbleRef.current.start
-                const damp = Math.exp(-el / 150)
-                const osc = Math.cos(el / 42)
-                pull = { dx: wobbleRef.current.ox * damp * osc, dy: wobbleRef.current.oy * damp * osc }
-              }
-              const p = wirePath(c, pull)
+              const p = wirePath(c, livePins(c))
               if (!p) return null
               // While this wire's end is being re-attached, hide it — only the live
               // drag wire shows until it lands (or snaps back).
@@ -2816,14 +2992,7 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
                         probeWire(c.id, c.from, c.to)
                         return
                       }
-                      ;(e.target as Element).setPointerCapture?.(e.pointerId)
-                      setSelectedWire(c.id)
-                      setSelectedKey(null)
-                      rootRef.current?.focus()
-                      // Start an elastic stretch (a click with no move stays a select).
-                      const w = toWorld(e)
-                      dragRef.current = { kind: 'stretch', boxKey: c.id, startX: w.x, startY: w.y, liveX: w.x, liveY: w.y }
-                      force((n) => n + 1)
+                      beginPinDrag(c, e)
                     }}
                   />
                   {/* Cable "jacket": a dark sleeve behind each cabled wire; the 4 run
@@ -2855,6 +3024,21 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
                     opacity={dimmed ? 0.16 : 1}
                     className="wc__wire"
                   />
+                  {/* A pinned wire wears its pins (#1173) — small studs, so you can
+                      see a route was placed by hand without selecting it first. The
+                      grabbable handles come with the selection; these are inert. */}
+                  {!isSel &&
+                    (c.waypoints ?? []).map((w, i) => (
+                      <circle
+                        key={`stud${i}`}
+                        cx={w.x}
+                        cy={w.y}
+                        r={2.4}
+                        className="wc__wire-stud"
+                        opacity={dimmed ? 0.16 : 0.75}
+                        pointerEvents="none"
+                      />
+                    ))}
                   {/* Current-flow (#604): travelling white dashes − → +, faster +
                       thicker with more current, reversed for negative flow. */}
                   {voltage?.on &&
@@ -3150,6 +3334,23 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
                   <g>
                     <circle cx={e.ax} cy={e.ay} r={6} className="wc__wire-handle" onPointerDown={grab(c.to)} />
                     <circle cx={e.bx} cy={e.by} r={6} className="wc__wire-handle" onPointerDown={grab(c.from)} />
+                    {/* The wire's PINS (#1173) — drag one to move it, click it to
+                        take it out and let that stretch of wire find its own way. */}
+                    {(c.waypoints ?? []).map((w, i) => (
+                      <circle
+                        key={`pin${i}`}
+                        cx={w.x}
+                        cy={w.y}
+                        r={5.5}
+                        className="wc__wire-pin"
+                        onPointerDown={(ev) => {
+                          ev.stopPropagation()
+                          beginPinDrag(c, ev)
+                        }}
+                      >
+                        <title>Pinned here — click to un-pin</title>
+                      </circle>
+                    ))}
                   </g>
                 )
               })()}
@@ -3337,7 +3538,11 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
                 : voltage.reason === 'singular' || voltage.reason === 'floating'
                   ? 'Node voltages: the circuit is floating — complete the loop from + back to −.'
                   : 'Node voltages: nothing to solve yet — add a powered source (battery / bench PSU) with an electrical model.'
-              : 'Drag from a pin to another pin to wire them.'}
+              : selectedWire
+                ? // #1173: the selected wire's own trick, said once, where the
+                  // other canvas hints are said — nobody guesses a gesture.
+                  'Drag this wire to pin it where you want it. Click a pin to un-pin it.'
+                : 'Drag from a pin to another pin to wire them.'}
           </span>
           <div className="wc__zoom">
             {/* Undo / redo over the wiring document, when the host keeps a
