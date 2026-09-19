@@ -1224,6 +1224,36 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A PWM you had named but not yet used was missing from the *set power of*
+  dropdown.** `motor_b_speed = PWM(Pin(7))` sat in the program, right under a
+  `motor_a_speed` that was on the menu, and the socket on *set power of ( ) to
+  [50] %* would not offer it.
+
+  The two blocks that take their hardware in a SOCKET rather than a dropdown
+  field — *set power of ( )* and *set pin ( ) to [high]* — hold a `variables_get`
+  there, so the menu on them is the workspace's list of VARIABLES. A declaration
+  is not one of those: it is a text field on the `name PWM` block. What put a
+  name on that list was the reader, which declares a variable for a name it finds
+  BEING USED — so a channel already driven somewhere in the file was offered and
+  the one declared beside it, not yet used, was not. A trap with no way out: to
+  get the name on the menu you had to use it, and to use it you needed the menu.
+  A `name PWM` block the learner had just DRAGGED was in the same position, with
+  nothing in the program able to point at what it had just named.
+
+  A name a program declares is now a name its blocks can reach: every `name pin`
+  and `name PWM` on the canvas gets a variable of that name, so it is on every
+  socket's menu and in the Variables drawer the moment it is declared. It shares
+  the identifier with the declaration deliberately — the generator already knows
+  these names are spoken for and leaves such a variable alone rather than
+  renaming it `motor_b_speed_`, which would have left the declaration and the
+  blocks using it pointing at two different objects — so the program that comes
+  out is unchanged. It tidies up after itself as well: a name field fires a
+  change per keystroke, so a variable this made, which no declaration claims any
+  more and no block uses, goes away again rather than leaving `m`, `mo`, `mot` in
+  the menus. One the learner made, or one that has found a use since, is never
+  touched, and the sync says nothing to the undo stack — so naming a motor cannot
+  dirty a file that was only opened.
+
 - **No more grey `blank line` block hanging under the imports, and no column of
   them where the functions were lifted out** (#1164). Opening a file that starts
   with imports left a wide gap between them and the rest of the canvas, and the
