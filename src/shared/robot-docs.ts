@@ -178,8 +178,10 @@ export function buildPinoutRows(
 
 /** Sort key for a board pin: group 0 = a numbered GPIO (`GP14`, `GPIO2`, `IO34`,
  *  or a bare `14`) sorted by its number; group 1 = any other named pin (`3V3`,
- *  `GND`, `A0`) sorted by text. */
-function pinSortKey(pin: string): { group: 0 | 1; num: number } {
+ *  `GND`, `A0`) sorted by text. Exported because the printed connections table
+ *  (#1170) orders its rows the same way this one does — a reader holding both
+ *  should not have to find the same wire in two different places. */
+export function pinSortKey(pin: string): { group: 0 | 1; num: number } {
   const m = pin.match(/^(?:gpio|gp|io)?(\d+)$/i)
   return m ? { group: 0, num: Number(m[1]) } : { group: 1, num: 0 }
 }

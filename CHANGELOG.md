@@ -8,6 +8,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A connections table to wire the project up from, and a white page to print
+  it on** (#1170). The document showed the wiring as a picture, and a picture is
+  a poor thing to wire FROM: following one curve out of a dozen across a page
+  and landing on the right pin is exactly the part a beginner gets wrong. The
+  page after the diagram now writes the same wiring out as a list — one row per
+  wire, the board's end first so you can count pins to it, the other end beside
+  it, the net it belongs to, and a box to tick as each one goes in. A wire in a
+  QWIIC or Grove bundle says which cable it is in, so nobody goes looking for
+  four separate jumper leads.
+
+  The rows are ordered the way the Board Viewer's own Markdown pinout export
+  orders them — GPIOs by number, the named rails after them, part-to-part wires
+  last — and `pinSortKey` is shared rather than copied, so a reader holding both
+  finds the same wire in the same place in each. A project with no wiring gets
+  no page, and a project whose board could not be captured still gets the table:
+  it is the one case where the reader would otherwise have no wiring at all.
+
+  **Every page is white now.** The document was printed on the app's warm
+  parchment, which is right on screen next to the editor's own furniture and
+  wrong on paper: a full-bleed tint on every page of a handout costs ink, comes
+  out a different colour from every printer, and made the board's own white
+  sheet sit in the page like a patch. The Soft Shell ink and accents stay; the
+  ground, the table bands and the letterbox every picture is drawn onto turn
+  white with it, so the wiring diagram now meets the page with no seam at all.
+
 - **Snakie says which board you are on, and opens with the board on screen.**
   (#1163) The web build connects its built-in simulator for you a moment after
   the page loads, so Run works without anyone hunting for the Connect control
