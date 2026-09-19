@@ -13,6 +13,7 @@ import { stripBlocksFooter } from '../../../../../shared/blocks-doc'
 import { type Box, type LaidOutPage, type PdfDocument, expandTabs, packUnits } from '../layout'
 import { COURIER_WIDTH, courierCharsPerLine } from '../metrics'
 import { GUTTER, INK, INK_MUTED, PAPER, RULE } from '../theme'
+import { drawIntro, introHeight } from './narrative'
 
 /** One printed row: a source line, or one of its wrapped continuations. */
 export interface ListingRow {
@@ -78,7 +79,11 @@ export function layOutListing(code: string, cols: number, tabWidth = 4): Listing
  * A single line too long to fit a whole page is split anyway; there is nowhere
  * else for it to go.
  */
-export function paginateListing(rows: readonly ListingRow[], capacity: number): ListingRow[][] {
+export function paginateListing(
+  rows: readonly ListingRow[],
+  capacity: number,
+  firstCapacity = capacity
+): ListingRow[][] {
   if (capacity <= 0) return rows.length ? [[...rows]] : []
   const groups: ListingRow[][] = []
   for (const row of rows) {
@@ -91,7 +96,8 @@ export function paginateListing(rows: readonly ListingRow[], capacity: number): 
   }
   return packUnits(
     splittable.map((group) => ({ item: group, size: group.length })),
-    capacity
+    capacity,
+    Math.max(1, firstCapacity)
   ).map((page) => page.flat())
 }
 
@@ -101,6 +107,9 @@ export interface ListingOptions {
   code: string
   /** Section heading. */
   heading?: string
+  /** A line of English above the listing — see `sections/narrative.ts`
+   *  (#1157). Set on the first page only. */
+  intro?: string
   fontSize?: number
   tabWidth?: number
 }
@@ -145,8 +154,17 @@ export function drawListing(doc: PdfDocument, opts: ListingOptions): LaidOutPage
   const textX = box.x + gutter + 6
   const cols = courierCharsPerLine(box.x + box.width - textX, fontSize)
   const capacity = Math.max(1, Math.floor((box.height - SECTION_HEADING_HEIGHT) / leading))
+  const intro = introHeight(opts.intro, box.width)
+  const firstCapacity = Math.max(
+    1,
+    Math.floor((box.height - SECTION_HEADING_HEIGHT - intro) / leading)
+  )
 
-  const pagesOfRows = paginateListing(layOutListing(code, cols, opts.tabWidth), capacity)
+  const pagesOfRows = paginateListing(
+    layOutListing(code, cols, opts.tabWidth),
+    capacity,
+    firstCapacity
+  )
   const heading = opts.heading ?? 'MicroPython'
   const out: LaidOutPage[] = []
 
@@ -154,7 +172,8 @@ export function drawListing(doc: PdfDocument, opts: ListingOptions): LaidOutPage
     const page = doc.newPage()
     out.push(page)
     page.rect({ x: 0, y: 0, width: doc.size.width, height: doc.size.height }, { fill: PAPER })
-    const top = drawSectionHeading(page, i === 0 ? heading : `${heading} (continued)`)
+    let top = drawSectionHeading(page, i === 0 ? heading : `${heading} (continued)`)
+    if (i === 0) top = drawIntro(page, opts.intro, box.x, top, box.width)
     const bodyHeight = rows.length * leading
 
     page.rect(

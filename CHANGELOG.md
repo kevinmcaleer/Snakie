@@ -8,6 +8,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A bill of materials, and a document that says what to do.** (#1157, epic
+  #1105) The printed project used to be a set of pictures under headings —
+  `Blocks`, `MicroPython`, `Electronics` — which reads perfectly to whoever
+  built it and not at all to whoever was handed it. A heading names a thing; it
+  does not say what to do with it, and nothing in the document said what you
+  had to have on the desk first.
+
+  So the export now opens, straight after the cover, with **What you will
+  need**: the microcontroller, every part on the breadboard (one row per kind,
+  with the quantity — two SG90s are `2×`, not two rows), and the wire to join
+  them, counted off the wiring diagram's own connections. Each row carries what
+  identifies it at a supplier — the maker and part number where the library has
+  them, the part's description otherwise — and a part whose library is no
+  longer installed is still listed, under its id and whatever the project
+  called it, because a name you have to look up beats a row that quietly is not
+  there.
+
+  Every section then opens with a line of ordinary English: *drag these blocks
+  to program the robot*, *wire up the robot like the picture below; use DuPont
+  cables or solder wires for a more permanent connection*, *you can also type
+  the code below into the code workspace instead of using the blocks* — that
+  last one only in a project that HAS blocks, since it is an alternative rather
+  than an instruction. The line costs its page the room it takes and no other
+  page any, so a listing or a set of blocks that spilled onto a second page
+  before still spills onto exactly one.
+
 - **A little floating bar while the PDF exports.** (epic #1105) Rasterising the
   blocks and the breadboard takes seconds on a real project, and until now the
   only sign of it was a print icon that had gone grey — which says "no", not

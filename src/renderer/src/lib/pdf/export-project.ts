@@ -11,8 +11,10 @@ import { generateProgram } from '../blocks/generator'
 import { getBlocksWorkspace } from '../blocks/workspace-registry'
 import { reportError } from '../report-error'
 import { showStatus } from '../status-bar'
+import { resolveBoards } from '../../components/part-editor.util'
 import { domProjectArt } from './project-art'
 import { type OmittedSection, type ProgressUpdate, buildProjectPdf } from './project-pdf'
+import type { BomCatalog } from './sections/bom'
 import { savePdf } from './save-pdf'
 import type { RobotDefinition } from '../../../../shared/robot'
 
@@ -45,6 +47,26 @@ async function loadRobot(folder: string | null): Promise<RobotDefinition | null>
   }
 }
 
+/**
+ * The catalogue the bill of materials names its rows from (#1157).
+ *
+ * Both halves are best-effort: a table of part IDS is a worse table than one of
+ * names, but it is a far better document than one with no shopping list in it,
+ * so nothing here can fail the export.
+ */
+async function loadCatalog(): Promise<BomCatalog> {
+  try {
+    const [libraries, userBoards] = await Promise.all([
+      window.api.parts.listLibraries().catch(() => []),
+      window.api.board.listUserBoards().catch(() => [])
+    ])
+    return { libraries, boards: resolveBoards(libraries, userBoards) }
+  } catch (err) {
+    reportError('export pdf: parts libraries', err)
+    return {}
+  }
+}
+
 /** A human summary of what did not make it into the document. */
 export function omissionMessage(omitted: readonly OmittedSection[]): string {
   const names: Record<OmittedSection['section'], string> = {
@@ -71,11 +93,12 @@ export async function exportProjectPdf(input: ExportProjectInput): Promise<Expor
   // Generate once, here: the listing prints this text and the blocks pages
   // order themselves from the same pass's `functions` (#1112).
   const program = workspace ? generateProgram(workspace) : null
-  const robot = await loadRobot(input.folder)
+  const [robot, catalog] = await Promise.all([loadRobot(input.folder), loadCatalog()])
 
   const result = await buildProjectPdf(
     {
       robot,
+      catalog,
       folder: input.folder,
       entryFile: input.entryFile,
       code: { generated: program?.code, stored: input.stored },

@@ -9,6 +9,7 @@ import {
   orderStacks,
   planBlocksPages
 } from '../src/renderer/src/lib/pdf/sections/blocks'
+import { BLOCKS_INTRO } from '../src/renderer/src/lib/pdf/sections/narrative'
 import { pageRuns, pageStrings, pages, parsePdf } from './helpers/pdf-inspect'
 import type { PdfImageRef } from '../src/renderer/src/lib/pdf/writer'
 
@@ -278,5 +279,45 @@ describe('drawing the pages', () => {
     const drawn = pages(pdf).flatMap((p) => [...pageStrings(pdf, p)])
     expect(drawn.length).toBeGreaterThan(0)
     expect(pdf.raw.match(/\/Im\d+ Do/g) ?? []).toHaveLength(3)
+  })
+})
+
+describe('the line above the blocks (#1157)', () => {
+  it('says what to do with them, once, on the first page', () => {
+    const stacks: DrawableStack[] = Array.from({ length: 6 }, (_, i) => ({
+      id: `s${i}`,
+      label: `Stack ${i}`,
+      width: 300,
+      height: 300,
+      image: ref(i)
+    }))
+    const doc = new PdfDocument()
+    const drawn = drawBlocksPages(doc, stacks, { intro: BLOCKS_INTRO })
+    expect(drawn.length).toBeGreaterThan(1)
+    const pdf = parsePdf(doc.build())
+    const said = pages(pdf).map((p) => pageStrings(pdf, p).filter((s) => s === BLOCKS_INTRO).length)
+    expect(said[0]).toBe(1)
+    expect(said.slice(1).every((n) => n === 0)).toBe(true)
+  })
+
+  it('costs the first page its room, and no other page any', () => {
+    const one = [{ id: 'a', width: 200, height: 100 }]
+    const [first] = planBlocksPages(one, BOX, { firstInset: 40 })
+    const [plain] = planBlocksPages(one, BOX, {})
+    expect(first[0].y).toBe(plain[0].y + 40)
+
+    // A stack that only just fits is pushed off the first page, not clipped.
+    const tall = [
+      { id: 'a', width: 100, height: BOX.height - 20 },
+      { id: 'b', width: 100, height: 100 }
+    ]
+    const planned = planBlocksPages(tall, BOX, { firstInset: 40 })
+    expect(planned).toHaveLength(2)
+    expect(planned[1][0].y).toBe(BOX.y)
+    for (const page of planned) {
+      for (const placed of page) {
+        expect(placed.y + placed.height).toBeLessThanOrEqual(BOX.y + BOX.height + 0.001)
+      }
+    }
   })
 })

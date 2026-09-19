@@ -11,6 +11,7 @@ import { type Box, type LaidOutPage, type PdfDocument, fitBox } from '../layout'
 import type { PdfImageRef } from '../writer'
 import { INK_MUTED, PAPER } from '../theme'
 import { SECTION_HEADING_HEIGHT, drawSectionHeading } from './listing'
+import { drawIntro, introHeight } from './narrative'
 
 /**
  * Whether this project HAS any wiring to show.
@@ -46,7 +47,7 @@ export function wiringSummary(robot: RobotDefinition): string {
 export function drawWiringPage(
   doc: PdfDocument,
   art: WiringArt | null,
-  opts: { heading?: string; summary?: string } = {}
+  opts: { heading?: string; summary?: string; intro?: string } = {}
 ): LaidOutPage | null {
   if (!art || art.width <= 0 || art.height <= 0) return null
 
@@ -56,11 +57,14 @@ export function drawWiringPage(
 
   const box = page.content
   const summaryRoom = opts.summary ? 22 : 0
+  // The instruction goes ABOVE the picture (#1157) — it is what to do with it,
+  // so it is read first; the summary stays a caption underneath.
+  const top = drawIntro(page, opts.intro, box.x, box.y + SECTION_HEADING_HEIGHT, box.width)
   const body: Box = {
     x: box.x,
-    y: box.y + SECTION_HEADING_HEIGHT,
+    y: top,
     width: box.width,
-    height: box.height - SECTION_HEADING_HEIGHT - summaryRoom
+    height: box.height - SECTION_HEADING_HEIGHT - summaryRoom - introHeight(opts.intro, box.width)
   }
   const placed = fitBox(art.width, art.height, body)
   page.image(art.image, placed)

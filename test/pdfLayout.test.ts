@@ -203,3 +203,22 @@ describe('defaults', () => {
     expect(new Set([top, right, bottom, left]).size).toBe(1)
   })
 })
+
+describe('a first page with less room (#1157)', () => {
+  const units = [0, 1, 2, 3].map((i) => ({ item: i, size: 3 }))
+
+  it('packs fewer units onto the page that carries the intro', () => {
+    expect(packUnits(units, 9, 6)).toEqual([
+      [0, 1],
+      [2, 3]
+    ])
+  })
+
+  it('leaves every other page the full capacity', () => {
+    expect(packUnits(units, 9, 3)).toEqual([[0], [1, 2, 3]])
+  })
+
+  it('is the plain packing when the first page is like the rest', () => {
+    expect(packUnits(units, 9, 9)).toEqual(packUnits(units, 9))
+  })
+})
