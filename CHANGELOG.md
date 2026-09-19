@@ -1224,6 +1224,36 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The zoom-to-fit button answers a press anywhere on it, and the column of
+  blocks is spaced by what the blocks measure.** (#1150, #1062) Two reports from
+  the same canvas.
+
+  The fit control only responded at its **corners**. #1150 swapped Blockly's
+  sprite for a corner-bracket path, and an SVG path is hit-tested where it is
+  painted — which here is four 2px brackets with nothing in between. The control
+  still looked like a button and still lit up under the pointer, because a group
+  is hovered by any of its children, so the only way to find out was to press
+  the middle of it and have nothing happen. An invisible 32×32 rect now sits
+  under the glyph, matching the box Blockly clips `+` and `-` to, so all four
+  controls have the same hit area as well as the same look.
+
+  And the **very large gap between the imports and whatever the file does next**
+  — the one that reads as blocks that failed to render — is the last of #1062's
+  layout estimate. The converter is pure, so it places each stack by counting
+  rows and multiplying by a row height rather than by asking Blockly. Measured
+  against the real canvas on this repo's own examples, that ran up to **512px
+  long** after a long chain, and 18px SHORT on a `def` with a big body, which is
+  the overlap the estimate exists to prevent. A row count cannot be right for
+  every block: a folded comment run draws shorter rows than a statement, a
+  `def`'s hat and empty mouth are their own arithmetic, and a block a plugin
+  registered has a height nothing in the converter has ever seen.
+
+  So the canvas stops guessing. Once Blockly has drawn the workspace, every
+  stack's height is a fact, and the column is re-spaced to exactly one gutter
+  between them — every gap in `examples/` is now 48px, from a spread of -18 to
+  512. A stack you dragged aside keeps its place and drops out of the column, so
+  the others close up around it rather than re-stacking over the top of it.
+
 - **No more grey `blank line` block hanging under the imports, and no column of
   them where the functions were lifted out** (#1164). Opening a file that starts
   with imports left a wide gap between them and the rest of the canvas, and the

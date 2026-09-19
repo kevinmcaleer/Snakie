@@ -1,6 +1,7 @@
+// @vitest-environment jsdom
 import { describe, it, expect } from 'vitest'
 import * as Blockly from 'blockly/core'
-import { installShelfFlyout, nextZoomAction } from '../src/renderer/src/lib/blocks/zoom'
+import { installShelfFlyout, installZoomReset, nextZoomAction } from '../src/renderer/src/lib/blocks/zoom'
 
 /**
  * The zoom control moves the CANVAS (#1150).
@@ -64,5 +65,84 @@ describe('nextZoomAction (#1150)', () => {
     // the maximum onto nothing. 100% is the only sane answer.
     expect(nextZoomAction(1, false)).toBe('actual-size')
     expect(nextZoomAction(2, false)).toBe('actual-size')
+  })
+})
+
+/**
+ * THE BUTTON IS THE BOX, NOT THE INK.
+ *
+ * Blockly's control held an `<image>` — a rectangle, hit-tested as one. Swapping
+ * it for the corner-bracket path swapped the hit region for four 2px strokes
+ * with nothing in between, so a press in the MIDDLE of the button did nothing
+ * while the control still looked and hovered like a button. Reported against
+ * #1150 as "only the corners of the zoom icon respond".
+ */
+describe('the fit control answers a press anywhere in its box', () => {
+  /** Blockly's reset control as it is actually built: a `<g>` holding an image. */
+  function control(): { root: HTMLElement; group: SVGGElement } {
+    const root = document.createElement('div')
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    const group = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+    group.setAttribute('class', 'blocklyZoom blocklyZoomReset')
+    group.setAttribute('aria-label', 'Reset zoom')
+    group.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'image'))
+    svg.appendChild(group)
+    root.appendChild(svg)
+    document.body.appendChild(root)
+    return { root, group }
+  }
+
+  /** Enough of a workspace for the control to act on, and a record of what it did. */
+  function workspace(root: HTMLElement): { ws: Blockly.WorkspaceSvg; scales: number[] } {
+    const scales: number[] = []
+    const ws = {
+      getInjectionDiv: () => root,
+      getScale: () => 1,
+      getTopBlocks: () => [{}],
+      beginCanvasTransition: () => {},
+      endCanvasTransition: () => {},
+      zoomToFit: () => scales.push(-1),
+      setScale: (s: number) => scales.push(s),
+      scrollCenter: () => {}
+    }
+    return { ws: ws as unknown as Blockly.WorkspaceSvg, scales }
+  }
+
+  it('puts a full-size target under the glyph, and the glyph on top of it', () => {
+    const { root, group } = control()
+    installZoomReset(workspace(root).ws)
+
+    const target = group.querySelector('.blocks-zoom-target')
+    expect(target).not.toBeNull()
+    // The control box Blockly clips `+`, `-` and the reset sprite to, so the
+    // four controls end up with the same hit area as well as the same look.
+    expect(target?.getAttribute('width')).toBe('32')
+    expect(target?.getAttribute('height')).toBe('32')
+    // Before the glyph in the DOM: painted under it, so the brackets still read
+    // as brackets. (`pointer-events: all` on the rect is `BlocksCanvas.css`.)
+    const kids = [...group.children].map((el) => el.getAttribute('class'))
+    expect(kids.indexOf('blocks-zoom-target')).toBeLessThan(kids.indexOf('blocks-zoom-fit'))
+    // And the image it replaced is gone, or the sprite would show through.
+    expect(group.querySelector('image')).toBeNull()
+  })
+
+  it('zooms when the target is pressed — the middle of the button, not a bracket', () => {
+    const { root, group } = control()
+    const { ws, scales } = workspace(root)
+    installZoomReset(ws)
+
+    const target = group.querySelector('.blocks-zoom-target') as Element
+    target.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    // At 100% with blocks on the canvas, the next action is "fit".
+    expect(scales).toEqual([-1])
+  })
+
+  it('takes the target away again with the rest of it', () => {
+    const { root, group } = control()
+    installZoomReset(workspace(root).ws)()
+
+    expect(group.querySelector('.blocks-zoom-target')).toBeNull()
+    expect(group.querySelector('.blocks-zoom-fit')).toBeNull()
+    expect(group.getAttribute('aria-label')).toBe('Reset zoom')
   })
 })
