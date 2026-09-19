@@ -206,6 +206,36 @@ export function pageStrings(pdf: ParsedPdf, page: PdfObject): string[] {
   return out
 }
 
+/** One `BT … ET` run: the text shown, and the font and size it was set in. */
+export interface TextRun {
+  /** The font RESOURCE name — `F1` Helvetica, `F2` Helvetica-Bold, `F3` Courier. */
+  font: string
+  size: number
+  text: string
+}
+
+/**
+ * Every text run on a page, with the size it was set at.
+ *
+ * `pageStrings` answers what a page SAYS; this answers how it says it, which is
+ * what a claim like "a function name is lettered like the section heading"
+ * (#1147) actually rests on. Runs are split on the writer's own `BT`/`ET`
+ * lines, so a literal string containing those letters cannot be mistaken for
+ * one.
+ */
+export function pageRuns(pdf: ParsedPdf, page: PdfObject): TextRun[] {
+  const out: TextRun[] = []
+  // The leading newline lets a `BT` that opens the stream split like the rest.
+  for (const block of `\n${pageContent(pdf, page)}`.split('\nBT\n').slice(1)) {
+    const body = block.split('\nET')[0]
+    const set = /\/(F\d+) ([\d.]+) Tf/.exec(body)
+    const shown = /\(([\s\S]*)\) Tj/.exec(body)
+    if (!set || !shown) continue
+    out.push({ font: set[1], size: Number(set[2]), text: decodeWinAnsi(unescape(shown[1])) })
+  }
+  return out
+}
+
 /** All text shown on a page, joined by newlines. */
 export function pageText(pdf: ParsedPdf, page: PdfObject): string {
   return pageStrings(pdf, page).join('\n')

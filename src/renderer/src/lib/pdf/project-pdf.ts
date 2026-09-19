@@ -3,7 +3,8 @@
  * epic true.
  *
  * The order is #1105's: title page, blocks (functions first), the MicroPython
- * listing, the wiring diagram, and the "Made with Snakie" closing page.
+ * listing, the wiring diagram — followed by the workspace's own board sheet
+ * (#1147) — and the "Made with Snakie" closing page.
  *
  * Three things live HERE rather than in the section modules:
  *
@@ -30,6 +31,8 @@ import { drawWiringPage, hasWiring, wiringSummary } from './sections/wiring'
 export interface StackArt {
   id: string
   label?: string
+  /** The function's docstring, printed under its name (#1147). */
+  description?: string
   /** Natural width in points. */
   width: number
   /** Natural height in points. */
@@ -54,8 +57,20 @@ export interface DiagramArt {
 export interface ProjectArt {
   /** The learner's top-level stacks, ordered functions-first. */
   blockStacks(): Promise<readonly StackArt[]>
-  /** The breadboard, or null when there is none to draw. */
+  /** The breadboard on the document's own parchment, or null when there is
+   *  none to draw. */
   wiring(): Promise<DiagramArt | null>
+  /**
+   * The board sheet exactly as the Electronics workspace's `Export ▸ PDF
+   * document` prints it — grid, mat colour and all (#1147) — or null when
+   * there is none.
+   *
+   * Separate from {@link wiring} because it is a different PICTURE of the same
+   * board: that one is the drawing lifted onto the page's parchment, this one
+   * is the workspace's own sheet. The live implementation captures both from a
+   * single pass over the canvas.
+   */
+  wiringSheet(): Promise<DiagramArt | null>
   /** The Snakie mark for the cover, or null to set the cover typographically. */
   logo(): Promise<PdfImageData | null>
 }
@@ -64,6 +79,7 @@ export interface ProjectArt {
 export const NO_ART: ProjectArt = {
   blockStacks: async () => [],
   wiring: async () => null,
+  wiringSheet: async () => null,
   logo: async () => null
 }
 
@@ -96,6 +112,11 @@ export interface ProjectPdfResult {
   /** Sections left out — an empty list means the whole document came through. */
   omitted: OmittedSection[]
 }
+
+/** The heading over the workspace's own board sheet (#1147). */
+export const SHEET_HEADING = 'Electronics sheet'
+/** What that page IS, in one line, so nobody takes it for a second board. */
+export const SHEET_CAPTION = 'The board as the Electronics workspace exports it'
 
 /** The phases an export moves through, for the toolbar's busy state. */
 export type ExportPhase = 'blocks' | 'wiring' | 'laying out' | 'writing'
@@ -164,6 +185,7 @@ export async function buildProjectPdf(
 
   progress('wiring', 0.4)
   let diagram: DiagramArt | null = null
+  let sheet: DiagramArt | null = null
   if (hasWiring(input.robot)) {
     try {
       diagram = await art.wiring()
@@ -172,6 +194,14 @@ export async function buildProjectPdf(
       }
     } catch (err) {
       omitted.push({ section: 'wiring', reason: messageOf(err) })
+    }
+    try {
+      // The sheet is a SECOND view of a board the document already shows, so a
+      // capture that fails is not worth reporting — and not worth failing the
+      // export over either.
+      sheet = await art.wiringSheet()
+    } catch {
+      sheet = null
     }
   }
 
@@ -203,6 +233,7 @@ export async function buildProjectPdf(
   const drawable: DrawableStack[] = stacks.map((stack) => ({
     id: stack.id,
     label: stack.label,
+    description: stack.description,
     width: stack.width,
     height: stack.height,
     image: doc.addImage(stack.jpeg)
@@ -221,6 +252,21 @@ export async function buildProjectPdf(
         height: diagram.height
       },
       { summary: input.robot ? wiringSummary(input.robot) : undefined }
+    )
+  }
+
+  if (sheet) {
+    // The workspace's own export, as its own page (#1147). It follows the
+    // diagram, since it is the same board dressed for the bench rather than for
+    // the page.
+    drawWiringPage(
+      doc,
+      {
+        image: doc.addImage(sheet.jpeg),
+        width: sheet.width,
+        height: sheet.height
+      },
+      { heading: SHEET_HEADING, summary: SHEET_CAPTION }
     )
   }
 

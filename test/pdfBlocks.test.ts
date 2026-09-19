@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { PdfDocument } from '../src/renderer/src/lib/pdf/layout'
 import {
+  DESCRIPTION_SIZE,
   type DrawableStack,
+  LABEL_SIZE,
+  captionFor,
   drawBlocksPages,
   orderStacks,
   planBlocksPages
 } from '../src/renderer/src/lib/pdf/sections/blocks'
-import { pageStrings, pages, parsePdf } from './helpers/pdf-inspect'
+import { pageRuns, pageStrings, pages, parsePdf } from './helpers/pdf-inspect'
 import type { PdfImageRef } from '../src/renderer/src/lib/pdf/writer'
 
 /** The blocks pages (#1112). */
@@ -94,6 +97,34 @@ describe('planning the pages', () => {
     expect(labelled.y).toBeGreaterThan(plain.y)
   })
 
+  it('reserves more room again for a description under the name', () => {
+    const base = { id: 'a', width: 100, height: 40, label: 'Function: blink' }
+    const [[plain]] = planBlocksPages([base], BOX)
+    const [[described]] = planBlocksPages([{ ...base, description: 'Flash the LED.' }], BOX)
+    expect(described.y).toBeGreaterThan(plain.y)
+    // …and the caption travels with the placement, so drawing cannot wrap it
+    // differently from the way it was measured.
+    expect(described.caption.lines).toEqual(['Flash the LED.'])
+  })
+
+  it('still leaves a stack room beside a docstring longer than the page', () => {
+    const planned = planBlocksPages(
+      [
+        {
+          id: 'a',
+          width: 100,
+          height: 400,
+          label: 'Function: essay',
+          description: 'word '.repeat(4000)
+        }
+      ],
+      BOX
+    )
+    const [placed] = planned[0]
+    expect(placed.width).toBeGreaterThan(0)
+    expect(placed.height).toBeGreaterThan(0)
+  })
+
   it('skips a stack with no measurable size', () => {
     expect(planBlocksPages([{ id: 'a', width: 0, height: 0 }], BOX)).toEqual([])
   })
@@ -103,12 +134,54 @@ describe('planning the pages', () => {
   })
 })
 
+describe('the caption under a function name (#1147)', () => {
+  const stack = { id: 'f', width: 100, height: 40, label: 'Function: blink' }
+
+  it('is just the name when the function has no docstring', () => {
+    const caption = captionFor(stack, 400)
+    expect(caption.label).toBe('Function: blink')
+    expect(caption.lines).toEqual([])
+    expect(caption.height).toBeGreaterThan(0)
+  })
+
+  it('carries a one-line docstring through as it was written', () => {
+    const caption = captionFor({ ...stack, description: 'Flash the LED twice.' }, 400)
+    expect(caption.lines).toEqual(['Flash the LED twice.'])
+  })
+
+  it('wraps a long docstring to the page and grows to fit it', () => {
+    const long = 'Flash the on-board LED so you can see the program is running. '.repeat(4)
+    const caption = captionFor({ ...stack, description: long }, 200)
+    expect(caption.lines.length).toBeGreaterThan(1)
+    expect(caption.height).toBeGreaterThan(captionFor(stack, 200).height)
+  })
+
+  it("keeps the docstring's own paragraphs, without opening or closing on a blank", () => {
+    const caption = captionFor(
+      { ...stack, description: '\n\nBlink the LED.\n\n\nTwice, briefly.\n\n' },
+      400
+    )
+    expect(caption.lines).toEqual(['Blink the LED.', '', 'Twice, briefly.'])
+  })
+
+  it('is nothing at all for a stack with neither name nor docstring', () => {
+    expect(captionFor({ id: 'a', width: 10, height: 10 }, 400)).toEqual({ lines: [], height: 0 })
+  })
+
+  it('describes a stack that has a docstring but no name', () => {
+    const caption = captionFor({ id: 'a', width: 10, height: 10, description: 'A note.' }, 400)
+    expect(caption.label).toBeUndefined()
+    expect(caption.lines).toEqual(['A note.'])
+  })
+})
+
 describe('drawing the pages', () => {
-  const stack = (id: string, label?: string): DrawableStack => ({
+  const stack = (id: string, label?: string, description?: string): DrawableStack => ({
     id,
     width: 200,
     height: 150,
     label,
+    description,
     image: ref()
   })
 
@@ -145,6 +218,51 @@ describe('drawing the pages', () => {
     expect(strings).toContain('Main program')
     // The caption comes before the main program's, because functions come first.
     expect(strings.indexOf('Function: blink')).toBeLessThan(strings.indexOf('Main program'))
+  })
+
+  it("letters a function name at the section heading's size (#1147)", () => {
+    const doc = new PdfDocument()
+    drawBlocksPages(doc, [stack('f1', 'Function: blink')])
+    const pdf = parsePdf(doc.build())
+    const runs = pageRuns(pdf, pages(pdf)[0])
+    const heading = runs.find((r) => r.text === 'Blocks')
+    const name = runs.find((r) => r.text === 'Function: blink')
+    expect(heading).toBeDefined()
+    expect(name).toEqual({ font: heading!.font, size: heading!.size, text: 'Function: blink' })
+    expect(name!.size).toBe(LABEL_SIZE)
+  })
+
+  it('prints the docstring under the name, smaller (#1147)', () => {
+    const doc = new PdfDocument()
+    drawBlocksPages(doc, [stack('f1', 'Function: blink', 'Flash the LED twice.')])
+    const pdf = parsePdf(doc.build())
+    const runs = pageRuns(pdf, pages(pdf)[0])
+    const name = runs.findIndex((r) => r.text === 'Function: blink')
+    const description = runs.findIndex((r) => r.text === 'Flash the LED twice.')
+    expect(description).toBeGreaterThan(name)
+    expect(runs[description].size).toBe(DESCRIPTION_SIZE)
+    expect(runs[description].size).toBeLessThan(runs[name].size)
+  })
+
+  it('prints a wrapped docstring line by line, in order', () => {
+    const doc = new PdfDocument()
+    const description =
+      'Sweep the servo from one end of its travel to the other and back again, ' +
+      'slowly enough that the arm never jerks, and leave it where it started.'
+    drawBlocksPages(doc, [stack('f1', 'Function: sweep', description)])
+    const pdf = parsePdf(doc.build())
+    const printed = pageRuns(pdf, pages(pdf)[0])
+      .filter((r) => r.size === DESCRIPTION_SIZE)
+      .map((r) => r.text)
+    expect(printed.length).toBeGreaterThan(1)
+    expect(printed.join(' ')).toBe(description)
+  })
+
+  it('prints nothing extra for a function with no docstring', () => {
+    const doc = new PdfDocument()
+    drawBlocksPages(doc, [stack('f1', 'Function: blink')])
+    const pdf = parsePdf(doc.build())
+    expect(pageRuns(pdf, pages(pdf)[0]).some((r) => r.size === DESCRIPTION_SIZE)).toBe(false)
   })
 
   it('puts every stack image on a page', () => {

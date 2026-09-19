@@ -11,7 +11,7 @@ import { getBlocksWorkspace } from '../blocks/workspace-registry'
 import { generateProgram } from '../blocks/generator'
 import { snakieMarkSvg } from '../../components/snakie-mark'
 import { PX_TO_PT, captureBlockStacks, inlineFontCss, svgToJpeg } from './capture'
-import { captureWiringDiagram } from './wiring-capture'
+import { type CapturedWiring, captureWiring } from './wiring-capture'
 import type { DiagramArt, ProjectArt, StackArt } from './project-pdf'
 import type { PdfImageData } from './writer'
 
@@ -24,6 +24,20 @@ const LOGO_PX = 256
 
 /** The live app's art: the mounted Blockly workspace and the breadboard. */
 export function domProjectArt(opts: { functionIds?: readonly string[] } = {}): ProjectArt {
+  /**
+   * ONE capture of the board, shared by both of its pages (#1147).
+   *
+   * `captureWiring` may mount a whole off-screen `BoardPane` and wait for its
+   * libraries — much the most expensive thing this module does — and the
+   * document asks for the diagram and the sheet separately. Memoising the
+   * PROMISE means the second ask is free however the two calls interleave.
+   */
+  let board: Promise<CapturedWiring | null> | null = null
+  const captureBoard = async (): Promise<CapturedWiring | null> => {
+    board ??= captureWiring(ART_BACKGROUND, await inlineFontCss())
+    return board
+  }
+
   return {
     async blockStacks(): Promise<readonly StackArt[]> {
       const workspace = getBlocksWorkspace()
@@ -40,6 +54,7 @@ export function domProjectArt(opts: { functionIds?: readonly string[] } = {}): P
         out.push({
           id: stack.id,
           label: stack.label,
+          description: stack.description,
           width: stack.width,
           height: stack.height,
           jpeg: await svgToJpeg(
@@ -54,12 +69,25 @@ export function domProjectArt(opts: { functionIds?: readonly string[] } = {}): P
     },
 
     async wiring(): Promise<DiagramArt | null> {
-      const captured = await captureWiringDiagram(ART_BACKGROUND, await inlineFontCss())
+      const captured = await captureBoard()
       if (!captured) return null
+      const { diagram } = captured
       return {
-        width: captured.width * PX_TO_PT,
-        height: captured.height * PX_TO_PT,
-        jpeg: await svgToJpeg(captured.svg, captured.width, captured.height, ART_BACKGROUND)
+        width: diagram.width * PX_TO_PT,
+        height: diagram.height * PX_TO_PT,
+        jpeg: await svgToJpeg(diagram.svg, diagram.width, diagram.height, ART_BACKGROUND)
+      }
+    },
+
+    async wiringSheet(): Promise<DiagramArt | null> {
+      const sheet = (await captureBoard())?.sheet
+      if (!sheet) return null
+      return {
+        width: sheet.width * PX_TO_PT,
+        height: sheet.height * PX_TO_PT,
+        // The sheet's OWN mat, not the parchment: this page is the workspace's
+        // export, and a JPEG has no alpha to let the page show through.
+        jpeg: await svgToJpeg(sheet.svg, sheet.width, sheet.height, sheet.background)
       }
     },
 

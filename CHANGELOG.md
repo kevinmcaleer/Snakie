@@ -8,6 +8,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The PDF tells you what each function is for, and prints the board's own
+  sheet** (#1147). A function's docstring is its description — the comment
+  bubble on a `def` block and the `"""…"""` line in the Python are one thing
+  (`lib/blocks/docstring.ts`) — so whatever the learner wrote about a function
+  is now set underneath its name on the blocks pages, wrapped to the page and
+  keeping its own paragraphs. The name itself is lettered like the `Blocks`
+  heading above it (13pt, the document's heading ink) instead of the 9pt muted
+  caption it was, so each stack reads as a little section of its own.
+
+  The document also gains an **Electronics sheet** page: the board exactly as
+  the Electronics workspace's `Export ▸ PDF document` writes it, grid and mat
+  colour and all, after the wiring diagram that lifts the drawing onto the
+  page's parchment. Both pictures come out of ONE capture, so the extra page
+  never costs a second off-screen mount of the board.
+
 - **Export the whole project as a PDF** (epic #1105). A print icon next to New
   and Save — and `File ▸ Export to PDF…`, ⌘P — writes a document of the project:
   a title page with its name and date, the blocks with the functions first, the

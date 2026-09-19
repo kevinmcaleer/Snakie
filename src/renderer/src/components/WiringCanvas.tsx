@@ -42,7 +42,7 @@ import {
   cablePlugStyle
 } from './part-body'
 import { cableRoute } from './cable-route'
-import { serializeLiveSvg, exportSvgString, downloadBlob, type ExportFmt } from './svg-export'
+import { serializeLiveSvg, exportSvgString, downloadBlob, stageBackground, type ExportFmt } from './svg-export'
 import { registerWiringSvg } from './wiring-svg-registry'
 import { bomMarkdown, pinoutMarkdown } from '../../../shared/robot-docs'
 import {
@@ -2240,8 +2240,7 @@ export function WiringCanvas({ robot, onChange, folder, joints = [], jointLimits
     // The sheet colour lives in CSS on the stage (blueprint blue / schematic
     // white / dark mat) — read the LIVE computed value so the export matches
     // exactly what's on screen, whatever the mode/theme.
-    const stageBg = svg.parentElement ? getComputedStyle(svg.parentElement).backgroundColor : ''
-    const background = stageBg && !/rgba?\([^)]*,\s*0\s*\)/.test(stageBg) ? stageBg : '#161719'
+    const background = stageBackground(svg)
     const res = serializeLiveSvg(svg, '.wc__content', {
       background,
       margin: 24,

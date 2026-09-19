@@ -23,10 +23,16 @@
  * The one hard rule: this returns null rather than something blank. A blank
  * wiring page is worse than no wiring page, so an empty or unmeasurable canvas
  * is reported as "no diagram" and the section is left out (#1108).
+ *
+ * TWO PICTURES, ONE PASS (#1147). The document shows the board twice: the
+ * drawing lifted onto the page's parchment, and the workspace's own sheet —
+ * grid, mat and all — as `Export ▸ PDF document` writes it. Mounting the board
+ * is the expensive half of this module, so both are serialised from whichever
+ * canvas it got hold of rather than capturing twice.
  */
 
 import { createRoot } from 'react-dom/client'
-import { serializeLiveSvg } from '../../components/svg-export'
+import { serializeLiveSvg, stageBackground } from '../../components/svg-export'
 import { getWiringSvg } from '../../components/wiring-svg-registry'
 
 /** A serialised diagram at its natural CSS-pixel size. */
@@ -36,8 +42,27 @@ export interface CapturedDiagram {
   height: number
 }
 
+/** A serialised diagram that carries its own sheet colour (#1147). */
+export interface CapturedSheet extends CapturedDiagram {
+  /** The mat the board is drawn on, for the JPEG's letterbox to match. */
+  background: string
+}
+
+/** Both pictures of the board the document wants, from one pass (#1147). */
+export interface CapturedWiring {
+  /** The drawing alone, on the document's parchment. */
+  diagram: CapturedDiagram
+  /** The workspace's own sheet, exactly as `Export ▸ PDF document` prints it. */
+  sheet: CapturedSheet | null
+}
+
 /** Chrome and view-derived backdrops that should not bake into a printed page. */
 const EXCLUDE = ['.wc__sel-ring', '.wc__grid-layer', '.wc__paper']
+
+/** The sheet keeps the grid and the mat; only the selection ring is chrome. */
+const SHEET_EXCLUDE = ['.wc__sel-ring']
+/** The margin `WiringCanvas`'s own PDF export frames the board with. */
+const SHEET_MARGIN = 24
 
 /** How long to wait for an off-screen board to finish loading its libraries. */
 const MOUNT_TIMEOUT_MS = 12000
@@ -62,6 +87,45 @@ export function serialiseWiring(
   })
 }
 
+/**
+ * Serialise a breadboard `<svg>` AS THE WORKSPACE EXPORTS IT (#1147).
+ *
+ * The same call `WiringCanvas.doExport` makes: the grid and the paper stay,
+ * the mat colour is read off the live stage, and the frame is the parts plus
+ * the export's own 24px margin — so the page in the document and the file that
+ * button writes are the same picture.
+ *
+ * Nothing forces a zoom-to-fit first, as the button does. It does not need to:
+ * the grid and the paper are drawn to cover the PLACED CONTENT as well as the
+ * viewport (`coverBounds`), precisely so an export fills to its edges whatever
+ * the canvas is scrolled to.
+ */
+export function serialiseWiringSheet(svg: SVGSVGElement, fontCss = ''): CapturedSheet | null {
+  const background = stageBackground(svg)
+  const res = serializeLiveSvg(svg, '.wc__content', {
+    background,
+    margin: SHEET_MARGIN,
+    exclude: SHEET_EXCLUDE,
+    // Frame to the parts, not the full-canvas grid/paper — they just fill it.
+    bboxExclude: ['.wc__grid-layer', '.wc__paper'],
+    fontCss
+  })
+  return res ? { ...res, background } : null
+}
+
+/** Both pictures of one canvas — the diagram, and the sheet beside it. */
+function captureBoth(
+  svg: SVGSVGElement,
+  background: string,
+  fontCss: string
+): CapturedWiring | null {
+  const diagram = serialiseWiring(svg, background, fontCss)
+  if (!diagram) return null
+  // The sheet is the extra page, not the section: a canvas that serialises one
+  // way but not the other still gets its diagram.
+  return { diagram, sheet: serialiseWiringSheet(svg, fontCss) }
+}
+
 /** A `<div>` parked off-screen, big enough for the canvas to lay out in. */
 function offscreenHost(): HTMLDivElement {
   const host = document.createElement('div')
@@ -77,9 +141,9 @@ function offscreenHost(): HTMLDivElement {
 
 /** Resolve once `probe` returns the same non-null answer twice running. */
 async function settle(
-  probe: () => CapturedDiagram | null,
+  probe: () => CapturedWiring | null,
   timeoutMs: number
-): Promise<CapturedDiagram | null> {
+): Promise<CapturedWiring | null> {
   const deadline = Date.now() + timeoutMs
   let previous: string | null = null
   while (Date.now() < deadline) {
@@ -87,7 +151,7 @@ async function settle(
     if (value !== null) {
       // Size and serialised length, rather than the whole markup: the string is
       // large and this runs several times a second.
-      const fingerprint = `${value.width}x${value.height}:${value.svg.length}`
+      const fingerprint = `${value.diagram.width}x${value.diagram.height}:${value.diagram.svg.length}`
       if (fingerprint === previous) return value
       previous = fingerprint
     }
@@ -97,16 +161,19 @@ async function settle(
 }
 
 /**
- * The project's wiring diagram, from the live canvas when there is one and from
- * an off-screen render otherwise. Null means "nothing to draw" — never a blank.
+ * The project's wiring, from the live canvas when there is one and from an
+ * off-screen render otherwise. Null means "nothing to draw" — never a blank.
+ *
+ * Both pictures come out of ONE pass: mounting a second board is the expensive
+ * part of this module, and the sheet page must never cost a second one.
  */
-export async function captureWiringDiagram(
+export async function captureWiring(
   background = '#f6f1e6',
   fontCss = ''
-): Promise<CapturedDiagram | null> {
+): Promise<CapturedWiring | null> {
   const live = getWiringSvg()
   if (live) {
-    const captured = serialiseWiring(live, background, fontCss)
+    const captured = captureBoth(live, background, fontCss)
     if (captured) return captured
   }
   if (typeof document === 'undefined') return null
@@ -122,7 +189,7 @@ export async function captureWiringDiagram(
     // the first frame — which would print a board with no parts on it.
     return await settle(() => {
       const svg = host.querySelector('svg.wc__svg') as SVGSVGElement | null
-      return svg ? serialiseWiring(svg, background, fontCss) : null
+      return svg ? captureBoth(svg, background, fontCss) : null
     }, MOUNT_TIMEOUT_MS)
   } catch {
     return null

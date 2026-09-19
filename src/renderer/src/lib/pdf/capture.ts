@@ -181,6 +181,28 @@ export interface CapturedStack {
   /** Natural height in POINTS. */
   height: number
   label?: string
+  /** The function's docstring, printed under its name (#1147). */
+  description?: string
+}
+
+/**
+ * A `def` block's DESCRIPTION — which is its docstring (#1147).
+ *
+ * The two are one thing in this app: `lib/blocks/docstring.ts` reads a
+ * function's `"""…"""` line into the block's comment bubble and writes the
+ * bubble back out as that line, so asking the block for its comment is asking
+ * the function for its docstring. The bubble is read rather than the generated
+ * Python because a bubble that is NOT expressible as a docstring (one holding
+ * `"""`, say) is still a description worth printing.
+ *
+ * Returns undefined rather than an empty string, so a function with nothing
+ * written about it prints its name and nothing else.
+ */
+function functionDescription(block: Blockly.Block): string | undefined {
+  const text = String(block.getCommentText?.() ?? '')
+    .replace(/\r\n?/g, '\n')
+    .trim()
+  return text || undefined
 }
 
 /** Escape a Blockly id for use inside an attribute selector's quoted value. */
@@ -238,9 +260,11 @@ export function captureBlockStacks(
 
       const isFunction = functions.has(block.id)
       let label: string | undefined
+      let description: string | undefined
       if (isFunction) {
         const name = String(block.getFieldValue('NAME') ?? '').trim()
         label = name ? `Function: ${name}` : 'Function'
+        description = functionDescription(block)
       } else if (!labelledMain) {
         label = 'Main program'
         labelledMain = true
@@ -251,7 +275,8 @@ export function captureBlockStacks(
         svg: serialised.svg,
         width: serialised.width * PX_TO_PT,
         height: serialised.height * PX_TO_PT,
-        label
+        label,
+        description
       })
     }
   } finally {

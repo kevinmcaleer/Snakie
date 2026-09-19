@@ -4,6 +4,8 @@ import { join } from 'path'
 import {
   type DiagramArt,
   type ProjectArt,
+  SHEET_CAPTION,
+  SHEET_HEADING,
   type StackArt,
   buildProjectPdf,
   fileStem
@@ -11,7 +13,14 @@ import {
 import { blankRobot } from '../src/shared/robot'
 import { robotFromYaml } from '../src/shared/robot-yaml'
 import { COFFEE_URL, SNAKIE_WEB_URL } from '../src/shared/links'
-import { latin1, pageLinks, pageStrings, pages, parsePdf } from './helpers/pdf-inspect'
+import {
+  latin1,
+  pageImages,
+  pageLinks,
+  pageStrings,
+  pages,
+  parsePdf
+} from './helpers/pdf-inspect'
 
 /**
  * The assembled project document (#1108) — the issue that makes epic #1105
@@ -35,11 +44,14 @@ function stack(id: string, label?: string): StackArt {
 }
 
 const diagram: DiagramArt = { width: 700, height: 420, jpeg: jpeg(128) }
+/** The workspace's own sheet — a different picture of the same board (#1147). */
+const sheet: DiagramArt = { width: 760, height: 460, jpeg: jpeg(192) }
 
 function art(over: Partial<ProjectArt> = {}): ProjectArt {
   return {
     blockStacks: async () => [],
     wiring: async () => null,
+    wiringSheet: async () => null,
     logo: async () => null,
     ...over
   }
@@ -104,6 +116,72 @@ describe('the whole document', () => {
     const pdf = parsePdf(result.bytes)
     const last = pages(pdf)[pages(pdf).length - 1]
     expect(pageLinks(pdf, last)).toEqual([SNAKIE_WEB_URL, COFFEE_URL])
+  })
+})
+
+describe('the electronics sheet page (#1147)', () => {
+  const withSheet = (over: Partial<ProjectArt> = {}): ProjectArt =>
+    art({ wiring: async () => diagram, wiringSheet: async () => sheet, ...over })
+
+  it('follows the wiring diagram, and says what it is', async () => {
+    const result = await buildProjectPdf(
+      { robot: demoRobot(), code: { stored: demoCode() } },
+      { art: withSheet() }
+    )
+    const flat = textOfPages(result.bytes).map((p) => p.join(' '))
+    const diagramPage = flat.findIndex((p) => p.includes('Electronics') && !p.includes(SHEET_HEADING))
+    const sheetPage = flat.findIndex((p) => p.includes(SHEET_HEADING))
+    expect(diagramPage).toBeGreaterThan(0)
+    expect(sheetPage).toBe(diagramPage + 1)
+    expect(flat[sheetPage]).toContain(SHEET_CAPTION)
+  })
+
+  it('draws the sheet, not a second copy of the diagram', async () => {
+    const result = await buildProjectPdf(
+      { robot: demoRobot(), code: { stored: 'x = 1' } },
+      { art: withSheet() }
+    )
+    const pdf = parsePdf(result.bytes)
+    const drawn = pages(pdf).flatMap((page) => [...pageImages(pdf, page).values()])
+    const lengths = drawn.map((obj) => Number(/\/Length\s+(\d+)/.exec(obj.body)?.[1]))
+    expect(lengths).toContain(128)
+    expect(lengths).toContain(192)
+  })
+
+  it('is left out when the board has no sheet to show', async () => {
+    const result = await buildProjectPdf(
+      { robot: demoRobot(), code: { stored: 'x = 1' } },
+      { art: art({ wiring: async () => diagram }) }
+    )
+    const flat = textOfPages(result.bytes).map((p) => p.join(' '))
+    expect(flat.some((p) => p.includes('Electronics'))).toBe(true)
+    expect(flat.some((p) => p.includes(SHEET_HEADING))).toBe(false)
+    expect(result.omitted).toEqual([])
+  })
+
+  it('is not asked for at all by a project with no parts', async () => {
+    const wiringSheet = vi.fn(async () => sheet)
+    await buildProjectPdf({ robot: blankRobot(), code: { stored: 'x = 1' } }, { art: art({ wiringSheet }) })
+    expect(wiringSheet).not.toHaveBeenCalled()
+  })
+
+  it('keeps the rest of the document when only the sheet fails', async () => {
+    const result = await buildProjectPdf(
+      { robot: demoRobot(), code: { stored: demoCode() } },
+      {
+        art: withSheet({
+          wiringSheet: async () => {
+            throw new Error('the mat would not rasterise')
+          }
+        })
+      }
+    )
+    const flat = textOfPages(result.bytes).map((p) => p.join(' '))
+    expect(flat.some((p) => p.includes('Electronics'))).toBe(true)
+    expect(flat.some((p) => p.includes(SHEET_HEADING))).toBe(false)
+    // The board is already in the document; a second view of it failing is not
+    // a section the reader is missing.
+    expect(result.omitted).toEqual([])
   })
 })
 
