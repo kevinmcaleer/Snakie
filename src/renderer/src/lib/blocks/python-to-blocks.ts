@@ -3806,6 +3806,19 @@ class Converter {
         if (depth > 0) continue
         if (tok.text !== ']') return null
         const inside = this.source.slice(tokens[cur.next].end, tok.start).trim()
+        // A COLON MAKES IT A SLICE (#1123), and a slice is a different set of
+        // blocks. Checked first, because `[:2]` and `[1:4]` would otherwise
+        // fall through to the index reader and take the whole line raw.
+        const sliced = this.slice(inside, cur.block)
+        if (sliced) return { block: sliced, next: i + 1 }
+        // `seq[-1]` is "the last thing", which is its own block rather than a
+        // negative index nobody has been taught to read.
+        if (inside === '-1') {
+          return {
+            block: { type: 'snakie_last_item', inputs: { SEQ: { block: cur.block } } },
+            next: i + 1
+          }
+        }
         // A STRING KEY IS A DICTIONARY, unambiguously (#1120). Nothing indexes
         // a list by `'name'`, so this one shape can be claimed for the
         // Dictionaries drawer with no guesswork at all — while `xs[i]`, where
@@ -3837,6 +3850,71 @@ class Converter {
       }
     }
     return null
+  }
+
+  /**
+   * `seq[a:b]` and its four shorthands → the slice blocks (#1123).
+   *
+   * Null when `inside` is not a slice at all (no top-level colon), and null
+   * again for the slices these blocks cannot say back — a step other than
+   * `::-1`, a start the 1-based face cannot undo. Either way the line stays
+   * raw and regenerates verbatim, which is the rule everywhere in this module.
+   */
+  private slice(inside: string, seq: BlockJson): BlockJson | null {
+    const tokens = tokenize(inside)
+    if (!tokens) return null
+    const parts: string[] = []
+    let depth = 0
+    let from = 0
+    for (const tok of tokens) {
+      if (tok.kind === 'open') depth += 1
+      else if (tok.kind === 'close') depth -= 1
+      else if (depth === 0 && tok.kind === 'op' && tok.text === ':') {
+        parts.push(inside.slice(from, tok.start).trim())
+        from = tok.end
+      }
+    }
+    if (parts.length === 0) return null
+    parts.push(inside.slice(from).trim())
+    const [start, stop, step] = [parts[0], parts[1], parts[2] ?? '']
+
+    // `seq[::-1]` — backwards. The only step this palette has a block for; any
+    // other one stays raw rather than coming back as a slice that drops it.
+    if (parts.length === 3) {
+      if (start !== '' || stop !== '' || step !== '-1') return null
+      return { type: 'snakie_slice_reverse', inputs: { SEQ: { block: seq } } }
+    }
+    if (parts.length !== 2) return null
+    if (start === '' && stop === '') {
+      return { type: 'snakie_slice_copy', inputs: { SEQ: { block: seq } } }
+    }
+    if (start === '') {
+      const n = this.expression(stop)
+      if (!fitsSocket(n, 'Number')) return null
+      return { type: 'snakie_slice_first', inputs: { SEQ: { block: seq }, N: { block: n } } }
+    }
+    if (stop === '') {
+      // `seq[-3:]` — the last few. `seq[3:]` is "everything from the 4th on",
+      // which is a real slice with no block, so it stays raw.
+      const negative = /^-\s*(.+)$/.exec(start)
+      if (!negative) return null
+      const inner = negative[1].trim()
+      // `-(a + b)` is how the block writes a compound count; either form reads.
+      const bare = /^\((.*)\)$/.exec(inner)
+      const n = this.expression(bare ? bare[1] : inner)
+      if (!fitsSocket(n, 'Number')) return null
+      return { type: 'snakie_slice_last', inputs: { SEQ: { block: seq }, N: { block: n } } }
+    }
+    // `seq[a - 1:b]` — the general one, 1-based on the block. Only the exact
+    // arithmetic the block writes can be undone; see {@link oneBased}.
+    const first = this.oneBased(start)
+    if (!first) return null
+    const last = this.expression(stop)
+    if (!fitsSocket(last, 'Number')) return null
+    return {
+      type: 'snakie_slice_range',
+      inputs: { SEQ: { block: seq }, FROM: { block: first }, TO: { block: last } }
+    }
   }
 
   /** The INDEX socket for a zero-based Python subscript, or null — see above. */

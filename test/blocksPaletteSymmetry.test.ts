@@ -98,6 +98,14 @@ const READ_DIRECTLY: Record<string, string> = {
   snakie_list_set: 'readings[0] = 1\n',
   // Taking one out by position has no method — `del` is the line (#1122).
   snakie_list_remove_at: 'del readings[0]\n',
+  // --- slicing (#1123). Every one is a subscript, so the reader claims them
+  // directly rather than through a rule.
+  snakie_slice_range: 'middle = readings[1:4]\n',
+  snakie_slice_first: 'head = readings[:3]\n',
+  snakie_slice_last: 'tail = readings[-3:]\n',
+  snakie_last_item: 'newest = readings[-1]\n',
+  snakie_slice_copy: 'spare = readings[:]\n',
+  snakie_slice_reverse: 'backwards = readings[::-1]\n',
   snakie_list_contains: 'found = name in names\n',
   snakie_tuple: 'point = (x, y)\n',
   // --- dictionaries (#1120). The three that are not calls are a literal, a

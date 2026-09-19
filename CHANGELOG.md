@@ -8,6 +8,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Slicing — the last reading, the first three, the string backwards.** (#1123,
+  epic #1119) There was no slice block, for a list or for a string. A learner
+  could read *one* thing out of a list and that was all; everything else was
+  escape-hatch text. It matters more on a board than the block count suggests,
+  because slicing is how a buffer is handled: `buf[1:]`, `data[:2]`.
+
+  Six blocks — **from … to …**, **first `n` of**, **last `n` of**, **last thing
+  in**, **copy of**, **… backwards** — and **not one of their sockets checks
+  `Array`**. That is the load-bearing decision: `"EDCDEEE"[::-1]` is a real line
+  in one of the music examples, and #1087 found that an over-tight check does
+  not refuse one socket, it refuses the whole workspace and the learner loses
+  every block in the file.
+
+  One set of blocks in Lists rather than a worded copy in Text, because Blockly
+  allows a block in one category only and two copies would be two blocks
+  generating one line. **last `n`** is its own block rather than a negative
+  number in the general one, so nobody has to discover that `-1` means "from the
+  end". A step the palette has no block for — `readings[::2]` — stays verbatim
+  rather than coming back as a slice that quietly dropped it.
+
 - **The list verbs: you can take something out of a list now.** (#1122, epic
   #1119) The Lists drawer was `create`, `length`, `append`, `get`, `set`,
   `contains`, and its own header recorded the trim that left it that way. That

@@ -16,6 +16,7 @@ import { STRUCTURE_BLOCKS, installStructureBlocks } from './structure'
 import { LIST_BLOCKS } from './lists'
 import { TUPLE_BLOCKS, installTupleBlocks } from './tuples'
 import { DICT_BLOCKS, installDictBlocks } from './dicts'
+import { SLICE_BLOCKS } from './slices'
 import { LOGIC_BLOCKS } from './logic'
 import { MATHS_BLOCKS } from './maths'
 import { TEXT_BLOCKS } from './text'
@@ -107,6 +108,9 @@ export function installCorePalette(): void {
     // belongs where a learner is standing when they want it: the literal in
     // Lists, `set … and … to` in Variables, the loops in Control.
     ...TUPLE_BLOCKS,
+    // Slicing (#1123, epic #1119) — one set of blocks for lists, strings and
+    // buffers, with no `Array` check on any socket. See the file header.
+    ...SLICE_BLOCKS,
     // The Dictionaries drawer (#1120, epic #1119) — the biggest hole the audit
     // found, and the only one that was a whole missing CATEGORY.
     ...DICT_BLOCKS,
