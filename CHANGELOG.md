@@ -10,9 +10,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **3-D model for the Yellow TT Motor.** The Standard-library `tt-motor` part
   now ships `model.stl` (mm) so it appears in the Robot View / build workspace
-  at true size. The mesh is Adafruit's 3777 TT Motor from the MIT-licensed
-  [Adafruit_CAD_Parts](https://github.com/adafruit/Adafruit_CAD_Parts)
-  repository; the help article credits it.
+  instead of a footprint box. The mesh is Adafruit's 3777 TT Motor from the
+  MIT-licensed [Adafruit_CAD_Parts](https://github.com/adafruit/Adafruit_CAD_Parts)
+  repository; the help article credits it. It ships with the `meshRotation` and
+  `meshOffset` that lay it flat the way it mounts in a chassis — axle horizontal
+  across X, body along Y, underside on `z = 0` — because the file as published
+  stands the motor on its end.
 
 - **⌘S / Ctrl+S saves the active file from anywhere in the window.** The
   shortcut already worked with the cursor in the code editor and, on the
@@ -29,6 +32,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   wire dragged to `a5` reaches `b5`–`e5` in the netlist and ERC. Ships a
   top-down image, a mini-help article on how the holes connect, and a 3-D
   model (`model.stl`) for the Robot View.
+
+### Changed
+
+- **The Yellow TT Motor's footprint is now its real size**, 36.6 × 70.6 mm
+  (shaft tip to shaft tip by overall length) rather than the placeholder
+  22 × 44 mm. The 2-D artwork is drawn in normalised coordinates so it rescales
+  with the part; the change matters because the new 3-D model is placed at true
+  millimetre scale, and the old footprint disagreed with it by a third.
 
 ### Fixed
 
