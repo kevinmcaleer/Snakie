@@ -83,6 +83,32 @@
   font-weight: 700;
 }
 
+/* THE CREATE VARIABLE BUTTON (#1117). Blockly draws it as an SVG pill in its own
+   grey; against Soft Shell parchment that reads as a disabled control rather
+   than the one thing in the drawer a learner is meant to press. Same tokens as
+   the app's own primary buttons, so it looks like something that DOES
+   something. */
+.blocks-canvas__host .blocklyFlyoutButton .blocklyFlyoutButtonBackground {
+  fill: var(--accent-2);
+  stroke: none;
+}
+
+.blocks-canvas__host .blocklyFlyoutButton:hover .blocklyFlyoutButtonBackground {
+  fill: var(--accent);
+}
+
+.blocks-canvas__host .blocklyFlyoutButton .blocklyFlyoutButtonShadow {
+  fill: rgb(0 0 0 / 18%);
+}
+
+.blocks-canvas__host .blocklyFlyoutButton .blocklyText {
+  /* The flyout's own text rule reads this custom property (see above), so set
+     it rather than fighting `fill` at four levels of specificity. */
+  --snakie-block-text: var(--accent-contrast);
+  font-family: var(--font-ui);
+  font-weight: 700;
+}
+
 /* Code fields — a raw-Python block (#1018), a pin name — are code, so they get
    the mono face even inside a block. */
 .blocks-canvas__host .blocklyHtmlInput,

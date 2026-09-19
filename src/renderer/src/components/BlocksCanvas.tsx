@@ -37,6 +37,8 @@ import {
 import { ensureBlocklyLocale } from '../lib/blocks/locale'
 import { unknownBlockTypes } from '../lib/blocks/workspace-check'
 import { buildToolbox } from '../lib/blocks/toolbox'
+import { installVariablesDrawer } from '../lib/blocks/variables-drawer'
+import { installDuplicateShortcut } from '../lib/blocks/duplicate'
 import type { Dialect } from '../../../shared/dialect'
 import { useHelpDialect } from '../hooks/useHelpDialect'
 import { isStaleDeselect, putOutHighlight } from '../lib/blocks/highlight'
@@ -342,6 +344,22 @@ export function BlocksCanvas({
       Blockly.PROCEDURE_CATEGORY_NAME,
       Blockly.Procedures.flyoutCategory
     )
+
+    // AND THE VARIABLES DRAWER, for the same reason one category along (#1117):
+    // a learner's own variables are a question about the workspace, and a static
+    // shelf could only offer one nameless `set _ to _` with the rest hidden in a
+    // dropdown. The drawer also carries the Create variable button, whose prompt
+    // reaches the in-app modal through the `dialog.setPrompt` bridge above —
+    // without it the button would open nothing at all in Electron.
+    //
+    // The dialect comes from the REF, not the value: this effect must not
+    // re-run on a runtime change, and the callback is asked afresh every time
+    // the drawer opens, so it reads the current one anyway.
+    installVariablesDrawer(ws, () => dialectRef.current)
+
+    // ⌘D / Ctrl+D duplicates the selected block (#1117). Blockly's registry is
+    // global rather than per workspace, hence a call that is safe to repeat.
+    installDuplicateShortcut()
 
     const listener = (event: Blockly.Events.Abstract): void => {
       // UI-only events (scroll, select, a flyout opening) are not edits, and
