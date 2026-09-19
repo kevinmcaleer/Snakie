@@ -3,7 +3,8 @@
  *
  * Renders nothing at all until `lib/pdf/wiring-capture` asks for a board it can
  * photograph; then it portals a `<BoardPane>` into the off-screen host the
- * exporter provides, and takes it down again when the capture is done.
+ * exporter provides — on the mat it asked for — and takes it down again when
+ * the capture is done.
  *
  * It lives in `App.tsx`, INSIDE the providers, for the reason written up in
  * `board-capture-registry.ts`: a `<BoardPane>` mounted anywhere else has no
@@ -18,29 +19,29 @@
 
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { registerBoardCaptureMount } from './board-capture-registry'
+import { type CaptureMat, registerBoardCaptureMount } from './board-capture-registry'
 
 const BoardPane = lazy(() => import('./BoardPane'))
 
 export function BoardCaptureHost(): JSX.Element | null {
-  const [host, setHost] = useState<HTMLElement | null>(null)
+  const [asked, setAsked] = useState<{ host: HTMLElement; mat: CaptureMat } | null>(null)
 
-  const mount = useCallback((el: HTMLElement) => {
-    setHost(el)
+  const mount = useCallback((host: HTMLElement, mat: CaptureMat) => {
+    setAsked({ host, mat })
     // Unmount only OUR pane: a capture that finishes after a second one started
     // must not pull the second one's board out from under it.
-    return () => setHost((cur) => (cur === el ? null : cur))
+    return () => setAsked((cur) => (cur?.host === host ? null : cur))
   }, [])
 
   useEffect(() => registerBoardCaptureMount(mount), [mount])
 
-  if (!host) return null
-  // No fallback: the capture polls for a canvas that measures the same twice
-  // running, so "still loading" and "not there yet" are the same thing to it.
+  if (!asked) return null
+  // No fallback: the capture waits for the pane to say it is ready, so "still
+  // loading" and "not there yet" are the same thing to it.
   return createPortal(
     <Suspense fallback={null}>
-      <BoardPane />
+      <BoardPane mat={asked.mat} />
     </Suspense>,
-    host
+    asked.host
   )
 }

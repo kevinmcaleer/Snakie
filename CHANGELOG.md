@@ -1199,6 +1199,38 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The printed wiring diagram has its WIRES — on a clean white sheet, once**
+  (#1168). Three complaints about one page, and the first two were the same
+  bug. The export renders a board of its own to photograph, off-screen, and it
+  was taking the picture before that board had finished loading: until the
+  installed part libraries arrive, every placed part draws as a
+  `part library not installed` box — a placeholder with **no pins**, and so no
+  wires between them. That frame is perfectly stable while it lasts, so
+  "measured the same twice running" never ruled it out, and a document came out
+  with a row of grey cards and not one connection on it. The board says when it
+  has both its `robot.yml` and its libraries now, and the capture waits for
+  that before it starts measuring.
+
+  This is also the answer to *why the Electronics workspace's own
+  `Export ▸ PDF document` never had the problem*: that one photographs the
+  canvas in front of you, which finished loading long ago. Same renderer, same
+  code — the toolbar's button was simply the only one that could catch a board
+  mid-assembly.
+
+  **The page is on the white mat now** (Settings ▸ Appearance's print sheet),
+  whatever mat the window is set to, because the ink turns round with it: a
+  ground wire is black on white instead of the white-on-parchment it was, and
+  the silk pin names are dark instead of the pale grey they are drawn in for a
+  dark bench. The skin is scoped to the board being photographed, so the canvas
+  you are looking at doesn't flash while a PDF is written. And because the page
+  can no longer inherit whichever mat you happened to have open, the export
+  never reuses the on-screen canvas at all — the same project prints the same
+  document from any tab.
+
+  **And it is one page, not two.** #1147 added a second "Electronics sheet"
+  page, being the board as the workspace exports it; now that the first page IS
+  that picture, printing it twice is just printing it twice.
+
 - **A named PWM's power line comes back as the block that wrote it** (#1163).
   *set power of (pwm_motor_a) to (50) %* writes
   `pwm_motor_a.duty_u16(int(50 * 65535 / 100))` — per cent is what a child has,

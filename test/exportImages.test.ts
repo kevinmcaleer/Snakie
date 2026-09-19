@@ -94,13 +94,12 @@ describe('the export paths that carry them', () => {
     expect(handler).toContain('exportSvgString(svgStr')
   })
 
-  it("the PDF's wiring page does too, on both of its capture routes", () => {
+  it("the PDF's wiring page does too", () => {
     const capture = SRC('lib/pdf/wiring-capture.ts')
-    // The live canvas and the off-screen render both go through the wrapper,
-    // and it carries BOTH pictures #1147 takes of the board.
-    expect(capture.match(/withImages\(/g)?.length).toBe(3) // def + 2 callers
     const wrapper = capture.slice(capture.indexOf('async function withImages'))
-    expect(wrapper).toContain('inlineImageHrefs(w.diagram.svg)')
-    expect(wrapper).toContain('inlineImageHrefs(w.sheet.svg)')
+    expect(wrapper).toContain('inlineImageHrefs(d.svg)')
+    // Everything the capture returns goes through the wrapper — there is one
+    // picture of the board now (#1168), and it is the one the document draws.
+    expect(capture).toContain('return await withImages(')
   })
 })

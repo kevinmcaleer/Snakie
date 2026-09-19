@@ -60,14 +60,16 @@
 }
 
 /* Blueprint breadboard background (Settings → Appearance): classic blue paper.
-   Applied via `data-breadboard-bg` on the Board View window's root, scoped to
+   Applied via `data-breadboard-bg` on the Board View window's root — or on any
+   ancestor of a canvas, which is how the PDF export renders ONE board on the
+   white print mat without touching the mat the window is using — scoped to
    the LIFELIKE breadboard. The grid LINES come from the SVG graph-paper grid
    now (which pans/scales with the parts); here we only set the blue paper +
    recolour those lines to a light blue (see `.wc__grid` overrides below). */
-:root[data-breadboard-bg='blueprint'] .wc--lifelike .wc__stage {
+[data-breadboard-bg='blueprint'] .wc--lifelike .wc__stage {
   background-color: #0d3b66;
 }
-:root[data-breadboard-bg='blueprint'] .wc--lifelike .wc__grid {
+[data-breadboard-bg='blueprint'] .wc--lifelike .wc__grid {
   stroke: #d6e6ff;
   /* A whisper so the graph-paper grid reads as a faint backdrop, not foreground
      (#452 — ~50% softer again than the previous 0.5). */
@@ -75,7 +77,7 @@
 }
 /* Blueprint only: warp the grid with the paper fibre so the lines aren't
    machine-perfect — a subtle ink-on-paper wobble that scales with the grid. */
-:root[data-breadboard-bg='blueprint'] .wc--lifelike .wc__grid-layer {
+[data-breadboard-bg='blueprint'] .wc--lifelike .wc__grid-layer {
   filter: url(#wc-grid-rough);
 }
 
@@ -85,14 +87,14 @@
 .wc__paper {
   display: none;
 }
-:root[data-breadboard-bg='blueprint'] .wc--lifelike .wc__paper {
+[data-breadboard-bg='blueprint'] .wc--lifelike .wc__paper {
   display: block;
   opacity: 0.85;
   mix-blend-mode: soft-light;
 }
 
 /* Keep the mat blue (not the dark drop tint) while dragging a part over blueprint. */
-:root[data-breadboard-bg='blueprint'] .wc--lifelike.wc--drop .wc__stage {
+[data-breadboard-bg='blueprint'] .wc--lifelike.wc--drop .wc__stage {
   background-color: #0e4373;
 }
 
@@ -100,43 +102,50 @@
    printing and screenshots. Unlike blueprint this inverts the SURFACE, so the
    ink has to go the other way — `isDark` in WiringCanvas.tsx turns off for this
    mat, which is what keeps a ground wire black instead of white-on-white. */
-:root[data-breadboard-bg='white'] .wc--lifelike .wc__stage {
+[data-breadboard-bg='white'] .wc--lifelike .wc__stage {
   background-color: #ffffff;
 }
 /* No grid at all — a plain white sheet. The whole point of this mat is a clean
    surface for printing and screenshots, and graph paper is the first thing you
    would crop out. The grid layer is hidden rather than recoloured so it costs
    nothing to draw. */
-:root[data-breadboard-bg='white'] .wc--lifelike .wc__grid-layer {
+[data-breadboard-bg='white'] .wc--lifelike .wc__grid-layer {
   display: none;
 }
 /* No paper mottle — the point of this mat is a clean, flat sheet. */
-:root[data-breadboard-bg='white'] .wc--lifelike .wc__paper {
+[data-breadboard-bg='white'] .wc--lifelike .wc__paper {
   display: none;
 }
 /* The drop tint darkens the mat, which on white reads as the sheet going grey.
    Tint toward the accent instead so the drop zone still reads. */
-:root[data-breadboard-bg='white'] .wc--lifelike.wc--drop .wc__stage {
+[data-breadboard-bg='white'] .wc--lifelike.wc--drop .wc__stage {
   background-color: #eef4ff;
 }
 
 /* Ink for the white mat. Everything below is light-on-dark by default, mirroring
    the overrides the skeuomorph SCHEMATIC sheet already needed for exactly this
    reason — a light surface flips which way round the contrast goes. */
-:root[data-breadboard-bg='white'] .wc--lifelike .wc__body-title {
+[data-breadboard-bg='white'] .wc--lifelike .wc__body-title {
   fill: #1c2128;
 }
 /* The GND dot's fill is CSS (the wires are handled by `isDark` in JS). */
-:root[data-breadboard-bg='white'] .wc--lifelike .wc__dot--gnd {
+[data-breadboard-bg='white'] .wc--lifelike .wc__dot--gnd {
   fill: #2c333c;
 }
 /* The code label is dark text with a light halo here — its default is the
    reverse, and a dark halo on a white sheet reads as a smudge. */
-:root[data-breadboard-bg='white'] .wc--lifelike .wc__code-label {
+[data-breadboard-bg='white'] .wc--lifelike .wc__code-label {
   stroke: #ffffff;
 }
-:root[data-breadboard-bg='white'] .wc--lifelike .wc__net-tag-txt {
+[data-breadboard-bg='white'] .wc--lifelike .wc__net-tag-txt {
   fill: #1c2128;
+}
+/* The silk pin names. `.pcv__pin-label` is light grey — "light-on-dark
+   everywhere outside the Part Editor", as PartPreview.css puts it — which on a
+   white sheet leaves a board's pinout as pale grey on white, and the pinout is
+   most of what a printed wiring diagram is for (#1168). */
+[data-breadboard-bg='white'] .wc--lifelike .pcv__pin-label {
+  fill: #55606b;
 }
 
 /* SCHEMATIC view sheet — follows the skin, never the blueprint/dark breadboard

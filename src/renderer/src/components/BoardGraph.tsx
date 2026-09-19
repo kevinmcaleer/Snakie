@@ -131,6 +131,9 @@ export interface BoardGraphProps {
   jointLimits?: Record<string, { min: number; max: number }>
   /** Installed part libraries (to resolve placed parts' pins). */
   libraries?: PartLibraryWithParts[]
+  /** The mat to draw the breadboard on, when the host is not using the window's
+   *  (#1168) — the PDF export renders its board on the white print mat. */
+  mat?: 'dark' | 'blueprint' | 'white'
   /** Append a library part to the project. When set, the library dock shows. `pos`
    *  (a wiring-canvas world position for the body's top-left) is set when the part
    *  is dragged onto the canvas (#159); omitted for a click-add (auto-layout). */
@@ -352,6 +355,7 @@ export function BoardGraph({
   joints,
   jointLimits,
   libraries,
+  mat,
   onAddToProject,
   onAddManyToProject,
   pendingSwapBoard,
@@ -1258,6 +1262,7 @@ export function BoardGraph({
               boardPart={boardPart}
               focusedChrome={!asWindow}
               renderMode={effectiveView}
+              mat={mat}
               robot={robot as RobotDefinition}
               onChange={onChangeRobot as (next: RobotDefinition) => void}
               folder={folder}
