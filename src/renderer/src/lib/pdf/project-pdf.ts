@@ -2,9 +2,12 @@
  * Assemble the project document end to end (#1108) — the issue that makes the
  * epic true.
  *
- * The order is #1105's: title page, blocks (functions first), the MicroPython
- * listing, the wiring diagram — followed by the workspace's own board sheet
- * (#1147) — and the "Made with Snakie" closing page.
+ * The order is #1105's, with the bill of materials #1157 put where a reader
+ * needs it: title page, what you will need, blocks (functions first), the
+ * MicroPython listing, the wiring diagram — followed by the workspace's own
+ * board sheet (#1147) — and the "Made with Snakie" closing page. Each section
+ * opens with a line of ordinary English saying what to do with it
+ * (`sections/narrative.ts`).
  *
  * Three things live HERE rather than in the section modules:
  *
@@ -24,7 +27,15 @@ import { PdfDocument } from './layout'
 import type { PdfImageData } from './writer'
 import { drawClosingPage, drawTitlePage, resolveProjectName } from './sections/cover'
 import { type DrawableStack, drawBlocksPages } from './sections/blocks'
+import { type BomCatalog, buildBom, drawBomPages } from './sections/bom'
 import { codeForListing, drawListing } from './sections/listing'
+import {
+  BLOCKS_INTRO,
+  BOM_INTRO,
+  CODE_INTRO,
+  CODE_INTRO_WITH_BLOCKS,
+  WIRING_INTRO
+} from './sections/narrative'
 import { drawWiringPage, hasWiring, wiringSummary } from './sections/wiring'
 
 /** A captured blocks stack, rasterised and measured in points. */
@@ -85,8 +96,14 @@ export const NO_ART: ProjectArt = {
 
 /** What the export was asked to produce. */
 export interface ProjectPdfInput {
-  /** The project's `robot.yml`, for the name and the wiring. */
+  /** The project's `robot.yml`, for the name, the wiring and the shopping list. */
   robot?: RobotDefinition | null
+  /**
+   * The installed parts libraries and boards, for naming the bill of materials'
+   * rows (#1157). Omit and the table falls back to the ids in `robot.yml` —
+   * which is what a project whose libraries could not be read gets.
+   */
+  catalog?: BomCatalog
   /** The workspace's current folder, the second rung of the name chain. */
   folder?: string | null
   /** The file the project opens on, printed under the title. */
@@ -230,6 +247,10 @@ export async function buildProjectPdf(
     logo: logo ? doc.addImage(logo) : undefined
   })
 
+  // What to get hold of, before anything that assumes you already have it
+  // (#1157). Derived from the model, so there is nothing here to fail.
+  drawBomPages(doc, buildBom(input.robot, input.catalog), { intro: BOM_INTRO })
+
   const drawable: DrawableStack[] = stacks.map((stack) => ({
     id: stack.id,
     label: stack.label,
@@ -238,10 +259,12 @@ export async function buildProjectPdf(
     height: stack.height,
     image: doc.addImage(stack.jpeg)
   }))
-  drawBlocksPages(doc, drawable)
+  drawBlocksPages(doc, drawable, { intro: BLOCKS_INTRO })
 
   const code = codeForListing(input.code ?? {})
-  drawListing(doc, { code })
+  // "You can also type the code below INSTEAD of using the blocks" only reads
+  // as an offer to a reader who was given blocks in the first place.
+  drawListing(doc, { code, intro: drawable.length ? CODE_INTRO_WITH_BLOCKS : CODE_INTRO })
 
   if (diagram) {
     drawWiringPage(
@@ -251,7 +274,7 @@ export async function buildProjectPdf(
         width: diagram.width,
         height: diagram.height
       },
-      { summary: input.robot ? wiringSummary(input.robot) : undefined }
+      { intro: WIRING_INTRO, summary: input.robot ? wiringSummary(input.robot) : undefined }
     )
   }
 

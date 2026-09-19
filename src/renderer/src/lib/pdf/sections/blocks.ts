@@ -21,6 +21,7 @@ import { type Box, type LaidOutPage, type PdfDocument, wrapText } from '../layou
 import type { PdfImageRef } from '../writer'
 import { INK, INK_MUTED, PAPER } from '../theme'
 import { SECTION_HEADING_HEIGHT, drawSectionHeading } from './listing'
+import { drawIntro, introHeight } from './narrative'
 
 /** A captured top-level stack, at its natural size in points. */
 export interface StackGeometry {
@@ -174,12 +175,15 @@ function drawCaption(page: LaidOutPage, caption: Caption, x: number, bottom: num
 export function planBlocksPages<T extends StackGeometry>(
   stacks: readonly T[],
   box: Box,
-  opts: { gap?: number } = {}
+  opts: { gap?: number; firstInset?: number } = {}
 ): PlacedStack<T>[][] {
   const gap = opts.gap ?? STACK_GAP
+  // Room the FIRST page gives up to the section's intro (#1157). Only the first
+  // one: the line is set once, so a continuation page starts at the top.
+  const inset = Math.max(0, opts.firstInset ?? 0)
   const pages: PlacedStack<T>[][] = []
   let current: PlacedStack<T>[] = []
-  let cursor = box.y
+  let cursor = box.y + inset
 
   for (const stack of stacks) {
     if (stack.width <= 0 || stack.height <= 0) continue
@@ -187,7 +191,10 @@ export function planBlocksPages<T extends StackGeometry>(
     // A caption taller than the page would otherwise scale the stack to nothing
     // (or to a negative size); leave it a sliver of room rather than an
     // impossible one. That only happens for a docstring of several pages.
-    const room = Math.max(1, box.height - caption.height)
+    //
+    // Scaled against the SHORTEST page — the first — so a stack still fits
+    // wherever it lands; the inset is a line or two of text, not a band.
+    const room = Math.max(1, box.height - inset - caption.height)
     const scale = Math.min(1, box.width / stack.width, room / stack.height)
     const width = stack.width * scale
     const height = stack.height * scale
@@ -227,7 +234,7 @@ export interface DrawableStack extends StackGeometry {
 export function drawBlocksPages(
   doc: PdfDocument,
   stacks: readonly DrawableStack[],
-  opts: { heading?: string } = {}
+  opts: { heading?: string; intro?: string } = {}
 ): LaidOutPage[] {
   if (!stacks.length) return []
   const heading = opts.heading ?? 'Blocks'
@@ -242,13 +249,16 @@ export function drawBlocksPages(
     height: box.height - SECTION_HEADING_HEIGHT
   }
 
-  const planned = planBlocksPages(stacks, body)
+  const planned = planBlocksPages(stacks, body, {
+    firstInset: introHeight(opts.intro, body.width)
+  })
   const out: LaidOutPage[] = []
   planned.forEach((placements, i) => {
     const page = doc.newPage()
     out.push(page)
     page.rect({ x: 0, y: 0, width: doc.size.width, height: doc.size.height }, { fill: PAPER })
     drawSectionHeading(page, i === 0 ? heading : `${heading} (continued)`)
+    if (i === 0) drawIntro(page, opts.intro, body.x, body.y, body.width)
     for (const placed of placements) {
       drawCaption(page, placed.caption, box.x, placed.y)
       page.image(placed.stack.image, placed)
