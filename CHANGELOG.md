@@ -8,6 +8,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Working with text: case, trim, replace, split, join, starts-with, find.**
+  (#1124, epic #1119) The Text drawer was four blocks, and its header recorded
+  why: case conversion, substring, index-of, trim, replace and reverse were
+  *"a text-processing library, and this is a palette for making a robot do
+  something."* That was right for #1007. Snakie is not only a robot palette now
+  — a serial command parser, a sensor that answers in CSV, a WiFi response, a
+  menu on a display are all string work, and all of it was grey.
+
+  **The first four blocks are still the first four.** The nine new ones (the
+  seven above plus `ord`/`chr`, which arrived loose a few days earlier) live in
+  a **Working with text** shelf inside the drawer, so a first-day learner opens
+  Text and still sees `text`, `join`, `length` and `print`.
+
+  `where … is in` carries Python's two surprises on its face rather than in a
+  footnote: the count starts at 1 like the rest of the palette, and "not there"
+  comes back as **0** — which is false, so it can be tested directly.
+
+  Two things the drawer deliberately does **not** have. `contains` is `n in s`,
+  which #1128's membership block writes. `letter n of` is `s[n - 1]`, which the
+  Lists drawer's **item `n` of** writes — so *that* socket stopped checking
+  `Array` instead of growing a twin. **set item `n` of** keeps its check, and
+  the asymmetry is the point: `s[0] = 'x'` is a TypeError.
+
+  Still no `text_prompt`. There is still no keyboard on the board.
+
 - **`bytes` and `bytearray` — the buffers I²C, SPI and NeoPixel need.** (#1135,
   epic #1119) The one item in the audit that is a *MicroPython* gap rather than
   a Python one: on a desktop you can go a long way without typing `bytearray`;

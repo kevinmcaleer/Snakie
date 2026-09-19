@@ -123,6 +123,15 @@ const OUTPUT_TYPE = new Map<string, SocketType>([
   // `ord` and `chr` (#1130): one answers with a number, the other with text.
   ['snakie_text_ord', 'Number'],
   ['snakie_text_chr', 'String'],
+  // Working with text (#1124). `split` is the one that hands back a LIST,
+  // which is what lets it go straight into a `for each`.
+  ['snakie_text_case', 'String'],
+  ['snakie_text_strip', 'String'],
+  ['snakie_text_replace', 'String'],
+  ['snakie_text_join_with', 'String'],
+  ['snakie_text_split', 'Array'],
+  ['snakie_text_edge', 'Boolean'],
+  ['snakie_text_find', 'Number'],
   ['snakie_int_base', 'Number'],
   // The list verbs (#1122). `sorted(xs)` is the only one that hands back a
   // LIST, which is what lets it go straight into a `for each`.
@@ -1046,6 +1055,17 @@ function mentions(text: string, name: string): boolean {
  * Groups: the `async` keyword or undefined, the name, the parameter list.
  */
 const DEF_HEADER = /^(async\s+)?def\s+([A-Za-z_]\w*)\((.*)\)\s*:$/
+
+/**
+ * Blocks whose 1-based setting writes `<call> + 1` (#1122, #1124).
+ *
+ * `xs.index(v)` and `s.find(n)` both answer 0-based, and both drawers count
+ * from 1 — so the friendly face has to write the `+ 1`, which is arithmetic
+ * around a call that no plain rule can read. The reader folds exactly that
+ * shape back into the block's own setting; `xs.index(v) + 2` is arithmetic
+ * somebody wrote and stays it.
+ */
+const ONE_BASED_PLUS_ONE = new Set(['snakie_list_index', 'snakie_text_find'])
 
 /** The multiplicative operators, as `math_arithmetic`'s dropdown spells them. */
 const MULTIPLICATIVE_OP: Record<string, string> = {
@@ -3313,7 +3333,7 @@ class Converter {
         // and stays the addition it is.
         if (
           op === '+' &&
-          a.type === 'snakie_list_index' &&
+          ONE_BASED_PLUS_ONE.has(a.type) &&
           (a.fields as { START?: string } | undefined)?.START === 'ZERO' &&
           b.type === 'math_number' &&
           (b.fields as { NUM?: number } | undefined)?.NUM === 1
@@ -3937,9 +3957,12 @@ class Converter {
           }
         }
         const index = this.oneBased(inside)
-        // LIST checks Array, so `"abc"[0]` is not this block — the same rule the
-        // socket table exists for (#1071).
-        if (!index || !fitsSocket(cur.block, 'Array')) return null
+        // THE `Array` GUARD CAME OFF WITH THE SOCKET'S CHECK (#1124). `'abc'[0]`
+        // is one letter out of a piece of text, which is the same line and the
+        // same block — see the note on `snakie_list_get` in `lists.ts`. The
+        // #1071 rule still holds: the reader refuses what the SOCKET refuses,
+        // and this socket no longer refuses anything.
+        if (!index) return null
         return {
           block: {
             type: 'snakie_list_get',

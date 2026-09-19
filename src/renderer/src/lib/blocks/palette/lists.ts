@@ -84,6 +84,16 @@ export const LIST_BLOCKS: BlockDefinition[] = [
     }
   },
   {
+    // READING ONE THING OUT IS NOT A LIST QUESTION (widened by #1124, epic
+    // #1119). The socket checked `Array`, so `'hello'[0]` — one letter out of a
+    // piece of text, which is the same line — was refused by the shape of the
+    // block, and a `letter %N of %TEXT` block beside it would have been two
+    // blocks writing `s[n - 1]`. The check comes off instead, which is the
+    // answer #1128 gave for `in` and #1123 gave for every slice socket.
+    //
+    // `set item` KEEPS ITS CHECK, and the asymmetry is the point: a string
+    // cannot be written to. `s[0] = 'x'` is a TypeError, and a socket that
+    // accepted it would be teaching one.
     type: 'snakie_list_get',
     category: 'lists',
     help: 'ref-types',
@@ -91,11 +101,12 @@ export const LIST_BLOCKS: BlockDefinition[] = [
       message0: 'item %1 of %2',
       args0: [
         { type: 'input_value', name: 'INDEX', check: 'Number' },
-        { type: 'input_value', name: 'LIST', check: 'Array' }
+        { type: 'input_value', name: 'LIST' }
       ],
       inputsInline: true,
       output: null,
-      tooltip: 'Read one value out of a list. The first item is number 1.'
+      tooltip:
+        'Read one value out of a list, or one letter out of a piece of text. The first item is number 1.'
     },
     toolbox: { inputs: { INDEX: { shadow: { type: 'math_number', fields: { NUM: 1 } } } } },
     code: (block, gen) => {

@@ -1,7 +1,7 @@
 import { Order } from '../generator'
 import { pyString } from '../py'
 import { registerCallRules } from '../python-to-blocks'
-import type { BlockDefinition } from '../registry'
+import type { BlockDefinition, BlockGroup } from '../registry'
 
 /**
  * TEXT (#1011, epic #1007).
@@ -21,11 +21,38 @@ import type { BlockDefinition } from '../registry'
  * in a socket is inlined into the f-string rather than interpolated —
  * `f"score: {n}"`, not `f"{'score: '}{n}"`.
  *
- * TRIMMED: case conversion, substring, index-of, trim, replace, reverse and
- * `text_prompt` (which asks for input on a device with no keyboard) are
+ * THE TRIM WAS RE-OPENED (#1124, epic #1119). It used to read: *"case
+ * conversion, substring, index-of, trim, replace, reverse and `text_prompt` are
  * registered nowhere. They are a text-processing library, and this is a palette
- * for making a robot do something.
+ * for making a robot do something."* That was right for #1007, and Snakie is
+ * not only a robot palette now — a serial command parser, a sensor that answers
+ * in CSV, a WiFi response, a menu on a display are all string work, and all of
+ * it was `snakie_python_value` text.
+ *
+ * SO THE DRAWER KEEPS ITS FIRST FOUR AND GROWS A SECOND SHELF. Seven new blocks
+ * loose in Text would double it and bury `print` half way down; they live in a
+ * **Working with text** sub-drawer instead, which `categoryContents` has built
+ * from `group` since #1017. A first-day learner opens Text and still sees four
+ * blocks.
+ *
+ * `text_prompt` IS STILL NOT HERE, and for the same reason as before: there is
+ * no keyboard on the board.
+ *
+ * TWO MORE THINGS THIS DRAWER DOES NOT HAVE. `%TEXT contains %NEEDLE` is
+ * `n in s`, which #1128's general membership block writes — it stopped checking
+ * `Array` for exactly this case. `letter %N of %TEXT` is `s[n - 1]`, which the
+ * Lists drawer's **item `n` of** writes; its socket stopped checking `Array`
+ * too, rather than growing a twin.
  */
+/**
+ * The second shelf of the Text drawer (#1124).
+ *
+ * A sub-category rather than seven more blocks loose in Text: the drawer is a
+ * curriculum, and doubling it would bury `print` half way down a flyout a
+ * first-day learner is meant to read at a glance.
+ */
+const TEXT_MORE: BlockGroup = { id: 'text-more', name: 'Working with text' }
+
 export const TEXT_BLOCKS: BlockDefinition[] = [
   {
     type: 'text',
@@ -68,6 +95,221 @@ export const TEXT_BLOCKS: BlockDefinition[] = [
     code: (block, gen) => `print(${gen.valueToCode(block, 'TEXT', Order.NONE) || "''"})\n`
   },
   {
+    type: 'snakie_text_case',
+    category: 'text',
+    group: TEXT_MORE,
+    help: 'ref-types',
+    json: {
+      message0: '%1 in %2 case',
+      args0: [
+        { type: 'input_value', name: 'TEXT' },
+        {
+          type: 'field_dropdown',
+          name: 'OP',
+          options: [
+            ['upper', 'upper'],
+            ['lower', 'lower']
+          ]
+        }
+      ],
+      inputsInline: true,
+      output: 'String',
+      tooltip:
+        'The same text in capitals or in small letters. Comparing both sides in lower case is how you accept a command however it was typed.'
+    },
+    toolbox: { inputs: { TEXT: { shadow: { type: 'text', fields: { TEXT: 'hello' } } } } },
+    code: (block, gen) => [
+      `${gen.valueToCode(block, 'TEXT', Order.MEMBER) || "''"}.${
+        String(block.getFieldValue('OP') ?? 'upper')
+      }()`,
+      Order.FUNCTION_CALL
+    ]
+  },
+  {
+    type: 'snakie_text_strip',
+    category: 'text',
+    group: TEXT_MORE,
+    help: 'ref-types',
+    read: { fn: 'strip', on: 'TEXT', args: [], shape: 'value' },
+    json: {
+      message0: '%1 with spaces trimmed',
+      args0: [{ type: 'input_value', name: 'TEXT' }],
+      inputsInline: true,
+      output: 'String',
+      tooltip:
+        'The same text with any spaces and line endings taken off both ends. A line read off a serial port almost always needs this first.'
+    },
+    toolbox: { inputs: { TEXT: { shadow: { type: 'text', fields: { TEXT: ' hello ' } } } } },
+    code: (block, gen) => [
+      `${gen.valueToCode(block, 'TEXT', Order.MEMBER) || "''"}.strip()`,
+      Order.FUNCTION_CALL
+    ]
+  },
+  {
+    type: 'snakie_text_replace',
+    category: 'text',
+    group: TEXT_MORE,
+    help: 'ref-types',
+    read: { fn: 'replace', on: 'TEXT', args: ['FROM', 'TO'], shape: 'value' },
+    json: {
+      message0: '%1 with %2 replaced by %3',
+      args0: [
+        { type: 'input_value', name: 'TEXT' },
+        { type: 'input_value', name: 'FROM' },
+        { type: 'input_value', name: 'TO' }
+      ],
+      inputsInline: true,
+      output: 'String',
+      tooltip: 'A copy of the text with every one of one thing swapped for another.'
+    },
+    toolbox: {
+      inputs: {
+        FROM: { shadow: { type: 'text', fields: { TEXT: ',' } } },
+        TO: { shadow: { type: 'text', fields: { TEXT: ' ' } } }
+      }
+    },
+    code: (block, gen) => {
+      const text = gen.valueToCode(block, 'TEXT', Order.MEMBER) || "''"
+      const from = gen.valueToCode(block, 'FROM', Order.NONE) || "''"
+      const to = gen.valueToCode(block, 'TO', Order.NONE) || "''"
+      return [`${text}.replace(${from}, ${to})`, Order.FUNCTION_CALL]
+    }
+  },
+  {
+    type: 'snakie_text_split',
+    category: 'text',
+    group: TEXT_MORE,
+    help: 'ref-types',
+    read: { fn: 'split', on: 'TEXT', args: ['SEP'], shape: 'value' },
+    json: {
+      message0: 'split %1 by %2',
+      args0: [
+        { type: 'input_value', name: 'TEXT' },
+        { type: 'input_value', name: 'SEP' }
+      ],
+      inputsInline: true,
+      output: 'Array',
+      tooltip:
+        'Cut a piece of text into a list, wherever the separator appears. This is how a line of CSV becomes values you can use.'
+    },
+    toolbox: { inputs: { SEP: { shadow: { type: 'text', fields: { TEXT: ',' } } } } },
+    code: (block, gen) => {
+      const text = gen.valueToCode(block, 'TEXT', Order.MEMBER) || "''"
+      return [
+        `${text}.split(${gen.valueToCode(block, 'SEP', Order.NONE) || "''"})`,
+        Order.FUNCTION_CALL
+      ]
+    }
+  },
+  {
+    // THE RECEIVER IS THE SEPARATOR, which is the one block on this shelf whose
+    // Python reads back-to-front from its face: `', '.join(xs)`. The block says
+    // it the way a person would, and the mirror shows the translation — which
+    // is the same job `is nothing` → `is None` does in Logic.
+    type: 'snakie_text_join_with',
+    category: 'text',
+    group: TEXT_MORE,
+    help: 'ref-types',
+    read: { fn: 'join', on: 'SEP', args: ['LIST'], shape: 'value', checks: { LIST: 'Array' } },
+    json: {
+      message0: 'join %1 with %2',
+      args0: [
+        { type: 'input_value', name: 'LIST', check: 'Array' },
+        { type: 'input_value', name: 'SEP' }
+      ],
+      inputsInline: true,
+      output: 'String',
+      tooltip:
+        'Stick a list of pieces of text together into one, with the separator between them. The other half of "split".'
+    },
+    toolbox: { inputs: { SEP: { shadow: { type: 'text', fields: { TEXT: ', ' } } } } },
+    code: (block, gen) => {
+      const sep = gen.valueToCode(block, 'SEP', Order.MEMBER) || "''"
+      return [
+        `${sep}.join(${gen.valueToCode(block, 'LIST', Order.NONE) || '[]'})`,
+        Order.FUNCTION_CALL
+      ]
+    }
+  },
+  {
+    type: 'snakie_text_edge',
+    category: 'text',
+    group: TEXT_MORE,
+    help: 'ref-types',
+    json: {
+      message0: '%1 %2 %3',
+      args0: [
+        { type: 'input_value', name: 'TEXT' },
+        {
+          type: 'field_dropdown',
+          name: 'OP',
+          options: [
+            ['starts with', 'startswith'],
+            ['ends with', 'endswith']
+          ]
+        },
+        { type: 'input_value', name: 'PART' }
+      ],
+      inputsInline: true,
+      output: 'Boolean',
+      tooltip:
+        'True when the text begins or finishes with that piece. How a command parser tells one instruction from another.'
+    },
+    toolbox: { inputs: { PART: { shadow: { type: 'text', fields: { TEXT: 'GO' } } } } },
+    code: (block, gen) => {
+      const text = gen.valueToCode(block, 'TEXT', Order.MEMBER) || "''"
+      const op = String(block.getFieldValue('OP') ?? 'startswith')
+      return [
+        `${text}.${op}(${gen.valueToCode(block, 'PART', Order.NONE) || "''"})`,
+        Order.FUNCTION_CALL
+      ]
+    }
+  },
+  {
+    // THE OFF-BY-ONE IS A SETTING, as it is on the Lists drawer's `where … is
+    // in` (#1122) and #1121's position loop — and here it carries a second
+    // surprise worth naming: Python's `find` answers `-1` for "not there", so
+    // the 1-based face turns that into `0`, which is falsy and consistent with
+    // the rest of this palette's counting. The tooltip says so.
+    type: 'snakie_text_find',
+    category: 'text',
+    group: TEXT_MORE,
+    help: 'ref-types',
+    read: {
+      fn: 'find',
+      on: 'TEXT',
+      args: ['NEEDLE'],
+      shape: 'value',
+      fields: { START: 'ZERO' }
+    },
+    json: {
+      message0: 'where %1 is in %2 %3',
+      args0: [
+        { type: 'input_value', name: 'NEEDLE' },
+        { type: 'input_value', name: 'TEXT' },
+        {
+          type: 'field_dropdown',
+          name: 'START',
+          options: [
+            ['(first is 1)', 'ONE'],
+            ['(first is 0)', 'ZERO']
+          ]
+        }
+      ],
+      inputsInline: true,
+      output: 'Number',
+      tooltip:
+        'Where a piece of text appears inside another. On "first is 1" it answers 0 when it is not there at all — which counts as false, so you can test it directly.'
+    },
+    toolbox: { inputs: { NEEDLE: { shadow: { type: 'text', fields: { TEXT: ',' } } } } },
+    code: (block, gen) => {
+      const text = gen.valueToCode(block, 'TEXT', Order.MEMBER) || "''"
+      const call = `${text}.find(${gen.valueToCode(block, 'NEEDLE', Order.NONE) || "''"})`
+      if (block.getFieldValue('START') === 'ZERO') return [call, Order.FUNCTION_CALL]
+      return [`${call} + 1`, Order.ADDITIVE]
+    }
+  },
+  {
     // LETTERS AND THEIR NUMBERS (#1130, epic #1119).
     //
     // `ord`/`chr` are here rather than in a Conversions drawer because this is
@@ -77,6 +319,11 @@ export const TEXT_BLOCKS: BlockDefinition[] = [
     // are not a type change, they are the two halves of one lookup.
     type: 'snakie_text_ord',
     category: 'text',
+    // ON THE SECOND SHELF TOO (#1124). They arrived loose in #1130, a few days
+    // before this drawer had a shelf to put them on; leaving them out front
+    // would have made "letter code of" one of the five blocks a first-day
+    // learner meets.
+    group: TEXT_MORE,
     help: 'ref-builtins',
     read: { fn: 'ord', args: ['CHAR'], shape: 'value' },
     json: {
@@ -96,6 +343,7 @@ export const TEXT_BLOCKS: BlockDefinition[] = [
   {
     type: 'snakie_text_chr',
     category: 'text',
+    group: TEXT_MORE,
     help: 'ref-builtins',
     read: { fn: 'chr', args: ['CODE'], shape: 'value', checks: { CODE: 'Number' } },
     json: {
@@ -120,9 +368,28 @@ export const TEXT_BLOCKS: BlockDefinition[] = [
  * the reader's own `len`/`abs`/`round` entries already have — which is the
  * whole argument for filing them together rather than as their own workstream.
  */
-registerCallRules(
-  TEXT_BLOCKS.flatMap((block) => (block.read ? [{ ...block.read, type: block.type }] : []))
-)
+registerCallRules([
+  ...TEXT_BLOCKS.flatMap((block) => (block.read ? [{ ...block.read, type: block.type }] : [])),
+  // The two dropdown blocks are two rules each, with the field fixed — the
+  // shape `CallRule.fields` exists for, and the only way the reader can produce
+  // both options of one block.
+  ...(['upper', 'lower'] as const).map((op) => ({
+    fn: op,
+    type: 'snakie_text_case',
+    on: 'TEXT',
+    args: [] as const,
+    shape: 'value' as const,
+    fields: { OP: op }
+  })),
+  ...(['startswith', 'endswith'] as const).map((op) => ({
+    fn: op,
+    type: 'snakie_text_edge',
+    on: 'TEXT',
+    args: ['PART'],
+    shape: 'value' as const,
+    fields: { OP: op }
+  }))
+])
 
 /**
  * A Python string literal for `value`, single-quoted like `ruff` prefers.

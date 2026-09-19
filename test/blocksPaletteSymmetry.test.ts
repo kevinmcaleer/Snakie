@@ -108,6 +108,10 @@ const READ_DIRECTLY: Record<string, string> = {
   snakie_slice_reverse: 'backwards = readings[::-1]\n',
   snakie_list_contains: 'found = name in names\n',
   snakie_tuple: 'point = (x, y)\n',
+  // `where … is in` on the 1-based setting writes `s.find(n) + 1`, which is
+  // arithmetic round a call — the rule reads the 0-based form and the parser
+  // folds the `+ 1` back (#1124).
+  snakie_text_find: "at = line.find(',') + 1\n",
   // A LIST DISPLAY IS READ NOW (#1135). It used to be listed below as an
   // argued exception; the buffer block takes its list in a socket, so it had
   // to become real — and `readings = [1, 2, 3]` stopping being grey is worth
