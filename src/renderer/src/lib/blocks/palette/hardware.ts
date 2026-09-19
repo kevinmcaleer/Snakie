@@ -472,12 +472,20 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
   // ------------------------------------------------------------------------ ADC
   {
     /**
-     * SET THE SPEED OF A PWM YOU NAMED — the block this whole trio exists for.
+     * SET THE DUTY OF A PWM YOU NAMED — the block this whole trio exists for.
      *
-     * `set brightness of [GP15 ▾] to [n] %` is the same arithmetic, and its
-     * label is why this one is here: a child building a rover should not have to
-     * work out that a motor is a dim LED. It also takes the PWM in a SOCKET, so
-     * two drive channels are two names rather than two pin numbers.
+     * IT IS DELIBERATELY NOT A MOTOR BLOCK. A motor block would have to promise
+     * something about the driver, and there is nothing to promise: one driver
+     * takes a PWM on its speed pin, another takes plain digital on/off, and a
+     * Modulino takes neither — it is an I²C device with its own protocol. A
+     * block labelled *set speed* would be telling the learner their hardware
+     * works one particular way, and it would be wrong about most of it. So this
+     * block says what it does to the PIN, and what that does to the motor is the
+     * datasheet's business.
+     *
+     * `set brightness of [GP15 ▾] to [n] %` is the same arithmetic off a pin
+     * dropdown. This one takes the PWM in a SOCKET, so a rover's two drive
+     * channels are two names rather than two pin numbers.
      *
      * NO `read` RULE, for the reason the brightness block has none: the percent
      * is wrapped in `int(n * 65535 / 100)`, which is the lesson and cannot be
@@ -488,7 +496,7 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
     category: 'hardware',
     help: 'ref-pwm',
     json: {
-      message0: 'set speed of %1 to %2 %%',
+      message0: 'set duty of %1 to %2 %%',
       args0: [
         { type: 'input_value', name: 'PWM' },
         { type: 'input_value', name: 'PERCENT', check: 'Number' }
@@ -497,7 +505,7 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
       previousStatement: null,
       nextStatement: null,
       tooltip:
-        'Drive a named PWM from 0 to 100 per cent — a motor’s speed, or how bright an LED is.'
+        'How much of each pulse a named PWM spends switched on, 0 to 100 per cent. What that does is the hardware’s business: an LED dims, a motor driver that takes a PWM speeds up.'
     },
     toolbox: { inputs: { PERCENT: { shadow: { type: 'math_number', fields: { NUM: 50 } } } } },
     imports: [],
@@ -531,7 +539,7 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
       previousStatement: null,
       nextStatement: null,
       tooltip:
-        'How many times a second a named PWM switches. Servos want 50; a motor is usually happier in the kilohertz.'
+        'How many times a second a named PWM switches. Servos want 50; an LED or a motor driver is usually happier in the kilohertz.'
     },
     toolbox: { inputs: { HZ: { shadow: { type: 'math_number', fields: { NUM: 1000 } } } } },
     imports: [],
