@@ -65,6 +65,14 @@ describe('every variable the learner made is on the shelf (#1117)', () => {
     expect(boundTo(items, 'math_change')).toEqual(['lives'])
   })
 
+  it('binds `global` to that variable too, rather than a name nobody made', () => {
+    // It carries a variable field (#1118), so an unbound copy would put its own
+    // default on the learner's shelf the moment they dragged it out.
+    const items = variablesFlyout(withVariables('score', 'lives'))
+    expect(boundTo(items, 'snakie_global')).toEqual(['lives'])
+    expect(types(items).filter((t) => t === 'snakie_global')).toHaveLength(1)
+  })
+
   it('keeps the registry shadows, so a dragged set block arrives holding a 0', () => {
     const items = variablesFlyout(withVariables('score'))
     const set = items.find((i) => i.type === 'variables_set')

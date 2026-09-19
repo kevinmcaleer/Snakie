@@ -52,7 +52,16 @@ export const CREATE_VARIABLE_BUTTON = 'CREATE_VARIABLE'
  * The blocks whose flyout copies are generated per variable, so the curated
  * list's nameless originals stand down once there is something to name.
  */
-const BOUND_TO_A_VARIABLE = new Set(['variables_set', 'math_change', 'variables_get'])
+const BOUND_TO_A_VARIABLE = new Set([
+  'variables_set',
+  'math_change',
+  'variables_get',
+  // `global` carries a variable field too (#1118), so it gets the same
+  // treatment: bound to the variable the learner is working on rather than
+  // handing out its own default name, which would put a variable they never
+  // made on the shelf the moment they dragged it.
+  'snakie_global'
+])
 
 /** A toolbox entry for `type`, carrying the registry's shadows, bound to `variable`. */
 function boundEntry(type: string, variable: Blockly.IVariableModel<Blockly.IVariableState>): Record<string, unknown> | null {
@@ -100,9 +109,10 @@ export function variablesFlyout(
   if (variables.length === 0) return [...items, ...curated]
 
   // `set` and `change` on the LAST variable — the one just created, which is the
-  // one the learner is thinking about. Blockly's own choice, kept.
+  // one the learner is thinking about. Blockly's own choice, kept. `global`
+  // (#1118) follows it for the same reason.
   const newest = variables[variables.length - 1]
-  for (const type of ['variables_set', 'math_change']) {
+  for (const type of ['variables_set', 'math_change', 'snakie_global']) {
     const entry = boundEntry(type, newest)
     if (entry) items.push(entry)
   }
