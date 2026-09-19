@@ -40,22 +40,118 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   numbering stays right and nothing blank is left behind. If one section cannot
   be captured, the export still produces the document and says what it left out.
 
-- **Name a PWM, and set a motor's speed with it.** A pin could be named since
-  #1097; the PWM built on it could not — so every block that wanted one got
-  `pwm_15`, a name the learner never chose on an object they had no way to refer
-  to, and a rover's two drive channels were told apart by pin number.
+- **Every variable you make is on the Variables shelf, and a button makes one.**
+  (#1117) The drawer was a fixed list of three nameless blocks however many
+  variables a learner had: `score`, `lives` and `speed` all lived inside one
+  dropdown on one `set` block, and the only way to create a variable at all was
+  to drag that block out and rename what was inside it — folklore, not an
+  interface.
+
+  It is generated from the workspace now, the way the Functions drawer has been
+  since #1045: **Create variable…** at the top, then `set`/`change` for the one
+  just made, then one block per variable, named and sorted. A variable created
+  but never used is on the shelf too — the button would otherwise look like it
+  had done nothing.
+
+  Before there are any variables the drawer keeps the three shapes. That is the
+  one place Blockly's own answer is wrong for us: it shows the button over an
+  empty shelf, which is the thing that sent people hunting through a dropdown in
+  the first place.
+
+- **⌘D / Ctrl+D duplicates the selected block.** (#1117) Duplicate was already
+  on a block's right-click menu and on a bare `D` for keyboard navigation, and
+  neither is the key anyone tries. It copies the block and everything inside it
+  — not the stack below it, which is the context menu's rule too — through
+  Blockly's own clipboard, so the learner's actual copied block is left alone.
+
+  The shortcut claims the key rather than merely listening for it: in the web
+  build an unhandled ⌘D opens the browser's bookmark dialog over the canvas.
+- **Casting is a block, and so is `global`.** Two lines every program with a
+  sensor or a function in it needs, and both were reachable only by typing Python
+  into a grey block.
+
+  ```
+  turn ( reading ) into [a whole number (int) ▾] → int(reading)
+  use the whole program’s [score ▾]              → global score
+  ```
+
+  **The cast names the Python on its face**, which is not the house style and is
+  right here: *as a whole number* on its own reads like rounding, and `int(3.7)`
+  is 3 while `round(3.7)` is 4 — a face that implies the wrong one of those
+  teaches the trap rather than the tool. One block with a dropdown rather than six
+  near-identical shapes in a drawer: `int`, `float`, `str`, `bool`, `list`,
+  `tuple`. Its output is deliberately unchecked, because what it produces depends
+  on the dropdown and a socket check is fixed when the block is built — a declared
+  `Number` would be a lie in five cases out of six.
+
+  An empty socket still generates something that RUNS — `int(0)`, `str('')` — and
+  the empty value is the one of the type going *in*, so the line says what the
+  block is for before it is filled.
+
+  **`global` takes a variable field, not text**, which is why it is its own block
+  rather than the escape hatch unhidden: the dropdown offers the variables this
+  program has, it follows a rename the way every other block in Variables does,
+  and it cannot say `global my score`. Reopening a program brings it back — a
+  plain `global name` is the new block, while `nonlocal` and `global low, high`
+  stay with the escape hatch that can hold them. So does `global list`: the
+  generator sanitises a reserved name to `list_`, and a declaration renamed out
+  from under itself would be a different program.
+
+  Six reader rules come with the cast, one per type, so a child can drag the block
+  out, save, reopen and get it back rather than the grey line it replaced. A base
+  conversion (`int('ff', 16)`) has a second argument and no socket for it, so it
+  stays raw instead of quietly losing the 16.
+
+- **Read the power back, and turn a PWM off.** The PWM family could set a duty
+  and a frequency and do nothing else, so two everyday lines had no block at all:
+
+  ```
+  power of [GP15 ▾] as [per cent ▾]   → pwm_15.duty_u16() * 100 / 65535
+  power of ( motor_a ) as [0-65535 ▾] → motor_a.duty_u16()
+  turn PWM off on [GP15 ▾]            → pwm_15.deinit()
+  turn PWM ( motor_a ) off            → motor_a.deinit()
+  ```
+
+  **`deinit()` is not `duty_u16(0)`.** Setting the duty to zero stops the pulses
+  and keeps the slice; releasing the pin is what lets the next block drive it
+  high and low itself, and what leaves a rover reliably stopped. A program that
+  ends with its wheels still turning is most often missing one of these.
+
+  The read block's unit dropdown is `read [pin] as [volts ▾]`'s, word for word:
+  the same question asked at the other end of the same 16-bit range, so a learner
+  who has met one has met both. The per-cent form backs out of exactly the
+  conversion `set power` writes, magic number and all, so the two read as a pair.
+
+  **Only the socket-shaped read claims `x.duty_u16()` on the way back**, which is
+  the opposite way round from every other pair here. `name PWM` registers its
+  names against the `pwm` receiver, so a receiver rule on the fielded block would
+  claim `motor_a.duty_u16()` too — and that block regenerates through `pwm()`,
+  which would build `pwm_motor_a = PWM(motor_a)`. The statement blocks settle
+  that race with `onNamedPin`, whose pass runs first; the value side has no such
+  pass, so only one of the two may claim the line, and it is the one that writes
+  it back unchanged.
+
+- **Name a PWM, and set it directly.** A pin could be named since #1097; the PWM
+  built on it could not — so every block that wanted one got `pwm_15`, a name the
+  learner never chose on an object they had no way to refer to, and a rover's two
+  drive channels were told apart by pin number.
 
   ```
   name PWM on pin [GP15 ▾] as [motor_a]     → motor_a = PWM(Pin(15))
-  set speed of ( motor_a ) to [75] %        → motor_a.duty_u16(int(75 * 65535 / 100))
+  set power of ( motor_a ) to [75] %        → motor_a.duty_u16(int(75 * 65535 / 100))
   set frequency of ( motor_a ) to [1000] Hz → motor_a.freq(1000)
+  power of ( motor_a ) as [0-65535 ▾]       → motor_a.duty_u16()
+  turn PWM ( motor_a ) off                  → motor_a.deinit()
   ```
 
-  **The label is half the point.** The block that already did this said *set
-  BRIGHTNESS of …*, with a tooltip admitting it also drives a motor. A child
-  building a rover should not have to work out that a motor is a dim LED. The two
-  new blocks take their PWM in a SOCKET, as `set pin` does since its own socket
-  version, and sit beside their fielded twins in the drawer.
+  **The label is half the point, and it is *set power*, not *set speed*.** A motor
+  block would have to promise something about the driver, and there is nothing to
+  promise: one driver takes a PWM on its speed pin, another takes plain digital
+  on/off, and a Modulino takes neither — it is an I²C device with its own
+  protocol. These blocks say what they do to the PIN, which is true of every
+  board; what that does to a motor is the driver's datasheet's business. They
+  take their PWM in a SOCKET, as `set pin` does since its own socket version, and
+  sit beside their fielded twins in the drawer.
 
   It reuses `AliasRule` unchanged — that machinery was written for pins, and a
   PWM fits because its constructor carries a single `{PIN}`. Two things had to
@@ -70,7 +166,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   output or for input, and a PWM has no direction to choose.
 
   `motor_a.duty_u16(…)` stays an ordinary line on the way back, for the reason
-  `set brightness` has never had a reader rule: the percent is wrapped in
+  the fielded `set power` has never had a reader rule: the percent is wrapped in
   `int(x * 65535 / 100)`, which is the lesson rather than something a table can
   unpick into a socket.
 
@@ -669,6 +765,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the fix rather than a silent substitution of some other pin.
 
 ### Changed
+
+- **`set brightness of [GP15 ▾] to [n] %` is now `set power of …`.** The block
+  drives a pin; whether that dims an LED or slows a motor is the wiring's
+  business, and the old label was a lie the moment the pin went to a motor
+  driver. The obvious fix — a `set speed` block beside a `set brightness` one —
+  is the one thing this palette cannot have: two blocks writing a byte-identical
+  line give the reader nothing to choose between them, so a learner's *set speed*
+  would come back as *set brightness* the next time the code pane synced.
+  *Power* is true of an LED, of a motor and of a heater alike, so one block
+  covers them all and the line it writes stays unambiguous. The unit is still the
+  duty cycle, and the tooltip says so. Its socket twin, added in this same
+  release, loses the word *duty* for the same reason.
+
+  Saved workspaces are untouched: the block's type id is unchanged, so this is a
+  label, not a migration.
 
 - **White lettering on the blank-line block.** It is 2.9:1 on the comment grey,
   where the ink that fill can readably carry is black at 7.2:1 — the second

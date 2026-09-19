@@ -112,7 +112,11 @@ const READ_DIRECTLY: Record<string, string> = {
   // --- assignment and scope (W8, #1095)
   snakie_python_assign: 'a, b = b, a\n',
   snakie_python_augmented: 'total *= 2\n',
-  snakie_python_scope: 'def go():\n    global total\n    total = 1\n',
+  // `global x` alone is the Variables drawer's own block (#1118); the escape
+  // hatch keeps what its variable field cannot hold — `nonlocal`, and several
+  // names at once.
+  snakie_global: 'def go():\n    global total\n    total = 1\n',
+  snakie_python_scope: 'def go():\n    nonlocal low, high\n    low = 1\n',
   snakie_python_import_here: 'def go():\n    import ujson\n    print(ujson)\n',
   snakie_python_value: 'x = [v for v in things]\n',
   snakie_python_comment: '# a note\n',
@@ -166,6 +170,13 @@ const NO_READER: Record<string, string> = {
   snakie_onboard_led: 'Writes a per-board pin token, which is board state rather than line text.',
   snakie_pin_pressed: 'Reads back as the pin block plus a comparison — two blocks for one line.',
   snakie_pwm_duty: 'Writes the percentage arithmetic inline, so the line is not a plain call.',
+  snakie_pwm_read:
+    'Two blocks write `x.duty_u16()`, and its socket twin `snakie_pwm_read_named` is the one that ' +
+    'wins. It has to be: `snakie_name_pwm` registers its names against the `pwm` receiver, so a ' +
+    'receiver rule here would claim `motor_a.duty_u16()` too — and this block regenerates through ' +
+    '`pwm()`, which would build `pwm_motor_a = PWM(motor_a)`. The statement blocks settle that ' +
+    'race with `onNamedPin`, whose pass runs first; the value side has no such pass, so only one ' +
+    'of the pair may claim the line.',
   snakie_pwm_duty_named:
     'As `snakie_pwm_duty`, which it is the socket-driven twin of: the percent is wrapped in ' +
     '`int(x * 65535 / 100)`, and that arithmetic is the lesson rather than something a table can ' +

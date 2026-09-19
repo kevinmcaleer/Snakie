@@ -19,6 +19,15 @@ import { BLOCK_CATEGORIES, categoryStyleName } from './theme'
  */
 
 /**
+ * The `custom` key the Variables category carries (#1117).
+ *
+ * Here rather than in `variables-drawer.ts` so the toolbox — which names it —
+ * does not have to import the drawer that fills it, which imports this module
+ * back for {@link categoryContents}.
+ */
+export const VARIABLES_CATEGORY_CALLBACK = 'SNAKIE_VARIABLES'
+
+/**
  * The toolbox: one category per entry in {@link BLOCK_CATEGORIES}, filled from
  * the block registry, for the runtime the learner is on (#1039, epic #209).
  *
@@ -35,16 +44,18 @@ export function buildToolbox(dialect: Dialect): Blockly.utils.toolbox.ToolboxDef
   return {
     kind: 'categoryToolbox',
     contents: BLOCK_CATEGORIES.map((c) =>
-      // Functions is the one category whose contents are a question about the
-      // WORKSPACE rather than about the registry (#1045), so it hands the job
-      // to Blockly — see the callback registered at injection. Everything else
-      // is a curated list and stays one.
-      c.id === 'functions'
+      // Functions and Variables are the two categories whose contents are a
+      // question about the WORKSPACE rather than about the registry (#1045,
+      // #1117), so they hand the job to a callback — Blockly's own for
+      // functions, `variables-drawer.ts` for variables, both registered at
+      // injection. Everything else is a curated list and stays one.
+      c.id === 'functions' || c.id === 'variables'
         ? {
             kind: 'category',
             name: c.name,
             categorystyle: categoryStyleName(c.id),
-            custom: Blockly.PROCEDURE_CATEGORY_NAME
+            custom:
+              c.id === 'functions' ? Blockly.PROCEDURE_CATEGORY_NAME : VARIABLES_CATEGORY_CALLBACK
           }
         : {
             kind: 'category',
