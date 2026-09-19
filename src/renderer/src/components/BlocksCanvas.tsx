@@ -20,6 +20,12 @@ import '../lib/blocks/python-editor'
 import { loadSelectedBoard, watchSelectedBoard } from './board-pin-source'
 import { blockDefinition, installBlockDefinitions } from '../lib/blocks/registry'
 import { installCorePalette } from '../lib/blocks/palette'
+import {
+  EXTRAS_FIELD,
+  extrasVisible,
+  hasExtrasRow,
+  setExtrasVisible
+} from '../lib/blocks/palette/functions'
 import { installSoftShellRenderer } from '../lib/blocks/renderer'
 import { installShelfFlyout, installZoomReset } from '../lib/blocks/zoom'
 import {
@@ -870,6 +876,7 @@ function BlocksUnreadable({ types }: { types: readonly string[] }): JSX.Element 
  */
 function installBlockHelpMenu(): void {
   installBlockPythonMenu()
+  installFunctionExtrasMenu()
   const id = 'snakieBlockHelp'
   if (Blockly.ContextMenuRegistry.registry.getItem(id)) return
   // Blockly's OWN Help item comes first, and it opens `helpUrl` — which every
@@ -906,6 +913,45 @@ function installBlockHelpMenu(): void {
  * rather than throwing inside Blockly's menu.
  */
 let showBlockPython: ((blockId: string) => void) | null = null
+
+/**
+ * A `def` block's right-click **Add extra parameters…** (#1134).
+ *
+ * The parameters Blockly's mutator cannot model — a default value, a `*args`,
+ * a `**kwargs` — live in a text field on the block, and that field's row is
+ * hidden while it is empty so the ordinary `def` block stays ordinary. This is
+ * how a learner asks for it: the row appears and its editor opens, ready to be
+ * typed into. Emptied and closed again, it puts itself away.
+ *
+ * Hidden — rather than greyed out — for a block that already shows the row, and
+ * for every block that has no such row at all, which is all of them but two.
+ */
+function installFunctionExtrasMenu(): void {
+  const id = 'snakieFunctionExtras'
+  if (Blockly.ContextMenuRegistry.registry.getItem(id)) return
+  Blockly.ContextMenuRegistry.registry.register({
+    id,
+    scopeType: Blockly.ContextMenuRegistry.ScopeType.BLOCK,
+    // Below "Show me the Python" and Help: it edits this block rather than
+    // explaining it, so it sits with Blockly's own editing items.
+    weight: 98,
+    displayText: 'Add extra parameters…',
+    preconditionFn: (scope) => {
+      const block = scope.block
+      if (!block || !hasExtrasRow(block)) return 'hidden'
+      return extrasVisible(block) ? 'hidden' : 'enabled'
+    },
+    callback: (scope) => {
+      const block = scope.block
+      if (!block) return
+      setExtrasVisible(block, true)
+      // After the render the row was just queued for, so the editor opens over
+      // a field that is actually on screen.
+      const field = block.getField(EXTRAS_FIELD)
+      if (field) setTimeout(() => field.showEditor(), 0)
+    }
+  })
+}
 
 function installBlockPythonMenu(): void {
   const id = 'snakieBlockPython'

@@ -1105,6 +1105,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The extra-parameters box is out of the way until it is used** (#1134). The
+  field that holds the parameters Blockly's mutator cannot model — a default
+  value, a `*args`, a `**kwargs` — sat on every `def` block labelled `and also`,
+  which said nothing about what belonged in it and asked every learner who ever
+  dragged a function out to wonder. The row is hidden while it is empty now, and
+  shows itself the moment it has something to say: right-click a `def` block and
+  choose **Add extra parameters…**, or open a file whose function has one. The
+  label reads `extra parameters:` rather than `and also`. Nothing about what the
+  field *generates* changed — a hidden empty row and no row at all write the same
+  Python, and a value saved with the row hidden brings it back on reopen.
+
+- **A description bubble left open no longer prints into the PDF** (#1147). A
+  `def` block's description is already set under the function's name on the
+  blocks pages, and the speech bubble it came from was going into the picture as
+  well — mislocated, because the capture strips the canvas's pan and zoom while
+  the bubble sits on a layer of its own that kept them, so it landed wherever the
+  canvas happened to be scrolled to. Bubbles are dropped from the exported copy
+  only: one the learner has open stays open on screen.
+
 - **Zooming the canvas no longer resizes the shelf, and one press shows the
   whole program** (#1150). Blockly's flyout — the drawer a category opens — is a
   workspace of its own whose scale followed the canvas's, so zooming in to look
