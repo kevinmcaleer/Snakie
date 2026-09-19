@@ -107,7 +107,7 @@ export interface ListingOptions {
 
 const DEFAULT_FONT_SIZE = 8.5
 /** Vertical space a section heading and its rule occupy. */
-const HEADING_HEIGHT = 32
+export const SECTION_HEADING_HEIGHT = 32
 
 /** Width of the line-number gutter, sized for the highest number present. */
 function gutterWidth(maxLine: number, fontSize: number): number {
@@ -121,7 +121,7 @@ export function drawSectionHeading(page: LaidOutPage, heading: string): number {
   const box = page.content
   page.text(heading, box.x, box.y + 12, { font: 'Helvetica-Bold', size: 13, color: INK })
   page.line(box.x, box.y + 20, box.x + box.width, box.y + 20, { color: RULE, width: 0.75 })
-  return box.y + HEADING_HEIGHT
+  return box.y + SECTION_HEADING_HEIGHT
 }
 
 /**
@@ -138,20 +138,20 @@ export function drawListing(doc: PdfDocument, opts: ListingOptions): LaidOutPage
   const leading = fontSize * 1.34
   const charWidth = (COURIER_WIDTH * fontSize) / 1000
   const lineCount = code.split('\n').length
-  const probe = doc.newPage()
-  const box: Box = probe.content
+  // Plan against the geometry every page shares, BEFORE adding one: a section
+  // that turns out to need no pages must leave none behind (#1108).
+  const box: Box = doc.contentBox
   const gutter = gutterWidth(lineCount, fontSize)
   const textX = box.x + gutter + 6
   const cols = courierCharsPerLine(box.x + box.width - textX, fontSize)
-  const capacity = Math.max(1, Math.floor((box.height - HEADING_HEIGHT) / leading))
+  const capacity = Math.max(1, Math.floor((box.height - SECTION_HEADING_HEIGHT) / leading))
 
   const pagesOfRows = paginateListing(layOutListing(code, cols, opts.tabWidth), capacity)
   const heading = opts.heading ?? 'MicroPython'
   const out: LaidOutPage[] = []
 
   pagesOfRows.forEach((rows, i) => {
-    // The first page is the one already added as `probe`; the rest are new.
-    const page = i === 0 ? probe : doc.newPage()
+    const page = doc.newPage()
     out.push(page)
     page.rect({ x: 0, y: 0, width: doc.size.width, height: doc.size.height }, { fill: PAPER })
     const top = drawSectionHeading(page, i === 0 ? heading : `${heading} (continued)`)

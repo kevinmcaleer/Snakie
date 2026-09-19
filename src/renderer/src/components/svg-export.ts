@@ -230,13 +230,26 @@ export function serializeLiveSvg(
      *  full-canvas grid/paper) so the export is tight to the drawing, and those
      *  large backdrop layers just fill the framed area to the edges. */
     bboxExclude?: string[]
+    /**
+     * Frame to THIS box (in the content group's own coordinates) instead of
+     * measuring the group (#1112).
+     *
+     * The blocks export captures one stack at a time out of a canvas holding
+     * several: the other stacks are excluded from the clone, but the live group
+     * still measures as all of them, so the caller supplies the box it wants.
+     */
+    frame?: { x: number; y: number; width: number; height: number }
   } = {}
 ): { svg: string; width: number; height: number } | null {
   const content = svg.querySelector(contentSelector) as SVGGraphicsElement | null
   if (!content) return null
   let bbox: { x: number; y: number; width: number; height: number }
   try {
-    bbox = opts.bboxExclude?.length ? bboxExcluding(content, opts.bboxExclude) : content.getBBox()
+    bbox = opts.frame
+      ? opts.frame
+      : opts.bboxExclude?.length
+        ? bboxExcluding(content, opts.bboxExclude)
+        : content.getBBox()
   } catch {
     return null
   }

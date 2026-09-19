@@ -236,6 +236,22 @@ export class PdfDocument {
     return this.pages.length
   }
 
+  /**
+   * The content box every page of this document will have.
+   *
+   * Every page shares one geometry, so a section can PLAN its pagination before
+   * it adds a page — which is how a section that turns out to be empty manages
+   * to leave no blank page behind (#1108).
+   */
+  get contentBox(): Box {
+    return {
+      x: this.margins.left,
+      y: this.margins.top,
+      width: this.size.width - this.margins.left - this.margins.right,
+      height: this.size.height - this.margins.top - this.margins.bottom
+    }
+  }
+
   /** Register a JPEG for use on any page. */
   addImage(data: Parameters<PdfWriter['addImage']>[0]): PdfImageRef {
     return this.writer.addImage(data)
