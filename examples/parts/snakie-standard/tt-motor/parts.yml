@@ -1,0 +1,133 @@
+id: tt-motor
+name: Yellow TT Motor
+manufacturer: Generic
+family: Motor
+package: THT
+pinSpacing: 2.54
+voltage: 6V
+version: 0.1.0
+pcbColor: "#0f5a2e"
+aspect: 0.5
+dimensions:
+  width: 22
+  height: 44
+shape:
+  kind: rect
+  cornerRadius: 0
+headers:
+  - edge: top
+    pins:
+      - name: VCC
+        type: pwr
+        x: 0.62
+        y: 0.045
+      - name: GND
+        type: gnd
+        x: 0.38
+        y: 0.045
+shapes:
+  - kind: rect
+    x: 0.23
+    y: 0.03
+    fill: "#c0392b"
+    stroke: "#8a2f24"
+    strokeWidth: 0.01
+    w: 0.06
+    h: 0.14
+    z: 0
+    cornerRadius: 0
+  - kind: rect
+    x: 0.71
+    y: 0.03
+    fill: "#1c2227"
+    stroke: "#111417"
+    strokeWidth: 0.01
+    w: 0.06
+    h: 0.14
+    z: 1
+    cornerRadius: 0
+  - kind: rect
+    x: 0.16
+    y: 0.1
+    fill: "#8a8f96"
+    stroke: "#6b6f75"
+    strokeWidth: 0.01
+    w: 0.68
+    h: 0.4
+    z: 2
+    cornerRadius: 0.15
+  - kind: rect
+    x: 0.24
+    y: 0.12
+    fill: "#a8adb3"
+    stroke: "#6b6f75"
+    strokeWidth: 0
+    w: 0.52
+    h: 0.04
+    z: 3
+    cornerRadius: 0
+  - kind: rect
+    x: 0.02
+    y: 0.44
+    fill: "#e8c93a"
+    stroke: "#b89c1f"
+    strokeWidth: 0.015
+    w: 0.14
+    h: 0.1
+    z: 4
+    cornerRadius: 0.03
+  - kind: rect
+    x: 0.84
+    y: 0.44
+    fill: "#e8c93a"
+    stroke: "#b89c1f"
+    strokeWidth: 0.015
+    w: 0.14
+    h: 0.1
+    z: 5
+    cornerRadius: 0.03
+  - kind: rect
+    x: 0.1
+    y: 0.48
+    fill: "#f2d93f"
+    stroke: "#b89c1f"
+    strokeWidth: 0.02
+    w: 0.8
+    h: 0.42
+    z: 6
+    cornerRadius: 0.06
+  - kind: rect
+    x: 0.16
+    y: 0.55
+    fill: "#d9bd2f"
+    stroke: "#b89c1f"
+    strokeWidth: 0
+    w: 0.68
+    h: 0.26
+    z: 7
+    cornerRadius: 0.04
+  - kind: rect
+    x: 0.42
+    y: 0.9
+    fill: "#8a8f96"
+    stroke: "#6b6f75"
+    strokeWidth: 0.01
+    w: 0.16
+    h: 0.1
+    z: 8
+    cornerRadius: 0
+help: help.md
+electrical:
+  model: consumer
+  maxCurrentA: 0.25
+  currentDrawA: 0.07
+  stallCurrentA: 0.25
+  terminals:
+    positive: VCC
+    negative: GND
+layerVisibility:
+  pcb: false
+  image: false
+  holes: true
+  pins: true
+  components: true
