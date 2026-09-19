@@ -124,6 +124,12 @@ const OUTPUT_TYPE = new Map<string, SocketType>([
   ['snakie_text_ord', 'Number'],
   ['snakie_text_chr', 'String'],
   ['snakie_int_base', 'Number'],
+  // The list verbs (#1122). `sorted(xs)` is the only one that hands back a
+  // LIST, which is what lets it go straight into a `for each`.
+  ['snakie_list_index', 'Number'],
+  ['snakie_list_count', 'Number'],
+  ['snakie_list_aggregate', 'Number'],
+  ['snakie_list_sorted', 'Array'],
   ['snakie_list_contains', 'Boolean'],
   // `controls_forEach`'s LIST socket checks Array, and a `text` in it is the
   // same class of unloadable workspace the table above exists for (#1087):
@@ -321,6 +327,19 @@ export interface CallRule {
    * stays raw.
    */
   checks?: Readonly<Record<string, SocketType>>
+  /**
+   * Sockets that are ONE-BASED on the block and zero-based in the Python
+   * (#1122, epic #1119).
+   *
+   * The Lists drawer counts from 1 and writes the `- 1` out visibly — see
+   * `lists.ts` for why that was chosen over renumbering in silence. Reading one
+   * back means undoing the same arithmetic, and only the two forms the
+   * generator can write are undoable: a literal, counted back up, and the
+   * `- 1` it wrote. `xs.pop(n)` is neither, so a rule naming a socket here
+   * DECLINES that line rather than producing a block which would regenerate as
+   * `xs.pop(n - 1)` — somebody's line, rewritten.
+   */
+  oneBased?: readonly string[]
 }
 
 /**
@@ -2002,6 +2021,12 @@ class Converter {
       if (target.type === 'snakie_dict_get') {
         return recognised([{ type: 'snakie_dict_remove', inputs: target.inputs }])
       }
+      // `del xs[0]` → the Lists drawer's remove-by-position (#1122). Taking one
+      // out by WHERE it is has no method — `pop` hands the value back, which is
+      // a different block — so `del` is the only line it can be.
+      if (target.type === 'snakie_list_get') {
+        return recognised([{ type: 'snakie_list_remove_at', inputs: target.inputs }])
+      }
     }
     const raise = /^raise(?:\s+(.+))?$/.exec(text)
     if (raise) {
@@ -2833,6 +2858,19 @@ class Converter {
     return null
   }
 
+  /**
+   * One argument of a rule, as the block it goes into wants it (#1122).
+   *
+   * Ordinarily that is just the expression. A socket the rule lists in
+   * {@link CallRule.oneBased} is counted back UP first, because the block face
+   * counts from 1 and the Python counts from 0 — and null when that cannot be
+   * undone exactly, which declines the whole rule.
+   */
+  private ruleArgument(rule: CallRule, name: string, text: string): BlockJson | null {
+    if (rule.oneBased?.includes(name)) return this.oneBased(text.trim())
+    return this.expression(text)
+  }
+
   private buildCall(rule: CallRule, args: readonly string[]): BlockJson | null {
     const names = rule.args ?? []
     // AN ARGUMENT CAN BE A FIELD (#1130), as it long has been for a call on a
@@ -2860,7 +2898,8 @@ class Converter {
         continue
       }
       const name = names[socket++]
-      const filled = this.expression(args[i])
+      const filled = this.ruleArgument(rule, name, args[i])
+      if (!filled) return null
       // A socket that CHECKS a type and an argument that cannot fit it is not
       // this block — see {@link CallRule.checks}.
       const want = rule.checks?.[name]
@@ -2923,9 +2962,9 @@ class Converter {
           continue
         }
         const name = names[socket++]
-        const filled = this.expression(args[i])
+        const filled = this.ruleArgument(rule, name, args[i])
         const check = rule.checks?.[name]
-        if (check && !fitsSocket(filled, check)) fits = false
+        if (!filled || (check && !fitsSocket(filled, check))) fits = false
         else inputs[name] = { block: filled }
       }
       if (!fits) continue
@@ -3243,11 +3282,30 @@ class Converter {
       tokens,
       at,
       ['+', '-'],
-      (a, b, op) => ({
-        type: 'math_arithmetic',
-        fields: { OP: op === '+' ? 'ADD' : 'MINUS' },
-        inputs: { A: { block: a }, B: { block: b } }
-      }),
+      (a, b, op) => {
+        // `xs.index(v) + 1` IS ONE BLOCK, not two (#1122). The Lists drawer
+        // counts from 1, so its 1-based setting writes exactly this — and the
+        // reader has to fold it back or a learner's own block comes back as an
+        // addition wrapped round a call it cannot see inside.
+        //
+        // Only that exact shape: `+ 1`, literally, on a block the `index` rule
+        // just produced. `xs.index(v) + n` is real arithmetic somebody wrote
+        // and stays the addition it is.
+        if (
+          op === '+' &&
+          a.type === 'snakie_list_index' &&
+          (a.fields as { START?: string } | undefined)?.START === 'ZERO' &&
+          b.type === 'math_number' &&
+          (b.fields as { NUM?: number } | undefined)?.NUM === 1
+        ) {
+          return { ...a, fields: { ...(a.fields as object), START: 'ONE' } }
+        }
+        return {
+          type: 'math_arithmetic',
+          fields: { OP: op === '+' ? 'ADD' : 'MINUS' },
+          inputs: { A: { block: a }, B: { block: b } }
+        }
+      },
       (t, i) => this.parseMultiplicative(t, i),
       'Number'
     )

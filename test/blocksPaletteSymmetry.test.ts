@@ -96,6 +96,8 @@ const READ_DIRECTLY: Record<string, string> = {
   // --- lists: the two subscript forms the block can write back exactly
   snakie_list_get: 'x = readings[0]\n',
   snakie_list_set: 'readings[0] = 1\n',
+  // Taking one out by position has no method — `del` is the line (#1122).
+  snakie_list_remove_at: 'del readings[0]\n',
   snakie_list_contains: 'found = name in names\n',
   snakie_tuple: 'point = (x, y)\n',
   // --- dictionaries (#1120). The three that are not calls are a literal, a

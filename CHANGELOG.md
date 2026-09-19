@@ -8,6 +8,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The list verbs: you can take something out of a list now.** (#1122, epic
+  #1119) The Lists drawer was `create`, `length`, `append`, `get`, `set`,
+  `contains`, and its own header recorded the trim that left it that way. That
+  was the right call for a "make a robot do something" palette and it left one
+  thing that is not a text-processing nicety: **there was no way to remove
+  anything from a list at all.**
+
+  Nine blocks: **insert at**, **remove**, **remove thing `n`**, **take thing `n`
+  out of** (hands the value back), **where … is in**, **how many … in**,
+  **sort / reverse / empty** (one block, three settings — all three return
+  `None`, so none of them may be a value block), **sorted copy of**, and
+  **total / smallest / biggest of**. That last one is the "average these five
+  readings" block: `snakie_math_min_max` takes two *numbers*, not a list.
+
+  Everything stays **1-based on the block and 0-based in the code**, the promise
+  the drawer has made since #1011, and the reader undoes exactly the arithmetic
+  the generator writes — `xs.pop(n)`, which no block could have written, stays
+  raw rather than coming back quietly renumbered.
+
 - **A Dictionaries drawer — the palette had no dictionary blocks at all.**
   (#1120, epic #1119) Not one block, no category, no theme colour. A dict is
   not an exotic construct in device code: it is the shape of a config, a

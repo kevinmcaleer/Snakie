@@ -129,8 +129,303 @@ export const LIST_BLOCKS: BlockDefinition[] = [
       const value = gen.valueToCode(block, 'VALUE', Order.NONE) || 'None'
       return `${list}[${index}] = ${value}\n`
     }
+  },
+  // -------------------------------------------------------------------------
+  // THE VERBS (#1122, epic #1119).
+  //
+  // The drawer was six blocks, and its own header said why and what it cost:
+  // *"TRIMMED: sort, reverse, split, sublist, repeat and index-of"*. That was
+  // the right call for #1007's "make a robot do something" palette; #1119
+  // re-opened it for the handful that are not a text-processing library but the
+  // ordinary verbs of a list. **You could not take something OUT of a list in
+  // blocks at all.**
+  //
+  // ONE-BASED ON THE BLOCK, ZERO-BASED IN THE CODE — the same promise the
+  // drawer has made since #1011, kept by every one of these or the drawer would
+  // contradict itself. `insert`, `pop` and the two removes all write the `- 1`
+  // out, and the reader undoes exactly that (see `CallRule.oneBased`).
+  //
+  // `split` AND `join` ARE NOT HERE: they are text, and #1124's drawer has
+  // them. Nor is `sublist`, which is #1123's slice.
+  // -------------------------------------------------------------------------
+  {
+    type: 'snakie_list_insert',
+    category: 'lists',
+    help: 'ref-types',
+    read: {
+      fn: 'insert',
+      on: 'LIST',
+      args: ['INDEX', 'ITEM'],
+      shape: 'statement',
+      oneBased: ['INDEX'],
+      checks: { LIST: 'Array' }
+    },
+    json: {
+      message0: 'insert %1 at %2 in %3',
+      args0: [
+        { type: 'input_value', name: 'ITEM' },
+        { type: 'input_value', name: 'INDEX', check: 'Number' },
+        { type: 'input_value', name: 'LIST', check: 'Array' }
+      ],
+      inputsInline: true,
+      previousStatement: null,
+      nextStatement: null,
+      tooltip:
+        'Put a value into the middle of a list, pushing the rest along. Position 1 puts it at the front.'
+    },
+    toolbox: { inputs: { INDEX: { shadow: { type: 'math_number', fields: { NUM: 1 } } } } },
+    code: (block, gen) => {
+      const list = gen.valueToCode(block, 'LIST', Order.MEMBER) || '[]'
+      const index = zeroBased(gen.valueToCode(block, 'INDEX', Order.ADDITIVE))
+      const item = gen.valueToCode(block, 'ITEM', Order.NONE) || 'None'
+      return `${list}.insert(${index}, ${item})\n`
+    }
+  },
+  {
+    type: 'snakie_list_remove',
+    category: 'lists',
+    help: 'ref-types',
+    read: {
+      fn: 'remove',
+      on: 'LIST',
+      args: ['ITEM'],
+      shape: 'statement',
+      checks: { LIST: 'Array' }
+    },
+    json: {
+      message0: 'remove %1 from %2',
+      args0: [
+        { type: 'input_value', name: 'ITEM' },
+        { type: 'input_value', name: 'LIST', check: 'Array' }
+      ],
+      inputsInline: true,
+      previousStatement: null,
+      nextStatement: null,
+      tooltip:
+        'Take the FIRST matching value out of a list. If it is not in there the program stops, so check with "is in" first when you are not sure.'
+    },
+    code: (block, gen) => {
+      const list = gen.valueToCode(block, 'LIST', Order.MEMBER) || '[]'
+      return `${list}.remove(${gen.valueToCode(block, 'ITEM', Order.NONE) || 'None'})\n`
+    }
+  },
+  {
+    // TAKING ONE OUT BY POSITION HAS NO METHOD — `del` is the only way to do it
+    // without also being handed the value back, which is what `pop` is for and
+    // is a different block below.
+    type: 'snakie_list_remove_at',
+    category: 'lists',
+    help: 'ref-types',
+    json: {
+      message0: 'remove thing %1 from %2',
+      args0: [
+        { type: 'input_value', name: 'INDEX', check: 'Number' },
+        { type: 'input_value', name: 'LIST', check: 'Array' }
+      ],
+      inputsInline: true,
+      previousStatement: null,
+      nextStatement: null,
+      tooltip: 'Take one value out of a list by where it is. The first thing is number 1.'
+    },
+    toolbox: { inputs: { INDEX: { shadow: { type: 'math_number', fields: { NUM: 1 } } } } },
+    code: (block, gen) => {
+      const list = gen.valueToCode(block, 'LIST', Order.MEMBER) || '[]'
+      return `del ${list}[${zeroBased(gen.valueToCode(block, 'INDEX', Order.ADDITIVE))}]\n`
+    }
+  },
+  {
+    type: 'snakie_list_pop',
+    category: 'lists',
+    help: 'ref-types',
+    read: {
+      fn: 'pop',
+      on: 'LIST',
+      args: ['INDEX'],
+      shape: 'value',
+      oneBased: ['INDEX'],
+      checks: { LIST: 'Array' }
+    },
+    json: {
+      message0: 'take thing %1 out of %2',
+      args0: [
+        { type: 'input_value', name: 'INDEX', check: 'Number' },
+        { type: 'input_value', name: 'LIST', check: 'Array' }
+      ],
+      inputsInline: true,
+      output: null,
+      tooltip:
+        'Take one value out of a list AND hand it back, so you can use it. The first thing is number 1.'
+    },
+    toolbox: { inputs: { INDEX: { shadow: { type: 'math_number', fields: { NUM: 1 } } } } },
+    code: (block, gen) => {
+      const list = gen.valueToCode(block, 'LIST', Order.MEMBER) || '[]'
+      return [
+        `${list}.pop(${zeroBased(gen.valueToCode(block, 'INDEX', Order.ADDITIVE))})`,
+        Order.FUNCTION_CALL
+      ]
+    }
+  },
+  {
+    // THE OFF-BY-ONE IS ON THE BLOCK, as it is on #1121's position loop. The
+    // 1-based face has to write `xs.index(item) + 1`, which is arithmetic
+    // around a call — so a plain rule cannot read it and a block with only one
+    // answer could not round-trip the other. The setting gives both forms a
+    // block and each regenerates as itself.
+    type: 'snakie_list_index',
+    category: 'lists',
+    help: 'ref-types',
+    read: {
+      fn: 'index',
+      on: 'LIST',
+      args: ['ITEM'],
+      shape: 'value',
+      fields: { START: 'ZERO' },
+      checks: { LIST: 'Array' }
+    },
+    json: {
+      message0: 'where %1 is in %2 %3',
+      args0: [
+        { type: 'input_value', name: 'ITEM' },
+        { type: 'input_value', name: 'LIST', check: 'Array' },
+        {
+          type: 'field_dropdown',
+          name: 'START',
+          options: [
+            ['(first is 1)', 'ONE'],
+            ['(first is 0)', 'ZERO']
+          ]
+        }
+      ],
+      inputsInline: true,
+      output: 'Number',
+      tooltip:
+        'Where a value sits in a list. Leave it on "first is 1" and the number matches the rest of this drawer. If the value is not in the list at all the program stops.'
+    },
+    code: (block, gen) => {
+      const list = gen.valueToCode(block, 'LIST', Order.MEMBER) || '[]'
+      const item = gen.valueToCode(block, 'ITEM', Order.NONE) || 'None'
+      const call = `${list}.index(${item})`
+      if (block.getFieldValue('START') === 'ZERO') return [call, Order.FUNCTION_CALL]
+      return [`${call} + 1`, Order.ADDITIVE]
+    }
+  },
+  {
+    type: 'snakie_list_count',
+    category: 'lists',
+    help: 'ref-types',
+    read: {
+      fn: 'count',
+      on: 'LIST',
+      args: ['ITEM'],
+      shape: 'value',
+      checks: { LIST: 'Array' }
+    },
+    json: {
+      message0: 'how many %1 in %2',
+      args0: [
+        { type: 'input_value', name: 'ITEM' },
+        { type: 'input_value', name: 'LIST', check: 'Array' }
+      ],
+      inputsInline: true,
+      output: 'Number',
+      tooltip: 'How many times a value appears in a list. Zero when it is not there at all.'
+    },
+    code: (block, gen) => {
+      const list = gen.valueToCode(block, 'LIST', Order.MEMBER) || '[]'
+      return [
+        `${list}.count(${gen.valueToCode(block, 'ITEM', Order.NONE) || 'None'})`,
+        Order.FUNCTION_CALL
+      ]
+    }
+  },
+  {
+    // THREE THINGS DONE TO A LIST IN PLACE, one block. They are the same
+    // sentence with one word changed — the argument `snakie_cast` makes — and
+    // all three return `None`, which is why none of them may be a value block:
+    // a learner who plugged `xs.sort()` into a socket would get nothing, with
+    // no error to explain it.
+    type: 'snakie_list_modify',
+    category: 'lists',
+    help: 'ref-types',
+    json: {
+      message0: '%1 %2',
+      args0: [
+        {
+          type: 'field_dropdown',
+          name: 'OP',
+          options: [
+            ['sort', 'sort'],
+            ['reverse', 'reverse'],
+            ['empty', 'clear']
+          ]
+        },
+        { type: 'input_value', name: 'LIST', check: 'Array' }
+      ],
+      inputsInline: true,
+      previousStatement: null,
+      nextStatement: null,
+      tooltip:
+        'Change a list where it stands: put it in order, turn it round, or throw everything out of it. The list itself changes — nothing is handed back.'
+    },
+    code: (block, gen) => {
+      const list = gen.valueToCode(block, 'LIST', Order.MEMBER) || '[]'
+      return `${list}.${String(block.getFieldValue('OP') ?? 'sort')}()\n`
+    }
+  },
+  {
+    // A SORTED COPY IS A DIFFERENT STATEMENT from sorting in place, which is
+    // why it is a different block: `xs.sort()` returns `None` and `sorted(xs)`
+    // returns a new list. One is a statement and one is a value, and Blockly
+    // blocks are one or the other.
+    type: 'snakie_list_sorted',
+    category: 'lists',
+    help: 'ref-builtins',
+    read: { fn: 'sorted', args: ['LIST'], shape: 'value', checks: { LIST: 'Array' } },
+    json: {
+      message0: 'sorted copy of %1',
+      args0: [{ type: 'input_value', name: 'LIST', check: 'Array' }],
+      inputsInline: true,
+      output: 'Array',
+      tooltip: 'A new list with the same things in order. The original is left alone.'
+    },
+    code: (block, gen) => [
+      `sorted(${gen.valueToCode(block, 'LIST', Order.NONE) || '[]'})`,
+      Order.FUNCTION_CALL
+    ]
+  },
+  {
+    // AVERAGE THESE FIVE READINGS is the single most common list job in a
+    // sensor program, and none of its three pieces had a block:
+    // `snakie_math_min_max` takes two NUMBERS, not a list.
+    type: 'snakie_list_aggregate',
+    category: 'lists',
+    help: 'ref-builtins',
+    json: {
+      message0: '%1 of %2',
+      args0: [
+        {
+          type: 'field_dropdown',
+          name: 'OP',
+          options: [
+            ['total', 'sum'],
+            ['smallest', 'min'],
+            ['biggest', 'max']
+          ]
+        },
+        { type: 'input_value', name: 'LIST', check: 'Array' }
+      ],
+      inputsInline: true,
+      output: 'Number',
+      tooltip:
+        'Add a list of numbers up, or find the smallest or biggest in it. Divide the total by the length to average some readings.'
+    },
+    code: (block, gen) => [
+      `${String(block.getFieldValue('OP') ?? 'sum')}(${
+        gen.valueToCode(block, 'LIST', Order.NONE) || '[]'
+      })`,
+      Order.FUNCTION_CALL
+    ]
   }
-
 ]
 
 /**
@@ -173,6 +468,30 @@ function countItems(block: { getInput(name: string): unknown }): number {
  * no rule of its own on purpose — `len(xs)` is already read as `text_length`,
  * and one line of Python cannot be two blocks.
  */
-registerCallRules(
-  LIST_BLOCKS.flatMap((block) => (block.read ? [{ ...block.read, type: block.type }] : []))
-)
+registerCallRules([
+  ...LIST_BLOCKS.flatMap((block) => (block.read ? [{ ...block.read, type: block.type }] : [])),
+  // ONE BLOCK WITH A DROPDOWN IS SEVERAL RULES (#1122), which is the whole
+  // reason `CallRule.fields` exists — `snakie_math_min_max` has done it since
+  // W2. Without them the reader could only ever have produced one option.
+  ...(['sort', 'reverse', 'clear'] as const).map((op) => ({
+    fn: op,
+    type: 'snakie_list_modify',
+    on: 'LIST',
+    args: [] as const,
+    shape: 'statement' as const,
+    fields: { OP: op },
+    checks: { LIST: 'Array' as const }
+  })),
+  // `min(xs)` AND `min(a, b)` ARE DIFFERENT BLOCKS, and arity is what keeps
+  // them apart: `buildCall` refuses a rule whose argument count does not line
+  // up, so the one-argument form lands here and the two-argument form stays
+  // with the Maths drawer's block.
+  ...(['sum', 'min', 'max'] as const).map((op) => ({
+    fn: op,
+    type: 'snakie_list_aggregate',
+    args: ['LIST'],
+    shape: 'value' as const,
+    fields: { OP: op },
+    checks: { LIST: 'Array' as const }
+  }))
+])
