@@ -24,6 +24,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   top-down image, a mini-help article on how the holes connect, and a 3-D
   model (`model.stl`) for the Robot View.
 
+- **2WD Robot Car Chassis in the Standard library.** The clear-acrylic
+  "smart car" kit — 210 × 150 mm plate, two TT gear motors on T-brackets,
+  Ø65 mm wheels rising through the plate's side notches, a steel-ball caster
+  and a 4×AA battery box — as one part, in a new `Chassis` category. Its 3-D
+  model is generated from the kit's published dimensions by
+  `scripts/robot-chassis-mesh.mjs` (millimetres, wheels on z = 0, so a placed
+  chassis sits on the floor rather than in it); the part declares its three
+  ground contacts, mass and centre of mass, and brings out both motors and the
+  battery pack as pins, with the pack a 6 V source in the circuit sim. Ships a
+  top-down render of the same model as its image and a help article on wiring
+  it through an H-bridge.
+
 ### Fixed
 
 - **PDF export drew some parts as `part library not installed`.** A placed
