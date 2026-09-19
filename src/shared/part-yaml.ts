@@ -187,6 +187,7 @@ function coercePin(raw: unknown): PartPin | null {
   const label = str(r.label)
   if (label && label !== name) pin.label = label
   if (r.castellated === true) pin.castellated = true
+  if (r.labelHidden === true) pin.labelHidden = true
   const padShape = coercePinShape(r.shape)
   if (padShape) pin.shape = padShape
   const rotation = num(r.rotation)
@@ -455,6 +456,7 @@ function pinToObj(p: PartPin): Record<string, unknown> {
   if (p.type === 'io' && p.buses && Object.keys(p.buses).length) out.buses = p.buses
   if (p.label && p.label !== p.name) out.label = p.label
   if (p.castellated) out.castellated = true
+  if (p.labelHidden === true) out.labelHidden = true
   if (p.shape) out.shape = p.shape
   if (p.rotation !== undefined) out.rotation = p.rotation
   if (p.x !== undefined) out.x = p.x

@@ -6,6 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Breadboard (400 point) in the Standard library.** A half-size solderless
+  breadboard part whose 400 tie points are wired internally like the real
+  thing: each row's `a`–`e` and `f`–`j` are two 5-way nets (the centre channel
+  splits them) and each `+`/`−` rail runs the full 30 rows as one net, so a
+  wire dragged to `a5` reaches `b5`–`e5` in the netlist and ERC. Ships a
+  top-down image, a mini-help article on how the holes connect, and a 3-D
+  model (`model.stl`) for the Robot View.
+
+### Fixed
+
+- **A pin's "hide label" flag now survives a save.** `parts.yml` dropped
+  `labelHidden` on both read and write, so the Part Editor's checkbox reset on
+  every reload.
+
 ## [0.84.1] - 2026-09-19
 
 ### Changed

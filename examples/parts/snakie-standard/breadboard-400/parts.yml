@@ -1,0 +1,568 @@
+id: breadboard-400
+name: Breadboard (400 point)
+description: Half-size solderless breadboard — 30 rows of 5-way tie points (a–e, f–j) plus two power rails, wired internally like the real thing.
+manufacturer: Generic
+family: Prototyping
+tags:
+- breadboard
+- prototyping
+- solderless
+- half-size
+package: THT
+pinSpacing: 2.54
+partNumber: BB-400
+properties:
+  points: 400
+  rows: 30
+  rails: 2 (+ and − each side)
+  wire: 20–29 AWG solid core
+version: 0.1.0
+pcbColor: '#f3efe4'
+aspect: 0.6707
+dimensions:
+  width: 55.0
+  height: 82.0
+shape:
+  kind: rect
+  cornerRadiusMm: 1
+image: image.png
+imageLayer:
+  x: 0
+  y: 0
+  w: 1
+  h: 1
+help: help.md
+mesh: model.stl
+meshUnits: mm
+headers:
+- edge: top
+  pins:
+  - { name: 'L+1', type: other, shape: square, labelHidden: true, x: 0.0659, y: 0.0509 }
+  - { name: 'L+2', type: other, shape: square, labelHidden: true, x: 0.0659, y: 0.0818 }
+  - { name: 'L+3', type: other, shape: square, labelHidden: true, x: 0.0659, y: 0.1128 }
+  - { name: 'L+4', type: other, shape: square, labelHidden: true, x: 0.0659, y: 0.1438 }
+  - { name: 'L+5', type: other, shape: square, labelHidden: true, x: 0.0659, y: 0.1748 }
+  - { name: 'L+6', type: other, shape: square, labelHidden: true, x: 0.0659, y: 0.2367 }
+  - { name: 'L+7', type: other, shape: square, labelHidden: true, x: 0.0659, y: 0.2677 }
+  - { name: 'L+8', type: other, shape: square, labelHidden: true, x: 0.0659, y: 0.2987 }
+  - { name: 'L+9', type: other, shape: square, labelHidden: true, x: 0.0659, y: 0.3296 }
+  - { name: 'L+10', type: other, shape: square, labelHidden: true, x: 0.0659, y: 0.3606 }
+  - { name: 'L+11', type: other, shape: square, labelHidden: true, x: 0.0659, y: 0.4226 }
+  - { name: 'L+12', type: other, shape: square, labelHidden: true, x: 0.0659, y: 0.4535 }
+  - { name: 'L+13', type: other, shape: square, labelHidden: true, x: 0.0659, y: 0.4845 }
+  - { name: 'L+14', type: other, shape: square, labelHidden: true, x: 0.0659, y: 0.5155 }
+  - { name: 'L+15', type: other, shape: square, labelHidden: true, x: 0.0659, y: 0.5465 }
+  - { name: 'L+16', type: other, shape: square, labelHidden: true, x: 0.0659, y: 0.6084 }
+  - { name: 'L+17', type: other, shape: square, labelHidden: true, x: 0.0659, y: 0.6394 }
+  - { name: 'L+18', type: other, shape: square, labelHidden: true, x: 0.0659, y: 0.6704 }
+  - { name: 'L+19', type: other, shape: square, labelHidden: true, x: 0.0659, y: 0.7013 }
+  - { name: 'L+20', type: other, shape: square, labelHidden: true, x: 0.0659, y: 0.7323 }
+  - { name: 'L+21', type: other, shape: square, labelHidden: true, x: 0.0659, y: 0.7943 }
+  - { name: 'L+22', type: other, shape: square, labelHidden: true, x: 0.0659, y: 0.8252 }
+  - { name: 'L+23', type: other, shape: square, labelHidden: true, x: 0.0659, y: 0.8562 }
+  - { name: 'L+24', type: other, shape: square, labelHidden: true, x: 0.0659, y: 0.8872 }
+  - { name: 'L+25', type: other, shape: square, labelHidden: true, x: 0.0659, y: 0.9182 }
+  - { name: 'L-1', type: other, shape: square, labelHidden: true, x: 0.1121, y: 0.0509 }
+  - { name: 'L-2', type: other, shape: square, labelHidden: true, x: 0.1121, y: 0.0818 }
+  - { name: 'L-3', type: other, shape: square, labelHidden: true, x: 0.1121, y: 0.1128 }
+  - { name: 'L-4', type: other, shape: square, labelHidden: true, x: 0.1121, y: 0.1438 }
+  - { name: 'L-5', type: other, shape: square, labelHidden: true, x: 0.1121, y: 0.1748 }
+  - { name: 'L-6', type: other, shape: square, labelHidden: true, x: 0.1121, y: 0.2367 }
+  - { name: 'L-7', type: other, shape: square, labelHidden: true, x: 0.1121, y: 0.2677 }
+  - { name: 'L-8', type: other, shape: square, labelHidden: true, x: 0.1121, y: 0.2987 }
+  - { name: 'L-9', type: other, shape: square, labelHidden: true, x: 0.1121, y: 0.3296 }
+  - { name: 'L-10', type: other, shape: square, labelHidden: true, x: 0.1121, y: 0.3606 }
+  - { name: 'L-11', type: other, shape: square, labelHidden: true, x: 0.1121, y: 0.4226 }
+  - { name: 'L-12', type: other, shape: square, labelHidden: true, x: 0.1121, y: 0.4535 }
+  - { name: 'L-13', type: other, shape: square, labelHidden: true, x: 0.1121, y: 0.4845 }
+  - { name: 'L-14', type: other, shape: square, labelHidden: true, x: 0.1121, y: 0.5155 }
+  - { name: 'L-15', type: other, shape: square, labelHidden: true, x: 0.1121, y: 0.5465 }
+  - { name: 'L-16', type: other, shape: square, labelHidden: true, x: 0.1121, y: 0.6084 }
+  - { name: 'L-17', type: other, shape: square, labelHidden: true, x: 0.1121, y: 0.6394 }
+  - { name: 'L-18', type: other, shape: square, labelHidden: true, x: 0.1121, y: 0.6704 }
+  - { name: 'L-19', type: other, shape: square, labelHidden: true, x: 0.1121, y: 0.7013 }
+  - { name: 'L-20', type: other, shape: square, labelHidden: true, x: 0.1121, y: 0.7323 }
+  - { name: 'L-21', type: other, shape: square, labelHidden: true, x: 0.1121, y: 0.7943 }
+  - { name: 'L-22', type: other, shape: square, labelHidden: true, x: 0.1121, y: 0.8252 }
+  - { name: 'L-23', type: other, shape: square, labelHidden: true, x: 0.1121, y: 0.8562 }
+  - { name: 'L-24', type: other, shape: square, labelHidden: true, x: 0.1121, y: 0.8872 }
+  - { name: 'L-25', type: other, shape: square, labelHidden: true, x: 0.1121, y: 0.9182 }
+  - { name: 'R+1', type: other, shape: square, labelHidden: true, x: 0.8879, y: 0.0509 }
+  - { name: 'R+2', type: other, shape: square, labelHidden: true, x: 0.8879, y: 0.0818 }
+  - { name: 'R+3', type: other, shape: square, labelHidden: true, x: 0.8879, y: 0.1128 }
+  - { name: 'R+4', type: other, shape: square, labelHidden: true, x: 0.8879, y: 0.1438 }
+  - { name: 'R+5', type: other, shape: square, labelHidden: true, x: 0.8879, y: 0.1748 }
+  - { name: 'R+6', type: other, shape: square, labelHidden: true, x: 0.8879, y: 0.2367 }
+  - { name: 'R+7', type: other, shape: square, labelHidden: true, x: 0.8879, y: 0.2677 }
+  - { name: 'R+8', type: other, shape: square, labelHidden: true, x: 0.8879, y: 0.2987 }
+  - { name: 'R+9', type: other, shape: square, labelHidden: true, x: 0.8879, y: 0.3296 }
+  - { name: 'R+10', type: other, shape: square, labelHidden: true, x: 0.8879, y: 0.3606 }
+  - { name: 'R+11', type: other, shape: square, labelHidden: true, x: 0.8879, y: 0.4226 }
+  - { name: 'R+12', type: other, shape: square, labelHidden: true, x: 0.8879, y: 0.4535 }
+  - { name: 'R+13', type: other, shape: square, labelHidden: true, x: 0.8879, y: 0.4845 }
+  - { name: 'R+14', type: other, shape: square, labelHidden: true, x: 0.8879, y: 0.5155 }
+  - { name: 'R+15', type: other, shape: square, labelHidden: true, x: 0.8879, y: 0.5465 }
+  - { name: 'R+16', type: other, shape: square, labelHidden: true, x: 0.8879, y: 0.6084 }
+  - { name: 'R+17', type: other, shape: square, labelHidden: true, x: 0.8879, y: 0.6394 }
+  - { name: 'R+18', type: other, shape: square, labelHidden: true, x: 0.8879, y: 0.6704 }
+  - { name: 'R+19', type: other, shape: square, labelHidden: true, x: 0.8879, y: 0.7013 }
+  - { name: 'R+20', type: other, shape: square, labelHidden: true, x: 0.8879, y: 0.7323 }
+  - { name: 'R+21', type: other, shape: square, labelHidden: true, x: 0.8879, y: 0.7943 }
+  - { name: 'R+22', type: other, shape: square, labelHidden: true, x: 0.8879, y: 0.8252 }
+  - { name: 'R+23', type: other, shape: square, labelHidden: true, x: 0.8879, y: 0.8562 }
+  - { name: 'R+24', type: other, shape: square, labelHidden: true, x: 0.8879, y: 0.8872 }
+  - { name: 'R+25', type: other, shape: square, labelHidden: true, x: 0.8879, y: 0.9182 }
+  - { name: 'R-1', type: other, shape: square, labelHidden: true, x: 0.9341, y: 0.0509 }
+  - { name: 'R-2', type: other, shape: square, labelHidden: true, x: 0.9341, y: 0.0818 }
+  - { name: 'R-3', type: other, shape: square, labelHidden: true, x: 0.9341, y: 0.1128 }
+  - { name: 'R-4', type: other, shape: square, labelHidden: true, x: 0.9341, y: 0.1438 }
+  - { name: 'R-5', type: other, shape: square, labelHidden: true, x: 0.9341, y: 0.1748 }
+  - { name: 'R-6', type: other, shape: square, labelHidden: true, x: 0.9341, y: 0.2367 }
+  - { name: 'R-7', type: other, shape: square, labelHidden: true, x: 0.9341, y: 0.2677 }
+  - { name: 'R-8', type: other, shape: square, labelHidden: true, x: 0.9341, y: 0.2987 }
+  - { name: 'R-9', type: other, shape: square, labelHidden: true, x: 0.9341, y: 0.3296 }
+  - { name: 'R-10', type: other, shape: square, labelHidden: true, x: 0.9341, y: 0.3606 }
+  - { name: 'R-11', type: other, shape: square, labelHidden: true, x: 0.9341, y: 0.4226 }
+  - { name: 'R-12', type: other, shape: square, labelHidden: true, x: 0.9341, y: 0.4535 }
+  - { name: 'R-13', type: other, shape: square, labelHidden: true, x: 0.9341, y: 0.4845 }
+  - { name: 'R-14', type: other, shape: square, labelHidden: true, x: 0.9341, y: 0.5155 }
+  - { name: 'R-15', type: other, shape: square, labelHidden: true, x: 0.9341, y: 0.5465 }
+  - { name: 'R-16', type: other, shape: square, labelHidden: true, x: 0.9341, y: 0.6084 }
+  - { name: 'R-17', type: other, shape: square, labelHidden: true, x: 0.9341, y: 0.6394 }
+  - { name: 'R-18', type: other, shape: square, labelHidden: true, x: 0.9341, y: 0.6704 }
+  - { name: 'R-19', type: other, shape: square, labelHidden: true, x: 0.9341, y: 0.7013 }
+  - { name: 'R-20', type: other, shape: square, labelHidden: true, x: 0.9341, y: 0.7323 }
+  - { name: 'R-21', type: other, shape: square, labelHidden: true, x: 0.9341, y: 0.7943 }
+  - { name: 'R-22', type: other, shape: square, labelHidden: true, x: 0.9341, y: 0.8252 }
+  - { name: 'R-23', type: other, shape: square, labelHidden: true, x: 0.9341, y: 0.8562 }
+  - { name: 'R-24', type: other, shape: square, labelHidden: true, x: 0.9341, y: 0.8872 }
+  - { name: 'R-25', type: other, shape: square, labelHidden: true, x: 0.9341, y: 0.9182 }
+  - { name: 'a1', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.0509 }
+  - { name: 'b1', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.0509 }
+  - { name: 'c1', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.0509 }
+  - { name: 'd1', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.0509 }
+  - { name: 'e1', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.0509 }
+  - { name: 'f1', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.0509 }
+  - { name: 'g1', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.0509 }
+  - { name: 'h1', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.0509 }
+  - { name: 'i1', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.0509 }
+  - { name: 'j1', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.0509 }
+  - { name: 'a2', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.0818 }
+  - { name: 'b2', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.0818 }
+  - { name: 'c2', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.0818 }
+  - { name: 'd2', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.0818 }
+  - { name: 'e2', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.0818 }
+  - { name: 'f2', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.0818 }
+  - { name: 'g2', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.0818 }
+  - { name: 'h2', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.0818 }
+  - { name: 'i2', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.0818 }
+  - { name: 'j2', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.0818 }
+  - { name: 'a3', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.1128 }
+  - { name: 'b3', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.1128 }
+  - { name: 'c3', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.1128 }
+  - { name: 'd3', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.1128 }
+  - { name: 'e3', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.1128 }
+  - { name: 'f3', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.1128 }
+  - { name: 'g3', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.1128 }
+  - { name: 'h3', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.1128 }
+  - { name: 'i3', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.1128 }
+  - { name: 'j3', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.1128 }
+  - { name: 'a4', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.1438 }
+  - { name: 'b4', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.1438 }
+  - { name: 'c4', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.1438 }
+  - { name: 'd4', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.1438 }
+  - { name: 'e4', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.1438 }
+  - { name: 'f4', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.1438 }
+  - { name: 'g4', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.1438 }
+  - { name: 'h4', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.1438 }
+  - { name: 'i4', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.1438 }
+  - { name: 'j4', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.1438 }
+  - { name: 'a5', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.1748 }
+  - { name: 'b5', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.1748 }
+  - { name: 'c5', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.1748 }
+  - { name: 'd5', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.1748 }
+  - { name: 'e5', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.1748 }
+  - { name: 'f5', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.1748 }
+  - { name: 'g5', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.1748 }
+  - { name: 'h5', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.1748 }
+  - { name: 'i5', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.1748 }
+  - { name: 'j5', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.1748 }
+  - { name: 'a6', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.2057 }
+  - { name: 'b6', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.2057 }
+  - { name: 'c6', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.2057 }
+  - { name: 'd6', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.2057 }
+  - { name: 'e6', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.2057 }
+  - { name: 'f6', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.2057 }
+  - { name: 'g6', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.2057 }
+  - { name: 'h6', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.2057 }
+  - { name: 'i6', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.2057 }
+  - { name: 'j6', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.2057 }
+  - { name: 'a7', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.2367 }
+  - { name: 'b7', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.2367 }
+  - { name: 'c7', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.2367 }
+  - { name: 'd7', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.2367 }
+  - { name: 'e7', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.2367 }
+  - { name: 'f7', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.2367 }
+  - { name: 'g7', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.2367 }
+  - { name: 'h7', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.2367 }
+  - { name: 'i7', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.2367 }
+  - { name: 'j7', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.2367 }
+  - { name: 'a8', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.2677 }
+  - { name: 'b8', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.2677 }
+  - { name: 'c8', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.2677 }
+  - { name: 'd8', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.2677 }
+  - { name: 'e8', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.2677 }
+  - { name: 'f8', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.2677 }
+  - { name: 'g8', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.2677 }
+  - { name: 'h8', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.2677 }
+  - { name: 'i8', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.2677 }
+  - { name: 'j8', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.2677 }
+  - { name: 'a9', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.2987 }
+  - { name: 'b9', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.2987 }
+  - { name: 'c9', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.2987 }
+  - { name: 'd9', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.2987 }
+  - { name: 'e9', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.2987 }
+  - { name: 'f9', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.2987 }
+  - { name: 'g9', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.2987 }
+  - { name: 'h9', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.2987 }
+  - { name: 'i9', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.2987 }
+  - { name: 'j9', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.2987 }
+  - { name: 'a10', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.3296 }
+  - { name: 'b10', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.3296 }
+  - { name: 'c10', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.3296 }
+  - { name: 'd10', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.3296 }
+  - { name: 'e10', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.3296 }
+  - { name: 'f10', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.3296 }
+  - { name: 'g10', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.3296 }
+  - { name: 'h10', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.3296 }
+  - { name: 'i10', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.3296 }
+  - { name: 'j10', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.3296 }
+  - { name: 'a11', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.3606 }
+  - { name: 'b11', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.3606 }
+  - { name: 'c11', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.3606 }
+  - { name: 'd11', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.3606 }
+  - { name: 'e11', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.3606 }
+  - { name: 'f11', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.3606 }
+  - { name: 'g11', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.3606 }
+  - { name: 'h11', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.3606 }
+  - { name: 'i11', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.3606 }
+  - { name: 'j11', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.3606 }
+  - { name: 'a12', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.3916 }
+  - { name: 'b12', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.3916 }
+  - { name: 'c12', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.3916 }
+  - { name: 'd12', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.3916 }
+  - { name: 'e12', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.3916 }
+  - { name: 'f12', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.3916 }
+  - { name: 'g12', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.3916 }
+  - { name: 'h12', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.3916 }
+  - { name: 'i12', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.3916 }
+  - { name: 'j12', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.3916 }
+  - { name: 'a13', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.4226 }
+  - { name: 'b13', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.4226 }
+  - { name: 'c13', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.4226 }
+  - { name: 'd13', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.4226 }
+  - { name: 'e13', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.4226 }
+  - { name: 'f13', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.4226 }
+  - { name: 'g13', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.4226 }
+  - { name: 'h13', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.4226 }
+  - { name: 'i13', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.4226 }
+  - { name: 'j13', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.4226 }
+  - { name: 'a14', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.4535 }
+  - { name: 'b14', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.4535 }
+  - { name: 'c14', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.4535 }
+  - { name: 'd14', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.4535 }
+  - { name: 'e14', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.4535 }
+  - { name: 'f14', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.4535 }
+  - { name: 'g14', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.4535 }
+  - { name: 'h14', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.4535 }
+  - { name: 'i14', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.4535 }
+  - { name: 'j14', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.4535 }
+  - { name: 'a15', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.4845 }
+  - { name: 'b15', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.4845 }
+  - { name: 'c15', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.4845 }
+  - { name: 'd15', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.4845 }
+  - { name: 'e15', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.4845 }
+  - { name: 'f15', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.4845 }
+  - { name: 'g15', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.4845 }
+  - { name: 'h15', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.4845 }
+  - { name: 'i15', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.4845 }
+  - { name: 'j15', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.4845 }
+  - { name: 'a16', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.5155 }
+  - { name: 'b16', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.5155 }
+  - { name: 'c16', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.5155 }
+  - { name: 'd16', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.5155 }
+  - { name: 'e16', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.5155 }
+  - { name: 'f16', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.5155 }
+  - { name: 'g16', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.5155 }
+  - { name: 'h16', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.5155 }
+  - { name: 'i16', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.5155 }
+  - { name: 'j16', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.5155 }
+  - { name: 'a17', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.5465 }
+  - { name: 'b17', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.5465 }
+  - { name: 'c17', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.5465 }
+  - { name: 'd17', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.5465 }
+  - { name: 'e17', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.5465 }
+  - { name: 'f17', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.5465 }
+  - { name: 'g17', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.5465 }
+  - { name: 'h17', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.5465 }
+  - { name: 'i17', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.5465 }
+  - { name: 'j17', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.5465 }
+  - { name: 'a18', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.5774 }
+  - { name: 'b18', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.5774 }
+  - { name: 'c18', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.5774 }
+  - { name: 'd18', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.5774 }
+  - { name: 'e18', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.5774 }
+  - { name: 'f18', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.5774 }
+  - { name: 'g18', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.5774 }
+  - { name: 'h18', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.5774 }
+  - { name: 'i18', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.5774 }
+  - { name: 'j18', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.5774 }
+  - { name: 'a19', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.6084 }
+  - { name: 'b19', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.6084 }
+  - { name: 'c19', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.6084 }
+  - { name: 'd19', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.6084 }
+  - { name: 'e19', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.6084 }
+  - { name: 'f19', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.6084 }
+  - { name: 'g19', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.6084 }
+  - { name: 'h19', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.6084 }
+  - { name: 'i19', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.6084 }
+  - { name: 'j19', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.6084 }
+  - { name: 'a20', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.6394 }
+  - { name: 'b20', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.6394 }
+  - { name: 'c20', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.6394 }
+  - { name: 'd20', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.6394 }
+  - { name: 'e20', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.6394 }
+  - { name: 'f20', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.6394 }
+  - { name: 'g20', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.6394 }
+  - { name: 'h20', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.6394 }
+  - { name: 'i20', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.6394 }
+  - { name: 'j20', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.6394 }
+  - { name: 'a21', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.6704 }
+  - { name: 'b21', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.6704 }
+  - { name: 'c21', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.6704 }
+  - { name: 'd21', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.6704 }
+  - { name: 'e21', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.6704 }
+  - { name: 'f21', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.6704 }
+  - { name: 'g21', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.6704 }
+  - { name: 'h21', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.6704 }
+  - { name: 'i21', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.6704 }
+  - { name: 'j21', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.6704 }
+  - { name: 'a22', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.7013 }
+  - { name: 'b22', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.7013 }
+  - { name: 'c22', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.7013 }
+  - { name: 'd22', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.7013 }
+  - { name: 'e22', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.7013 }
+  - { name: 'f22', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.7013 }
+  - { name: 'g22', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.7013 }
+  - { name: 'h22', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.7013 }
+  - { name: 'i22', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.7013 }
+  - { name: 'j22', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.7013 }
+  - { name: 'a23', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.7323 }
+  - { name: 'b23', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.7323 }
+  - { name: 'c23', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.7323 }
+  - { name: 'd23', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.7323 }
+  - { name: 'e23', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.7323 }
+  - { name: 'f23', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.7323 }
+  - { name: 'g23', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.7323 }
+  - { name: 'h23', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.7323 }
+  - { name: 'i23', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.7323 }
+  - { name: 'j23', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.7323 }
+  - { name: 'a24', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.7633 }
+  - { name: 'b24', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.7633 }
+  - { name: 'c24', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.7633 }
+  - { name: 'd24', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.7633 }
+  - { name: 'e24', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.7633 }
+  - { name: 'f24', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.7633 }
+  - { name: 'g24', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.7633 }
+  - { name: 'h24', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.7633 }
+  - { name: 'i24', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.7633 }
+  - { name: 'j24', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.7633 }
+  - { name: 'a25', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.7943 }
+  - { name: 'b25', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.7943 }
+  - { name: 'c25', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.7943 }
+  - { name: 'd25', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.7943 }
+  - { name: 'e25', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.7943 }
+  - { name: 'f25', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.7943 }
+  - { name: 'g25', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.7943 }
+  - { name: 'h25', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.7943 }
+  - { name: 'i25', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.7943 }
+  - { name: 'j25', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.7943 }
+  - { name: 'a26', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.8252 }
+  - { name: 'b26', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.8252 }
+  - { name: 'c26', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.8252 }
+  - { name: 'd26', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.8252 }
+  - { name: 'e26', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.8252 }
+  - { name: 'f26', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.8252 }
+  - { name: 'g26', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.8252 }
+  - { name: 'h26', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.8252 }
+  - { name: 'i26', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.8252 }
+  - { name: 'j26', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.8252 }
+  - { name: 'a27', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.8562 }
+  - { name: 'b27', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.8562 }
+  - { name: 'c27', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.8562 }
+  - { name: 'd27', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.8562 }
+  - { name: 'e27', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.8562 }
+  - { name: 'f27', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.8562 }
+  - { name: 'g27', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.8562 }
+  - { name: 'h27', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.8562 }
+  - { name: 'i27', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.8562 }
+  - { name: 'j27', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.8562 }
+  - { name: 'a28', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.8872 }
+  - { name: 'b28', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.8872 }
+  - { name: 'c28', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.8872 }
+  - { name: 'd28', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.8872 }
+  - { name: 'e28', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.8872 }
+  - { name: 'f28', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.8872 }
+  - { name: 'g28', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.8872 }
+  - { name: 'h28', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.8872 }
+  - { name: 'i28', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.8872 }
+  - { name: 'j28', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.8872 }
+  - { name: 'a29', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.9182 }
+  - { name: 'b29', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.9182 }
+  - { name: 'c29', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.9182 }
+  - { name: 'd29', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.9182 }
+  - { name: 'e29', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.9182 }
+  - { name: 'f29', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.9182 }
+  - { name: 'g29', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.9182 }
+  - { name: 'h29', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.9182 }
+  - { name: 'i29', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.9182 }
+  - { name: 'j29', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.9182 }
+  - { name: 'a30', type: other, shape: square, labelHidden: true, x: 0.2460, y: 0.9491 }
+  - { name: 'b30', type: other, shape: square, labelHidden: true, x: 0.2922, y: 0.9491 }
+  - { name: 'c30', type: other, shape: square, labelHidden: true, x: 0.3384, y: 0.9491 }
+  - { name: 'd30', type: other, shape: square, labelHidden: true, x: 0.3845, y: 0.9491 }
+  - { name: 'e30', type: other, shape: square, labelHidden: true, x: 0.4307, y: 0.9491 }
+  - { name: 'f30', type: other, shape: square, labelHidden: true, x: 0.5693, y: 0.9491 }
+  - { name: 'g30', type: other, shape: square, labelHidden: true, x: 0.6155, y: 0.9491 }
+  - { name: 'h30', type: other, shape: square, labelHidden: true, x: 0.6616, y: 0.9491 }
+  - { name: 'i30', type: other, shape: square, labelHidden: true, x: 0.7078, y: 0.9491 }
+  - { name: 'j30', type: other, shape: square, labelHidden: true, x: 0.7540, y: 0.9491 }
+rails:
+- name: 'L+'
+  pins: ['L+1', 'L+2', 'L+3', 'L+4', 'L+5', 'L+6', 'L+7', 'L+8', 'L+9', 'L+10', 'L+11', 'L+12', 'L+13', 'L+14', 'L+15', 'L+16', 'L+17', 'L+18', 'L+19', 'L+20', 'L+21', 'L+22', 'L+23', 'L+24', 'L+25']
+- name: 'L-'
+  pins: ['L-1', 'L-2', 'L-3', 'L-4', 'L-5', 'L-6', 'L-7', 'L-8', 'L-9', 'L-10', 'L-11', 'L-12', 'L-13', 'L-14', 'L-15', 'L-16', 'L-17', 'L-18', 'L-19', 'L-20', 'L-21', 'L-22', 'L-23', 'L-24', 'L-25']
+- name: 'R+'
+  pins: ['R+1', 'R+2', 'R+3', 'R+4', 'R+5', 'R+6', 'R+7', 'R+8', 'R+9', 'R+10', 'R+11', 'R+12', 'R+13', 'R+14', 'R+15', 'R+16', 'R+17', 'R+18', 'R+19', 'R+20', 'R+21', 'R+22', 'R+23', 'R+24', 'R+25']
+- name: 'R-'
+  pins: ['R-1', 'R-2', 'R-3', 'R-4', 'R-5', 'R-6', 'R-7', 'R-8', 'R-9', 'R-10', 'R-11', 'R-12', 'R-13', 'R-14', 'R-15', 'R-16', 'R-17', 'R-18', 'R-19', 'R-20', 'R-21', 'R-22', 'R-23', 'R-24', 'R-25']
+- name: 'a-e1'
+  pins: ['a1', 'b1', 'c1', 'd1', 'e1']
+- name: 'f-j1'
+  pins: ['f1', 'g1', 'h1', 'i1', 'j1']
+- name: 'a-e2'
+  pins: ['a2', 'b2', 'c2', 'd2', 'e2']
+- name: 'f-j2'
+  pins: ['f2', 'g2', 'h2', 'i2', 'j2']
+- name: 'a-e3'
+  pins: ['a3', 'b3', 'c3', 'd3', 'e3']
+- name: 'f-j3'
+  pins: ['f3', 'g3', 'h3', 'i3', 'j3']
+- name: 'a-e4'
+  pins: ['a4', 'b4', 'c4', 'd4', 'e4']
+- name: 'f-j4'
+  pins: ['f4', 'g4', 'h4', 'i4', 'j4']
+- name: 'a-e5'
+  pins: ['a5', 'b5', 'c5', 'd5', 'e5']
+- name: 'f-j5'
+  pins: ['f5', 'g5', 'h5', 'i5', 'j5']
+- name: 'a-e6'
+  pins: ['a6', 'b6', 'c6', 'd6', 'e6']
+- name: 'f-j6'
+  pins: ['f6', 'g6', 'h6', 'i6', 'j6']
+- name: 'a-e7'
+  pins: ['a7', 'b7', 'c7', 'd7', 'e7']
+- name: 'f-j7'
+  pins: ['f7', 'g7', 'h7', 'i7', 'j7']
+- name: 'a-e8'
+  pins: ['a8', 'b8', 'c8', 'd8', 'e8']
+- name: 'f-j8'
+  pins: ['f8', 'g8', 'h8', 'i8', 'j8']
+- name: 'a-e9'
+  pins: ['a9', 'b9', 'c9', 'd9', 'e9']
+- name: 'f-j9'
+  pins: ['f9', 'g9', 'h9', 'i9', 'j9']
+- name: 'a-e10'
+  pins: ['a10', 'b10', 'c10', 'd10', 'e10']
+- name: 'f-j10'
+  pins: ['f10', 'g10', 'h10', 'i10', 'j10']
+- name: 'a-e11'
+  pins: ['a11', 'b11', 'c11', 'd11', 'e11']
+- name: 'f-j11'
+  pins: ['f11', 'g11', 'h11', 'i11', 'j11']
+- name: 'a-e12'
+  pins: ['a12', 'b12', 'c12', 'd12', 'e12']
+- name: 'f-j12'
+  pins: ['f12', 'g12', 'h12', 'i12', 'j12']
+- name: 'a-e13'
+  pins: ['a13', 'b13', 'c13', 'd13', 'e13']
+- name: 'f-j13'
+  pins: ['f13', 'g13', 'h13', 'i13', 'j13']
+- name: 'a-e14'
+  pins: ['a14', 'b14', 'c14', 'd14', 'e14']
+- name: 'f-j14'
+  pins: ['f14', 'g14', 'h14', 'i14', 'j14']
+- name: 'a-e15'
+  pins: ['a15', 'b15', 'c15', 'd15', 'e15']
+- name: 'f-j15'
+  pins: ['f15', 'g15', 'h15', 'i15', 'j15']
+- name: 'a-e16'
+  pins: ['a16', 'b16', 'c16', 'd16', 'e16']
+- name: 'f-j16'
+  pins: ['f16', 'g16', 'h16', 'i16', 'j16']
+- name: 'a-e17'
+  pins: ['a17', 'b17', 'c17', 'd17', 'e17']
+- name: 'f-j17'
+  pins: ['f17', 'g17', 'h17', 'i17', 'j17']
+- name: 'a-e18'
+  pins: ['a18', 'b18', 'c18', 'd18', 'e18']
+- name: 'f-j18'
+  pins: ['f18', 'g18', 'h18', 'i18', 'j18']
+- name: 'a-e19'
+  pins: ['a19', 'b19', 'c19', 'd19', 'e19']
+- name: 'f-j19'
+  pins: ['f19', 'g19', 'h19', 'i19', 'j19']
+- name: 'a-e20'
+  pins: ['a20', 'b20', 'c20', 'd20', 'e20']
+- name: 'f-j20'
+  pins: ['f20', 'g20', 'h20', 'i20', 'j20']
+- name: 'a-e21'
+  pins: ['a21', 'b21', 'c21', 'd21', 'e21']
+- name: 'f-j21'
+  pins: ['f21', 'g21', 'h21', 'i21', 'j21']
+- name: 'a-e22'
+  pins: ['a22', 'b22', 'c22', 'd22', 'e22']
+- name: 'f-j22'
+  pins: ['f22', 'g22', 'h22', 'i22', 'j22']
+- name: 'a-e23'
+  pins: ['a23', 'b23', 'c23', 'd23', 'e23']
+- name: 'f-j23'
+  pins: ['f23', 'g23', 'h23', 'i23', 'j23']
+- name: 'a-e24'
+  pins: ['a24', 'b24', 'c24', 'd24', 'e24']
+- name: 'f-j24'
+  pins: ['f24', 'g24', 'h24', 'i24', 'j24']
+- name: 'a-e25'
+  pins: ['a25', 'b25', 'c25', 'd25', 'e25']
+- name: 'f-j25'
+  pins: ['f25', 'g25', 'h25', 'i25', 'j25']
+- name: 'a-e26'
+  pins: ['a26', 'b26', 'c26', 'd26', 'e26']
+- name: 'f-j26'
+  pins: ['f26', 'g26', 'h26', 'i26', 'j26']
+- name: 'a-e27'
+  pins: ['a27', 'b27', 'c27', 'd27', 'e27']
+- name: 'f-j27'
+  pins: ['f27', 'g27', 'h27', 'i27', 'j27']
+- name: 'a-e28'
+  pins: ['a28', 'b28', 'c28', 'd28', 'e28']
+- name: 'f-j28'
+  pins: ['f28', 'g28', 'h28', 'i28', 'j28']
+- name: 'a-e29'
+  pins: ['a29', 'b29', 'c29', 'd29', 'e29']
+- name: 'f-j29'
+  pins: ['f29', 'g29', 'h29', 'i29', 'j29']
+- name: 'a-e30'
+  pins: ['a30', 'b30', 'c30', 'd30', 'e30']
+- name: 'f-j30'
+  pins: ['f30', 'g30', 'h30', 'i30', 'j30']
