@@ -8,6 +8,33 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Files on the board — log your readings, and read them back.** (#1132, epic
+  #1119) `with` shipped hidden in #1094, and on a microcontroller it has one
+  overwhelmingly common use: opening a file on the flash. Logging to `data.csv`
+  and reading a config back are things learners ask for early, and neither was
+  expressible in blocks at all — not the `with`, and not the `open()` either.
+
+  A **Files** shelf inside Control: **use … as …** (Python's `with`, with
+  *"and close it afterwards"* written on the block), **open file … for
+  reading / writing / adding to the end**, **write … to …**, and **for every
+  line … of …**, which hands one line at a time rather than holding a whole log
+  in 264 KB of RAM.
+
+  **use … as** takes the thing in a socket, which is what lets **open file**
+  plug into it; the old text-field `with` stays hidden and keeps everything that
+  shape cannot hold — two context managers on one line, `async with`, a name
+  that is not a plain identifier.
+
+  The reason to teach `with` rather than open-and-close is not that it is
+  idiomatic: a learner who forgets `close()` on a Pico **loses their data with
+  no error at all**, because it was still waiting in memory to be flushed. That
+  is why there is no "close file" block to forget.
+
+  On CircuitPython, reading works and writing needs `boot.py` to remount the
+  filesystem first. The blocks are offered on both runtimes — scoping them out
+  would take reading away from a board that does it perfectly well — and the
+  tooltip and the new **Files on the board** help page say so plainly.
+
 - **Error handling is a drawer you can reach.** (#1131, epic #1119) The `try`
   and `raise` blocks were built by #1094 and registered *hidden* — the reader
   could produce them and no learner could drag one. #1119 re-takes that

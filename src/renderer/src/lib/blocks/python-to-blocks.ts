@@ -2071,6 +2071,27 @@ class Converter {
     if (text === 'try:') return recognised([this.tryChain(node, siblings)])
     const withHead = /^(async\s+)?with\s+(.+):$/.exec(text)
     if (withHead) {
+      // ONE THING, BOUND TO ONE PLAIN NAME → the friendly block (#1132). That
+      // is the shape a learner meets — `with open('data.csv', 'a') as f:` — and
+      // it takes the thing in a SOCKET, so the `open file` block plugs into it.
+      // Everything else keeps the text-field block: two context managers on one
+      // line, `async with`, a name that is not a plain identifier. The same
+      // split #1121 made between `set … and … to` and the exact assign block.
+      const one = withHead[1] ? null : /^(.+?)\s+as\s+([A-Za-z_]\w*)$/.exec(withHead[2].trim())
+      if (one && !isReservedName(one[2]) && splitArgs(one[1])?.length === 1) {
+        const thing = this.expression(one[1])
+        return recognised([
+          this.withBody(
+            {
+              type: 'snakie_use',
+              fields: { VAR: { id: this.variable(one[2]) } },
+              inputs: { THING: { block: thing } }
+            },
+            'BODY',
+            node
+          )
+        ])
+      }
       return recognised([
         this.withBody(
           {
@@ -2082,6 +2103,10 @@ class Converter {
         )
       ])
     }
+    // `for line in f:` where the body is a file's — read as the ordinary
+    // `for each` below, which writes the identical line. The Files drawer's own
+    // loop block is for BUILDING one; there is nothing in the text that says
+    // which of the two wrote it, and `controls_forEach` got there first.
     // `await <expr>` ON A LINE OF ITS OWN (W9, #1096). The value form is in the
     // expression parser, where `data = await sensor.read()` needs it.
     const awaited = /^await\s+(.+)$/.exec(text)

@@ -152,7 +152,11 @@ const READ_DIRECTLY: Record<string, string> = {
   snakie_self: 'class Thing:\n    def go(self):\n        self.x = 1\n',
   // --- error handling and resources (W7, #1094)
   snakie_try: 'try:\n    print(1)\nexcept OSError as e:\n    print(e)\n',
-  snakie_with: 'with open(path) as handle:\n    print(handle)\n',
+  // `use … as` took the shape a learner meets (#1132); the text-field block
+  // keeps what that one cannot hold — two context managers on one line,
+  // `async with`, a name that is not a plain identifier.
+  snakie_use: "with open('data.csv') as handle:\n    print(handle)\n",
+  snakie_with: 'with a() as f, b() as g:\n    print(f)\n',
   // --- async (W9, #1096)
   snakie_await: 'async def go():\n    await sleeper()\n',
   snakie_await_value: 'async def go():\n    data = await sensor.read()\n',
@@ -208,6 +212,11 @@ const NO_READER: Record<string, string> = {
     'nothing in COND the generator wrote `if False:`, so every early return became dead code. ' +
     'W3 (#1090) is the real return block.',
   // --- an expression, not a call
+  snakie_file_lines:
+    'Writes `for line in f:`, which `controls_forEach` writes too — and nothing ' +
+    'in the text says which of the two a learner built it with. The ordinary loop ' +
+    'block got there first and keeps the line; this one is for BUILDING one, ' +
+    'where the Files drawer is what a learner is looking at (#1132).',
   snakie_map_range:
     'Writes arithmetic, not a call. The expression parser already reads that arithmetic back as ' +
     'the nest of math_arithmetic blocks it literally is.',

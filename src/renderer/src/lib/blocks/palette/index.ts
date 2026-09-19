@@ -18,6 +18,7 @@ import { TUPLE_BLOCKS, installTupleBlocks } from './tuples'
 import { DICT_BLOCKS, installDictBlocks } from './dicts'
 import { SLICE_BLOCKS } from './slices'
 import { BUFFER_BLOCKS } from './buffers'
+import { FILE_BLOCKS } from './files'
 import { LOGIC_BLOCKS } from './logic'
 import { MATHS_BLOCKS } from './maths'
 import { TEXT_BLOCKS, installTextBlocks } from './text'
@@ -109,6 +110,10 @@ export function installCorePalette(): void {
     ...scoped('micropython', instrumentBlocks()),
     ...WAIT_BLOCKS,
     ...CONTROL_BLOCKS,
+    // Files, and the `use … as` that closes them (#1132, epic #1119). A shelf
+    // inside Control rather than a category of its own — see the file header
+    // for why the palette has no sixteenth colour to give.
+    ...FILE_BLOCKS,
     ...LOGIC_BLOCKS,
     ...MATHS_BLOCKS,
     ...TEXT_BLOCKS,

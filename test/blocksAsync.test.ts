@@ -173,8 +173,12 @@ describe('async with', () => {
   })
 
   it('leaves an ordinary with alone', () => {
+    // A plain `with … as name` is the Files drawer's friendly block since
+    // #1132, so what this asserts is the half that matters here: the async
+    // setting is not put on a block that never asked for it.
     const src = ['with open(path) as handle:', '    print(handle)', ''].join('\n')
-    expect(one(src, 'snakie_with')!.fields).toMatchObject({ KIND: 'SYNC' })
+    expect(one(src, 'snakie_with')).toBeUndefined()
+    expect(one(src, 'snakie_use')).toBeTruthy()
     roundTrips(src)
   })
 })

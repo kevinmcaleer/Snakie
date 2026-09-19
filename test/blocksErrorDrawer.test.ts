@@ -59,11 +59,12 @@ describe('they can be reached', () => {
     const loose = contents.filter((c) => c.kind === 'block').map((c) => c.type)
     expect(loose[0]).toBe('snakie_forever')
     expect(loose).not.toContain('snakie_try')
-    const shelf = contents.find((c) => c.kind === 'category') as {
+    const shelves = contents.filter((c) => c.kind === 'category') as {
       name: string
       contents: { type: string }[]
-    }
-    expect(shelf.name).toBe('When things go wrong')
+    }[]
+    const shelf = shelves.find((c) => c.name === 'When things go wrong')!
+    expect(shelf).toBeTruthy()
     expect(shelf.contents.map((c) => c.type)).toEqual(['snakie_try', 'snakie_raise'])
   })
 })

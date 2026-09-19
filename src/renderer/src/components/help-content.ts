@@ -289,6 +289,11 @@ export const HELP_SECTIONS: HelpNode[] = [
           { id: 'ref-classes', kind: 'article', title: 'Classes', accent: A.page },
           { id: 'ref-exceptions', kind: 'article', title: 'Errors & exceptions', accent: A.page },
           { id: 'ref-imports', kind: 'article', title: 'Imports & modules', accent: A.page },
+          // Files and `with` (#1132, epic #1119). It sits in the plain-Python
+          // section because `open` is core to both runtimes — but it carries
+          // CircuitPython's read-only filesystem in a section of its own,
+          // because that is the one thing about it that is not the same.
+          { id: 'ref-files', kind: 'article', title: 'Files on the board', accent: A.page },
           // The seam between the two worlds (#1018): it sits in the Python
           // section rather than a Blocks one because that is where a learner
           // who has started reading the code will already be.
