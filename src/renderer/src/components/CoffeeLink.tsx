@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { COFFEE_URL } from '../../../shared/links'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import './CoffeeLink.css'
 
@@ -13,7 +14,6 @@ import './CoffeeLink.css'
  * nags. After that it's just the quiet coffee cup.
  */
 
-const COFFEE_URL = 'https://buymeacoffee.com/kevinmcaleer'
 const NUDGE_KEY = 'snakie.coffee.nudged'
 /** Delay before the first-launch nudge appears (issue #126: "after a couple of seconds"). */
 const NUDGE_DELAY_MS = 2500

@@ -140,6 +140,35 @@ export class LaidOutPage {
     this.page.link(box.x, this.flip(box.y + box.height), box.width, box.height, url)
   }
 
+  /**
+   * Flow `text` into `width`, one wrapped line per `leading`, starting with its
+   * first baseline at `y`. Returns the baseline the NEXT line would take, so
+   * sections can stack without each one re-deriving the leading.
+   */
+  paragraph(
+    text: string,
+    x: number,
+    y: number,
+    opts: {
+      width: number
+      font?: PdfFont
+      size?: number
+      color?: Rgb
+      align?: 'left' | 'center' | 'right'
+      leading?: number
+    }
+  ): number {
+    const font = opts.font ?? 'Helvetica'
+    const size = opts.size ?? 11
+    const leading = opts.leading ?? size * 1.45
+    let baseline = y
+    for (const line of wrapText(text, font, size, opts.width)) {
+      if (line) this.text(line, x, baseline, { font, size, color: opts.color, align: opts.align })
+      baseline += leading
+    }
+    return baseline
+  }
+
   /** A link whose hit box is derived from a piece of text already drawn. */
   linkText(
     text: string,
