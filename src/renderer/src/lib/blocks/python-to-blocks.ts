@@ -1695,7 +1695,16 @@ class Converter {
     line: LogicalLine
   ): void {
     built.push({ block, line })
-    if (this.depth === 0 && !HOISTED_TYPES.has(block.type)) this.bodyStarted = true
+    // A BLANK LINE IS NOT THE BODY STARTING (#1164). It writes nothing that
+    // stands anywhere — it IS the gap — so counting it here latched
+    // `bodyStarted` on the very first spacer and switched the separator rule off
+    // for the whole rest of the file. Every later gap then kept all its blanks
+    // instead of conceding one to the generator, which is how a program with
+    // PEP 8's two blank lines between its `def`s came back with a wall of grey
+    // notes above its body and gained a line every time it went round.
+    if (this.depth === 0 && !HOISTED_TYPES.has(block.type) && block.type !== 'snakie_python_blank') {
+      this.bodyStarted = true
+    }
   }
 
   /** A chain of statement blocks, or null for an empty suite. */
@@ -1810,15 +1819,40 @@ class Converter {
   /**
    * Close off what has been built as a root, if it is anything at all.
    *
-   * A piece that is NOTHING BUT BLANK LINES is held over to the chain after it
-   * instead (#1145). Those blanks are the gap the learner left around the `def`
-   * this is cutting at — real, and kept, because the generator writes the body
-   * back out from them — but two grey notes floating between two hats is not a
-   * thing anybody wrote, and holding them over leaves the body text identical:
-   * the stacks generate in canvas order either way.
+   * THE BLANKS AT THE CUT ARE THE GENERATOR'S, NOT THE LEARNER'S (#1164).
+   * ---------------------------------------------------------------------
+   *
+   * A blank line normally comes back because its spacer block sits in the chain
+   * where it was typed, and the generator writes the chain out in order. A blank
+   * standing directly above a top-level `def` has no such chain to sit in: the
+   * `def` is about to become a hat of its own, and the blocks above it are about
+   * to become a root that generates somewhere else entirely — the imports
+   * generate nothing where they stand, so a spacer riding with them surfaces at
+   * the top of the BODY, a section and several hats away from the gap it stands
+   * for.
+   *
+   * That is what a learner saw as a grey `blank line` block hanging under their
+   * imports with a hole beneath it, and as a wall of them where a run of `def`s
+   * had been lifted out. `import time` + PEP 8's two blank lines + `def` came
+   * back with SIX blank lines above the body and a different canvas each time it
+   * went round.
+   *
+   * So the blanks at the cut are dropped. The gap is not lost: `sectionsOf`
+   * joins the imports, the functions, the setup and the body with exactly one
+   * blank line each, and writes one between two `def`s — the separator this
+   * would otherwise be a second, mislaid copy of. Dropping them makes the trip
+   * IDEMPOTENT, which is the property that was actually broken: two blank lines
+   * above a `def` normalise to the one the generator can write, and stay there.
+   *
+   * A piece that is left with NOTHING BUT BLANK LINES is held over to the chain
+   * after it (#1145) — which, now that the trailing ones are gone, is a piece
+   * that was empty to begin with.
    */
   private cut(built: { block: BlockJson; line: LogicalLine }[], hold = true): void {
-    if (hold && built.every((b) => b.block.type === 'snakie_python_blank')) return
+    while (built.length > 0 && built[built.length - 1].block.type === 'snakie_python_blank') {
+      built.pop()
+    }
+    if (hold && built.length === 0) return
     const root = this.linked(built.splice(0))
     if (root) this.roots.push(root)
   }

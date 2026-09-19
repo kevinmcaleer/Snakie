@@ -4,7 +4,7 @@ import 'blockly/blocks'
 import { generateProgram } from '../src/renderer/src/lib/blocks/generator'
 import { installBlockDefinitions, resetBlockRegistry } from '../src/renderer/src/lib/blocks/registry'
 import { installCorePalette } from '../src/renderer/src/lib/blocks/palette'
-import { pythonToBlocks } from '../src/renderer/src/lib/blocks/python-to-blocks'
+import { pythonToBlocks, type BlockJson } from '../src/renderer/src/lib/blocks/python-to-blocks'
 import { logicalLines } from '../src/renderer/src/lib/blocks/python-tokens'
 
 /**
@@ -105,6 +105,114 @@ describe('the gap under a hoisted section is the generator’s', () => {
 
   it('under an import AND a def together', () =>
     roundTrips('import time\n\ndef hello():\n    time.sleep(1)\n\nhello()\n'))
+})
+
+/**
+ * THE GAP ABOVE A `def` CANNOT BE A BLOCK (#1164).
+ * ===========================================================================
+ *
+ * The rule above holds because a spacer block sits in the chain where it was
+ * typed and the generator writes that chain out in order. A blank standing
+ * directly above a TOP-LEVEL `def` has no such chain: #1145 cuts the chain
+ * there and the `def` becomes a hat of its own, so the spacer rides on with the
+ * blocks above it — and those are the imports, which generate nothing where
+ * they stand. The gap surfaced at the top of the BODY instead, a section and
+ * several hats away from where it was typed.
+ *
+ * Reported as a grey `blank line` block hanging under the imports with a hole
+ * beneath it. The same mistake compounded down the file: `spacers` concedes one
+ * blank per gap to the generator only while the body has not started, and a
+ * spacer was itself counted as the body starting — so the FIRST gap in a file
+ * switched the rule off for every gap after it, and every `def` boundary added
+ * another grey note to the pile.
+ */
+describe('the gap above a top-level def is the generator’s too (#1164)', () => {
+  /**
+   * The type of every block in a root's chain, in order.
+   *
+   * `BlocksWorkspace` is Blockly's own serialisation and is typed as loosely as
+   * Blockly types it, so the shape is named here rather than asserted twice.
+   */
+  const chains = (source: string): string[][] => {
+    const { workspace } = pythonToBlocks(source)
+    const roots = (workspace as unknown as { blocks: { blocks: BlockJson[] } }).blocks.blocks
+    return roots.map((root) => {
+      const out: string[] = []
+      for (let b: BlockJson | undefined = root; b; b = b.next?.block) out.push(b.type)
+      return out
+    })
+  }
+
+  /** What the file settles on once it has been round the loop. Must be reached. */
+  const settlesOn = (source: string, settled: string): void => {
+    expect(regenerate(source)).toBe(settled)
+    // The property that was actually broken. The old code moved the gap rather
+    // than dropping it, so each trip found it somewhere new and added another.
+    expect(regenerate(settled)).toBe(settled)
+  }
+
+  it('leaves no spacer hanging under the imports', () =>
+    // PEP 8's two blank lines before a `def` — which is to say, most real files.
+    expect(chains('import time\n\n\ndef go():\n    pass\n')[0]).toEqual([
+      'snakie_python_import'
+    ]))
+
+  it('and normalises that gap to the one line the generator can write', () =>
+    // `sectionsOf` joins the imports, the functions, the setup and the body with
+    // exactly one blank line each. There is no way to ask it for two, so the
+    // second is not the learner's to keep — it is a copy of a separator.
+    settlesOn(
+      'import time\n\n\ndef go():\n    pass\n',
+      'import time\n\ndef go():\n    pass\n'
+    ))
+
+  it('does not pile the gaps up where a run of defs was lifted out', () => {
+    // Two `def`s with PEP 8 spacing around them, and a body under the last one.
+    const source = [
+      'import time',
+      '',
+      '',
+      'def a():',
+      '    pass',
+      '',
+      '',
+      'def b():',
+      '    pass',
+      '',
+      '',
+      'print(1)',
+      ''
+    ].join('\n')
+    // Six blank lines in the source; one spacer block out of them. Five stood at
+    // a `def` boundary and are the separators `sectionsOf` writes. The sixth is
+    // the second of the two under the last `def`, and THAT one is the learner's:
+    // it opens the body, which is a chain that generates where it stands.
+    //
+    // The pile it used to make: the body root opened with four grey notes, and
+    // the canvas had a column of them where the `def`s had been lifted out.
+    expect(chains(source).map((c) => c.filter((t) => t === 'snakie_python_blank').length)).toEqual([
+      0, 0, 0, 1
+    ])
+  })
+
+  it('because a blank line is not the body starting', () =>
+    // THE LATCH, in the smallest file that shows it. Two hoisted boundaries: the
+    // gap above the `def` and the gap below it. With a spacer counted as the
+    // body starting, the first one turned the separator rule off and the second
+    // kept BOTH its blanks on top of the separator the generator writes — three
+    // blank lines above `go()`, and another every time round.
+    //
+    // The gap below the `def` is still the learner's two, because that one does
+    // sit in a chain that generates where it stands.
+    settlesOn(
+      'import time\n\n\ndef go():\n    pass\n\n\ngo()\n',
+      'import time\n\ndef go():\n    pass\n\n\ngo()\n'
+    ))
+
+  it('and a gap between two statements is still the learner’s', () =>
+    // The guard on the change: only the boundaries a section separator lands on
+    // are the generator's. An ordinary gap in the body is untouched.
+    roundTrips('print(1)\n\n\nprint(2)\n'))
 })
 
 describe('the spacer block', () => {

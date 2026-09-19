@@ -1174,6 +1174,36 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **No more grey `blank line` block hanging under the imports, and no column of
+  them where the functions were lifted out** (#1164). Opening a file that starts
+  with imports left a wide gap between them and the rest of the canvas, and the
+  top half of that gap was a block that does nothing.
+
+  A blank line comes back because its spacer block sits in the chain where it
+  was typed, and the generator writes that chain out in order. A blank standing
+  directly above a **top-level `def`** has no such chain: #1145 cuts the chain
+  there and the `def` becomes a hat of its own, so the spacer rode on with the
+  blocks above it — the imports, which generate nothing where they stand — and
+  surfaced at the top of the *body*, a section and several hats away from the gap
+  it stood for. Two blank lines before a `def` is PEP 8, so this was most real
+  files.
+
+  It compounded, too: a gap concedes one blank line to the separator the
+  generator writes, but only while the body has not started — and a spacer was
+  itself counted as the body starting. So the first gap in a file switched the
+  rule off for every gap after it, and each `def` boundary added another grey
+  note to the pile. Two `def`s with PEP 8 spacing came back with **six** blank
+  lines above the body, and a different canvas every time the file went round.
+
+  Those blanks are dropped now. The gap is not lost — the imports, the
+  functions, the setup and the body are joined by exactly one blank line each,
+  and one is written between two `def`s, which is the separator the spacer was a
+  second, mislaid copy of. Two blank lines above a `def` settle on the one the
+  generator can actually write, and **stay there**: the trip is idempotent now,
+  which is the property that was really broken. A gap anywhere else — between two
+  statements, inside a loop, under the imports of a program with no `def` — is
+  still the learner's and still comes back.
+
 - **Blocks sit snug in the mouth that holds them, and none of them has a line
   hanging off its corner** (#1158). Two smudges on the canvas, reported
   together and turning out to be the same mistake twice: the Soft Shell shape
