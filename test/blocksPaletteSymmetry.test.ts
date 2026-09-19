@@ -198,7 +198,14 @@ const READ_DIRECTLY: Record<string, string> = {
   // only place a term can start with a star.
   snakie_spread: 'thing.calibrate(*args)\n',
   snakie_spread_named: 'thing.calibrate(**settings)\n',
-  snakie_python_value: 'x = [v for v in things]\n',
+  // A comprehension is a real block since #1126, so the grey value block needs
+  // a sample that is still nobody's: a conditional expression.
+  snakie_python_value: 'x = a if ready else b\n',
+  // --- comprehensions (#1126). The spike §4.1 asked for came back yes: the
+  // reader splits at the top-level `for`, `in` and optional `if`, so these are
+  // rules rather than the argued exception the issue expected.
+  snakie_list_comprehension: 'squares = [n * n for n in numbers]\n',
+  snakie_dict_comprehension: 'table = {name: 0 for name in names}\n',
   snakie_python_comment: '# a note\n',
   snakie_python_docstring: '"""What this program does."""\n',
   snakie_python_blank: 'x = 1\n\ny = 2\n',

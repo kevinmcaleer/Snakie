@@ -8,6 +8,49 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Comprehensions.** (#1126, epic #1119) No comprehension block of any kind
+  existed. `docs/blocks-coverage-epic.md` §3.5 declined them for the *reader* on
+  good evidence — 26 projects write them and they cost 3 raw lines, because they
+  sit inside a statement that is already a real block. That says nothing about
+  whether a learner should be able to *build* one, which is what #1119 asked:
+  26 of 73 projects is how this editor's author writes, and a learner
+  graduating to text meets one immediately.
+
+  **list of ( ) for each (n) in ( )** in Lists, **dictionary of ( ) to ( ) for
+  each …** in Dictionaries, each with an **only when** socket that filters when
+  it is filled and keeps everything when it is empty. That optional socket is
+  the mutator arm the issue proposed, with nothing to serialise and no second
+  way to edit the block.
+
+  **The reader spike came back yes**, so these ship with rules rather than the
+  argued exception the issue expected — a comprehension is one logical line
+  with two fixed keywords in it, and splitting at the top-level `for`, then the
+  `in`, then an optional `if`, needs no parser. Drag one, save, reopen, and you
+  get your block back rather than a grey one. A nest, a second filter, a tuple
+  target and a set comprehension are all declined, and stay verbatim.
+
+- **Keyword arguments, default values, `*args` and `super()`.** (#1134, epic
+  #1119) A `def` block built its signature from Blockly's parameter list —
+  positional names and nothing else. So `def blink(times=3):`, which is how a
+  beginner-friendly helper and almost every driver's `__init__` is written,
+  could not be built; `pixels.fill(colour=RED)` could not be written, and
+  keyword arguments are everywhere in MicroPython library APIs; and
+  `def __init__(self, *args, **kwargs)` had only the escape hatch.
+
+  The **call** blocks grew a small name box before each argument socket: empty
+  means positional, as always, and a name makes it `name=value`. Two new
+  blocks, **spread** and **spread by name**, hand a whole list or dictionary
+  over (`f(*values)`, `f(**settings)`), and **the class this one is built on**
+  is `super()` — which #1093's class inheritance made live rather than
+  theoretical.
+
+  The `def` blocks grew an **and also** box for the parameters Blockly's mutator
+  cannot hold, appended after the declared ones. That is the decision that
+  keeps every saved workspace loading: a field is serialised by name, a block
+  saved before it existed simply has none, and the mutator that renames every
+  caller is untouched. It also means `def load(path, flip=None):` stops coming
+  back as a grey wall — it used to, because dropping the default would have
+  changed every call to it.
 - **A little floating bar while the PDF exports.** (epic #1105) Rasterising the
   blocks and the breadboard takes seconds on a real project, and until now the
   only sign of it was a print icon that had gone grey — which says "no", not

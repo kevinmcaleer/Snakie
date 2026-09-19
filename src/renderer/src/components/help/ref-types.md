@@ -56,3 +56,44 @@ value = buf[0] << 8 | buf[1]
 type(42)                 # <class 'int'>
 isinstance(x, float)     # True / False
 ```
+
+## Comprehensions — building a list in one step
+
+Doubling every reading can be written as a loop:
+
+```python
+doubled = []
+for n in readings:
+    doubled.append(n * 2)
+```
+
+…or in one line, which is how most Python programmers write it:
+
+```python
+doubled = [n * 2 for n in readings]
+```
+
+That is a **comprehension**, and the Lists drawer has a block for it:
+**list of ( ) for each (n) in ( )**. Read it inside out — *for each `n` in
+`readings`, collect `n * 2`*.
+
+The **only when** socket at the bottom keeps just the ones that match, and
+leaving it empty keeps everything:
+
+```python
+hot = [t for t in readings if t > 30]
+```
+
+The Dictionaries drawer has the matching one, which builds a lookup table from
+a list of names:
+
+```python
+scores = {name: 0 for name in players}
+```
+
+### What the blocks do not cover
+
+A comprehension with **two** `for`s in it, or two `only when`s, or a loop
+target that is two names — those are real Python with no block. Write them in a
+grey Python block; they will keep working, and they will come back exactly as
+you typed them.

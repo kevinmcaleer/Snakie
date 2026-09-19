@@ -48,8 +48,18 @@ import { installCorePalette } from '../src/renderer/src/lib/blocks/palette'
  * headroom between a floor and the measurement is never a mystery.
  */
 
-/** Recognised lines / logical lines. 53.31% at W0, 96.32% at W8, 97.94% at W9. */
-const STATEMENT_FLOOR = 97
+/**
+ * Recognised lines / logical lines. 53.31% at W0, 96.32% at W8, 97.94% at W9,
+ * **98.53% after epic #1119**.
+ *
+ * #1119 is an AUTHORING epic and it moved this anyway, which is worth saying
+ * because the two halves are not the same question. Most of its fifteen issues
+ * gave a learner a way to BUILD something; a handful of them also taught the
+ * reader a line it had been leaving grey — `for name, value in rows:` and
+ * `print("x:", x)`, both listed in §10 as still-grey (#1121, #1125), plus
+ * `del`, `pass`, a list display and a `def` with a default on it.
+ */
+const STATEMENT_FLOOR = 98
 
 /**
  * Value sockets holding a real block. 53.88% at W0, 72.41% at W10, 71.58% at W3,
@@ -64,18 +74,28 @@ const STATEMENT_FLOOR = 97
  * asyncio.sleep(period)`) are genuinely grey values. Nothing got worse; more of
  * the file is being counted. Statement coverage moved 72.61% → 97.94% across the
  * same changes.
+ *
+ * AND THEN EPIC #1119 MOVED IT NINE POINTS THE OTHER WAY, 73.17% → **82.25%**,
+ * which is the largest single jump this number has had. Sockets are where an
+ * authoring epic shows up: a dictionary literal, a list display, a slice, a
+ * mask, a hex address, a string method, a format spec, `*args` — every one of
+ * them was a grey blob inside a real block, and each is now the block it says
+ * it is.
  */
-const SOCKET_FLOOR = 73
+const SOCKET_FLOOR = 81
 
 /**
- * Files that open with no grey at all. 4.65% at W0, 9.30% at W6, 16.28% now.
+ * Files that open with no grey at all. 4.65% at W0, 9.30% at W6, 16.28% at W10,
+ * **25.58% after epic #1119**.
  *
- * The last two came from fixes rather than workstreams — the `name pin` binding
- * (a pin whose methods have no blocks of their own) and `ticks_ms` — which is
- * the argument for raising the floor rather than leaving the headroom: a number
- * seven points above its gate is a gate that has stopped gating.
+ * The hardest of the three numbers to move, because ONE grey line disqualifies
+ * a whole file — which is also what makes it the one that measures what #1119
+ * set out to measure. The epic's own framing was not line coverage but *how
+ * often a learner has to drop into the grey escape hatch to say an ordinary
+ * thing*, and a file with no grey in it is a file where they never had to.
+ * Eleven of forty-three now, from seven.
  */
-const CLEAN_FILE_FLOOR = 16
+const CLEAN_FILE_FLOOR = 24
 
 const FIXTURES = join(__dirname, 'fixtures', 'coverage')
 
