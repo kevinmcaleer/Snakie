@@ -16,9 +16,10 @@ import { PRINT_BACKGROUND, captureWiring } from './wiring-capture'
 import type { DiagramArt, ProjectArt, StackArt } from './project-pdf'
 import type { PdfImageData } from './writer'
 
-/** The parchment every rasterised piece is drawn onto — JPEG has no alpha, so
- *  the background has to match the page or the art sits in a grey box. */
-const ART_BACKGROUND = '#f6f1e6'
+/** The page every rasterised piece is drawn onto — JPEG has no alpha, so the
+ *  background has to match the page or the art sits in a tinted box (#1170:
+ *  the page is white now, so this is too). */
+const ART_BACKGROUND = '#ffffff'
 
 /** The mark's raster size; it is placed at ~112pt, so this is comfortably 2×. */
 const LOGO_PX = 256

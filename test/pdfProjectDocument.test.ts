@@ -10,10 +10,15 @@ import {
 } from '../src/renderer/src/lib/pdf/project-pdf'
 import { BOM_HEADING } from '../src/renderer/src/lib/pdf/sections/bom'
 import {
+  CONNECTIONS_HEADING,
+  buildConnections
+} from '../src/renderer/src/lib/pdf/sections/connections'
+import {
   BLOCKS_INTRO,
   BOM_INTRO,
   CODE_INTRO,
-  CODE_INTRO_WITH_BLOCKS
+  CODE_INTRO_WITH_BLOCKS,
+  CONNECTIONS_INTRO
 } from '../src/renderer/src/lib/pdf/sections/narrative'
 import { blankRobot } from '../src/shared/robot'
 import { robotFromYaml } from '../src/shared/robot-yaml'
@@ -210,6 +215,51 @@ describe('the electronics page (#1147, #1168)', () => {
     const wiring = vi.fn(async () => diagram)
     await buildProjectPdf({ robot: blankRobot(), code: { stored: 'x = 1' } }, { art: art({ wiring }) })
     expect(wiring).not.toHaveBeenCalled()
+  })
+})
+
+describe('the connections table (#1170)', () => {
+  it('follows the diagram, so the picture comes before the list', async () => {
+    const result = await buildProjectPdf(
+      { robot: demoRobot(), code: { stored: demoCode() } },
+      { art: art({ wiring: async () => diagram }) }
+    )
+    const flat = textOfPages(result.bytes).map((p) => p.join(' '))
+    const diagramPage = flat.findIndex((p) => p.includes('Electronics'))
+    const tablePage = flat.findIndex((p) => p.includes(CONNECTIONS_HEADING))
+    expect(diagramPage).toBeGreaterThan(0)
+    expect(tablePage).toBe(diagramPage + 1)
+    expect(flat[tablePage]).toContain(CONNECTIONS_INTRO.slice(0, 30))
+  })
+
+  it('writes out every wire in the project', async () => {
+    const result = await buildProjectPdf(
+      { robot: demoRobot(), code: { stored: 'x = 1' } },
+      { art: art({ wiring: async () => diagram }) }
+    )
+    const flat = textOfPages(result.bytes)
+      .map((p) => p.join(' '))
+      .join(' ')
+    for (const row of buildConnections(demoRobot())) {
+      expect(flat).toContain(row.to)
+    }
+  })
+
+  it('stands on its own when the board could not be captured', async () => {
+    // The one case where the reader would otherwise have no wiring at all.
+    const result = await buildProjectPdf(
+      { robot: demoRobot(), code: { stored: 'x = 1' } },
+      { art: art({ wiring: async () => null }) }
+    )
+    const flat = textOfPages(result.bytes).map((p) => p.join(' '))
+    expect(flat.some((p) => p.includes(CONNECTIONS_HEADING))).toBe(true)
+    expect(result.omitted).toEqual([{ section: 'wiring', reason: expect.any(String) }])
+  })
+
+  it('is left out by a project with no wiring', async () => {
+    const result = await buildProjectPdf({ robot: blankRobot(), code: { stored: 'x = 1' } })
+    const flat = textOfPages(result.bytes).map((p) => p.join(' '))
+    expect(flat.some((p) => p.includes(CONNECTIONS_HEADING))).toBe(false)
   })
 })
 

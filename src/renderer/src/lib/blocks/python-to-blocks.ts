@@ -730,13 +730,29 @@ export function pythonToBlocks(source: string): Conversion {
  * Where it is still an estimate, it errs UPWARDS, and the gutter is wide. Being
  * a little too far apart costs a scroll; being too close costs the overlap this
  * exists to remove, and only one of those is a bug.
+ *
+ * A LITTLE TOO FAR APART TURNED OUT TO COST MORE THAN A SCROLL. Measured on the
+ * repo's own examples, a long chain over-reserves by up to 512px — half a screen
+ * of empty parchment where a learner expects their next stack, which reads as
+ * blocks that failed to draw — and a `def` with a big body still comes up short.
+ * A row count cannot be right for every block, so the CANVAS no longer relies on
+ * one: `root-column.ts` re-spaces the column from the rendered heights as soon
+ * as Blockly has drawn them. What is below stays the layout of a document
+ * nothing has rendered yet — the footer a file is saved with, the JSON a test
+ * reads — which is a job an estimate can do.
  */
 
-/** Where the first root goes, and the left margin for all of them. */
-const ROOT_ORIGIN = 40
+/**
+ * Where the first root goes, and the left margin for all of them.
+ *
+ * Exported because it is also what tells a LIVE canvas which roots it may
+ * re-space: `root-column.ts` tightens the column this function lays out, and a
+ * root the learner has dragged somewhere is one that is no longer at this x.
+ */
+export const ROOT_ORIGIN = 40
 
 /** Clear space between one root's bottom and the next root's top. */
-const ROOT_GUTTER = 48
+export const ROOT_GUTTER = 48
 
 /**
  * One statement row, in px — `MIN_BLOCK_HEIGHT` plus the top and bottom strips
