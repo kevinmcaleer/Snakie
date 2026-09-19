@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.84.1] - 2026-09-19
+
 ### Changed
 
 - **New canvases default to the `scratch` block shape.** Settings ▸
@@ -9767,7 +9769,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.68.8...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.84.1...HEAD
+[0.84.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.68.8...v0.84.1
 [0.68.8]: https://github.com/kevinmcaleer/Snakie/compare/v0.56.0...v0.68.8
 [0.56.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.55.0...v0.56.0
 [0.55.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.51.1...v0.55.0
