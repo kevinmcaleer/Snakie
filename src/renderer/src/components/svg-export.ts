@@ -16,6 +16,8 @@
  * and the breadboard share one pipeline.
  */
 
+import { PdfWriter } from '../lib/pdf'
+
 export type ExportFmt = 'svg' | 'png' | 'pdf'
 
 /** XML-escape a string for use inside SVG text / attributes. */
@@ -74,69 +76,40 @@ export async function rasterise(
 }
 
 /** Read a canvas as a Blob of the given MIME (+ quality). */
-export function canvasToBlob(canvas: HTMLCanvasElement, mime: string, quality?: number): Promise<Blob> {
+export function canvasToBlob(
+  canvas: HTMLCanvasElement,
+  mime: string,
+  quality?: number
+): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), mime, quality)
   })
 }
 
 /**
- * Build a minimal single-page PDF embedding a JPEG (the rasterised view) at
- * `outW`×`outH` points. No dependency: a tiny hand-assembled PDF (5 objects +
- * xref) with a single `/DCTDecode` (JPEG) image XObject. Intentionally the
- * WEAKEST export — an image-only, vector-less page — but a real, openable PDF.
+ * Build a single-page PDF embedding a JPEG (the rasterised view) at
+ * `outW`×`outH` points. Still no dependency — it now goes through the shared
+ * writer in `lib/pdf` (#1113), which is the same one the project export uses,
+ * so there is one implementation of "get the bytes right" rather than two.
+ *
+ * `pixelW`/`pixelH` are the JPEG's own dimensions; they differ from the placed
+ * size whenever the canvas was rasterised above 1× and belong in the XObject's
+ * `/Width` and `/Height`.
  */
-export function buildImagePdf(jpeg: Uint8Array, outW: number, outH: number): Blob {
-  const enc = new TextEncoder()
-  const parts: Uint8Array[] = []
-  const offsets: number[] = []
-  let length = 0
-  const push = (chunk: Uint8Array | string): void => {
-    const u = typeof chunk === 'string' ? enc.encode(chunk) : chunk
-    parts.push(u)
-    length += u.length
-  }
-  const startObj = (): void => {
-    offsets.push(length)
-  }
+export function buildImagePdf(
+  jpeg: Uint8Array,
+  outW: number,
+  outH: number,
+  pixelW = Math.round(outW),
+  pixelH = Math.round(outH)
+): Blob {
   const w = Math.round(outW)
   const h = Math.round(outH)
-
-  push('%PDF-1.4\n%ÿÿÿÿ\n')
-  startObj()
-  push('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n')
-  startObj()
-  push('2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n')
-  startObj()
-  push(
-    `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${w} ${h}] ` +
-      `/Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>\nendobj\n`
-  )
-  startObj()
-  push(
-    `4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${w} /Height ${h} ` +
-      `/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>\nstream\n`
-  )
-  push(jpeg)
-  push('\nendstream\nendobj\n')
-  const content = `q\n${w} 0 0 ${h} 0 0 cm\n/Im0 Do\nQ\n`
-  startObj()
-  push(`5 0 obj\n<< /Length ${content.length} >>\nstream\n${content}endstream\nendobj\n`)
-  const xrefOffset = length
-  let xref = `xref\n0 6\n0000000000 65535 f \n`
-  for (const off of offsets) {
-    xref += `${off.toString().padStart(10, '0')} 00000 n \n`
-  }
-  push(xref)
-  push(`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`)
-
-  const total = new Uint8Array(length)
-  let pos = 0
-  for (const p of parts) {
-    total.set(p, pos)
-    pos += p.length
-  }
-  return new Blob([total], { type: 'application/pdf' })
+  const writer = new PdfWriter()
+  const image = writer.addImage({ jpeg, width: pixelW, height: pixelH })
+  const page = writer.addPage(w, h)
+  page.drawImage(image, 0, 0, w, h)
+  return new Blob([writer.build()], { type: 'application/pdf' })
 }
 
 /** SVG presentation properties worth inlining so a serialized SVG paints alone. */
@@ -190,7 +163,9 @@ const SVG_NS = 'http://www.w3.org/2000/svg'
 /** A child's bbox mapped into its PARENT's coordinate space. `getBBox()` alone
  *  is in the child's own (pre-transform) space, so a translated group would be
  *  mislocated — apply the child's transform matrix to the box corners. */
-function childBoxInParent(k: SVGGraphicsElement): { x0: number; y0: number; x1: number; y1: number } | null {
+function childBoxInParent(
+  k: SVGGraphicsElement
+): { x0: number; y0: number; x1: number; y1: number } | null {
   let bb: DOMRect
   try {
     bb = k.getBBox()
@@ -318,5 +293,5 @@ export async function exportSvgString(
   const dpr = Math.min(window.devicePixelRatio || 1, 2)
   const canvas = await rasterise(svgStr, outW, outH, dpr, background)
   const jpeg = new Uint8Array(await (await canvasToBlob(canvas, 'image/jpeg', 0.92)).arrayBuffer())
-  downloadBlob(buildImagePdf(jpeg, outW, outH), `${baseName}.pdf`)
+  downloadBlob(buildImagePdf(jpeg, outW, outH, canvas.width, canvas.height), `${baseName}.pdf`)
 }
