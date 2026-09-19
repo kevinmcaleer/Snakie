@@ -553,6 +553,29 @@ describe('pin label offset (manual placement) round-trip', () => {
   })
 })
 
+describe('pin labelHidden round-trip', () => {
+  it('keeps an explicit labelHidden: true and omits it otherwise', () => {
+    const part = normalisePart({
+      id: 'p',
+      name: 'P',
+      headers: [
+        {
+          edge: 'left',
+          pins: [
+            { name: 'a1', type: 'other', labelHidden: true },
+            { name: 'SDA', type: 'io', gpio: 4 }
+          ]
+        }
+      ]
+    })
+    const yaml = partToYaml(part)
+    expect(yaml).toContain('labelHidden: true')
+    const pins = partFromYaml(yaml).headers[0].pins
+    expect(pins[0].labelHidden).toBe(true)
+    expect(pins[1].labelHidden).toBeUndefined()
+  })
+})
+
 describe('onboard LEDs round-trip', () => {
   it('keeps single + RGB onboard LEDs through normalise + YAML', () => {
     const part = normalisePart({
