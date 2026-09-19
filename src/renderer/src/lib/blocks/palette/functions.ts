@@ -2,7 +2,8 @@ import { commentDocstring } from '../docstring'
 import { Order } from '../generator'
 import type { MicroPythonGenerator } from '../generator'
 import type { BlockDefinition } from '../registry'
-import type * as Blockly from 'blockly/core'
+import * as Blockly from 'blockly/core'
+import { registerCallRules } from '../python-to-blocks'
 
 /**
  * FUNCTIONS (#1011, epic #1007).
@@ -30,6 +31,41 @@ function params(block: Blockly.Block, gen: MicroPythonGenerator): string[] {
   const models = block.getVarModels?.() ?? []
   return models.map((m) => gen.variableName(m.getId(), m.getName()))
 }
+
+/**
+ * THE PARAMETERS BLOCKLY'S LIST CANNOT HOLD (#1134, epic #1119).
+ *
+ * Blockly's procedure mutator models a parameter as a bare NAME — it becomes a
+ * workspace variable, and renaming it renames every caller, which is exactly the
+ * machinery `palette/index.ts` says is worth not rebuilding. A default value, a
+ * `*args` or a `**kwargs` has nowhere to live on it, so
+ * `def blink(times=3):` could not be built and `def load(path, flip=None):`
+ * could not even be READ — `modellableParams` sent the whole `def` to a raw
+ * suite rather than drop a parameter.
+ *
+ * SO THEY GO IN A FIELD, appended after the declared ones. That is the same
+ * decision `snakie_method` made for its whole parameter list and `snakie_with`
+ * made for its head: the text is exact for every form, where sockets would
+ * model the common case and lose the rest.
+ *
+ * AND IT IS THE DECISION THAT KEEPS EVERY SAVED WORKSPACE LOADING. The issue
+ * names extending the mutator's serialisation as the whole cost of this work;
+ * a field on the block is serialised by name, a block saved before it existed
+ * simply has none, and Blockly's own procedure machinery is untouched.
+ *
+ * A DEFAULTED PARAMETER GETS NO CALLER SOCKET, which is correct rather than a
+ * shortcoming: it is optional at the call site, which is the whole reason for
+ * giving it a default.
+ */
+function signature(block: Blockly.Block, gen: MicroPythonGenerator): string {
+  const declared = params(block, gen)
+  const extra = String(block.getFieldValue(EXTRAS_FIELD) ?? '').trim().replace(/,\s*$/, '')
+  return [...declared, ...(extra === '' ? [] : [extra])].join(', ')
+}
+
+/** The field the extra parameters live in, and the input that carries it. */
+export const EXTRAS_FIELD = 'EXTRAS'
+const EXTRAS_INPUT = 'SNAKIE_EXTRAS'
 
 /** A statement input's body, or `pass` — an empty `def` is a syntax error. */
 function body(block: Blockly.Block, name: string, gen: MicroPythonGenerator): string {
@@ -66,7 +102,7 @@ export const FUNCTION_BLOCKS: BlockDefinition[] = [
       const stack = doc ? gen.statementToCode(block, 'STACK') : body(block, 'STACK', gen)
       gen.defineFunction(
         block.id,
-        `def ${name}(${params(block, gen).join(', ')}):\n${doc}${stack}`
+        `def ${name}(${signature(block, gen)}):\n${doc}${stack}`
       )
       return ''
     }
@@ -98,7 +134,7 @@ export const FUNCTION_BLOCKS: BlockDefinition[] = [
         docstring(block, gen) +
         gen.statementToCode(block, 'STACK') +
         `${gen.INDENT}return ${answer}\n`
-      gen.defineFunction(block.id, `def ${name}(${params(block, gen).join(', ')}):\n${inner}`)
+      gen.defineFunction(block.id, `def ${name}(${signature(block, gen)}):\n${inner}`)
       return ''
     }
   },
@@ -113,6 +149,27 @@ export const FUNCTION_BLOCKS: BlockDefinition[] = [
   // `custom: 'PROCEDURE'` (see `buildToolbox`). Listed statically they render as
   // what they are with no procedure to name: two BLANK, nameless blocks. Blockly
   // generates a named caller per defined function instead.
+  {
+    // `super()` — THE CLASS THIS ONE IS BUILT ON (#1134, epic #1119).
+    //
+    // W6 (#1093) gave `snakie_class` inheritance, which makes this live rather
+    // than theoretical: the standard way to write a subclass's `__init__` is to
+    // call the parent's, and there was no block that could name it.
+    //
+    // A VALUE BLOCK, so it goes in the object socket of a `call` block and
+    // reads as what it is: *call (__init__) on (the class this is built on)*.
+    type: 'snakie_super',
+    category: 'functions',
+    help: 'ref-classes',
+    read: { fn: 'super', args: [], shape: 'value' },
+    json: {
+      message0: 'the class this one is built on',
+      output: null,
+      tooltip:
+        'The class your class was built on — Python writes it super(). Call a method on it to run the version your class replaced, which is how a subclass’s setup runs its parent’s first.'
+    },
+    code: () => ['super()', Order.FUNCTION_CALL]
+  },
   {
     type: 'procedures_callnoreturn',
     category: 'functions',
@@ -190,4 +247,48 @@ function callCode(block: Blockly.Block, gen: MicroPythonGenerator): string {
     args.push(gen.valueToCode(block, `ARG${i}`, Order.NONE) || 'None')
   }
   return `${name}(${args.join(', ')})`
+}
+
+/**
+ * How `super()` reads back (#1134).
+ *
+ * A one-liner, the same shape as the `len`/`abs` entries in the reader's own
+ * table — which is the whole reason it could be filed with the keyword
+ * arguments rather than as work of its own.
+ */
+registerCallRules(
+  FUNCTION_BLOCKS.flatMap((block) => (block.read ? [{ ...block.read, type: block.type }] : []))
+)
+
+/**
+ * Give Blockly's two `def` blocks the extra-parameters field (#1134).
+ *
+ * WRAPPING `init` RATHER THAN REDEFINING THE BLOCK. Both are built in code and
+ * carry the mutator, the caller bookkeeping and the rename flow; handing them a
+ * JSON definition would replace all of it. Appending one input afterwards
+ * leaves every bit of that machinery exactly where it was.
+ *
+ * Idempotent, because `installCorePalette` runs again for every test file and
+ * `Blockly.Blocks` is not reset between them — a second wrap would append the
+ * field twice and Blockly throws on a duplicate input name.
+ */
+export function installFunctionBlocks(): void {
+  for (const type of ['procedures_defnoreturn', 'procedures_defreturn']) {
+    const def = Blockly.Blocks[type] as unknown as {
+      init: (this: Blockly.Block) => void
+      snakieExtras_?: boolean
+    }
+    if (!def || def.snakieExtras_) continue
+    const init = def.init
+    def.init = function (this: Blockly.Block): void {
+      init.call(this)
+      this.appendDummyInput(EXTRAS_INPUT)
+        .appendField('and also')
+        .appendField(new Blockly.FieldTextInput(''), EXTRAS_FIELD)
+      // Above the body, where the rest of the signature is — `appendDummyInput`
+      // puts it at the bottom, under the `return` row.
+      if (this.getInput('STACK')) this.moveInputBefore(EXTRAS_INPUT, 'STACK')
+    }
+    def.snakieExtras_ = true
+  }
 }

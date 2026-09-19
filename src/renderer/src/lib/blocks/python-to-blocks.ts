@@ -104,17 +104,57 @@ const OUTPUT_TYPE = new Map<string, SocketType>([
   ['math_round', 'Number'],
   ['snakie_math_abs', 'Number'],
   ['text_length', 'Number'],
+  // The bits (#1127). THE LITERALS ARE NUMBERS AND THE OPERATORS ARE NOT, which
+  // looks inconsistent and is not: `if flags & 0x01:` is how every driver asks
+  // whether a bit is set, so the result of a mask has to fit a socket that
+  // checks Boolean, and the blocks in `maths.ts` say so by leaving their output
+  // unchecked. This table mirrors what those blocks DECLARE — a row here that
+  // disagrees with the block is a workspace Blockly refuses to load, which is
+  // the whole reason the table exists.
+  ['snakie_hex_number', 'Number'],
+  ['snakie_binary_number', 'Number'],
   ['logic_boolean', 'Boolean'],
   ['logic_compare', 'Boolean'],
   ['logic_negate', 'Boolean'],
   ['logic_operation', 'Boolean'],
   ['snakie_is_none', 'Boolean'],
+  ['snakie_identity', 'Boolean'],
+  ['snakie_isinstance', 'Boolean'],
+  // `ord` and `chr` (#1130): one answers with a number, the other with text.
+  ['snakie_text_ord', 'Number'],
+  ['snakie_text_chr', 'String'],
+  // Working with text (#1124). `split` is the one that hands back a LIST,
+  // which is what lets it go straight into a `for each`.
+  ['snakie_text_case', 'String'],
+  ['snakie_text_strip', 'String'],
+  ['snakie_text_replace', 'String'],
+  ['snakie_text_join_with', 'String'],
+  ['snakie_text_split', 'Array'],
+  ['snakie_text_edge', 'Boolean'],
+  ['snakie_text_find', 'Number'],
+  // The format blocks (#1125) hand back TEXT, which is what lets one of them
+  // go into `print`, into `join`, or onto a display — one block, every
+  // destination.
+  ['snakie_format_places', 'String'],
+  ['snakie_format_pad', 'String'],
+  ['snakie_format_base', 'String'],
+  ['snakie_int_base', 'Number'],
+  // The list verbs (#1122). `sorted(xs)` is the only one that hands back a
+  // LIST, which is what lets it go straight into a `for each`.
+  ['snakie_list_index', 'Number'],
+  ['snakie_list_count', 'Number'],
+  ['snakie_list_aggregate', 'Number'],
+  ['snakie_list_sorted', 'Array'],
   ['snakie_list_contains', 'Boolean'],
   // `controls_forEach`'s LIST socket checks Array, and a `text` in it is the
   // same class of unloadable workspace the table above exists for (#1087):
   // `for name in "EDCDEEE":` is ordinary Python — iterating a string — and it
   // took the whole file's canvas down with it.
   ['lists_create_with', 'Array'],
+  // A TUPLE IS NOT AN `Array` (#1121). `controls_forEach`'s LIST socket checks
+  // Array and a tuple is perfectly iterable, but so is a string — the table
+  // says what a block DECLARES, and `snakie_tuple` declares nothing, so it fits
+  // everywhere the way a variable does.
   ['lists_repeat', 'Array'],
   ['lists_sort', 'Array'],
   ['lists_split', 'Array']
@@ -302,6 +342,19 @@ export interface CallRule {
    * stays raw.
    */
   checks?: Readonly<Record<string, SocketType>>
+  /**
+   * Sockets that are ONE-BASED on the block and zero-based in the Python
+   * (#1122, epic #1119).
+   *
+   * The Lists drawer counts from 1 and writes the `- 1` out visibly — see
+   * `lists.ts` for why that was chosen over renumbering in silence. Reading one
+   * back means undoing the same arithmetic, and only the two forms the
+   * generator can write are undoable: a literal, counted back up, and the
+   * `- 1` it wrote. `xs.pop(n)` is neither, so a rule naming a socket here
+   * DECLINES that line rather than producing a block which would regenerate as
+   * `xs.pop(n - 1)` — somebody's line, rewritten.
+   */
+  oneBased?: readonly string[]
 }
 
 /**
@@ -881,10 +934,10 @@ function groupComments(nodes: readonly Stmt[]): Stmt[] {
 /**
  * A call's ARGUMENTS, split on the commas that are actually separators.
  *
- * `splitParams` splits on every comma, which is right for a parameter list of
- * bare names and wrong for `wiggle(f(1, 2), 3)`. Returns null when the brackets
- * or quotes do not balance, which is the caller's signal to leave the line raw
- * rather than guess at it.
+ * A plain `split(',')` is right for a parameter list of bare names — which is
+ * what {@link splitSignature} does — and wrong for `wiggle(f(1, 2), 3)`.
+ * Returns null when the brackets or quotes do not balance, which is the
+ * caller's signal to leave the line raw rather than guess at it.
  */
 function splitArgs(args: string): string[] | null {
   const out: string[] = []
@@ -925,29 +978,111 @@ function splitArgs(args: string): string[] | null {
   return out.every((a) => a !== '') ? out : null
 }
 
-/** A parameter list, split and trimmed. Empty for `()`. */
-function splitParams(params: string): string[] {
-  return params
-    .split(',')
-    .map((p) => p.trim())
-    .filter((p) => p !== '')
+/**
+ * `f"{value:.2f}"` → which format block wrote it, and with what (#1125).
+ *
+ * Null for every other f-string, including one with any literal text in it.
+ * The three specs here are the three the blocks emit and nothing more: a spec
+ * this does not recognise belongs to a line somebody wrote by hand, and coming
+ * back as an approximation of it would be a rewrite.
+ */
+function readFormatString(
+  literal: string
+): { type: string; fields: Record<string, string>; expr: string } | null {
+  // DOUBLE QUOTES ONLY, which is what the blocks emit. `f'{t:.1f}'` is the same
+  // string and a different line, and a block has nowhere to record which quote
+  // the learner used — the same reason `0x3C` needed a field that holds text
+  // rather than a number (#1127).
+  if (!literal.startsWith('"')) return null
+  const body = readStringLiteral(literal)
+  if (body === null) return null
+  const slot = /^\{(.+):([^{}]+)\}$/.exec(body)
+  if (!slot) return null
+  const [, expr, spec] = slot
+  // An expression with a brace in it is a nested f-string or a dict display,
+  // neither of which these blocks can hold.
+  if (/[{}]/.test(expr) || expr.trim() === '') return null
+  const places = /^\.(\d+)f$/.exec(spec)
+  if (places) return { type: 'snakie_format_places', fields: { PLACES: places[1] }, expr }
+  const width = /^>(\d+)$/.exec(spec)
+  if (width) return { type: 'snakie_format_pad', fields: { WIDTH: width[1] }, expr }
+  const base = /^#([xb])$/.exec(spec)
+  if (base) return { type: 'snakie_format_base', fields: { BASE: base[1] }, expr }
+  return null
 }
 
 /**
- * Can Blockly's `procedures_def` hold this parameter list faithfully? (#1063)
+ * Does `text` carry a `for` at the top level of its brackets?
  *
- * Its parameters are bare NAMES — they become workspace variables — so that is
- * all it can express. A default (`flip_x=None`), a type annotation, `*args` or
- * `**kwargs` has nowhere to live on the block.
- *
- * This used to be a `.filter()`, which meant the ones it could not hold were
- * simply dropped: `def load(path, flip_x=None, flip_y=None)` came back as
- * `def load(path)`. A signature is not decoration — every call to that function
- * still passed three arguments — so a `def` we cannot model faithfully stays a
- * raw suite with its header verbatim instead. Uglier, and correct.
+ * Which is to say: is it a COMPREHENSION rather than a display (#1126)? The
+ * literal readers use it to decline, because a comprehension has no top-level
+ * commas and would otherwise split into a single "item" holding the whole of
+ * it — half an expression, and worse than none.
  */
-function modellableParams(params: string): boolean {
-  return splitParams(params).every((p) => /^[A-Za-z_]\w*$/.test(p))
+function hasLoopKeyword(text: string): boolean {
+  const tokens = tokenize(text)
+  if (!tokens) return false
+  let depth = 0
+  for (const tok of tokens) {
+    if (tok.kind === 'open') depth += 1
+    else if (tok.kind === 'close') depth -= 1
+    else if (depth === 0 && tok.kind === 'keyword' && tok.text === 'for') return true
+  }
+  return false
+}
+
+/**
+ * `'name': value` → the two halves, or null (#1120).
+ *
+ * The FIRST top-level colon, so `{'a': d['b']}` splits where it should and a
+ * colon inside a nested slice or dict does not fool it. Null for a piece with
+ * no colon at all, which is how `{1, 2}` — a set, which this palette has no
+ * blocks for — declines to be read as a dictionary.
+ */
+function splitPair(text: string): [string, string] | null {
+  const tokens = tokenize(text)
+  if (!tokens) return null
+  let depth = 0
+  for (const tok of tokens) {
+    if (tok.kind === 'open') depth += 1
+    else if (tok.kind === 'close') depth -= 1
+    else if (depth === 0 && tok.kind === 'op' && tok.text === ':') {
+      const key = text.slice(0, tok.start).trim()
+      const value = text.slice(tok.end).trim()
+      return key === '' || value === '' ? null : [key, value]
+    }
+  }
+  return null
+}
+
+/**
+ * A parameter list, split into the part Blockly's mutator can hold and the rest
+ * (#1063, widened by #1134).
+ *
+ * Blockly's parameters are bare NAMES — they become workspace variables — so a
+ * default (`flip_x=None`), a type annotation, `*args` or `**kwargs` has nowhere
+ * to live in the mutator. This used to be a boolean, and a `def` carrying any
+ * of them went to a raw suite whole: correct, and it meant
+ * `def blink(times=3):` — a beginner-friendly helper, and nearly every driver's
+ * `__init__` — came back as a grey wall.
+ *
+ * #1134 gave the block a FIELD for the rest, appended after the declared ones,
+ * so the split is what this returns. Everything from the first parameter
+ * Blockly cannot hold onwards goes into the field VERBATIM, which keeps
+ * keyword-only parameters after a `*args` in the order Python needs and never
+ * reorders anybody's signature.
+ *
+ * Null for a list that cannot be split at all — an empty piece, which means a
+ * trailing comma the block has nowhere to record.
+ */
+function splitSignature(params: string): { declared: string[]; extra: string } | null {
+  const pieces = params.split(',').map((p) => p.trim())
+  if (pieces.length === 1 && pieces[0] === '') return { declared: [], extra: '' }
+  if (pieces.some((p) => p === '')) return null
+  const plain = (p: string): boolean => /^[A-Za-z_]\w*$/.test(p)
+  let at = 0
+  while (at < pieces.length && plain(pieces[at])) at += 1
+  return { declared: pieces.slice(0, at), extra: pieces.slice(at).join(', ') }
 }
 
 // ---------------------------------------------------------------------------
@@ -1031,6 +1166,24 @@ function mentions(text: string, name: string): boolean {
  * Groups: the `async` keyword or undefined, the name, the parameter list.
  */
 const DEF_HEADER = /^(async\s+)?def\s+([A-Za-z_]\w*)\((.*)\)\s*:$/
+
+/**
+ * Blocks whose 1-based setting writes `<call> + 1` (#1122, #1124).
+ *
+ * `xs.index(v)` and `s.find(n)` both answer 0-based, and both drawers count
+ * from 1 — so the friendly face has to write the `+ 1`, which is arithmetic
+ * around a call that no plain rule can read. The reader folds exactly that
+ * shape back into the block's own setting; `xs.index(v) + 2` is arithmetic
+ * somebody wrote and stays it.
+ */
+const ONE_BASED_PLUS_ONE = new Set(['snakie_list_index', 'snakie_text_find'])
+
+/** The multiplicative operators, as `math_arithmetic`'s dropdown spells them. */
+const MULTIPLICATIVE_OP: Record<string, string> = {
+  '*': 'MULTIPLY',
+  '/': 'DIVIDE',
+  '//': 'FLOORDIVIDE'
+}
 
 /** Every augmented-assign operator the block has a setting for (W8, #1095). */
 const AUGMENTED = new Set([
@@ -1437,10 +1590,15 @@ class Converter {
       // anyway would build a CALLER block for a definition that does not exist —
       // a workspace Blockly refuses to load, which costs the learner every block
       // in the file.
-      if (!def || !modellableParams(def[2]) || decoratedAbove(node, nodes)) continue
+      if (!def || !splitSignature(def[2]) || decoratedAbove(node, nodes)) continue
       const last = node.body[node.body.length - 1]
       this.definedHere.set(def[1], {
-        params: splitParams(def[2]),
+        // ONLY THE DECLARED ONES ARE CALLER SOCKETS (#1134). A parameter with a
+        // default is optional at the call site, which is the whole reason it
+        // has one, so a caller block with a socket for it would be wrong — and
+        // the arity check below is what keeps `blink()` and `blink(2)` from
+        // both trying to become the same block.
+        params: splitSignature(def[2])!.declared,
         // The same rule `definition` uses, down to the comment: a TRAILING
         // `return <expr>` becomes the block's RETURN socket, and that is what
         // makes it a `defreturn`. One carrying a trailing comment does not
@@ -1584,20 +1742,18 @@ class Converter {
         this.report.recognised += 1
         continue
       }
-      // `pass` exists only to fill an empty suite, and an empty suite in blocks
-      // is an empty socket — so carrying it over would add a block that means
-      // "nothing" and then generate `pass` a second time.
+      // `pass` USED TO BE DROPPED HERE when it was the whole body of a suite:
+      // an empty suite in blocks is an empty socket, and every emitter writes
+      // its own `pass` for one, so carrying it over would have added a block
+      // meaning "nothing" and then written `pass` twice. (#1068 narrowed an
+      // earlier version that dropped it everywhere and lost lines with it.)
       //
-      // ONLY WHEN IT IS THE WHOLE BODY, though (#1068). Dropping it wherever it
-      // appeared lost a `pass` that was keeping company with real statements, or
-      // standing at the top level where no socket will put it back —
-      // `examples/hello_world.py` came back a line short. Every emitter writes
-      // `pass` for an empty body, so the one case this is for is still covered.
-      if (node.line.text === 'pass' && grouped.length === 1) {
-        this.report.total += 1
-        this.report.recognised += 1
-        continue
-      }
+      // #1133 GAVE `pass` A BLOCK, and that changes the arithmetic: a body
+      // holding one is not empty, so the emitter writes the learner's `pass`
+      // rather than its own — one either way. Dropping it now would mean a
+      // learner could drag `do nothing` into an empty `if`, save, reopen, and
+      // find the block gone, which is the asymmetry the palette/reader test
+      // exists to catch. So it is read like anything else, in `recognise`.
       // `elif`/`else` are not statements: they belong to the `if` above them.
       //
       // ASKED, NOT ASSUMED (#1068). This used to skip any line STARTING with
@@ -1961,6 +2117,70 @@ class Converter {
         )
       ])
     }
+    // TWO NAMES IN THE LOOP TARGET (#1121, epic #1119), which `controls_forEach`
+    // cannot hold — `docs/blocks-coverage-epic.md` §10 lists
+    // `for name, value in rows:` among the lines still grey for exactly that
+    // reason. `enumerate` and `zip` are tried first, because both are also a
+    // two-name loop over "something" and the general block would claim them and
+    // render the call as a grey socket.
+    const forTwo = /^for\s+([A-Za-z_]\w*)\s*,\s*([A-Za-z_]\w*)\s+in\s+(.+):$/.exec(text)
+    if (forTwo) {
+      const [, first, second, over] = forTwo
+      const enumerated = /^enumerate\((.+)\)$/.exec(over)
+      if (enumerated) {
+        // `enumerate(xs)` counts from 0 and `enumerate(xs, 1)` from 1, which is
+        // the block's own dropdown. Any other start — `enumerate(xs, 5)` — is
+        // not this block, and a raw suite says so rather than losing the 5.
+        const parts = splitArgs(enumerated[1])
+        const start = parts?.length === 1 ? 'ZERO' : parts?.length === 2 && parts[1].trim() === '1' ? 'ONE' : null
+        if (parts && start) {
+          return recognised([
+            this.withBody(
+              {
+                type: 'snakie_for_each_indexed',
+                fields: {
+                  START: start,
+                  VAR_INDEX: { id: this.variable(first) },
+                  VAR_ITEM: { id: this.variable(second) }
+                },
+                inputs: { LIST: { block: this.expression(parts[0]) } }
+              },
+              'DO',
+              node
+            )
+          ])
+        }
+      }
+      const zipped = /^zip\((.+)\)$/.exec(over)
+      const zipArgs = zipped ? splitArgs(zipped[1]) : null
+      if (zipArgs && zipArgs.length === 2) {
+        return recognised([
+          this.withBody(
+            {
+              type: 'snakie_for_each_zip',
+              fields: { VAR_A: { id: this.variable(first) }, VAR_B: { id: this.variable(second) } },
+              inputs: {
+                LIST_A: { block: this.expression(zipArgs[0]) },
+                LIST_B: { block: this.expression(zipArgs[1]) }
+              }
+            },
+            'DO',
+            node
+          )
+        ])
+      }
+      return recognised([
+        this.withBody(
+          {
+            type: 'snakie_for_each_two',
+            fields: { VAR_A: { id: this.variable(first) }, VAR_B: { id: this.variable(second) } },
+            inputs: { SEQ: { block: this.expression(over) } }
+          },
+          'DO',
+          node
+        )
+      ])
+    }
     const forEach = /^for\s+([A-Za-z_]\w*)\s+in\s+(.+):$/.exec(text)
     if (forEach) {
       // The thing being iterated has to FIT the LIST socket, which checks Array
@@ -2017,6 +2237,27 @@ class Converter {
     if (text === 'try:') return recognised([this.tryChain(node, siblings)])
     const withHead = /^(async\s+)?with\s+(.+):$/.exec(text)
     if (withHead) {
+      // ONE THING, BOUND TO ONE PLAIN NAME → the friendly block (#1132). That
+      // is the shape a learner meets — `with open('data.csv', 'a') as f:` — and
+      // it takes the thing in a SOCKET, so the `open file` block plugs into it.
+      // Everything else keeps the text-field block: two context managers on one
+      // line, `async with`, a name that is not a plain identifier. The same
+      // split #1121 made between `set … and … to` and the exact assign block.
+      const one = withHead[1] ? null : /^(.+?)\s+as\s+([A-Za-z_]\w*)$/.exec(withHead[2].trim())
+      if (one && !isReservedName(one[2]) && splitArgs(one[1])?.length === 1) {
+        const thing = this.expression(one[1])
+        return recognised([
+          this.withBody(
+            {
+              type: 'snakie_use',
+              fields: { VAR: { id: this.variable(one[2]) } },
+              inputs: { THING: { block: thing } }
+            },
+            'BODY',
+            node
+          )
+        ])
+      }
       return recognised([
         this.withBody(
           {
@@ -2028,6 +2269,10 @@ class Converter {
         )
       ])
     }
+    // `for line in f:` where the body is a file's — read as the ordinary
+    // `for each` below, which writes the identical line. The Files drawer's own
+    // loop block is for BUILDING one; there is nothing in the text that says
+    // which of the two wrote it, and `controls_forEach` got there first.
     // `await <expr>` ON A LINE OF ITS OWN (W9, #1096). The value form is in the
     // expression parser, where `data = await sensor.read()` needs it.
     const awaited = /^await\s+(.+)$/.exec(text)
@@ -2036,6 +2281,35 @@ class Converter {
         { type: 'snakie_await', inputs: { VALUE: { block: this.expression(awaited[1]) } } }
       ])
     }
+    // `del config['pin']` → the Dictionaries drawer's remove block (#1120).
+    // TAKING A KEY OUT HAS NO METHOD — `del` is the only way to do it — and the
+    // same string-key rule decides it here as decides the read: nothing deletes
+    // a list item by `'name'`. A `del` of anything else is #1133's block.
+    const delKey = /^del\s+(.+)$/.exec(text)
+    if (delKey) {
+      const target = this.expression(delKey[1])
+      if (target.type === 'snakie_dict_get') {
+        return recognised([{ type: 'snakie_dict_remove', inputs: target.inputs }])
+      }
+      // `del xs[0]` → the Lists drawer's remove-by-position (#1122). Taking one
+      // out by WHERE it is has no method — `pop` hands the value back, which is
+      // a different block — so `del` is the only line it can be.
+      if (target.type === 'snakie_list_get') {
+        return recognised([{ type: 'snakie_list_remove_at', inputs: target.inputs }])
+      }
+      // `del name` → the Variables drawer's own block (#1133). Only a plain
+      // name a variable FIELD can hold: `del a, b` and `del obj.attr` are real
+      // lines with no block, and they keep the grey one that regenerates them
+      // exactly.
+      if (target.type === 'variables_get') {
+        return recognised([{ type: 'snakie_forget', fields: target.fields }])
+      }
+    }
+    // `pass`, said deliberately (#1133). The generator writes its own for an
+    // empty body; this is the one a learner put there, and reading it back as
+    // a real block is what stops it being the grey line in the middle of an
+    // otherwise complete program.
+    if (text === 'pass') return recognised([{ type: 'snakie_pass' }])
     const raise = /^raise(?:\s+(.+))?$/.exec(text)
     if (raise) {
       const block: BlockJson = { type: 'snakie_raise' }
@@ -2077,7 +2351,8 @@ class Converter {
     const def = /^def\s+([A-Za-z_]\w*)\(([^)]*)\):$/.exec(text)
     // An `async def` never takes this branch — the pattern has no `async` in it —
     // because `procedures_def` has nowhere to put the keyword (W9, #1096).
-    if (def && this.depth === 0 && modellableParams(def[2]) && !decoratedAbove(node, siblings)) {
+    const signature = def ? splitSignature(def[2]) : null
+    if (def && signature && this.depth === 0 && !decoratedAbove(node, siblings)) {
       this.definitions.push(this.definition(def[1], def[2], node))
       // And the generator will write it into a section of its own, with a blank
       // line after it — which is the gap the learner typed under the `def`. See
@@ -2088,9 +2363,12 @@ class Converter {
       return recognised([])
     }
     // A `def` THAT IS NOT A TOP-LEVEL PROCEDURE (W6, #1093). Two kinds land
-    // here: a method inside a class, and a `def` whose signature Blockly's
-    // procedure block cannot hold (`def load(path, flip_x=None)` — see
-    // `modellableParams`, and #1063 for what dropping those parameters cost).
+    // here: a method inside a class, and a `def` whose signature cannot be
+    // split at all — a trailing comma the block has nowhere to record. The
+    // defaults and stars that used to land here are the procedure block's now
+    // (#1134): they go in its extras field, and #1063's argument for never
+    // DROPPING a parameter is answered by keeping it rather than by refusing
+    // the whole `def`.
     //
     // Both become the same stackable block, which is the shape a hat cannot be:
     // `procedures_defnoreturn` has no previous or next connection, so it can
@@ -2374,8 +2652,9 @@ class Converter {
 
   /** `def name(a, b):` → a procedure definition, with its body. */
   private definition(name: string, params: string, node: Stmt): BlockJson {
-    // Every one of these is a bare name — `modellableParams` is what let us in.
-    const args = splitParams(params)
+    // The bare names go to Blockly's mutator; everything else to the field
+    // #1134 added — see {@link splitSignature}.
+    const { declared, extra } = splitSignature(params)!
     // A LEADING DOCSTRING IS THE BLOCK'S DESCRIPTION, not a statement in the
     // body — one idea in two notations, so it becomes the comment bubble rather
     // than a raw Python block sitting at the top of the function. Only when it
@@ -2396,8 +2675,8 @@ class Converter {
     const body = this.nested(returns ? statements.slice(0, -1) : statements)
     const block: BlockJson = {
       type: returns ? 'procedures_defreturn' : 'procedures_defnoreturn',
-      fields: { NAME: name },
-      extraState: { params: args.map((a) => ({ name: a, id: this.variable(a) })) },
+      fields: { NAME: name, ...(extra === '' ? {} : { EXTRAS: extra }) },
+      extraState: { params: declared.map((a) => ({ name: a, id: this.variable(a) })) },
       inputs: {}
     }
     if (described !== null) {
@@ -2599,6 +2878,29 @@ class Converter {
           inputs: { ...read.block.inputs, VALUE: { block: this.expression(value) } }
         }
       }
+      // `config['pin'] = 15` → the Dictionaries drawer's setter (#1120). The
+      // read side has already decided this is a dictionary, on the one
+      // unambiguous ground there is: a string key.
+      if (read.block.type === 'snakie_dict_get') {
+        return {
+          type: 'snakie_dict_set',
+          inputs: { ...read.block.inputs, VALUE: { block: this.expression(value) } }
+        }
+      }
+    }
+
+    // EXACTLY TWO PLAIN NAMES → the friendly unpacking block (#1121). The one
+    // shape a learner meets — `x, y = position()`, `key, value = pair` — gets
+    // variable fields, so it follows a rename and cannot be typed wrong. Three
+    // names or more, an attribute target, a subscript or a starred one all fall
+    // through to the text-target block below, which is what that block is for.
+    const pair = /^([A-Za-z_]\w*)\s*,\s*([A-Za-z_]\w*)$/.exec(target)
+    if (pair && !isReservedName(pair[1]) && !isReservedName(pair[2])) {
+      return {
+        type: 'snakie_unpack',
+        fields: { VAR_A: { id: this.variable(pair[1]) }, VAR_B: { id: this.variable(pair[2]) } },
+        inputs: { VALUE: { block: this.expression(value) } }
+      }
     }
 
     // ANYTHING ELSE the left-hand side can legally be (W8, #1095): several names
@@ -2649,8 +2951,38 @@ class Converter {
     return null
   }
 
+  /**
+   * `print(a, b, c)` → the one block, with as many sockets as it needs (#1125).
+   *
+   * A `CallRule` names its sockets, so it cannot express "however many there
+   * are" — and one of the fourteen lines `docs/blocks-coverage-epic.md` §10
+   * lists as still grey is exactly this. The one-argument form stays with the
+   * rule in `BUILT_IN_RULES`, which keeps every existing reading unchanged;
+   * this claims the rest.
+   *
+   * THE FIRST SOCKET IS `TEXT`, matching the block — see `text.ts` for why that
+   * name could not move.
+   */
+  private printCall(text: string): BlockJson | null {
+    const tokens = tokenize(text)
+    if (!tokens || tokens[0]?.kind !== 'name' || tokens[0].text !== 'print') return null
+    if (tokens[1]?.text !== '(') return null
+    const read = readArgs(tokens, text, 1)
+    // A trailing comma is the learner's text, as it is on any other call, and
+    // a call that does not end the line is not this statement.
+    if (!read || read.trailingComma || read.next !== tokens.length) return null
+    if (read.args.length < 2) return null
+    const inputs: Record<string, { block: BlockJson }> = {}
+    read.args.forEach((arg, i) => {
+      inputs[i === 0 ? 'TEXT' : `ADD${i}`] = { block: this.expression(arg) }
+    })
+    return { type: 'text_print', extraState: { items: read.args.length }, inputs }
+  }
+
   /** A whole line that is one recognised call, as a statement block. */
   private callStatement(text: string): BlockJson | null {
+    const several = this.printCall(text)
+    if (several) return several
     const tokens = tokenize(text)
     if (!tokens) return null
     // A PIN THE LEARNER NAMED GOES TO THE BLOCK THAT TAKES A NAME, ahead of the
@@ -2843,24 +3175,56 @@ class Converter {
     return null
   }
 
+  /**
+   * One argument of a rule, as the block it goes into wants it (#1122).
+   *
+   * Ordinarily that is just the expression. A socket the rule lists in
+   * {@link CallRule.oneBased} is counted back UP first, because the block face
+   * counts from 1 and the Python counts from 0 — and null when that cannot be
+   * undone exactly, which declines the whole rule.
+   */
+  private ruleArgument(rule: CallRule, name: string, text: string): BlockJson | null {
+    if (rule.oneBased?.includes(name)) return this.oneBased(text.trim())
+    return this.expression(text)
+  }
+
   private buildCall(rule: CallRule, args: readonly string[]): BlockJson | null {
     const names = rule.args ?? []
+    // AN ARGUMENT CAN BE A FIELD (#1130), as it long has been for a call on a
+    // hoisted object: `isinstance(x, int)` is *x is a [whole number]*, and the
+    // `int` is a dropdown rather than a socket — a socket there would mean a
+    // learner had to find a block that says `int` the TYPE, which nothing in
+    // the palette does. So the arity a rule expects is its sockets plus its
+    // fields, exactly as `objectCall` already counts it.
+    const argFields = rule.argFields ?? {}
     // A call with the wrong number of arguments is not this block, whatever it
     // looks like — better a raw block than one that silently drops an argument.
-    if (args.length !== names.length) return null
+    if (args.length !== names.length + Object.keys(argFields).length) return null
     const block: BlockJson = { type: rule.type }
-    if (rule.fields) block.fields = { ...rule.fields }
-    if (names.length > 0) {
-      block.inputs = {}
-      for (let i = 0; i < names.length; i++) {
-        const filled = this.expression(args[i])
-        // A socket that CHECKS a type and an argument that cannot fit it is not
-        // this block — see {@link CallRule.checks}.
-        const want = rule.checks?.[names[i]]
-        if (want && !fitsSocket(filled, want)) return null
-        block.inputs[names[i]] = { block: filled }
+    const fields: Record<string, string> = { ...(rule.fields ?? {}) }
+    const inputs: Record<string, { block: BlockJson }> = {}
+    let socket = 0
+    for (let i = 0; i < args.length; i++) {
+      const asField = argFields[i]
+      if (asField) {
+        // A value the dropdown cannot hold — `isinstance(x, MyClass)` — is not
+        // this block, and a raw line says so honestly.
+        const value = asField.values[args[i].trim()]
+        if (value === undefined) return null
+        fields[asField.field] = value
+        continue
       }
+      const name = names[socket++]
+      const filled = this.ruleArgument(rule, name, args[i])
+      if (!filled) return null
+      // A socket that CHECKS a type and an argument that cannot fit it is not
+      // this block — see {@link CallRule.checks}.
+      const want = rule.checks?.[name]
+      if (want && !fitsSocket(filled, want)) return null
+      inputs[name] = { block: filled }
     }
+    if (Object.keys(fields).length > 0) block.fields = fields
+    if (Object.keys(inputs).length > 0) block.inputs = inputs
     return block
   }
 
@@ -2915,9 +3279,9 @@ class Converter {
           continue
         }
         const name = names[socket++]
-        const filled = this.expression(args[i])
+        const filled = this.ruleArgument(rule, name, args[i])
         const check = rule.checks?.[name]
-        if (check && !fitsSocket(filled, check)) fits = false
+        if (!filled || (check && !fitsSocket(filled, check))) fits = false
         else inputs[name] = { block: filled }
       }
       if (!fits) continue
@@ -3052,23 +3416,60 @@ class Converter {
     const operators = Object.keys(COMPARE)
     const isCompare = (tok: Token | undefined): boolean =>
       Boolean(tok) && tok!.kind === 'op' && operators.includes(tok!.text)
+    /**
+     * Is another comparison waiting, making this a CHAIN?
+     *
+     * `<` and friends, and also `in` and `is` — Python puts all three at one
+     * precedence level, so `a in b is c` is as much a chain as `0 <= n <= 59`
+     * and folding it left is as wrong. Refusing sends the whole expression to a
+     * raw value block, which regenerates it verbatim and means what was written.
+     */
+    const chained = (tok: Token | undefined): boolean =>
+      isCompare(tok) || (tok?.kind === 'keyword' && (tok.text === 'in' || tok.text === 'is'))
 
-    const left = this.parseAdditive(tokens, at)
+    const left = this.parseBitOr(tokens, at)
     if (!left) return null
 
-    // `x is None` → the Logic drawer's own block (W2, #1089).
+    // `x is None`, `x is not None`, and `a is b` → the Logic drawer's own two
+    // blocks (W2 #1089; the other three forms, #1128).
     //
-    // Python has it and Blockly does not, which is why `snakie_is_none` exists —
-    // and until now it was a block a learner could drag out of the drawer and
-    // never get back, because nothing read it. `is NOT None` is deliberately not
-    // here: `logic_negate` around this block writes `not x is None`, which is
-    // the same test and a different line, and rewriting somebody's line is the
-    // one thing this module does not do.
+    // `is not` IS ITS OWN OPERATOR rather than a `not` around the block: a
+    // `logic_negate` wrapper writes `not x is None`, which is the same test and
+    // a different line, and rewriting somebody's line is the one thing this
+    // module does not do. Both blocks carry a `MODE` setting that says it
+    // exactly, which is what let `is not None` be read at all.
+    //
+    // `None` FIRST, then the general identity — otherwise `x is None` would
+    // come back as the two-socket block with a `logic_null` in it, which is the
+    // same line written by the wrong block.
     const is = tokens[left.next]
-    if (is?.kind === 'keyword' && is.text === 'is' && tokens[left.next + 1]?.text === 'None') {
+    if (is?.kind === 'keyword' && is.text === 'is') {
+      const negated =
+        tokens[left.next + 1]?.kind === 'keyword' && tokens[left.next + 1].text === 'not'
+      const after = left.next + (negated ? 2 : 1)
+      const mode = negated ? 'IS_NOT' : 'IS'
+      if (tokens[after]?.text === 'None' && !isCompare(tokens[after + 1])) {
+        return {
+          block: {
+            type: 'snakie_is_none',
+            fields: { MODE: mode },
+            inputs: { VALUE: { block: left.block } }
+          },
+          next: after + 1
+        }
+      }
+      const right = this.parseBitOr(tokens, after)
+      if (!right) return null
+      // A CHAIN IS REFUSED, exactly as it is for `<` below: `a is b is c` folded
+      // left compares a Bool against `c`, which is a different program.
+      if (chained(tokens[right.next])) return null
       return {
-        block: { type: 'snakie_is_none', inputs: { VALUE: { block: left.block } } },
-        next: left.next + 2
+        block: {
+          type: 'snakie_identity',
+          fields: { MODE: mode },
+          inputs: { A: { block: left.block }, B: { block: right.block } }
+        },
+        next: right.next
       }
     }
 
@@ -3082,9 +3483,13 @@ class Converter {
       tokens[left.next + 1]?.kind === 'keyword' &&
       tokens[left.next + 1].text === 'in'
     if ((is?.kind === 'keyword' && is.text === 'in') || notIn) {
-      const right = this.parseAdditive(tokens, left.next + (notIn ? 2 : 1))
+      const right = this.parseBitOr(tokens, left.next + (notIn ? 2 : 1))
       if (!right) return null
-      if (!fitsSocket(right.block, 'Array')) return null
+      // NO `Array` REQUIREMENT ANY MORE (#1128). The block's haystack socket
+      // stopped checking, because `"c" in text`, `key in config` and
+      // `byte in buf` are all this same line and all had no block at all while
+      // it did.
+      if (chained(tokens[right.next])) return null
       return {
         block: {
           type: 'snakie_list_contains',
@@ -3097,10 +3502,10 @@ class Converter {
 
     const op = tokens[left.next]
     if (!isCompare(op)) return left
-    const right = this.parseAdditive(tokens, left.next + 1)
+    const right = this.parseBitOr(tokens, left.next + 1)
     if (!right) return null
     // The third operator at this level is what makes it a chain.
-    if (isCompare(tokens[right.next])) return null
+    if (chained(tokens[right.next])) return null
     return {
       block: {
         type: 'logic_compare',
@@ -3111,6 +3516,81 @@ class Converter {
     }
   }
 
+  /**
+   * `|`, then `^`, then `&`, then `<<`/`>>` — Python's own four levels, in
+   * Python's own order (#1127, epic #1119).
+   *
+   * THEY GO BETWEEN COMPARISON AND ADDITION, which is where Python puts them and
+   * is the whole reason they are four functions rather than one: `x & 1 == 0`
+   * means `x & (1 == 0)` in Python, and a reader that folded them into a single
+   * precedence level would say the other thing — silently, and about a line that
+   * is in every driver ever written. The levels cost four small functions and
+   * buy exactness.
+   *
+   * Left-associative, like the arithmetic above, and the emitters in `maths.ts`
+   * ask for one step looser on the left so `a & b & c` comes back as itself.
+   */
+  private parseBitOr(
+    tokens: readonly Token[],
+    at: number
+  ): { block: BlockJson; next: number } | null {
+    return this.bitwise(tokens, at, '|', 'OR', (t, i) => this.parseBitXor(t, i))
+  }
+
+  private parseBitXor(
+    tokens: readonly Token[],
+    at: number
+  ): { block: BlockJson; next: number } | null {
+    return this.bitwise(tokens, at, '^', 'XOR', (t, i) => this.parseBitAnd(t, i))
+  }
+
+  private parseBitAnd(
+    tokens: readonly Token[],
+    at: number
+  ): { block: BlockJson; next: number } | null {
+    return this.bitwise(tokens, at, '&', 'AND', (t, i) => this.parseShift(t, i))
+  }
+
+  /** One bitwise level: the operator, the dropdown value, and what is below it. */
+  private bitwise(
+    tokens: readonly Token[],
+    at: number,
+    op: string,
+    field: string,
+    next: (tokens: readonly Token[], at: number) => { block: BlockJson; next: number } | null
+  ): { block: BlockJson; next: number } | null {
+    return this.binary(
+      tokens,
+      at,
+      [op],
+      (a, b) => ({
+        type: 'snakie_bitwise',
+        fields: { OP: field },
+        inputs: { A: { block: a }, B: { block: b } }
+      }),
+      next,
+      'Number'
+    )
+  }
+
+  private parseShift(
+    tokens: readonly Token[],
+    at: number
+  ): { block: BlockJson; next: number } | null {
+    return this.binary(
+      tokens,
+      at,
+      ['<<', '>>'],
+      (a, b, op) => ({
+        type: 'snakie_bit_shift',
+        fields: { DIR: op === '>>' ? 'RIGHT' : 'LEFT' },
+        inputs: { VALUE: { block: a }, BY: { block: b } }
+      }),
+      (t, i) => this.parseAdditive(t, i),
+      'Number'
+    )
+  }
+
   private parseAdditive(
     tokens: readonly Token[],
     at: number
@@ -3119,11 +3599,30 @@ class Converter {
       tokens,
       at,
       ['+', '-'],
-      (a, b, op) => ({
-        type: 'math_arithmetic',
-        fields: { OP: op === '+' ? 'ADD' : 'MINUS' },
-        inputs: { A: { block: a }, B: { block: b } }
-      }),
+      (a, b, op) => {
+        // `xs.index(v) + 1` IS ONE BLOCK, not two (#1122). The Lists drawer
+        // counts from 1, so its 1-based setting writes exactly this — and the
+        // reader has to fold it back or a learner's own block comes back as an
+        // addition wrapped round a call it cannot see inside.
+        //
+        // Only that exact shape: `+ 1`, literally, on a block the `index` rule
+        // just produced. `xs.index(v) + n` is real arithmetic somebody wrote
+        // and stays the addition it is.
+        if (
+          op === '+' &&
+          ONE_BASED_PLUS_ONE.has(a.type) &&
+          (a.fields as { START?: string } | undefined)?.START === 'ZERO' &&
+          b.type === 'math_number' &&
+          (b.fields as { NUM?: number } | undefined)?.NUM === 1
+        ) {
+          return { ...a, fields: { ...(a.fields as object), START: 'ONE' } }
+        }
+        return {
+          type: 'math_arithmetic',
+          fields: { OP: op === '+' ? 'ADD' : 'MINUS' },
+          inputs: { A: { block: a }, B: { block: b } }
+        }
+      },
       (t, i) => this.parseMultiplicative(t, i),
       'Number'
     )
@@ -3136,7 +3635,9 @@ class Converter {
     return this.binary(
       tokens,
       at,
-      ['*', '/', '%'],
+      // `//` BINDS EXACTLY HERE (#1127) — same level as `*`, `/` and `%`, and
+      // left-associative with them, which is what `7 // 2 * 3` depends on.
+      ['*', '/', '%', '//'],
       (a, b, op): BlockJson | null =>
         op === '%'
           ? // `%` ON A STRING IS FORMATTING, NOT MODULO (#1068).
@@ -3157,7 +3658,7 @@ class Converter {
             : { type: 'math_modulo', inputs: { DIVIDEND: { block: a }, DIVISOR: { block: b } } }
           : {
               type: 'math_arithmetic',
-              fields: { OP: op === '*' ? 'MULTIPLY' : 'DIVIDE' },
+              fields: { OP: MULTIPLICATIVE_OP[op] ?? 'MULTIPLY' },
               inputs: { A: { block: a }, B: { block: b } }
             },
       (t, i) => this.parsePower(t, i),
@@ -3240,6 +3741,40 @@ class Converter {
     const tok = tokens[at]
     if (!tok) return null
 
+    // `*args` AND `**settings` (#1134, epic #1119).
+    //
+    // Only ever meaningful in an argument socket, which is the only place a
+    // term can start with a star — `a * b` reaches this function with `b`, not
+    // with `* b`. Reading them is what stops `super().__init__(*args,
+    // **kwargs)` — the standard shape of a subclass's setup — coming back with
+    // two grey sockets in it.
+    if (tok.kind === 'op' && (tok.text === '*' || tok.text === '**')) {
+      const inner = this.parseAtom(tokens, at + 1)
+      if (!inner) return null
+      return {
+        block: {
+          type: tok.text === '**' ? 'snakie_spread_named' : 'snakie_spread',
+          inputs: { VALUE: { block: inner.block } }
+        },
+        next: inner.next
+      }
+    }
+
+    // `~mask` (#1127). It binds where unary minus does — tighter than `*`,
+    // looser than `**` — and the one place that matters is `~a ** 2`, which
+    // Python reads as `~(a ** 2)`. Reading it here would give `(~a) ** 2`, a
+    // different number, so that shape is declined and stays verbatim.
+    if (tok.kind === 'op' && tok.text === '~') {
+      const inner = this.parseAtom(tokens, at + 1)
+      if (!inner) return null
+      if (tokens[inner.next]?.kind === 'op' && tokens[inner.next].text === '**') return null
+      if (!fitsSocket(inner.block, 'Number')) return null
+      return {
+        block: { type: 'snakie_bitwise_not', inputs: { VALUE: { block: inner.block } } },
+        next: inner.next
+      }
+    }
+
     if (tok.kind === 'op' && tok.text === '-') {
       const inner = this.parseAtom(tokens, at + 1)
       if (!inner) return null
@@ -3257,7 +3792,29 @@ class Converter {
       return null
     }
 
+    // A LIST DISPLAY (#1135, epic #1119). `readings = [1, 2, 3]` used to go
+    // grey — `lists_create_with` was listed in the symmetry test's exceptions
+    // as *"a literal the expression parser does not read yet"* — which meant
+    // the commonest first line of any program that keeps several readings could
+    // be dragged out and never got back. It is also what `bytes([0xF4, 0x2E])`
+    // needs, since the buffer block takes the list in a socket.
+    if (tok.kind === 'open' && tok.text === '[') {
+      return this.listDisplay(tokens, at)
+    }
+
+    // A DICTIONARY LITERAL (#1120). `{'a': 1}` used to take its whole line raw,
+    // which is the escape hatch doing the drawer's job — the thing #1119 set
+    // out to count.
+    if (tok.kind === 'open' && tok.text === '{') {
+      return this.dictLiteral(tokens, at)
+    }
+
     if (tok.kind === 'open' && tok.text === '(') {
+      // A COMMA MAKES IT A TUPLE, not a bracketed expression (#1121). Checked
+      // before the parse, because `(x, y)` parses as `x` and then stops at the
+      // comma — which used to take the whole line raw.
+      const tuple = this.tupleLiteral(tokens, at)
+      if (tuple) return tuple
       const inner = this.parse(tokens, at + 1)
       if (!inner) return null
       const close = tokens[inner.next]
@@ -3266,6 +3823,25 @@ class Converter {
     }
 
     if (tok.kind === 'number') {
+      // A HEX OR BINARY LITERAL COMES BACK AS ITSELF (#1127). `math_number`
+      // holds a number, so `0x3C` through it is `60` — the same value, a
+      // different line, and a whole file's conversion refused by the round-trip
+      // gate. These two blocks hold the DIGITS as text, so what the learner
+      // copied out of a datasheet is what goes back into the mirror.
+      //
+      // A leading underscore is excluded rather than handled: `0x_FF` is legal
+      // Python and the field would normalise it away, which is a rewrite.
+      const hex = /^0x([0-9a-fA-F][0-9a-fA-F_]*)$/.exec(tok.text)
+      if (hex) {
+        return { block: { type: 'snakie_hex_number', fields: { HEX: hex[1] } }, next: at + 1 }
+      }
+      const binary = /^0b([01][01_]*)$/.exec(tok.text)
+      if (binary) {
+        return {
+          block: { type: 'snakie_binary_number', fields: { BITS: binary[1] } },
+          next: at + 1
+        }
+      }
       const written = tok.text.replace(/_/g, '')
       const n = Number(written)
       if (!Number.isFinite(n)) return null
@@ -3278,10 +3854,43 @@ class Converter {
       return { block: { type: 'math_number', fields: { NUM: n } }, next: at + 1 }
     }
 
+    // AN f-STRING THAT IS NOTHING BUT ONE FORMATTED VALUE (#1125).
+    //
+    // `f"{t:.1f}"` is exactly what the format blocks write, and nothing else in
+    // the reader claims an f-string — the lexer sees a NAME and a STRING, and
+    // every other f-string stays raw and regenerates verbatim. Claiming the one
+    // shape the blocks themselves emit is what keeps a learner's own block from
+    // coming back grey; claiming more would mean parsing the f-string grammar,
+    // which is not this issue.
+    if (
+      tok.kind === 'name' &&
+      tok.text === 'f' &&
+      tokens[at + 1]?.kind === 'string' &&
+      tokens[at + 1].start === tok.end
+    ) {
+      const formatted = readFormatString(tokens[at + 1].text)
+      if (!formatted) return null
+      const value = this.readExpression(formatted.expr)
+      // ONLY WHEN THE VALUE ITSELF IS READABLE. `f"{values!r:>10}"` has a
+      // CONVERSION in it, and `values!r` is not an expression — reading the
+      // spec and leaving the rest grey would produce a block that regenerates
+      // a line the learner did not write. The whole f-string stays raw instead.
+      if (GREY_VALUE_TYPES.has(value.type)) return null
+      return {
+        block: { type: formatted.type, fields: formatted.fields, inputs: { VALUE: { block: value } } },
+        next: at + 2
+      }
+    }
+
     if (tok.kind === 'string') {
       const text = readStringLiteral(tok.text)
       if (text === null) return null
-      return { block: { type: 'text', fields: { TEXT: text } }, next: at + 1 }
+      // AND THEN WHATEVER IS DOTTED ONTO IT (#1135, and #1124 after it).
+      // `'AT'.encode()` and `'hello'.upper()` are methods on a literal, and
+      // without this the literal was read and the method was not — which took
+      // the whole line raw. {@link chain} reads a slice off it too, which is
+      // how `'EDCDEEE'[::-1]` comes back.
+      return this.chain({ block: { type: 'text', fields: { TEXT: text } }, next: at + 1 }, tokens)
     }
 
     if (tok.kind === 'keyword' && (tok.text === 'True' || tok.text === 'False')) {
@@ -3325,6 +3934,173 @@ class Converter {
       return this.chain({ block: base, next: at + 1 }, tokens)
     }
 
+    return null
+  }
+
+  /**
+   * `(a, b)` → the tuple block, when the brackets really hold a tuple (#1121).
+   *
+   * Null for `(a + b)`, which is one expression in brackets and is read as
+   * itself — the comma at the TOP level of the brackets is the whole
+   * difference, and a comma nested inside a call or a list is not one.
+   *
+   * `(x,)` — a one-element tuple, which is what a driver wanting a one-byte
+   * buffer writes — is read too, and generates its comma back.
+   */
+  private tupleLiteral(
+    tokens: readonly Token[],
+    at: number
+  ): { block: BlockJson; next: number } | null {
+    let depth = 0
+    const parts: string[] = []
+    let from = tokens[at].end
+    for (let i = at; i < tokens.length; i++) {
+      const tok = tokens[i]
+      if (tok.kind === 'open') {
+        depth += 1
+        continue
+      }
+      if (tok.kind === 'close') {
+        depth -= 1
+        if (depth > 0) continue
+        if (tok.text !== ')') return null
+        const last = this.source.slice(from, tok.start).trim()
+        // A TRAILING COMMA IS MEANINGFUL HERE and only here: `(x,)` is a
+        // one-element tuple, while `(x, y,)` is the same pair with the
+        // learner's spare comma, which the block has nowhere to record.
+        if (last !== '') parts.push(last)
+        else if (parts.length !== 1) return null
+        if (parts.length === 0) return null
+        if (parts.length === 1 && last !== '') return null
+        return {
+          block: {
+            type: 'snakie_tuple',
+            extraState: { items: parts.length },
+            inputs: Object.fromEntries(
+              parts.map((part, n) => [`ADD${n}`, { block: this.expression(part) }])
+            )
+          },
+          next: i + 1
+        }
+      }
+      if (depth === 1 && tok.kind === 'op' && tok.text === ',') {
+        parts.push(this.source.slice(from, tok.start).trim())
+        from = tok.end
+      }
+    }
+    return null
+  }
+
+  /**
+   * `[1, 2, 3]` → Blockly's own `lists_create_with` (#1135).
+   *
+   * The mutator's state is `{ itemCount: n }` and its sockets are `ADD0…ADDn`,
+   * which is Blockly's shape rather than ours — the growable blocks this epic
+   * added use `{ items: n }`, and the two must not be confused.
+   *
+   * A TRAILING COMMA IS THE LEARNER'S TEXT, as it is everywhere else here: the
+   * block has one socket per item and nowhere to record that there was a comma
+   * after the last of them, so `[1, 2,]` stays raw rather than coming back
+   * silently reformatted.
+   */
+  private listDisplay(
+    tokens: readonly Token[],
+    at: number
+  ): { block: BlockJson; next: number } | null {
+    let depth = 0
+    for (let i = at; i < tokens.length; i++) {
+      const tok = tokens[i]
+      if (tok.kind === 'open') {
+        depth += 1
+        continue
+      }
+      if (tok.kind !== 'close') continue
+      depth -= 1
+      if (depth > 0) continue
+      if (tok.text !== ']') return null
+      const inside = this.source.slice(tokens[at].end, tok.start).trim()
+      if (inside === '') {
+        return {
+          block: { type: 'lists_create_with', extraState: { itemCount: 0 } },
+          next: i + 1
+        }
+      }
+      // A TRAILING COMMA IS THE LEARNER'S TEXT, as it is on a call (see
+      // {@link Converter.chain}): the block has one socket per item and
+      // nowhere to record that there was a comma after the last of them.
+      // `splitArgs` drops it silently, so the check has to be here — and the
+      // multi-line `SEQUENCE = [...,]` in the fixture corpus is exactly the
+      // line that catches it.
+      if (inside.endsWith(',')) return null
+      // A COMPREHENSION IS NOT A LIST DISPLAY (#1126). `[v for v in things]`
+      // has no commas in it at all, so splitting would hand back one "item"
+      // that is the whole comprehension — a list block with one grey socket
+      // saying `v for v in things`, which is half an expression and worse than
+      // none. It stays raw until the block that really says it exists.
+      if (hasLoopKeyword(inside)) return null
+      const parts = splitArgs(inside)
+      if (!parts) return null
+      return {
+        block: {
+          type: 'lists_create_with',
+          extraState: { itemCount: parts.length },
+          inputs: Object.fromEntries(
+            parts.map((part, n) => [`ADD${n}`, { block: this.expression(part) }])
+          )
+        },
+        next: i + 1
+      }
+    }
+    return null
+  }
+
+  /**
+   * `{'a': 1, 'b': 2}` → the Dictionaries drawer's literal (#1120).
+   *
+   * A SET IS NOT A DICTIONARY and shares the braces: `{1, 2, 3}` has no colons
+   * in it, and the palette has no set blocks (#1119 argued them out), so a
+   * brace group whose top level holds no `:` is declined and stays verbatim.
+   * `{}` is the empty DICTIONARY, which is what Python means by it.
+   *
+   * A COMPREHENSION also wears braces — `{k: v for k in xs}` — and is declined
+   * here by the same test that declines anything whose pieces do not split into
+   * clean `key: value`: see #1126 for the block that does claim it.
+   */
+  private dictLiteral(
+    tokens: readonly Token[],
+    at: number
+  ): { block: BlockJson; next: number } | null {
+    let depth = 0
+    for (let i = at; i < tokens.length; i++) {
+      const tok = tokens[i]
+      if (tok.kind === 'open') {
+        depth += 1
+        continue
+      }
+      if (tok.kind !== 'close') continue
+      depth -= 1
+      if (depth > 0) continue
+      if (tok.text !== '}') return null
+      const inside = this.source.slice(tokens[at].end, tok.start).trim()
+      if (inside === '') {
+        return { block: { type: 'snakie_dict_create', extraState: { items: 0 } }, next: i + 1 }
+      }
+      // A trailing comma the block cannot record — as for a list display above.
+      if (inside.endsWith(',') || hasLoopKeyword(inside)) return null
+      const parts = splitArgs(inside)
+      if (!parts) return null
+      const inputs: Record<string, { block: BlockJson }> = {}
+      for (let n = 0; n < parts.length; n++) {
+        const split = splitPair(parts[n])
+        if (!split) return null
+        inputs[`KEY${n}`] = { block: this.expression(split[0]) }
+        inputs[`VALUE${n}`] = { block: this.expression(split[1]) }
+      }
+      return {
+        block: { type: 'snakie_dict_create', extraState: { items: parts.length }, inputs },
+        next: i + 1
+      }
+    }
     return null
   }
 
@@ -3474,10 +4250,43 @@ class Converter {
         if (depth > 0) continue
         if (tok.text !== ']') return null
         const inside = this.source.slice(tokens[cur.next].end, tok.start).trim()
+        // A COLON MAKES IT A SLICE (#1123), and a slice is a different set of
+        // blocks. Checked first, because `[:2]` and `[1:4]` would otherwise
+        // fall through to the index reader and take the whole line raw.
+        const sliced = this.slice(inside, cur.block)
+        if (sliced) return { block: sliced, next: i + 1 }
+        // `seq[-1]` is "the last thing", which is its own block rather than a
+        // negative index nobody has been taught to read.
+        if (inside === '-1') {
+          return {
+            block: { type: 'snakie_last_item', inputs: { SEQ: { block: cur.block } } },
+            next: i + 1
+          }
+        }
+        // A STRING KEY IS A DICTIONARY, unambiguously (#1120). Nothing indexes
+        // a list by `'name'`, so this one shape can be claimed for the
+        // Dictionaries drawer with no guesswork at all — while `xs[i]`, where
+        // the index is a variable, could be either and stays where #1089 put it.
+        const key = readStringLiteral(inside)
+        if (key !== null) {
+          return {
+            block: {
+              type: 'snakie_dict_get',
+              inputs: {
+                DICT: { block: cur.block },
+                KEY: { block: { type: 'text', fields: { TEXT: key } } }
+              }
+            },
+            next: i + 1
+          }
+        }
         const index = this.oneBased(inside)
-        // LIST checks Array, so `"abc"[0]` is not this block — the same rule the
-        // socket table exists for (#1071).
-        if (!index || !fitsSocket(cur.block, 'Array')) return null
+        // THE `Array` GUARD CAME OFF WITH THE SOCKET'S CHECK (#1124). `'abc'[0]`
+        // is one letter out of a piece of text, which is the same line and the
+        // same block — see the note on `snakie_list_get` in `lists.ts`. The
+        // #1071 rule still holds: the reader refuses what the SOCKET refuses,
+        // and this socket no longer refuses anything.
+        if (!index) return null
         return {
           block: {
             type: 'snakie_list_get',
@@ -3488,6 +4297,71 @@ class Converter {
       }
     }
     return null
+  }
+
+  /**
+   * `seq[a:b]` and its four shorthands → the slice blocks (#1123).
+   *
+   * Null when `inside` is not a slice at all (no top-level colon), and null
+   * again for the slices these blocks cannot say back — a step other than
+   * `::-1`, a start the 1-based face cannot undo. Either way the line stays
+   * raw and regenerates verbatim, which is the rule everywhere in this module.
+   */
+  private slice(inside: string, seq: BlockJson): BlockJson | null {
+    const tokens = tokenize(inside)
+    if (!tokens) return null
+    const parts: string[] = []
+    let depth = 0
+    let from = 0
+    for (const tok of tokens) {
+      if (tok.kind === 'open') depth += 1
+      else if (tok.kind === 'close') depth -= 1
+      else if (depth === 0 && tok.kind === 'op' && tok.text === ':') {
+        parts.push(inside.slice(from, tok.start).trim())
+        from = tok.end
+      }
+    }
+    if (parts.length === 0) return null
+    parts.push(inside.slice(from).trim())
+    const [start, stop, step] = [parts[0], parts[1], parts[2] ?? '']
+
+    // `seq[::-1]` — backwards. The only step this palette has a block for; any
+    // other one stays raw rather than coming back as a slice that drops it.
+    if (parts.length === 3) {
+      if (start !== '' || stop !== '' || step !== '-1') return null
+      return { type: 'snakie_slice_reverse', inputs: { SEQ: { block: seq } } }
+    }
+    if (parts.length !== 2) return null
+    if (start === '' && stop === '') {
+      return { type: 'snakie_slice_copy', inputs: { SEQ: { block: seq } } }
+    }
+    if (start === '') {
+      const n = this.expression(stop)
+      if (!fitsSocket(n, 'Number')) return null
+      return { type: 'snakie_slice_first', inputs: { SEQ: { block: seq }, N: { block: n } } }
+    }
+    if (stop === '') {
+      // `seq[-3:]` — the last few. `seq[3:]` is "everything from the 4th on",
+      // which is a real slice with no block, so it stays raw.
+      const negative = /^-\s*(.+)$/.exec(start)
+      if (!negative) return null
+      const inner = negative[1].trim()
+      // `-(a + b)` is how the block writes a compound count; either form reads.
+      const bare = /^\((.*)\)$/.exec(inner)
+      const n = this.expression(bare ? bare[1] : inner)
+      if (!fitsSocket(n, 'Number')) return null
+      return { type: 'snakie_slice_last', inputs: { SEQ: { block: seq }, N: { block: n } } }
+    }
+    // `seq[a - 1:b]` — the general one, 1-based on the block. Only the exact
+    // arithmetic the block writes can be undone; see {@link oneBased}.
+    const first = this.oneBased(start)
+    if (!first) return null
+    const last = this.expression(stop)
+    if (!fitsSocket(last, 'Number')) return null
+    return {
+      type: 'snakie_slice_range',
+      inputs: { SEQ: { block: seq }, FROM: { block: first }, TO: { block: last } }
+    }
   }
 
   /** The INDEX socket for a zero-based Python subscript, or null — see above. */

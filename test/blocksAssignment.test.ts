@@ -65,7 +65,15 @@ const one = (source: string, type: string): Record<string, unknown> | undefined 
 
 describe('targets that are not a plain name', () => {
   it('reads a tuple assignment', () => {
-    expect(one('a, b = 1, 2\n', 'snakie_python_assign')!.fields).toEqual({ TARGET: 'a, b' })
+    // TWO PLAIN NAMES MOVED TO THE FRIENDLY BLOCK (#1121): `snakie_unpack`
+    // holds them as variable FIELDS, so they follow a rename. This block keeps
+    // every target that cannot be — three names or more among them — which is
+    // why the example here grew one.
+    expect(one('a, b, c = 1, 2, 3\n', 'snakie_python_assign')!.fields).toEqual({
+      TARGET: 'a, b, c'
+    })
+    roundTrips('a, b, c = 1, 2, 3\n')
+    expect(types('a, b = 1, 2\n')).toContain('snakie_unpack')
     roundTrips('a, b = 1, 2\n')
   })
 

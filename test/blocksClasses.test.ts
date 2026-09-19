@@ -203,10 +203,20 @@ describe('a method’s own signature', () => {
     roundTrips(src)
   })
 
-  it('reads a nested `def` whose signature a procedure block cannot hold', () => {
-    // Not a method at all — a top-level `def` with a default. It used to stay a
-    // raw suite, because dropping the default would have changed every call.
+  it('reads a top-level `def` with a default as a PROCEDURE block now (#1134)', () => {
+    // It used to land on the method block, because dropping the default would
+    // have changed every call and Blockly's mutator had nowhere to put it.
+    // #1134 gave the procedure block a field for exactly that, so `path` keeps
+    // its caller socket and `flip_x=None` keeps its default.
     const src = ['def load(path, flip_x=None):', '    print(path)', ''].join('\n')
+    expect(types(src)).toContain('procedures_defnoreturn')
+    expect(types(src)).not.toContain('snakie_method')
+    roundTrips(src)
+  })
+
+  it('still sends a signature it cannot split to the method block', () => {
+    // A trailing comma is the learner's text and no block records it.
+    const src = ['def load(path,):', '    print(path)', ''].join('\n')
     expect(types(src)).toContain('snakie_method')
     roundTrips(src)
   })

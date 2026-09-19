@@ -180,6 +180,16 @@ export interface BlockDefinition {
     fields?: Readonly<Record<string, string>>
     /** Socket name → the type that socket checks, for the ones that check. */
     checks?: Readonly<Record<string, SocketType>>
+    /**
+     * Sockets that are ONE-BASED on the block and zero-based in the Python
+     * (#1122).
+     *
+     * The Lists drawer counts from 1 and writes the `- 1` out visibly; reading
+     * one back means undoing exactly that, and a line the generator could not
+     * have written — `xs.pop(n)` — declines the rule rather than coming back as
+     * a block that would regenerate `xs.pop(n - 1)`.
+     */
+    oneBased?: readonly string[]
   }
   /**
    * REGISTERED BUT NOT LISTED IN THE FLYOUT (epic #1086 §4.5).

@@ -11,12 +11,17 @@ import { installPythonField } from '../python-field'
 import { CONTROL_BLOCKS } from './control'
 import { HARDWARE_BLOCKS } from './hardware'
 import { instrumentBlocks } from './instruments'
-import { FUNCTION_BLOCKS } from './functions'
+import { FUNCTION_BLOCKS, installFunctionBlocks } from './functions'
 import { STRUCTURE_BLOCKS, installStructureBlocks } from './structure'
 import { LIST_BLOCKS } from './lists'
+import { TUPLE_BLOCKS, installTupleBlocks } from './tuples'
+import { DICT_BLOCKS, installDictBlocks } from './dicts'
+import { SLICE_BLOCKS } from './slices'
+import { BUFFER_BLOCKS } from './buffers'
+import { FILE_BLOCKS } from './files'
 import { LOGIC_BLOCKS } from './logic'
 import { MATHS_BLOCKS } from './maths'
-import { TEXT_BLOCKS } from './text'
+import { TEXT_BLOCKS, installTextBlocks } from './text'
 import { TURTLE_BLOCKS } from './turtle'
 import { PYTHON_BLOCKS, installPythonBlocks } from './python'
 import { VARIABLE_BLOCKS } from './variables'
@@ -69,6 +74,16 @@ export function installCorePalette(): void {
   installPythonBlocks()
   // And the `try` block, whose arms come and go for the same reason.
   installStructureBlocks()
+  // And the literals that grow a socket at a time (#1119): a tuple, a
+  // dictionary, a buffer, a `print` with several things in it.
+  installTupleBlocks()
+  installDictBlocks()
+  // `print`, which grew from one socket to as many as you like (#1125) and so
+  // is no longer Blockly's own shape.
+  installTextBlocks()
+  // And Blockly's two `def` blocks, which gain a field for the parameters its
+  // mutator cannot hold — a default, `*args`, `**kwargs` (#1134).
+  installFunctionBlocks()
   defineBlocks([
     ...TURTLE_BLOCKS,
     // HARDWARE IS SCOPED BY WHAT IT CAN GENERATE (#1039 → #1040). Nine of the
@@ -81,6 +96,12 @@ export function installCorePalette(): void {
     // Scope HIDES, it never deregisters: a hardware program written on a Pico
     // still opens, still edits and still saves when a Feather is plugged in.
     ...scopedByEmitters(HARDWARE_BLOCKS),
+    // `bytes` and `bytearray` (#1135, epic #1119), in a Buffers drawer inside
+    // Hardware — next to the I²C and SPI blocks that ask for one. NOT through
+    // `scopedByEmitters`, unlike everything above: these four are plain Python,
+    // core and identical in both runtimes, so they stay unscoped like the rest
+    // of the plain-Python palette. See the file header.
+    ...BUFFER_BLOCKS,
     // INSTRUMENTS STAY MICROPYTHON (#1040). `instruments.py` is telemetry over
     // `print()`, which CircuitPython runs happily — but the sensor reads
     // underneath it are `machine`-based, and #1038 made those DEGRADE rather
@@ -92,10 +113,25 @@ export function installCorePalette(): void {
     ...scoped('micropython', instrumentBlocks()),
     ...WAIT_BLOCKS,
     ...CONTROL_BLOCKS,
+    // Files, and the `use … as` that closes them (#1132, epic #1119). A shelf
+    // inside Control rather than a category of its own — see the file header
+    // for why the palette has no sixteenth colour to give.
+    ...FILE_BLOCKS,
     ...LOGIC_BLOCKS,
     ...MATHS_BLOCKS,
     ...TEXT_BLOCKS,
     ...LIST_BLOCKS,
+    // Tuples, unpacking and the multi-value loops (#1121, epic #1119). They
+    // spread across three drawers rather than gathering in one, because each
+    // belongs where a learner is standing when they want it: the literal in
+    // Lists, `set … and … to` in Variables, the loops in Control.
+    ...TUPLE_BLOCKS,
+    // Slicing (#1123, epic #1119) — one set of blocks for lists, strings and
+    // buffers, with no `Array` check on any socket. See the file header.
+    ...SLICE_BLOCKS,
+    // The Dictionaries drawer (#1120, epic #1119) — the biggest hole the audit
+    // found, and the only one that was a whole missing CATEGORY.
+    ...DICT_BLOCKS,
     ...VARIABLE_BLOCKS,
     ...FUNCTION_BLOCKS,
     // Class, method and `self` (#1093). Registered, never listed — a class is

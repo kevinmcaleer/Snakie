@@ -8,6 +8,300 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`forget` and `do nothing` — and two decisions taken out loud.** (#1133,
+  epic #1119) `del` is listed in `docs/blocks-coverage-epic.md` §10 as the
+  statement *"no workstream claimed"*, and it is the only way to take a key out
+  of a dictionary. **forget `name`** is the variable case, with a variable field
+  like `global`'s; `del d['k']` and `del xs[0]` stay with the Dictionaries and
+  Lists blocks that say what they mean.
+
+  **do nothing** is `pass` said deliberately — sketching a structure before
+  filling it in, or an "if that goes wrong" meant to carry on quietly. It does
+  not fight the generator's own implicit `pass`: a body holding the block is not
+  empty, so one is written either way. `pass` used to be *dropped* when it was
+  the whole body of a suite, which would have made the block vanish on reopen;
+  it is read like anything else now.
+
+  Two things this issue asked to be decided rather than left:
+
+  - **No `assert` block.** §3.5 declined it for the reader on evidence — 890
+    lines across 8 projects, almost all `pytest` files, which is test code and
+    not device code — and authoring came out the same way. On a board an
+    `assert` stops the program with a traceback nobody is there to read, while
+    *if … then report a problem* says the same thing and says why, with two
+    blocks the palette has had since #1131.
+  - **`nonlocal` stays hidden.** #1118 gave `global` a block with a variable
+    field, which is a better answer than un-hiding the escape hatch would have
+    been. `nonlocal` needs a function inside a function, which nothing in the
+    curriculum reaches.
+
+- **Files on the board — log your readings, and read them back.** (#1132, epic
+  #1119) `with` shipped hidden in #1094, and on a microcontroller it has one
+  overwhelmingly common use: opening a file on the flash. Logging to `data.csv`
+  and reading a config back are things learners ask for early, and neither was
+  expressible in blocks at all — not the `with`, and not the `open()` either.
+
+  A **Files** shelf inside Control: **use … as …** (Python's `with`, with
+  *"and close it afterwards"* written on the block), **open file … for
+  reading / writing / adding to the end**, **write … to …**, and **for every
+  line … of …**, which hands one line at a time rather than holding a whole log
+  in 264 KB of RAM.
+
+  **use … as** takes the thing in a socket, which is what lets **open file**
+  plug into it; the old text-field `with` stays hidden and keeps everything that
+  shape cannot hold — two context managers on one line, `async with`, a name
+  that is not a plain identifier.
+
+  The reason to teach `with` rather than open-and-close is not that it is
+  idiomatic: a learner who forgets `close()` on a Pico **loses their data with
+  no error at all**, because it was still waiting in memory to be flushed. That
+  is why there is no "close file" block to forget.
+
+  On CircuitPython, reading works and writing needs `boot.py` to remount the
+  filesystem first. The blocks are offered on both runtimes — scoping them out
+  would take reading away from a board that does it perfectly well — and the
+  tooltip and the new **Files on the board** help page say so plainly.
+
+- **Error handling is a drawer you can reach.** (#1131, epic #1119) The `try`
+  and `raise` blocks were built by #1094 and registered *hidden* — the reader
+  could produce them and no learner could drag one. #1119 re-takes that
+  decision, and `try` is the strongest candidate in the hidden set: on hardware,
+  error handling is the difference between a robot that stops dead when a sensor
+  is unplugged and one that carries on, and catching `KeyboardInterrupt` is how
+  you get out of a `while True:` cleanly.
+
+  Flipping the field was not the work. They live on a **When things go wrong**
+  shelf inside Control, so the drawer still opens on `forever`; they say **try
+  to …**, **if that goes wrong …**, **if nothing went wrong**, **either way,
+  afterwards** and **report a problem**, with Python's own words in the tooltip
+  and in the mirror; and the arms are reachable — a **+** for another
+  "if that goes wrong", ticks for the other two — which they were not, because
+  `updateShape_` was built for the reader, which knows how many arms a file has.
+
+  **The flyout copy arrives with `OSError` in it rather than empty**, which is a
+  safety decision rather than a default: a bare `except:` catches Ctrl-C, and a
+  program you cannot stop is the worst possible first experience of this block.
+
+- **`print` takes as many things as you like, and numbers can be formatted.**
+  (#1125, epic #1119) Two gaps that meet in the same line of a sensor program.
+
+  `print("x:", x, "y:", y)` is how everybody debugs, and `text_print` had one
+  socket — one of the fourteen lines `docs/blocks-coverage-epic.md` §10 listed
+  as still grey. It grows a socket at a time now, with the **+** stepper the
+  call blocks already use. **Its first socket is still called `TEXT`**, which is
+  the whole migration story: every workspace anybody has saved has one, and
+  Blockly does not warn about an input it cannot find — it throws, and the throw
+  costs the learner every block in the file.
+
+  And there was no way to say `{temp:.1f}`. The nearest block,
+  *round to n decimal places*, changes the **number**: it gives `23.1` where a
+  display wanted `23.10`. Three new blocks — **to `n` decimal places**,
+  **padded to `n`**, **as hex / as binary** — hand back **text**, so one block
+  serves `print`, `join` and a display alike.
+
+  `join` **folds a format block into its own f-string** rather than nesting one:
+  you get `f"temp: {t:.1f}"`, not `f"{f'{t:.1f}'}"`. The reader claims exactly
+  the f-strings these blocks write and no others; anything else — a conversion,
+  a literal alongside the slot, a spec the blocks cannot hold — stays raw and
+  regenerates verbatim.
+
+- **Working with text: case, trim, replace, split, join, starts-with, find.**
+  (#1124, epic #1119) The Text drawer was four blocks, and its header recorded
+  why: case conversion, substring, index-of, trim, replace and reverse were
+  *"a text-processing library, and this is a palette for making a robot do
+  something."* That was right for #1007. Snakie is not only a robot palette now
+  — a serial command parser, a sensor that answers in CSV, a WiFi response, a
+  menu on a display are all string work, and all of it was grey.
+
+  **The first four blocks are still the first four.** The nine new ones (the
+  seven above plus `ord`/`chr`, which arrived loose a few days earlier) live in
+  a **Working with text** shelf inside the drawer, so a first-day learner opens
+  Text and still sees `text`, `join`, `length` and `print`.
+
+  `where … is in` carries Python's two surprises on its face rather than in a
+  footnote: the count starts at 1 like the rest of the palette, and "not there"
+  comes back as **0** — which is false, so it can be tested directly.
+
+  Two things the drawer deliberately does **not** have. `contains` is `n in s`,
+  which #1128's membership block writes. `letter n of` is `s[n - 1]`, which the
+  Lists drawer's **item `n` of** writes — so *that* socket stopped checking
+  `Array` instead of growing a twin. **set item `n` of** keeps its check, and
+  the asymmetry is the point: `s[0] = 'x'` is a TypeError.
+
+  Still no `text_prompt`. There is still no keyboard on the board.
+
+- **`bytes` and `bytearray` — the buffers I²C, SPI and NeoPixel need.** (#1135,
+  epic #1119) The one item in the audit that is a *MicroPython* gap rather than
+  a Python one: on a desktop you can go a long way without typing `bytearray`;
+  on a board you cannot talk to a device without it. `buf = bytearray(2)`,
+  `i2c.writeto(addr, bytes([0xF4, 0x2E]))`, `uart.write('AT'.encode())` — every
+  one was escape-hatch text, including inside the hardware lessons.
+
+  Four blocks in a **Buffers** drawer inside Hardware, which is where a learner
+  is standing when the need appears: **buffer of `n` bytes**, **bytes from**,
+  **bytes of text**, **text of bytes**. `bytes` and `bytearray` being different
+  things — one you can change, one you cannot — is taught by the two words
+  rather than hidden.
+
+  **bytes from** takes its list in a socket rather than growing its own row,
+  so the hex blocks from #1127 drop straight in, which is how a command byte is
+  actually written. That is also what made the reader learn **list displays**:
+  `readings = [1, 2, 3]` used to come back grey, and now does not.
+
+  The drawer has no `how many bytes` and no byte-by-byte get/set: those are
+  `len(buf)` and `buf[n - 1]`, which **length of**, **item `n` of** and **set
+  item `n` of** already write. Slicing a buffer is #1123's, whose sockets check
+  nothing for exactly this reason.
+
+- **Slicing — the last reading, the first three, the string backwards.** (#1123,
+  epic #1119) There was no slice block, for a list or for a string. A learner
+  could read *one* thing out of a list and that was all; everything else was
+  escape-hatch text. It matters more on a board than the block count suggests,
+  because slicing is how a buffer is handled: `buf[1:]`, `data[:2]`.
+
+  Six blocks — **from … to …**, **first `n` of**, **last `n` of**, **last thing
+  in**, **copy of**, **… backwards** — and **not one of their sockets checks
+  `Array`**. That is the load-bearing decision: `"EDCDEEE"[::-1]` is a real line
+  in one of the music examples, and #1087 found that an over-tight check does
+  not refuse one socket, it refuses the whole workspace and the learner loses
+  every block in the file.
+
+  One set of blocks in Lists rather than a worded copy in Text, because Blockly
+  allows a block in one category only and two copies would be two blocks
+  generating one line. **last `n`** is its own block rather than a negative
+  number in the general one, so nobody has to discover that `-1` means "from the
+  end". A step the palette has no block for — `readings[::2]` — stays verbatim
+  rather than coming back as a slice that quietly dropped it.
+
+- **The list verbs: you can take something out of a list now.** (#1122, epic
+  #1119) The Lists drawer was `create`, `length`, `append`, `get`, `set`,
+  `contains`, and its own header recorded the trim that left it that way. That
+  was the right call for a "make a robot do something" palette and it left one
+  thing that is not a text-processing nicety: **there was no way to remove
+  anything from a list at all.**
+
+  Nine blocks: **insert at**, **remove**, **remove thing `n`**, **take thing `n`
+  out of** (hands the value back), **where … is in**, **how many … in**,
+  **sort / reverse / empty** (one block, three settings — all three return
+  `None`, so none of them may be a value block), **sorted copy of**, and
+  **total / smallest / biggest of**. That last one is the "average these five
+  readings" block: `snakie_math_min_max` takes two *numbers*, not a list.
+
+  Everything stays **1-based on the block and 0-based in the code**, the promise
+  the drawer has made since #1011, and the reader undoes exactly the arithmetic
+  the generator writes — `xs.pop(n)`, which no block could have written, stays
+  raw rather than coming back quietly renumbered.
+
+- **A Dictionaries drawer — the palette had no dictionary blocks at all.**
+  (#1120, epic #1119) Not one block, no category, no theme colour. A dict is
+  not an exotic construct in device code: it is the shape of a config, a
+  note→frequency table, a pin map, a JSON payload. A learner who wanted one had
+  to type the literal into a grey Python block, which is the escape hatch doing
+  a job the palette should do.
+
+  Six blocks: the literal (**+** for another pair), **get … or …**, plain
+  **get**, **set**, **remove**, and **the keys / values / pairs of**. Keys are
+  sockets rather than typed-in text, because a key is as often a variable or a
+  number — a note, a pin — as it is a word.
+
+  **`get … or …` is offered first.** `d['k']` raises a `KeyError`, and a
+  beginner meeting that has no idea what happened; `.get(k, default)` carries
+  on. Both ship — the plain one is what they will read everywhere else — but
+  the order in the drawer is a curriculum decision.
+
+  The drawer deliberately has **no `has key` and no `how many`**: those are
+  `'k' in d` and `len(d)`, which #1128's membership block and the Lists
+  **length of** block already write. Two blocks generating one line is the
+  outcome worth avoiding.
+
+  Reading one back: `d['k']`, `d['k'] = v` and `del d['k']` are claimed only
+  where the key is a **string literal**, which is the one unambiguous ground
+  there is — nothing indexes a list by `'name'`. `xs[i]` with a variable in it
+  could be either, and stays where it was.
+
+- **Tuples, unpacking, and loops that name two things.** (#1121, epic #1119)
+  Nothing in the palette made or took apart a tuple, and four separate holes
+  came from that. There was no `(…)` literal, so a function that wants to hand
+  back an `(x, y)` could not say so. Unpacking was registered but *hidden* — the
+  reader could produce `a, b = f()` and a learner could not drag it. Tuple loop
+  targets did not exist at all: `for name, value in rows:` is one of the
+  fourteen lines `docs/blocks-coverage-epic.md` §10 listed as still grey,
+  precisely because `controls_forEach` cannot hold two names. And there was no
+  `enumerate` or `zip`, so "loop over the list and know which position I'm at" —
+  a first-week question — was answered with a counter kept by hand.
+
+  Five blocks: **tuple of … and …** (grows a socket at a time, and keeps the
+  comma on a one-element `(x,)`), **set … and … to …**, **for each … and … in
+  …**, **for each … at position … in …**, and **for each … and … in … and …**.
+
+  The position block puts the off-by-one **on the block** rather than picking
+  one quietly: *(first is 1)* generates `enumerate(xs, 1)` so the number matches
+  the Lists drawer, *(first is 0)* generates plain `enumerate(xs)`. That is the
+  same choice `lists.ts` made when it decided to write the `- 1` out rather than
+  renumber in silence.
+
+  `snakie_python_assign` is **superseded, not un-hidden**: two plain names go to
+  the friendly block, whose names are variable fields and so follow a rename,
+  and everything that shape cannot hold — three names or more, `self.x, self.y`,
+  a chain, a starred target — stays with the exact one.
+
+- **`ord`, `chr`, `isinstance` and a number in another base.** (#1130, epic
+  #1119) #1118's *turn %1 into %2* covers the six types a learner meets first
+  and has nowhere to put the rest. **letter code of** / **letter for code** are
+  the two halves of one lookup — how a byte off a UART or a key from a keypad
+  is really worked with — and live in Text, where a learner is standing when
+  they need them. **%1 as a number in base %2** parses `int('3C', 16)`, the hex
+  string off a serial line, and is a block of its own rather than a second
+  socket on the cast block, where a base would be meaningful for one dropdown
+  option out of six. **%1 is a …** asks what a value *is*, which nothing in the
+  palette could do; its type is a dropdown, because `isinstance(x, int)` wants
+  `int` the type and no block in the palette produces one.
+
+- **`in` works on text and dictionaries, and `is not None` has a block.**
+  (#1128, epic #1119) Membership existed in the palette exactly once and only
+  for lists: the haystack socket carried `check: 'Array'`, so `"c" in text`,
+  `key in config` and `byte in buf` were refused by the *shape* of the block and
+  had no block at all. #1086 measured `in`/`not in` at 214 lines across 31 of 73
+  projects, and almost none of it is a list.
+
+  There is still exactly **one** block writing `a in b` — two would have been
+  the outcome worth avoiding — and it kept its type, so a workspace saved before
+  this opens unchanged. What changed is that its check came off and it moved to
+  **Logic**, where every other Boolean test already lives and where it is
+  equidistant from Lists, Text and Dictionaries.
+
+  `is nothing` grew an **is / is not** setting, so "has this been set up yet?"
+  — `wifi is not None`, the commonest guard in a program that builds something
+  lazily — is a block rather than a `not` wrapped around one, which would have
+  written a different line. And there is a new **is the same thing as** block
+  for `a is b`: kept separate from `=` on purpose, because a learner who finds
+  `is` sitting beside `==` will reach for it on two numbers, be right by
+  accident, and be wrong later.
+
+- **The bits: masking, shifting, `//`, and hex you can actually type.** (#1127,
+  epic #1119) The Maths drawer knew five operators — `+ - * / **` — so `&`, `|`,
+  `^`, `~`, `<<`, `>>` and `//` could not be said in blocks at all. That is the
+  most MicroPython-shaped hole in the palette: bitwise arithmetic is not an
+  advanced topic on a microcontroller, it is the vocabulary. Masking a status
+  register, packing a command byte, `value & 0xFF`, `1 << pin` — every one of
+  them was grey escape-hatch text.
+
+  And you could not write `0x3C`. `math_number` holds a *number*, so a hex
+  address copied out of a datasheet came back as `60`: the same value, a
+  different line, and a whole file's conversion refused by the round-trip gate.
+  There are two literal blocks now — **hex** and **binary** — that hold the
+  digits as text, so `0x3C` stays `0x3C` and `0xDE_AD` keeps its underscore.
+
+  The blocks say **bits and**, **bits or**, **bits xor**, never the bare words
+  the Logic drawer already owns: a learner who reaches for `and` and gets `&`
+  has been taught something false in a way that will not surface until a number
+  comes out wrong. `//` went onto the division dropdown rather than becoming a
+  block of its own, because it is division.
+
+  The reader learned Python's four bitwise precedence levels, in Python's own
+  order — between comparison and addition, which is the opposite of C and the
+  reason `x & 1 == 0` has to read as `(x & 1) == 0`. There is a help page,
+  **Bits & bitwise maths**, that explains masking with a real status register.
 - **The PDF tells you what each function is for, and prints the board's own
   sheet** (#1147). A function's docstring is its description — the comment
   bubble on a `def` block and the `"""…"""` line in the Python are one thing

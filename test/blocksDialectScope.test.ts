@@ -63,7 +63,15 @@ describe('which blocks carry a scope', () => {
   it('scopes a hardware block by what it can GENERATE (#1040)', () => {
     // Derived, not written down twice — otherwise the copy that drifts is the
     // one hiding a working block from the board it works on.
-    for (const block of blocksInCategory('hardware')) {
+    //
+    // THE BUFFERS DRAWER IS NOT HARDWARE IN THIS SENSE (#1135). `bytes` and
+    // `bytearray` are plain Python, core and identical in both runtimes; they
+    // sit in this category for curriculum reasons — next to the I²C and SPI
+    // blocks that ask for one — rather than because they reach `machine`. The
+    // rule here is about emitters, and they have nothing to derive from, so
+    // they stay unscoped like the rest of the plain-Python palette. The test
+    // below still holds them to that.
+    for (const block of blocksInCategory('hardware').filter((b) => b.group?.id !== 'buffers')) {
       expect([block.type, block.scope]).toEqual([
         block.type,
         block.circuitpython ? 'both' : 'micropython'

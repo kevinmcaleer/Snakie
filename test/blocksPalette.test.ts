@@ -419,7 +419,55 @@ describe('logic (#1011)', () => {
         }
       ])[0]
     ).toBe('print(1 is None)')
-    expect(blockDefinition('snakie_is_none')!.json!.message0).toBe('%1 is nothing')
+    // The face is "is nothing" / "is not nothing"; the mirror says `is None`.
+    // A block saved before the setting existed has no MODE and still means the
+    // thing it always meant, which is what the assertion above checks.
+    expect(blockDefinition('snakie_is_none')!.json!.message0).toBe('%1 %2 nothing')
+  })
+
+  it('says `is not None` with its own operator rather than a `not` around it (#1128)', () => {
+    // A `logic_negate` wrapper would write `not x is None` — the same test and
+    // a different line, which is the one thing the reader does not do.
+    expect(
+      lines([
+        {
+          type: 'text_print',
+          id: 'p',
+          inputs: {
+            TEXT: {
+              block: {
+                type: 'snakie_is_none',
+                id: 'q',
+                fields: { MODE: 'IS_NOT' },
+                inputs: { VALUE: { block: num(1) } }
+              }
+            }
+          }
+        }
+      ])[0]
+    ).toBe('print(1 is not None)')
+  })
+
+  it('asks about the same OBJECT, not the same value (#1128)', () => {
+    const identity = (mode: string): string =>
+      lines([
+        {
+          type: 'text_print',
+          id: 'p',
+          inputs: {
+            TEXT: {
+              block: {
+                type: 'snakie_identity',
+                id: 'i',
+                fields: { MODE: mode },
+                inputs: { A: { block: num(1) }, B: { block: num(2, 'n2') } }
+              }
+            }
+          }
+        }
+      ])[0]
+    expect(identity('IS')).toBe('print(1 is 2)')
+    expect(identity('IS_NOT')).toBe('print(1 is not 2)')
   })
 })
 

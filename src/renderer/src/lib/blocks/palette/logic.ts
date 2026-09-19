@@ -1,12 +1,19 @@
 import { Order } from '../generator'
+import { registerCallRules } from '../python-to-blocks'
 import type { BlockDefinition } from '../registry'
 
 /**
- * LOGIC (#1011, epic #1007).
+ * LOGIC (#1011, epic #1007; widened by #1128, epic #1119).
  * =============================================================================
  *
- * Comparison, `and`/`or`/`not`, `True`/`False`, `None`. All Blockly's own blocks
- * except the `is None` test, which Python has and Blockly doesn't.
+ * Comparison, `and`/`or`/`not`, `True`/`False`, `None`, and the three tests
+ * Python has that Blockly does not: `is None`, `is` / `is not`, and `in`.
+ *
+ * MEMBERSHIP LIVES HERE NOW, not in Lists. `v in xs` was a Lists block with an
+ * `Array`-checked haystack, which meant `"c" in text`, `key in config` and
+ * `byte in buf` had no block at all — #1086 measured `in`/`not in` at 214 lines
+ * across 31 of 73 projects, and almost none of it is a list. One block, no
+ * check, in the drawer where every other Boolean test already is.
  *
  * TRIMMED: `logic_ternary` (`if x then a else b` as a VALUE) is registered
  * nowhere. It generates a conditional expression, which is a fine thing to know
@@ -65,22 +72,210 @@ export const LOGIC_BLOCKS: BlockDefinition[] = [
     category: 'logic',
     help: 'ref-types',
     json: {
-      message0: '%1 is nothing',
-      args0: [{ type: 'input_value', name: 'VALUE' }],
+      message0: '%1 %2 nothing',
+      args0: [
+        { type: 'input_value', name: 'VALUE' },
+        {
+          // `is not None` IS ITS OWN OPERATOR (#1128), for the reason the
+          // membership block below gives: a `logic_negate` around this block
+          // writes `not x is None`, which is the same test and a different
+          // line. "Has this been set up yet?" is the commonest guard in a
+          // program that builds an object lazily, and it had no block at all.
+          //
+          // A block saved before this field existed has no `MODE` and gets the
+          // first option, which is what it always meant.
+          type: 'field_dropdown',
+          name: 'MODE',
+          options: [
+            ['is', 'IS'],
+            ['is not', 'IS_NOT']
+          ]
+        }
+      ],
       inputsInline: true,
       output: 'Boolean',
       // "is nothing" rather than "is None" on the block face: the block says
       // what it MEANS and the generated line says `is None`, which is the
       // translation the mirror is there to make.
       tooltip:
-        'True when the value is None — "nothing". Sensors return None when they have no reading yet.'
+        'True when the value is None — "nothing". Sensors return None when they have no reading yet; set "is not" to ask whether something has a value.'
+    },
+    code: (block, gen) => {
+      const op = block.getFieldValue('MODE') === 'IS_NOT' ? 'is not' : 'is'
+      const value = gen.valueToCode(block, 'VALUE', Order.RELATIONAL) || 'None'
+      return [`${value} ${op} None`, Order.RELATIONAL]
+    }
+  },
+  {
+    // `is` IS NOT `==`, AND THAT IS THE LESSON (#1128). Half of this was
+    // already covered — `snakie_is_none` handles the common case — and the
+    // other half, "is this the same object as that one?", had nothing.
+    //
+    // It is kept as a separate block from `logic_compare` rather than a seventh
+    // entry on its dropdown, because a learner who finds `is` sitting beside
+    // `=` will reach for it on two numbers, be right by accident, and be wrong
+    // later. A block of its own, with a tooltip that says what it asks, is the
+    // honest shape.
+    type: 'snakie_identity',
+    category: 'logic',
+    help: 'ref-types',
+    json: {
+      message0: '%1 %2 %3',
+      args0: [
+        { type: 'input_value', name: 'A' },
+        {
+          type: 'field_dropdown',
+          name: 'MODE',
+          options: [
+            ['is the same thing as', 'IS'],
+            ['is not the same thing as', 'IS_NOT']
+          ]
+        },
+        { type: 'input_value', name: 'B' }
+      ],
+      inputsInline: true,
+      output: 'Boolean',
+      tooltip:
+        'True when both sides are the SAME OBJECT — not merely equal. Two lists with the same things in them are equal and are not the same list. Python writes it `is`.'
+    },
+    code: (block, gen) => {
+      const op = block.getFieldValue('MODE') === 'IS_NOT' ? 'is not' : 'is'
+      const a = gen.valueToCode(block, 'A', Order.RELATIONAL) || 'None'
+      const b = gen.valueToCode(block, 'B', Order.RELATIONAL) || 'None'
+      return [`${a} ${op} ${b}`, Order.RELATIONAL]
+    }
+  },
+  {
+    // MEMBERSHIP IS NOT A LIST QUESTION (#1128, epic #1119), which is why this
+    // one block now lives in Logic and its haystack checks nothing.
+    //
+    // It was `check: 'Array'`, and that check was the block REFUSING, by its
+    // shape, to answer `"c" in text`, `key in config` or `byte in buf` — three
+    // of the commonest guards in device code, each with no block at all as a
+    // result. #1086 measured `in`/`not in` at 214 lines across 31 of 73
+    // projects; almost none of that is a list.
+    //
+    // TWO BLOCKS WRITING `a in b` WAS THE OUTCOME TO AVOID, so there is still
+    // exactly one, and it kept its TYPE — a workspace saved before this opens
+    // unchanged. What moved is the drawer: Logic is where every other Boolean
+    // test already lives, and it is equidistant from Lists, Text and
+    // Dictionaries, which is the whole of what "general" means here. The
+    // Dictionaries drawer (#1120) deliberately ships no `has key` of its own
+    // for the same reason.
+    type: 'snakie_list_contains',
+    category: 'logic',
+    help: 'ref-types',
+    json: {
+      message0: '%1 %2 %3',
+      args0: [
+        { type: 'input_value', name: 'ITEM' },
+        {
+          // `not in` IS ITS OWN OPERATOR, not a `not` around this block (W8,
+          // #1095). Wrapping it in `logic_negate` writes `not x in xs`, which is
+          // the same test and a different line — and rewriting somebody's line
+          // is the one thing the reader does not do. A setting says it exactly.
+          //
+          // A block saved before this field existed has no `MODE` and gets the
+          // first option, which is what it always meant.
+          type: 'field_dropdown',
+          name: 'MODE',
+          options: [
+            ['is in', 'IN'],
+            ['is not in', 'NOT_IN']
+          ]
+        },
+        // NO CHECK, deliberately — see the note above. #1087 found that an
+        // over-tight `Array` check can refuse a whole workspace rather than one
+        // socket, and a string, a dictionary and a buffer all answer `in`.
+        { type: 'input_value', name: 'LIST' }
+      ],
+      inputsInline: true,
+      output: 'Boolean',
+      tooltip:
+        'True when the value appears somewhere in a list, a piece of text, a dictionary or a buffer — or, the other way round, when it does not. For a dictionary it asks about the keys.'
+    },
+    code: (block, gen) => {
+      const item = gen.valueToCode(block, 'ITEM', Order.RELATIONAL) || 'None'
+      const list = gen.valueToCode(block, 'LIST', Order.RELATIONAL) || '[]'
+      const op = block.getFieldValue('MODE') === 'NOT_IN' ? 'not in' : 'in'
+      return [`${item} ${op} ${list}`, Order.RELATIONAL]
+    }
+  },
+  {
+    // NOTHING IN THE PALETTE ASKED WHAT A VALUE *IS* (#1130, epic #1119).
+    //
+    // #1118's `snakie_cast` changes a value's type; this asks about it, which
+    // is a different question and the one a program asks when it has been
+    // handed something it did not choose — a line off a UART, an argument to a
+    // helper, a value out of a config dictionary.
+    //
+    // THE TYPE IS A FIELD, NOT A SOCKET. `isinstance(x, int)` wants `int` the
+    // TYPE, and no block in the palette produces one — a socket here would be a
+    // hole a learner cannot fill. The dropdown carries the same six names
+    // `snakie_cast` offers, so the two blocks read as a pair.
+    type: 'snakie_isinstance',
+    category: 'logic',
+    help: 'ref-types',
+    read: {
+      fn: 'isinstance',
+      args: ['VALUE'],
+      shape: 'value',
+      argFields: {
+        1: {
+          field: 'KIND',
+          values: {
+            int: 'int',
+            float: 'float',
+            str: 'str',
+            bool: 'bool',
+            list: 'list',
+            dict: 'dict'
+          }
+        }
+      }
+    },
+    json: {
+      message0: '%1 is %2',
+      args0: [
+        { type: 'input_value', name: 'VALUE' },
+        {
+          type: 'field_dropdown',
+          name: 'KIND',
+          options: [
+            ['a whole number (int)', 'int'],
+            ['a decimal number (float)', 'float'],
+            ['text (str)', 'str'],
+            ['true or false (bool)', 'bool'],
+            ['a list', 'list'],
+            ['a dictionary', 'dict']
+          ]
+        }
+      ],
+      inputsInline: true,
+      output: 'Boolean',
+      tooltip:
+        'True when the value is of that kind. Python writes it isinstance(value, int) — useful when something hands you a value and you do not know what it is yet.'
     },
     code: (block, gen) => [
-      `${gen.valueToCode(block, 'VALUE', Order.RELATIONAL) || 'None'} is None`,
-      Order.RELATIONAL
+      `isinstance(${gen.valueToCode(block, 'VALUE', Order.NONE) || 'None'}, ${
+        String(block.getFieldValue('KIND') ?? 'int')
+      })`,
+      Order.FUNCTION_CALL
     ]
   }
 ]
+
+/**
+ * How `isinstance` reads back (#1130).
+ *
+ * The SECOND argument is a field, which is what `CallRule.argFields` is for —
+ * and `isinstance(x, MyClass)` names a type the dropdown cannot hold, so the
+ * rule declines it and the line stays raw rather than coming back as a block
+ * that says something else.
+ */
+registerCallRules(
+  LOGIC_BLOCKS.flatMap((block) => (block.read ? [{ ...block.read, type: block.type }] : []))
+)
 
 /** Blockly's operator field values, as Python writes them. */
 const COMPARISONS: Record<string, string> = {

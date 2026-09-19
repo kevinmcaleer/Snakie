@@ -275,10 +275,25 @@ export const HELP_SECTIONS: HelpNode[] = [
           { id: 'ref-flow', kind: 'article', title: 'Control flow', accent: A.page },
           { id: 'ref-functions', kind: 'article', title: 'Functions', accent: A.page },
           { id: 'ref-types', kind: 'article', title: 'Values & types', accent: A.page },
+          // The Dictionaries drawer (#1120, epic #1119) — a whole category that
+          // did not exist, so the reference gets a page of its own rather than
+          // a paragraph inside "Values & types".
+          { id: 'ref-dicts', kind: 'article', title: 'Dictionaries', accent: A.page },
           { id: 'ref-builtins', kind: 'article', title: 'Built-in functions', accent: A.page },
+          // Bits, hex and masking (#1127, epic #1119). Plain Python, so it sits
+          // here rather than in the MicroPython section — but it is here
+          // BECAUSE of MicroPython: a status register is the first place most
+          // learners meet `&`, and the Maths drawer's bitwise blocks all point
+          // at this page.
+          { id: 'ref-bits', kind: 'article', title: 'Bits & bitwise maths', accent: A.page },
           { id: 'ref-classes', kind: 'article', title: 'Classes', accent: A.page },
           { id: 'ref-exceptions', kind: 'article', title: 'Errors & exceptions', accent: A.page },
           { id: 'ref-imports', kind: 'article', title: 'Imports & modules', accent: A.page },
+          // Files and `with` (#1132, epic #1119). It sits in the plain-Python
+          // section because `open` is core to both runtimes — but it carries
+          // CircuitPython's read-only filesystem in a section of its own,
+          // because that is the one thing about it that is not the same.
+          { id: 'ref-files', kind: 'article', title: 'Files on the board', accent: A.page },
           // The seam between the two worlds (#1018): it sits in the Python
           // section rather than a Blocks one because that is where a learner
           // who has started reading the code will already be.

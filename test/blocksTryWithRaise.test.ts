@@ -171,12 +171,14 @@ describe('the idiom that must not break', () => {
 })
 
 describe('with', () => {
-  it('reads one context manager and its binding', () => {
+  it('reads one context manager and its binding as the FRIENDLY block (#1132)', () => {
+    // The shape a learner meets went to `snakie_use`, whose thing is a socket
+    // and whose name is a variable field — which is what lets the `open file`
+    // block plug into it. The text-field block below keeps everything that
+    // shape cannot hold.
     const src = ['with open(path) as handle:', '    print(handle)', ''].join('\n')
-    expect(one(src, 'snakie_with')!.fields).toEqual({
-      ITEMS: 'open(path) as handle',
-      KIND: 'SYNC'
-    })
+    expect(one(src, 'snakie_use')).toBeTruthy()
+    expect(one(src, 'snakie_with')).toBeUndefined()
     roundTrips(src)
   })
 
@@ -204,7 +206,7 @@ describe('with', () => {
       '    print(1)',
       ''
     ].join('\n')
-    expect(types(src)).toContain('snakie_with')
+    expect(types(src)).toContain('snakie_use')
     expect(types(src)).toContain('text_print')
     roundTrips(src)
   })

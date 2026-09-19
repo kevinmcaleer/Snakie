@@ -91,6 +91,7 @@ function skin(want: (selector: string) => boolean): ThemeTokens {
     blockMath: '--block-math',
     blockText: '--block-text',
     blockLists: '--block-lists',
+    blockDicts: '--block-dicts',
     blockVariables: '--block-variables',
     blockFunctions: '--block-functions',
     blockPlugins: '--block-plugins',

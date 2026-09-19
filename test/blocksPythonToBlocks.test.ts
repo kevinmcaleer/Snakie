@@ -273,7 +273,8 @@ describe('what it recognises', () => {
   })
 
   it('reads `while True:` as the forever block', () => {
-    expect(types('while True:\n    pass\n')).toEqual(['snakie_forever'])
+    // The `pass` is a block of its own since #1133 — see the test below.
+    expect(types('while True:\n    pass\n')).toEqual(['snakie_forever', 'snakie_pass'])
   })
 
   it('reads `for _ in range(n):` as repeat, and a named for as for-each', () => {
@@ -319,10 +320,19 @@ describe('what it recognises', () => {
     ])
   })
 
-  it('drops a `pass` that was only holding an empty suite open', () => {
-    // Carrying it over would add a block meaning "nothing" that then generates
-    // `pass` a second time.
-    expect(types('while True:\n    pass\n')).toEqual(['snakie_forever'])
+  it('keeps a `pass` that was holding an empty suite open (#1133)', () => {
+    // IT USED TO BE DROPPED, and the reasoning was sound while `pass` had no
+    // block: an empty suite in blocks is an empty socket, every emitter writes
+    // its own `pass` for one, so carrying it over would have written `pass`
+    // twice.
+    //
+    // #1133 gave `pass` a block, which changes the arithmetic — a body holding
+    // one is not empty, so the emitter writes the learner's and not its own.
+    // Dropping it now would mean dragging `do nothing` into an empty `if`,
+    // saving, reopening and finding it gone.
+    expect(types('while True:\n    pass\n')).toEqual(['snakie_forever', 'snakie_pass'])
+    const out = regenerate('while True:\n    pass\n')
+    expect(out.code).toBe('while True:\n    pass\n')
   })
 
   it('does not mistake a comparison for an assignment', () => {
@@ -350,11 +360,24 @@ describe('what it keeps as raw Python, and says so', () => {
     // RECOGNISED line. It is what makes W1 cheap — fix the statement and the
     // expression stops mattering — and it is why f-strings appear in 44 projects
     // and account for five raw lines between them.
-    const { report } = regenerate('thing.calibrate(*args)\n')
+    //
+    // THE EXAMPLE HAD TO MOVE ON (#1134). `*args` is a real block now — the
+    // spread block, which is exactly the improvement that issue was for — so
+    // the grey socket here is an f-string with a conversion in it, which is
+    // still nobody's block.
+    const { report } = regenerate('thing.calibrate(f"{x!r}")\n')
     expect(report.raw).toBe(0)
     expect(report.recognised).toBe(1)
     expect(report.rawSockets).toBe(1)
-    expect(types('thing.calibrate(*args)\n')).toContain('snakie_python_call')
+    expect(types('thing.calibrate(f"{x!r}")\n')).toContain('snakie_python_call')
+  })
+
+  it('reads a starred argument as the spread block (#1134)', () => {
+    const { report } = regenerate('thing.calibrate(*args, **settings)\n')
+    expect(report.rawSockets).toBe(0)
+    expect(types('thing.calibrate(*args, **settings)\n')).toContain('snakie_spread')
+    expect(types('thing.calibrate(*args, **settings)\n')).toContain('snakie_spread_named')
+    roundTrips('thing.calibrate(*args, **settings)\n')
   })
 
   it('keeps a whole expression raw rather than half of it', () => {

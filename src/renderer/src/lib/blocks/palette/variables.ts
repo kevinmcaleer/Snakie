@@ -148,6 +148,35 @@ export const VARIABLE_BLOCKS: BlockDefinition[] = [
     },
     code: (block, gen) => `global ${gen.variableName(block.getFieldValue('VAR'))}\n`
   },
+  {
+    // `del`, WHICH NO WORKSTREAM CLAIMED (#1133, epic #1119).
+    // `docs/blocks-coverage-epic.md` §10 lists it plainly among the still-grey
+    // lines, and it is not an exotic statement: it is the only way to take a
+    // key out of a dictionary, which is why it gated the Dictionaries drawer.
+    //
+    // THIS BLOCK IS THE VARIABLE CASE ONLY, and that is the whole of its scope.
+    // `del d['k']` and `del xs[0]` are the Dictionaries and Lists drawers' own
+    // remove blocks (#1120, #1122), where they read as what they mean rather
+    // than as a statement about the name. What is left is "forget this name
+    // entirely", which is what `del name` does and nothing else says.
+    //
+    // A VARIABLE FIELD, for the reason `snakie_global` gives: the dropdown
+    // offers the variables the program actually has, it follows a rename, and
+    // it cannot say `del my score`.
+    type: 'snakie_forget',
+    category: 'variables',
+    help: 'ref-types',
+    json: {
+      message0: 'forget %1',
+      args0: [{ type: 'field_variable', name: 'VAR', variable: 'score' }],
+      inputsInline: true,
+      previousStatement: null,
+      nextStatement: null,
+      tooltip:
+        'Take a name away completely, so using it again is an error until something sets it. Python writes it `del`. On a board it is also how you let go of something big so the memory can be reused.'
+    },
+    code: (block, gen) => `del ${gen.variableName(block.getFieldValue('VAR'))}\n`
+  },
   // ------------------------------------------------- the assignment shapes
   //
   // EVERYTHING `variables_set` CANNOT SAY (W8, #1095, epic #1086). 833 raw lines
