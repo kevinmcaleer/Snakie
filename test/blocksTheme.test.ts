@@ -3,6 +3,7 @@ import {
   BLOCK_CATEGORIES,
   DEFAULT_BLOCK_SHAPE,
   FALLBACK_TOKENS,
+  SOFT_SHELL_RENDERER,
   SOFT_SHELL_RENDERERS,
   buildSoftShellTheme,
   categoryColour,
@@ -196,11 +197,12 @@ describe('softShellWorkspaceOptions (#1009)', () => {
     }
   })
 
-  it('falls back to the default shape for a value this build does not know', () => {
+  it('falls back to the bare renderer name for a value this build does not know', () => {
     // A settings value written by a newer build, or by hand. Better a canvas in
-    // the wrong shape than no canvas at all.
+    // the wrong shape than no canvas at all — and the fallback is the `standard`
+    // shape's bare name specifically, not whichever shape is the current default.
     const o = softShellWorkspaceOptions(FALLBACK_TOKENS, 'hexagonal' as never)
-    expect(o.renderer).toBe(SOFT_SHELL_RENDERERS[DEFAULT_BLOCK_SHAPE])
+    expect(o.renderer).toBe(SOFT_SHELL_RENDERER)
   })
 
   it('asks for the default shape when nobody says', () => {

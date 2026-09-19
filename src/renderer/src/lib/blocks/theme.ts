@@ -463,18 +463,19 @@ export function buildSoftShellTheme(tokens: ThemeTokens): SoftShellThemeSpec {
  * cannot answer for everybody, and Settings ▸ Appearance asks it.
  *
  *  - `standard` — `thrasos`. Blockly's row layout with a flat outline. The
- *    default here, because it is the most compact and it sits under the Soft
- *    Shell palette without arguing with it.
+ *    most compact, and it sits under the Soft Shell palette without arguing
+ *    with it.
  *  - `classic` — `geras`. Blockly's OWN default, the same geometry with a bevel
  *    down the left and top of every block. What blockly.games looks like.
  *  - `scratch` — `zelos`. Blockly's port of `scratch-blocks`: pill reporters,
  *    hexagonal booleans, everything inline, and roughly twice as tall. What a
- *    child arriving from Scratch or MakeCode already knows.
+ *    child arriving from Scratch or MakeCode already knows. The default here,
+ *    because it is the shape most newcomers already recognise.
  */
 export type BlockShape = 'standard' | 'classic' | 'scratch'
 
 /** The shape a canvas wears when nobody has chosen. */
-export const DEFAULT_BLOCK_SHAPE: BlockShape = 'standard'
+export const DEFAULT_BLOCK_SHAPE: BlockShape = 'scratch'
 
 /**
  * The Soft Shell renderers' registered names (#573), one per shape.
@@ -494,8 +495,8 @@ export const SOFT_SHELL_RENDERERS: Readonly<Record<BlockShape, string>> = {
   scratch: 'snakie-soft-shell-scratch'
 }
 
-/** The default shape's registered name — what most callers mean. */
-export const SOFT_SHELL_RENDERER = SOFT_SHELL_RENDERERS[DEFAULT_BLOCK_SHAPE]
+/** The `standard` shape's registered name — the bare name, kept stable regardless of the default. */
+export const SOFT_SHELL_RENDERER = SOFT_SHELL_RENDERERS.standard
 
 /**
  * The custom property a block's own text colour is published on (#1099).
