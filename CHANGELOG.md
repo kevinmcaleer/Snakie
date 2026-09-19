@@ -8,6 +8,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Every variable you make is on the Variables shelf, and a button makes one.**
+  (#1117) The drawer was a fixed list of three nameless blocks however many
+  variables a learner had: `score`, `lives` and `speed` all lived inside one
+  dropdown on one `set` block, and the only way to create a variable at all was
+  to drag that block out and rename what was inside it — folklore, not an
+  interface.
+
+  It is generated from the workspace now, the way the Functions drawer has been
+  since #1045: **Create variable…** at the top, then `set`/`change` for the one
+  just made, then one block per variable, named and sorted. A variable created
+  but never used is on the shelf too — the button would otherwise look like it
+  had done nothing.
+
+  Before there are any variables the drawer keeps the three shapes. That is the
+  one place Blockly's own answer is wrong for us: it shows the button over an
+  empty shelf, which is the thing that sent people hunting through a dropdown in
+  the first place.
+
+- **⌘D / Ctrl+D duplicates the selected block.** (#1117) Duplicate was already
+  on a block's right-click menu and on a bare `D` for keyboard navigation, and
+  neither is the key anyone tries. It copies the block and everything inside it
+  — not the stack below it, which is the context menu's rule too — through
+  Blockly's own clipboard, so the learner's actual copied block is left alone.
+
+  The shortcut claims the key rather than merely listening for it: in the web
+  build an unhandled ⌘D opens the browser's bookmark dialog over the canvas.
 - **Casting is a block, and so is `global`.** Two lines every program with a
   sensor or a function in it needs, and both were reachable only by typing Python
   into a grey block.
