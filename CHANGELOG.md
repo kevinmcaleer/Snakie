@@ -18,6 +18,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **PDF export drew some parts as `part library not installed`.** A placed
+  part is named in `robot.yml` by the library it was placed from, and that
+  name does not follow the part: a part promoted from `my-parts` into the
+  Standard library, or a desktop project opened in the web app (which ships
+  only the Standard library), still says `my-parts`. The bill of materials
+  already fell back to the part's id in any installed library; the wiring
+  diagram did not, so the same document named the part on one page and drew
+  a grey placeholder with no pins on the next. Every place a placed part is
+  resolved — the breadboard, the netlist and ERC, the help panel, the driver
+  banner, the Robot View and the part blocks — now shares that fallback.
 - **Zoom to fit centres the blocks.** Pressing the fit control on the blocks
   canvas left the fitted stacks below the bottom edge, so the learner still had
   to scroll. The canvas is now re-measured before the fit and the view is

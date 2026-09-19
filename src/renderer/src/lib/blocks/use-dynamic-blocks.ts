@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { PartDefinition, PartLibraryWithParts } from '../../../../shared/part'
+import { findPart, type PartDefinition, type PartLibraryWithParts } from '../../../../shared/part'
 import type { RobotDefinition } from '../../../../shared/robot'
 import {
   normaliseBlocksManifest,
@@ -271,7 +271,7 @@ export function useDynamicBlocks(folder: string | null | undefined): DynamicBloc
 
   const partFor = useCallback(
     (libraryId: string, partId: string): PartDefinition | undefined =>
-      libraries.find((l) => l.id === libraryId)?.parts?.find((p) => p.id === partId),
+      findPart(libraries, libraryId, partId) ?? undefined,
     [libraries]
   )
 

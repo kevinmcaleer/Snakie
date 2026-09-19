@@ -24,7 +24,7 @@ import {
 import { isServoPart, servoBoardGpio, boundJoint, bindServoJoint } from './servo-bind'
 import type { BoardDefinition } from '../../../shared/board'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
-import type { PartConnector, PartPinBuses, PartPinCapability, PartPinSignals } from '../../../shared/part'
+import { findPart, type PartConnector, type PartPinBuses, type PartPinCapability, type PartPinSignals } from '../../../shared/part'
 import { cablePlugGeometry, cableRole, conductorColour, connectorFit, housingPlugAngle } from './cable'
 import { partSupplyVoltage } from '../../../shared/power-led'
 import type { SmokeSite } from '../../../shared/erc'
@@ -1011,8 +1011,11 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
   // The image-export format menu (PNG / SVG / PDF) on the zoom toolbar.
   const [exportOpen, setExportOpen] = useState(false)
 
+  // By library, then by id anywhere (`findPart`): a part placed from a library
+  // that has since been renamed, promoted or — on the web — never installed
+  // still draws as itself rather than as a `part library not installed` box.
   const resolvePart = (lib: string, part: string): PartDefinition | null =>
-    libraries.find((l) => l.id === lib)?.parts.find((p) => p.id === part) ?? null
+    findPart(libraries, lib, part)
 
   // --- build the subjects ---------------------------------------------------
   const subjects: Subject[] = []

@@ -22,6 +22,7 @@
 import { INSTRUMENTS } from './instruments-registry'
 import { inScope, type DialectScope } from '../../../shared/dialect-api'
 import type { Dialect } from '../../../shared/dialect'
+import { findPart } from '../../../shared/part'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
 import { HELP_ARTICLES } from './help-articles'
 import { ALL_RULES } from '../../../shared/refactor/rules'
@@ -500,7 +501,7 @@ export function detectProjectParts(
   // Board-placed parts join the section too (deduped against import matches).
   for (const rp of placed ?? []) {
     if (seen.has(rp.part)) continue
-    const part = libraries.find((l) => l.id === rp.lib)?.parts.find((p) => p.id === rp.part)
+    const part = findPart(libraries, rp.lib, rp.part)
     if (!part) continue
     seen.add(part.id)
     out.push({
