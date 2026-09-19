@@ -38,11 +38,21 @@ import { BLOCK_TEXT_VAR, SOFT_SHELL_RENDERER, inkForBlock } from './theme'
  * list is short and every entry makes it rounder or roomier than Scratch rather
  * than re-deriving it. Zelos's own defaults are in the comment beside each.
  *
- * THE ONE CONSTRAINT THAT IS NOT TASTE: `NOTCH_OFFSET_LEFT` must stay clear of
- * `CORNER_RADIUS`. The notch is drawn along the top edge starting at that
- * offset, and the corner arc eats the first `CORNER_RADIUS` pixels of it — so a
- * corner rounder than the notch's offset cuts into the notch and the two blocks
- * stop looking like they fit together.
+ * THE CONSTRAINTS THAT ARE NOT TASTE. A rounder corner is not free: Zelos sizes
+ * three things off `CORNER_RADIUS` and then draws arcs of exactly that radius
+ * into them, so raising the radius alone leaves the arcs bigger than the space
+ * the layout pass reserved. All three are listed here because each one showed
+ * up as a different smudge on the canvas (#1158).
+ *
+ *  1. `NOTCH_OFFSET_LEFT` must stay clear of `CORNER_RADIUS`. The notch is
+ *     drawn along the top edge starting at that offset, and the corner arc eats
+ *     the first `CORNER_RADIUS` pixels of it — so a corner rounder than the
+ *     notch's offset cuts into the notch and the two blocks stop looking like
+ *     they fit together.
+ *  2. `BOTTOM_ROW_MIN_HEIGHT` must be at least `CORNER_RADIUS` — see the
+ *     constant below.
+ *  3. A spacer row either side of a C-block's mouth must be at least as tall as
+ *     the inside corner drawn into it — see {@link snugStatementSpacers}.
  */
 
 /** Corner rounding, in px. Bounded by {@link NOTCH_OFFSET_LEFT} — see above. */
@@ -50,6 +60,15 @@ const CORNER_RADIUS = 12
 
 /** Where the top notch starts, in px. Must leave the corner arc room. */
 const NOTCH_OFFSET_LEFT = 20
+
+/**
+ * The Soft Shell geometry, un-initialised — `init()` derives the corner, notch
+ * and tab PATHS from the numbers below, and Blockly calls it when the renderer
+ * starts. Exported so the geometry can be measured without a canvas.
+ */
+export function softShellConstants(): Blockly.zelos.ConstantProvider {
+  return new SoftShellConstantProvider()
+}
 
 class SoftShellConstantProvider extends Blockly.zelos.ConstantProvider {
   constructor() {
@@ -60,6 +79,32 @@ class SoftShellConstantProvider extends Blockly.zelos.ConstantProvider {
     // roundness, and it is what makes a block look like a thing you pick up.
     this.CORNER_RADIUS = CORNER_RADIUS
     this.NOTCH_OFFSET_LEFT = NOTCH_OFFSET_LEFT // Zelos: 12 — too close to the arc above.
+    // THE BOTTOM ROW HAS TO BE AS TALL AS THE CORNER DRAWN INTO IT (#1158).
+    //
+    // Zelos writes `BOTTOM_ROW_MIN_HEIGHT = this.CORNER_RADIUS` in its own
+    // constructor, which runs BEFORE the line above — so raising the radius to
+    // 12 left this at Zelos's 4, and nothing in Blockly re-derives it.
+    //
+    // The cost was a HAIRLINE HANGING OFF EVERY BLOCK'S BOTTOM-RIGHT CORNER.
+    // Blockly's drawer runs the right-hand edge down to
+    // `baseline - OUTSIDE_CORNERS.rightHeight` and then arcs away to the left —
+    // rightHeight being the radius, 12. But the bottom row only reserved
+    // `max(BOTTOM_ROW_MIN_HEIGHT, CORNER_RADIUS / 2)` = 6 above the baseline,
+    // so the edge above it had already been drawn 6px FURTHER DOWN than where
+    // the arc departs. The path doubled back up those 6px, and a stroked path
+    // paints every segment it walks: a 6px tick sticking out past the corner,
+    // on every block with a rounded bottom-right (`v 47 V 41 a 12 12 …`).
+    //
+    // At `CORNER_RADIUS` the row reserves exactly what the arc consumes, the
+    // `V` lands where the edge already is, and the tick has nowhere to come
+    // from. It buys 6px of block height, which is what a 12px corner costs.
+    //
+    // `TOP_ROW_MIN_HEIGHT` IS THE SAME KIND OF STALE AND IS LEFT ALONE, because
+    // the top has no equivalent to go wrong: the corner arc is drawn BEFORE the
+    // edge below it, so the pen is already past the arc when the edge starts
+    // and the absolute `V` that follows only ever moves it down. Raising it
+    // would add 4px to every block to fix nothing.
+    this.BOTTOM_ROW_MIN_HEIGHT = CORNER_RADIUS // Zelos: CORNER_RADIUS, i.e. its own 4.
     // A true pill: half of FIELD_BORDER_RECT_HEIGHT. Zelos ships 4, a rounded
     // rectangle; a pill reads as something you press rather than type into.
     this.FIELD_BORDER_RECT_RADIUS = 16
@@ -92,6 +137,59 @@ class SoftShellConstantProvider extends Blockly.zelos.ConstantProvider {
     // here either: Blockly copies it out of the theme's `fontStyle` into
     // `FIELD_TEXT_FONTSIZE` when the theme is applied, so a value set here would
     // be silently overwritten — it lives in `theme.ts`.
+  }
+}
+
+/**
+ * A C-BLOCK'S MOUTH CLOSES ON WHAT IS IN IT (#1158).
+ * ---------------------------------------------------------------------------
+ *
+ * The bug, as it was reported: a block sitting in an `if`'s `do` had a sliver
+ * of canvas showing between its bottom edge and the bottom of the mouth, so the
+ * two did not look like they fit together.
+ *
+ * THE MOUTH IS THE RIGHT HEIGHT; IT IS DRAWN 4px TOO LOW. Blockly reserves a
+ * SPACER ROW either side of a statement input and draws the mouth's inside
+ * corner into it — `max(NOTCH_HEIGHT, INSIDE_CORNERS.rightHeight)`, which on
+ * stock Zelos is `max(8, 4)` = 8 for a 4px corner, with room to spare. At a
+ * 12px corner it is `max(8, 12)` = 12, with none: and then Zelos's own
+ * `finalizeVerticalAlignment_` takes `SMALL_PADDING` back off that spacer when
+ * a block is nested tightly, leaving 8px of row for a 12px arc. The arc is
+ * drawn at its full radius regardless, so the whole mouth — top edge and bottom
+ * edge together — lands 4px below the connection point the child block is
+ * actually placed at. The overhang at the top hides behind the child; the one
+ * at the bottom is the sliver.
+ *
+ * So this is not a spacing tweak: it is the floor that makes the drawn mouth
+ * agree with the measured one. It runs AFTER Zelos's tight-nesting pass, which
+ * is the thing that breaks the floor, and before `finalize_` assigns each row
+ * its `yPos` — so the rows it lifts are the ones the layout then lays out.
+ *
+ * Only the spacers that actually have a corner drawn into them are touched;
+ * Blockly marks those with `precedesStatement`/`followsStatement`, which is the
+ * same test its drawer uses to decide to draw one.
+ */
+export function snugStatementSpacers(rows: Blockly.blockRendering.Row[], cornerHeight: number): void {
+  for (const row of rows) {
+    if (!Blockly.blockRendering.Types.isSpacerRow(row)) continue
+    if (!row.precedesStatement && !row.followsStatement) continue
+    row.height = Math.max(row.height, cornerHeight)
+  }
+}
+
+/**
+ * Zelos widens `INSIDE_CORNERS` with a right-hand pair — the mouth is arced on
+ * both sides, not just the left — but only the base interface is re-exported
+ * from `blockly/core`, so the extra field has to be named here. It is Zelos's
+ * own shape, not ours: `zelos/drawer.ts` casts to the same thing to read it.
+ */
+type ZelosInsideCorners = Blockly.blockRendering.InsideCorners & { rightHeight: number }
+
+class SoftShellRenderInfo extends Blockly.zelos.RenderInfo {
+  protected override finalizeVerticalAlignment_(): void {
+    super.finalizeVerticalAlignment_()
+    const corners = this.constants_.INSIDE_CORNERS as ZelosInsideCorners
+    snugStatementSpacers(this.rows, corners.rightHeight)
   }
 }
 
@@ -135,7 +233,11 @@ class SoftShellPathObject extends Blockly.zelos.PathObject {
 
 class SoftShellRenderer extends Blockly.zelos.Renderer {
   protected override makeConstants_(): Blockly.zelos.ConstantProvider {
-    return new SoftShellConstantProvider()
+    return softShellConstants()
+  }
+
+  protected override makeRenderInfo_(block: Blockly.BlockSvg): Blockly.zelos.RenderInfo {
+    return new SoftShellRenderInfo(this, block)
   }
 
   override makePathObject(root: SVGElement, style: Blockly.Theme.BlockStyle): Blockly.zelos.PathObject {
