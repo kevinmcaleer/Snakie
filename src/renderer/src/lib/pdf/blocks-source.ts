@@ -29,6 +29,7 @@
  */
 
 import * as Blockly from 'blockly/core'
+import { arrangeWorkspaceRoots, separateWorkspaceRoots } from '../blocks/arrange'
 import { blocksDocumentFor } from '../blocks/document'
 import { ensureBlocklyLocale } from '../blocks/locale'
 import { installCorePalette } from '../blocks/palette'
@@ -141,6 +142,11 @@ export function offscreenBlocksSource(input: BlocksSourceInput): BlocksSource {
     Blockly.Events.disable()
     try {
       Blockly.serialization.workspaces.load(doc.workspace, ws)
+      // Laid out the way the canvas would lay it out: a derived document's
+      // roots are only numbered, and a page of them a gutter apart is a page
+      // of blocks drawn over each other.
+      if (doc.derived) arrangeWorkspaceRoots(ws)
+      else separateWorkspaceRoots(ws)
     } finally {
       Blockly.Events.enable()
     }

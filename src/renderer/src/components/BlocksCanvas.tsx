@@ -32,6 +32,7 @@ import {
   arrangeWorkspaceRoots,
   rootMoved,
   rootsUnmoved,
+  separateWorkspaceRoots,
   type RootPlacement
 } from '../lib/blocks/arrange'
 import { installShelfFlyout, installZoomReset } from '../lib/blocks/zoom'
@@ -109,6 +110,49 @@ export interface BlocksProgram extends GeneratedProgram {
  *  Short enough that the mirror feels live while you drag; long enough that one
  *  gesture is one regeneration. */
 const REGENERATE_DEBOUNCE_MS = 120
+
+/**
+ * A pending overlap pass, one per workspace — see `scheduleSeparation`.
+ *
+ * Module-level rather than a ref so the pass belongs to the workspace and not
+ * to the render that registered the listener; a canvas is injected once and
+ * the listener with it.
+ */
+const separationTimers = new WeakMap<Blockly.Workspace, ReturnType<typeof setTimeout>>()
+
+/**
+ * Once the burst of events from one edit has landed, move any root that now
+ * overlaps another out of the way — keeping the edited root where it is.
+ *
+ * The moves it makes are ordinary events in the edit's own group, so one ⌘Z
+ * takes back the edit and the tidy-up together, and the listener writes the
+ * new positions to the file the way it writes any move.
+ */
+function scheduleSeparation(ws: Blockly.WorkspaceSvg, event: Blockly.Events.Abstract): void {
+  const pending = separationTimers.get(ws)
+  if (pending) clearTimeout(pending)
+  const edited = 'blockId' in event ? (event as { blockId?: string }).blockId : undefined
+  const group = event.group
+  separationTimers.set(
+    ws,
+    setTimeout(() => {
+      separationTimers.delete(ws)
+      if (ws.isDragging()) return
+      const root = edited ? ws.getBlockById(edited)?.getRootBlock() : null
+      const fixed = new Set(root ? [root.id] : [])
+      const was = Blockly.Events.getGroup()
+      Blockly.Events.setGroup(group || true)
+      try {
+        separateWorkspaceRoots(ws, fixed)
+      } finally {
+        Blockly.Events.setGroup(was)
+      }
+    }, SEPARATE_DEBOUNCE_MS)
+  )
+}
+
+/** After the regenerate debounce, so a burst of events is one pass. */
+const SEPARATE_DEBOUNCE_MS = REGENERATE_DEBOUNCE_MS + 30
 
 export interface BlocksCanvasProps {
   /** Identity of the document on screen — a change here means "load this". */
@@ -442,6 +486,15 @@ export function BlocksCanvas({
       // somebody deliberately closed back open, but reaching for a turtle block
       // should, because that is the moment they need somewhere to draw.
       revealInstrumentFor(ws, event)
+      // KEEP THE ISLANDS APART (#1062). A block dropped into a function makes
+      // it taller, and the function below did not move — so the two now share
+      // pixels and the join is unreadable. After each edit settles, whatever
+      // root the edit was in stays put and the roots it has grown into are
+      // moved out from under it. Not while a block is in the air: a drag
+      // crosses every stack on its way, and pushing them all aside as it
+      // passes would scatter the canvas for one gesture. The drop is an event
+      // of its own and gets its own pass.
+      scheduleSeparation(ws, event)
       // Debounced: Blockly fires an event per drag frame, and generating (and
       // writing) forty times while a block is in the air would churn the mirror,
       // the source map and the undo-relevant buffer for one gesture.
@@ -530,6 +583,9 @@ export function BlocksCanvas({
       restoreZoomReset()
       ws.removeChangeListener(pointing)
       if (debounceRef.current) clearTimeout(debounceRef.current)
+      const separation = separationTimers.get(ws)
+      if (separation) clearTimeout(separation)
+      separationTimers.delete(ws)
       ws.removeChangeListener(listener)
       unregisterWorkspace()
       ws.dispose()
@@ -788,13 +844,31 @@ export function BlocksCanvas({
     Blockly.Events.disable()
     try {
       Blockly.serialization.workspaces.load(workspace, ws)
+      // Back where they were. Only roots: everything else is positioned by the
+      // block it is connected to, and moving those would be a fight with
+      // Blockly's own layout rather than a courtesy.
+      for (const block of ws.getTopBlocks(false)) {
+        const at = places.get(block.id)
+        if (!at) continue
+        const now = block.getRelativeToSurfaceXY()
+        block.moveBy(at.x - now.x, at.y - now.y)
+      }
       // LAY THE ROOTS OUT, NOW THEY CAN BE MEASURED. The document only
-      // numbers them — the program in one column with the functions beside it
-      // is worked out here, from what Blockly actually drew. BEFORE the
+      // numbers them — the program in one column with the functions in
+      // columns beside it is worked out here, from what Blockly actually
+      // drew, around the roots just put back. A file the learner arranged
+      // themselves keeps its layout, but not its overlaps: an island that has
+      // grown into the one below it is moved out from under it. BEFORE the
       // re-serialise below, so the positions this writes are part of the
       // "nothing has changed since it loaded" baseline rather than an edit the
       // listener would write back to the file for the crime of opening it.
-      arrangedRef.current = derived ? arrangeWorkspaceRoots(ws as Blockly.WorkspaceSvg) : null
+      const canvas = ws as Blockly.WorkspaceSvg
+      if (derived) {
+        arrangedRef.current = arrangeWorkspaceRoots(canvas, new Set(places.keys()))
+      } else {
+        arrangedRef.current = null
+        separateWorkspaceRoots(canvas)
+      }
       // What comes BACK OUT, not what went in: Blockly normalises as it loads
       // (fills in default fields, assigns ids, rounds coordinates), so a
       // re-serialise of an untouched workspace differs from the file's own
@@ -821,16 +895,7 @@ export function BlocksCanvas({
       // program saved yesterday is exactly the one whose board has been
       // re-flashed since.
       onPartsUsedRef.current?.(partsUsedBy(ws))
-      // Back where they were. Only roots: everything else is positioned by the
-      // block it is connected to, and moving those would be a fight with
-      // Blockly's own layout rather than a courtesy.
-      for (const block of ws.getTopBlocks(false)) {
-        const at = places.get(block.id)
-        if (!at) continue
-        const now = block.getRelativeToSurfaceXY()
-        block.moveBy(at.x - now.x, at.y - now.y)
-      }
-      // And still selected, so a reconversion cannot steal the highlight out
+      // Still selected, so a reconversion cannot steal the highlight out
       // from under #1016's link.
       if (selected) {
         const block = ws.getBlockById(selected)
