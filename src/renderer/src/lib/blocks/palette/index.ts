@@ -11,7 +11,7 @@ import { installPythonField } from '../python-field'
 import { CONTROL_BLOCKS } from './control'
 import { HARDWARE_BLOCKS } from './hardware'
 import { instrumentBlocks } from './instruments'
-import { FUNCTION_BLOCKS } from './functions'
+import { FUNCTION_BLOCKS, installFunctionBlocks } from './functions'
 import { STRUCTURE_BLOCKS, installStructureBlocks } from './structure'
 import { LIST_BLOCKS } from './lists'
 import { TUPLE_BLOCKS, installTupleBlocks } from './tuples'
@@ -81,6 +81,9 @@ export function installCorePalette(): void {
   // `print`, which grew from one socket to as many as you like (#1125) and so
   // is no longer Blockly's own shape.
   installTextBlocks()
+  // And Blockly's two `def` blocks, which gain a field for the parameters its
+  // mutator cannot hold — a default, `*args`, `**kwargs` (#1134).
+  installFunctionBlocks()
   defineBlocks([
     ...TURTLE_BLOCKS,
     // HARDWARE IS SCOPED BY WHAT IT CAN GENERATE (#1039 → #1040). Nine of the

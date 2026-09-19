@@ -5,6 +5,7 @@ import type { BlockDefinition } from '../registry'
 import { FIELD_PYTHON_TYPE } from '../python-field'
 import { isAtomicExpression } from '../python-check'
 import { trailingCommentAt } from '../python-tokens'
+import { sanitise } from '../names'
 
 /**
  * THE ESCAPE HATCHES (#1018, epic #1007).
@@ -173,6 +174,15 @@ function callBlockMixin(valueShape: boolean): Record<string, unknown> {
           .setCheck(null)
           // "with" once, then commas — so the block reads like the call it makes.
           .appendField(i === 0 ? 'with' : ',')
+          // A NAME FOR THIS ARGUMENT, WHEN IT NEEDS ONE (#1134, epic #1119).
+          //
+          // `pixels.fill(colour=RED)`, `sleep_ms(ms=100)`, `Pin(15, Pin.OUT,
+          // value=0)` — keyword arguments are everywhere in MicroPython library
+          // APIs, and until now the only way to write one was to type the whole
+          // call into a grey block. Left empty the field costs a narrow box and
+          // the argument is positional, exactly as it has always been.
+          .appendField(new Blockly.FieldTextInput(''), `NAME${i}`)
+          .appendField('=')
       }
       self.argCount_ = target
       // The buttons live on their own input at the end, so they stay to the
@@ -204,7 +214,18 @@ function callArgs(block: Blockly.Block, gen: MicroPythonGenerator): string {
     // pressed `+` once too often should get `sensor.read()`, not a TypeError
     // about an argument they cannot see.
     const code = gen.valueToCode(block, `ARG${i}`, Order.NONE)
-    if (code) parts.push(code)
+    if (!code) continue
+    // A NAME MAKES IT A KEYWORD ARGUMENT (#1134).
+    //
+    // EMPTY IS CHECKED BEFORE SANITISING, and that is not a nicety: `sanitise`
+    // falls back to `value` for anything that cleans down to nothing, which is
+    // right for a LABEL somebody typed and catastrophic here — every positional
+    // argument in the palette would have come out as `value=…`.
+    const typed = String(block.getFieldValue(`NAME${i}`) ?? '').trim()
+    // Sanitised rather than trusted once it is non-empty: the field takes
+    // anything, and `my colour=RED` is a SyntaxError in the mirror rather than
+    // a block that merely looks wrong.
+    parts.push(typed === '' ? code : `${sanitise(typed)}=${code}`)
   }
   return parts.join(', ')
 }
@@ -707,6 +728,52 @@ export const PYTHON_BLOCKS: BlockDefinition[] = [
       const value = gen.valueToCode(block, 'VALUE', Order.NONE) || 'None'
       return `${callTarget(block, gen)}.${memberName(block, 'NAME', 'value')} = ${value}\n`
     }
+  },
+  // ---------------------------------------------------------- spreading (#1134)
+  //
+  // `f(*args)` and `f(**kwargs)` — passing a whole list or a whole dictionary on
+  // as arguments. They belong in this drawer rather than in Functions because
+  // they are the same kind of thing the blocks above it are: a piece of Python
+  // syntax with no Scratch equivalent, reached for when the shape you need is
+  // not one the palette models.
+  //
+  // THEY ARE NOT EXPRESSIONS, and the tooltip says so. `x = *args` is a
+  // SyntaxError; a starred argument only means anything inside a call. That is
+  // the same honest caveat `snakie_python_value` carries, in a drawer the
+  // learner has already been told is the escape hatch.
+  {
+    type: 'snakie_spread',
+    category: 'python',
+    help: 'blocks-python',
+    json: {
+      message0: 'spread %1',
+      args0: [{ type: 'input_value', name: 'VALUE' }],
+      inputsInline: true,
+      output: null,
+      tooltip:
+        'Hand a whole list over as separate arguments — Python writes it *values. Only meaningful in an argument socket: it is not a value you can store.'
+    },
+    code: (block, gen) => [
+      `*${gen.valueToCode(block, 'VALUE', Order.UNARY_SIGN) || '()'}`,
+      Order.UNARY_SIGN
+    ]
+  },
+  {
+    type: 'snakie_spread_named',
+    category: 'python',
+    help: 'blocks-python',
+    json: {
+      message0: 'spread by name %1',
+      args0: [{ type: 'input_value', name: 'VALUE' }],
+      inputsInline: true,
+      output: null,
+      tooltip:
+        'Hand a whole dictionary over as named arguments — Python writes it **settings. Only meaningful in an argument socket.'
+    },
+    code: (block, gen) => [
+      `**${gen.valueToCode(block, 'VALUE', Order.UNARY_SIGN) || '{}'}`,
+      Order.UNARY_SIGN
+    ]
   }
 ]
 

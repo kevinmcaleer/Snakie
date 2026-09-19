@@ -867,10 +867,10 @@ function groupComments(nodes: readonly Stmt[]): Stmt[] {
 /**
  * A call's ARGUMENTS, split on the commas that are actually separators.
  *
- * `splitParams` splits on every comma, which is right for a parameter list of
- * bare names and wrong for `wiggle(f(1, 2), 3)`. Returns null when the brackets
- * or quotes do not balance, which is the caller's signal to leave the line raw
- * rather than guess at it.
+ * A plain `split(',')` is right for a parameter list of bare names — which is
+ * what {@link splitSignature} does — and wrong for `wiggle(f(1, 2), 3)`.
+ * Returns null when the brackets or quotes do not balance, which is the
+ * caller's signal to leave the line raw rather than guess at it.
  */
 function splitArgs(args: string): string[] | null {
   const out: string[] = []
@@ -988,29 +988,34 @@ function splitPair(text: string): [string, string] | null {
   return null
 }
 
-/** A parameter list, split and trimmed. Empty for `()`. */
-function splitParams(params: string): string[] {
-  return params
-    .split(',')
-    .map((p) => p.trim())
-    .filter((p) => p !== '')
-}
-
 /**
- * Can Blockly's `procedures_def` hold this parameter list faithfully? (#1063)
+ * A parameter list, split into the part Blockly's mutator can hold and the rest
+ * (#1063, widened by #1134).
  *
- * Its parameters are bare NAMES — they become workspace variables — so that is
- * all it can express. A default (`flip_x=None`), a type annotation, `*args` or
- * `**kwargs` has nowhere to live on the block.
+ * Blockly's parameters are bare NAMES — they become workspace variables — so a
+ * default (`flip_x=None`), a type annotation, `*args` or `**kwargs` has nowhere
+ * to live in the mutator. This used to be a boolean, and a `def` carrying any
+ * of them went to a raw suite whole: correct, and it meant
+ * `def blink(times=3):` — a beginner-friendly helper, and nearly every driver's
+ * `__init__` — came back as a grey wall.
  *
- * This used to be a `.filter()`, which meant the ones it could not hold were
- * simply dropped: `def load(path, flip_x=None, flip_y=None)` came back as
- * `def load(path)`. A signature is not decoration — every call to that function
- * still passed three arguments — so a `def` we cannot model faithfully stays a
- * raw suite with its header verbatim instead. Uglier, and correct.
+ * #1134 gave the block a FIELD for the rest, appended after the declared ones,
+ * so the split is what this returns. Everything from the first parameter
+ * Blockly cannot hold onwards goes into the field VERBATIM, which keeps
+ * keyword-only parameters after a `*args` in the order Python needs and never
+ * reorders anybody's signature.
+ *
+ * Null for a list that cannot be split at all — an empty piece, which means a
+ * trailing comma the block has nowhere to record.
  */
-function modellableParams(params: string): boolean {
-  return splitParams(params).every((p) => /^[A-Za-z_]\w*$/.test(p))
+function splitSignature(params: string): { declared: string[]; extra: string } | null {
+  const pieces = params.split(',').map((p) => p.trim())
+  if (pieces.length === 1 && pieces[0] === '') return { declared: [], extra: '' }
+  if (pieces.some((p) => p === '')) return null
+  const plain = (p: string): boolean => /^[A-Za-z_]\w*$/.test(p)
+  let at = 0
+  while (at < pieces.length && plain(pieces[at])) at += 1
+  return { declared: pieces.slice(0, at), extra: pieces.slice(at).join(', ') }
 }
 
 // ---------------------------------------------------------------------------
@@ -1485,10 +1490,15 @@ class Converter {
       // anyway would build a CALLER block for a definition that does not exist —
       // a workspace Blockly refuses to load, which costs the learner every block
       // in the file.
-      if (!def || !modellableParams(def[2]) || decoratedAbove(node, nodes)) continue
+      if (!def || !splitSignature(def[2]) || decoratedAbove(node, nodes)) continue
       const last = node.body[node.body.length - 1]
       this.definedHere.set(def[1], {
-        params: splitParams(def[2]),
+        // ONLY THE DECLARED ONES ARE CALLER SOCKETS (#1134). A parameter with a
+        // default is optional at the call site, which is the whole reason it
+        // has one, so a caller block with a socket for it would be wrong — and
+        // the arity check below is what keeps `blink()` and `blink(2)` from
+        // both trying to become the same block.
+        params: splitSignature(def[2])!.declared,
         // The same rule `definition` uses, down to the comment: a TRAILING
         // `return <expr>` becomes the block's RETURN socket, and that is what
         // makes it a `defreturn`. One carrying a trailing comment does not
@@ -2183,7 +2193,8 @@ class Converter {
     const def = /^def\s+([A-Za-z_]\w*)\(([^)]*)\):$/.exec(text)
     // An `async def` never takes this branch — the pattern has no `async` in it —
     // because `procedures_def` has nowhere to put the keyword (W9, #1096).
-    if (def && this.depth === 0 && modellableParams(def[2]) && !decoratedAbove(node, siblings)) {
+    const signature = def ? splitSignature(def[2]) : null
+    if (def && signature && this.depth === 0 && !decoratedAbove(node, siblings)) {
       this.definitions.push(this.definition(def[1], def[2], node))
       // And the generator will write it into a section of its own, with a blank
       // line after it — which is the gap the learner typed under the `def`. See
@@ -2194,9 +2205,12 @@ class Converter {
       return recognised([])
     }
     // A `def` THAT IS NOT A TOP-LEVEL PROCEDURE (W6, #1093). Two kinds land
-    // here: a method inside a class, and a `def` whose signature Blockly's
-    // procedure block cannot hold (`def load(path, flip_x=None)` — see
-    // `modellableParams`, and #1063 for what dropping those parameters cost).
+    // here: a method inside a class, and a `def` whose signature cannot be
+    // split at all — a trailing comma the block has nowhere to record. The
+    // defaults and stars that used to land here are the procedure block's now
+    // (#1134): they go in its extras field, and #1063's argument for never
+    // DROPPING a parameter is answered by keeping it rather than by refusing
+    // the whole `def`.
     //
     // Both become the same stackable block, which is the shape a hat cannot be:
     // `procedures_defnoreturn` has no previous or next connection, so it can
@@ -2480,8 +2494,9 @@ class Converter {
 
   /** `def name(a, b):` → a procedure definition, with its body. */
   private definition(name: string, params: string, node: Stmt): BlockJson {
-    // Every one of these is a bare name — `modellableParams` is what let us in.
-    const args = splitParams(params)
+    // The bare names go to Blockly's mutator; everything else to the field
+    // #1134 added — see {@link splitSignature}.
+    const { declared, extra } = splitSignature(params)!
     // A LEADING DOCSTRING IS THE BLOCK'S DESCRIPTION, not a statement in the
     // body — one idea in two notations, so it becomes the comment bubble rather
     // than a raw Python block sitting at the top of the function. Only when it
@@ -2502,8 +2517,8 @@ class Converter {
     const body = this.nested(returns ? statements.slice(0, -1) : statements)
     const block: BlockJson = {
       type: returns ? 'procedures_defreturn' : 'procedures_defnoreturn',
-      fields: { NAME: name },
-      extraState: { params: args.map((a) => ({ name: a, id: this.variable(a) })) },
+      fields: { NAME: name, ...(extra === '' ? {} : { EXTRAS: extra }) },
+      extraState: { params: declared.map((a) => ({ name: a, id: this.variable(a) })) },
       inputs: {}
     }
     if (described !== null) {
@@ -3567,6 +3582,25 @@ class Converter {
   ): { block: BlockJson; next: number } | null {
     const tok = tokens[at]
     if (!tok) return null
+
+    // `*args` AND `**settings` (#1134, epic #1119).
+    //
+    // Only ever meaningful in an argument socket, which is the only place a
+    // term can start with a star — `a * b` reaches this function with `b`, not
+    // with `* b`. Reading them is what stops `super().__init__(*args,
+    // **kwargs)` — the standard shape of a subclass's setup — coming back with
+    // two grey sockets in it.
+    if (tok.kind === 'op' && (tok.text === '*' || tok.text === '**')) {
+      const inner = this.parseAtom(tokens, at + 1)
+      if (!inner) return null
+      return {
+        block: {
+          type: tok.text === '**' ? 'snakie_spread_named' : 'snakie_spread',
+          inputs: { VALUE: { block: inner.block } }
+        },
+        next: inner.next
+      }
+    }
 
     // `~mask` (#1127). It binds where unary minus does — tighter than `*`,
     // looser than `**` — and the one place that matters is `~a ** 2`, which

@@ -194,6 +194,10 @@ const READ_DIRECTLY: Record<string, string> = {
   // decision is recorded rather than left as a leftover.
   snakie_python_scope: 'def go():\n    nonlocal low, high\n    low = 1\n',
   snakie_python_import_here: 'def go():\n    import ujson\n    print(ujson)\n',
+  // Spreading (#1134): only meaningful in an argument socket, which is the
+  // only place a term can start with a star.
+  snakie_spread: 'thing.calibrate(*args)\n',
+  snakie_spread_named: 'thing.calibrate(**settings)\n',
   snakie_python_value: 'x = [v for v in things]\n',
   snakie_python_comment: '# a note\n',
   snakie_python_docstring: '"""What this program does."""\n',
