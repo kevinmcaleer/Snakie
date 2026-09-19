@@ -1199,6 +1199,37 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A named PWM's power line comes back as the block that wrote it** (#1163).
+  *set power of (pwm_motor_a) to (50) %* writes
+  `pwm_motor_a.duty_u16(int(50 * 65535 / 100))` — per cent is what a child has,
+  0-65535 is what MicroPython wants, and the conversion sits on the line where
+  both are visible. Reading that line back, though, found no block for it: the
+  arithmetic around the argument kept both duty blocks off the reader's table,
+  so a robot program reopened as the generic escape hatch — *call duty_u16 on
+  (pwm_motor_a) with (turn (50 × 65535 ÷ 100) into a whole number (int))*. Five
+  blocks, four levels of nesting and 116px of canvas, per motor, for a line the
+  Hardware drawer writes in a single 68px row.
+
+  A rule can now declare that a socket is written as a per cent of a full-scale
+  number, and the reader takes exactly that wrapper back off — the same job the
+  Lists drawer's `- 1` has had undone since #1122, and bounded the same way.
+  Only the shape the generator itself writes is unpicked: `pwm.duty_u16(duty)`,
+  a different scale, or an `int()` that is not the outermost thing on the line
+  are all still somebody's own line, and stay verbatim.
+
+- **A positional argument no longer wears an empty name box and a stray `=`**
+  (#1163). #1134 gave each argument socket on the **call** blocks a box for the
+  keyword name in front of it, and shipped it visible — so every ordinary call
+  grew a small white pill and an `=` that appears in no line of anybody's
+  Python, sitting exactly where a value looks like it should drop in.
+
+  The box and its `=` are hidden while empty now, the same rule the `def`
+  block's extra-parameters row follows. Right-click a call block and choose
+  **Name the arguments…** to bring them out; the reveal lapses as soon as an
+  editor closes, so naming the second of three arguments leaves one box on
+  screen rather than three. What the block generates is unchanged — the
+  argument is built from the field's value, not from whether it is on screen.
+
 - **The PDF export has its Electronics pages back** (#1147). The document is
   meant to show the board twice — the diagram on the page's parchment, and the
   workspace's own sheet — and it showed neither unless the Electronics view
@@ -2114,7 +2145,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   its place beside Text for the empty warm-green gap.
 
 
-
 - **The blocks are shaped like MakeCode and Scratch now, because they are
   rendered like them** (epic #1007, #573's design direction). The canvas moves
   from Blockly's `thrasos` renderer to **`zelos`** — which is Blockly's own port
@@ -2146,7 +2176,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   making it rounder or roomier than Scratch rather than re-deriving it — the
   12px corner radius, the notch offset that has to clear it, a pill radius on
   field boxes, 8px top and bottom rows, and a 20px C-block mouth.
-
 
 
 - **Comments are grey, and they are quiet** (#1062). #1062's folding made a

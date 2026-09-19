@@ -190,6 +190,16 @@ export interface BlockDefinition {
      * a block that would regenerate `xs.pop(n - 1)`.
      */
     oneBased?: readonly string[]
+    /**
+     * Sockets written as a PER CENT OF A FULL-SCALE NUMBER (#1163).
+     *
+     * `set power of (pwm) to (50) %` writes `pwm.duty_u16(int(50 * 65535 /
+     * 100))` — per cent is what a child has, 0-65535 is what MicroPython wants,
+     * and the conversion sits where both are visible. Socket name → the
+     * full-scale number, and reading one back undoes exactly the shape the
+     * generator writes and nothing else.
+     */
+    percentOf?: Readonly<Record<string, number>>
   }
   /**
    * REGISTERED BUT NOT LISTED IN THE FLYOUT (epic #1086 §4.5).
