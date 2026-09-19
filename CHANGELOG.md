@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The PDF export always includes the blocks.** The blocks pages read the
+  Blockly canvas on screen and nothing else, and that canvas only exists while
+  the Blocks view is open. Press the print button from the Code workspace, from
+  Electronics or Build, or with the split collapsed to its Python-only view,
+  and the document went out with every other section in it and no blocks — and
+  nothing said so. The export now photographs the canvas on screen when there
+  is one, and otherwise builds the active file's blocks into an off-screen
+  workspace (the same footer-or-derived reading the Blocks view opens on, in
+  the same theme and renderer), prints them, and throws it away. A file whose
+  blocks this build cannot read is reported as "exported without the blocks"
+  in the status bar rather than quietly dropped.
+
 ### Added
 
 - **A connections table to wire the project up from, and a white page to print
