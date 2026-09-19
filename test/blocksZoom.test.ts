@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest'
 import * as Blockly from 'blockly/core'
-import { installShelfFlyout, installZoomReset, nextZoomAction } from '../src/renderer/src/lib/blocks/zoom'
+import {
+  centredScroll,
+  installShelfFlyout,
+  installZoomReset,
+  nextZoomAction
+} from '../src/renderer/src/lib/blocks/zoom'
 
 /**
  * The zoom control moves the CANVAS (#1150).
@@ -93,19 +98,34 @@ describe('the fit control answers a press anywhere in its box', () => {
   }
 
   /** Enough of a workspace for the control to act on, and a record of what it did. */
-  function workspace(root: HTMLElement): { ws: Blockly.WorkspaceSvg; scales: number[] } {
+  function workspace(root: HTMLElement): {
+    ws: Blockly.WorkspaceSvg
+    scales: number[]
+    scrolls: { x: number; y: number }[]
+  } {
     const scales: number[] = []
+    const scrolls: { x: number; y: number }[] = []
     const ws = {
+      options: {},
       getInjectionDiv: () => root,
+      // What `Blockly.svgResize` reads to re-measure the host before a fit.
+      getParentSvg: () => root.querySelector('svg'),
+      getCachedParentSvgSize: () => ({ width: 0, height: 0 }),
+      setCachedParentSvgSize: () => {},
+      resize: () => {},
       getScale: () => 1,
       getTopBlocks: () => [{}],
       beginCanvasTransition: () => {},
       endCanvasTransition: () => {},
       zoomToFit: () => scales.push(-1),
       setScale: (s: number) => scales.push(s),
-      scrollCenter: () => {}
+      scrollCenter: () => {},
+      // A 800×500 view looking at a 200×200 box whose centre is (200, 300).
+      getMetrics: () => ({ viewWidth: 800, viewHeight: 500 }),
+      getBlocksBoundingBox: () => ({ left: 100, top: 200, right: 300, bottom: 400 }),
+      scroll: (x: number, y: number) => scrolls.push({ x, y })
     }
-    return { ws: ws as unknown as Blockly.WorkspaceSvg, scales }
+    return { ws: ws as unknown as Blockly.WorkspaceSvg, scales, scrolls }
   }
 
   it('puts a full-size target under the glyph, and the glyph on top of it', () => {
@@ -137,6 +157,17 @@ describe('the fit control answers a press anywhere in its box', () => {
     expect(scales).toEqual([-1])
   })
 
+  it('centres the blocks after the fit, not wherever Blockly left them', () => {
+    const { root, group } = control()
+    const { ws, scrolls } = workspace(root)
+    installZoomReset(ws)
+
+    const target = group.querySelector('.blocks-zoom-target') as Element
+    target.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    // The box centre (200, 300) lands on the view centre (400, 250).
+    expect(scrolls).toEqual([{ x: 200, y: -50 }])
+  })
+
   it('takes the target away again with the rest of it', () => {
     const { root, group } = control()
     installZoomReset(workspace(root).ws)()
@@ -144,5 +175,23 @@ describe('the fit control answers a press anywhere in its box', () => {
     expect(group.querySelector('.blocks-zoom-target')).toBeNull()
     expect(group.querySelector('.blocks-zoom-fit')).toBeNull()
     expect(group.getAttribute('aria-label')).toBe('Reset zoom')
+  })
+})
+
+/**
+ * The arithmetic behind that centring, on its own: Blockly's `scrollX`/`scrollY`
+ * are the pixel position of the workspace origin from the view's top-left, so
+ * the offset is half the view minus the scaled centre of the box.
+ */
+describe('centredScroll', () => {
+  it('scales the box before centring it', () => {
+    const box = { left: 0, top: 0, right: 200, bottom: 100 }
+    // At 50% the box centre (100, 50) is at (50, 25) px.
+    expect(centredScroll(box, { width: 400, height: 300 }, 0.5)).toEqual({ x: 150, y: 125 })
+  })
+
+  it('handles a box above and left of the origin', () => {
+    const box = { left: -50, top: -50, right: 50, bottom: 50 }
+    expect(centredScroll(box, { width: 200, height: 200 }, 2)).toEqual({ x: 100, y: 100 })
   })
 })

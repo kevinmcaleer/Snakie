@@ -138,6 +138,44 @@ const FIT_LABEL = 'Zoom to fit, or back to 100%'
 /** Blockly's canvas transition is 500ms of CSS; end it once it has run. */
 const TRANSITION_MS = 500
 
+/** A rectangle in workspace units, as `getBlocksBoundingBox` reports one. */
+export interface Box {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+/**
+ * FIT MEANS CENTRED.
+ *
+ * Blockly's `zoomToFit` picks the scale and then calls its `scrollCenter`,
+ * which centres the SCROLL AREA rather than the blocks: the scroll area is the
+ * content padded by the scrollbars' idea of the view, and that idea is stale
+ * whenever the panel has changed size since Blockly last measured it. The
+ * result on a real canvas was the fitted stacks landing below the bottom edge,
+ * with a scroll left for the learner to do — the opposite of "show me all of
+ * it".
+ *
+ * So the scroll offset is worked out here from first principles, as the pure
+ * arithmetic so it can be tested without a canvas. Blockly's `scrollX`/`scrollY`
+ * are the pixel position of the workspace origin relative to the view's
+ * top-left, so the offset that puts the box's centre on the view's centre is
+ * half the view minus the scaled centre of the box.
+ */
+export function centredScroll(
+  box: Box,
+  view: { width: number; height: number },
+  scale: number
+): { x: number; y: number } {
+  const centreX = (box.left + box.right) / 2
+  const centreY = (box.top + box.bottom) / 2
+  return {
+    x: view.width / 2 - centreX * scale,
+    y: view.height / 2 - centreY * scale
+  }
+}
+
 /** Apply {@link nextZoomAction} to a live workspace. */
 function toggleZoom(ws: Blockly.WorkspaceSvg): void {
   const action = nextZoomAction(ws.getScale(), ws.getTopBlocks(false).length > 0)
@@ -146,7 +184,18 @@ function toggleZoom(ws: Blockly.WorkspaceSvg): void {
   // buttons.
   ws.beginCanvasTransition()
   if (action === 'fit') {
+    // Re-measure the host first: Blockly caches its view size, and a fit
+    // against a stale size centres on a canvas that is no longer there.
+    Blockly.svgResize(ws)
     ws.zoomToFit()
+    // Then put the blocks in the middle of the view we actually have (above).
+    const metrics = ws.getMetrics()
+    const target = centredScroll(
+      ws.getBlocksBoundingBox(),
+      { width: metrics.viewWidth, height: metrics.viewHeight },
+      ws.getScale()
+    )
+    ws.scroll(target.x, target.y)
   } else {
     ws.setScale(1)
     ws.scrollCenter()
