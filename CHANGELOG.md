@@ -8,6 +8,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Keyword arguments, default values, `*args` and `super()`.** (#1134, epic
+  #1119) A `def` block built its signature from Blockly's parameter list —
+  positional names and nothing else. So `def blink(times=3):`, which is how a
+  beginner-friendly helper and almost every driver's `__init__` is written,
+  could not be built; `pixels.fill(colour=RED)` could not be written, and
+  keyword arguments are everywhere in MicroPython library APIs; and
+  `def __init__(self, *args, **kwargs)` had only the escape hatch.
+
+  The **call** blocks grew a small name box before each argument socket: empty
+  means positional, as always, and a name makes it `name=value`. Two new
+  blocks, **spread** and **spread by name**, hand a whole list or dictionary
+  over (`f(*values)`, `f(**settings)`), and **the class this one is built on**
+  is `super()` — which #1093's class inheritance made live rather than
+  theoretical.
+
+  The `def` blocks grew an **and also** box for the parameters Blockly's mutator
+  cannot hold, appended after the declared ones. That is the decision that
+  keeps every saved workspace loading: a field is serialised by name, a block
+  saved before it existed simply has none, and the mutator that renames every
+  caller is untouched. It also means `def load(path, flip=None):` stops coming
+  back as a grey wall — it used to, because dropping the default would have
+  changed every call to it.
+
 - **`forget` and `do nothing` — and two decisions taken out loud.** (#1133,
   epic #1119) `del` is listed in `docs/blocks-coverage-epic.md` §10 as the
   statement *"no workstream claimed"*, and it is the only way to take a key out
