@@ -8,13 +8,18 @@
  * makes the promise true by construction: a stack is atomic, and a page is a
  * set of whole stacks.
  *
+ * Each stack is headed by a caption — its name at the section heading's size,
+ * and, for a function with a docstring, that docstring set underneath it as a
+ * description (#1147). The caption is MEASURED before the page is planned, so
+ * the room it takes is room the stack does not.
+ *
  * Everything in this module is pure arithmetic over sizes — the capturing lives
  * in `lib/pdf/capture.ts`, which is the part that needs a DOM.
  */
 
-import { type Box, type LaidOutPage, type PdfDocument } from '../layout'
+import { type Box, type LaidOutPage, type PdfDocument, wrapText } from '../layout'
 import type { PdfImageRef } from '../writer'
-import { INK_MUTED, PAPER } from '../theme'
+import { INK, INK_MUTED, PAPER } from '../theme'
 import { SECTION_HEADING_HEIGHT, drawSectionHeading } from './listing'
 
 /** A captured top-level stack, at its natural size in points. */
@@ -25,6 +30,15 @@ export interface StackGeometry {
   height: number
   /** A caption printed above the stack, e.g. `Function: blink`. */
   label?: string
+  /**
+   * The function's docstring, printed under its name as a description (#1147).
+   *
+   * A `def` block's description IS its docstring — `lib/blocks/docstring.ts`
+   * makes the comment bubble and the `"""…"""` line one idea in two
+   * notations — so what the learner wrote about the function travels onto the
+   * page with it.
+   */
+  description?: string
 }
 
 /** A stack placed on a page, in top-left document coordinates. */
@@ -34,12 +48,29 @@ export interface PlacedStack<T> {
   y: number
   width: number
   height: number
+  /** The name-and-description block sitting directly above `y`. */
+  caption: Caption
 }
 
 /** Space between two stacks on a page. */
 const STACK_GAP = 20
-/** Room reserved above a stack for its caption. */
-const LABEL_HEIGHT = 14
+
+/**
+ * A stack's name is set at the SECTION HEADING's size (#1147).
+ *
+ * `Function: blink` heads its own little section of the document, so it is
+ * lettered like one: the same 13pt Helvetica-Bold ink as the `Blocks` heading
+ * above it, rather than the 9pt muted caption it used to be.
+ */
+export const LABEL_SIZE = 13
+/** Room reserved above a stack for its name, baseline and descender included. */
+const LABEL_HEIGHT = 19
+/** The docstring description under the name. */
+export const DESCRIPTION_SIZE = 9.5
+/** Baseline-to-baseline for a wrapped description. */
+const DESCRIPTION_LEADING = 12
+/** Breathing room between a caption and the stack it heads. */
+const CAPTION_GAP = 5
 
 /**
  * Functions first, in the order the GENERATOR hoisted them, then everything
@@ -67,6 +98,73 @@ export function orderStacks<T extends { id: string }>(
 }
 
 /**
+ * A stack's caption — its name, and the description wrapped to the page.
+ *
+ * Measured once, by {@link captionFor}, and carried on the {@link PlacedStack}:
+ * the planner has to know how tall it is to leave room for it, and the drawing
+ * has to set exactly the lines that were measured, so a wrap that disagreed
+ * between the two would push a stack off the bottom of the page.
+ */
+export interface Caption {
+  /** The name line, e.g. `Function: blink`. */
+  label?: string
+  /** The description, already wrapped to the content width. */
+  lines: string[]
+  /** Total height, gap to the stack included. Zero when there is no caption. */
+  height: number
+}
+
+/**
+ * Measure a stack's caption at `width`.
+ *
+ * A docstring's own line breaks are kept — a PEP 257 summary line followed by a
+ * paragraph is a shape somebody chose — and each of those lines is then wrapped
+ * to the page. Blank lines separate paragraphs rather than accumulating.
+ */
+export function captionFor(stack: StackGeometry, width: number): Caption {
+  const lines: string[] = []
+  const description = (stack.description ?? '').replace(/\r\n?/g, '\n').trim()
+  if (description && width > 0) {
+    for (const paragraph of description.split('\n')) {
+      if (paragraph.trim() === '') {
+        // Never open with a blank, and never double one.
+        if (lines.length && lines[lines.length - 1] !== '') lines.push('')
+        continue
+      }
+      lines.push(...wrapText(paragraph.trim(), 'Helvetica', DESCRIPTION_SIZE, width))
+    }
+    while (lines.length && lines[lines.length - 1] === '') lines.pop()
+  }
+  const label = stack.label
+  if (!label && !lines.length) return { lines: [], height: 0 }
+  return {
+    label,
+    lines,
+    height: (label ? LABEL_HEIGHT : 0) + lines.length * DESCRIPTION_LEADING + CAPTION_GAP
+  }
+}
+
+/** Draw a caption at `x`, its block ending at `bottom` — the stack's top edge. */
+function drawCaption(page: LaidOutPage, caption: Caption, x: number, bottom: number): void {
+  if (caption.height <= 0) return
+  const top = bottom - caption.height
+  if (caption.label) {
+    page.text(caption.label, x, top + LABEL_SIZE, {
+      font: 'Helvetica-Bold',
+      size: LABEL_SIZE,
+      color: INK
+    })
+  }
+  let baseline = top + (caption.label ? LABEL_HEIGHT : 0) + DESCRIPTION_SIZE
+  for (const line of caption.lines) {
+    if (line) {
+      page.text(line, x, baseline, { size: DESCRIPTION_SIZE, color: INK_MUTED })
+    }
+    baseline += DESCRIPTION_LEADING
+  }
+}
+
+/**
  * Scale and place every stack, page by page.
  *
  * A stack TALLER (or wider) than a page is scaled down to fit — scaling is
@@ -85,11 +183,15 @@ export function planBlocksPages<T extends StackGeometry>(
 
   for (const stack of stacks) {
     if (stack.width <= 0 || stack.height <= 0) continue
-    const labelRoom = stack.label ? LABEL_HEIGHT : 0
-    const scale = Math.min(1, box.width / stack.width, (box.height - labelRoom) / stack.height)
+    const caption = captionFor(stack, box.width)
+    // A caption taller than the page would otherwise scale the stack to nothing
+    // (or to a negative size); leave it a sliver of room rather than an
+    // impossible one. That only happens for a docstring of several pages.
+    const room = Math.max(1, box.height - caption.height)
+    const scale = Math.min(1, box.width / stack.width, room / stack.height)
     const width = stack.width * scale
     const height = stack.height * scale
-    const needed = labelRoom + height
+    const needed = caption.height + height
 
     if (current.length && cursor + needed > box.y + box.height) {
       pages.push(current)
@@ -99,9 +201,10 @@ export function planBlocksPages<T extends StackGeometry>(
     current.push({
       stack,
       x: box.x + (box.width - width) / 2,
-      y: cursor + labelRoom,
+      y: cursor + caption.height,
       width,
-      height
+      height,
+      caption
     })
     cursor += needed + gap
   }
@@ -147,13 +250,7 @@ export function drawBlocksPages(
     page.rect({ x: 0, y: 0, width: doc.size.width, height: doc.size.height }, { fill: PAPER })
     drawSectionHeading(page, i === 0 ? heading : `${heading} (continued)`)
     for (const placed of placements) {
-      if (placed.stack.label) {
-        page.text(placed.stack.label, box.x, placed.y - 4, {
-          font: 'Helvetica-Bold',
-          size: 9,
-          color: INK_MUTED
-        })
-      }
+      drawCaption(page, placed.caption, box.x, placed.y)
       page.image(placed.stack.image, placed)
     }
   })

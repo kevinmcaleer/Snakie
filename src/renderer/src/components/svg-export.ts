@@ -112,6 +112,28 @@ export function buildImagePdf(
   return new Blob([writer.build()], { type: 'application/pdf' })
 }
 
+/** The mat colour an export falls back to when the stage has none of its own. */
+export const DEFAULT_SHEET_BACKGROUND = '#161719'
+
+/**
+ * The sheet colour BEHIND a canvas, read live.
+ *
+ * The board's mat lives in CSS on the stage (blueprint blue / schematic white /
+ * dark mat), so an export that wants to look like what is on screen has to ask
+ * the element rather than pick a constant. A fully transparent background —
+ * which is what a detached or unstyled element answers — is no colour at all,
+ * so the fallback stands in for it.
+ */
+export function stageBackground(
+  el: Element | null | undefined,
+  fallback = DEFAULT_SHEET_BACKGROUND
+): string {
+  const parent = el?.parentElement
+  if (!parent) return fallback
+  const bg = getComputedStyle(parent).backgroundColor
+  return bg && !/rgba?\([^)]*,\s*0\s*\)/.test(bg) ? bg : fallback
+}
+
 /** SVG presentation properties worth inlining so a serialized SVG paints alone. */
 const INLINE_PROPS = [
   'fill',
