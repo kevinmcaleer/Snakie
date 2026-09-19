@@ -56,6 +56,7 @@ function deps(): {
     },
     save: () => rec.fired.push('save'),
     saveAs: () => rec.fired.push('saveAs'),
+    exportPdf: () => rec.fired.push('exportPdf'),
     closeTab: () => rec.fired.push('closeTab'),
     connect: () => rec.fired.push('connect'),
     disconnect: () => rec.fired.push('disconnect'),

@@ -215,6 +215,11 @@ export function appMenuTemplate(o: MenuTemplateOptions): MenuItemConstructorOpti
         commandItem('file.save', 'Save', o, { accelerator: 'CmdOrCtrl+S' }),
         commandItem('file.saveAs', 'Save As…', o, { accelerator: 'CmdOrCtrl+Shift+S' }),
         { type: 'separator' },
+        // The whole PROJECT as a document — cover, blocks, listing, wiring
+        // (#1105). ⌘P rather than a Print item, because there is nothing to
+        // send to a printer directly: it writes a file the user then prints.
+        commandItem('file.exportPdf', 'Export to PDF…', o, { accelerator: 'CmdOrCtrl+P' }),
+        { type: 'separator' },
         // Distinct from closing the WINDOW, which is macOS's ⇧⌘W role below.
         // It goes through the tabs' own dirty prompt rather than around it.
         commandItem('file.closeTab', 'Close Tab', o, { accelerator: 'CmdOrCtrl+W' }),

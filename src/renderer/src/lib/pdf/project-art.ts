@@ -23,14 +23,15 @@ const ART_BACKGROUND = '#f6f1e6'
 const LOGO_PX = 256
 
 /** The live app's art: the mounted Blockly workspace and the breadboard. */
-export function domProjectArt(): ProjectArt {
+export function domProjectArt(opts: { functionIds?: readonly string[] } = {}): ProjectArt {
   return {
     async blockStacks(): Promise<readonly StackArt[]> {
       const workspace = getBlocksWorkspace()
       if (!workspace) return []
       // The generator's own notion of which stacks are functions, so the pages
-      // and the generated `.py` order them the same way (#1112).
-      const { functions } = generateProgram(workspace)
+      // and the generated `.py` order them the same way (#1112). The caller
+      // normally hands over the pass it already ran for the listing.
+      const functions = opts.functionIds ?? generateProgram(workspace).functions
       const captured = captureBlockStacks(workspace, functions)
       const out: StackArt[] = []
       for (const stack of captured) {
