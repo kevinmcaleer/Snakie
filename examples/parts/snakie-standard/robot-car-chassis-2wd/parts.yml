@@ -1,0 +1,151 @@
+id: robot-car-chassis-2wd
+name: 2WD Robot Car Chassis
+description: The classic clear-acrylic "smart car" kit — 210 × 150 mm plate, two TT gear motors on T-brackets, Ø65 mm wheels, a ball caster and a 4×AA battery box — modelled in 3-D for the Robot View, with the motors and the pack brought out as pins.
+manufacturer: Generic
+family: Chassis
+help: help.md
+tags:
+  - chassis
+  - 2wd
+  - robot car
+  - smart car
+  - tt motor
+  - kit
+  - acrylic
+package: THT
+pinSpacing: 2.54
+voltage: 6V
+properties:
+  plate: 210 × 150 × 3 mm acrylic
+  wheels: 2 × Ø65 × 26 mm
+  motors: 2 × TT gear motor, 1:48, 3–6 V
+  caster: Ø15 mm steel ball on M3 × 30 mm standoffs
+  wheelbase: 135 mm (axle to caster)
+  track: 120 mm
+  ground clearance: 50 mm under the plate
+  battery: 4×AA holder with switch (~6 V)
+# The assembled kit without cells; four alkaline AAs add ~90 g over the box.
+mass_g: 250
+com_xyz: [-22, 0, 41]
+# Where it touches the floor, in the mesh frame (mm): both tyres and the caster
+# ball. These are the generator's GROUND_CONTACTS — the test holds them equal.
+contacts:
+  - [-55, 60, 0]
+  - [-55, -60, 0]
+  - [80, 0, 0]
+version: 0.1.0
+pcbColor: "#c9e4f2"
+aspect: 1.4
+dimensions:
+  width: 210
+  height: 150
+shape:
+  kind: rect
+  cornerRadiusMm: 10
+# A top-down render of model.stl (scripts/robot-chassis-mesh.mjs), cropped to
+# the plate's 210 × 150 mm, so the picture and the 3-D model cannot disagree.
+image: image.png
+imageLayer:
+  x: 0
+  y: 0
+  w: 1
+  h: 1
+mesh: model.stl
+meshUnits: mm
+headers:
+  # The battery pack's leads, at the slide switch on the rear edge.
+  - edge: left
+    pins:
+      - name: V+
+        type: pwr
+        x: 0.033
+        y: 0.467
+      - name: GND
+        type: gnd
+        x: 0.033
+        y: 0.533
+  # Left motor's terminal tabs (the car's left is the top of the drawing; +x
+  # is forward, towards the caster). "+"/"-" are nominal: swap to reverse.
+  - edge: top
+    pins:
+      - name: ML+
+        type: other
+        x: 0.5
+        y: 0.24
+      - name: ML-
+        type: other
+        x: 0.5
+        y: 0.293
+  - edge: bottom
+    pins:
+      - name: MR+
+        type: other
+        x: 0.5
+        y: 0.707
+      - name: MR-
+        type: other
+        x: 0.5
+        y: 0.76
+# The 4×AA pack, same numbers as the standalone 4×AA Battery Pack part: fresh
+# alkalines sag under a stall, and the sim should show that.
+electrical:
+  model: source
+  supplyV: 6
+  resistanceOhms: 0.3
+  maxCurrentA: 2
+  capacityMah: 2400
+  terminals:
+    positive: V+
+    negative: GND
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true
+# The plate's Ø3.2 mm (M3) holes, from the generator's ROUND_HOLES — same grid
+# as the mesh and the image.
+mountingHoles:
+  - { x: 0.8333, y: 0.5, diameter: 3.2 }
+  - { x: 0.9286, y: 0.5, diameter: 3.2 }
+  - { x: 0.4524, y: 0.8, diameter: 3.2 }
+  - { x: 0.4524, y: 0.7, diameter: 3.2 }
+  - { x: 0.4524, y: 0.6, diameter: 3.2 }
+  - { x: 0.4524, y: 0.5, diameter: 3.2 }
+  - { x: 0.4524, y: 0.4, diameter: 3.2 }
+  - { x: 0.4524, y: 0.3, diameter: 3.2 }
+  - { x: 0.4524, y: 0.2, diameter: 3.2 }
+  - { x: 0.5238, y: 0.8, diameter: 3.2 }
+  - { x: 0.5238, y: 0.7, diameter: 3.2 }
+  - { x: 0.5238, y: 0.6, diameter: 3.2 }
+  - { x: 0.5238, y: 0.5, diameter: 3.2 }
+  - { x: 0.5238, y: 0.4, diameter: 3.2 }
+  - { x: 0.5238, y: 0.3, diameter: 3.2 }
+  - { x: 0.5238, y: 0.2, diameter: 3.2 }
+  - { x: 0.5952, y: 0.8, diameter: 3.2 }
+  - { x: 0.5952, y: 0.7, diameter: 3.2 }
+  - { x: 0.5952, y: 0.6, diameter: 3.2 }
+  - { x: 0.5952, y: 0.5, diameter: 3.2 }
+  - { x: 0.5952, y: 0.4, diameter: 3.2 }
+  - { x: 0.5952, y: 0.3, diameter: 3.2 }
+  - { x: 0.5952, y: 0.2, diameter: 3.2 }
+  - { x: 0.6667, y: 0.8, diameter: 3.2 }
+  - { x: 0.6667, y: 0.7, diameter: 3.2 }
+  - { x: 0.6667, y: 0.6, diameter: 3.2 }
+  - { x: 0.6667, y: 0.5, diameter: 3.2 }
+  - { x: 0.6667, y: 0.4, diameter: 3.2 }
+  - { x: 0.6667, y: 0.3, diameter: 3.2 }
+  - { x: 0.6667, y: 0.2, diameter: 3.2 }
+  - { x: 0.7381, y: 0.8, diameter: 3.2 }
+  - { x: 0.7381, y: 0.7, diameter: 3.2 }
+  - { x: 0.7381, y: 0.6, diameter: 3.2 }
+  - { x: 0.7381, y: 0.5, diameter: 3.2 }
+  - { x: 0.7381, y: 0.4, diameter: 3.2 }
+  - { x: 0.7381, y: 0.3, diameter: 3.2 }
+  - { x: 0.7381, y: 0.2, diameter: 3.2 }
+  - { x: 0.119, y: 0.7533, diameter: 3.2 }
+  - { x: 0.119, y: 0.2467, diameter: 3.2 }
+  - { x: 0.2143, y: 0.7533, diameter: 3.2 }
+  - { x: 0.2143, y: 0.2467, diameter: 3.2 }
+  - { x: 0.3095, y: 0.7533, diameter: 3.2 }
+  - { x: 0.3095, y: 0.2467, diameter: 3.2 }
