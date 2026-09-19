@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { reportError, reporter } from '../lib/report-error'
 import { showStatus } from '../lib/status-bar'
 import { exportProjectPdf } from '../lib/pdf/export-project'
+import type { ExportPhase } from '../lib/pdf/project-pdf'
+import { ExportProgress, type ExportProgressState } from './ExportProgress'
 import { onExportPdf } from './export-bus'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
@@ -111,6 +113,13 @@ export function Toolbar(): JSX.Element {
   const [connecting, setConnecting] = useState(false)
   const canRun = activeFile != null && !connecting
   const [exporting, setExporting] = useState(false)
+  /** What the floating bar is showing, or null when there is nothing to show. */
+  const [exportProgress, setExportProgress] = useState<{
+    phase: ExportPhase
+    fraction: number
+    state: ExportProgressState
+  } | null>(null)
+  const clearExportProgress = useCallback(() => setExportProgress(null), [])
   /** The export in flight, read inside the handler so a second click during a
    *  long rasterise cannot start a second one. */
   const exportingRef = useRef(false)
@@ -234,14 +243,24 @@ export function Toolbar(): JSX.Element {
     if (exportingRef.current) return
     exportingRef.current = true
     setExporting(true)
+    setExportProgress({ phase: 'blocks', fraction: 0, state: 'working' })
     showStatus('Exporting the project as a PDF…', { priority: 3 })
     void exportProjectPdf({
       folder: currentFolder,
       entryFile: activeFileRef.current?.name,
-      stored: activeFileRef.current?.content
+      stored: activeFileRef.current?.content,
+      onProgress: ({ phase, fraction }) => setExportProgress({ phase, fraction, state: 'working' })
     })
+      .then((result) => {
+        // A cancelled save is not an outcome worth a badge: the user closed the
+        // file dialog, they know what happened. Take the bar away at once.
+        setExportProgress((prev) =>
+          result.outcome === 'cancelled' || !prev ? null : { ...prev, state: 'done' }
+        )
+      })
       .catch((err) => {
         reportError('export pdf', err, { notify: "Couldn't export the PDF." })
+        setExportProgress((prev) => (prev ? { ...prev, state: 'failed' } : prev))
       })
       .finally(() => {
         exportingRef.current = false
@@ -340,6 +359,17 @@ export function Toolbar(): JSX.Element {
           Centred between two equal-weight sides. */}
       <WorkspaceSwitcher />
       <div className="toolbar__side toolbar__side--end" aria-hidden="true" />
+
+      {/* Fixed-position, so it floats over the shell rather than sitting in the
+          toolbar's flex row — see ExportProgress.css. */}
+      {exportProgress && (
+        <ExportProgress
+          phase={exportProgress.phase}
+          fraction={exportProgress.fraction}
+          state={exportProgress.state}
+          onDismiss={clearExportProgress}
+        />
+      )}
     </header>
   )
 }
