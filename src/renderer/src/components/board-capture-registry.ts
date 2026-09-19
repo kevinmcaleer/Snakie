@@ -1,10 +1,10 @@
 /**
  * HOW THE EXPORT MOUNTS A BOARD IT CANNOT SEE (#1110, #1147).
  *
- * The twin of `wiring-svg-registry.ts`: that one hands the exporter the
- * breadboard ON SCREEN, this one gets it one when the Electronics view is not
- * mounted — which is the usual case, because a learner presses print from
- * Blocks or Code.
+ * The export never photographs the canvas on screen — it renders a board of its
+ * own, dressed for the page (see `lib/pdf/wiring-capture.ts`). This is how it
+ * asks for one: the same publish-and-undo shape as
+ * `lib/blocks/workspace-registry.ts`.
  *
  * WHY A REGISTRY RATHER THAN A SECOND REACT ROOT. `wiring-capture` used to
  * render its own `createRoot(host)` and put a `<BoardPane>` in it. A root of its
@@ -15,14 +15,18 @@
  *
  * So the app itself does the mounting: {@link BoardCaptureHost} sits inside the
  * providers and portals a `<BoardPane>` into whatever off-screen host the
- * exporter hands over. The pane then reads the SAME workspace the Electronics
+ * exporter hands over, on the mat it asks for (#1168 — the page wants the white
+ * print mat, whatever the window is set to). The pane then reads the SAME workspace the Electronics
  * view would — the open folder, the active file, the settings — so the picture
  * in the document is the picture the learner would see, rather than a second
  * board assembled out of defaults.
  */
 
+/** The mat a captured board is drawn on — the export asks for the white one. */
+export type CaptureMat = 'dark' | 'blueprint' | 'white'
+
 /** Mount a board into `host`; the returned function takes it down again. */
-export type BoardCaptureMount = (host: HTMLElement) => () => void
+export type BoardCaptureMount = (host: HTMLElement, mat: CaptureMat) => () => void
 
 let current: BoardCaptureMount | null = null
 
@@ -42,8 +46,8 @@ export function registerBoardCaptureMount(mount: BoardCaptureMount): () => void 
  * answer, not a failure: the caller leaves the wiring page out rather than
  * printing a blank one.
  */
-export function mountCaptureBoard(host: HTMLElement): (() => void) | null {
-  return current ? current(host) : null
+export function mountCaptureBoard(host: HTMLElement, mat: CaptureMat): (() => void) | null {
+  return current ? current(host, mat) : null
 }
 
 /** Test seam. */
