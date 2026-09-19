@@ -1199,6 +1199,44 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **No more grey `blank line` block hanging under the imports, and no column of
+  them where the functions were lifted out** (#1164). Opening a file that starts
+  with imports left a wide gap between them and the rest of the canvas, and the
+  top half of that gap was a block that does nothing.
+
+  A blank line comes back because its spacer block sits in the chain where it
+  was typed, and the generator writes that chain out in order. A blank standing
+  directly above a **top-level `def`** has no such chain: #1145 cuts the chain
+  there and the `def` becomes a hat of its own, so the spacer rode on with the
+  blocks above it — the imports, which generate nothing where they stand — and
+  surfaced at the top of the *body*, a section and several hats away from the gap
+  it stood for. Two blank lines before a `def` is PEP 8, so this was most real
+  files.
+
+  It compounded, too: a gap concedes one blank line to the separator the
+  generator writes, but only while the body has not started — and a spacer was
+  itself counted as the body starting. So the first gap in a file switched the
+  rule off for every gap after it, and each `def` boundary added another grey
+  note to the pile. Two `def`s with PEP 8 spacing came back with **six** blank
+  lines above the body, and a different canvas every time the file went round.
+
+  A `name pin` had the same trouble one line earlier, and it showed up as the
+  gap MOVING: the assignment goes into the setup section, so a spacer above the
+  block did not stand above the line in the file — it surfaced at the top of the
+  body, which is to say *below* the thing it had been written above, one line
+  wider than it went in. A grey note floated over the `name pin` block, and the
+  paragraph break a learner put in front of their pin setup came back underneath
+  it.
+
+  Those blanks are dropped now. The gap is not lost — the imports, the
+  functions, the setup and the body are joined by exactly one blank line each,
+  and one is written between two `def`s, which is the separator the spacer was a
+  second, mislaid copy of. Two blank lines above a `def` settle on the one the
+  generator can actually write, and **stay there**: the trip is idempotent now,
+  which is the property that was really broken. A gap anywhere else — between two
+  statements, inside a loop, in front of a line that does stand where it is
+  written — is still the learner's and still comes back.
+
 - **The printed wiring diagram has its WIRES — on a clean white sheet, once**
   (#1168). Three complaints about one page, and the first two were the same
   bug. The export renders a board of its own to photograph, off-screen, and it
