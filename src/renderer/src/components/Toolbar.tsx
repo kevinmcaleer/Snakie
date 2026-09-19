@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { reporter } from '../lib/report-error'
+import { reportError, reporter } from '../lib/report-error'
+import { showStatus } from '../lib/status-bar'
+import { exportProjectPdf } from '../lib/pdf/export-project'
+import { onExportPdf } from './export-bus'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
+import { SNAKIE_MARK_BODY, SNAKIE_MARK_VIEWBOX } from './snakie-mark'
 import { useConsole } from '../store/console'
 import { onDeviceAction } from './device-bus'
 import { dispatchProgramRunState } from './editorBridge'
@@ -46,6 +50,16 @@ const SAVE_ICON = ToolIcon(
   </g>
 )
 
+// printer (export the project as a PDF, #1114)
+const PRINT_ICON = ToolIcon(
+  <g fill="currentColor">
+    <rect x="4" y="1" width="8" height="4" />
+    <path d="M1.5 5h13v6h-3v-2H4.5v2h-3z" />
+    <rect x="11.5" y="6.5" width="1.6" height="1.6" fill="var(--bg-elevated)" />
+    <rect x="4.5" y="10" width="7" height="5" fill="var(--bg-elevated)" stroke="currentColor" />
+  </g>
+)
+
 /**
  * Glossy green snake brand mark from the Skeuomorph concept: a green
  * vertical-gradient body with a round head, eye and a small red forked tongue.
@@ -54,28 +68,14 @@ const SNAKE_LOGO = (
   <svg
     width="28"
     height="28"
-    viewBox="0 0 32 32"
+    viewBox={SNAKIE_MARK_VIEWBOX}
     className="toolbar__logo"
     aria-hidden="true"
     focusable="false"
-  >
-    <defs>
-      <linearGradient id="snakie-mark" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stopColor="#86df6f" />
-        <stop offset="1" stopColor="#369b2c" />
-      </linearGradient>
-    </defs>
-    <path
-      d="M10 27c0-4 6-3.5 6-8s-6-3.5-6-8 5.5-5 10-3.6"
-      fill="none"
-      stroke="url(#snakie-mark)"
-      strokeWidth="4.3"
-      strokeLinecap="round"
-    />
-    <circle cx="21" cy="7" r="3.7" fill="url(#snakie-mark)" stroke="#2f7a28" strokeWidth="0.7" />
-    <circle cx="22.1" cy="6.3" r="0.95" fill="#16240f" />
-    <path d="M24.4 8l3 .7m-3-.7l3-.9" stroke="#e23b2b" strokeWidth="1.1" strokeLinecap="round" />
-  </svg>
+    // The artwork itself lives in `snakie-mark.ts`, shared with the PDF
+    // export's cover (#1109) — a module constant, not user input.
+    dangerouslySetInnerHTML={{ __html: SNAKIE_MARK_BODY }}
+  />
 )
 
 /**
@@ -102,7 +102,7 @@ const SNAKE_LOGO = (
  */
 export function Toolbar(): JSX.Element {
   const status = useDeviceStatus()
-  const { openFiles, activeId, newFile, saveFile } = useWorkspace()
+  const { openFiles, activeId, currentFolder, newFile, saveFile } = useWorkspace()
   const { markRun } = useConsole()
   const connected = status.state === 'connected'
   const activeFile = openFiles.find((f) => f.id === activeId)
@@ -110,6 +110,14 @@ export function Toolbar(): JSX.Element {
   // the simulator first (see handleRun), so Run never silently no-ops.
   const [connecting, setConnecting] = useState(false)
   const canRun = activeFile != null && !connecting
+  const [exporting, setExporting] = useState(false)
+  /** The export in flight, read inside the handler so a second click during a
+   *  long rasterise cannot start a second one. */
+  const exportingRef = useRef(false)
+  /** The active file as it stands WHEN THE EXPORT RUNS — the menu can fire this
+   *  from anywhere, and a stale closure would print yesterday's file. */
+  const activeFileRef = useRef(activeFile)
+  activeFileRef.current = activeFile
 
   /**
    * Execute the active file on the device via `device.runProgram` — the raw-REPL
@@ -216,6 +224,33 @@ export function Toolbar(): JSX.Element {
       void saveFile(activeId).catch(reporter('save file', { notify: "Couldn't save the file." }))
   }, [activeId, saveFile])
 
+  // EXPORT THE PROJECT AS A PDF (#1114, epic #1105).
+  //
+  // Rasterising the blocks and the breadboard takes real time, so the button
+  // has a busy state and refuses to start a second export on top of the first.
+  // A failure lands in the status bar rather than being a silent no-op — the
+  // thing #225 was written to stop.
+  const handleExportPdf = useCallback(() => {
+    if (exportingRef.current) return
+    exportingRef.current = true
+    setExporting(true)
+    showStatus('Exporting the project as a PDF…', { priority: 3 })
+    void exportProjectPdf({
+      folder: currentFolder,
+      entryFile: activeFileRef.current?.name,
+      stored: activeFileRef.current?.content
+    })
+      .catch((err) => {
+        reportError('export pdf', err, { notify: "Couldn't export the PDF." })
+      })
+      .finally(() => {
+        exportingRef.current = false
+        setExporting(false)
+      })
+  }, [currentFolder])
+
+  useEffect(() => onExportPdf(handleExportPdf), [handleExportPdf])
+
   return (
     <header className="toolbar" role="toolbar" aria-label="Main toolbar">
       {/* Left cluster: brand + file/run/board controls. Wrapped in a flex side
@@ -247,6 +282,17 @@ export function Toolbar(): JSX.Element {
               aria-label="Save active file"
             >
               {SAVE_ICON}
+            </button>
+            <button
+              type="button"
+              className="btn btn--ghost btn--icon toolbar__seg-btn"
+              onClick={handleExportPdf}
+              disabled={exporting}
+              title={exporting ? 'Exporting the PDF…' : 'Export the project as a PDF'}
+              aria-label="Export the project as a PDF"
+              aria-busy={exporting || undefined}
+            >
+              {PRINT_ICON}
             </button>
           </div>
         </div>

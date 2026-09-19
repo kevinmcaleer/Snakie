@@ -409,7 +409,7 @@ export function buildSoftShellTheme(tokens: ThemeTokens): SoftShellThemeSpec {
   // palette, so anything mixed within it stays warm and reads as another kind
   // of code; a true neutral is the only thing on this canvas that is not trying
   // to be a category, which is exactly what a comment is.
-  blockStyles.comment_blocks = shades(greyOf(tokens.com))
+  blockStyles[COMMENT_BLOCK_STYLE] = shades(greyOf(tokens.com))
 
   // The stock names, pointed at the same colours as the categories they map to.
   for (const [stockStyle, category] of Object.entries(STOCK_STYLE_ALIASES)) {
@@ -475,6 +475,17 @@ export const SOFT_SHELL_RENDERER = 'snakie-soft-shell'
  * Named in one place because two files have to agree on the string.
  */
 export const BLOCK_TEXT_VAR = '--snakie-block-text'
+
+/**
+ * The style a NOTE about the program wears — the comment block, the docstring
+ * block and the blank-line spacer (`palette/python.ts`), all of which are prose
+ * rather than a step, and share the one grey that says so.
+ *
+ * Named because three places have to agree on the string: the theme that mixes
+ * its fill, the blocks that ask for it, and {@link inkForBlock}, which is where
+ * its lettering is decided.
+ */
+export const COMMENT_BLOCK_STYLE = 'comment_blocks'
 
 export function softShellWorkspaceOptions(tokens: ThemeTokens): Partial<BlocklyOptions> {
   return {
@@ -585,6 +596,31 @@ export function readableTextOn(fill: string): string {
 export function inkOn(fill: string): string {
   return DECLARED_INK.get(fill.toLowerCase()) ?? readableTextOn(fill)
 }
+
+/**
+ * THE INK A BLOCK GETS WHEN ITS *STYLE* HAS AN OPINION.
+ *
+ * {@link inkOn} is keyed by FILL, which is right for the categories: one
+ * palette, one colour per drawer, and a part's or a plugin's block covered for
+ * free. The comment style is the one thing on this canvas whose fill is not a
+ * palette colour at all — it is {@link greyOf} of the `--com` syntax token, so
+ * it is a DIFFERENT grey in each skin (`#747474` dark, `#989898` parchment) and
+ * the readable ink flipped with it: white in the dark skin, black on parchment.
+ * Asked for: WHITE, both skins. Keying that by fill would have meant pinning
+ * two greys here that a `--com` edit would silently walk away from, so it is
+ * keyed by the STYLE NAME — which is what "a comment block" actually means, and
+ * what the renderer can ask the block for.
+ *
+ * AND IT IS A TRADE, like `hardware`'s. White on the parchment grey is 2.88:1,
+ * under the 4.5:1 that grey carries in black — the note recedes, which is the
+ * point of the grey (#1062), and the lettering was chosen over the ratio.
+ */
+export function inkForBlock(styleName: string, fill: string): string {
+  return STYLE_INK.get(styleName) ?? inkOn(fill)
+}
+
+/** Style name → the ink it insists on, whatever its fill could carry. */
+const STYLE_INK = new Map<string, string>([[COMMENT_BLOCK_STYLE, '#ffffff']])
 
 /** Fill → the ink its category insists on. Built once; the palette is fixed. */
 const DECLARED_INK = new Map<string, string>(

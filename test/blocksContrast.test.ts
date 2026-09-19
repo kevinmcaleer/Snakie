@@ -3,10 +3,12 @@ import { resolve } from 'node:path'
 import { describe, it, expect } from 'vitest'
 import {
   BLOCK_CATEGORIES,
+  COMMENT_BLOCK_STYLE,
   FALLBACK_TOKENS,
   buildSoftShellTheme,
   categoryColour,
   contrastRatio,
+  inkForBlock,
   inkOn,
   readableTextOn,
   relativeLuminance,
@@ -246,6 +248,63 @@ describe('block text is the ink the canvas really paints, in both skins', () => 
           id: category.id,
           declared: true
         })
+      }
+    }
+  })
+})
+
+/**
+ * A COMMENT'S LETTERING IS WHITE, IN BOTH SKINS — asked for, and stated here
+ * because it is the one ink on this canvas that is NOT the readable one and not
+ * a category's either.
+ *
+ * The comment style is the only fill that is not a palette colour: it is the
+ * `--com` syntax token with the colour taken out (#1062), so it is a different
+ * grey in each skin and the readable ink used to flip with it — white in the
+ * dark skin, black on parchment. `inkForBlock` keys the override by STYLE NAME
+ * rather than by fill, which is what makes one declaration cover both greys and
+ * any later edit to `--com`; these are the tests that say so.
+ */
+describe('a comment block wears white in both skins', () => {
+  /** The grey the theme actually mixes for the comment style, per skin. */
+  const commentFill = (tokens: ThemeTokens): string =>
+    buildSoftShellTheme(tokens).blockStyles[COMMENT_BLOCK_STYLE].colourPrimary
+
+  for (const [name, tokens] of SKINS) {
+    it(`is white in ${name}`, () => {
+      const fill = commentFill(tokens)
+      expect({ name, ink: inkForBlock(COMMENT_BLOCK_STYLE, fill) }).toEqual({
+        name,
+        ink: '#ffffff'
+      })
+    })
+  }
+
+  it('is a declaration and not a coincidence, which is the half that costs', () => {
+    // On parchment the grey carries BLACK at 7.28:1 and takes white at 2.88:1,
+    // so the white is a trade like `hardware`'s — held to the number, so that a
+    // palette with a below-AA block cannot be read as one that passes, and so a
+    // colour edit that makes it worse still fails here.
+    const fill = commentFill(SKEUOMORPH)
+    expect(readableTextOn(fill)).toBe('#000000')
+    expect(Math.round(contrastRatio(fill, '#ffffff') * 100) / 100).toBe(2.88)
+  })
+
+  it('and in the dark skin it clears AA anyway', () => {
+    const fill = commentFill(DARK)
+    expect({ ok: contrastRatio(fill, inkForBlock(COMMENT_BLOCK_STYLE, fill)) >= AA }).toEqual({
+      ok: true
+    })
+  })
+
+  it('leaves every other block to the fill-keyed rule', () => {
+    // The guard: a style-keyed override is a second way to decide an ink, and
+    // two of those are how a palette drifts. Only the comment style has one.
+    for (const [, tokens] of SKINS) {
+      for (const category of BLOCK_CATEGORIES) {
+        const fill = categoryColour(tokens, category)
+        const style = `${category.id}_blocks`
+        expect({ style, ink: inkForBlock(style, fill) }).toEqual({ style, ink: inkOn(fill) })
       }
     }
   })

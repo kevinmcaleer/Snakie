@@ -6,6 +6,7 @@ import { FIELD_PYTHON_TYPE } from '../python-field'
 import { isAtomicExpression } from '../python-check'
 import { trailingCommentAt } from '../python-tokens'
 import { sanitise } from '../names'
+import { COMMENT_BLOCK_STYLE } from '../theme'
 
 /**
  * THE ESCAPE HATCHES (#1018, epic #1007).
@@ -249,7 +250,7 @@ export function installPythonBlocks(): void {
   Blockly.Blocks[PYTHON_CALL_VALUE] = callBlockMixin(true) as never
   Blockly.Blocks[PYTHON_COMMENT] = commentBlockMixin() as never
   Blockly.Blocks[PYTHON_DOCSTRING] = linesBlockMixin({
-    style: 'comment_blocks',
+    style: COMMENT_BLOCK_STYLE,
     tooltip:
       'A description, written into your program as a triple-quoted string. Python reads it as the documentation for the thing it sits at the top of, and ignores it when the program runs.',
     defaults: [DEFAULT_DOCSTRING]
@@ -289,7 +290,7 @@ function commentBlockMixin(): Record<string, unknown> {
     // Its OWN grey (#1062), not the Python category's — see `comment_blocks` in
     // `theme.ts`. A note about the program should not carry the same visual
     // weight as the program.
-    style: 'comment_blocks',
+    style: COMMENT_BLOCK_STYLE,
     tooltip:
       'A note to whoever reads this program next — you, most likely. Written into the file as comments, and ignored when it runs.',
     defaults: [DEFAULT_COMMENT]
@@ -543,7 +544,7 @@ export const PYTHON_BLOCKS: BlockDefinition[] = [
       // in it, and giving it the same visual weight as a statement makes a
       // canvas of real work look like it is half spacing. A `style` inside
       // `json` wins over the one the registry derives from `category`.
-      style: 'comment_blocks',
+      style: COMMENT_BLOCK_STYLE,
       // `%1` rather than the words directly, because a bare `message0` string
       // becomes a label this cannot put a class on — and the class is what
       // carries the italics.

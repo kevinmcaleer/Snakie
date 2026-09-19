@@ -100,6 +100,10 @@ export interface MenuCommandDeps {
 
   /** Open the Help panel (#918). */
   showHelp: () => void
+  /** Export the whole project as a PDF (#1114). Reaches the TOOLBAR's print
+   *  button, which owns the busy state and the error surface — a second
+   *  implementation here would drift from the one the button runs. */
+  exportPdf: () => void
 
   // --- Tools (#917) --------------------------------------------------------
 
@@ -128,6 +132,7 @@ export function menuCommandHandlers(
     'file.openFolder': () => deps.openFolder(),
     'file.save': () => deps.save(),
     'file.saveAs': () => deps.saveAs(),
+    'file.exportPdf': () => deps.exportPdf(),
     'file.closeTab': () => deps.closeTab(),
     'device.connect': () => deps.connect(),
     'device.disconnect': () => deps.disconnect(),

@@ -302,6 +302,52 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   order — between comparison and addition, which is the opposite of C and the
   reason `x & 1 == 0` has to read as `(x & 1) == 0`. There is a help page,
   **Bits & bitwise maths**, that explains masking with a real status register.
+- **The PDF tells you what each function is for, and prints the board's own
+  sheet** (#1147). A function's docstring is its description — the comment
+  bubble on a `def` block and the `"""…"""` line in the Python are one thing
+  (`lib/blocks/docstring.ts`) — so whatever the learner wrote about a function
+  is now set underneath its name on the blocks pages, wrapped to the page and
+  keeping its own paragraphs. The name itself is lettered like the `Blocks`
+  heading above it (13pt, the document's heading ink) instead of the 9pt muted
+  caption it was, so each stack reads as a little section of its own.
+
+  The document also gains an **Electronics sheet** page: the board exactly as
+  the Electronics workspace's `Export ▸ PDF document` writes it, grid and mat
+  colour and all, after the wiring diagram that lifts the drawing onto the
+  page's parchment. Both pictures come out of ONE capture, so the extra page
+  never costs a second off-screen mount of the board.
+
+- **Export the whole project as a PDF** (epic #1105). A print icon next to New
+  and Save — and `File ▸ Export to PDF…`, ⌘P — writes a document of the project:
+  a title page with its name and date, the blocks with the functions first, the
+  generated MicroPython, the wiring diagram, and a closing page linking to
+  app.snakie.org and Buy Me a Coffee. It works on the desktop app (native save
+  dialog) and on the web build (download).
+
+  **No new dependency.** `buildImagePdf` already hand-assembled a one-page,
+  image-only PDF for the breadboard; that grew into a real writer under
+  `src/renderer/src/lib/pdf/` — a proper `/Pages` tree, base-14 text, image
+  XObjects and `/URI` link annotations, with every xref entry a byte offset and
+  every `/Length` taken from the encoded stream rather than `String.length`. The
+  breadboard's own export now goes through it, so there is one implementation of
+  "get the bytes right" instead of two.
+
+  **The code listing is real text**, not a screenshot of text: `/Courier`,
+  selectable and copyable, with line numbers in a gutter and long lines wrapped
+  at the measured column. A blocks project prints without its `snakie-blocks`
+  footer.
+
+  **A block is never cut in half.** Each top-level stack is captured as its own
+  image and whole stacks are packed onto pages, so the promise holds by
+  construction rather than by fiddling with offsets. Functions come first, from
+  the generator's own list of the `def`s it hoisted — so the pages and the
+  generated `.py` cannot disagree about what a function is.
+
+  **The wiring page renders off-screen on demand** when the Electronics view is
+  not open, which it usually is not when you press print. A project with no
+  blocks, or no wiring, or neither, simply leaves those sections out: the page
+  numbering stays right and nothing blank is left behind. If one section cannot
+  be captured, the export still produces the document and says what it left out.
 
 - **Every variable you make is on the Variables shelf, and a button makes one.**
   (#1117) The drawer was a fixed list of three nameless blocks however many
@@ -1047,6 +1093,78 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Zooming the canvas no longer resizes the shelf, and one press shows the
+  whole program** (#1150). Blockly's flyout — the drawer a category opens — is a
+  workspace of its own whose scale followed the canvas's, so zooming in to look
+  at a stack blew the shelf up with it, pushing half the category off the bottom
+  and moving every block out from under the hand reaching for it. The shelf is
+  chrome: it now holds the size it opens at, whatever the canvas is doing, the
+  way the category list beside it always has.
+
+  The third control under `+` and `-` becomes a **toggle between 100% and zoom
+  to fit**, behind the corner-bracket icon that means "fit" — in the same grey
+  as the `+`, `-` and trashcan above it, since it is still Blockly's own control
+  with a new glyph and a new action rather than a button drawn over the canvas.
+  At 100% it fits the program to the window; from anywhere else — zoomed in,
+  zoomed out, or fitted a moment ago — it comes back to 100%. An empty canvas
+  goes to 100% either way, rather than fitting the margin around no blocks at
+  all and landing at 300% on nothing.
+
+- **Blocks are laid out in the order the file has them.** (#1145) A `def` leaves
+  the chain — Blockly models it as a hat, which has no previous or next
+  connection — and every hat used to be collected to the top of the canvas with
+  the rest of the program in one stack underneath. On a file that defines a
+  function halfway down, the canvas read backwards: the lines that run first
+  were below the function they call, and a comment written about a `def` sat a
+  screen away from what it is about.
+
+  The chain is cut where each hat came out of it, so the roots go down the
+  canvas in the order they go down the file: whatever ran before the `def`, then
+  the `def`, then whatever ran after. A comment stands with the code beneath it
+  again. The Python is untouched — the generator concatenates the top-level
+  stacks in canvas order and hoists the functions above them either way — and a
+  piece that is nothing but blank lines is held over rather than laid out as a
+  root of grey notes.
+
+- **A `def` no longer has the next block drawn on top of it.** The height
+  estimate that spaces the roots (#1062) was short on two rows only a definition
+  has: the mouth it wears even when it is empty, and the `return` socket under
+  it. `def frame(i)` out of `examples/sprites/blinking_eyes.py` renders 157px
+  and was reserved 80, so the next root was drawn 29px inside it. The estimate
+  was also a tenth short on EVERY row — a statement renders 54px against the 48
+  it assumed — and counted a socket inside a socket as free, though each one
+  grows the row it is on by a measured 8px. Across the example and runtime
+  modules that takes the overlaps from 70 to 11, all of them now in
+  thousand-line hardware drivers rather than in anything a learner opens.
+
+- **The breadboard's own image export came out in the wrong font.** `PNG image`
+  / `SVG image` / `PDF document` on the Board Viewer rasterise through an
+  `<img>`, and an SVG loaded that way is a sandboxed document that fetches
+  nothing external — webfonts included. Every part name, pin name and pin
+  number was therefore lettered in the browser's fallback rather than IBM Plex
+  Mono / Plus Jakarta Sans, wider than the plate it was laid out to sit on.
+
+  The PDF export (epic #1105) already solved this for the blocks pages by
+  inlining the `@font-face` rules the app has loaded and embedding them in the
+  serialised SVG; the board's export handler simply never asked for them. It
+  does now. The font inlining moved out of `lib/pdf/` to
+  `components/export-fonts.ts` at the same time — it is not a PDF concern, it
+  belongs to every export that goes through an `<img>`.
+
+- **On the web, an exported board had no board in it.** The same sandbox, a
+  different resource: the breadboard's own picture is an `<image>` whose href
+  the web build points at a hashed build asset, deliberately, to keep a few MB
+  of part photos out of the JS payload. The rasteriser's `<img>` cannot fetch
+  it, and neither can anything opening a saved `.svg` later, so the PNG, the
+  PDF and the SVG all came out as pin labels floating on blank blueprint. The
+  desktop was unaffected — it inlines a part's photo when it reads the library.
+
+  Every `<image>` href is now inlined as a `data:` URI on the way out, so the
+  web export matches the desktop one. It is a no-op where the photos are
+  already inline, and an image that will not load leaves the export alone
+  rather than failing it. The PDF's wiring page gets this too, by both of its
+  capture routes.
+
 - **Naming a PWM on a pin you had already named generated nothing at all.**
   The pin dropdowns list the names a program declares above the numbers, so
   after *name pin GP15 as `motor_left`* the obvious next move is *name PWM on
@@ -1084,17 +1202,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Saved workspaces are untouched: the block's type id is unchanged, so this is a
   label, not a migration.
 
-- **White lettering on the blank-line block.** It is 2.9:1 on the comment grey,
-  where the ink that fill can readably carry is black at 7.2:1 — the second
-  place in the palette where the look was chosen over the contrast, after the
-  hardware amber.
+- **White lettering on a note about the program** — the comment block, the
+  docstring block and the blank-line spacer, all three of which wear the one
+  grey that says "this is not a step". It used to be whichever of black and
+  white the fill could readably carry, and that grey is a different grey in each
+  skin (it is the `--com` syntax token with the colour taken out), so the
+  lettering flipped with the skin: white in the dark one, black on parchment.
 
-  Set as `--snakie-block-text` on the label rather than as a `fill`, because the
-  rule that paints block text reads that property and its `:not()`s carry its
-  specificity past anything reasonable to write beside it — so this overrides the
-  VALUE it reads instead of racing it. Not a category `ink` either: that is keyed
-  by fill, and this block shares its fill with the comment block, which keeps its
-  readable black.
+  Asked for, and below AA on parchment: white is 2.88:1 on that grey, where the
+  black it replaces is 7.28:1. The second place in the palette where the look was
+  chosen over the contrast, after the hardware amber.
+
+  Declared against the block STYLE rather than against the fill, which is what
+  makes one line cover both skins — and any later edit to `--com` — instead of
+  two greys pinned in a table. It also folds in the blank-line spacer's own
+  white, which was a CSS override of the fill-keyed ink and is now just the
+  style it already wore.
 
 - **White lettering on the hardware blocks**, asked for over the black the amber
   can actually carry. It is the one block in the palette whose text does not
@@ -1175,6 +1298,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   plugin's blocks (#1017) are covered by the same two lines.
 
 ### Fixed
+
+- **Two more guards on the pin dropdown's label.** Tests only, behind the `GPled`
+  fix: the redraw is asserted by watching for the call that asks for one, because
+  `getText()` reads the live options every time it is called and so passes in a
+  headless workspace whether anything redrew the field or not — which is exactly
+  the gap the bug lived in. And the fallback is pinned for the other road to it,
+  the one a learner can take on purpose rather than by timing: a name for a pin
+  that cannot do the job (`sensor` on GP0, in an analogue block's menu) is not in
+  that dropdown's options at all, and used to read `GPsensor`.
 
 - **A bracket the language did not need no longer holds back a whole file.**
 

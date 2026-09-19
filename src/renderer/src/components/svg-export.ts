@@ -14,7 +14,14 @@
  * 1:1 — independent of the on-screen pan/zoom. {@link exportSvgString} dispatches
  * an SVG string to the chosen format. Extracted from BoardGraph so the node-graph
  * and the breadboard share one pipeline.
+ *
+ * A serialised SVG has to be SELF-CONTAINED, because {@link rasterise} draws it
+ * through an `<img>` and a document loaded that way fetches nothing external.
+ * {@link inlineImageHrefs} carries the pictures; `export-fonts.ts` carries the
+ * lettering.
  */
+
+import { PdfWriter } from '../lib/pdf'
 
 export type ExportFmt = 'svg' | 'png' | 'pdf'
 
@@ -74,69 +81,129 @@ export async function rasterise(
 }
 
 /** Read a canvas as a Blob of the given MIME (+ quality). */
-export function canvasToBlob(canvas: HTMLCanvasElement, mime: string, quality?: number): Promise<Blob> {
+export function canvasToBlob(
+  canvas: HTMLCanvasElement,
+  mime: string,
+  quality?: number
+): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), mime, quality)
   })
 }
 
 /**
- * Build a minimal single-page PDF embedding a JPEG (the rasterised view) at
- * `outW`×`outH` points. No dependency: a tiny hand-assembled PDF (5 objects +
- * xref) with a single `/DCTDecode` (JPEG) image XObject. Intentionally the
- * WEAKEST export — an image-only, vector-less page — but a real, openable PDF.
+ * Build a single-page PDF embedding a JPEG (the rasterised view) at
+ * `outW`×`outH` points. Still no dependency — it now goes through the shared
+ * writer in `lib/pdf` (#1113), which is the same one the project export uses,
+ * so there is one implementation of "get the bytes right" rather than two.
+ *
+ * `pixelW`/`pixelH` are the JPEG's own dimensions; they differ from the placed
+ * size whenever the canvas was rasterised above 1× and belong in the XObject's
+ * `/Width` and `/Height`.
  */
-export function buildImagePdf(jpeg: Uint8Array, outW: number, outH: number): Blob {
-  const enc = new TextEncoder()
-  const parts: Uint8Array[] = []
-  const offsets: number[] = []
-  let length = 0
-  const push = (chunk: Uint8Array | string): void => {
-    const u = typeof chunk === 'string' ? enc.encode(chunk) : chunk
-    parts.push(u)
-    length += u.length
-  }
-  const startObj = (): void => {
-    offsets.push(length)
-  }
+export function buildImagePdf(
+  jpeg: Uint8Array,
+  outW: number,
+  outH: number,
+  pixelW = Math.round(outW),
+  pixelH = Math.round(outH)
+): Blob {
   const w = Math.round(outW)
   const h = Math.round(outH)
+  const writer = new PdfWriter()
+  const image = writer.addImage({ jpeg, width: pixelW, height: pixelH })
+  const page = writer.addPage(w, h)
+  page.drawImage(image, 0, 0, w, h)
+  return new Blob([writer.build()], { type: 'application/pdf' })
+}
 
-  push('%PDF-1.4\n%ÿÿÿÿ\n')
-  startObj()
-  push('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n')
-  startObj()
-  push('2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n')
-  startObj()
-  push(
-    `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${w} ${h}] ` +
-      `/Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>\nendobj\n`
-  )
-  startObj()
-  push(
-    `4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${w} /Height ${h} ` +
-      `/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>\nstream\n`
-  )
-  push(jpeg)
-  push('\nendstream\nendobj\n')
-  const content = `q\n${w} 0 0 ${h} 0 0 cm\n/Im0 Do\nQ\n`
-  startObj()
-  push(`5 0 obj\n<< /Length ${content.length} >>\nstream\n${content}endstream\nendobj\n`)
-  const xrefOffset = length
-  let xref = `xref\n0 6\n0000000000 65535 f \n`
-  for (const off of offsets) {
-    xref += `${off.toString().padStart(10, '0')} 00000 n \n`
-  }
-  push(xref)
-  push(`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`)
+/** The mat colour an export falls back to when the stage has none of its own. */
+export const DEFAULT_SHEET_BACKGROUND = '#161719'
 
-  const total = new Uint8Array(length)
-  let pos = 0
-  for (const p of parts) {
-    total.set(p, pos)
-    pos += p.length
+/**
+ * The sheet colour BEHIND a canvas, read live.
+ *
+ * The board's mat lives in CSS on the stage (blueprint blue / schematic white /
+ * dark mat), so an export that wants to look like what is on screen has to ask
+ * the element rather than pick a constant. A fully transparent background —
+ * which is what a detached or unstyled element answers — is no colour at all,
+ * so the fallback stands in for it.
+ */
+export function stageBackground(
+  el: Element | null | undefined,
+  fallback = DEFAULT_SHEET_BACKGROUND
+): string {
+  const parent = el?.parentElement
+  if (!parent) return fallback
+  const bg = getComputedStyle(parent).backgroundColor
+  return bg && !/rgba?\([^)]*,\s*0\s*\)/.test(bg) ? bg : fallback
+}
+
+/**
+ * Fetch `url` and return it as a `data:` URI, or null if it cannot be read.
+ *
+ * Shared with `export-fonts.ts`: an `<img>`-rendered SVG fetches nothing
+ * external, so every resource it names has to be carried inside it.
+ */
+export async function fetchAsDataUri(url: string, mime?: string): Promise<string | null> {
+  try {
+    const response = await fetch(url)
+    if (!response.ok) return null
+    const blob = await response.blob()
+    const bytes = new Uint8Array(await blob.arrayBuffer())
+    let binary = ''
+    for (let i = 0; i < bytes.length; i += 8192) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + 8192))
+    }
+    return `data:${mime || blob.type || 'application/octet-stream'};base64,${btoa(binary)}`
+  } catch {
+    return null
   }
-  return new Blob([total], { type: 'application/pdf' })
+}
+
+/** Undo the XML escaping {@link XMLSerializer} applies to an attribute value. */
+function unesc(s: string): string {
+  return s
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+}
+
+/**
+ * Replace every `<image>` href in a serialised SVG with a `data:` URI.
+ *
+ * On the DESKTOP this is a no-op: the main process inlines a part's photo when
+ * it reads the library, so `imageData` is already a `data:` URL. The WEB build
+ * emits those photos as hashed build assets and references them by URL
+ * (deliberately — they are a few MB, and the live canvas renders them fine), so
+ * without this the board's own picture is simply missing from an exported PNG,
+ * PDF or saved `.svg`: the sandboxed document the `<img>` loads cannot fetch it,
+ * and neither can a viewer opening the file later, wherever that URL pointed.
+ *
+ * Best-effort, like {@link inlineFontCss}: an image that will not load is left
+ * as it was rather than failing the export.
+ */
+export async function inlineImageHrefs(svgStr: string): Promise<string> {
+  const tags = svgStr.match(/<image\b[^>]*>/g)
+  if (!tags) return svgStr
+  const urls = new Set<string>()
+  for (const tag of tags) {
+    const m = /(?:xlink:)?href="([^"]*)"/.exec(tag)
+    if (m?.[1] && !m[1].startsWith('data:')) urls.add(m[1])
+  }
+  if (!urls.size) return svgStr
+  // Not cached: a part's photo can be re-imported mid-session, and an export is
+  // a rare, deliberate act — the HTTP cache is enough for a repeat.
+  const resolved = await Promise.all(
+    [...urls].map(async (u) => [u, await fetchAsDataUri(unesc(u))] as const)
+  )
+  let out = svgStr
+  for (const [url, data] of resolved) {
+    if (data) out = out.split(`href="${url}"`).join(`href="${data}"`)
+  }
+  return out
 }
 
 /** SVG presentation properties worth inlining so a serialized SVG paints alone. */
@@ -190,7 +257,9 @@ const SVG_NS = 'http://www.w3.org/2000/svg'
 /** A child's bbox mapped into its PARENT's coordinate space. `getBBox()` alone
  *  is in the child's own (pre-transform) space, so a translated group would be
  *  mislocated — apply the child's transform matrix to the box corners. */
-function childBoxInParent(k: SVGGraphicsElement): { x0: number; y0: number; x1: number; y1: number } | null {
+function childBoxInParent(
+  k: SVGGraphicsElement
+): { x0: number; y0: number; x1: number; y1: number } | null {
   let bb: DOMRect
   try {
     bb = k.getBBox()
@@ -255,13 +324,37 @@ export function serializeLiveSvg(
      *  full-canvas grid/paper) so the export is tight to the drawing, and those
      *  large backdrop layers just fill the framed area to the edges. */
     bboxExclude?: string[]
+    /**
+     * Frame to THIS box (in the content group's own coordinates) instead of
+     * measuring the group (#1112).
+     *
+     * The blocks export captures one stack at a time out of a canvas holding
+     * several: the other stacks are excluded from the clone, but the live group
+     * still measures as all of them, so the caller supplies the box it wants.
+     */
+    frame?: { x: number; y: number; width: number; height: number }
+    /**
+     * CSS to embed in the serialised file — in practice `@font-face` rules with
+     * their sources inlined as data URIs (#1112).
+     *
+     * An SVG rendered through an `<img>` (which is how {@link rasterise} works,
+     * and the only route the renderer's CSP allows) loads NO external resource,
+     * fonts included. Without this the app's webfont silently falls back to a
+     * wider one, and text laid out to fit a Blockly block runs off the end of
+     * it — white lettering on the page's parchment, which is #1099 again.
+     */
+    fontCss?: string
   } = {}
 ): { svg: string; width: number; height: number } | null {
   const content = svg.querySelector(contentSelector) as SVGGraphicsElement | null
   if (!content) return null
   let bbox: { x: number; y: number; width: number; height: number }
   try {
-    bbox = opts.bboxExclude?.length ? bboxExcluding(content, opts.bboxExclude) : content.getBBox()
+    bbox = opts.frame
+      ? opts.frame
+      : opts.bboxExclude?.length
+        ? bboxExcluding(content, opts.bboxExclude)
+        : content.getBBox()
   } catch {
     return null
   }
@@ -283,6 +376,11 @@ export function serializeLiveSvg(
   clone.setAttribute('height', String(h))
   clone.setAttribute('preserveAspectRatio', 'xMidYMid meet')
   clone.setAttribute('xmlns', SVG_NS)
+  if (opts.fontCss) {
+    const style = document.createElementNS(SVG_NS, 'style')
+    style.textContent = opts.fontCss
+    clone.insertBefore(style, clone.firstChild)
+  }
   if (opts.background) {
     const rect = document.createElementNS(SVG_NS, 'rect')
     rect.setAttribute('x', String(x))
@@ -318,5 +416,5 @@ export async function exportSvgString(
   const dpr = Math.min(window.devicePixelRatio || 1, 2)
   const canvas = await rasterise(svgStr, outW, outH, dpr, background)
   const jpeg = new Uint8Array(await (await canvasToBlob(canvas, 'image/jpeg', 0.92)).arrayBuffer())
-  downloadBlob(buildImagePdf(jpeg, outW, outH), `${baseName}.pdf`)
+  downloadBlob(buildImagePdf(jpeg, outW, outH, canvas.width, canvas.height), `${baseName}.pdf`)
 }

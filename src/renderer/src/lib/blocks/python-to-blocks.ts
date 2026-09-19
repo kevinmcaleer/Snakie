@@ -655,13 +655,14 @@ export function pythonToBlocks(source: string): Conversion {
   // with names in it has to run again for the same reason.
   const again = probe.claimed.size > 0 || aliases.size > 0
   const state = again ? convert(lines, hoisted, consumable, named) : probe
-  const stack = state.stack
   // Definitions are TOP-LEVEL blocks, not links in the chain: Blockly models a
   // `def` as a hat with no previous or next connection, which is also the truth
   // about Python — a function is not a step in the program, it is a thing the
   // program can do. The generator hoists their code above the body either way.
-  const roots = [...state.definitions, ...(stack ? [stack] : [])]
-  const positioned = stackRoots(roots)
+  //
+  // They are laid out WHERE THEY WERE WRITTEN, though (#1145): see
+  // {@link Converter.roots}.
+  const positioned = stackRoots(state.roots)
   identify(positioned)
   // Ascending, as the field promises: a block demoted to a raw one because it
   // turned out not to be last in its chain (#1068) reports its line after the
@@ -716,8 +717,33 @@ const ROOT_GUTTER = 48
 /**
  * One statement row, in px — `MIN_BLOCK_HEIGHT` plus the top and bottom strips
  * from `lib/blocks/renderer.ts`, rounded up.
+ *
+ * RE-MEASURED for #1145: a `set x to 1` renders 54px in the real canvas, so 48
+ * was a tenth short on every row — invisible while the only thing under the
+ * long chain was empty canvas, and an overlap the moment a `def` was laid out
+ * beneath it.
  */
-const ROW_HEIGHT = 48
+const ROW_HEIGHT = 56
+
+/**
+ * What one more level of nested value blocks adds to the row holding them.
+ *
+ * Measured the same way: `x = 1` is 54px, `x = a + b` 62, `x = a + b * c` 70 —
+ * every socket inside a socket grows the row it is on by a fixed step. A row of
+ * plain terms is the common case and pays nothing for this.
+ */
+const NESTED_VALUE = 8
+
+/**
+ * How many levels of that are worth counting.
+ *
+ * Not every nested block grows its row — a call inside a `print` does not — so
+ * counting depth for ever would reserve a screen for a line that renders in one
+ * row, which is the failure #1062 fixed in the other direction. Six steps holds
+ * the deepest line in the corpus: `math.atan2(math.sqrt(1.0 - c * c), c) +
+ * math.acos(max(-1.0, min(1.0, d)))` renders 94px, and six steps reserves 104.
+ */
+const NESTED_VALUE_CAP = 6
 
 /** The arm under a C-block's mouth. Measured: see above. */
 const MOUTH_BOTTOM = 32
@@ -741,6 +767,33 @@ function rootHeight(block: BlockJson): number {
   return hat + chainHeight(block)
 }
 
+/**
+ * THE ROWS A `def` HAS THAT NOTHING ELSE DOES (#1145).
+ *
+ * Measured in the real canvas, which is the only way any of these constants
+ * were arrived at: `def frame(i)` out of `examples/sprites/blinking_eyes.py` —
+ * a docstring, no statements, one `return` — renders 157px, and the estimate
+ * for it was 80. The next root was drawn 29px INSIDE it.
+ *
+ * Two rows were missing, and both are rows only a definition has:
+ *
+ *  - an EMPTY MOUTH still draws. Every other estimate here counts a statement
+ *    input by what is in it, which is right for a socket that closes up when it
+ *    is empty and wrong for the one a `def` always wears.
+ *  - the RETURN socket of a `procedures_defreturn` is on a row of ITS OWN, under
+ *    the mouth — unlike every other value socket, which sits on the row that
+ *    has already been counted.
+ *
+ * It mattered less when every `def` was laid out first and the program hung
+ * below them all; now that a root can be a `def` with a whole program under it,
+ * an underestimate here is an overlap in the middle of the canvas.
+ */
+function definitionExtra(block: BlockJson): number {
+  if (!block.type.startsWith('procedures_def')) return 0
+  const empty = block.inputs?.STACK?.block ? 0 : ROW_HEIGHT + MOUTH_BOTTOM
+  return empty + (block.type === 'procedures_defreturn' ? ROW_HEIGHT : 0)
+}
+
 /** A block and its `next` chain. */
 function chainHeight(block: BlockJson | undefined): number {
   let total = 0
@@ -754,12 +807,26 @@ function blockHeight(block: BlockJson): number {
   // folding, and the case that would break a per-block estimate worst.
   const lines = (block.extraState as { lines?: unknown[] } | undefined)?.lines
   let total = Array.isArray(lines) && lines.length > 0 ? lines.length * ROW_HEIGHT : ROW_HEIGHT
+  // A socket inside a socket makes the row it is on taller, and a program built
+  // out of expressions is made of those rows.
+  total += Math.min(valueDepth(block), NESTED_VALUE_CAP) * NESTED_VALUE
+  total += definitionExtra(block)
   for (const [name, input] of Object.entries(block.inputs ?? {})) {
     // A VALUE socket sits on the row that is already counted; only a STATEMENT
     // body adds height, and it brings the arm under the mouth with it.
     if (input.block && isStatementBody(name)) total += chainHeight(input.block) + MOUTH_BOTTOM
   }
   return total
+}
+
+/** How far value sockets nest inside this block's own row. A plain term is 0. */
+function valueDepth(block: BlockJson): number {
+  let deepest = 0
+  for (const [name, input] of Object.entries(block.inputs ?? {})) {
+    if (!input.block || isStatementBody(name)) continue
+    deepest = Math.max(deepest, 1 + valueDepth(input.block))
+  }
+  return deepest
 }
 
 /**
@@ -1280,7 +1347,10 @@ function convert(
   const state = new Converter(hoisted, consumable, importedNames(lines), aliases)
   const nodes = tree(lines)
   state.indexDefinitions(nodes)
-  state.stack = state.statements(nodes)
+  // The return value is the module's FIRST root; the rest of them — the `def`
+  // hats, and the chains either side of each one — are collected into
+  // {@link Converter.roots} as the walk passes them. See it for why.
+  state.statements(nodes)
   return state
 }
 
@@ -1377,8 +1447,29 @@ class Converter {
     sockets: 0,
     rawSockets: 0
   }
-  /** The module-level chain, filled in by {@link convert}. */
-  stack: BlockJson | null = null
+  /**
+   * THE MODULE'S ROOTS, IN THE ORDER THEY WERE WRITTEN (#1145).
+   *
+   * A top-level `def` leaves the chain — Blockly models it as a hat, which has
+   * no previous or next connection — so the module used to come out as every
+   * hat, in definition order, and then one chain holding everything else. On a
+   * file that defines a function halfway down, that is not the program the
+   * learner wrote: the canvas read
+   *
+   *     def blink(n):          # its own root, first
+   *     ...
+   *     # blink twice on boot  <- the comment about the `def`, a screen below
+   *     blink(2)                  it, under everything the file did before it
+   *
+   * and a comment is only ever about the code NEXT TO IT. So the chain is cut
+   * where each hat came out of it, and the pieces are laid out in source order:
+   * whatever ran before the `def`, then the `def`, then whatever ran after.
+   *
+   * The generated Python is unchanged — {@link generateProgram} concatenates
+   * the top-level stacks in canvas order, and hoists the functions above them
+   * either way — so this is a layout fix and nothing else.
+   */
+  readonly roots: BlockJson[] = []
   /** Hoisted objects this file declares, by name (#1058). */
   private readonly hoisted: ReadonlyMap<string, Hoisted>
   /**
@@ -1442,6 +1533,15 @@ class Converter {
    * to recognise it by. See {@link spacers}.
    */
   private hoistedAbove = false
+  /**
+   * Has the module written a line that stands WHERE IT IS?
+   *
+   * The companion to {@link hoistedAbove}, and the two together are what decide
+   * whether the blank line under the imports is the learner's or the
+   * generator's — see {@link spacers}. Held on the converter rather than read
+   * off the chain because #1145 cuts that chain at every `def`.
+   */
+  private bodyStarted = false
   /**
    * The functions this program defines AS BLOCKS, by name.
    *
@@ -1569,15 +1669,29 @@ class Converter {
   private spacers(line: LogicalLine, built: { block: BlockJson; line: LogicalLine }[]): void {
     const blanks = line.blankBefore ?? 0
     if (blanks === 0) return
-    const separator =
-      this.depth === 0 &&
-      this.hoistedAbove &&
-      built.every((b) => HOISTED_TYPES.has(b.block.type))
+    // "Is the body still empty" is asked of {@link bodyStarted} rather than of
+    // the chain in hand, because since #1145 that chain is cut at every `def` —
+    // and an empty one the cut just made would read as a program that has
+    // written nothing yet, dropping a blank line the learner typed.
+    const separator = this.depth === 0 && this.hoistedAbove && !this.bodyStarted
     for (let i = separator ? 1 : 0; i < blanks; i++) {
       // The literal, like the raw blocks: this module is imported by the palette
       // and must not import back.
-      built.push({ block: { type: 'snakie_python_blank' }, line })
+      this.push(built, { type: 'snakie_python_blank' }, line)
     }
+  }
+
+  /**
+   * Add one block to the chain being built, noting whether the program has now
+   * written anything that stands where it is. See {@link bodyStarted}.
+   */
+  private push(
+    built: { block: BlockJson; line: LogicalLine }[],
+    block: BlockJson,
+    line: LogicalLine
+  ): void {
+    built.push({ block, line })
+    if (this.depth === 0 && !HOISTED_TYPES.has(block.type)) this.bodyStarted = true
   }
 
   /** A chain of statement blocks, or null for an empty suite. */
@@ -1586,6 +1700,9 @@ class Converter {
     // out not to be last in its chain has to be re-made as a raw one, and the
     // report needs to know which source line that was.
     const built: { block: BlockJson; line: LogicalLine }[] = []
+    // The module's own level is the one that has roots to collect (#1145); a
+    // suite is one chain, and a `def` inside one is not a hat at all.
+    const top = this.depth === 0
     // A RUN OF COMMENTS IS ONE BLOCK (#1062). Grouped before anything else
     // looks at them, because the grouping is about consecutive SIBLINGS and
     // this is the only place that sees a whole body at once.
@@ -1595,15 +1712,16 @@ class Converter {
         this.report.total += node.comment.length
         this.report.recognised += node.comment.length
         this.spacers(node.line, built)
-        built.push({
-          block: {
+        this.push(
+          built,
+          {
             // The literal, like the raw blocks above: this module is imported by the
             // palette, so it must not import back.
             type: 'snakie_python_comment',
             extraState: { lines: node.comment.map((l) => l.text) }
           },
-          line: node.line
-        })
+          node.line
+        )
         continue
       }
       // A CONSTRUCTOR THE BLOCKS ALREADY CARRY (#1058). `led_15 = Led(...)` is
@@ -1658,11 +1776,51 @@ class Converter {
       // (a constructor the blocks carry, a `pass` filling an empty suite) would
       // be a gap in front of nothing.
       this.spacers(node.line, built)
+      const defined = this.definitions.length
       for (const block of this.statement(node, nodes)) {
-        built.push({ block, line: node.line })
+        this.push(built, block, node.line)
         if (this.depth === 0 && HOISTED_TYPES.has(block.type)) this.hoistedAbove = true
       }
+      // A `def` CAME OUT OF THE CHAIN HERE (#1145), and here is where it goes
+      // back on the canvas. Everything read so far is closed off as a root of
+      // its own, the hat follows it, and the lines under the `def` open a fresh
+      // chain — so the order down the canvas is the order down the file.
+      //
+      // Read after `statement`, not inside it: a trial that pushed a definition
+      // and then failed (W5 — `def go():  # the main loop`) has already taken it
+      // back off, and a `def` that was never a hat must not cut anything.
+      if (top && this.definitions.length > defined) {
+        this.cut(built)
+        this.roots.push(...this.definitions.slice(defined))
+      }
     }
+    if (top) {
+      // Nothing is held over at the end of the file: there is no chain left for
+      // it to join, and a blank line dropped is a blank line lost.
+      this.cut(built, false)
+      return this.roots[0] ?? null
+    }
+    return this.linked(built)
+  }
+
+  /**
+   * Close off what has been built as a root, if it is anything at all.
+   *
+   * A piece that is NOTHING BUT BLANK LINES is held over to the chain after it
+   * instead (#1145). Those blanks are the gap the learner left around the `def`
+   * this is cutting at — real, and kept, because the generator writes the body
+   * back out from them — but two grey notes floating between two hats is not a
+   * thing anybody wrote, and holding them over leaves the body text identical:
+   * the stacks generate in canvas order either way.
+   */
+  private cut(built: { block: BlockJson; line: LogicalLine }[], hold = true): void {
+    if (hold && built.every((b) => b.block.type === 'snakie_python_blank')) return
+    const root = this.linked(built.splice(0))
+    if (root) this.roots.push(root)
+  }
+
+  /** Link one run of blocks into a chain, or null if there are none. */
+  private linked(built: { block: BlockJson; line: LogicalLine }[]): BlockJson | null {
     if (built.length === 0) return null
     // A TERMINAL BLOCK CANNOT HOLD A CHAIN (#1068), and Blockly does not forgive
     // being asked to. `forever` and `break`/`continue` are defined with no next

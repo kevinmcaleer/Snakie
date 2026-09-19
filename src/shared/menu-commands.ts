@@ -72,6 +72,7 @@ export type RendererMenuCommand =
   | 'file.openFolder'
   | 'file.save'
   | 'file.saveAs'
+  | 'file.exportPdf'
   | 'file.closeTab'
   | 'device.connect'
   | 'device.disconnect'
@@ -101,6 +102,7 @@ export const RENDERER_MENU_COMMANDS: readonly RendererMenuCommand[] = [
   ...RECENT_FOLDER_SLOTS.map(recentFolderMenuCommand),
   'file.save',
   'file.saveAs',
+  'file.exportPdf',
   'file.closeTab',
   'device.connect',
   'device.disconnect',
@@ -195,6 +197,9 @@ export function menuStateFrom(ctx: MenuContext): MenuState {
   const enabled: Partial<Record<MenuCommand, boolean>> = {
     'file.save': ctx.hasActiveFile,
     'file.saveAs': ctx.hasActiveFile,
+    // `file.exportPdf` is deliberately ABSENT — i.e. always enabled. A project
+    // is its wiring and its blocks as much as its `.py`, and even an empty one
+    // prints a cover and a closing page (#1108).
     'file.closeTab': ctx.hasActiveFile,
     // Connect and Disconnect are opposites, so exactly one is ever available —
     // an enabled Disconnect with nothing connected is a menu describing a state

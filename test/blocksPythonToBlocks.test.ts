@@ -66,6 +66,22 @@ function types(source: string): string[] {
   return out
 }
 
+/** Each top-level root as the chain of block types hanging off it (#1145). */
+function rootChains(source: string): string[][] {
+  const { workspace } = pythonToBlocks(source)
+  return topLevel(workspace).map((root) => {
+    const chain: string[] = []
+    for (
+      let b: Record<string, unknown> | undefined = root;
+      b;
+      b = (b.next as { block?: Record<string, unknown> } | undefined)?.block
+    ) {
+      chain.push(b.type as string)
+    }
+    return chain
+  })
+}
+
 describe('the round trip — what comes out is what went in', () => {
   it('holds for a turtle square', () => {
     roundTrips(['import turtle', '', 'for _ in range(4):', '    turtle.forward(100)', '    turtle.right(90)', ''].join('\n'))
@@ -638,6 +654,99 @@ describe('the roots do not overlap (#1062)', () => {
     ].join('\n')
     const ys = spans(src).map(([top]) => top)
     for (let i = 1; i < ys.length; i++) expect(ys[i]).toBeGreaterThan(ys[i - 1])
+  })
+
+  it('lays the roots out in the order the FILE has them (#1145)', () => {
+    // The `def` used to be collected first and everything else chained under
+    // it, so a file that defines a function halfway down opened with the hat on
+    // top and the lines above it in a root below — the program read backwards,
+    // and a comment written about the `def` sat a screen away from what it is
+    // about.
+    const src = [
+      'print("before")',
+      '',
+      '# blink twice on boot',
+      'def blink(n):',
+      '    print(n)',
+      '',
+      'blink(2)',
+      ''
+    ].join('\n')
+    const chains = rootChains(src)
+    // Three roots: what ran before the `def`, the `def`, and what ran after.
+    expect(chains[0]).toEqual(['text_print', 'snakie_python_blank', 'snakie_python_comment'])
+    expect(chains[1]).toEqual(['procedures_defnoreturn'])
+    expect(chains[2]).toEqual(['snakie_python_blank', 'procedures_callnoreturn'])
+    // The comment is the tail of the root ABOVE the hat, which is where it was
+    // written and what it is about.
+    const roots = topLevel(pythonToBlocks(src).workspace) as unknown as { y: number }[]
+    // Down the canvas, never back up.
+    for (let i = 1; i < roots.length; i++) expect(roots[i].y).toBeGreaterThan(roots[i - 1].y)
+  })
+
+  it('leaves the Python it generates exactly as it was', () => {
+    // The layout moved; the program did not. `generateProgram` concatenates the
+    // top-level stacks in canvas order and hoists the functions above them
+    // either way, so cutting one chain into three writes the same file.
+    const code = regenerate(
+      ['print(1)', '', '# about go', 'def go():', '    pass', '', 'go()', ''].join('\n')
+    ).code
+    expect(code).toBe(
+      ['def go():', '    pass', '', 'print(1)', '', '# about go', '', 'go()', ''].join('\n')
+    )
+  })
+
+  it('a def-first file is still a hat and one chain under it', () => {
+    const src = ['def go():', '    print(1)', '', 'go()', ''].join('\n')
+    expect(rootChains(src)).toEqual([['procedures_defnoreturn'], ['procedures_callnoreturn']])
+    roundTrips(src)
+  })
+
+  it('keeps the blank line a learner typed, either side of a def', () => {
+    // The cut empties the chain at every hat, and "has this program written
+    // anything yet?" is what decides whether a gap belongs to the learner or to
+    // the section break the generator writes for itself. Asked of a chain the
+    // cut had just emptied, it swallowed the learner's.
+    const code = regenerate(['print(1)', '', 'def go():', '    pass', '', 'go()', ''].join('\n')).code
+    expect(code).toContain('print(1)\n\n')
+    // And the gap under the imports is still the generator's own, not a second
+    // blank line on top of the one it writes between its sections.
+    roundTrips(['import time', '', 'def go():', '    pass', '', 'go()', ''].join('\n'))
+  })
+
+  it('never lays out a root that is nothing but blank lines', () => {
+    // The gap between two `def`s is a real blank line in the body — the
+    // functions leave the program where they were — but two grey notes floating
+    // between two hats is not a thing anybody wrote.
+    const chains = rootChains(
+      ['x = 1', '', 'def a():', '    pass', '', 'def b():', '    pass', '', 'a()', ''].join('\n')
+    )
+    expect(chains.every((c) => c.some((t) => t !== 'snakie_python_blank'))).toBe(true)
+    expect(chains.map((c) => c[0])).toEqual([
+      'variables_set',
+      'procedures_defnoreturn',
+      'procedures_defnoreturn',
+      'snakie_python_blank'
+    ])
+  })
+
+  it('reserves the rows a def has that nothing else does (#1145)', () => {
+    // `def frame(i)` out of `examples/sprites/blinking_eyes.py`: a docstring, no
+    // statements, one `return`. It renders 157px in the real canvas and the
+    // estimate reserved 80, so whatever came next was drawn 29px inside it —
+    // which was invisible while every `def` was laid out first, and is the
+    // middle of the canvas now that they are laid out where they were written.
+    const src = [
+      'def frame(i):',
+      '    """One frame."""',
+      '    return FRAMES[i]',
+      '',
+      'def after():',
+      '    print(1)',
+      ''
+    ].join('\n')
+    const ys = spans(src).map(([top]) => top)
+    expect(ys[1] - ys[0]).toBeGreaterThanOrEqual(157)
   })
 
   it('counts a folded comment block by its lines, not as one row', () => {
