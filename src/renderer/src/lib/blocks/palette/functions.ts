@@ -67,6 +67,76 @@ function signature(block: Blockly.Block, gen: MicroPythonGenerator): string {
 export const EXTRAS_FIELD = 'EXTRAS'
 const EXTRAS_INPUT = 'SNAKIE_EXTRAS'
 
+/**
+ * THE ROW IS NOT THERE UNTIL IT HOLDS SOMETHING.
+ *
+ * `def` is the block a learner meets on their first afternoon, and a defaulted
+ * parameter is a thing they will want in their second month. An always-visible
+ * `extra parameters` row asks every one of them, every time, to wonder what it
+ * is for — which is a poor trade for a field most programs never fill in.
+ *
+ * So the row is HIDDEN while it is empty, and appears the moment it has
+ * something to say: the learner asks for it from the block's right-click menu
+ * (`Add extra parameters…`, registered in `BlocksCanvas.tsx`), or a file being
+ * read gives it a value. Nothing about what the field GENERATES changes — the
+ * signature is built from the value, not from whether the row is on screen —
+ * so a hidden empty row and no row at all write the same Python.
+ *
+ * SHOWING IS IMMEDIATE, HIDING WAITS for the editor to close (see
+ * {@link syncExtras}). Blockly's text input commits its value on every
+ * keystroke, so hiding on an empty one would pull the row — and the editor
+ * attached to it — out from under a learner who has just selected all and typed
+ * over it.
+ */
+export function setExtrasVisible(block: Blockly.Block, visible: boolean): void {
+  const input = block.getInput(EXTRAS_INPUT)
+  if (!input || input.isVisible() === visible) return
+  input.setVisible(visible)
+  ;(block as Blockly.BlockSvg).queueRender?.()
+}
+
+/** Is this one of the two `def` blocks the extras row is installed on? */
+export function hasExtrasRow(block: Blockly.Block): boolean {
+  return !!block.getInput(EXTRAS_INPUT)
+}
+
+/** Is the extras row on screen? False for a block that has no such row. */
+export function extrasVisible(block: Blockly.Block): boolean {
+  return !!block.getInput(EXTRAS_INPUT)?.isVisible()
+}
+
+/** The extras row, shown iff `value` is non-blank. Used on load and on edit. */
+function syncExtras(field: Blockly.Field, value: string, allowHide: boolean): void {
+  const block = field.getSourceBlock()
+  // No source block yet: the field is validated once while it is still being
+  // constructed, before `appendField` has attached it to anything.
+  if (!block) return
+  const wanted = String(value ?? '').trim() !== ''
+  if (wanted || allowHide) setExtrasVisible(block, wanted)
+}
+
+/**
+ * The extras field: a text input that carries the row's visibility with it.
+ *
+ * A subclass rather than a plain {@link Blockly.FieldTextInput} with a
+ * validator, because the two halves of the rule fire at different moments —
+ * the validator on every committed value (a keystroke, and a workspace being
+ * deserialised), `onFinishEditing_` once the editor closes.
+ */
+class ExtrasField extends Blockly.FieldTextInput {
+  constructor() {
+    super('', (value) => {
+      syncExtras(this, value, false)
+      return value
+    })
+  }
+
+  override onFinishEditing_(value: string): void {
+    super.onFinishEditing_(value)
+    syncExtras(this, value, true)
+  }
+}
+
 /** A statement input's body, or `pass` — an empty `def` is a syntax error. */
 function body(block: Blockly.Block, name: string, gen: MicroPythonGenerator): string {
   return gen.statementToCode(block, name) || `${gen.INDENT}pass\n`
@@ -283,11 +353,15 @@ export function installFunctionBlocks(): void {
     def.init = function (this: Blockly.Block): void {
       init.call(this)
       this.appendDummyInput(EXTRAS_INPUT)
-        .appendField('and also')
-        .appendField(new Blockly.FieldTextInput(''), EXTRAS_FIELD)
+        // `and also` said nothing about what belongs in the box. This names it.
+        .appendField('extra parameters:')
+        .appendField(new ExtrasField(), EXTRAS_FIELD)
       // Above the body, where the rest of the signature is — `appendDummyInput`
       // puts it at the bottom, under the `return` row.
       if (this.getInput('STACK')) this.moveInputBefore(EXTRAS_INPUT, 'STACK')
+      // Empty, so out of the way — see {@link setExtrasVisible}. A block being
+      // deserialised turns it back on when the field takes its value.
+      setExtrasVisible(this, false)
     }
     def.snakieExtras_ = true
   }
