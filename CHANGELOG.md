@@ -1148,6 +1148,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Blocks sit snug in the mouth that holds them, and none of them has a line
+  hanging off its corner** (#1158). Two smudges on the canvas, reported
+  together and turning out to be the same mistake twice: the Soft Shell shape
+  raises Blockly's corner radius to 12, but Zelos sizes its rows off that
+  radius in a constructor that has already run — so Blockly drew an arc of the
+  new radius into a row measured for the old one, and the difference came out
+  on screen.
+
+  **The hairline** was the block's own outline continuing past where the corner
+  curves away: the bottom row reserved 6px above the baseline while the drawer
+  ran the right-hand edge down to 12px above it, so the path doubled back up
+  those 6px and a stroked path paints every segment it walks. It showed on
+  every block with a rounded bottom-right corner, which is every block that is
+  not a reporter.
+
+  **The gap** was the mouth of an `if`, a `repeat` or a `def` being drawn 4px
+  lower than the block placed inside it — the spacer row Blockly reserves for
+  the mouth's inside corner is 12px at a 12px corner with nothing to spare, and
+  Zelos's tight-nesting pass then takes 4px back off it. The overhang at the
+  top hid behind the block; the one at the bottom was the sliver of canvas
+  showing under it.
+
+  The roundness is unchanged. A block in a mouth is flush with it top and
+  bottom now, and the fix costs 6px of height on a block, which is what a 12px
+  corner has always cost — it was simply being drawn rather than reserved.
+
 - **The extra-parameters box is out of the way until it is used** (#1134). The
   field that holds the parameters Blockly's mutator cannot model — a default
   value, a `*args`, a `**kwargs` — sat on every `def` block labelled `and also`,
