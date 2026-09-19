@@ -99,6 +99,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pass, so only one of the two may claim the line, and it is the one that writes
   it back unchanged.
 
+- **An audit of the MicroPython that Blocks cannot say** (`docs/blocks-language-epic.md`,
+  epic #1119). Epic #1086 taught the reader to understand the MicroPython people
+  already wrote, and measured it: 97.94% of lines on the fixture corpus. It never
+  asked the other question — whether a learner can *build* the same thing.
+
+  Fifteen gaps, filed as #1120-#1128 and #1130-#1135: no dictionary block of any
+  kind, no tuple, no slice, no `bytearray`, no bitwise operator, no hex literal,
+  no string method, no comprehension, and `try` / `with` / `del` reachable by the
+  reader but by nobody's mouse. #1118 landed the cast and `global` blocks while
+  this was being written, and #1130 and #1133 are narrowed to what they leave.
+
+  **The measure is not line coverage, and the document says why.** #1086's ratchet
+  counts lines of somebody's existing code; the question here is how often a
+  learner has to drop into the grey escape hatch to say an ordinary thing. The
+  proposed twin is an escape-hatch count over a fixture of programs a learner
+  would plausibly want — parse a serial command, log to a file, average five
+  readings, walk a config dict — which falls per phase and never rises.
+
 - **Name a PWM, and set it directly.** A pin could be named since #1097; the PWM
   built on it could not — so every block that wanted one got `pwm_15`, a name the
   learner never chose on an object they had no way to refer to, and a rover's two
