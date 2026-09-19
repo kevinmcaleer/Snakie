@@ -8,22 +8,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **Name a PWM, and set a motor's speed with it.** A pin could be named since
-  #1097; the PWM built on it could not — so every block that wanted one got
-  `pwm_15`, a name the learner never chose on an object they had no way to refer
-  to, and a rover's two drive channels were told apart by pin number.
+- **Name a PWM, and set it directly.** A pin could be named since #1097; the PWM
+  built on it could not — so every block that wanted one got `pwm_15`, a name the
+  learner never chose on an object they had no way to refer to, and a rover's two
+  drive channels were told apart by pin number.
 
   ```
   name PWM on pin [GP15 ▾] as [motor_a]     → motor_a = PWM(Pin(15))
-  set speed of ( motor_a ) to [75] %        → motor_a.duty_u16(int(75 * 65535 / 100))
+  set duty of ( motor_a ) to [75] %         → motor_a.duty_u16(int(75 * 65535 / 100))
   set frequency of ( motor_a ) to [1000] Hz → motor_a.freq(1000)
   ```
 
-  **The label is half the point.** The block that already did this said *set
-  BRIGHTNESS of …*, with a tooltip admitting it also drives a motor. A child
-  building a rover should not have to work out that a motor is a dim LED. The two
-  new blocks take their PWM in a SOCKET, as `set pin` does since its own socket
-  version, and sit beside their fielded twins in the drawer.
+  **The label is half the point, and it is *set duty*, not *set speed*.** A motor
+  block would have to promise something about the driver, and there is nothing to
+  promise: one driver takes a PWM on its speed pin, another takes plain digital
+  on/off, and a Modulino takes neither — it is an I²C device with its own
+  protocol. These blocks say what they do to the PIN, which is true of every
+  board; what that does to a motor is the driver's datasheet's business. They
+  take their PWM in a SOCKET, as `set pin` does since its own socket version, and
+  sit beside their fielded twins in the drawer.
 
   It reuses `AliasRule` unchanged — that machinery was written for pins, and a
   PWM fits because its constructor carries a single `{PIN}`. Two things had to
