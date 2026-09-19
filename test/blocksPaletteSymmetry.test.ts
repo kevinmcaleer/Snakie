@@ -126,7 +126,9 @@ const READ_DIRECTLY: Record<string, string> = {
   snakie_python_attr_get: 'x = self.angle\n',
   snakie_python_attr_set: 'self.angle = 0\n',
   // --- a declaration rather than a call (W10, #1097)
-  snakie_name_pin: 'echo = Pin(0, Pin.IN)\n'
+  snakie_name_pin: 'echo = Pin(0, Pin.IN)\n',
+  // Named hardware that is not a pin: the same `AliasRule` machinery, one mode.
+  snakie_name_pwm: 'motor_a = PWM(Pin(15))\n'
 }
 
 /**
@@ -164,6 +166,10 @@ const NO_READER: Record<string, string> = {
   snakie_onboard_led: 'Writes a per-board pin token, which is board state rather than line text.',
   snakie_pin_pressed: 'Reads back as the pin block plus a comparison — two blocks for one line.',
   snakie_pwm_duty: 'Writes the percentage arithmetic inline, so the line is not a plain call.',
+  snakie_pwm_duty_named:
+    'As `snakie_pwm_duty`, which it is the socket-driven twin of: the percent is wrapped in ' +
+    '`int(x * 65535 / 100)`, and that arithmetic is the lesson rather than something a table can ' +
+    'unpick back into a socket.',
   snakie_adc_read: 'Writes the volts arithmetic inline, so the line is not a plain call.',
   snakie_i2c_scan: 'Takes a hoisted I²C bus built from two pin fields, not from the call text.',
   snakie_i2c_present: 'As `snakie_i2c_scan`, with an address comparison on top.',

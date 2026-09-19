@@ -4,7 +4,7 @@ import { ensureBlocklyLocale } from './locale'
 import { ImportManager, type PyImport } from './imports'
 import { sanitise, toPythonIdentifier } from './names'
 import { blockDefinition, registeredBlocks } from './registry'
-import { pinAliasesIn } from './board-pins'
+import { pinAliasesIn, pwmAliasesIn } from './board-pins'
 
 /**
  * THE MICROPYTHON GENERATOR (#1010, epic #1007).
@@ -291,12 +291,26 @@ export class MicroPythonGenerator extends Blockly.CodeGenerator {
     return toPythonIdentifier(clean, this.reservedNames())
   }
 
-  /** The pin names this workspace declares, read off its `name pin` blocks. */
+  /**
+   * The names this workspace declares for a piece of hardware, off its `name
+   * pin` and `name PWM` blocks.
+   *
+   * BOTH, because the collision is the same one either way: the naming block
+   * writes `motor_a = PWM(Pin(15))` into the setup section, and a workspace
+   * variable called `motor_a` that got renamed `motor_a_` would leave the two
+   * halves pointing at different objects — the declaration on one name and every
+   * block that uses it on another.
+   */
   private declaredPins(): ReadonlySet<string> {
     if (this.pinNames) return this.pinNames
     const workspace = this.workspaceRef
     this.pinNames = new Set(
-      workspace ? pinAliasesIn(workspace).map((alias) => sanitise(alias.name)) : []
+      workspace
+        ? [
+            ...pinAliasesIn(workspace).map((alias) => sanitise(alias.name)),
+            ...pwmAliasesIn(workspace).map(sanitise)
+          ]
+        : []
     )
     return this.pinNames
   }

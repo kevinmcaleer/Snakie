@@ -104,11 +104,15 @@ describe('a name for a pin', () => {
   })
 
   it('binds a later call on the name to the hardware block', () => {
+    // `led.value(1)` goes to the block that TAKES A NAME rather than the one
+    // with the pin dropdown — the name is what the learner wrote, so it is what
+    // the canvas should show them. `snakie_pin_write` keeps `pin_15.value(1)`,
+    // below, and the two can never race: an `onNamedPin` rule is only reachable
+    // in a pass of its own, where the receiver has to be in the alias map.
     const src = `${IMPORT}led = Pin(15, Pin.OUT)\n\nled.value(1)\nled.toggle()\n`
     const built = blocks(src).map((b) => b.type)
-    expect(built).toContain('snakie_pin_write')
+    expect(built).toContain('snakie_pin_write_named')
     expect(built).toContain('snakie_led_toggle')
-    expect(one(src, 'snakie_pin_write')!.fields).toMatchObject({ PIN: 'led' })
     roundTrips(src)
   })
 

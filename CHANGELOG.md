@@ -8,6 +8,59 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Name a PWM, and set a motor's speed with it.** A pin could be named since
+  #1097; the PWM built on it could not — so every block that wanted one got
+  `pwm_15`, a name the learner never chose on an object they had no way to refer
+  to, and a rover's two drive channels were told apart by pin number.
+
+  ```
+  name PWM on pin [GP15 ▾] as [motor_a]     → motor_a = PWM(Pin(15))
+  set speed of ( motor_a ) to [75] %        → motor_a.duty_u16(int(75 * 65535 / 100))
+  set frequency of ( motor_a ) to [1000] Hz → motor_a.freq(1000)
+  ```
+
+  **The label is half the point.** The block that already did this said *set
+  BRIGHTNESS of …*, with a tooltip admitting it also drives a motor. A child
+  building a rover should not have to work out that a motor is a dim LED. The two
+  new blocks take their PWM in a SOCKET, as `set pin` does since its own socket
+  version, and sit beside their fielded twins in the drawer.
+
+  It reuses `AliasRule` unchanged — that machinery was written for pins, and a
+  PWM fits because its constructor carries a single `{PIN}`. Two things had to
+  give: the generator must not rename a declared name out from under its own
+  declaration (`boundName` now protects PWM names as well as pin names), and a
+  block that HOISTS its line rather than emitting it in place must not also keep
+  the blank line the generator writes after the setup section — without that, a
+  named PWM gained an empty line every time the file was opened.
+
+  A naming block with one mode now declares an empty `modeField`, rather than
+  writing a field called `""` into every saved workspace: a pin is named for
+  output or for input, and a PWM has no direction to choose.
+
+  `motor_a.duty_u16(…)` stays an ordinary line on the way back, for the reason
+  `set brightness` has never had a reader rule: the percent is wrapped in
+  `int(x * 65535 / 100)`, which is the lesson rather than something a table can
+  unpick into a socket.
+
+- **`set pin ( … ) to [high]` — a pin you have named, dropped in.** The existing
+  block asks for a pin off a menu of the board's twenty-nine. This one takes a
+  SOCKET, so the pin arrives as a value: usually the name a `name pin` block gave
+  it, but equally one held in a variable, picked out of a list, or worked out by
+  a loop — none of which a dropdown of hardware can express.
+
+  Two blocks now write one line, and only the NAME tells them apart. `led.value(1)`
+  opens as this block, because a name is how the learner wrote it;
+  `pin_15.value(1)` — an object the generator hoisted, whose pin lives in its
+  name rather than in the line — stays with the block that has the pin field.
+  They cannot race: an `onNamedPin` rule is reachable only in a pass of its own,
+  where the receiver has to be a bare name in the alias map, and every other `on`
+  rule sits that pass out.
+
+  `objectCall` learned to place a FIELD argument while it was there, as the
+  module and hoisted-object paths already could, so the `1` can be the high/low
+  setting rather than a socket. `led.value(brightness)` stays an ordinary line —
+  the setting has nowhere to put a variable, and a raw block says so honestly.
+
 - **`millisecond ticks`, beside the microsecond one it already had.** The Wait
   drawer shipped `ticks_us` and `ticks between` (#1011) and stopped there, on the
   argument that microseconds are the unit a datasheet quotes. That is true of the

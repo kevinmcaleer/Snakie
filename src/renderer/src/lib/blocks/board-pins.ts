@@ -178,6 +178,14 @@ export function pinConstructor(gpio: number, direction: PinDirection): string {
  */
 export const PIN_ALIAS_BLOCK = 'snakie_name_pin'
 
+/**
+ * The block that names a PWM.
+ *
+ * Beside {@link PIN_ALIAS_BLOCK} and for the same reason: this module is what
+ * reads a declaration back, so the two block names live where the reading is.
+ */
+export const PWM_ALIAS_BLOCK = 'snakie_name_pwm'
+
 let aliases: readonly PinAlias[] = []
 
 /**
@@ -236,6 +244,29 @@ export function pinAliasesIn(workspace: {
     const raw = String(block.getFieldValue('DIRECTION') ?? 'OUT')
     const direction = (['OUT', 'IN', 'PULL_UP', 'PULL_DOWN'] as const).find((d) => d === raw)
     out.push({ name, gpio, direction: direction ?? 'OUT' })
+  }
+  return out
+}
+
+/**
+ * The PWM names a WORKSPACE declares, read off its `name pwm` blocks.
+ *
+ * The same source-of-truth role {@link pinAliasesIn} has, and kept separate
+ * from it on purpose: a name here stands for a `PWM(...)`, not for a `Pin(...)`,
+ * so anything that would build a pin from it — `namedPin`, the pin dropdowns,
+ * the conflict pass — must NOT see it. What both lists share is that the
+ * generator may not rename either of them (`boundName`).
+ */
+export function pwmAliasesIn(workspace: {
+  getBlocksByType: (type: string, ordered: boolean) => { getFieldValue: (n: string) => unknown }[]
+}): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const block of workspace.getBlocksByType(PWM_ALIAS_BLOCK, true)) {
+    const name = String(block.getFieldValue('NAME') ?? '').trim()
+    if (!name || seen.has(name)) continue
+    seen.add(name)
+    out.push(name)
   }
   return out
 }

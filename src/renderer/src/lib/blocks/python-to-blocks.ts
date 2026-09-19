@@ -224,7 +224,11 @@ const HOISTED_TYPES = new Set([
   // A `name pin` block is hoisted the same way (W10, #1097): it generates
   // nothing where it stands and its assignment goes into the setup section,
   // which the generator already puts a blank line after.
-  'snakie_name_pin'
+  'snakie_name_pin',
+  // And `name PWM`, for the same reason and by the same route. Leaving it out
+  // kept the learner's blank line AND the separator the generator writes, so a
+  // named PWM gained an empty line every time the file was opened.
+  'snakie_name_pwm'
 ])
 
 /** A statement and the suite indented under it. */
@@ -266,6 +270,20 @@ export interface CallRule {
    * list is what is left.
    */
   on?: string
+  /**
+   * This `on` rule claims a receiver the learner NAMED, and only that (#1097).
+   *
+   * `led.value(1)` and `pin_15.value(1)` are the same line twice over, and two
+   * blocks write it: `snakie_pin_write_named`, which takes the pin in a socket,
+   * and `snakie_pin_write`, whose pin is a dropdown and whose receiver is an
+   * object the generator hoisted. The NAME decides which, because that is what
+   * the learner wrote.
+   *
+   * A rule with this set is tried in a pass of its own, ahead of the hoisted
+   * path, and only where the receiver is a bare name a `name pin` block gave
+   * out. Every other `on` rule sits that pass out, so the two can never race.
+   */
+  onNamedPin?: boolean
   /**
    * Fields this rule fixes on the block it builds.
    *
@@ -432,7 +450,13 @@ export interface AliasRule {
   nameField: string
   /** The field holding the pin — a number here, a name everywhere else. */
   pinField: string
-  /** The field holding the mode. */
+  /**
+   * The field holding the mode, or `''` for a block whose mode is not a choice.
+   *
+   * A pin is named `for output` or `for input`, which is four constructors and a
+   * dropdown. A PWM is named one way, so there is no field — and an empty name
+   * here is what says so, rather than a field called `''` on every block.
+   */
   modeField: string
   /** Mode value → the exact expression the block writes, `{PIN}` for the number. */
   modes: Readonly<Record<string, string>>
@@ -2308,7 +2332,11 @@ class Converter {
       fields: {
         [alias.rule.pinField]: alias.pin,
         [alias.rule.nameField]: m[1],
-        [alias.rule.modeField]: alias.mode
+        // A NAMING BLOCK WITH ONE MODE HAS NOWHERE TO PUT IT, and says so with
+        // an empty `modeField`: a PWM has no direction to choose, where a pin
+        // has four. Writing it anyway gave every such block a field called `""`
+        // — junk in the saved workspace, and a field Blockly has no home for.
+        ...(alias.rule.modeField ? { [alias.rule.modeField]: alias.mode } : {})
       }
     }
   }
@@ -2427,6 +2455,13 @@ class Converter {
   private callStatement(text: string): BlockJson | null {
     const tokens = tokenize(text)
     if (!tokens) return null
+    // A PIN THE LEARNER NAMED GOES TO THE BLOCK THAT TAKES A NAME, ahead of the
+    // hoisted-object path below — which would otherwise claim `led.value(1)`
+    // for the block whose pin is a dropdown. `pin_15.value(1)` is not a named
+    // pin (the generator's own hoisted objects are kept out of the alias map on
+    // purpose) and still goes there, which is the boundary #1097 drew.
+    const named = this.objectCallStatement(text, tokens, true)
+    if (named) return named
     const call = readCall(tokens, text)
     if (call && call.rest.length === 0) {
       // A call on a hoisted object first (#1058) — `led_15.set(True)`. Its
@@ -2449,7 +2484,12 @@ class Converter {
    * {@link methodCall}, because the chain builds VALUE blocks and a rule of this
    * shape may only exist as a statement.
    */
-  private objectCallStatement(text: string, tokens: readonly Token[]): BlockJson | null {
+  private objectCallStatement(
+    text: string,
+    tokens: readonly Token[],
+    /** Only rules that claim a learner-named pin — see {@link callStatement}. */
+    namedPinOnly = false
+  ): BlockJson | null {
     for (let i = tokens.length - 1; i > 0; i--) {
       const tok = tokens[i]
       if (tok.kind !== 'op' || tok.text !== '.') continue
@@ -2457,9 +2497,25 @@ class Converter {
       if (!member || member.kind !== 'name') return null
       const read = readArgs(tokens, text, i + 2)
       if (!read || read.trailingComma || read.next !== tokens.length) return null
-      const object = this.readChain(text, tokens.slice(0, i))
+      // Asked of the TEXT rather than of the built block: a `variables_get`
+      // carries its variable's id, and the name is what the alias map is keyed
+      // by. A named pin is a bare name with a dot after it — `self.led.value()`
+      // is an attribute of something, not a pin this file declared.
+      if (namedPinOnly && !(i === 1 && tokens[0].kind === 'name' && this.aliases.has(tokens[0].text))) {
+        return null
+      }
+      // THE NAME IS BUILT HERE RATHER THAN PARSED, and it has to be: a declared
+      // pin is not readable as a plain variable — `name()` refuses it, because
+      // a pin the blocks hoist must not also become a variable beside itself
+      // (#1097). In THIS pass the name has already been checked against the
+      // alias map, so the variable it stands for is exactly what belongs in the
+      // socket, and `boundName` in the generator binds the two to one
+      // identifier on the way back out.
+      const object = namedPinOnly
+        ? { block: this.pinVariable(tokens[0].text), next: i }
+        : this.readChain(text, tokens.slice(0, i))
       if (!object || object.next !== i) return null
-      return this.objectCall(object.block, member.text, read.args, 'statement')
+      return this.objectCall(object.block, member.text, read.args, 'statement', namedPinOnly)
     }
     return null
   }
@@ -2626,27 +2682,50 @@ class Converter {
     object: BlockJson,
     fn: string,
     args: readonly string[],
-    shape: 'statement' | 'value'
+    shape: 'statement' | 'value',
+    /** The named-pin pass, which is the ONLY way an `onNamedPin` rule matches. */
+    namedPinOnly = false
   ): BlockJson | null {
     for (const rule of rules()) {
       if (!rule.on || rule.fn !== fn) continue
+      // Exclusive both ways: a named-pin rule is unreachable outside its pass,
+      // and an ordinary `on` rule never claims a line inside it.
+      if (!!rule.onNamedPin !== namedPinOnly) continue
       if ((rule.shape ?? 'statement') !== shape) continue
       const names = rule.args ?? []
-      if (args.length !== names.length) continue
+      const argFields = rule.argFields ?? {}
+      // AN ARGUMENT CAN BE A FIELD HERE TOO, as it long has been for a call on a
+      // module or on a hoisted object: `led.value(1)` is *set pin (led) to
+      // [high]*, and the `1` is the dropdown rather than a socket. So the arity
+      // this rule expects is its sockets PLUS its fields.
+      const fieldCount = Object.keys(argFields).length
+      if (args.length !== names.length + fieldCount) continue
       const want = rule.checks?.[rule.on]
       if (want && !fitsSocket(object, want)) continue
       const inputs: Record<string, { block: BlockJson }> = { [rule.on]: { block: object } }
+      const fields: Record<string, string> = { ...(rule.fields ?? {}) }
       let fits = true
-      for (let i = 0; i < names.length && fits; i++) {
+      let socket = 0
+      for (let i = 0; i < args.length && fits; i++) {
+        const asField = argFields[i]
+        if (asField) {
+          // A value the dropdown cannot hold — `led.value(brightness)` — is not
+          // this block, and a raw line says so honestly.
+          const value = asField.values[args[i].trim()]
+          if (value === undefined) fits = false
+          else fields[asField.field] = value
+          continue
+        }
+        const name = names[socket++]
         const filled = this.expression(args[i])
-        const check = rule.checks?.[names[i]]
+        const check = rule.checks?.[name]
         if (check && !fitsSocket(filled, check)) fits = false
-        else inputs[names[i]] = { block: filled }
+        else inputs[name] = { block: filled }
       }
       if (!fits) continue
       return {
         type: rule.type,
-        ...(rule.fields ? { fields: { ...rule.fields } } : {}),
+        ...(Object.keys(fields).length > 0 ? { fields } : {}),
         inputs
       }
     }
@@ -3096,6 +3175,11 @@ class Converter {
     // generator binds a declared pin and a variable of that name to one
     // identifier, so `led.on()` reads as a call on `led` and writes `led.on()`.
     return { type: 'variables_get', fields: { VAR: { id: this.variable(text) } } }
+  }
+
+  /** A read of a pin this file NAMED, for the socket of an `onNamedPin` rule. */
+  private pinVariable(name: string): BlockJson {
+    return { type: 'variables_get', fields: { VAR: { id: this.variable(name) } } }
   }
 
   /** The source text of the call `readCall` just read, for `procedureCall`. */
