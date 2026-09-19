@@ -18,6 +18,7 @@ import { loadMicroPython } from '@micropython/micropython-webassembly-pyscript/m
 import type { MicroPythonInstance } from '@micropython/micropython-webassembly-pyscript/micropython.mjs'
 import mpWasmUrl from '@micropython/micropython-webassembly-pyscript/micropython.wasm?url'
 import { delScratch } from '../../../shared/device-scratch'
+import { SimOutputPump } from '../../../shared/sim-output-pump'
 import { SIM_MACHINE_PY } from '../../../shared/sim-machine'
 import { INSTRUMENTS_PY, SNAKIE_PY, TURTLE_PY } from './web-lib-sources'
 
@@ -67,20 +68,11 @@ const installLibrary = (mpi: MicroPythonInstance): void => {
   writeVfsFile(mpi, '/lib/turtle.py', TURTLE_PY)
 }
 let mp: MicroPythonInstance | null = null
-let pending: number[] = []
-let capturing: number[] | null = null
-
-const collect = (bytes: Uint8Array): void => {
-  const sink = capturing ?? pending
-  for (const b of bytes) sink.push(b)
-}
-
-const flush = (): void => {
-  if (capturing || pending.length === 0) return
-  const chunk = Uint8Array.from(pending)
-  pending = []
-  postMessage({ type: 'out', bytes: chunk })
-}
+// Posts a line the moment it is complete (see the pump): a `while True:` with
+// `time.sleep` never yields to the flush timer below, so a timer alone left a
+// running program's `print`s stuck in the worker until Stop (#1179).
+const pump = new SimOutputPump((bytes) => postMessage({ type: 'out', bytes }))
+const { collect, flush } = pump
 
 // Pre-ready messages are queued, not dropped — dropping hung the caller's
 // promise and leaked the busy count (Stop became a VFS wipe) (#501).
@@ -139,19 +131,14 @@ self.onmessage = async (e: MessageEvent<InMsg>): Promise<void> => {
     return
   }
   if (msg.type === 'run') {
-    flush()
-    capturing = []
+    pump.beginCapture()
     try {
       mp.runPython(msg.code)
-      postMessage({
-        type: 'result',
-        id: msg.id,
-        value: new TextDecoder().decode(Uint8Array.from(capturing))
-      })
+      postMessage({ type: 'result', id: msg.id, value: pump.captured() })
     } catch (err) {
       postMessage({ type: 'result', id: msg.id, error: String(err) })
     } finally {
-      capturing = null
+      pump.endCapture()
     }
   }
   // Run a whole user PROGRAM with its output STREAMING to the terminal (#612):
@@ -160,7 +147,6 @@ self.onmessage = async (e: MessageEvent<InMsg>): Promise<void> => {
   // surfaced as a transport error.
   if (msg.type === 'runStream') {
     flush()
-    capturing = null
     try {
       mp.runPython(msg.code)
     } catch (err) {
