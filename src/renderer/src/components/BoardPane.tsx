@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import { BoardGraph } from './BoardGraph'
 import { PartEditor } from './PartEditor'
 import { OPEN_PART_EDITOR_EVENT, PARTS_CHANGED_EVENT, type OpenPartEditorDetail } from './PartsPanel'
@@ -7,6 +7,8 @@ import { blankRobot, type RobotDefinition } from '../../../shared/robot'
 import { addPartsToProject, offerLibraryInstall } from './project-parts'
 import { SyncControl } from './SyncControl'
 import { movableJointNames, jointDisplayLimits } from './robot-assembly'
+import { canRedo as histCanRedo, canUndo as histCanUndo, historyInit, type History } from './use-history'
+import { commitRobot, redoRobot, undoRobot } from './robot-history'
 import { useWorkspace } from '../store/workspace'
 import { useWorkspaceLayout } from '../store/layout'
 import { useEditorSettings } from '../store/settings'
@@ -123,6 +125,40 @@ export function BoardPane({ mat }: BoardPaneProps = {}): JSX.Element {
   // A placement bridge rewrote the .urdf (#716) — re-read so the servo "drives
   // joint" picker sees links/joints added from another window too.
   useEffect(() => window.api.robot.onUrdfChanged(() => setRobotNonce((n) => n + 1)), [])
+
+  // ── Undo/redo: the wiring document's history (the #187 stack, as #338 gave
+  // the Build view) ─────────────────────────────────────────────────────────
+  // The Electronics view edits ONE document and every action in it — drop a
+  // part, drag it, wire two pins, recolour or delete a wire, rotate, rename,
+  // duplicate, swap the board — ends in `commit` below, so checkpointing there
+  // is undo over all of them. The stack lives in a ref (a checkpoint alone must
+  // not re-render the canvas) with a counter to repaint the toolbar's enabled
+  // states; `robot-history` holds the pure steps, and the reasoning about the
+  // disk round-trip every save makes and the `urdfLink` MAIN stamps back.
+  const robotRef = useRef(robot)
+  robotRef.current = robot
+  const histRef = useRef<History<RobotDefinition>>(historyInit(robot))
+  const [, bumpHist] = useReducer((n: number) => n + 1, 0)
+  // Which project the stack belongs to — history is per-project, and an
+  // `undefined` folder is a real answer (an unsaved project), so "none yet"
+  // needs a sentinel of its own.
+  const histFolderRef = useRef<string | null>(null)
+  /** Start a fresh stack on a newly-loaded document. Without this the blank
+   *  robot the pane mounts with would sit in `past` as an undo target, and two
+   *  Ctrl+Z from a fresh Electronics view would wipe the project's wiring.
+   *  `force` re-seeds even for the same project (a load that FAILED: there is
+   *  nothing behind it to step back to). */
+  const resetHistory = useCallback(
+    (d: RobotDefinition, force = false): void => {
+      const key = folder ?? ''
+      if (!force && histFolderRef.current === key) return // same project — keep the stack
+      histFolderRef.current = key
+      histRef.current = historyInit(d)
+      bumpHist()
+    },
+    [folder]
+  )
+
   useEffect(() => {
     let live = true
     const startSeq = saveSeqRef.current
@@ -133,6 +169,10 @@ export function BoardPane({ mat }: BoardPaneProps = {}): JSX.Element {
         if (fresh()) {
           setRobot(d)
           setRobotLoaded(true)
+          // The project's FIRST load is where undo starts from; a later re-read
+          // (our own save echoing back, or another window's edit) leaves the
+          // stack alone — `robot-history` folds those in on the next step.
+          resetHistory(d)
         }
       })
       .catch(() => {
@@ -140,14 +180,16 @@ export function BoardPane({ mat }: BoardPaneProps = {}): JSX.Element {
         // applied against a blank robot (which would wipe the file). Clear any
         // punted swap so an unreadable robot.yml can't leave it stuck.
         if (fresh()) {
-          setRobot(blankRobot())
+          const blank = blankRobot()
+          setRobot(blank)
+          resetHistory(blank, true)
           clearBoardSwap()
         }
       })
     return () => {
       live = false
     }
-  }, [folder, robotNonce, clearBoardSwap])
+  }, [folder, robotNonce, clearBoardSwap, resetHistory])
 
   // The linked URDF's joint names, so a placed servo's inspector can offer a
   // "drives joint" picker (#) — mirrors the floating Board View window, which
@@ -184,6 +226,8 @@ export function BoardPane({ mat }: BoardPaneProps = {}): JSX.Element {
     }
   }, [folder, urdfPath, robotNonce])
 
+  // Low-level: write the document to robot.yml. NO checkpoint — this is also how
+  // an undo puts a restored document back.
   const saveRobot = useCallback(
     (next: RobotDefinition): void => {
       saveSeqRef.current += 1
@@ -192,6 +236,33 @@ export function BoardPane({ mat }: BoardPaneProps = {}): JSX.Element {
     },
     [folder]
   )
+  // Take a stepped stack: repaint the undo/redo controls, and write the document
+  // out when the step actually moved the present (an undo with nothing behind it
+  // must not dirty robot.yml).
+  const applyHistory = useCallback(
+    (h: History<RobotDefinition>): void => {
+      histRef.current = h
+      bumpHist()
+      if (h.present !== robotRef.current) saveRobot(h.present)
+    },
+    [saveRobot]
+  )
+  /** The board's single edit choke point: check-point the current document, then
+   *  save the new one — one undo step per action. */
+  const commit = useCallback(
+    (next: RobotDefinition): void => {
+      applyHistory(commitRobot(histRef.current, robotRef.current, next))
+    },
+    [applyHistory]
+  )
+  const undo = useCallback(
+    () => applyHistory(undoRobot(histRef.current, robotRef.current)),
+    [applyHistory]
+  )
+  const redo = useCallback(
+    () => applyHistory(redoRobot(histRef.current, robotRef.current)),
+    [applyHistory]
+  )
   // Append library part(s) to the project — the shared sequence (#716) both board
   // hosts use: unique ids, robot.yml saved synchronously, every part given its
   // Build body (mesh or footprint box). The urdfLink record-back happens in MAIN
@@ -199,10 +270,10 @@ export function BoardPane({ mat }: BoardPaneProps = {}): JSX.Element {
   // no late-firing whole-document save.
   const addToProject = useCallback(
     (libraryId: string, part: PartDefinition, pos?: { x: number; y: number }): void => {
-      addPartsToProject({ robot, folder, libraries, saveRobot }, [{ libraryId, part, pos }])
+      addPartsToProject({ robot, folder, libraries, saveRobot: commit }, [{ libraryId, part, pos }])
       offerLibraryInstall(part)
     },
-    [robot, saveRobot, folder, libraries]
+    [robot, commit, folder, libraries]
   )
 
   // Add MANY parts at once (the full-screen catalog's "Add to project", #613) in a
@@ -211,11 +282,11 @@ export function BoardPane({ mat }: BoardPaneProps = {}): JSX.Element {
   const addManyToProject = useCallback(
     (items: { libraryId: string; part: PartDefinition }[]): void => {
       addPartsToProject(
-        { robot, folder, libraries, saveRobot },
+        { robot, folder, libraries, saveRobot: commit },
         items.map(({ libraryId, part }) => ({ libraryId, part }))
       )
     },
-    [robot, saveRobot, folder, libraries]
+    [robot, commit, folder, libraries]
   )
 
   // The Part Editor overlay (opened from the pane's library dock, exactly like
@@ -255,6 +326,36 @@ export function BoardPane({ mat }: BoardPaneProps = {}): JSX.Element {
     return () => window.removeEventListener(OPEN_PART_EDITOR_EVENT, handler)
   }, [])
 
+  // Cmd/Ctrl+Z undoes, +Shift (or Ctrl+Y) redoes — anywhere in the Electronics
+  // view, since the board fills it and the keys have nothing else to mean here.
+  // Three exceptions, each of which would otherwise undo something twice or undo
+  // the wrong document: while typing in a field (a text input has its own undo,
+  // and Monaco certainly does), while the Part Editor overlay is open (it keeps
+  // its own history on the same keys), and in the off-screen pane the PDF export
+  // mounts — that one is a second, invisible BoardPane on the same project.
+  useEffect(() => {
+    if (mat || editing) return
+    const onKey = (e: KeyboardEvent): void => {
+      const k = e.key.toLowerCase()
+      if (!(e.metaKey || e.ctrlKey) || (k !== 'z' && k !== 'y')) return
+      const el = document.activeElement as HTMLElement | null
+      if (
+        el &&
+        (el.tagName === 'INPUT' ||
+          el.tagName === 'TEXTAREA' ||
+          el.tagName === 'SELECT' ||
+          el.isContentEditable ||
+          el.closest('.monaco-editor'))
+      )
+        return
+      e.preventDefault()
+      if (k === 'y' || e.shiftKey) redo()
+      else undo()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [mat, editing, undo, redo])
+
   // Author a NEW board (a starter Microcontroller-family part in `my-parts`).
   // EVERYTHING THE BOARD IS DRAWN FROM IS HERE (#1168). A reader can see this
   // as "the pane has stopped filling in"; the PDF export needs it as a fact,
@@ -277,7 +378,13 @@ export function BoardPane({ mat }: BoardPaneProps = {}): JSX.Element {
         fileName={fileName}
         isPython={isPython}
         robot={robot}
-        onChangeRobot={saveRobot}
+        onChangeRobot={commit}
+        history={{
+          canUndo: histCanUndo(histRef.current),
+          canRedo: histCanRedo(histRef.current),
+          undo,
+          redo
+        }}
         folder={folder}
         libraries={libraries}
         mat={mat}

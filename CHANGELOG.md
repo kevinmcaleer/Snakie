@@ -22,6 +22,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Undo and redo in the Electronics view.** Wiring is drawing: you drag a part
+  where you think it goes, run a wire to the wrong pin, and delete one thing
+  while another was selected. Every one of those was permanent. The Part Editor
+  has had undo since #187 and the Build view since #338 — the board, where a
+  slip costs you a wire you then have to remember the ends of, had nothing.
+
+  Now it does. **⌘Z / Ctrl+Z** steps back and **⇧⌘Z / Ctrl+Y** steps forward,
+  from anywhere in the view, with a matching pair of buttons at the head of the
+  canvas toolbar so the feature is visible rather than folklore. It covers
+  everything the view does, because everything the view does goes through one
+  save: dropping a part, dragging it, wiring two pins, re-attaching or
+  recolouring a wire, rotating, renaming, duplicating, deleting, swapping the
+  board (the swap's dropped wires come back with it). One action is one step —
+  a drag is a single step, not one per pixel — and fifty steps are kept.
+
+  Two things had to be handled for that to be true rather than nearly true.
+  Every save echoes back through `robot:didChange` and the file is re-read, so
+  the document the view holds is a *new* object after each edit holding the same
+  wiring; comparing objects would have made half the undo stack no-ops that step
+  through nothing. So "did this change?" is asked of the YAML the file would
+  hold. And after a part is added, the main process stamps that part's Build
+  body reference into `robot.yml` — bookkeeping, not an edit, so it costs no
+  step, and an undo carries it forward rather than stripping it off and orphaning
+  the body in the Build view.
+
 - **A connections table to wire the project up from, and a white page to print
   it on** (#1170). The document showed the wiring as a picture, and a picture is
   a poor thing to wire FROM: following one curve out of a dozen across a page
