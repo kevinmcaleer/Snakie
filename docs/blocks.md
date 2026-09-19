@@ -103,6 +103,28 @@ offers, at the moment you are actually about to need it.
 into its folder, and a plugin can contribute blocks too. See
 [writing-plugins.md](writing-plugins.md#ship-blocks-with-your-plugin-1017).
 
+### Variables are kept on their own shelf
+
+Open **Variables** and the first thing in the drawer is **Create variable…**.
+Name it — `score`, `lives`, `speed` — and it appears in the drawer as a block of
+its own, alongside `set … to` and `change … by` for the one you just made.
+
+Every variable you create is on that shelf, one block each, sorted by name.
+There is no need to drag a block out and hunt through a dropdown to find the
+variable you wanted: the block with its name on it is already there to drag.
+
+Rename a variable (right-click the block, or use the dropdown on it) and every
+block using it follows, on the canvas and in the Python.
+
+### Copying a block you have already built
+
+**⌘D** on a Mac, **Ctrl+D** on Windows, Linux and the web, duplicates whatever
+block is selected — together with everything inside it. Select the `repeat` you
+just filled in, press it, and there is a second one to drag into place.
+
+It is the same *Duplicate* that lives on a block's right-click menu, on the key
+everyone tries first.
+
 ### When the block you need doesn't exist yet
 
 At the bottom of the toolbox is a category called **Python**, and the blocks in
