@@ -106,8 +106,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
   Fifteen gaps, filed as #1120-#1128 and #1130-#1135: no dictionary block of any
   kind, no tuple, no slice, no `bytearray`, no bitwise operator, no hex literal,
-  no type conversion, no string method, no comprehension, and `try` / `with` /
-  `del` reachable by the reader but by nobody's mouse.
+  no string method, no comprehension, and `try` / `with` / `del` reachable by the
+  reader but by nobody's mouse. #1118 landed the cast and `global` blocks while
+  this was being written, and #1130 and #1133 are narrowed to what they leave.
 
   **The measure is not line coverage, and the document says why.** #1086's ratchet
   counts lines of somebody's existing code; the question here is how often a

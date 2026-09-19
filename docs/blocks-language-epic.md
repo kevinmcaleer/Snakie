@@ -3,7 +3,12 @@
 > Which MicroPython language features a learner still cannot *build* in Blocks,
 > and which of them should become native blocks.
 > Owner: Kevin McAleer. Status: **audited** — fifteen sub-issues filed and linked
-> to epic #1119 (#1120–#1128, #1130–#1135). Nothing implemented yet.
+> to epic #1119 (#1120–#1128, #1130–#1135).
+>
+> **#1118 landed between the audit and this document**, shipping the cast block
+> (`turn %1 into %2`) and a `global` block with a variable field. #1130 and #1133
+> are narrowed to what those two do not cover, and §2's Variables row counts
+> them. Nothing else here is implemented.
 
 ---
 
@@ -50,7 +55,7 @@ language rather than hardware:
 | Maths | 9 — number, arithmetic, modulo, round ×2, random, abs, min/max, map-range | `palette/maths.ts` |
 | Text | 4 — literal, join (f-string), length, print | `palette/text.ts` |
 | Lists | 6 — create, length, append, get, set, contains | `palette/lists.ts` |
-| Variables | 3 visible — get, set, change-by (+3 hidden) | `palette/variables.ts` |
+| Variables | 5 visible — get, set, change-by, cast, `global` (+3 hidden) | `palette/variables.ts` |
 | Functions | 6 — def ×2, call ×2, return, if-return | `palette/functions.ts` |
 | Python | 12 visible — raw statement/value/suite/call ×2, comment, blank, imports ×3, attr get/set | `palette/python.ts` |
 
@@ -100,7 +105,7 @@ argument for why it is on the list at all.
 | --- | --- | --- |
 | #1127 | **Bitwise, `//`, hex/binary literals** | `ARITHMETIC` is five operators. Masks, flags, `1 << pin`, `0x3C` — the vocabulary of a microcontroller, entirely absent. |
 | #1128 | **General `in` / `not in`, `is` / `is not`** | `snakie_list_contains` has `check: 'Array'`, so membership on a string or dict is refused by the block's shape. 31 of 73 projects. |
-| #1130 | **Type conversion — `int`, `float`, `str`, `ord`, `chr`, `isinstance`** | Six built-ins are known to the palette in total. A serial line arrives as text and has to become a number. |
+| #1130 | **Inspection, and the conversions the cast block doesn't cover** — `ord`, `chr`, `isinstance`, `int(s, base)` | **Narrowed by #1118**, which landed `turn %1 into %2` (int/float/str/bool/list/tuple) after this audit was written. What is left is the byte-and-character half. |
 
 ### 3.4 Control flow and structure
 
@@ -108,7 +113,7 @@ argument for why it is on the list at all.
 | --- | --- | --- |
 | #1131 | **Surface `try` / `except` / `finally` / `raise`** | Built by W7, hidden. The difference between a robot that stops dead when a sensor is unplugged and one that carries on. |
 | #1132 | **Surface `with`, and give it file blocks to hold** | Built by W7, hidden — and flipping it alone gives a C-shape with nothing to put in it. Logging to `data.csv` has no blocks at all. |
-| #1133 | **`del`, `pass`, `assert`, `global`** | `del` is explicitly unclaimed by any #1086 workstream and gates "remove a key" in #1120. |
+| #1133 | **`del`, `pass`, `assert`, `nonlocal`** | **Narrowed by #1118**, which landed `snakie_global` with a variable field. `del` is unclaimed by any #1086 workstream and gates "remove a key" in #1120; `nonlocal` and multi-name scope stay with the escape hatch. |
 | #1126 | **Comprehensions** | 26 of 73 projects write them. The one item here where authoring and reading genuinely part company — see §4.3. |
 | #1134 | **Keyword arguments, defaults, `*args`/`**kwargs`** | MicroPython library APIs are full of keyword arguments and the escape hatch is the only way to pass one. Subclassing needs `**kwargs`. |
 
