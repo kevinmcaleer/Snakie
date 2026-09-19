@@ -698,10 +698,12 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
      * on the value side, so the safe answer is for only one of the two to claim
      * the line, and the one that regenerates it unchanged is this one.
      *
-     * ONLY THE RAW FORM IS CLAIMED (`fields`), and that is honest: the per-cent
-     * form wraps the call in arithmetic, which the expression parser reads back
-     * as the arithmetic it literally is — with this block, set to *a number
-     * 0-65535*, in the middle of it. The program is identical either way.
+     * BOTH FORMS ARE CLAIMED NOW (#1163). Only the raw one used to be: the
+     * per-cent form wraps the call in arithmetic, and the expression parser read
+     * it back as the arithmetic it literally is — with this block, set to *a
+     * number 0-65535*, in the middle of it. The program was identical either
+     * way, and the canvas was not. `scaledBy` names that wrapper, and the
+     * reader folds it off the tree it has already built.
      */
     type: 'snakie_pwm_read_named',
     read: {
@@ -709,7 +711,15 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
       on: 'PWM',
       args: [] as const,
       shape: 'value' as const,
-      fields: { UNIT: 'RAW' }
+      fields: { UNIT: 'RAW' },
+      // AND THE PER-CENT FORM TOO (#1163). The paragraph below used to end
+      // "only the raw form is claimed", because the per-cent form wraps the
+      // call in arithmetic the expression parser could only read as the
+      // arithmetic it literally is. `scaledBy` is that arithmetic named, folded
+      // off the built tree — so both halves of this block's dropdown come back
+      // as this block. It changes nothing about the race: the FIELDED twin
+      // still carries no rule at all, so there is still exactly one claimant.
+      scaledBy: { times: 100, over: 65535, fields: { UNIT: 'PERCENT' } }
     },
     category: 'hardware',
     help: 'ref-pwm',
@@ -767,6 +777,25 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
   // ------------------------------------------------------------------------ ADC
   {
     type: 'snakie_adc_read',
+    /**
+     * BOTH UNITS READ BACK (#1163). The raw form is a plain call on the hoisted
+     * `adc_26` and could always have been tabled; the volts form is that call
+     * with `* 3.3 / 65535` after it, which is why this block sat out #1058
+     * entirely — a rule describes a CALL, and the volts line is a call inside a
+     * division.
+     *
+     * `scaledBy` says what that division looks like, and the reader folds it off
+     * the built tree rather than matching text, so the reading comes back as
+     * this block wherever it sits: on its own, in a comparison, inside a sum.
+     */
+    read: {
+      fn: 'read_u16',
+      args: [] as const,
+      shape: 'value' as const,
+      receiver: { name: 'adc', pinField: 'PIN', ctor: 'ADC(Pin({PIN}))' },
+      fields: { UNIT: 'RAW' },
+      scaledBy: { times: 3.3, over: 65535, fields: { UNIT: 'VOLTS' } }
+    },
     circuitpython: {
       imports: CP_ADC,
       // `.value` is already 0–65535, the same range `read_u16()` gives, so both
@@ -1372,24 +1401,25 @@ function cpAdc(gen: MicroPythonGenerator, pin: string, block: Blockly.Block): st
  * writes, so a block that changes its function name or its constructor changes
  * both halves at once, or neither.
  *
- * NINE OF THE TWELVE. The three left out are left out for a reason, and it is
- * the same reason each time — their generated line is not a plain call on the
- * hoisted object:
+ * TEN OF THE TWELVE. The two left out are left out for a reason, and it is the
+ * same reason twice — their generated line is not a plain call on the hoisted
+ * object:
  *
  *  - `snakie_onboard_led` hoists as `onboard_led`, with no pin in the name to
  *    read back (the board decides it, and on a Pico W it is not a number).
  *  - `snakie_pin_pressed` changes the SHAPE of its line with the dropdown —
  *    `not p.value()` for a pull-up, `p.value() == 1` otherwise — so the line is
  *    not a call at all.
- *  - `snakie_adc_read` wraps its reading in arithmetic (`* 3.3 / 65535`) on the
- *    VALUE side, where there is no equivalent of `percentOf` to undo it.
  *
- * `snakie_pwm_duty` used to be the fourth, for the arithmetic it wraps its
- * argument in (`int(x * 65535 / 100)`). {@link CallRule.percentOf} undoes
- * exactly that shape and nothing else (#1163), so the block that WROTE the line
+ * TWO OF THIS LIST WERE ARITHMETIC PROBLEMS, and both are solved (#1163).
+ * `snakie_pwm_duty` wraps its ARGUMENT (`int(x * 65535 / 100)`), which
+ * {@link CallRule.percentOf} takes back off; `snakie_adc_read` wraps its
+ * READING (`* 3.3 / 65535`), which {@link CallRule.scaledBy} folds back out of
+ * the tree the expression parser has already built. Each undoes exactly the
+ * shape the generator writes and nothing else, so the block that WROTE the line
  * is the block the line comes back as.
  *
- * Those three still convert — as raw Python blocks, exactly as before. Reading
+ * Those two still convert — as raw Python blocks, exactly as before. Reading
  * back fewer lines correctly beats reading back more of them wrongly.
  */
 registerCallRules(

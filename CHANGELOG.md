@@ -1296,6 +1296,44 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **An analogue reading comes back as the block that took it** (#1163). *read
+  (GP26) as [volts]* writes `adc_26.read_u16() * 3.3 / 65535` — 0-65535 is what
+  the hardware gives, volts is what was asked for, and the conversion sits on
+  the line where both are visible. That conversion is why the block sat out the
+  hardware round trip entirely: a rule describes a call, and this line is a call
+  inside a division. So the reading came back as arithmetic wrapped round a
+  block whose own dropdown already offered *volts* — with the block in the
+  middle of it set to the other option.
+
+  A rule can now name the conversion its block writes, and the reader folds it
+  back off the tree the expression parser has already built. Off the tree rather
+  than out of the text, so the reading comes back wherever it sits: on its own,
+  in an `if`, inside a bigger sum. A named PWM's *power as [per cent]* reads
+  back the same way, and for the same reason. Anything else stays the arithmetic
+  somebody wrote: a scale the block never writes, the same conversion applied
+  twice, or `reading * 3.3 / 65535` on something that is not a reading at all.
+
+  **A raw reading was also being read back as a volts one**, which is the sharper
+  half of this. Every path that builds a block from a rule honours the fields the
+  rule fixes — except the one for a call on an object the generator hoisted,
+  which never had a rule with a field to fix until now. Left unset, `UNIT` fell
+  to its dropdown's first option, so `level = adc_26.read_u16()` came back as a
+  block that regenerates `adc_26.read_u16() * 3.3 / 65535`.
+
+- **A keyword argument comes back as a name and a value** (#1163). #1134 gave
+  each argument socket on the **call** blocks a box for the keyword name in
+  front of it, so `pixels.fill(colour=RED)` could be built. Reading one back put
+  the whole `colour=RED` into a grey block inside the socket — so a block a
+  learner had just made came back as something they could not have made.
+
+  The name goes in the box and the value in the socket now, which is the same
+  split the block writes. Only a bare name followed by a single top-level `=` is
+  claimed: `a == b`, `a != b` and `a <= b` lex as one operator each and are left
+  alone, `x := 5` is not an `=` either, and `*args` and `**kwargs` start with an
+  operator rather than a name. A value the reader cannot model still goes in the
+  socket verbatim, so `xs.sort(key=lambda v: v)` comes back with `key` in the
+  box and the lambda beside it.
+
 - **The zoom-to-fit button answers a press anywhere on it, and the column of
   blocks is spaced by what the blocks measure.** (#1150, #1062) Two reports from
   the same canvas.
