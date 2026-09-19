@@ -1,5 +1,5 @@
 import * as Blockly from 'blockly/core'
-import { BLOCK_TEXT_VAR, SOFT_SHELL_RENDERER, inkOn } from './theme'
+import { BLOCK_TEXT_VAR, SOFT_SHELL_RENDERER, inkForBlock } from './theme'
 
 /**
  * THE SOFT SHELL BLOCK GEOMETRY (#573's design direction, epic #1007).
@@ -126,7 +126,10 @@ class SoftShellPathObject extends Blockly.zelos.PathObject {
     // `url(#…)` — falls back to the style's own colour rather than to a guess.
     const painted = this.svgPath.getAttribute('fill') ?? ''
     const fill = painted.startsWith('#') ? painted : this.style.colourPrimary
-    this.svgRoot.style.setProperty(BLOCK_TEXT_VAR, inkOn(fill))
+    // THE STYLE NAME AS WELL AS THE FILL, because one style has an opinion its
+    // fill cannot express: a comment wears white in both skins although its
+    // grey is a different grey in each. See `inkForBlock`.
+    this.svgRoot.style.setProperty(BLOCK_TEXT_VAR, inkForBlock(block.getStyleName(), fill))
   }
 }
 

@@ -131,6 +131,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pass, so only one of the two may claim the line, and it is the one that writes
   it back unchanged.
 
+- **An audit of the MicroPython that Blocks cannot say** (`docs/blocks-language-epic.md`,
+  epic #1119). Epic #1086 taught the reader to understand the MicroPython people
+  already wrote, and measured it: 97.94% of lines on the fixture corpus. It never
+  asked the other question — whether a learner can *build* the same thing.
+
+  Fifteen gaps, filed as #1120-#1128 and #1130-#1135: no dictionary block of any
+  kind, no tuple, no slice, no `bytearray`, no bitwise operator, no hex literal,
+  no string method, no comprehension, and `try` / `with` / `del` reachable by the
+  reader but by nobody's mouse. #1118 landed the cast and `global` blocks while
+  this was being written, and #1130 and #1133 are narrowed to what they leave.
+
+  **The measure is not line coverage, and the document says why.** #1086's ratchet
+  counts lines of somebody's existing code; the question here is how often a
+  learner has to drop into the grey escape hatch to say an ordinary thing. The
+  proposed twin is an escape-hatch count over a fixture of programs a learner
+  would plausibly want — parse a serial command, log to a file, average five
+  readings, walk a config dict — which falls per phase and never rises.
+
 - **Name a PWM, and set it directly.** A pin could be named since #1097; the PWM
   built on it could not — so every block that wanted one got `pwm_15`, a name the
   learner never chose on an object they had no way to refer to, and a rover's two
@@ -764,6 +782,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   one pin, and it still says so. A name nothing declares gets a warning naming
   the fix rather than a silent substitution of some other pin.
 
+### Fixed
+
+- **Naming a PWM on a pin you had already named generated nothing at all.**
+  The pin dropdowns list the names a program declares above the numbers, so
+  after *name pin GP15 as `motor_left`* the obvious next move is *name PWM on
+  pin `motor_left` as `motor_a`* — and that block read its field with
+  `Number`, got `NaN`, and quietly declined: no `motor_a = …` line, no
+  `from machine import PWM`, and no warning anywhere. The import was the half
+  that showed, because the code pane kept saying `from machine import Pin` for
+  a program that was supposed to have a PWM in it.
+
+  It builds on the pin OBJECT now — `motor_a = PWM(motor_left)` — the
+  same thing every other block that takes a pin does, so the PWM drives the one
+  pin the learner named rather than a second `Pin(15)` on the same hole. `Pin`
+  is imported only when the line actually writes one, and the reader takes
+  `PWM(motor_left)` back as the **name PWM** block with the name in its field,
+  so the file round-trips.
+
+  The other half of the same complaint already held and now has a test saying
+  so: the import section is a consequence of what the blocks need, so deleting
+  the last PWM block takes `PWM` out of the import line with it.
+
 ### Changed
 
 - **`set brightness of [GP15 ▾] to [n] %` is now `set power of …`.** The block
@@ -781,17 +821,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Saved workspaces are untouched: the block's type id is unchanged, so this is a
   label, not a migration.
 
-- **White lettering on the blank-line block.** It is 2.9:1 on the comment grey,
-  where the ink that fill can readably carry is black at 7.2:1 — the second
-  place in the palette where the look was chosen over the contrast, after the
-  hardware amber.
+- **White lettering on a note about the program** — the comment block, the
+  docstring block and the blank-line spacer, all three of which wear the one
+  grey that says "this is not a step". It used to be whichever of black and
+  white the fill could readably carry, and that grey is a different grey in each
+  skin (it is the `--com` syntax token with the colour taken out), so the
+  lettering flipped with the skin: white in the dark one, black on parchment.
 
-  Set as `--snakie-block-text` on the label rather than as a `fill`, because the
-  rule that paints block text reads that property and its `:not()`s carry its
-  specificity past anything reasonable to write beside it — so this overrides the
-  VALUE it reads instead of racing it. Not a category `ink` either: that is keyed
-  by fill, and this block shares its fill with the comment block, which keeps its
-  readable black.
+  Asked for, and below AA on parchment: white is 2.88:1 on that grey, where the
+  black it replaces is 7.28:1. The second place in the palette where the look was
+  chosen over the contrast, after the hardware amber.
+
+  Declared against the block STYLE rather than against the fill, which is what
+  makes one line cover both skins — and any later edit to `--com` — instead of
+  two greys pinned in a table. It also folds in the blank-line spacer's own
+  white, which was a CSS override of the fill-keyed ink and is now just the
+  style it already wore.
 
 - **White lettering on the hardware blocks**, asked for over the black the amber
   can actually carry. It is the one block in the palette whose text does not
