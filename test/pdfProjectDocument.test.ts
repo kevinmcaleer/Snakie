@@ -10,6 +10,13 @@ import {
   buildProjectPdf,
   fileStem
 } from '../src/renderer/src/lib/pdf/project-pdf'
+import { BOM_HEADING } from '../src/renderer/src/lib/pdf/sections/bom'
+import {
+  BLOCKS_INTRO,
+  BOM_INTRO,
+  CODE_INTRO,
+  CODE_INTRO_WITH_BLOCKS
+} from '../src/renderer/src/lib/pdf/sections/narrative'
 import { blankRobot } from '../src/shared/robot'
 import { robotFromYaml } from '../src/shared/robot-yaml'
 import { COFFEE_URL, SNAKIE_WEB_URL } from '../src/shared/links'
@@ -90,7 +97,9 @@ describe('the whole document', () => {
 
     // The cover takes the name from robot.yml, ahead of the folder.
     expect(indexOf('Servo Arm')).toBe(0)
-    expect(indexOf('Blocks')).toBe(1)
+    // What you will need comes before anything that assumes you have it (#1157).
+    expect(indexOf(BOM_HEADING)).toBe(1)
+    expect(indexOf('Blocks')).toBe(2)
     expect(indexOf('Blocks')).toBeLessThan(indexOf('MicroPython'))
     expect(indexOf('MicroPython')).toBeLessThan(indexOf('Electronics'))
     expect(indexOf('Electronics')).toBeLessThan(lastIndexOf('Made with Snakie'))
@@ -109,6 +118,67 @@ describe('the whole document', () => {
     for (let i = 1; i < text.length; i++) {
       expect(text[i]).toContain(`Page ${i + 1} of ${result.pageCount}`)
     }
+  })
+
+  it('opens every section with a line saying what to do with it (#1157)', async () => {
+    const result = await buildProjectPdf(
+      {
+        robot: demoRobot(),
+        folder: DEMO,
+        code: { stored: demoCode() },
+        catalog: { boards: [{ id: 'pico', name: 'Raspberry Pi Pico' }] }
+      },
+      {
+        art: art({
+          blockStacks: async () => [stack('main', 'Main program')],
+          wiring: async () => diagram
+        })
+      }
+    )
+    const flat = textOfPages(result.bytes).map((p) => p.join(' '))
+    const says = (needle: string): boolean => flat.some((p) => p.includes(needle))
+    expect(says(BOM_INTRO)).toBe(true)
+    expect(says(BLOCKS_INTRO)).toBe(true)
+    // The wiring line wraps, so it is the opening of it that is one string.
+    expect(says('Wire up the robot like the picture below')).toBe(true)
+    expect(says(CODE_INTRO_WITH_BLOCKS.slice(0, 60))).toBe(true)
+  })
+
+  it('offers the listing as an alternative only to a reader who was given blocks', async () => {
+    const withoutBlocks = await buildProjectPdf({ code: { stored: 'print(1)' } })
+    const flat = textOfPages(withoutBlocks.bytes).map((p) => p.join(' '))
+    expect(flat.some((p) => p.includes(CODE_INTRO.slice(0, 50)))).toBe(true)
+    expect(flat.some((p) => p.includes(CODE_INTRO_WITH_BLOCKS.slice(0, 50)))).toBe(false)
+  })
+
+  it('names the bill of materials from the installed libraries', async () => {
+    const result = await buildProjectPdf({
+      robot: demoRobot(),
+      code: { stored: 'x = 1' },
+      catalog: {
+        libraries: [
+          {
+            id: 'snakie-standard',
+            name: 'Snakie standard',
+            parts: [
+              { id: 'sg90', name: 'SG90 micro servo', manufacturer: 'TowerPro', headers: [] }
+            ]
+          }
+        ],
+        boards: [{ id: 'pico', name: 'Raspberry Pi Pico' }]
+      }
+    })
+    const bom = textOfPages(result.bytes)[1]
+    expect(bom).toContain('Raspberry Pi Pico')
+    expect(bom).toContain('SG90 micro servo')
+    expect(bom).toContain('2×')
+  })
+
+  it('has no shopping list when there is no project model to shop from', async () => {
+    const result = await buildProjectPdf({ code: { stored: 'print(1)' } })
+    const flat = textOfPages(result.bytes).map((p) => p.join(' '))
+    expect(flat.some((p) => p.includes(BOM_HEADING))).toBe(false)
+    expect(flat.some((p) => p.includes(BOM_INTRO))).toBe(false)
   })
 
   it('closes with the two real links', async () => {

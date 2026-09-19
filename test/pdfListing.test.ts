@@ -7,6 +7,7 @@ import {
   layOutListing,
   paginateListing
 } from '../src/renderer/src/lib/pdf/sections/listing'
+import { CODE_INTRO_WITH_BLOCKS } from '../src/renderer/src/lib/pdf/sections/narrative'
 import { BLOCKS_FOOTER_TAG, writeBlocksFooter } from '../src/shared/blocks-doc'
 import { pageStrings, pages, parsePdf } from './helpers/pdf-inspect'
 
@@ -163,5 +164,38 @@ describe('drawing the listing', () => {
     const printed = strings.filter((s) => s.includes('wide'))
     expect(printed.length).toBeGreaterThan(1)
     expect(printed.join('')).toContain('wide wide')
+  })
+})
+
+describe('the line above the listing (#1157)', () => {
+  const code = Array.from({ length: 90 }, (_, i) => `line_${i} = ${i}`).join('\n')
+
+  it('is set once, above the first page of code', () => {
+    const doc = new PdfDocument()
+    drawListing(doc, { code, intro: CODE_INTRO_WITH_BLOCKS })
+    const pdf = parsePdf(doc.build())
+    const said = pages(pdf).map(
+      (p) => pageStrings(pdf, p).filter((s) => s === CODE_INTRO_WITH_BLOCKS).length
+    )
+    expect(said.length).toBeGreaterThan(1)
+    expect(said[0]).toBe(1)
+    expect(said.slice(1).every((n) => n === 0)).toBe(true)
+  })
+
+  it('moves the lines it displaces onto the next page rather than off the foot', () => {
+    const withIntro = new PdfDocument()
+    drawListing(withIntro, { code, intro: CODE_INTRO_WITH_BLOCKS })
+    const without = new PdfDocument()
+    drawListing(without, { code })
+    const linesOn = (doc: PdfDocument): number[] => {
+      const pdf = parsePdf(doc.build())
+      return pages(pdf).map((p) => pageStrings(pdf, p).filter((s) => /^line_\d+ = /.test(s)).length)
+    }
+    const shifted = linesOn(withIntro)
+    const plain = linesOn(without)
+    expect(shifted[0]).toBeLessThan(plain[0])
+    // Not a line of code lost between the two.
+    const total = (ns: number[]): number => ns.reduce((a, b) => a + b, 0)
+    expect(total(shifted)).toBe(total(plain))
   })
 })

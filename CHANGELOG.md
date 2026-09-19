@@ -8,6 +8,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A bill of materials, and a document that says what to do.** (#1157, epic
+  #1105) The printed project used to be a set of pictures under headings —
+  `Blocks`, `MicroPython`, `Electronics` — which reads perfectly to whoever
+  built it and not at all to whoever was handed it. A heading names a thing; it
+  does not say what to do with it, and nothing in the document said what you
+  had to have on the desk first.
+
+  So the export now opens, straight after the cover, with **What you will
+  need**: the microcontroller, every part on the breadboard (one row per kind,
+  with the quantity — two SG90s are `2×`, not two rows), and the wire to join
+  them, counted off the wiring diagram's own connections. Each row carries what
+  identifies it at a supplier — the maker and part number where the library has
+  them, the part's description otherwise — and a part whose library is no
+  longer installed is still listed, under its id and whatever the project
+  called it, because a name you have to look up beats a row that quietly is not
+  there.
+
+  Every section then opens with a line of ordinary English: *drag these blocks
+  to program the robot*, *wire up the robot like the picture below; use DuPont
+  cables or solder wires for a more permanent connection*, *you can also type
+  the code below into the code workspace instead of using the blocks* — that
+  last one only in a project that HAS blocks, since it is an alternative rather
+  than an instruction. The line costs its page the room it takes and no other
+  page any, so a listing or a set of blocks that spilled onto a second page
+  before still spills onto exactly one.
+
 - **Comprehensions.** (#1126, epic #1119) No comprehension block of any kind
   existed. `docs/blocks-coverage-epic.md` §3.5 declined them for the *reader* on
   good evidence — 26 projects write them and they cost 3 raw lines, because they
@@ -1179,6 +1205,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   screen rather than three. What the block generates is unchanged — the
   argument is built from the field's value, not from whether it is on screen.
 
+- **The PDF export has its Electronics pages back** (#1147). The document is
+  meant to show the board twice — the diagram on the page's parchment, and the
+  workspace's own sheet — and it showed neither unless the Electronics view
+  happened to be open when you pressed print, which it usually is not: a learner
+  prints from Blocks or Code.
+
+  The capture renders the board off-screen when there is none on screen, and it
+  did that by opening a React root of its own and putting a `<BoardPane>` in it.
+  A root of its own is a TREE of its own, with none of `App.tsx`'s providers
+  above it, so the pane threw `useWorkspace must be used within a
+  WorkspaceProvider` on its first render — out in a root nothing was watching,
+  where it surfaced only as a capture that never settled, twelve seconds of
+  waiting, and a document with the wiring quietly left out of it.
+
+  The app does the mounting now: a `BoardCaptureHost` inside the providers
+  portals the pane into whatever off-screen host the exporter hands it. The
+  board it photographs therefore reads the same workspace the Electronics view
+  reads — the open folder, the active file, the breadboard mat you chose — so
+  the picture in the document is the picture you would see. Printing from Code
+  with parts on the board now takes about two seconds and produces the
+  Electronics page and the Electronics sheet, part photographs and all.
+
 - **Blocks sit snug in the mouth that holds them, and none of them has a line
   hanging off its corner** (#1158). Two smudges on the canvas, reported
   together and turning out to be the same mistake twice: the Soft Shell shape
@@ -2072,7 +2120,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   its place beside Text for the empty warm-green gap.
 
 
-
 - **The blocks are shaped like MakeCode and Scratch now, because they are
   rendered like them** (epic #1007, #573's design direction). The canvas moves
   from Blockly's `thrasos` renderer to **`zelos`** — which is Blockly's own port
@@ -2104,7 +2151,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   making it rounder or roomier than Scratch rather than re-deriving it — the
   12px corner radius, the notch offset that has to clear it, a pill radius on
   field boxes, 8px top and bottom rows, and a 20px C-block mouth.
-
 
 
 - **Comments are grey, and they are quiet** (#1062). #1062's folding made a

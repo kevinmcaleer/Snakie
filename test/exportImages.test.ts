@@ -95,7 +95,7 @@ describe('the export paths that carry them', () => {
   })
 
   it("the PDF's wiring page does too, on both of its capture routes", () => {
-    const capture = SRC('lib/pdf/wiring-capture.tsx')
+    const capture = SRC('lib/pdf/wiring-capture.ts')
     // The live canvas and the off-screen render both go through the wrapper,
     // and it carries BOTH pictures #1147 takes of the board.
     expect(capture.match(/withImages\(/g)?.length).toBe(3) // def + 2 callers

@@ -386,13 +386,23 @@ export interface PackUnit<T> {
  *
  * A unit larger than `capacity` gets a page to itself — the caller is expected
  * to have scaled it down first, since clipping is not an option.
+ *
+ * `firstCapacity` is the FIRST page's room, which is smaller whenever a section
+ * opens with a line of narrative (#1157): the intro is set once, so making
+ * every page pay for it would leave a band of nothing at the top of each
+ * continuation.
  */
-export function packUnits<T>(units: ReadonlyArray<PackUnit<T>>, capacity: number): T[][] {
+export function packUnits<T>(
+  units: ReadonlyArray<PackUnit<T>>,
+  capacity: number,
+  firstCapacity = capacity
+): T[][] {
   const pages: T[][] = []
   let current: T[] = []
   let used = 0
   for (const unit of units) {
-    if (current.length && used + unit.size > capacity) {
+    const room = pages.length === 0 ? firstCapacity : capacity
+    if (current.length && used + unit.size > room) {
       pages.push(current)
       current = []
       used = 0
