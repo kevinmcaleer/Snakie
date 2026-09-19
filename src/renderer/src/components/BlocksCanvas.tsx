@@ -21,6 +21,7 @@ import { loadSelectedBoard, watchSelectedBoard } from './board-pin-source'
 import { blockDefinition, installBlockDefinitions } from '../lib/blocks/registry'
 import { installCorePalette } from '../lib/blocks/palette'
 import { installSoftShellRenderer } from '../lib/blocks/renderer'
+import { installShelfFlyout, installZoomReset } from '../lib/blocks/zoom'
 import {
   dispatchNeedLibrary,
   dispatchOpenHelp,
@@ -320,6 +321,10 @@ export function BlocksCanvas({
     // And the Soft Shell geometry, which the options below name. Registering a
     // renderer Blockly has never heard of throws during injection.
     installSoftShellRenderer()
+    // And the shelf that holds still while the canvas zooms (#1150). Also
+    // before injection: the flyout class is read out of the registry as the
+    // workspace is built.
+    installShelfFlyout()
 
     const tokens = readThemeTokens(document.documentElement)
     const ws = Blockly.inject(host, {
@@ -336,6 +341,10 @@ export function BlocksCanvas({
     // cleanup below, because reading a disposed workspace is a crash.
     const unregisterWorkspace = registerBlocksWorkspace(ws)
     toolboxDialectRef.current = dialectRef.current
+
+    // Blockly's "reset zoom" control becomes the fit/100% toggle (#1150). After
+    // injection, because it works on the control Blockly has just drawn.
+    const restoreZoomReset = installZoomReset(ws)
 
     // THE FUNCTIONS DRAWER IS DYNAMIC (#1045). Every other category is a fixed
     // list from the registry, which is right for them and wrong for this one:
@@ -472,6 +481,7 @@ export function BlocksCanvas({
     return () => {
       host.removeEventListener('mousemove', onMove)
       host.removeEventListener('mouseleave', onLeave)
+      restoreZoomReset()
       ws.removeChangeListener(pointing)
       if (debounceRef.current) clearTimeout(debounceRef.current)
       ws.removeChangeListener(listener)
