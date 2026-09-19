@@ -98,6 +98,12 @@ const READ_DIRECTLY: Record<string, string> = {
   snakie_list_set: 'readings[0] = 1\n',
   snakie_list_contains: 'found = name in names\n',
   snakie_tuple: 'point = (x, y)\n',
+  // --- dictionaries (#1120). The three that are not calls are a literal, a
+  // subscript and a `del`, each claimed only where the key is a string.
+  snakie_dict_create: "config = {'pin': 15}\n",
+  snakie_dict_get: "pin = config['pin']\n",
+  snakie_dict_set: "config['pin'] = 15\n",
+  snakie_dict_remove: "del config['pin']\n",
   // --- variables and functions
   variables_get: 'x = y\n',
   variables_set: 'x = 1\n',

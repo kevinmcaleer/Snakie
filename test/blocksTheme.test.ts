@@ -92,10 +92,20 @@ describe('buildSoftShellTheme (#1009)', () => {
   it('keeps the vivid categories at least 20° apart on the wheel', () => {
     // Near-greys are excluded on purpose: they take no hue space and are told
     // apart by lightness, which is why variables and python can share a corner.
+    //
+    // `hardware` IS EXCLUDED FOR THE SAME REASON, not a different one (#1120).
+    // It is the one colour deliberately off the palette's depth — luminance
+    // 0.37 against everyone else's 0.15, far enough that it carries BLACK
+    // lettering while every other block carries white. A block that bright and
+    // a block at the body depth are told apart at a glance whatever their hue,
+    // which is what let the fifteenth drawer, Dictionaries, take the burnt
+    // orange two degrees off it: at 0.15 that hue was never occupied. The
+    // exclusion is narrow — `blocksContrast.test.ts` owns the other half, and
+    // fails if `hardware` ever drifts back onto the depth and starts competing.
     const vivid = BLOCK_CATEGORIES.map((c) => ({
       id: c.id,
       ...hsl(categoryColour(FALLBACK_TOKENS, c))
-    })).filter((c) => c.s > 30)
+    })).filter((c) => c.s > 30 && c.id !== 'hardware')
 
     const tooClose: string[] = []
     for (const a of vivid) {

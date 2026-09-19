@@ -877,6 +877,30 @@ function splitArgs(args: string): string[] | null {
   return out.every((a) => a !== '') ? out : null
 }
 
+/**
+ * `'name': value` → the two halves, or null (#1120).
+ *
+ * The FIRST top-level colon, so `{'a': d['b']}` splits where it should and a
+ * colon inside a nested slice or dict does not fool it. Null for a piece with
+ * no colon at all, which is how `{1, 2}` — a set, which this palette has no
+ * blocks for — declines to be read as a dictionary.
+ */
+function splitPair(text: string): [string, string] | null {
+  const tokens = tokenize(text)
+  if (!tokens) return null
+  let depth = 0
+  for (const tok of tokens) {
+    if (tok.kind === 'open') depth += 1
+    else if (tok.kind === 'close') depth -= 1
+    else if (depth === 0 && tok.kind === 'op' && tok.text === ':') {
+      const key = text.slice(0, tok.start).trim()
+      const value = text.slice(tok.end).trim()
+      return key === '' || value === '' ? null : [key, value]
+    }
+  }
+  return null
+}
+
 /** A parameter list, split and trimmed. Empty for `()`. */
 function splitParams(params: string): string[] {
   return params
@@ -1968,6 +1992,17 @@ class Converter {
         { type: 'snakie_await', inputs: { VALUE: { block: this.expression(awaited[1]) } } }
       ])
     }
+    // `del config['pin']` → the Dictionaries drawer's remove block (#1120).
+    // TAKING A KEY OUT HAS NO METHOD — `del` is the only way to do it — and the
+    // same string-key rule decides it here as decides the read: nothing deletes
+    // a list item by `'name'`. A `del` of anything else is #1133's block.
+    const delKey = /^del\s+(.+)$/.exec(text)
+    if (delKey) {
+      const target = this.expression(delKey[1])
+      if (target.type === 'snakie_dict_get') {
+        return recognised([{ type: 'snakie_dict_remove', inputs: target.inputs }])
+      }
+    }
     const raise = /^raise(?:\s+(.+))?$/.exec(text)
     if (raise) {
       const block: BlockJson = { type: 'snakie_raise' }
@@ -2528,6 +2563,15 @@ class Converter {
       if (read.block.type === 'snakie_list_get') {
         return {
           type: 'snakie_list_set',
+          inputs: { ...read.block.inputs, VALUE: { block: this.expression(value) } }
+        }
+      }
+      // `config['pin'] = 15` → the Dictionaries drawer's setter (#1120). The
+      // read side has already decided this is a dictionary, on the one
+      // unambiguous ground there is: a string key.
+      if (read.block.type === 'snakie_dict_get') {
+        return {
+          type: 'snakie_dict_set',
           inputs: { ...read.block.inputs, VALUE: { block: this.expression(value) } }
         }
       }
@@ -3354,6 +3398,13 @@ class Converter {
       return null
     }
 
+    // A DICTIONARY LITERAL (#1120). `{'a': 1}` used to take its whole line raw,
+    // which is the escape hatch doing the drawer's job — the thing #1119 set
+    // out to count.
+    if (tok.kind === 'open' && tok.text === '{') {
+      return this.dictLiteral(tokens, at)
+    }
+
     if (tok.kind === 'open' && tok.text === '(') {
       // A COMMA MAKES IT A TUPLE, not a bracketed expression (#1121). Checked
       // before the parse, because `(x, y)` parses as `x` and then stops at the
@@ -3498,6 +3549,54 @@ class Converter {
       if (depth === 1 && tok.kind === 'op' && tok.text === ',') {
         parts.push(this.source.slice(from, tok.start).trim())
         from = tok.end
+      }
+    }
+    return null
+  }
+
+  /**
+   * `{'a': 1, 'b': 2}` → the Dictionaries drawer's literal (#1120).
+   *
+   * A SET IS NOT A DICTIONARY and shares the braces: `{1, 2, 3}` has no colons
+   * in it, and the palette has no set blocks (#1119 argued them out), so a
+   * brace group whose top level holds no `:` is declined and stays verbatim.
+   * `{}` is the empty DICTIONARY, which is what Python means by it.
+   *
+   * A COMPREHENSION also wears braces — `{k: v for k in xs}` — and is declined
+   * here by the same test that declines anything whose pieces do not split into
+   * clean `key: value`: see #1126 for the block that does claim it.
+   */
+  private dictLiteral(
+    tokens: readonly Token[],
+    at: number
+  ): { block: BlockJson; next: number } | null {
+    let depth = 0
+    for (let i = at; i < tokens.length; i++) {
+      const tok = tokens[i]
+      if (tok.kind === 'open') {
+        depth += 1
+        continue
+      }
+      if (tok.kind !== 'close') continue
+      depth -= 1
+      if (depth > 0) continue
+      if (tok.text !== '}') return null
+      const inside = this.source.slice(tokens[at].end, tok.start).trim()
+      if (inside === '') {
+        return { block: { type: 'snakie_dict_create', extraState: { items: 0 } }, next: i + 1 }
+      }
+      const parts = splitArgs(inside)
+      if (!parts) return null
+      const inputs: Record<string, { block: BlockJson }> = {}
+      for (let n = 0; n < parts.length; n++) {
+        const split = splitPair(parts[n])
+        if (!split) return null
+        inputs[`KEY${n}`] = { block: this.expression(split[0]) }
+        inputs[`VALUE${n}`] = { block: this.expression(split[1]) }
+      }
+      return {
+        block: { type: 'snakie_dict_create', extraState: { items: parts.length }, inputs },
+        next: i + 1
       }
     }
     return null
@@ -3649,6 +3748,23 @@ class Converter {
         if (depth > 0) continue
         if (tok.text !== ']') return null
         const inside = this.source.slice(tokens[cur.next].end, tok.start).trim()
+        // A STRING KEY IS A DICTIONARY, unambiguously (#1120). Nothing indexes
+        // a list by `'name'`, so this one shape can be claimed for the
+        // Dictionaries drawer with no guesswork at all — while `xs[i]`, where
+        // the index is a variable, could be either and stays where #1089 put it.
+        const key = readStringLiteral(inside)
+        if (key !== null) {
+          return {
+            block: {
+              type: 'snakie_dict_get',
+              inputs: {
+                DICT: { block: cur.block },
+                KEY: { block: { type: 'text', fields: { TEXT: key } } }
+              }
+            },
+            next: i + 1
+          }
+        }
         const index = this.oneBased(inside)
         // LIST checks Array, so `"abc"[0]` is not this block — the same rule the
         // socket table exists for (#1071).

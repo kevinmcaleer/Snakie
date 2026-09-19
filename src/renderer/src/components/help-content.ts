@@ -275,6 +275,10 @@ export const HELP_SECTIONS: HelpNode[] = [
           { id: 'ref-flow', kind: 'article', title: 'Control flow', accent: A.page },
           { id: 'ref-functions', kind: 'article', title: 'Functions', accent: A.page },
           { id: 'ref-types', kind: 'article', title: 'Values & types', accent: A.page },
+          // The Dictionaries drawer (#1120, epic #1119) — a whole category that
+          // did not exist, so the reference gets a page of its own rather than
+          // a paragraph inside "Values & types".
+          { id: 'ref-dicts', kind: 'article', title: 'Dictionaries', accent: A.page },
           { id: 'ref-builtins', kind: 'article', title: 'Built-in functions', accent: A.page },
           // Bits, hex and masking (#1127, epic #1119). Plain Python, so it sits
           // here rather than in the MicroPython section — but it is here

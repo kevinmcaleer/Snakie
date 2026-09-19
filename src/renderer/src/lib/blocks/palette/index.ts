@@ -15,6 +15,7 @@ import { FUNCTION_BLOCKS } from './functions'
 import { STRUCTURE_BLOCKS, installStructureBlocks } from './structure'
 import { LIST_BLOCKS } from './lists'
 import { TUPLE_BLOCKS, installTupleBlocks } from './tuples'
+import { DICT_BLOCKS, installDictBlocks } from './dicts'
 import { LOGIC_BLOCKS } from './logic'
 import { MATHS_BLOCKS } from './maths'
 import { TEXT_BLOCKS } from './text'
@@ -73,6 +74,7 @@ export function installCorePalette(): void {
   // And the literals that grow a socket at a time (#1119): a tuple, a
   // dictionary, a buffer, a `print` with several things in it.
   installTupleBlocks()
+  installDictBlocks()
   defineBlocks([
     ...TURTLE_BLOCKS,
     // HARDWARE IS SCOPED BY WHAT IT CAN GENERATE (#1039 → #1040). Nine of the
@@ -105,6 +107,9 @@ export function installCorePalette(): void {
     // belongs where a learner is standing when they want it: the literal in
     // Lists, `set … and … to` in Variables, the loops in Control.
     ...TUPLE_BLOCKS,
+    // The Dictionaries drawer (#1120, epic #1119) — the biggest hole the audit
+    // found, and the only one that was a whole missing CATEGORY.
+    ...DICT_BLOCKS,
     ...VARIABLE_BLOCKS,
     ...FUNCTION_BLOCKS,
     // Class, method and `self` (#1093). Registered, never listed — a class is

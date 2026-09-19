@@ -87,6 +87,7 @@ export interface ThemeTokens {
   blockMath: string
   blockText: string
   blockLists: string
+  blockDicts: string
   blockVariables: string
   blockFunctions: string
   blockPlugins: string
@@ -122,6 +123,7 @@ const TOKEN_VARS: Record<keyof ThemeTokens, string> = {
   blockMath: '--block-math',
   blockText: '--block-text',
   blockLists: '--block-lists',
+  blockDicts: '--block-dicts',
   blockVariables: '--block-variables',
   blockFunctions: '--block-functions',
   blockPlugins: '--block-plugins',
@@ -166,6 +168,7 @@ export const FALLBACK_TOKENS: ThemeTokens = {
   blockMath: '#2b66da',
   blockText: '#6158e1',
   blockLists: '#227d16',
+  blockDicts: '#a25a0d',
   blockVariables: '#1a7595',
   blockFunctions: '#c22298',
   blockPlugins: '#cd2457',
@@ -262,6 +265,10 @@ export const BLOCK_CATEGORIES = [
   { id: 'math', name: 'Maths', token: 'blockMath' },
   { id: 'text', name: 'Text', token: 'blockText' },
   { id: 'lists', name: 'Lists', token: 'blockLists' },
+  // Dictionaries (#1120, epic #1119), straight after Lists because that is the
+  // order a learner meets them in: a list is "several things", a dictionary is
+  // "several things you can look up by name".
+  { id: 'dicts', name: 'Dictionaries', token: 'blockDicts' },
   // The brand blue (#1098). It used to wear `ident`, a near-grey in both skins,
   // so the drawer read as black on parchment and as white in the dark — which
   // is the screenshot that opened the issue.

@@ -8,6 +8,33 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A Dictionaries drawer — the palette had no dictionary blocks at all.**
+  (#1120, epic #1119) Not one block, no category, no theme colour. A dict is
+  not an exotic construct in device code: it is the shape of a config, a
+  note→frequency table, a pin map, a JSON payload. A learner who wanted one had
+  to type the literal into a grey Python block, which is the escape hatch doing
+  a job the palette should do.
+
+  Six blocks: the literal (**+** for another pair), **get … or …**, plain
+  **get**, **set**, **remove**, and **the keys / values / pairs of**. Keys are
+  sockets rather than typed-in text, because a key is as often a variable or a
+  number — a note, a pin — as it is a word.
+
+  **`get … or …` is offered first.** `d['k']` raises a `KeyError`, and a
+  beginner meeting that has no idea what happened; `.get(k, default)` carries
+  on. Both ship — the plain one is what they will read everywhere else — but
+  the order in the drawer is a curriculum decision.
+
+  The drawer deliberately has **no `has key` and no `how many`**: those are
+  `'k' in d` and `len(d)`, which #1128's membership block and the Lists
+  **length of** block already write. Two blocks generating one line is the
+  outcome worth avoiding.
+
+  Reading one back: `d['k']`, `d['k'] = v` and `del d['k']` are claimed only
+  where the key is a **string literal**, which is the one unambiguous ground
+  there is — nothing indexes a list by `'name'`. `xs[i]` with a variable in it
+  could be either, and stays where it was.
+
 - **Tuples, unpacking, and loops that name two things.** (#1121, epic #1119)
   Nothing in the palette made or took apart a tuple, and four separate holes
   came from that. There was no `(…)` literal, so a function that wants to hand

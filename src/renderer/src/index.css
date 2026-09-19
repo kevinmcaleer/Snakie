@@ -47,6 +47,15 @@
   --block-wait: #766d15;
   --block-control: #4e7715;
   --block-lists: #227d16;
+  /* Dictionaries (#1120). The fifteenth drawer, and the wheel at 24° spacing
+     had no room left for it — so it takes the one hue that was never really
+     occupied at THIS depth. `--block-hardware` sits two degrees away and is a
+     different thing entirely: it lives at a luminance of 0.37 rather than 0.15,
+     which is the whole reason it carries black lettering. A deep burnt orange
+     and a bright amber are told apart by lightness, exactly as the near-greys
+     in this palette are, and 23° clear of `--block-parts` and `--block-wait`
+     either side. */
+  --block-dicts: #a25a0d;
   --block-turtle: #167d38;
   --block-instruments: #157965;
   --block-variables: #1a7595;
