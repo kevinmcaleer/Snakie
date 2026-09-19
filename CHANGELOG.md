@@ -732,6 +732,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   one pin, and it still says so. A name nothing declares gets a warning naming
   the fix rather than a silent substitution of some other pin.
 
+### Fixed
+
+- **Naming a PWM on a pin you had already named generated nothing at all.**
+  The pin dropdowns list the names a program declares above the numbers, so
+  after *name pin GP15 as `motor_left`* the obvious next move is *name PWM on
+  pin `motor_left` as `motor_a`* — and that block read its field with
+  `Number`, got `NaN`, and quietly declined: no `motor_a = …` line, no
+  `from machine import PWM`, and no warning anywhere. The import was the half
+  that showed, because the code pane kept saying `from machine import Pin` for
+  a program that was supposed to have a PWM in it.
+
+  It builds on the pin OBJECT now — `motor_a = PWM(motor_left)` — the
+  same thing every other block that takes a pin does, so the PWM drives the one
+  pin the learner named rather than a second `Pin(15)` on the same hole. `Pin`
+  is imported only when the line actually writes one, and the reader takes
+  `PWM(motor_left)` back as the **name PWM** block with the name in its field,
+  so the file round-trips.
+
+  The other half of the same complaint already held and now has a test saying
+  so: the import section is a consequence of what the blocks need, so deleting
+  the last PWM block takes `PWM` out of the import line with it.
+
 ### Changed
 
 - **`set brightness of [GP15 ▾] to [n] %` is now `set power of …`.** The block

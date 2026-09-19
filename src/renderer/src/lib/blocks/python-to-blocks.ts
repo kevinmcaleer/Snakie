@@ -503,22 +503,50 @@ function declaredAliases(lines: readonly LogicalLine[]): Map<string, Alias> {
   for (const line of lines) {
     const m = /^([A-Za-z_]\w*)\s*=\s*(\S.*)$/.exec(line.text)
     if (!m) continue
-    const found = matchAlias(m[2].trim())
+    // THE NAMES ALREADY DECLARED ARE PART OF THE QUESTION: `motor_a =
+    // PWM(motor_left)` is the PWM naming block written on a pin this file has
+    // already named, and only a scan that remembers `motor_left` can see it.
+    // In order, because a declaration can only be built on one above it.
+    const found = matchAlias(m[2].trim(), out)
     if (found) out.set(m[1], found)
   }
   return out
 }
 
-/** Which naming block, if any, writes exactly `expr`? */
-function matchAlias(expr: string): Alias | null {
+/**
+ * Which naming block, if any, writes exactly `expr`?
+ *
+ * `declared` is what this file has named so far, so `{PIN}` can be a NAME as
+ * well as a number: the `name PWM` block builds on the pin object when the pin
+ * has one (`PWM(motor_left)`, not a second `Pin(15)` on the same hole), and the
+ * block that holds the name is a block whose pin field holds a name too.
+ */
+function matchAlias(expr: string, declared?: ReadonlyMap<string, Alias>): Alias | null {
   for (const rule of ALIASES) {
     for (const [mode, template] of Object.entries(rule.modes)) {
       const pattern = new RegExp(`^${escapeRe(template).replace('\\{PIN\\}', '(\\d+)')}$`)
       const found = pattern.exec(expr)
       if (found) return { rule, pin: found[1], mode }
+      const byName = namedPinTemplate(template).exec(expr)
+      // A RULE THAT DECLARES A PIN CANNOT BE BUILT ON ONE. `Pin(motor_left,
+      // Pin.OUT)` is not a second name for a pin — `Pin` takes a number — so
+      // only the rules that build something ON a pin (the PWM) take a name
+      // here, and `Pin(x, Pin.OUT)` with a variable in it stays the raw line it
+      // has always been.
+      if (byName && rule.receiver !== 'pin' && declared?.get(byName[1])?.rule.receiver === 'pin') {
+        return { rule, pin: byName[1], mode }
+      }
     }
   }
   return null
+}
+
+/** The same template with a NAME where the pin number goes. */
+function namedPinTemplate(template: string): RegExp {
+  // `escapeRe` has already escaped the braces and the brackets, so the needle
+  // is the escaped spelling of `Pin({PIN})` — the whole constructor, because a
+  // name stands for the pin OBJECT and not for the number inside it.
+  return new RegExp(`^${escapeRe(template).replace('Pin\\(\\{PIN\\}\\)', '([A-Za-z_]\\w*)')}$`)
 }
 
 // ---------------------------------------------------------------------------
@@ -2338,7 +2366,7 @@ class Converter {
     const alias = this.aliases.get(m[1])
     // The same line has to still BE the declaration: a name can be reassigned,
     // and only the line that matches the block's own constructor is this block.
-    if (!alias || matchAlias(m[2].trim())?.mode !== alias.mode) return null
+    if (!alias || matchAlias(m[2].trim(), this.aliases)?.mode !== alias.mode) return null
     return {
       type: alias.rule.type,
       fields: {

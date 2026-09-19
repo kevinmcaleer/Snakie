@@ -980,6 +980,12 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
      * registered into the setup section, so parking the block at the bottom of
      * the canvas cannot produce a `NameError`, and the line is attributed to
      * this block so hovering it lights the right row up.
+     *
+     * THE PIN MAY ITSELF BE A NAME — `motor_a = PWM(motor_left)` — because the
+     * dropdown offers the program's own pin names above the numbers and a
+     * learner who has named a pin reaches for the name. The PWM is then built
+     * on that one pin object rather than on a second `Pin(15)` for the same
+     * hole, which is what `pinObject` does everywhere else in this file.
      */
     type: PWM_ALIAS_BLOCK,
     category: 'hardware',
@@ -997,13 +1003,26 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
     },
     code: (block, gen) => {
       const name = String(block.getFieldValue('NAME') ?? '').trim()
-      const gpio = Number(block.getFieldValue('PIN'))
+      const pin = String(block.getFieldValue('PIN') ?? '').trim()
       // A BLANK NAME IS NOT A DECLARATION — as `name pin`. A learner clearing
       // the field to retype it should still have a program that runs.
-      if (!name || !Number.isFinite(gpio)) return ''
-      gen.need({ module: 'machine', name: 'Pin' })
+      if (!name || !pin) return ''
+      // A NAMED PIN IS ALREADY THE OBJECT, exactly as it is for every other
+      // block that builds something on a pin (`pinObject`). The dropdown lists
+      // the names this program declares ABOVE the numbers — a learner who has
+      // named GP15 `motor_left` is reaching for the name — and reading the
+      // field as a number turned every one of those into a `NaN` this block
+      // silently declined to generate: no `motor_a = …` line, no `PWM` import,
+      // and nothing said. `PWM(motor_left)` is what somebody writing it by hand
+      // would put, and it drives the ONE pin object rather than a second one on
+      // the same hole.
+      const named = namedPin(gen, pin, block)
+      // `Pin` IS ONLY NEEDED WHEN THIS LINE WRITES ONE. On a named pin the
+      // `name pin` block declares it, and declaring it here as well would leave
+      // `from machine import Pin` at the top of a program that never says it.
+      if (!named) gen.need({ module: 'machine', name: 'Pin' })
       gen.need({ module: 'machine', name: 'PWM' })
-      gen.setup(`pwm-alias:${name}`, name, `PWM(Pin(${gpio}))`, block)
+      gen.setup(`pwm-alias:${name}`, name, `PWM(${named ?? `Pin(${pin})`})`, block)
       return ''
     }
   },
