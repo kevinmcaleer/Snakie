@@ -32,7 +32,11 @@
  */
 
 import { createRoot } from 'react-dom/client'
-import { serializeLiveSvg, stageBackground } from '../../components/svg-export'
+import {
+  inlineImageHrefs,
+  serializeLiveSvg,
+  stageBackground
+} from '../../components/svg-export'
 import { getWiringSvg } from '../../components/wiring-svg-registry'
 
 /** A serialised diagram at its natural CSS-pixel size. */
@@ -82,7 +86,7 @@ export function serialiseWiring(
     exclude: EXCLUDE,
     bboxExclude: ['.wc__grid-layer', '.wc__paper'],
     // Part labels and pin names are lettered in the app's webfont, which an
-    // `<img>`-rendered SVG cannot fetch — see `capture.ts`.
+    // `<img>`-rendered SVG cannot fetch — see `export-fonts.ts`.
     fontCss
   })
 }
@@ -160,6 +164,18 @@ async function settle(
   return null
 }
 
+/** Carry the part photos into the capture — BOTH pictures of it. A no-op on
+ *  the desktop, where the main process has already inlined them; on the web
+ *  they are build assets named by URL, which the `<img>` the rasteriser uses
+ *  cannot fetch, so the board would print without its own photograph. */
+async function withImages(w: CapturedWiring | null): Promise<CapturedWiring | null> {
+  if (!w) return null
+  return {
+    diagram: { ...w.diagram, svg: await inlineImageHrefs(w.diagram.svg) },
+    sheet: w.sheet ? { ...w.sheet, svg: await inlineImageHrefs(w.sheet.svg) } : null
+  }
+}
+
 /**
  * The project's wiring, from the live canvas when there is one and from an
  * off-screen render otherwise. Null means "nothing to draw" — never a blank.
@@ -174,7 +190,7 @@ export async function captureWiring(
   const live = getWiringSvg()
   if (live) {
     const captured = captureBoth(live, background, fontCss)
-    if (captured) return captured
+    if (captured) return withImages(captured)
   }
   if (typeof document === 'undefined') return null
 
@@ -187,10 +203,12 @@ export async function captureWiring(
     // The board loads its part libraries and robot.yml asynchronously, so wait
     // for a canvas that measures the same twice running rather than grabbing
     // the first frame — which would print a board with no parts on it.
-    return await settle(() => {
-      const svg = host.querySelector('svg.wc__svg') as SVGSVGElement | null
-      return svg ? captureBoth(svg, background, fontCss) : null
-    }, MOUNT_TIMEOUT_MS)
+    return await withImages(
+      await settle(() => {
+        const svg = host.querySelector('svg.wc__svg') as SVGSVGElement | null
+        return svg ? captureBoth(svg, background, fontCss) : null
+      }, MOUNT_TIMEOUT_MS)
+    )
   } catch {
     return null
   } finally {

@@ -843,6 +843,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   modules that takes the overlaps from 70 to 11, all of them now in
   thousand-line hardware drivers rather than in anything a learner opens.
 
+- **The breadboard's own image export came out in the wrong font.** `PNG image`
+  / `SVG image` / `PDF document` on the Board Viewer rasterise through an
+  `<img>`, and an SVG loaded that way is a sandboxed document that fetches
+  nothing external — webfonts included. Every part name, pin name and pin
+  number was therefore lettered in the browser's fallback rather than IBM Plex
+  Mono / Plus Jakarta Sans, wider than the plate it was laid out to sit on.
+
+  The PDF export (epic #1105) already solved this for the blocks pages by
+  inlining the `@font-face` rules the app has loaded and embedding them in the
+  serialised SVG; the board's export handler simply never asked for them. It
+  does now. The font inlining moved out of `lib/pdf/` to
+  `components/export-fonts.ts` at the same time — it is not a PDF concern, it
+  belongs to every export that goes through an `<img>`.
+
+- **On the web, an exported board had no board in it.** The same sandbox, a
+  different resource: the breadboard's own picture is an `<image>` whose href
+  the web build points at a hashed build asset, deliberately, to keep a few MB
+  of part photos out of the JS payload. The rasteriser's `<img>` cannot fetch
+  it, and neither can anything opening a saved `.svg` later, so the PNG, the
+  PDF and the SVG all came out as pin labels floating on blank blueprint. The
+  desktop was unaffected — it inlines a part's photo when it reads the library.
+
+  Every `<image>` href is now inlined as a `data:` URI on the way out, so the
+  web export matches the desktop one. It is a no-op where the photos are
+  already inline, and an image that will not load leaves the export alone
+  rather than failing it. The PDF's wiring page gets this too, by both of its
+  capture routes.
+
 - **Naming a PWM on a pin you had already named generated nothing at all.**
   The pin dropdowns list the names a program declares above the numbers, so
   after *name pin GP15 as `motor_left`* the obvious next move is *name PWM on
