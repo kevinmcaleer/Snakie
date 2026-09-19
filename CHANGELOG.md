@@ -8,6 +8,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Comprehensions.** (#1126, epic #1119) No comprehension block of any kind
+  existed. `docs/blocks-coverage-epic.md` §3.5 declined them for the *reader* on
+  good evidence — 26 projects write them and they cost 3 raw lines, because they
+  sit inside a statement that is already a real block. That says nothing about
+  whether a learner should be able to *build* one, which is what #1119 asked:
+  26 of 73 projects is how this editor's author writes, and a learner
+  graduating to text meets one immediately.
+
+  **list of ( ) for each (n) in ( )** in Lists, **dictionary of ( ) to ( ) for
+  each …** in Dictionaries, each with an **only when** socket that filters when
+  it is filled and keeps everything when it is empty. That optional socket is
+  the mutator arm the issue proposed, with nothing to serialise and no second
+  way to edit the block.
+
+  **The reader spike came back yes**, so these ship with rules rather than the
+  argued exception the issue expected — a comprehension is one logical line
+  with two fixed keywords in it, and splitting at the top-level `for`, then the
+  `in`, then an optional `if`, needs no parser. Drag one, save, reopen, and you
+  get your block back rather than a grey one. A nest, a second filter, a tuple
+  target and a set comprehension are all declined, and stay verbatim.
+
 - **Keyword arguments, default values, `*args` and `super()`.** (#1134, epic
   #1119) A `def` block built its signature from Blockly's parameter list —
   positional names and nothing else. So `def blink(times=3):`, which is how a

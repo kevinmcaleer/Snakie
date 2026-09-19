@@ -17,6 +17,7 @@ import { LIST_BLOCKS } from './lists'
 import { TUPLE_BLOCKS, installTupleBlocks } from './tuples'
 import { DICT_BLOCKS, installDictBlocks } from './dicts'
 import { SLICE_BLOCKS } from './slices'
+import { COMPREHENSION_BLOCKS } from './comprehensions'
 import { BUFFER_BLOCKS } from './buffers'
 import { FILE_BLOCKS } from './files'
 import { LOGIC_BLOCKS } from './logic'
@@ -132,6 +133,9 @@ export function installCorePalette(): void {
     // The Dictionaries drawer (#1120, epic #1119) — the biggest hole the audit
     // found, and the only one that was a whole missing CATEGORY.
     ...DICT_BLOCKS,
+    // Comprehensions (#1126, epic #1119) — one in Lists and one in
+    // Dictionaries, each at the end of the drawer it belongs to.
+    ...COMPREHENSION_BLOCKS,
     ...VARIABLE_BLOCKS,
     ...FUNCTION_BLOCKS,
     // Class, method and `self` (#1093). Registered, never listed — a class is

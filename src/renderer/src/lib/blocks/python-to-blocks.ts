@@ -145,6 +145,10 @@ const OUTPUT_TYPE = new Map<string, SocketType>([
   ['snakie_list_count', 'Number'],
   ['snakie_list_aggregate', 'Number'],
   ['snakie_list_sorted', 'Array'],
+  // A list comprehension is a LIST (#1126), which is what lets it go straight
+  // into a `for each`. The dictionary one declares nothing, as the literal
+  // beside it does.
+  ['snakie_list_comprehension', 'Array'],
   ['snakie_list_contains', 'Boolean'],
   // `controls_forEach`'s LIST socket checks Array, and a `text` in it is the
   // same class of unloadable workspace the table above exists for (#1087):
@@ -3992,6 +3996,80 @@ class Converter {
   }
 
   /**
+   * `expr for name in seq [if cond]` → a comprehension block (#1126).
+   *
+   * THE SPIKE §4.1 ASKED FOR, AND IT CAME BACK YES. A comprehension is one of
+   * the two shapes the lexer-plus-indentation design genuinely cannot PARSE —
+   * but it does not need parsing: it is a single logical line with two fixed
+   * keywords in it, and splitting at the top-level `for`, then the `in`, then
+   * an optional `if`, is this function. So the symmetry test gets a reader
+   * rather than the argued exception, and a learner who drags one, saves and
+   * reopens gets their block back rather than a grey value block.
+   *
+   * NULL FOR EVERY SHAPE THE BLOCK CANNOT SAY BACK, which is the same rule as
+   * everywhere else here and keeps the whole line verbatim: a nested
+   * comprehension (two `for`s), two filters, a target that is not a plain name,
+   * an `else` in the expression, or — for the dictionary one — a head with no
+   * colon in it, which is a set.
+   *
+   * `head` builds the inputs that come before the `for`, because that is the
+   * only part the two blocks differ in.
+   */
+  private comprehension(
+    inside: string,
+    type: string,
+    head: (text: string) => Record<string, { block: BlockJson }> | null
+  ): BlockJson | null {
+    const tokens = tokenize(inside)
+    if (!tokens) return null
+    /** Every top-level occurrence of a keyword, as [start, end] in `inside`. */
+    const at = (word: string): [number, number][] => {
+      const out: [number, number][] = []
+      let depth = 0
+      for (const tok of tokens) {
+        if (tok.kind === 'open') depth += 1
+        else if (tok.kind === 'close') depth -= 1
+        else if (depth === 0 && tok.kind === 'keyword' && tok.text === word) {
+          out.push([tok.start, tok.end])
+        }
+      }
+      return out
+    }
+    const fors = at('for')
+    const ins = at('in')
+    const ifs = at('if')
+    // One `for`, one `in`, at most one `if`, and in that order. Anything else is
+    // a shape with no block — a nest, a second filter, a conditional expression.
+    if (fors.length !== 1 || ins.length !== 1 || ifs.length > 1) return null
+    if (ins[0][0] < fors[0][1]) return null
+    if (ifs.length === 1 && ifs[0][0] < ins[0][1]) return null
+    const collected = inside.slice(0, fors[0][0]).trim()
+    const target = inside.slice(fors[0][1], ins[0][0]).trim()
+    const end = ifs.length === 1 ? ifs[0][0] : inside.length
+    const sequence = inside.slice(ins[0][1], end).trim()
+    if (collected === '' || sequence === '') return null
+    // A TUPLE TARGET IS NOT THIS BLOCK. `[k for k, v in d.items()]` is real and
+    // the variable field holds one name; #1121's loops are the two-name shape,
+    // and there is no comprehension version of them.
+    if (!/^[A-Za-z_]\w*$/.test(target) || isReservedName(target)) return null
+    const inputs = head(collected)
+    if (!inputs) return null
+    const block: BlockJson = {
+      type,
+      fields: { VAR: { id: this.variable(target) } },
+      inputs: { ...inputs, SEQ: { block: this.expression(sequence) } }
+    }
+    if (ifs.length === 1) {
+      const cond = this.expression(inside.slice(ifs[0][1]).trim())
+      // The socket checks Boolean, and a filter that cannot fit it is a line
+      // this block would refuse to load rather than one it can say (#1071).
+      if (!fitsSocket(cond, 'Boolean')) return null
+      block.inputs!.COND = { block: cond }
+    }
+    return block
+  }
+
+  /**
    * `[1, 2, 3]` → Blockly's own `lists_create_with` (#1135).
    *
    * The mutator's state is `{ itemCount: n }` and its sockets are `ADD0…ADDn`,
@@ -4032,12 +4110,21 @@ class Converter {
       // multi-line `SEQUENCE = [...,]` in the fixture corpus is exactly the
       // line that catches it.
       if (inside.endsWith(',')) return null
-      // A COMPREHENSION IS NOT A LIST DISPLAY (#1126). `[v for v in things]`
-      // has no commas in it at all, so splitting would hand back one "item"
-      // that is the whole comprehension — a list block with one grey socket
-      // saying `v for v in things`, which is half an expression and worse than
-      // none. It stays raw until the block that really says it exists.
-      if (hasLoopKeyword(inside)) return null
+      // A COMPREHENSION IS NOT A LIST DISPLAY (#1126). It has no commas in it
+      // at all, so splitting would hand back one "item" that is the whole
+      // comprehension — a list block with one grey socket saying
+      // `v for v in things`, which is half an expression and worse than none.
+      //
+      // It has its OWN block since #1126, so this hands it over rather than
+      // declining; a comprehension that block cannot say back still keeps the
+      // whole line raw, which is what {@link comprehension} returning null does.
+      if (hasLoopKeyword(inside)) {
+        const built = this.comprehension(inside, 'snakie_list_comprehension', (head) => {
+          const expr = this.expression(head)
+          return { EXPR: { block: expr } }
+        })
+        return built ? { block: built, next: i + 1 } : null
+      }
       const parts = splitArgs(inside)
       if (!parts) return null
       return {
@@ -4086,7 +4173,19 @@ class Converter {
         return { block: { type: 'snakie_dict_create', extraState: { items: 0 } }, next: i + 1 }
       }
       // A trailing comma the block cannot record — as for a list display above.
-      if (inside.endsWith(',') || hasLoopKeyword(inside)) return null
+      if (inside.endsWith(',')) return null
+      // `{name: score for name in names}` → the Dictionaries drawer's own
+      // comprehension (#1126). A SET comprehension wears the same braces and
+      // has no colon in it; `splitPair` returning null is what declines it,
+      // since this palette has no set blocks.
+      if (hasLoopKeyword(inside)) {
+        const built = this.comprehension(inside, 'snakie_dict_comprehension', (head) => {
+          const pair = splitPair(head)
+          if (!pair) return null
+          return { KEY: { block: this.expression(pair[0]) }, VALUE: { block: this.expression(pair[1]) } }
+        })
+        return built ? { block: built, next: i + 1 } : null
+      }
       const parts = splitArgs(inside)
       if (!parts) return null
       const inputs: Record<string, { block: BlockJson }> = {}

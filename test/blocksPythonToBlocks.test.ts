@@ -383,7 +383,22 @@ describe('what it keeps as raw Python, and says so', () => {
   it('keeps a whole expression raw rather than half of it', () => {
     // Half an expression is worse than none: the learner would see blocks that
     // do not add up to the line they wrote.
-    expect(types('x = [v for v in things]\n')).toEqual(['variables_set', 'snakie_python_value'])
+    //
+    // THE EXAMPLE HAD TO MOVE ON (#1126). A comprehension is a real block now —
+    // the spike §4.1 asked for came back yes — so the shape that is still
+    // nobody's is a conditional expression, which the palette argued out in
+    // #1011 (`logic_ternary` is registered nowhere) and has never had.
+    expect(types('x = a if ready else b\n')).toEqual(['variables_set', 'snakie_python_value'])
+    // …and the nests and second filters a comprehension block cannot say back
+    // still take the whole line, rather than coming back as half of one.
+    expect(types('x = [y for row in grid for y in row]\n')).toEqual([
+      'variables_set',
+      'snakie_python_value'
+    ])
+    expect(types('x = [v for v in xs if a if b]\n')).toEqual([
+      'variables_set',
+      'snakie_python_value'
+    ])
   })
 
   it('keeps a string with an escape in it raw', () => {
