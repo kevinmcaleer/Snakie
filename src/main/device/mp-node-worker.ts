@@ -15,6 +15,7 @@
 import { parentPort } from 'worker_threads'
 import { createRequire } from 'module'
 import { SIM_MACHINE_PY } from '../../shared/sim-machine'
+import { SimOutputPump } from '../../shared/sim-output-pump'
 import type { MicroPythonInstance } from '@micropython/micropython-webassembly-pyscript/micropython.mjs'
 
 const require = createRequire(import.meta.url)
@@ -30,37 +31,14 @@ type InMsg =
 const port = parentPort
 if (!port) throw new Error('mp-node-worker must run as a worker_threads Worker')
 
-/** Flush console output once it reaches this many bytes without a newline. */
-const FLUSH_BYTES = 256
-
 const enc = new TextEncoder()
 let mp: MicroPythonInstance | null = null
-let pending: number[] = []
-let capturing: number[] | null = null
-
-const flush = (): void => {
-  if (capturing || pending.length === 0) return
-  const chunk = Uint8Array.from(pending)
-  pending = []
-  port.postMessage({ type: 'out', bytes: chunk })
-}
-
-const collect = (bytes: Uint8Array): void => {
-  if (capturing) {
-    for (const b of bytes) capturing.push(b)
-    return
-  }
-  let sawNewline = false
-  for (const b of bytes) {
-    pending.push(b)
-    if (b === 10) sawNewline = true
-  }
-  // A `while True:` with time.sleep starves the flush TIMER (Asyncify doesn't
-  // yield to macrotasks until the loop ends), but this stdout callback IS called
-  // as the program prints — so pump here, batched per line, to keep a running
-  // program's output + `SNK …` telemetry streaming instead of stalling.
-  if (sawNewline || pending.length >= FLUSH_BYTES) flush()
-}
+// Batches output per line, and posts from inside the stdout callback rather
+// than only on the timer — a `while True:` with `time.sleep` starves the timer
+// (the sleep is a busy-wait inside `runPython`), but the callback IS called as
+// the program prints. Shared with the web worker so the two cannot drift.
+const pump = new SimOutputPump((bytes) => port.postMessage({ type: 'out', bytes }))
+const { collect, flush } = pump
 
 // Messages that arrive while the WASM is still loading (the handler is async,
 // so a feed/run can interleave with init's awaits — e.g. typing right after a
@@ -117,19 +95,14 @@ port.on('message', async (msg: InMsg): Promise<void> => {
     return
   }
   if (msg.type === 'run') {
-    flush()
-    capturing = []
+    pump.beginCapture()
     try {
       instance.runPython(msg.code)
-      port.postMessage({
-        type: 'result',
-        id: msg.id,
-        value: new TextDecoder().decode(Uint8Array.from(capturing))
-      })
+      port.postMessage({ type: 'result', id: msg.id, value: pump.captured() })
     } catch (err) {
       port.postMessage({ type: 'result', id: msg.id, error: String(err) })
     } finally {
-      capturing = null
+      pump.endCapture()
     }
   }
   // Run a whole user PROGRAM with its output STREAMING to the terminal (#612):
@@ -139,7 +112,6 @@ port.on('message', async (msg: InMsg): Promise<void> => {
   // never surface it as a transport error (that program ran; it just raised).
   if (msg.type === 'runStream') {
     flush()
-    capturing = null
     try {
       instance.runPython(msg.code)
     } catch (err) {

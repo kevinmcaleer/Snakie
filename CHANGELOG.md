@@ -8,6 +8,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Run on the web simulator shows the program's output while it runs.** Click
+  Run on a blink program — `while True:` around `time.sleep(1)` and a
+  `print('hello')` — and the console stayed empty: no `hello`, ever, until
+  Stop. The program was running; its output was not leaving the simulator's
+  worker. The worker posted output to the page on a timer, and `time.sleep`
+  in the WebAssembly port is a busy-wait inside the interpreter, so a program
+  that never returns never let the timer fire. The desktop simulator had
+  learned this already and posted each line as it was printed; the web one had
+  not. Both workers now share one output pump that posts a line the moment it
+  is complete, so `hello` appears once a second, on the web as on the desktop.
 - **The PDF export always includes the blocks.** The blocks pages read the
   Blockly canvas on screen and nothing else, and that canvas only exists while
   the Blocks view is open. Press the print button from the Code workspace, from
