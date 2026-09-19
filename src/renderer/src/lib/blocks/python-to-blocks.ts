@@ -359,6 +359,26 @@ export interface CallRule {
    * `xs.pop(n - 1)` — somebody's line, rewritten.
    */
   oneBased?: readonly string[]
+  /**
+   * Sockets the generator writes as a PER CENT OF A FULL-SCALE NUMBER (#1163).
+   *
+   * `set power of (pwm) to (50) %` does not write `50`. It writes
+   * `pwm.duty_u16(int(50 * 65535 / 100))`, because 0-65535 is what MicroPython
+   * wants and per cent is what a child has — and the conversion is deliberately
+   * on the line where both are visible (see `palette/hardware.ts`).
+   *
+   * That wrapper was why the block had no `read` rule at all: the line came back
+   * as *call duty_u16 on (pwm) with (turn (50 × 65535 ÷ 100) into a whole
+   * number)*, five blocks and 116px of canvas for a line the palette has a
+   * one-row block for. Undoing arithmetic the generator itself wrote is the
+   * same job {@link oneBased} does for the Lists drawer's `- 1`, and it is
+   * bounded the same way: ONLY the exact shape the generator emits is unpicked,
+   * so anything else stays the raw line it was.
+   *
+   * Socket name → the full-scale number, which lives on the rule rather than in
+   * the reader so the 65535 is written down once per block that uses it.
+   */
+  percentOf?: Readonly<Record<string, number>>
 }
 
 /**
@@ -3176,7 +3196,14 @@ class Converter {
         fields[asField.field] = value
         continue
       }
-      inputs[sockets[socket++]] = { block: this.expression(call.args[i]) }
+      // THROUGH `ruleArgument`, so a socket the rule says is written wrapped —
+      // `int(n * 65535 / 100)` (#1163) — is unwrapped here as it is on every
+      // other path. Null means the argument is not the shape this block writes,
+      // and the line goes back to being somebody's own line.
+      const name = sockets[socket++]
+      const filled = this.ruleArgument(rule, name, call.args[i])
+      if (!filled) return null
+      inputs[name] = { block: filled }
     }
     this.claimed.add(call.module)
     const block: BlockJson = { type: rule.type, fields }
@@ -3219,11 +3246,65 @@ class Converter {
    * Ordinarily that is just the expression. A socket the rule lists in
    * {@link CallRule.oneBased} is counted back UP first, because the block face
    * counts from 1 and the Python counts from 0 — and null when that cannot be
-   * undone exactly, which declines the whole rule.
+   * undone exactly, which declines the whole rule. A socket the rule lists in
+   * {@link CallRule.percentOf} has the generator's own `int(n * FULL / 100)`
+   * taken back off it, on the same terms.
    */
   private ruleArgument(rule: CallRule, name: string, text: string): BlockJson | null {
     if (rule.oneBased?.includes(name)) return this.oneBased(text.trim())
+    const full = rule.percentOf?.[name]
+    if (full !== undefined) return this.percentOf(text.trim(), full)
     return this.expression(text)
+  }
+
+  /**
+   * `int(n * 65535 / 100)` → the `n` somebody put in the per-cent socket.
+   *
+   * TOKENS RATHER THAN A REGULAR EXPRESSION, because `n` is an expression and
+   * may hold the very characters the pattern is made of: `int(speed * scale *
+   * 65535 / 100)` and `int(f(a, b) * 65535 / 100)` both have to come apart at
+   * the LAST top-level `* FULL / 100`, and only there.
+   *
+   * Null for anything that is not exactly what the generator writes — a
+   * different scale, a stray bracket, a bare `int(x)` — which leaves the line
+   * on the raw path it was already on.
+   */
+  private percentOf(text: string, full: number): BlockJson | null {
+    const tokens = tokenize(text)
+    // `int` `(` … `*` FULL `/` `100` `)` is eight tokens with nothing in `n`.
+    if (!tokens || tokens.length < 8) return null
+    const [fn, open] = tokens
+    if (fn.kind !== 'name' || fn.text !== 'int') return null
+    if (open.kind !== 'open' || open.text !== '(') return null
+    const last = tokens[tokens.length - 1]
+    if (last.kind !== 'close' || last.text !== ')') return null
+    // THE CALL'S OWN BRACKET HAS TO BE THE ONE THAT CLOSES IT. `int(a) * b` is
+    // eight tokens too, and its first `)` is not its last.
+    const inner = tokens.slice(2, -1)
+    let depth = 0
+    for (const token of inner) {
+      if (token.kind === 'open') depth += 1
+      else if (token.kind === 'close') depth -= 1
+      if (depth < 0) return null
+    }
+    if (depth !== 0) return null
+    // The tail carries no brackets, so a balanced `inner` puts it at depth 0 —
+    // which is what makes this the OUTERMOST arithmetic rather than a coincidence
+    // inside somebody's own brackets.
+    const [star, scale, slash, hundred] = inner.slice(-4)
+    if (star?.kind !== 'op' || star.text !== '*') return null
+    if (scale?.kind !== 'number' || Number(scale.text) !== full) return null
+    if (slash?.kind !== 'op' || slash.text !== '/') return null
+    if (hundred?.kind !== 'number' || Number(hundred.text) !== 100) return null
+    const head = inner.slice(0, -4)
+    if (head.length === 0) return null
+    // Sliced from the source rather than re-joined, for the reason every other
+    // argument here is: an f-string or a comprehension cannot be spaced back
+    // together the way it was written.
+    const percent = this.expression(text.slice(head[0].start, head[head.length - 1].end))
+    // The socket CHECKS `Number` (#1071), so a percent that is not one declines
+    // the rule rather than building a workspace Blockly's loader throws on.
+    return fitsSocket(percent, 'Number') ? percent : null
   }
 
   private buildCall(rule: CallRule, args: readonly string[]): BlockJson | null {

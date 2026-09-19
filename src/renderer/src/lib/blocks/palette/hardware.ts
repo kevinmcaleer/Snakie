@@ -397,6 +397,17 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
   // ------------------------------------------------------------------------ PWM
   {
     type: 'snakie_pwm_duty',
+    // READ BACK, now that `percentOf` can undo the wrapper (#1163). The line is
+    // an ordinary call on the hoisted `pwm_15`, exactly as the frequency and
+    // off blocks' are; what kept it off this table was the `int(n * 65535/100)`
+    // around its argument, and that is now the reader's job rather than a
+    // reason to hand the whole line back as grey Python.
+    read: {
+      fn: 'duty_u16',
+      args: ['PERCENT'] as const,
+      percentOf: { PERCENT: 65535 },
+      receiver: { name: 'pwm', pinField: 'PIN', ctor: 'PWM(Pin({PIN}))' }
+    },
     circuitpython: {
       imports: CP_PWM,
       // `duty_cycle`, and the same 16-bit range — so the arithmetic that IS the
@@ -595,14 +606,31 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
      * dropdown. This one takes the PWM in a SOCKET, so a rover's two drive
      * channels are two names rather than two pin numbers.
      *
-     * NO `read` RULE, for the reason the brightness block has none: the percent
-     * is wrapped in `int(n * 65535 / 100)`, which is the lesson and cannot be
-     * unpicked into a socket by a table. `motor_a.duty_u16(…)` comes back as an
-     * ordinary line, which is honest about what it is.
+     * IT READS BACK (#1163). It did not, once: the percent is wrapped in
+     * `int(n * 65535 / 100)` — the lesson, and for a long time more than a
+     * table could unpick — so `pwm_motor_a.duty_u16(int(50 * 65535 / 100))`
+     * came back as the generic *call duty_u16 on (pwm_motor_a) with (turn (50 ×
+     * 65535 ÷ 100) into a whole number (int))*: five blocks, four levels of
+     * nesting and 116px of canvas, with an empty keyword-name box in the middle
+     * of it, for a line this one block writes in a single row. `percentOf` on
+     * the rule takes the generator's own arithmetic back off, and only in
+     * exactly the shape the generator writes it.
+     *
+     * `onNamedPin`, as the frequency and off blocks beside it — so this rule is
+     * tried in the named-pin pass, ahead of the hoisted `pwm_15` path, and the
+     * two can never race for the same line.
      */
     type: 'snakie_pwm_duty_named',
     category: 'hardware',
     help: 'ref-pwm',
+    read: {
+      fn: 'duty_u16',
+      on: 'PWM',
+      onNamedPin: true,
+      args: ['PERCENT'] as const,
+      percentOf: { PERCENT: 65535 },
+      shape: 'statement' as const
+    },
     json: {
       message0: 'set power of %1 to %2 %%',
       args0: [
@@ -1344,7 +1372,7 @@ function cpAdc(gen: MicroPythonGenerator, pin: string, block: Blockly.Block): st
  * writes, so a block that changes its function name or its constructor changes
  * both halves at once, or neither.
  *
- * EIGHT OF THE TWELVE. The four left out are left out for a reason, and it is
+ * NINE OF THE TWELVE. The three left out are left out for a reason, and it is
  * the same reason each time — their generated line is not a plain call on the
  * hoisted object:
  *
@@ -1353,11 +1381,15 @@ function cpAdc(gen: MicroPythonGenerator, pin: string, block: Blockly.Block): st
  *  - `snakie_pin_pressed` changes the SHAPE of its line with the dropdown —
  *    `not p.value()` for a pull-up, `p.value() == 1` otherwise — so the line is
  *    not a call at all.
- *  - `snakie_pwm_duty` and `snakie_adc_read` wrap theirs in arithmetic
- *    (`int(x * 65535 / 100)`, `* 3.3 / 65535`), which is the lesson and cannot
- *    be unpicked into a socket by a table.
+ *  - `snakie_adc_read` wraps its reading in arithmetic (`* 3.3 / 65535`) on the
+ *    VALUE side, where there is no equivalent of `percentOf` to undo it.
  *
- * Those four still convert — as raw Python blocks, exactly as before. Reading
+ * `snakie_pwm_duty` used to be the fourth, for the arithmetic it wraps its
+ * argument in (`int(x * 65535 / 100)`). {@link CallRule.percentOf} undoes
+ * exactly that shape and nothing else (#1163), so the block that WROTE the line
+ * is the block the line comes back as.
+ *
+ * Those three still convert — as raw Python blocks, exactly as before. Reading
  * back fewer lines correctly beats reading back more of them wrongly.
  */
 registerCallRules(
