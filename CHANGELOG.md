@@ -8,6 +8,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Blocks never overlap, and the functions use the width of the canvas.**
+  Open a converted `.py` and its functions, classes and main program could
+  land on top of each other. The canvas measured each stack straight after
+  loading it, but Blockly draws on the next animation frame, so every stack
+  measured 0px tall and they were laid one gutter apart. The layout now
+  flushes Blockly's render queue before it measures, so each island of blocks
+  gets a box of its true size and no two boxes share a pixel. The functions
+  no longer trail down a single column, either: they flow into as many columns
+  beside the main program as the viewport is wide, each column as tall as the
+  program (or the screen, for a short program) before the next one opens. A
+  file whose layout the learner arranged keeps that layout, but not its
+  overlaps — a stack that has grown into the one below it moves the lower one
+  down, on opening and after each edit, with the stack being edited staying
+  where it is. The PDF export's off-screen blocks get the same layout.
 - **Run on the web simulator shows the program's output while it runs.** Click
   Run on a blink program — `while True:` around `time.sleep(1)` and a
   `print('hello')` — and the console stayed empty: no `hello`, ever, until
