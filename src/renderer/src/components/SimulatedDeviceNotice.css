@@ -1,0 +1,90 @@
+/* The simulated-device notice (#1163) — a callout floating above the console
+   header's port dropdown. UNIQUE `sim-notice__` prefix (this CSS is global; see
+   the i2c-detect vs i2c-display collision).
+
+   Themed with the Soft Shell tokens rather than a self-contained palette: it
+   floats OVER the editor, not over the dark console bar it is anchored to, so a
+   dark-only card would sit as a black hole on the parchment skin. */
+
+.sim-notice {
+  /* FIXED, not absolute: the console header lives inside a resizable Panel that
+     clips its overflow, so an absolutely-positioned callout reaching above the
+     header is never painted. The component measures its anchor and sets `left`
+     / `bottom` (see SimulatedDeviceNotice.tsx). */
+  position: fixed;
+  z-index: 1100;
+  width: 19rem;
+  max-width: min(19rem, 80vw);
+  padding: 0.6rem 0.7rem 0.55rem;
+  border: var(--border-w, 1px) solid var(--shellbd);
+  border-left: 3px solid var(--gold);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--head);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  line-height: 1.45;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+}
+
+.sim-notice__title {
+  margin: 0 1.1rem 0.2rem 0;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--head);
+}
+
+.sim-notice__body {
+  margin: 0;
+  color: var(--txt2);
+}
+
+.sim-notice__body strong {
+  color: var(--head);
+  font-weight: 700;
+}
+
+.sim-notice__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+
+/* The dismiss ×, tucked into the top-right corner so it never pushes the prose. */
+.sim-notice__close {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.3rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.15rem;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--txt3);
+  cursor: pointer;
+}
+
+.sim-notice__close:hover {
+  color: var(--head);
+  background: rgba(127, 127, 127, 0.18);
+}
+
+/* The tail — a rotated square straddling the bottom edge, over the dropdown it
+   is talking about. Its border edges are the two that show. */
+.sim-notice__tail {
+  position: absolute;
+  bottom: -5px;
+  left: 1.1rem;
+  width: 9px;
+  height: 9px;
+  transform: rotate(45deg);
+  background: var(--card);
+  border-right: var(--border-w, 1px) solid var(--shellbd);
+  border-bottom: var(--border-w, 1px) solid var(--shellbd);
+}

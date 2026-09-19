@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   isVirtualPort,
   VIRTUAL_PORT_LABEL,
@@ -6,6 +6,9 @@ import {
 } from '../../../shared/virtual-device'
 import { onDeviceAction } from './device-bus'
 import { SimMemoryDialog } from './SimMemoryDialog'
+import { SimulatedDeviceNotice } from './SimulatedDeviceNotice'
+import { SIM_NOTICE_KEY, shouldShowSimNotice } from './sim-notice'
+import { useLocalStorage } from '../hooks/useLocalStorage'
 import { pushSimHeapBytes, readSimHeapBytes, writeSimHeapBytes } from '../store/sim-memory'
 import type { DeviceStatus, PortCircuitPy, PortInfo } from '../../../preload/index.d'
 
@@ -47,12 +50,29 @@ export function ConnectionControl({ status }: ConnectionControlProps): JSX.Eleme
   const [memOpen, setMemOpen] = useState(false)
   const [heapBytes, setHeapBytes] = useState(readSimHeapBytes)
   const [bootedHeap, setBootedHeap] = useState<number | null>(null)
+  // The "you're on the simulator" callout (#1163). Dismissed for good once the
+  // user has read it — it explains a default, and a default only needs
+  // explaining the first time you meet it.
+  const [simNoticeDismissed, setSimNoticeDismissed] = useLocalStorage<boolean>(
+    SIM_NOTICE_KEY,
+    false
+  )
+  // What the callout sits above. It is positioned from this element's rect
+  // rather than by `position: absolute`, because the console panel clips.
+  const rootRef = useRef<HTMLDivElement>(null)
 
   const connected = status.state === 'connected'
   const connecting = status.state === 'connecting' || busy
   // The cog belongs to the SELECTED port, not the connected one — the setting is
   // about the simulator's next boot, so it has to be reachable before connecting.
   const simSelected = isVirtualPort(selected)
+  // The callout belongs to the CONNECTED port: the dropdown is disabled only
+  // while something is connected, which is the state it explains a way out of.
+  const showSimNotice = shouldShowSimNotice({
+    state: status.state,
+    path: status.path,
+    dismissed: simNoticeDismissed
+  })
 
   const refreshPorts = useCallback(async (): Promise<void> => {
     try {
@@ -193,7 +213,18 @@ export function ConnectionControl({ status }: ConnectionControlProps): JSX.Eleme
   )
 
   return (
-    <div className="conn-control" title={error ?? undefined}>
+    <div className="conn-control" ref={rootRef} title={error ?? undefined}>
+      {showSimNotice && (
+        <SimulatedDeviceNotice
+          anchor={rootRef}
+          busy={connecting}
+          onDisconnect={() => {
+            setSimNoticeDismissed(true)
+            void handleToggle()
+          }}
+          onDismiss={() => setSimNoticeDismissed(true)}
+        />
+      )}
       <select
         className="conn-control__select"
         value={selected}
