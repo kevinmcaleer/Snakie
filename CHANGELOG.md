@@ -8,6 +8,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **⌘S / Ctrl+S saves the active file from anywhere in the window.** The
+  shortcut already worked with the cursor in the code editor and, on the
+  desktop, through the File menu's accelerator. Now a window-level listener
+  also catches it with focus in the file tree, the shell or a panel — which
+  matters most in the web app, where there is no native menu and the key
+  otherwise fell through to the browser's "Save page as…" dialog. Same on
+  macOS, Windows and Linux.
+
 - **Breadboard (400 point) in the Standard library.** A half-size solderless
   breadboard part whose 400 tie points are wired internally like the real
   thing: each row's `a`–`e` and `f`–`j` are two 5-way nets (the centre channel
