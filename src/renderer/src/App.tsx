@@ -1,4 +1,5 @@
 import { AppShell } from './components/AppShell'
+import { BoardCaptureHost } from './components/BoardCaptureHost'
 import { DeviceQueueDialog } from './components/DeviceQueueDialog'
 import { PromptProvider } from './components/PromptModal'
 import { RefactorPreview } from './components/RefactorPreview'
@@ -37,6 +38,12 @@ function App(): JSX.Element {
                       {/* The refactoring diff preview (#634): renders nothing
                         until a refactoring is proposed from the editor. */}
                       <RefactorPreview />
+                      {/* The board the PDF export photographs when the
+                        Electronics view isn't open (#1110): renders nothing
+                        until an export asks for one. It belongs HERE, inside
+                        the providers — a BoardPane mounted in a React root of
+                        its own has no workspace and throws. */}
+                      <BoardCaptureHost />
                     </TutorialsProvider>
                   </ConsoleProvider>
                 </DiagnosticsProvider>

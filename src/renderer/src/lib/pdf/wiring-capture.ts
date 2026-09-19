@@ -16,9 +16,13 @@
  *
  * `BoardPane` takes no props and feeds itself from the workspace store, so
  * mounting a second one into an off-screen host gives a real, laid-out canvas
- * without duplicating any of its plumbing here. It is imported dynamically, so
- * the board subsystem stays out of the main bundle exactly as `AppShell`'s
- * `React.lazy` intends.
+ * without duplicating any of its plumbing here — but it has to be mounted by
+ * the APP, inside its providers. This module used to open a React root of its
+ * own, which is a tree of its own: the pane threw `useWorkspace must be used
+ * within a WorkspaceProvider` on its first render, off where nothing could see
+ * it, and every export made from Blocks or Code came out with no Electronics
+ * page in it. `BoardCaptureHost` does the mounting now; see
+ * `components/board-capture-registry.ts`.
  *
  * The one hard rule: this returns null rather than something blank. A blank
  * wiring page is worse than no wiring page, so an empty or unmeasurable canvas
@@ -31,12 +35,12 @@
  * canvas it got hold of rather than capturing twice.
  */
 
-import { createRoot } from 'react-dom/client'
 import {
   inlineImageHrefs,
   serializeLiveSvg,
   stageBackground
 } from '../../components/svg-export'
+import { mountCaptureBoard } from '../../components/board-capture-registry'
 import { getWiringSvg } from '../../components/wiring-svg-registry'
 
 /** A serialised diagram at its natural CSS-pixel size. */
@@ -195,11 +199,13 @@ export async function captureWiring(
   if (typeof document === 'undefined') return null
 
   const host = offscreenHost()
-  let root: ReturnType<typeof createRoot> | null = null
+  let unmount: (() => void) | null = null
   try {
-    const { BoardPane } = await import('../../components/BoardPane')
-    root = createRoot(host)
-    root.render(<BoardPane />)
+    // The app renders the pane — inside its providers, reading the same
+    // workspace the Electronics view reads. Null means there is no app tree to
+    // render it in, which is "no diagram", not a failure.
+    unmount = mountCaptureBoard(host)
+    if (!unmount) return null
     // The board loads its part libraries and robot.yml asynchronously, so wait
     // for a canvas that measures the same twice running rather than grabbing
     // the first frame — which would print a board with no parts on it.
@@ -212,7 +218,7 @@ export async function captureWiring(
   } catch {
     return null
   } finally {
-    root?.unmount()
+    unmount?.()
     host.remove()
   }
 }
