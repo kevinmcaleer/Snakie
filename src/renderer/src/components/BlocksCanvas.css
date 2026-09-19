@@ -227,3 +227,34 @@
     animation: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * THE ZOOM-FIT GLYPH (#1150).
+ *
+ * `zoom.ts` swaps the sprite out of Blockly's reset control for a corner-
+ * bracket path. Blockly's own rules only reach `.blocklyZoom > image`, so the
+ * path needs the resting/hover/press opacities restated — and it needs the same
+ * ones, because the whole point is that the four controls in that corner read
+ * as one set.
+ *
+ * `#000` for the same reason: it is the ink in `sprites.png`, which `+`, `-`
+ * and the trashcan are drawn from. Taking a theme token here would make this
+ * one button a different grey from the three above it in at least one skin.
+ * ------------------------------------------------------------------------- */
+.blocks-canvas__host .blocklyZoom > .blocks-zoom-fit {
+  fill: none;
+  stroke: #000;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.4;
+}
+
+.blocks-canvas__host .blocklyZoom:hover > .blocks-zoom-fit,
+.blocks-canvas__host .blocklyZoom:focus > .blocks-zoom-fit {
+  opacity: 0.8;
+}
+
+.blocks-canvas__host .blocklyZoom:active > .blocks-zoom-fit {
+  opacity: 1;
+}

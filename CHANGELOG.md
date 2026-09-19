@@ -799,6 +799,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Zooming the canvas no longer resizes the shelf, and one press shows the
+  whole program** (#1150). Blockly's flyout — the drawer a category opens — is a
+  workspace of its own whose scale followed the canvas's, so zooming in to look
+  at a stack blew the shelf up with it, pushing half the category off the bottom
+  and moving every block out from under the hand reaching for it. The shelf is
+  chrome: it now holds the size it opens at, whatever the canvas is doing, the
+  way the category list beside it always has.
+
+  The third control under `+` and `-` becomes a **toggle between 100% and zoom
+  to fit**, behind the corner-bracket icon that means "fit" — in the same grey
+  as the `+`, `-` and trashcan above it, since it is still Blockly's own control
+  with a new glyph and a new action rather than a button drawn over the canvas.
+  At 100% it fits the program to the window; from anywhere else — zoomed in,
+  zoomed out, or fitted a moment ago — it comes back to 100%. An empty canvas
+  goes to 100% either way, rather than fitting the margin around no blocks at
+  all and landing at 300% on nothing.
+
 - **Blocks are laid out in the order the file has them.** (#1145) A `def` leaves
   the chain — Blockly models it as a hat, which has no previous or next
   connection — and every hat used to be collected to the top of the canvas with
