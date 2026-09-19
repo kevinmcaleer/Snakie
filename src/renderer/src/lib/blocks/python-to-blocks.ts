@@ -104,6 +104,15 @@ const OUTPUT_TYPE = new Map<string, SocketType>([
   ['math_round', 'Number'],
   ['snakie_math_abs', 'Number'],
   ['text_length', 'Number'],
+  // The bits (#1127). THE LITERALS ARE NUMBERS AND THE OPERATORS ARE NOT, which
+  // looks inconsistent and is not: `if flags & 0x01:` is how every driver asks
+  // whether a bit is set, so the result of a mask has to fit a socket that
+  // checks Boolean, and the blocks in `maths.ts` say so by leaving their output
+  // unchecked. This table mirrors what those blocks DECLARE — a row here that
+  // disagrees with the block is a workspace Blockly refuses to load, which is
+  // the whole reason the table exists.
+  ['snakie_hex_number', 'Number'],
+  ['snakie_binary_number', 'Number'],
   ['logic_boolean', 'Boolean'],
   ['logic_compare', 'Boolean'],
   ['logic_negate', 'Boolean'],
@@ -964,6 +973,13 @@ function mentions(text: string, name: string): boolean {
  * Groups: the `async` keyword or undefined, the name, the parameter list.
  */
 const DEF_HEADER = /^(async\s+)?def\s+([A-Za-z_]\w*)\((.*)\)\s*:$/
+
+/** The multiplicative operators, as `math_arithmetic`'s dropdown spells them. */
+const MULTIPLICATIVE_OP: Record<string, string> = {
+  '*': 'MULTIPLY',
+  '/': 'DIVIDE',
+  '//': 'FLOORDIVIDE'
+}
 
 /** Every augmented-assign operator the block has a setting for (W8, #1095). */
 const AUGMENTED = new Set([
@@ -2895,7 +2911,7 @@ class Converter {
     const isCompare = (tok: Token | undefined): boolean =>
       Boolean(tok) && tok!.kind === 'op' && operators.includes(tok!.text)
 
-    const left = this.parseAdditive(tokens, at)
+    const left = this.parseBitOr(tokens, at)
     if (!left) return null
 
     // `x is None` → the Logic drawer's own block (W2, #1089).
@@ -2924,7 +2940,7 @@ class Converter {
       tokens[left.next + 1]?.kind === 'keyword' &&
       tokens[left.next + 1].text === 'in'
     if ((is?.kind === 'keyword' && is.text === 'in') || notIn) {
-      const right = this.parseAdditive(tokens, left.next + (notIn ? 2 : 1))
+      const right = this.parseBitOr(tokens, left.next + (notIn ? 2 : 1))
       if (!right) return null
       if (!fitsSocket(right.block, 'Array')) return null
       return {
@@ -2939,7 +2955,7 @@ class Converter {
 
     const op = tokens[left.next]
     if (!isCompare(op)) return left
-    const right = this.parseAdditive(tokens, left.next + 1)
+    const right = this.parseBitOr(tokens, left.next + 1)
     if (!right) return null
     // The third operator at this level is what makes it a chain.
     if (isCompare(tokens[right.next])) return null
@@ -2951,6 +2967,81 @@ class Converter {
       },
       next: right.next
     }
+  }
+
+  /**
+   * `|`, then `^`, then `&`, then `<<`/`>>` — Python's own four levels, in
+   * Python's own order (#1127, epic #1119).
+   *
+   * THEY GO BETWEEN COMPARISON AND ADDITION, which is where Python puts them and
+   * is the whole reason they are four functions rather than one: `x & 1 == 0`
+   * means `x & (1 == 0)` in Python, and a reader that folded them into a single
+   * precedence level would say the other thing — silently, and about a line that
+   * is in every driver ever written. The levels cost four small functions and
+   * buy exactness.
+   *
+   * Left-associative, like the arithmetic above, and the emitters in `maths.ts`
+   * ask for one step looser on the left so `a & b & c` comes back as itself.
+   */
+  private parseBitOr(
+    tokens: readonly Token[],
+    at: number
+  ): { block: BlockJson; next: number } | null {
+    return this.bitwise(tokens, at, '|', 'OR', (t, i) => this.parseBitXor(t, i))
+  }
+
+  private parseBitXor(
+    tokens: readonly Token[],
+    at: number
+  ): { block: BlockJson; next: number } | null {
+    return this.bitwise(tokens, at, '^', 'XOR', (t, i) => this.parseBitAnd(t, i))
+  }
+
+  private parseBitAnd(
+    tokens: readonly Token[],
+    at: number
+  ): { block: BlockJson; next: number } | null {
+    return this.bitwise(tokens, at, '&', 'AND', (t, i) => this.parseShift(t, i))
+  }
+
+  /** One bitwise level: the operator, the dropdown value, and what is below it. */
+  private bitwise(
+    tokens: readonly Token[],
+    at: number,
+    op: string,
+    field: string,
+    next: (tokens: readonly Token[], at: number) => { block: BlockJson; next: number } | null
+  ): { block: BlockJson; next: number } | null {
+    return this.binary(
+      tokens,
+      at,
+      [op],
+      (a, b) => ({
+        type: 'snakie_bitwise',
+        fields: { OP: field },
+        inputs: { A: { block: a }, B: { block: b } }
+      }),
+      next,
+      'Number'
+    )
+  }
+
+  private parseShift(
+    tokens: readonly Token[],
+    at: number
+  ): { block: BlockJson; next: number } | null {
+    return this.binary(
+      tokens,
+      at,
+      ['<<', '>>'],
+      (a, b, op) => ({
+        type: 'snakie_bit_shift',
+        fields: { DIR: op === '>>' ? 'RIGHT' : 'LEFT' },
+        inputs: { VALUE: { block: a }, BY: { block: b } }
+      }),
+      (t, i) => this.parseAdditive(t, i),
+      'Number'
+    )
   }
 
   private parseAdditive(
@@ -2978,7 +3069,9 @@ class Converter {
     return this.binary(
       tokens,
       at,
-      ['*', '/', '%'],
+      // `//` BINDS EXACTLY HERE (#1127) — same level as `*`, `/` and `%`, and
+      // left-associative with them, which is what `7 // 2 * 3` depends on.
+      ['*', '/', '%', '//'],
       (a, b, op): BlockJson | null =>
         op === '%'
           ? // `%` ON A STRING IS FORMATTING, NOT MODULO (#1068).
@@ -2999,7 +3092,7 @@ class Converter {
             : { type: 'math_modulo', inputs: { DIVIDEND: { block: a }, DIVISOR: { block: b } } }
           : {
               type: 'math_arithmetic',
-              fields: { OP: op === '*' ? 'MULTIPLY' : 'DIVIDE' },
+              fields: { OP: MULTIPLICATIVE_OP[op] ?? 'MULTIPLY' },
               inputs: { A: { block: a }, B: { block: b } }
             },
       (t, i) => this.parsePower(t, i),
@@ -3082,6 +3175,21 @@ class Converter {
     const tok = tokens[at]
     if (!tok) return null
 
+    // `~mask` (#1127). It binds where unary minus does — tighter than `*`,
+    // looser than `**` — and the one place that matters is `~a ** 2`, which
+    // Python reads as `~(a ** 2)`. Reading it here would give `(~a) ** 2`, a
+    // different number, so that shape is declined and stays verbatim.
+    if (tok.kind === 'op' && tok.text === '~') {
+      const inner = this.parseAtom(tokens, at + 1)
+      if (!inner) return null
+      if (tokens[inner.next]?.kind === 'op' && tokens[inner.next].text === '**') return null
+      if (!fitsSocket(inner.block, 'Number')) return null
+      return {
+        block: { type: 'snakie_bitwise_not', inputs: { VALUE: { block: inner.block } } },
+        next: inner.next
+      }
+    }
+
     if (tok.kind === 'op' && tok.text === '-') {
       const inner = this.parseAtom(tokens, at + 1)
       if (!inner) return null
@@ -3108,6 +3216,25 @@ class Converter {
     }
 
     if (tok.kind === 'number') {
+      // A HEX OR BINARY LITERAL COMES BACK AS ITSELF (#1127). `math_number`
+      // holds a number, so `0x3C` through it is `60` — the same value, a
+      // different line, and a whole file's conversion refused by the round-trip
+      // gate. These two blocks hold the DIGITS as text, so what the learner
+      // copied out of a datasheet is what goes back into the mirror.
+      //
+      // A leading underscore is excluded rather than handled: `0x_FF` is legal
+      // Python and the field would normalise it away, which is a rewrite.
+      const hex = /^0x([0-9a-fA-F][0-9a-fA-F_]*)$/.exec(tok.text)
+      if (hex) {
+        return { block: { type: 'snakie_hex_number', fields: { HEX: hex[1] } }, next: at + 1 }
+      }
+      const binary = /^0b([01][01_]*)$/.exec(tok.text)
+      if (binary) {
+        return {
+          block: { type: 'snakie_binary_number', fields: { BITS: binary[1] } },
+          next: at + 1
+        }
+      }
       const written = tok.text.replace(/_/g, '')
       const n = Number(written)
       if (!Number.isFinite(n)) return null

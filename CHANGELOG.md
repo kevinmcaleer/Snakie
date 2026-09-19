@@ -8,6 +8,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The bits: masking, shifting, `//`, and hex you can actually type.** (#1127,
+  epic #1119) The Maths drawer knew five operators — `+ - * / **` — so `&`, `|`,
+  `^`, `~`, `<<`, `>>` and `//` could not be said in blocks at all. That is the
+  most MicroPython-shaped hole in the palette: bitwise arithmetic is not an
+  advanced topic on a microcontroller, it is the vocabulary. Masking a status
+  register, packing a command byte, `value & 0xFF`, `1 << pin` — every one of
+  them was grey escape-hatch text.
+
+  And you could not write `0x3C`. `math_number` holds a *number*, so a hex
+  address copied out of a datasheet came back as `60`: the same value, a
+  different line, and a whole file's conversion refused by the round-trip gate.
+  There are two literal blocks now — **hex** and **binary** — that hold the
+  digits as text, so `0x3C` stays `0x3C` and `0xDE_AD` keeps its underscore.
+
+  The blocks say **bits and**, **bits or**, **bits xor**, never the bare words
+  the Logic drawer already owns: a learner who reaches for `and` and gets `&`
+  has been taught something false in a way that will not surface until a number
+  comes out wrong. `//` went onto the division dropdown rather than becoming a
+  block of its own, because it is division.
+
+  The reader learned Python's four bitwise precedence levels, in Python's own
+  order — between comparison and addition, which is the opposite of C and the
+  reason `x & 1 == 0` has to read as `(x & 1) == 0`. There is a help page,
+  **Bits & bitwise maths**, that explains masking with a real status register.
+
 - **Every variable you make is on the Variables shelf, and a button makes one.**
   (#1117) The drawer was a fixed list of three nameless blocks however many
   variables a learner had: `score`, `lives` and `speed` all lived inside one

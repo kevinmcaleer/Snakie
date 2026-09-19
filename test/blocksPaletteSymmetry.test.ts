@@ -73,6 +73,12 @@ const READ_DIRECTLY: Record<string, string> = {
   math_number: 'x = 1\n',
   math_arithmetic: 'x = a + b\n',
   math_modulo: 'x = a % b\n',
+  // --- the bits (#1127)
+  snakie_bitwise: 'x = status & mask\n',
+  snakie_bitwise_not: 'x = ~mask\n',
+  snakie_bit_shift: 'x = 1 << pin\n',
+  snakie_hex_number: 'addr = 0x3C\n',
+  snakie_binary_number: 'mask = 0b1010\n',
   text: "x = 'hi'\n",
   logic_boolean: 'x = True\n',
   logic_null: 'x = None\n',
@@ -159,6 +165,11 @@ const NO_READER: Record<string, string> = {
   snakie_map_range:
     'Writes arithmetic, not a call. The expression parser already reads that arithmetic back as ' +
     'the nest of math_arithmetic blocks it literally is.',
+  snakie_bit_of:
+    'Writes `(value >> (n - 1)) & 1` — three operators, not a call. The expression parser reads ' +
+    'that back as the shift and the mask it literally is, which is two real blocks rather than ' +
+    'one; claiming the shape here would mean pattern-matching arithmetic, and being wrong about ' +
+    'that rewrites a formula somebody wrote (#1127).',
   text_join:
     'Writes a `+` chain of `str(...)` calls, which reads back as the arithmetic it is written as.',
   lists_create_with: 'A list display `[1, 2]` is a literal the expression parser does not read yet.',

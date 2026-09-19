@@ -276,6 +276,12 @@ export const HELP_SECTIONS: HelpNode[] = [
           { id: 'ref-functions', kind: 'article', title: 'Functions', accent: A.page },
           { id: 'ref-types', kind: 'article', title: 'Values & types', accent: A.page },
           { id: 'ref-builtins', kind: 'article', title: 'Built-in functions', accent: A.page },
+          // Bits, hex and masking (#1127, epic #1119). Plain Python, so it sits
+          // here rather than in the MicroPython section — but it is here
+          // BECAUSE of MicroPython: a status register is the first place most
+          // learners meet `&`, and the Maths drawer's bitwise blocks all point
+          // at this page.
+          { id: 'ref-bits', kind: 'article', title: 'Bits & bitwise maths', accent: A.page },
           { id: 'ref-classes', kind: 'article', title: 'Classes', accent: A.page },
           { id: 'ref-exceptions', kind: 'article', title: 'Errors & exceptions', accent: A.page },
           { id: 'ref-imports', kind: 'article', title: 'Imports & modules', accent: A.page },
