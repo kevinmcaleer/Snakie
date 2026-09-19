@@ -312,9 +312,16 @@ describe('what stays an ordinary line, and why', () => {
   it('a constructor that is not what the block writes', () => {
     // The exact-match safety rule, as everywhere else: somebody wrote their own,
     // and reading it back as this block would rewrite it.
-    const src = `${IMPORT}motor_a = PWM(Pin(15), freq=1000)\n`
-    expect(types(src)).not.toContain(PWM_ALIAS_BLOCK)
-    roundTrips(src)
+    //
+    // `freq=` USED TO BE THE EXAMPLE HERE and is now the block's own —
+    // see the suite below. These are the shapes still past it: a second keyword
+    // the block has nowhere to put, and a positional argument, which is not
+    // what `freq=` means even though it lands in the same parameter.
+    for (const ctor of ['PWM(Pin(15), freq=1000, duty_u16=0)', 'PWM(Pin(15), 1000)']) {
+      const src = `${IMPORT}motor_a = ${ctor}\n`
+      expect([ctor, types(src).includes(PWM_ALIAS_BLOCK)]).toEqual([ctor, false])
+      roundTrips(src)
+    }
   })
 
   it('a PWM built on a pin that was itself named IS this block', () => {
@@ -400,6 +407,86 @@ describe('the duty line reads back as the block that wrote it (#1163)', () => {
     const src = `${IMPORT}pwm_15 = PWM(Pin(15))\n\npwm_15.duty_u16(int(25 * 65535 / 100))\n`
     expect(types(src)).toContain('snakie_pwm_duty')
     expect(types(src)).not.toContain('snakie_pwm_duty_named')
+    roundTrips(src)
+  })
+})
+
+/**
+ * THE FREQUENCY ON THE DECLARATION.
+ * =============================================================================
+ *
+ * `pwm_motor_a = PWM(motor_a, freq=1000)` is how nearly every robot tutorial
+ * opens, and it matched no template this palette had — so `pwm_motor_a` was not
+ * a declared name, and every `pwm_motor_a.duty_u16(int(50 * 65535 / 100))`
+ * under it came back as the generic *call duty_u16 on (pwm_motor_a) with (turn
+ * (50 × 65535 ÷ 100) into a whole number (int))*. One keyword argument at the
+ * top of a file turned the whole of its hardware grey.
+ */
+describe('a PWM declared with its frequency', () => {
+  it('is the naming block, with the Hz in its own field', () => {
+    const src = `${IMPORT}motor_a = PWM(Pin(15), freq=1000)\n`
+    expect(types(src)).toContain(PWM_ALIAS_BLOCK)
+    expect(one(src, PWM_ALIAS_BLOCK)!.fields).toEqual({ PIN: '15', NAME: 'motor_a', FREQ: '1000' })
+    roundTrips(src)
+  })
+
+  it('leaves the field empty when the constructor has no frequency', () => {
+    // And that is what stops this rewriting every workspace saved before the
+    // field existed: blank means "don't set one".
+    const src = `${IMPORT}motor_a = PWM(Pin(15))\n`
+    expect(one(src, PWM_ALIAS_BLOCK)!.fields).toEqual({ PIN: '15', NAME: 'motor_a' })
+    roundTrips(src)
+  })
+
+  it('takes the frequency on a PWM built on a pin that was itself named', () => {
+    const src = [
+      'from machine import PWM, Pin',
+      '',
+      'motor_pin = Pin(15, Pin.OUT)',
+      'motor_a = PWM(motor_pin, freq=1000)',
+      ''
+    ].join('\n')
+    expect(one(src, PWM_ALIAS_BLOCK)!.fields).toEqual({
+      PIN: 'motor_pin',
+      NAME: 'motor_a',
+      FREQ: '1000'
+    })
+    roundTrips(src)
+  })
+
+  it('takes a NAME as the frequency, not just a number', () => {
+    const src = `${IMPORT}motor_a = PWM(Pin(15), freq=MOTOR_HZ)\n`
+    expect(one(src, PWM_ALIAS_BLOCK)!.fields).toEqual({
+      PIN: '15',
+      NAME: 'motor_a',
+      FREQ: 'MOTOR_HZ'
+    })
+    roundTrips(src)
+  })
+
+  it('makes the power lines under it blocks again — the whole point', () => {
+    // The bug as it was reported: a robot file whose every motor line read
+    // *call duty_u16 on (pwm_motor_a) with (turn (50 × 65535 ÷ 100) into a
+    // whole number (int))*, five blocks deep, for a line one block writes.
+    const src = [
+      'from machine import PWM, Pin',
+      '',
+      'motor_a = Pin(8, Pin.OUT)',
+      'pwm_motor_a = PWM(motor_a, freq=1000)',
+      '',
+      'pwm_motor_a.duty_u16(int(50 * 65535 / 100))',
+      ''
+    ].join('\n')
+    expect(types(src)).toContain('snakie_pwm_duty_named')
+    expect(types(src)).not.toContain('snakie_python_call')
+    roundTrips(src)
+  })
+
+  it('a frequency the block could not write back is left as an ordinary line', () => {
+    // Arithmetic in the constructor is not a shape a text field can hold, and
+    // the exact-match rule is what keeps somebody's own line theirs.
+    const src = `${IMPORT}motor_a = PWM(Pin(15), freq=1000 * 2)\n`
+    expect(types(src)).not.toContain(PWM_ALIAS_BLOCK)
     roundTrips(src)
   })
 })

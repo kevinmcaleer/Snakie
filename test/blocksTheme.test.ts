@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
   BLOCK_CATEGORIES,
+  DEFAULT_BLOCK_SHAPE,
   FALLBACK_TOKENS,
+  SOFT_SHELL_RENDERERS,
   buildSoftShellTheme,
   categoryColour,
   categoryStyleName,
@@ -180,6 +182,31 @@ describe('softShellWorkspaceOptions (#1009)', () => {
     expect(o.sounds).toBe(false)
     expect(o.trashcan).toBe(true)
     expect(o.zoom?.controls).toBe(true)
+  })
+
+  it('names the renderer for the shape it was asked for', () => {
+    // Three renderers, three names, and the options are the only place the two
+    // meet — a shape that resolved to a name Blockly has not been taught throws
+    // during injection, which is a blank canvas rather than a wrong-looking one.
+    for (const shape of ['standard', 'classic', 'scratch'] as const) {
+      expect([shape, softShellWorkspaceOptions(FALLBACK_TOKENS, shape).renderer]).toEqual([
+        shape,
+        SOFT_SHELL_RENDERERS[shape]
+      ])
+    }
+  })
+
+  it('falls back to the default shape for a value this build does not know', () => {
+    // A settings value written by a newer build, or by hand. Better a canvas in
+    // the wrong shape than no canvas at all.
+    const o = softShellWorkspaceOptions(FALLBACK_TOKENS, 'hexagonal' as never)
+    expect(o.renderer).toBe(SOFT_SHELL_RENDERERS[DEFAULT_BLOCK_SHAPE])
+  })
+
+  it('asks for the default shape when nobody says', () => {
+    expect(softShellWorkspaceOptions(FALLBACK_TOKENS).renderer).toBe(
+      SOFT_SHELL_RENDERERS[DEFAULT_BLOCK_SHAPE]
+    )
   })
 })
 

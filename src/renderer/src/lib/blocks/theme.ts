@@ -440,10 +440,12 @@ export function buildSoftShellTheme(tokens: ThemeTokens): SoftShellThemeSpec {
     },
     // Plus Jakarta Sans — Soft Shell's UI face — on block text. The mono face
     // belongs inside code FIELDS, which is a per-field style, not a theme one.
-    // 12, not Blockly's 11: the blocks got roomier (see `renderer.ts`) and text
-    // that stayed put would have read as a small label floating in a large
-    // shape. This is also the size Blockly writes into the renderer's
-    // `FIELD_TEXT_FONTSIZE`, so the field boxes are measured around it.
+    // 12, not Blockly's 11. This is the size Blockly writes into the renderer's
+    // `FIELD_TEXT_FONTSIZE`, and the field boxes are measured around it — so it
+    // is the ONE dial that gives a block more room without touching a geometry
+    // constant, which is exactly why `renderer.ts` sends you here instead.
+    // Plus Jakarta Sans also runs a little smaller than Blockly's stock sans at
+    // the same nominal size, so 11 read as fine print on the palette.
     fontStyle: { family: 'Plus Jakarta Sans, system-ui, sans-serif', weight: '600', size: 12 },
     // A hat on every top-level block: it is the visual that says "programs start
     // here", which is the single most useful thing the canvas can tell a child
@@ -454,14 +456,46 @@ export function buildSoftShellTheme(tokens: ThemeTokens): SoftShellThemeSpec {
 
 /** The workspace options that don't depend on the theme (grid, zoom, trashcan). */
 /**
- * The Soft Shell renderer's registered name (#573).
+ * WHICH SHAPE THE BLOCKS WEAR.
  *
- * Declared HERE, with the options that name it, rather than imported from
+ * Blockly ships three renderers and they are genuinely different vocabularies,
+ * not three levels of a dial — so which one suits a room is a question this
+ * cannot answer for everybody, and Settings ▸ Appearance asks it.
+ *
+ *  - `standard` — `thrasos`. Blockly's row layout with a flat outline. The
+ *    default here, because it is the most compact and it sits under the Soft
+ *    Shell palette without arguing with it.
+ *  - `classic` — `geras`. Blockly's OWN default, the same geometry with a bevel
+ *    down the left and top of every block. What blockly.games looks like.
+ *  - `scratch` — `zelos`. Blockly's port of `scratch-blocks`: pill reporters,
+ *    hexagonal booleans, everything inline, and roughly twice as tall. What a
+ *    child arriving from Scratch or MakeCode already knows.
+ */
+export type BlockShape = 'standard' | 'classic' | 'scratch'
+
+/** The shape a canvas wears when nobody has chosen. */
+export const DEFAULT_BLOCK_SHAPE: BlockShape = 'standard'
+
+/**
+ * The Soft Shell renderers' registered names (#573), one per shape.
+ *
+ * Declared HERE, with the options that name them, rather than imported from
  * `renderer.ts` — this module is deliberately Blockly-free so the golden-file
  * theme tests can run in plain node, and `renderer.ts` subclasses Blockly's own
  * classes. The dependency points that way instead.
+ *
+ * `standard` KEEPS THE BARE NAME it has always had. A renderer name is written
+ * into nothing we persist, but it is in screenshots, in `docs/`, and in the
+ * habit of anybody who has read this file before.
  */
-export const SOFT_SHELL_RENDERER = 'snakie-soft-shell'
+export const SOFT_SHELL_RENDERERS: Readonly<Record<BlockShape, string>> = {
+  standard: 'snakie-soft-shell',
+  classic: 'snakie-soft-shell-classic',
+  scratch: 'snakie-soft-shell-scratch'
+}
+
+/** The default shape's registered name — what most callers mean. */
+export const SOFT_SHELL_RENDERER = SOFT_SHELL_RENDERERS[DEFAULT_BLOCK_SHAPE]
 
 /**
  * The custom property a block's own text colour is published on (#1099).
@@ -487,11 +521,14 @@ export const BLOCK_TEXT_VAR = '--snakie-block-text'
  */
 export const COMMENT_BLOCK_STYLE = 'comment_blocks'
 
-export function softShellWorkspaceOptions(tokens: ThemeTokens): Partial<BlocklyOptions> {
+export function softShellWorkspaceOptions(
+  tokens: ThemeTokens,
+  shape: BlockShape = DEFAULT_BLOCK_SHAPE
+): Partial<BlocklyOptions> {
   return {
-    // Thrasos's row layout, wearing the Soft Shell geometry — rounder corners
-    // and room around a field. `installSoftShellRenderer()` must have run.
-    renderer: SOFT_SHELL_RENDERER,
+    // The Soft Shell palette on one of Blockly's three geometries — see
+    // {@link BlockShape}. `installSoftShellRenderers()` must have run.
+    renderer: SOFT_SHELL_RENDERERS[shape] ?? SOFT_SHELL_RENDERER,
     grid: { spacing: 24, length: 3, colour: tokens.line, snap: true },
     zoom: {
       controls: true,

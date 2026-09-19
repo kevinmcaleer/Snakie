@@ -22,6 +22,61 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The functions get a column of their own, and nothing is drawn on top of
+  anything.** Opening a MicroPython file in Blocks or Split laid every
+  top-level stack out in one tall column — so a file that defines four
+  functions opened with its program a screen and a half below the last of them,
+  and you scrolled past everything to find where it starts. Worse, the column
+  was spaced by an ESTIMATE: the converter is pure and has never loaded Blockly,
+  so it counted rows and multiplied by numbers somebody had read off a
+  screenshot. When the estimate came in short — which a `def` full of
+  arithmetic reliably did — the next stack was drawn straight over the one
+  above it.
+
+  Now the program runs down the left and the functions and methods stand beside
+  it in a second column, each clear of the one above, and the sizes are
+  MEASURED rather than guessed: the canvas asks each stack how big it actually
+  rendered. A layout you arranged yourself is still yours — a file whose footer
+  matched its code opens exactly as you left it, and a stack you drag aside
+  stays where you put it even as the code pane keeps re-converting around it.
+
+- **Settings ▸ Appearance ▸ Block shape — try all three Blockly geometries.**
+  Blockly ships three renderers and they are three vocabularies rather than
+  three settings of one dial, so which one suits a room is not a question the
+  app can answer on its own: a class arriving from Scratch wants the pills and
+  the hexagons, and somebody reading a forty-line robot file wants the compact
+  rows.
+
+  **Standard** is `thrasos`, the flat standard rows, and the default. **Classic**
+  is `geras`, Blockly's own default, the same geometry with a bevelled edge.
+  **Scratch** is `zelos`, the `scratch-blocks` port — pill reporters, hexagonal
+  booleans, roughly twice as tall. All three wear the same Soft Shell palette,
+  fonts and per-category lettering, so the choice is a SHAPE and nothing else,
+  and all three are stock: the hand-tuning that made the old canvas fragile is
+  not coming back on any of them.
+
+  An open canvas redraws as soon as you pick one. Blockly fixes its renderer
+  when a workspace is created and offers no setter, so this is the one
+  appearance setting that re-injects the canvas rather than restyling it — your
+  file, your scroll position and your arrangement come straight back. The
+  printed PDF follows the same setting, so a page matches the screen it was
+  printed from.
+
+- **A PWM can be named with its frequency: `name PWM on pin [GP15 ▾] as
+  [motor_a] at [1000] Hz`.** `pwm_motor_a = PWM(motor_a, freq=1000)` is
+  how nearly every robot tutorial opens, and it matched nothing this palette
+  writes — so `pwm_motor_a` was not a name the blocks knew, and every
+  `pwm_motor_a.duty_u16(int(50 * 65535 / 100))` under it came back as the
+  generic *call duty_u16 on (pwm_motor_a) with (turn (50 × 65535 ÷ 100) into a
+  whole number (int))*: five blocks and four levels of nesting for a line that
+  *set power of (pwm_motor_a) to (50) %* writes in one row. One keyword
+  argument at the top of a file turned the whole of its hardware grey.
+
+  The Hz box starts EMPTY and empty means "don't set one", so every program
+  saved before this field existed still writes the constructor it always wrote.
+  The separate *set frequency of (…) to (…) Hz* block is still how you change it
+  while the program runs; this is how you say what it starts at.
+
 - **Yellow TT Motor** added to the standard parts library — the classic
   yellow-gearbox 3–6 V brushed DC motor found on most budget robot chassis
   kits, alongside the existing N20 motor part.
@@ -1300,6 +1355,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A file no longer opens as grey `call` blocks depending on how fast a chunk
+  downloaded.** Every rule the reader matches against is registered when
+  a palette module is imported, and the palettes arrive with the block canvas,
+  which is loaded on demand — while the component that asks for the conversion
+  is not. Lose that race and the file is converted against a reader that knows
+  no hardware at all: `motor_a.value(1)` as *call value on (motor_a) with (1)*
+  instead of *set pin (motor_a) to (1 high)*, for every line in the program. The
+  answer was then remembered against the file's text, so it never recovered —
+  the same file opened right or wrong depending on the network.
+
+  The reader now says when its vocabulary has grown, and a file converted
+  against a smaller one is simply converted again.
+
 - **An analogue reading comes back as the block that took it** (#1163). *read
   (GP26) as [volts]* writes `adc_26.read_u16() * 3.3 / 65535` — 0-65535 is what
   the hardware gives, volts is what was asked for, and the conversion sits on
@@ -1363,10 +1431,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   registered has a height nothing in the converter has ever seen.
 
   So the canvas stops guessing. Once Blockly has drawn the workspace, every
-  stack's height is a fact, and the column is re-spaced to exactly one gutter
-  between them — every gap in `examples/` is now 48px, from a spread of -18 to
-  512. A stack you dragged aside keeps its place and drops out of the column, so
-  the others close up around it rather than re-stacking over the top of it.
+  stack's height is a fact, and the stacks are spaced by exactly one 48px gutter
+  — down from a spread of -18 to 512. A stack you dragged aside keeps its place
+  and drops out of the column, so the others close up around it rather than
+  re-stacking over the top of it.
+
+  (A second change in this same release reached the same conclusion from the
+  other end and removed the estimate outright; the two are now one pass, which
+  also puts the functions in a column of their own. See *The functions get a
+  column of their own* above.)
 
 - **A PWM you had named but not yet used was missing from the *set power of*
   dropdown.** `motor_b_speed = PWM(Pin(7))` sat in the program, right under a
@@ -1659,6 +1732,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the last PWM block takes `PWM` out of the import line with it.
 
 ### Changed
+
+- **The blocks are standard Blockly shapes again.** The canvas rendered
+  on Zelos — Blockly's port of `scratch-blocks` — for the Scratch and MakeCode
+  feel, and on a real MicroPython file that choice was costing more than it
+  bought. Zelos's floor is twice the standard one (48px a block against 24, and
+  Snakie raised it again to 52), and its inline sockets pad their contents at
+  every level: `pwm.duty_u16(int(50 * 65535 / 100))` is four levels deep and
+  rendered about 90px tall, one statement taller than three. A forty-line
+  program looked like it had been left out in the rain, and values dropped into
+  other blocks sat at visibly different heights down a row.
+
+  It also made the geometry fragile in a way two previous bugs record: every
+  Blockly measurement is derived from the others, so a corner radius raised by
+  hand is a corner arc drawn into a row that was measured for the old one — a
+  hairline off every block's bottom-right corner, and a sliver of canvas under
+  every C-block's mouth, both of which had to be fixed with more arithmetic.
+
+  So the geometry is now Blockly's own, unmodified, and the Soft Shell direction
+  lives entirely in the skin: the palette, the fonts and the per-category
+  lettering are exactly as they were. Rows are about half as tall, an expression
+  stays the height of the row it is written on, and a plugged-in value lines up
+  with the block it is plugged into.
 
 - **`set brightness of [GP15 ▾] to [n] %` is now `set power of …`.** The block
   drives a pin; whether that dims an LED or slows a motor is the wiring's

@@ -628,31 +628,29 @@ describe('a run of comments is one block (#1062)', () => {
   })
 })
 
-describe('the roots do not overlap (#1062)', () => {
-  /** Every root as `[top, bottom]`, using the converter's own estimate. */
+describe('the roots come out in the order the file has them', () => {
+  /** Every root's `y`, which is the converter's statement of their order. */
   const spans = (source: string): [number, number][] => {
     const { workspace } = pythonToBlocks(source)
     const roots = topLevel(workspace as never) as unknown as { y: number }[]
     return roots.map((r, i) => [r.y, i + 1 < roots.length ? roots[i + 1].y : r.y] as [number, number])
   }
 
-  it('puts a tall root clear of the next one', () => {
-    // A fixed 240px gap was fine for a four-block program and wrong for a real
-    // one: a class with eight methods is well over a thousand pixels tall, so
-    // the next four roots were drawn on top of it.
-    const tall = [
-      'def big():',
-      ...Array.from({ length: 30 }, (_, i) => `    print(${i})`),
-      '',
-      'def after():',
-      '    print("me")',
-      ''
-    ].join('\n')
-    const [first, second] = spans(tall)
-    // The first root's own height must fit in the space before the second.
-    expect(second[0] - first[0]).toBeGreaterThan(30 * 40)
-  })
-
+  /**
+   * THIS SUITE USED TO BE ABOUT OVERLAP, and it no longer is — see
+   * `python-to-blocks.ts` and `test/blocksArrange.test.ts`.
+   *
+   * #1062 laid each root out under the ESTIMATED bottom of the one above it,
+   * out of constants read off a screenshot of the renderer of the day. Moving to
+   * standard Blockly geometry
+   * changed the renderer, every constant was wrong at once, and the same file
+   * came out both far too spread out and overlapping. So the geometry moved to
+   * the canvas, where a rendered block can be asked its real size, and what is
+   * left here is the one thing measuring later cannot recover: which order the
+   * file had the roots in. Blockly's ordered `getTopBlocks` walks by position,
+   * so that order has to survive in the JSON, and these tests are what say it
+   * does.
+   */
   it('stacks every root downwards, in order, never back up', () => {
     const src = [
       'def a():',

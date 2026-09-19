@@ -27,9 +27,14 @@ import {
   setExtrasVisible
 } from '../lib/blocks/palette/functions'
 import { argNamesHidden, hasArgNames, revealArgNames } from '../lib/blocks/palette/python'
-import { installSoftShellRenderer } from '../lib/blocks/renderer'
+import { installSoftShellRenderers } from '../lib/blocks/renderer'
+import {
+  arrangeWorkspaceRoots,
+  rootMoved,
+  rootsUnmoved,
+  type RootPlacement
+} from '../lib/blocks/arrange'
 import { installShelfFlyout, installZoomReset } from '../lib/blocks/zoom'
-import { compactRootColumn } from '../lib/blocks/root-column'
 import {
   dispatchNeedLibrary,
   dispatchOpenHelp,
@@ -51,6 +56,7 @@ import { installVariablesDrawer } from '../lib/blocks/variables-drawer'
 import { installDuplicateShortcut } from '../lib/blocks/duplicate'
 import type { Dialect } from '../../../shared/dialect'
 import { useHelpDialect } from '../hooks/useHelpDialect'
+import { useEditorSettings } from '../store/settings'
 import { isStaleDeselect, putOutHighlight } from '../lib/blocks/highlight'
 import type { BlocksWorkspace } from '../../../shared/blocks-doc'
 import './BlocksCanvas.css'
@@ -175,6 +181,18 @@ export interface BlocksCanvasProps {
    * this is how it says so.
    */
   reloadNonce?: number
+  /**
+   * These blocks are Snakie's READING of somebody's Python, rather than
+   * an arrangement a learner made and saved.
+   *
+   * It decides one thing: whether the canvas may lay the top-level stacks out
+   * for itself. A converted file has no layout to respect — `python-to-blocks`
+   * only numbers the roots so their order survives — so the canvas measures
+   * them and puts the program in one column with the functions beside it. A
+   * file whose footer matched its code was arranged by the person who saved it,
+   * and tidying that up behind their back would throw away work.
+   */
+  derived?: boolean
 }
 
 // Blockly's message table is a precondition of `inject` — see `locale.ts`.
@@ -215,7 +233,8 @@ export function BlocksCanvas({
   onShowBlockPython,
   paletteNonce = 0,
   onPartsUsed,
-  reloadNonce = 0
+  reloadNonce = 0,
+  derived = false
 }: BlocksCanvasProps): JSX.Element {
   // BEFORE anything else: can this build read these blocks at all? A file made
   // by a newer Snakie, or with a part/plugin's blocks (#1017) that isn't
@@ -248,6 +267,14 @@ export function BlocksCanvas({
    * new file's blocks to wherever the old file's happened to sit.
    */
   const loadedFileRef = useRef<string | null>(null)
+  /**
+   * Where the last arrange put each root, or `null` for a workspace we
+   * did not arrange — a stored layout somebody made themselves.
+   *
+   * Kept so a late measurement can tell its own arrangement from a learner's:
+   * see the webfont effect below.
+   */
+  const arrangedRef = useRef<Map<string, RootPlacement> | null>(null)
   const onGenerateRef = useRef(onGenerate)
   onGenerateRef.current = onGenerate
   const onEditRef = useRef(onEdit)
@@ -291,6 +318,11 @@ export function BlocksCanvas({
    * because every block stays defined whether or not it is reachable.
    */
   const { dialect } = useHelpDialect()
+  // Which of Blockly's three geometries to draw in (Settings ▸ Appearance).
+  // Read here rather than passed down: it is a preference, not a property of
+  // the document, and every caller of this component would just be forwarding
+  // it.
+  const { blockShape } = useEditorSettings()
   /**
    * A REF as well, because the injection below must read the dialect WITHOUT
    * depending on it: re-injecting on a dialect change would tear the workspace
@@ -316,8 +348,14 @@ export function BlocksCanvas({
     return () => Blockly.dialog.setPrompt(undefined)
   }, [prompt])
 
-  // Inject once. The theme is applied separately below so a skin change never
-  // has to tear the workspace down.
+  // Inject once — and again if the BLOCK SHAPE changes, which is the one
+  // setting that cannot be applied to a live workspace: Blockly fixes its
+  // renderer when the workspace is created, and there is no setter for it. The
+  // teardown below is the same one a workspace switch already runs, and the
+  // load effect (keyed on the shape too) puts the file straight back.
+  //
+  // The SKIN is not like that: a theme is applied separately below, so turning
+  // the app dark never tears the canvas down.
   useEffect(() => {
     const host = hostRef.current
     if (!host || peek || blocked) return
@@ -326,9 +364,9 @@ export function BlocksCanvas({
     // hold one. Here rather than at module load, so a block a part or plugin
     // registers later (#1017) is installed by the next canvas that opens.
     installBlockDefinitions()
-    // And the Soft Shell geometry, which the options below name. Registering a
-    // renderer Blockly has never heard of throws during injection.
-    installSoftShellRenderer()
+    // And the Soft Shell geometries, which the options below name one of.
+    // Registering a renderer Blockly has never heard of throws during injection.
+    installSoftShellRenderers()
     // And the shelf that holds still while the canvas zooms (#1150). Also
     // before injection: the flyout class is read out of the registry as the
     // workspace is built.
@@ -336,7 +374,7 @@ export function BlocksCanvas({
 
     const tokens = readThemeTokens(document.documentElement)
     const ws = Blockly.inject(host, {
-      ...softShellWorkspaceOptions(tokens),
+      ...softShellWorkspaceOptions(tokens, blockShape),
       toolbox: buildToolbox(dialectRef.current),
       theme: Blockly.Theme.defineTheme(
         'snakie-soft-shell',
@@ -497,8 +535,13 @@ export function BlocksCanvas({
       ws.dispose()
       wsRef.current = null
       lastLoadedRef.current = ''
+      // The arrangement belonged to the workspace that just went away; a new
+      // one measures for itself, and the next load is a first load rather than
+      // a reload of a canvas that no longer exists.
+      arrangedRef.current = null
+      loadedFileRef.current = null
     }
-  }, [peek, blocked])
+  }, [peek, blocked, blockShape])
 
   // The pin dropdowns offer THIS board's pins (#1012). Loaded here rather than
   // by the blocks themselves because a Blockly field's option list is produced
@@ -722,8 +765,17 @@ export function BlocksCanvas({
     const places = new Map<string, { x: number; y: number }>()
     const selected = sameFile ? (Blockly.getSelected()?.id ?? null) : null
     if (sameFile) {
+      // A ROOT WE PUT THERE IS NOT A ROOT THEY PUT THERE. On a derived
+      // file the previous positions are mostly our own arrangement, and putting
+      // those back would pin the layout to whatever the program looked like
+      // when it was first opened — so a function that has since grown would be
+      // laid out for its old height and drawn over the one below it. Only the
+      // roots that have MOVED since we arranged them are the learner's, and
+      // only those are worth restoring; the rest take the fresh measurement.
+      const arranged = arrangedRef.current
       for (const block of ws.getTopBlocks(false)) {
         const at = block.getRelativeToSurfaceXY()
+        if (!rootMoved(at, arranged?.get(block.id))) continue
         places.set(block.id, { x: at.x, y: at.y })
       }
     }
@@ -736,6 +788,13 @@ export function BlocksCanvas({
     Blockly.Events.disable()
     try {
       Blockly.serialization.workspaces.load(workspace, ws)
+      // LAY THE ROOTS OUT, NOW THEY CAN BE MEASURED. The document only
+      // numbers them — the program in one column with the functions beside it
+      // is worked out here, from what Blockly actually drew. BEFORE the
+      // re-serialise below, so the positions this writes are part of the
+      // "nothing has changed since it loaded" baseline rather than an edit the
+      // listener would write back to the file for the crime of opening it.
+      arrangedRef.current = derived ? arrangeWorkspaceRoots(ws as Blockly.WorkspaceSvg) : null
       // What comes BACK OUT, not what went in: Blockly normalises as it loads
       // (fills in default fields, assigns ids, rounds coordinates), so a
       // re-serialise of an untouched workspace differs from the file's own
@@ -771,14 +830,6 @@ export function BlocksCanvas({
         const now = block.getRelativeToSurfaceXY()
         block.moveBy(at.x - now.x, at.y - now.y)
       }
-      // AND NOW THAT THEY ARE DRAWN, SPACE THEM BY WHAT THEY MEASURE. The
-      // document's own y for each root is an estimate made without Blockly (see
-      // `root-column.ts`), and on a real file it runs hundreds of pixels long —
-      // a screen of empty canvas under the imports, which reads as blocks that
-      // failed to render. After the restore above, so a root somebody dragged
-      // aside keeps its place and drops out of the column rather than being
-      // re-stacked into it.
-      compactRootColumn(ws)
       // And still selected, so a reconversion cannot steal the highlight out
       // from under #1016's link.
       if (selected) {
@@ -807,7 +858,41 @@ export function BlocksCanvas({
     }
     // `workspace` is intentionally not a dependency — see the comment above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fileId, reloadNonce, peek, blocked])
+  }, [fileId, reloadNonce, peek, blocked, derived, blockShape])
+
+  /**
+   * MEASURE AGAIN ONCE THE FONT ARRIVES.
+   *
+   * The arrange above asks each block how big it is, and a block is only as big
+   * as the text in it — so a canvas laid out while Plus Jakarta Sans is still
+   * downloading is laid out against the fallback face. The difference is small
+   * and it is not nothing: the same file measured 506px for its first root on a
+   * cold load and 530px on a warm one, which is an overlap's worth.
+   *
+   * `document.fonts.ready` resolves immediately on a warm load, so this is
+   * normally one wasted comparison. When it does fire late, it re-arranges ONLY
+   * IF every root is still exactly where the arrange put it — the moment the
+   * learner has dragged anything, their layout is the layout and a webfont is
+   * not a reason to undo it.
+   */
+  useEffect(() => {
+    if (!derived || peek || blocked) return
+    let cancelled = false
+    void document.fonts?.ready.then(() => {
+      const ws = wsRef.current
+      const applied = arrangedRef.current
+      if (cancelled || !ws || !applied || !rootsUnmoved(ws, applied)) return
+      Blockly.Events.disable()
+      try {
+        arrangedRef.current = arrangeWorkspaceRoots(ws)
+      } finally {
+        Blockly.Events.enable()
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [fileId, reloadNonce, peek, blocked, derived, blockShape])
 
   // Blockly sizes itself from its host and does not observe it, so a panel drag,
   // a workspace switch or a window resize leaves the canvas the wrong size with

@@ -1043,20 +1043,45 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
      * learner who has named a pin reaches for the name. The PWM is then built
      * on that one pin object rather than on a second `Pin(15)` for the same
      * hole, which is what `pinObject` does everywhere else in this file.
+     *
+     * AND THE FREQUENCY IS ON THE DECLARATION, OPTIONALLY.
+     *
+     * `pwm_motor_a = PWM(motor_a, freq=1000)` is how nearly every robot
+     * tutorial opens, and it used to match no template this palette has: so the
+     * name was not a declared name, and every `pwm_motor_a.duty_u16(…)` under
+     * it came back as the generic *call duty_u16 on (pwm_motor_a) with (turn
+     * (50 × 65535 ÷ 100) into a whole number (int))* rather than as *set power
+     * of (pwm_motor_a) to (50) %*. One keyword argument at the top of the file
+     * turned the whole of its hardware grey.
+     *
+     * BLANK BY DEFAULT, AND IT HAS TO BE. A default of 1000 would rewrite every
+     * workspace saved before this field existed: Blockly fills a missing field
+     * from the JSON, so `PWM(Pin(15))` would silently become
+     * `PWM(Pin(15), freq=1000)` the next time somebody opened their program.
+     * Blank means "don't set one", which is what those files say today.
+     *
+     * The separate *set frequency of (…) to (…) Hz* block is still the way to
+     * CHANGE it while the program runs; this is the way to say what it starts
+     * at, which is the line people actually write.
      */
     type: PWM_ALIAS_BLOCK,
     category: 'hardware',
     help: 'ref-pwm',
     json: {
-      message0: 'name PWM on pin %1 as %2',
+      message0: 'name PWM on pin %1 as %2 at %3 Hz',
       // The PWM capability filter DOES belong here, unlike `name pin`'s: this
       // block builds the PWM, so a pin that cannot do PWM cannot be named one.
-      args0: [pinField('PIN', 'pwm', 15), { type: 'field_input', name: 'NAME', text: 'motor_a' }],
+      args0: [
+        pinField('PIN', 'pwm', 15),
+        { type: 'field_input', name: 'NAME', text: 'motor_a' },
+        // See the note above on why this starts empty.
+        { type: 'field_input', name: 'FREQ', text: '' }
+      ],
       inputsInline: true,
       previousStatement: null,
       nextStatement: null,
       tooltip:
-        'Give a PWM output a name you will recognise — a motor channel, a servo line, an LED you dim. Blocks that set speed or frequency take the name, so rewiring means changing this one block.'
+        'Give a PWM output a name you will recognise — a motor channel, a servo line, an LED you dim. Blocks that set speed or frequency take the name, so rewiring means changing this one block. Leave the Hz box empty to take the board’s default; a servo wants 50, a motor driver is usually happier in the kilohertz.'
     },
     code: (block, gen) => {
       const name = String(block.getFieldValue('NAME') ?? '').trim()
@@ -1079,7 +1104,13 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
       // `from machine import Pin` at the top of a program that never says it.
       if (!named) gen.need({ module: 'machine', name: 'Pin' })
       gen.need({ module: 'machine', name: 'PWM' })
-      gen.setup(`pwm-alias:${name}`, name, `PWM(${named ?? `Pin(${pin})`})`, block)
+      // ONLY WHAT THE READER CAN READ BACK. `freq=` takes a literal or a name
+      // here, which is the shape `AliasRule`'s `{VALUE}` matches; anything else
+      // a learner types into the box would generate a line this palette could
+      // not recognise as its own, and the file would open grey.
+      const freq = String(block.getFieldValue('FREQ') ?? '').trim()
+      const at = /^([A-Za-z_][\w.]*|\d[\w.]*)$/.test(freq) ? `, freq=${freq}` : ''
+      gen.setup(`pwm-alias:${name}`, name, `PWM(${named ?? `Pin(${pin})`}${at})`, block)
       return ''
     }
   },
@@ -1461,8 +1492,13 @@ registerAliasRules([
     nameField: 'NAME',
     pinField: 'PIN',
     modeField: '',
+    valueField: 'FREQ',
     receiver: 'pwm',
-    modes: { PWM: 'PWM(Pin({PIN}))' }
+    // TWO MODES, AND STILL NO `modeField`: a PWM has no direction to choose, so
+    // which of these a declaration is falls out of whether the FREQ box has
+    // anything in it. The plain one is FIRST because both are tried in order
+    // and it is the one a file without a frequency has to match.
+    modes: { PWM: 'PWM(Pin({PIN}))', PWM_AT: 'PWM(Pin({PIN}), freq={VALUE})' }
   },
   {
     type: PIN_ALIAS_BLOCK,

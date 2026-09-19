@@ -26,6 +26,9 @@ import {
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { DEFAULT_EDITOR_THEME, editorThemeFor } from './editorThemes'
 import type { DialectPreference } from '../../../shared/dialect-api'
+import { DEFAULT_BLOCK_SHAPE, type BlockShape } from '../lib/blocks/theme'
+
+export type { BlockShape }
 
 /** How the notebook paper is drawn behind the editor. */
 export type EditorPaper = 'lines' | 'dots' | 'off'
@@ -54,6 +57,14 @@ export interface SettingsStore {
   /** Whether the status bar shows rotating 💡 discovery tips (#434). Default on. */
   showTips: boolean
   /**
+   * Which of Blockly's three geometries the block canvas wears.
+   *
+   * `standard` (the default), `classic` or `scratch` — see `BlockShape` in
+   * `lib/blocks/theme.ts` for what each one is. A shape change re-injects the
+   * canvas, because Blockly fixes its renderer when the workspace is created.
+   */
+  blockShape: BlockShape
+  /**
    * Which Python the help pages and editor completions should teach (#763).
    * `'auto'` (the default) follows the connected board; the explicit values are
    * the override for reading before anything is plugged in.
@@ -74,9 +85,36 @@ export interface SettingsStore {
   setShowTips: (on: boolean) => void
   /** Follow the board, or pin the help/completions to one runtime (#763). */
   setHelpDialect: (pref: DialectPreference) => void
+  /** Set the shape the block canvas draws its blocks in. */
+  setBlockShape: (shape: BlockShape) => void
 }
 
 const SettingsContext = createContext<SettingsStore | null>(null)
+
+/** Where the chosen block shape is persisted. */
+export const BLOCK_SHAPE_KEY = 'snakie.blocks.shape'
+
+/**
+ * The chosen block shape, read straight out of storage.
+ *
+ * For the callers that are not React and cannot hold the context — the PDF
+ * export injects a workspace of its own (`lib/pdf/blocks-source.ts`), and a
+ * printed page that did not match the canvas it was printed from would be a
+ * bug people would reasonably report. Falls back to the default for a value
+ * this build does not recognise, which is what an older or newer setting looks
+ * like.
+ */
+export function storedBlockShape(): BlockShape {
+  try {
+    const raw = window.localStorage.getItem(BLOCK_SHAPE_KEY)
+    const shape = raw === null ? null : (JSON.parse(raw) as BlockShape)
+    return shape === 'standard' || shape === 'classic' || shape === 'scratch'
+      ? shape
+      : DEFAULT_BLOCK_SHAPE
+  } catch {
+    return DEFAULT_BLOCK_SHAPE
+  }
+}
 
 /** Clamp a spacing value to the supported range, rounding to whole px. */
 export function clampSpacing(px: number): number {
@@ -108,6 +146,10 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
   const [helpDialect, setHelpDialect] = useLocalStorage<DialectPreference>(
     'snakie.help.dialect',
     'auto'
+  )
+  const [blockShape, setBlockShape] = useLocalStorage<BlockShape>(
+    BLOCK_SHAPE_KEY,
+    DEFAULT_BLOCK_SHAPE
   )
 
   // Apply the paper mode + spacing to the document root so the CSS ruled paper
@@ -170,6 +212,7 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
       breadboardBg,
       showTips,
       helpDialect,
+      blockShape,
       setPaper,
       setLineSpacing: (px: number) => setLineSpacingRaw(clampSpacing(px)),
       setEditorTheme,
@@ -177,7 +220,8 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
       setMinimap,
       setBreadboardBg,
       setShowTips,
-      setHelpDialect
+      setHelpDialect,
+      setBlockShape
     }),
     [
       paper,
@@ -188,6 +232,7 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
       breadboardBg,
       showTips,
       helpDialect,
+      blockShape,
       setPaper,
       setLineSpacingRaw,
       setEditorTheme,
@@ -195,7 +240,8 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
       setMinimap,
       setBreadboardBg,
       setShowTips,
-      setHelpDialect
+      setHelpDialect,
+      setBlockShape
     ]
   )
 

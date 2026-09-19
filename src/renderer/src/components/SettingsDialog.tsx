@@ -6,7 +6,8 @@ import {
   MIN_LINE_SPACING,
   MAX_LINE_SPACING,
   type EditorPaper,
-  type BreadboardBg
+  type BreadboardBg,
+  type BlockShape
 } from '../store/settings'
 import { EDITOR_THEME_LIST } from '../store/editorThemes'
 import { useFocusTrap } from '../hooks/useFocusTrap'
@@ -156,6 +157,30 @@ const BREADBOARD_BG_OPTIONS: { value: BreadboardBg; label: string; hint: string 
   }
 ]
 
+/**
+ * BLOCK SHAPE (Settings ▸ Appearance).
+ *
+ * Blockly ships three renderers and they are three vocabularies rather than
+ * three settings of one dial, so which suits a room is not a question the app
+ * can answer on its own — a class arriving from Scratch wants the pills and the
+ * hexagons; somebody reading a forty-line robot file wants the compact rows.
+ * The Soft Shell palette, fonts and lettering are identical on all three, so
+ * this changes the SHAPE and nothing else.
+ */
+const BLOCK_SHAPE_OPTIONS: { value: BlockShape; label: string; hint: string }[] = [
+  {
+    value: 'standard',
+    label: 'Standard',
+    hint: "Blockly's standard rows, flat — the most compact, and the default"
+  },
+  { value: 'classic', label: 'Classic', hint: "Blockly's own default, with a bevelled edge" },
+  {
+    value: 'scratch',
+    label: 'Scratch',
+    hint: 'Pill and hexagon shapes like Scratch and MakeCode — roughly twice as tall'
+  }
+]
+
 /** The Appearance tab: the app-wide skin + the Board View breadboard background. */
 function AppearanceTab({
   theme,
@@ -164,7 +189,8 @@ function AppearanceTab({
   theme: Theme
   setTheme: (t: Theme) => void
 }): JSX.Element {
-  const { breadboardBg, setBreadboardBg, showTips, setShowTips } = useEditorSettings()
+  const { breadboardBg, setBreadboardBg, showTips, setShowTips, blockShape, setBlockShape } =
+    useEditorSettings()
   return (
     <>
       <section className="settings-section">
@@ -201,6 +227,29 @@ function AppearanceTab({
               aria-checked={breadboardBg === opt.value}
               className={`settings-segment__btn${breadboardBg === opt.value ? ' is-active' : ''}`}
               onClick={() => setBreadboardBg(opt.value)}
+              title={opt.hint}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="settings-section">
+        <h3 className="settings-section__title">Block shape</h3>
+        <p className="settings-section__hint">
+          The shape the Blocks canvas draws in. The colours, fonts and lettering are the same on
+          all three — only the geometry changes, and an open canvas redraws as soon as you pick.
+        </p>
+        <div className="settings-segment" role="radiogroup" aria-label="Block shape">
+          {BLOCK_SHAPE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              role="radio"
+              aria-checked={blockShape === opt.value}
+              className={`settings-segment__btn${blockShape === opt.value ? ' is-active' : ''}`}
+              onClick={() => setBlockShape(opt.value)}
               title={opt.hint}
             >
               {opt.label}
