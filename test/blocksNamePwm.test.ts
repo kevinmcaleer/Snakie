@@ -350,10 +350,55 @@ describe('what stays an ordinary line, and why', () => {
     roundTrips(src)
   })
 
-  it('the duty line, because its arithmetic is the lesson', () => {
-    // `int(x * 65535 / 100)` cannot be unpicked into a socket by a table — the
-    // same reason `snakie_pwm_duty` has never had a reader rule either.
+  it('a duty line whose arithmetic is not the block\u2019s own', () => {
+    // `percentOf` undoes exactly the shape the generator writes and nothing
+    // else. A raw 0-65535 duty is somebody\u2019s own line, and stays one.
+    const src = `${IMPORT}motor_a = PWM(Pin(15))\n\nmotor_a.duty_u16(32768)\n`
+    expect(types(src)).not.toContain('snakie_pwm_duty_named')
+    roundTrips(src)
+  })
+
+  it('a duty line scaled against a number this block never writes', () => {
+    const src = `${IMPORT}motor_a = PWM(Pin(15))\n\nmotor_a.duty_u16(int(50 * 1023 / 100))\n`
+    expect(types(src)).not.toContain('snakie_pwm_duty_named')
+    roundTrips(src)
+  })
+
+  it('a duty line whose int() is not the outermost thing on it', () => {
+    // `int(a) * 65535 / 100` lexes to the same tokens in the same order as the
+    // shape this reads, and is a different program.
+    const src = `${IMPORT}motor_a = PWM(Pin(15))\n\nmotor_a.duty_u16(int(50) * 65535 / 100)\n`
+    expect(types(src)).not.toContain('snakie_pwm_duty_named')
+    roundTrips(src)
+  })
+})
+
+describe('the duty line reads back as the block that wrote it (#1163)', () => {
+  it('unwraps the per-cent arithmetic into the socket', () => {
     const src = `${IMPORT}motor_a = PWM(Pin(15))\n\nmotor_a.duty_u16(int(50 * 65535 / 100))\n`
+    expect(types(src)).toContain('snakie_pwm_duty_named')
+    // The socket-driven block, not the fielded one, which would regenerate
+    // through `pwm()` and build `pwm_motor_a = PWM(motor_a)`.
+    expect(types(src)).not.toContain('snakie_pwm_duty')
+    expect(one(src, 'math_number')!.fields).toEqual({ NUM: 50 })
+    roundTrips(src)
+  })
+
+  it('splits at the last top-level `* 65535 / 100`, brackets and all', () => {
+    // The per-cent may hold the very characters the shape is made of, so the
+    // reader walks tokens rather than matching text: `min(a, b)` has a comma
+    // and a bracket pair in it and is one socket.
+    const src = `${IMPORT}motor_a = PWM(Pin(15))\n\nmotor_a.duty_u16(int(min(a, b) * 65535 / 100))\n`
+    expect(types(src)).toContain('snakie_pwm_duty_named')
+    expect(types(src)).toContain('snakie_math_min_max')
+    roundTrips(src)
+  })
+
+  it('does not claim the fielded block\u2019s line for the named one', () => {
+    // `pwm_15` is a name the generator hoisted, not one a learner gave out, so
+    // this is the block whose pin is a dropdown.
+    const src = `${IMPORT}pwm_15 = PWM(Pin(15))\n\npwm_15.duty_u16(int(25 * 65535 / 100))\n`
+    expect(types(src)).toContain('snakie_pwm_duty')
     expect(types(src)).not.toContain('snakie_pwm_duty_named')
     roundTrips(src)
   })

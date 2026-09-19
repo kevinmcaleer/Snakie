@@ -1148,6 +1148,37 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A named PWM's power line comes back as the block that wrote it** (#1163).
+  *set power of (pwm_motor_a) to (50) %* writes
+  `pwm_motor_a.duty_u16(int(50 * 65535 / 100))` — per cent is what a child has,
+  0-65535 is what MicroPython wants, and the conversion sits on the line where
+  both are visible. Reading that line back, though, found no block for it: the
+  arithmetic around the argument kept both duty blocks off the reader's table,
+  so a robot program reopened as the generic escape hatch — *call duty_u16 on
+  (pwm_motor_a) with (turn (50 × 65535 ÷ 100) into a whole number (int))*. Five
+  blocks, four levels of nesting and 116px of canvas, per motor, for a line the
+  Hardware drawer writes in a single 68px row.
+
+  A rule can now declare that a socket is written as a per cent of a full-scale
+  number, and the reader takes exactly that wrapper back off — the same job the
+  Lists drawer's `- 1` has had undone since #1122, and bounded the same way.
+  Only the shape the generator itself writes is unpicked: `pwm.duty_u16(duty)`,
+  a different scale, or an `int()` that is not the outermost thing on the line
+  are all still somebody's own line, and stay verbatim.
+
+- **A positional argument no longer wears an empty name box and a stray `=`**
+  (#1163). #1134 gave each argument socket on the **call** blocks a box for the
+  keyword name in front of it, and shipped it visible — so every ordinary call
+  grew a small white pill and an `=` that appears in no line of anybody's
+  Python, sitting exactly where a value looks like it should drop in.
+
+  The box and its `=` are hidden while empty now, the same rule the `def`
+  block's extra-parameters row follows. Right-click a call block and choose
+  **Name the arguments…** to bring them out; the reveal lapses as soon as an
+  editor closes, so naming the second of three arguments leaves one box on
+  screen rather than three. What the block generates is unchanged — the
+  argument is built from the field's value, not from whether it is on screen.
+
 - **Blocks sit snug in the mouth that holds them, and none of them has a line
   hanging off its corner** (#1158). Two smudges on the canvas, reported
   together and turning out to be the same mistake twice: the Soft Shell shape
