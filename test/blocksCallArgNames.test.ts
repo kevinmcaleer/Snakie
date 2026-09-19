@@ -58,6 +58,16 @@ function call(ws: Blockly.Workspace): Blockly.Block {
   return block
 }
 
+/** The Python `source` regenerates as, through the blocks it reads back as. */
+function regenerate(source: string): string {
+  return generateProgram(load(source)).code
+}
+
+/** The one promise the reader makes: the program comes back the program. */
+function roundTrips(source: string): void {
+  expect(regenerate(source)).toBe(source)
+}
+
 /** A call block with `n` argument sockets, built the way the toolbox does. */
 function fresh(ws: Blockly.Workspace, n = 1, type = PYTHON_CALL): Blockly.Block {
   const block = ws.newBlock(type)
@@ -85,6 +95,17 @@ describe('the argument name boxes', () => {
     expect(shown(block, 0)).toBe(false)
     expect(shown(block, 1)).toBe(false)
     expect(argNamesHidden(block)).toBe(true)
+  })
+
+  it('show themselves for a keyword argument read back from Python', () => {
+    // The reader puts the name in the field, and the field's own validator
+    // brings the box out as the value arrives — the same path a saved file
+    // takes. See `keywordArgument` in `python-to-blocks.ts` (#1163).
+    const block = call(load('pixels.fill(1, colour=2)\n'))
+    expect(block.getFieldValue('NAME1')).toBe('colour')
+    expect(shown(block, 1)).toBe(true)
+    // And only that one: the positional argument beside it keeps its hole shut.
+    expect(shown(block, 0)).toBe(false)
   })
 
   it('show themselves for the argument that has a name', () => {
@@ -172,5 +193,61 @@ describe('what a box’s visibility does to the Python — nothing', () => {
     // `updateArgs_` builds the boxes away, and the value brings this one back.
     expect(shown(block, 1)).toBe(true)
     expect(shown(block, 0)).toBe(false)
+  })
+})
+
+/**
+ * THE OTHER HALF OF #1134, read back (#1163).
+ *
+ * A call block writes `${sanitise(name)}=${value}` when its name box holds
+ * something. Until now reading that line back put the whole `colour=2` in a
+ * grey value block inside the socket — so a block the learner had just built
+ * came back as something they could not have built.
+ */
+describe('a keyword argument comes back as a name and a value', () => {
+  it('splits the name off the socket', () => {
+    const block = call(load('pixels.fill(1, colour=2)\n'))
+    expect(block.getFieldValue('NAME1')).toBe('colour')
+    // The socket holds the VALUE, as a real block — not the whole `colour=2`.
+    expect(block.getInputTargetBlock('ARG1')?.type).toBe('math_number')
+    roundTrips('pixels.fill(1, colour=2)\n')
+  })
+
+  it('takes the name however it was spaced, and writes it back one way', () => {
+    // The gate compares a line's SHAPE, so `colour = 2` and `colour=2` are the
+    // same program and a learner who spaces theirs still gets a real block.
+    const block = call(load('pixels.fill(colour = 2)\n'))
+    expect(block.getFieldValue('NAME0')).toBe('colour')
+    expect(regenerate('pixels.fill(colour = 2)\n')).toBe('pixels.fill(colour=2)\n')
+  })
+
+  it('keeps a value the reader cannot model, in the socket', () => {
+    const block = call(load('xs.sort(key=lambda v: v)\n'))
+    expect(block.getFieldValue('NAME0')).toBe('key')
+    expect(block.getInputTargetBlock('ARG0')?.getFieldValue('CODE')).toBe('lambda v: v')
+    roundTrips('xs.sort(key=lambda v: v)\n')
+  })
+
+  it('is not fooled by the operators that merely contain an `=`', () => {
+    // The tokenizer takes its operators longest first, so none of these is an
+    // `=` and none of them is claimed.
+    for (const line of ['obj.go(a == b)\n', 'obj.go(a != b)\n', 'obj.go(a <= b)\n']) {
+      const block = call(load(line))
+      expect(block.getFieldValue('NAME0')).toBe('')
+      roundTrips(line)
+    }
+  })
+
+  it('claims the name of a comparison that really is a keyword argument', () => {
+    const block = call(load('obj.go(a=b == c)\n'))
+    expect(block.getFieldValue('NAME0')).toBe('a')
+    expect(block.getInputTargetBlock('ARG0')?.type).toBe('logic_compare')
+    roundTrips('obj.go(a=b == c)\n')
+  })
+
+  it('leaves a walrus alone', () => {
+    // `x := 5` lexes as `:` then `=`, so the token after the name is not the
+    // one this wants — and the line stays the learner's own.
+    roundTrips('obj.go(x := 5)\n')
   })
 })
