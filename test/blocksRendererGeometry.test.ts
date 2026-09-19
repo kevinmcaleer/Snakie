@@ -1,11 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import * as Blockly from 'blockly/core'
 import { installSoftShellRenderers, softShellConstants } from '../src/renderer/src/lib/blocks/renderer'
-import {
-  DEFAULT_BLOCK_SHAPE,
-  SOFT_SHELL_RENDERER,
-  SOFT_SHELL_RENDERERS
-} from '../src/renderer/src/lib/blocks/theme'
+import { SOFT_SHELL_RENDERER, SOFT_SHELL_RENDERERS } from '../src/renderer/src/lib/blocks/theme'
 
 /**
  * SOFT SHELL IS A SKIN, NOT A GEOMETRY.
@@ -78,11 +74,12 @@ describe('the Soft Shell geometry is standard Blockly', () => {
     expect(() => installSoftShellRenderers()).not.toThrow()
   })
 
-  it('keeps the bare renderer name for the default shape', () => {
+  it('keeps the bare renderer name for the standard shape', () => {
     // It is in screenshots, in `docs/` and in the habit of anybody who has read
-    // `renderer.ts`; a rename would be churn with no reader.
+    // `renderer.ts`; a rename would be churn with no reader. This holds
+    // regardless of which shape Settings ▸ Appearance defaults to.
     expect(SOFT_SHELL_RENDERER).toBe('snakie-soft-shell')
-    expect(SOFT_SHELL_RENDERERS[DEFAULT_BLOCK_SHAPE]).toBe(SOFT_SHELL_RENDERER)
+    expect(SOFT_SHELL_RENDERERS.standard).toBe(SOFT_SHELL_RENDERER)
   })
 })
 

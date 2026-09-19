@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **New canvases default to the `scratch` block shape.** Settings ▸
+  Appearance still offers `standard` and `classic`, and an existing choice in
+  storage is unaffected — this only changes what a first-run canvas looks
+  like, from Blockly's compact `standard` row layout to the taller,
+  Scratch/MakeCode-style pill blocks newcomers are more likely to recognise.
+
 ### Fixed
 
 - **Run on the web simulator shows the program's output while it runs.** Click
