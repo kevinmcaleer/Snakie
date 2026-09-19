@@ -10,7 +10,8 @@
 import { getBlocksWorkspace } from '../blocks/workspace-registry'
 import { generateProgram } from '../blocks/generator'
 import { snakieMarkSvg } from '../../components/snakie-mark'
-import { PX_TO_PT, captureBlockStacks, inlineFontCss, svgToJpeg } from './capture'
+import { inlineFontCss } from '../../components/export-fonts'
+import { PX_TO_PT, captureBlockStacks, svgToJpeg } from './capture'
 import { type CapturedWiring, captureWiring } from './wiring-capture'
 import type { DiagramArt, ProjectArt, StackArt } from './project-pdf'
 import type { PdfImageData } from './writer'
@@ -47,7 +48,7 @@ export function domProjectArt(opts: { functionIds?: readonly string[] } = {}): P
       // normally hands over the pass it already ran for the listing.
       const functions = opts.functionIds ?? generateProgram(workspace).functions
       // The app's webfont, inlined — Blockly's layout assumes it, and an
-      // `<img>`-rendered SVG cannot fetch it (see `capture.ts`).
+      // `<img>`-rendered SVG cannot fetch it (see `export-fonts.ts`).
       const captured = captureBlockStacks(workspace, functions, await inlineFontCss())
       const out: StackArt[] = []
       for (const stack of captured) {

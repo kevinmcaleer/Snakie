@@ -82,7 +82,7 @@ export function serialiseWiring(
     exclude: EXCLUDE,
     bboxExclude: ['.wc__grid-layer', '.wc__paper'],
     // Part labels and pin names are lettered in the app's webfont, which an
-    // `<img>`-rendered SVG cannot fetch — see `capture.ts`.
+    // `<img>`-rendered SVG cannot fetch — see `export-fonts.ts`.
     fontCss
   })
 }

@@ -42,7 +42,14 @@ import {
   cablePlugStyle
 } from './part-body'
 import { cableRoute } from './cable-route'
-import { serializeLiveSvg, exportSvgString, downloadBlob, stageBackground, type ExportFmt } from './svg-export'
+import {
+  serializeLiveSvg,
+  exportSvgString,
+  downloadBlob,
+  stageBackground,
+  type ExportFmt
+} from './svg-export'
+import { inlineFontCss } from './export-fonts'
 import { registerWiringSvg } from './wiring-svg-registry'
 import { bomMarkdown, pinoutMarkdown } from '../../../shared/robot-docs'
 import {
@@ -2227,10 +2234,17 @@ export function WiringCanvas({ robot, onChange, folder, joints = [], jointLimits
 
   // Export the canvas as an image (#…): serialise the live SVG framed to its
   // content (full drawing at 1:1, independent of pan/zoom) and save it.
-  const doExport = (fmt: ExportFmt): void => {
+  const doExport = async (fmt: ExportFmt): Promise<void> => {
     setExportOpen(false)
     const svg = svgRef.current
     if (!svg) return
+    // The webfont, inlined, BEFORE the fit/serialise/restore below — awaiting
+    // between them would let the user see the fitted frame paint. Part labels
+    // and pin names are laid out against Plus Jakarta Sans / IBM Plex Mono, and
+    // an `<img>`-rendered SVG fetches nothing external, so without this every
+    // label comes out in the fallback font and overruns its shape. See
+    // `export-fonts.ts`.
+    const fontCss = await inlineFontCss()
     // Always export the ZOOM-TO-FIT view so every item is included AND fully
     // backed by the grid/paper (which are view-derived). flushSync applies the
     // fit + restores the previous view WITHIN this call, so the serialise reads
@@ -2246,7 +2260,8 @@ export function WiringCanvas({ robot, onChange, folder, joints = [], jointLimits
       margin: 24,
       exclude: ['.wc__sel-ring'],
       // Frame to the parts, not the full-canvas grid/paper — they just fill it.
-      bboxExclude: ['.wc__grid-layer', '.wc__paper']
+      bboxExclude: ['.wc__grid-layer', '.wc__paper'],
+      fontCss
     })
     flushSync(() => setView(prev))
     if (!res) return
@@ -3392,13 +3407,13 @@ export function WiringCanvas({ robot, onChange, folder, joints = [], jointLimits
               </button>
               {exportOpen && (
                 <div className="wc__export-menu" role="menu" aria-label="Export format">
-                  <button type="button" role="menuitem" className="wc__export-item" onClick={() => doExport('png')}>
+                  <button type="button" role="menuitem" className="wc__export-item" onClick={() => void doExport('png')}>
                     PNG image
                   </button>
-                  <button type="button" role="menuitem" className="wc__export-item" onClick={() => doExport('svg')}>
+                  <button type="button" role="menuitem" className="wc__export-item" onClick={() => void doExport('svg')}>
                     SVG image
                   </button>
-                  <button type="button" role="menuitem" className="wc__export-item" onClick={() => doExport('pdf')}>
+                  <button type="button" role="menuitem" className="wc__export-item" onClick={() => void doExport('pdf')}>
                     PDF document
                   </button>
                   <span className="wc__export-sep" role="separator" />
