@@ -26,6 +26,7 @@ import {
   hasExtrasRow,
   setExtrasVisible
 } from '../lib/blocks/palette/functions'
+import { argNamesHidden, hasArgNames, revealArgNames } from '../lib/blocks/palette/python'
 import { installSoftShellRenderer } from '../lib/blocks/renderer'
 import { installShelfFlyout, installZoomReset } from '../lib/blocks/zoom'
 import {
@@ -877,6 +878,7 @@ function BlocksUnreadable({ types }: { types: readonly string[] }): JSX.Element 
 function installBlockHelpMenu(): void {
   installBlockPythonMenu()
   installFunctionExtrasMenu()
+  installCallArgNamesMenu()
   const id = 'snakieBlockHelp'
   if (Blockly.ContextMenuRegistry.registry.getItem(id)) return
   // Blockly's OWN Help item comes first, and it opens `helpUrl` — which every
@@ -948,6 +950,43 @@ function installFunctionExtrasMenu(): void {
       // After the render the row was just queued for, so the editor opens over
       // a field that is actually on screen.
       const field = block.getField(EXTRAS_FIELD)
+      if (field) setTimeout(() => field.showEditor(), 0)
+    }
+  })
+}
+
+/**
+ * A `call` block's right-click **Name the arguments…** (#1163).
+ *
+ * Each argument socket carries a box for the keyword name that goes in front of
+ * it — `pixels.fill(colour=RED)` — and the box is hidden while it is empty, so
+ * an ordinary positional call reads as the call it makes rather than growing an
+ * empty pill and an `=` per argument. This is how a learner asks for one.
+ *
+ * Every hidden box on the block at once, and the editor opens on the first that
+ * has no name: the learner asking cannot point at which argument they meant,
+ * and the reveal lapses the moment that editor closes — see `palette/python.ts`.
+ */
+function installCallArgNamesMenu(): void {
+  const id = 'snakieCallArgNames'
+  if (Blockly.ContextMenuRegistry.registry.getItem(id)) return
+  Blockly.ContextMenuRegistry.registry.register({
+    id,
+    scopeType: Blockly.ContextMenuRegistry.ScopeType.BLOCK,
+    // Beside "Add extra parameters…", which is the same kind of item: it edits
+    // this block rather than explaining it.
+    weight: 98,
+    displayText: 'Name the arguments…',
+    preconditionFn: (scope) => {
+      const block = scope.block
+      if (!block || !hasArgNames(block)) return 'hidden'
+      return argNamesHidden(block) ? 'enabled' : 'hidden'
+    },
+    callback: (scope) => {
+      if (!scope.block) return
+      const field = revealArgNames(scope.block)
+      // After the render the boxes were just queued for, so the editor opens
+      // over a field that is actually on screen.
       if (field) setTimeout(() => field.showEditor(), 0)
     }
   })
