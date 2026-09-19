@@ -244,9 +244,15 @@
   cursor: pointer;
 }
 
-.wc__zoom-btn:hover {
+.wc__zoom-btn:hover:not(:disabled) {
   border-color: rgba(220, 235, 245, 0.34);
   background: rgba(255, 255, 255, 0.14);
+}
+
+/* Nothing to undo / redo: still readable as a control, plainly not offered. */
+.wc__zoom-btn:disabled {
+  opacity: 0.38;
+  cursor: default;
 }
 
 /* Active toggle state (snap-to-grid magnet). */

@@ -56,7 +56,13 @@ import {
   parseProbeOutput,
   type LiveValue
 } from './board-values'
-import { WiringCanvas, BOARD_BODY_W, BOARD_BODY_H, type WiringRenderMode } from './WiringCanvas'
+import {
+  WiringCanvas,
+  BOARD_BODY_W,
+  BOARD_BODY_H,
+  type WiringHistory,
+  type WiringRenderMode
+} from './WiringCanvas'
 import { PartsPanel } from './PartsPanel'
 import { PartHelpDrawer, type PartHelpItem } from './PartHelpDrawer'
 import type { RobotDefinition } from '../../../shared/robot'
@@ -118,6 +124,13 @@ export interface BoardGraphProps {
   robot?: RobotDefinition
   /** Persist a changed robot definition (writes robot.yml). */
   onChangeRobot?: (next: RobotDefinition) => void
+  /**
+   * Undo/redo over that document, when the host keeps a history of it — the
+   * Electronics pane does ({@link ./BoardPane}); the popped-out Board View
+   * window doesn't, and simply shows no undo controls. Passed straight to the
+   * wiring canvas, which is where the edits are made.
+   */
+  history?: WiringHistory
   /**
    * The project folder — the wiring canvas reads the Build model from it for the
    * shared hierarchy (#718). **Deliberately NOT optional**: this component has
@@ -351,6 +364,7 @@ export function BoardGraph({
   asWindow = false,
   robot,
   onChangeRobot,
+  history,
   folder,
   joints,
   jointLimits,
@@ -1265,6 +1279,7 @@ export function BoardGraph({
               mat={mat}
               robot={robot as RobotDefinition}
               onChange={onChangeRobot as (next: RobotDefinition) => void}
+              history={history}
               folder={folder}
               joints={joints ?? []}
               jointLimits={jointLimits ?? {}}

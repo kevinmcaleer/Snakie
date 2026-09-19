@@ -7,6 +7,7 @@
  * that runs in the app.
  */
 
+import type * as Blockly from 'blockly/core'
 import { getBlocksWorkspace } from '../blocks/workspace-registry'
 import { generateProgram } from '../blocks/generator'
 import { snakieMarkSvg } from '../../components/snakie-mark'
@@ -25,10 +26,21 @@ const ART_BACKGROUND = '#ffffff'
 const LOGO_PX = 256
 
 /** The live app's art: the mounted Blockly workspace and the breadboard. */
-export function domProjectArt(opts: { functionIds?: readonly string[] } = {}): ProjectArt {
+export function domProjectArt(
+  opts: {
+    functionIds?: readonly string[]
+    /**
+     * The workspace to photograph — the canvas on screen, or the off-screen one
+     * `lib/pdf/blocks-source.ts` builds from the file when there isn't one.
+     * Omitted, the art falls back to whatever is registered; null means the
+     * project has no blocks at all.
+     */
+    workspace?: Blockly.WorkspaceSvg | null
+  } = {}
+): ProjectArt {
   return {
     async blockStacks(): Promise<readonly StackArt[]> {
-      const workspace = getBlocksWorkspace()
+      const workspace = opts.workspace === undefined ? getBlocksWorkspace() : opts.workspace
       if (!workspace) return []
       // The generator's own notion of which stacks are functions, so the pages
       // and the generated `.py` order them the same way (#1112). The caller
