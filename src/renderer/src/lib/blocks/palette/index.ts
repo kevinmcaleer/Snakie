@@ -17,6 +17,7 @@ import { LIST_BLOCKS } from './lists'
 import { TUPLE_BLOCKS, installTupleBlocks } from './tuples'
 import { DICT_BLOCKS, installDictBlocks } from './dicts'
 import { SLICE_BLOCKS } from './slices'
+import { BUFFER_BLOCKS } from './buffers'
 import { LOGIC_BLOCKS } from './logic'
 import { MATHS_BLOCKS } from './maths'
 import { TEXT_BLOCKS } from './text'
@@ -88,6 +89,12 @@ export function installCorePalette(): void {
     // Scope HIDES, it never deregisters: a hardware program written on a Pico
     // still opens, still edits and still saves when a Feather is plugged in.
     ...scopedByEmitters(HARDWARE_BLOCKS),
+    // `bytes` and `bytearray` (#1135, epic #1119), in a Buffers drawer inside
+    // Hardware — next to the I²C and SPI blocks that ask for one. NOT through
+    // `scopedByEmitters`, unlike everything above: these four are plain Python,
+    // core and identical in both runtimes, so they stay unscoped like the rest
+    // of the plain-Python palette. See the file header.
+    ...BUFFER_BLOCKS,
     // INSTRUMENTS STAY MICROPYTHON (#1040). `instruments.py` is telemetry over
     // `print()`, which CircuitPython runs happily — but the sensor reads
     // underneath it are `machine`-based, and #1038 made those DEGRADE rather

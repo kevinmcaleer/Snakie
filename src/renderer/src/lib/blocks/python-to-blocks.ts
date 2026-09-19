@@ -897,6 +897,26 @@ function splitArgs(args: string): string[] | null {
 }
 
 /**
+ * Does `text` carry a `for` at the top level of its brackets?
+ *
+ * Which is to say: is it a COMPREHENSION rather than a display (#1126)? The
+ * literal readers use it to decline, because a comprehension has no top-level
+ * commas and would otherwise split into a single "item" holding the whole of
+ * it — half an expression, and worse than none.
+ */
+function hasLoopKeyword(text: string): boolean {
+  const tokens = tokenize(text)
+  if (!tokens) return false
+  let depth = 0
+  for (const tok of tokens) {
+    if (tok.kind === 'open') depth += 1
+    else if (tok.kind === 'close') depth -= 1
+    else if (depth === 0 && tok.kind === 'keyword' && tok.text === 'for') return true
+  }
+  return false
+}
+
+/**
  * `'name': value` → the two halves, or null (#1120).
  *
  * The FIRST top-level colon, so `{'a': d['b']}` splits where it should and a
@@ -3456,6 +3476,16 @@ class Converter {
       return null
     }
 
+    // A LIST DISPLAY (#1135, epic #1119). `readings = [1, 2, 3]` used to go
+    // grey — `lists_create_with` was listed in the symmetry test's exceptions
+    // as *"a literal the expression parser does not read yet"* — which meant
+    // the commonest first line of any program that keeps several readings could
+    // be dragged out and never got back. It is also what `bytes([0xF4, 0x2E])`
+    // needs, since the buffer block takes the list in a socket.
+    if (tok.kind === 'open' && tok.text === '[') {
+      return this.listDisplay(tokens, at)
+    }
+
     // A DICTIONARY LITERAL (#1120). `{'a': 1}` used to take its whole line raw,
     // which is the escape hatch doing the drawer's job — the thing #1119 set
     // out to count.
@@ -3511,7 +3541,12 @@ class Converter {
     if (tok.kind === 'string') {
       const text = readStringLiteral(tok.text)
       if (text === null) return null
-      return { block: { type: 'text', fields: { TEXT: text } }, next: at + 1 }
+      // AND THEN WHATEVER IS DOTTED ONTO IT (#1135, and #1124 after it).
+      // `'AT'.encode()` and `'hello'.upper()` are methods on a literal, and
+      // without this the literal was read and the method was not — which took
+      // the whole line raw. {@link chain} reads a slice off it too, which is
+      // how `'EDCDEEE'[::-1]` comes back.
+      return this.chain({ block: { type: 'text', fields: { TEXT: text } }, next: at + 1 }, tokens)
     }
 
     if (tok.kind === 'keyword' && (tok.text === 'True' || tok.text === 'False')) {
@@ -3613,6 +3648,69 @@ class Converter {
   }
 
   /**
+   * `[1, 2, 3]` → Blockly's own `lists_create_with` (#1135).
+   *
+   * The mutator's state is `{ itemCount: n }` and its sockets are `ADD0…ADDn`,
+   * which is Blockly's shape rather than ours — the growable blocks this epic
+   * added use `{ items: n }`, and the two must not be confused.
+   *
+   * A TRAILING COMMA IS THE LEARNER'S TEXT, as it is everywhere else here: the
+   * block has one socket per item and nowhere to record that there was a comma
+   * after the last of them, so `[1, 2,]` stays raw rather than coming back
+   * silently reformatted.
+   */
+  private listDisplay(
+    tokens: readonly Token[],
+    at: number
+  ): { block: BlockJson; next: number } | null {
+    let depth = 0
+    for (let i = at; i < tokens.length; i++) {
+      const tok = tokens[i]
+      if (tok.kind === 'open') {
+        depth += 1
+        continue
+      }
+      if (tok.kind !== 'close') continue
+      depth -= 1
+      if (depth > 0) continue
+      if (tok.text !== ']') return null
+      const inside = this.source.slice(tokens[at].end, tok.start).trim()
+      if (inside === '') {
+        return {
+          block: { type: 'lists_create_with', extraState: { itemCount: 0 } },
+          next: i + 1
+        }
+      }
+      // A TRAILING COMMA IS THE LEARNER'S TEXT, as it is on a call (see
+      // {@link Converter.chain}): the block has one socket per item and
+      // nowhere to record that there was a comma after the last of them.
+      // `splitArgs` drops it silently, so the check has to be here — and the
+      // multi-line `SEQUENCE = [...,]` in the fixture corpus is exactly the
+      // line that catches it.
+      if (inside.endsWith(',')) return null
+      // A COMPREHENSION IS NOT A LIST DISPLAY (#1126). `[v for v in things]`
+      // has no commas in it at all, so splitting would hand back one "item"
+      // that is the whole comprehension — a list block with one grey socket
+      // saying `v for v in things`, which is half an expression and worse than
+      // none. It stays raw until the block that really says it exists.
+      if (hasLoopKeyword(inside)) return null
+      const parts = splitArgs(inside)
+      if (!parts) return null
+      return {
+        block: {
+          type: 'lists_create_with',
+          extraState: { itemCount: parts.length },
+          inputs: Object.fromEntries(
+            parts.map((part, n) => [`ADD${n}`, { block: this.expression(part) }])
+          )
+        },
+        next: i + 1
+      }
+    }
+    return null
+  }
+
+  /**
    * `{'a': 1, 'b': 2}` → the Dictionaries drawer's literal (#1120).
    *
    * A SET IS NOT A DICTIONARY and shares the braces: `{1, 2, 3}` has no colons
@@ -3643,6 +3741,8 @@ class Converter {
       if (inside === '') {
         return { block: { type: 'snakie_dict_create', extraState: { items: 0 } }, next: i + 1 }
       }
+      // A trailing comma the block cannot record — as for a list display above.
+      if (inside.endsWith(',') || hasLoopKeyword(inside)) return null
       const parts = splitArgs(inside)
       if (!parts) return null
       const inputs: Record<string, { block: BlockJson }> = {}

@@ -616,7 +616,16 @@ describe('the hardware category (#1012)', () => {
       // opening this drawer should meet is still "turn LED on". The two naming
       // blocks sit together, because they are the same idea twice.
       'snakie_name_pwm',
-      'snakie_name_pin'
+      'snakie_name_pin',
+      // A BUFFERS SUB-DRAWER, after the naming blocks (#1135, epic #1119).
+      // `bytes` and `bytearray` are plain Python and sit here for curriculum
+      // reasons — a learner meets them next to the I²C and SPI blocks that ask
+      // for one, not in Lists, whose blocks are 1-based and Array-checked.
+      // They are grouped, so they do not lengthen the drawer a beginner scrolls.
+      'snakie_buffer_new',
+      'snakie_bytes_of',
+      'snakie_bytes_encode',
+      'snakie_bytes_decode'
     ])
   })
 

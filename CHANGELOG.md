@@ -8,6 +8,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`bytes` and `bytearray` — the buffers I²C, SPI and NeoPixel need.** (#1135,
+  epic #1119) The one item in the audit that is a *MicroPython* gap rather than
+  a Python one: on a desktop you can go a long way without typing `bytearray`;
+  on a board you cannot talk to a device without it. `buf = bytearray(2)`,
+  `i2c.writeto(addr, bytes([0xF4, 0x2E]))`, `uart.write('AT'.encode())` — every
+  one was escape-hatch text, including inside the hardware lessons.
+
+  Four blocks in a **Buffers** drawer inside Hardware, which is where a learner
+  is standing when the need appears: **buffer of `n` bytes**, **bytes from**,
+  **bytes of text**, **text of bytes**. `bytes` and `bytearray` being different
+  things — one you can change, one you cannot — is taught by the two words
+  rather than hidden.
+
+  **bytes from** takes its list in a socket rather than growing its own row,
+  so the hex blocks from #1127 drop straight in, which is how a command byte is
+  actually written. That is also what made the reader learn **list displays**:
+  `readings = [1, 2, 3]` used to come back grey, and now does not.
+
+  The drawer has no `how many bytes` and no byte-by-byte get/set: those are
+  `len(buf)` and `buf[n - 1]`, which **length of**, **item `n` of** and **set
+  item `n` of** already write. Slicing a buffer is #1123's, whose sockets check
+  nothing for exactly this reason.
+
 - **Slicing — the last reading, the first three, the string backwards.** (#1123,
   epic #1119) There was no slice block, for a list or for a string. A learner
   could read *one* thing out of a list and that was all; everything else was

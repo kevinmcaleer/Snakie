@@ -108,6 +108,11 @@ const READ_DIRECTLY: Record<string, string> = {
   snakie_slice_reverse: 'backwards = readings[::-1]\n',
   snakie_list_contains: 'found = name in names\n',
   snakie_tuple: 'point = (x, y)\n',
+  // A LIST DISPLAY IS READ NOW (#1135). It used to be listed below as an
+  // argued exception; the buffer block takes its list in a socket, so it had
+  // to become real — and `readings = [1, 2, 3]` stopping being grey is worth
+  // more than the block it was added for.
+  lists_create_with: 'readings = [1, 2, 3]\n',
   // --- dictionaries (#1120). The three that are not calls are a literal, a
   // subscript and a `del`, each claimed only where the key is a string.
   snakie_dict_create: "config = {'pin': 15}\n",
@@ -203,7 +208,6 @@ const NO_READER: Record<string, string> = {
     'that rewrites a formula somebody wrote (#1127).',
   text_join:
     'Writes a `+` chain of `str(...)` calls, which reads back as the arithmetic it is written as.',
-  lists_create_with: 'A list display `[1, 2]` is a literal the expression parser does not read yet.',
   controls_for:
     "Blockly's count-with loop writes `range(a, b, c)`; the reader knows `range(n)` and " +
     '`for x in xs`. Widening it is W8 (#1095).',
