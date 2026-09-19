@@ -389,6 +389,9 @@ export interface PartEditorProps {
 interface Status {
   kind: 'ok' | 'error' | 'info'
   text: string
+  /** An action the notice offers (e.g. "Reload from disk" on a refused save,
+   *  #750). A status carrying one stays up until it is used or replaced. */
+  action?: { label: string; run: () => void }
 }
 
 /** Inline pixel-ish toolbar icons (currentColor, crisp). */
@@ -712,7 +715,7 @@ export function PartEditor({
   // forever; errors hang around a bit longer than confirmations. Each new status
   // resets the timer via the effect cleanup.
   useEffect(() => {
-    if (!status) return
+    if (!status || status.action) return
     const t = setTimeout(() => setStatus(null), status.kind === 'error' ? 8000 : 4000)
     return () => clearTimeout(t)
   }, [status])
@@ -1272,6 +1275,39 @@ export function PartEditor({
     setStatus({ kind: 'info', text: 'Started a new blank part.' })
   }
 
+  /**
+   * Re-read the opened part from disk and make it the editor's part (#750). The
+   * way out of a refused save: the file changed under us, so the only safe next
+   * step is to look at what is actually there. Unsaved edits are discarded —
+   * that is the point, they were made against a copy that no longer exists —
+   * and the read stamp is refreshed so the next save presents the right one.
+   */
+  const reloadFromDisk = async (): Promise<void> => {
+    const fromLib = openedLibId
+    const fromId = openedId
+    if (!fromId) {
+      setStatus({ kind: 'error', text: 'This part has not been saved yet, so there is nothing on disk to reload.' })
+      return
+    }
+    try {
+      const libs = await window.api.parts.listLibraries()
+      const fresh = libs.find((l) => l.id === fromLib)?.parts.find((p) => sanitisePartId(p.id) === sanitisePartId(fromId))
+      if (!fresh) {
+        setStatus({ kind: 'error', text: `"${fromId}" is no longer in ${fromLib} on disk. Close the editor and pick a part from the Parts panel.` })
+        return
+      }
+      const seed = withShapesFromFeatures(withPinPositions(fresh))
+      resetHistory(seed) // you can't undo across a reload — the old copy is gone
+      setPropRows(Object.entries(seed.properties ?? {}))
+      setSelection(null)
+      lastSavedRef.current = { content: partContentKey(seed), version: seed.version }
+      sourceHashRef.current = fresh.sourceHash
+      setStatus({ kind: 'info', text: `Reloaded "${fresh.name}" (v${fresh.version ?? '?'}) from disk. Re-apply your edit and save again.` })
+    } catch (e) {
+      setStatus({ kind: 'error', text: `Could not reload the part: ${(e as Error).message}` })
+    }
+  }
+
   const save = async (): Promise<void> => {
     const err = validatePart(part)
     if (err) {
@@ -1361,7 +1397,8 @@ export function PartEditor({
         // only safe next step is to look at what is actually on disk (#750).
         setStatus({
           kind: 'error',
-          text: res.error ?? `"${clean.id}" changed on disk since you opened it — close the editor and reopen the part.`
+          text: res.error ?? `"${clean.id}" changed on disk since you opened it — reload it from disk, then re-apply your edit.`,
+          action: { label: 'Reload from disk', run: () => void reloadFromDisk() }
         })
       } else {
         setStatus({ kind: 'error', text: res?.error ?? 'Save failed.' })
@@ -1451,6 +1488,11 @@ export function PartEditor({
       {status && (
         <div className={`pe__status pe__status--${status.kind}`} role="status">
           {status.text}
+          {status.action && (
+            <button type="button" className="pe__status-action" onClick={status.action.run}>
+              {status.action.label}
+            </button>
+          )}
         </div>
       )}
 
