@@ -8,7 +8,7 @@
  *
  * The export must cope with the canvas NOT being mounted — the learner is
  * usually on Blocks or Code when they press print — so this deliberately says
- * "no canvas" rather than pretending; see `wiring-capture.tsx` for what happens
+ * "no canvas" rather than pretending; see `wiring-capture.ts` for what happens
  * then.
  */
 

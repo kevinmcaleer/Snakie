@@ -1093,6 +1093,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The PDF export has its Electronics pages back** (#1147). The document is
+  meant to show the board twice — the diagram on the page's parchment, and the
+  workspace's own sheet — and it showed neither unless the Electronics view
+  happened to be open when you pressed print, which it usually is not: a learner
+  prints from Blocks or Code.
+
+  The capture renders the board off-screen when there is none on screen, and it
+  did that by opening a React root of its own and putting a `<BoardPane>` in it.
+  A root of its own is a TREE of its own, with none of `App.tsx`'s providers
+  above it, so the pane threw `useWorkspace must be used within a
+  WorkspaceProvider` on its first render — out in a root nothing was watching,
+  where it surfaced only as a capture that never settled, twelve seconds of
+  waiting, and a document with the wiring quietly left out of it.
+
+  The app does the mounting now: a `BoardCaptureHost` inside the providers
+  portals the pane into whatever off-screen host the exporter hands it. The
+  board it photographs therefore reads the same workspace the Electronics view
+  reads — the open folder, the active file, the breadboard mat you chose — so
+  the picture in the document is the picture you would see. Printing from Code
+  with parts on the board now takes about two seconds and produces the
+  Electronics page and the Electronics sheet, part photographs and all.
+
 - **Zooming the canvas no longer resizes the shelf, and one press shows the
   whole program** (#1150). Blockly's flyout — the drawer a category opens — is a
   workspace of its own whose scale followed the canvas's, so zooming in to look
