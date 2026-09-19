@@ -166,6 +166,13 @@ const NO_READER: Record<string, string> = {
   snakie_onboard_led: 'Writes a per-board pin token, which is board state rather than line text.',
   snakie_pin_pressed: 'Reads back as the pin block plus a comparison — two blocks for one line.',
   snakie_pwm_duty: 'Writes the percentage arithmetic inline, so the line is not a plain call.',
+  snakie_pwm_read:
+    'Two blocks write `x.duty_u16()`, and its socket twin `snakie_pwm_read_named` is the one that ' +
+    'wins. It has to be: `snakie_name_pwm` registers its names against the `pwm` receiver, so a ' +
+    'receiver rule here would claim `motor_a.duty_u16()` too — and this block regenerates through ' +
+    '`pwm()`, which would build `pwm_motor_a = PWM(motor_a)`. The statement blocks settle that ' +
+    'race with `onNamedPin`, whose pass runs first; the value side has no such pass, so only one ' +
+    'of the pair may claim the line.',
   snakie_pwm_duty_named:
     'As `snakie_pwm_duty`, which it is the socket-driven twin of: the percent is wrapped in ' +
     '`int(x * 65535 / 100)`, and that arithmetic is the lesson rather than something a table can ' +

@@ -18,16 +18,22 @@ import { PWM_ALIAS_BLOCK, pwmAliasesIn } from '../src/renderer/src/lib/blocks/bo
  *
  * ```
  *   name PWM on pin [GP15 ▾] as [motor_a]     → motor_a = PWM(Pin(15))
- *   set duty of ( motor_a ) to [75] %         → motor_a.duty_u16(int(75 * 65535 / 100))
+ *   set power of ( motor_a ) to [75] %        → motor_a.duty_u16(int(75 * 65535 / 100))
  *   set frequency of ( motor_a ) to [1000] Hz → motor_a.freq(1000)
+ *   power of ( motor_a ) as [0-65535 ▾]       → motor_a.duty_u16()
+ *   turn PWM ( motor_a ) off                  → motor_a.deinit()
  * ```
  *
- * AND THE LABEL IS HALF THE POINT — *set duty*, NOT *set speed*. A motor block
+ * AND THE LABEL IS HALF THE POINT — *set power*, NOT *set speed*. A motor block
  * would have to promise something about the driver, and there is nothing to
  * promise: one driver takes a PWM on its speed pin, another takes plain digital
  * on/off, and a Modulino takes neither. These blocks say what they do to the
  * PIN, which is true of every board; what that does to a motor belongs to the
- * driver's datasheet.
+ * driver's datasheet. *Power* is the word that survives that: it is true of an
+ * LED, of a motor and of a heater, where *speed* and *brightness* are each true
+ * of one of them — and a PAIR of blocks, one per word, is the thing this palette
+ * cannot have, because both would write the same line and the reader would have
+ * nothing to tell them apart by.
  *
  * IT REUSES `AliasRule` UNCHANGED, which is the interesting part: that machinery
  * was written for pins, and a PWM fits it because its constructor carries a
@@ -141,6 +147,52 @@ describe('the blocks a learner drags', () => {
     expect(code).toContain('motor_a.freq(1000)')
   })
 
+  it('writes the off line, which is not the same as a duty of zero', () => {
+    const code = program([{ type: 'snakie_pwm_off_named', id: 'o', inputs: { PWM: { block: NAMED } } }])
+    expect(code).toContain('motor_a.deinit()')
+  })
+
+  it('reads the duty back, raw and as a percentage', () => {
+    const raw = program([
+      {
+        type: 'variables_set',
+        id: 's',
+        fields: { VAR: { id: 'd' } },
+        inputs: {
+          VALUE: {
+            block: {
+              type: 'snakie_pwm_read_named',
+              id: 'r',
+              fields: { UNIT: 'RAW' },
+              inputs: { PWM: { block: NAMED } }
+            }
+          }
+        }
+      }
+    ])
+    expect(raw).toContain('motor_a.duty_u16()')
+    expect(raw).not.toContain('65535')
+
+    const percent = program([
+      {
+        type: 'variables_set',
+        id: 's',
+        fields: { VAR: { id: 'd' } },
+        inputs: {
+          VALUE: {
+            block: {
+              type: 'snakie_pwm_read_named',
+              id: 'r',
+              fields: { UNIT: 'PERCENT' },
+              inputs: { PWM: { block: NAMED } }
+            }
+          }
+        }
+      }
+    ])
+    expect(percent).toContain('motor_a.duty_u16() * 100 / 65535')
+  })
+
   it('never renames the name out from under its own declaration', () => {
     // The collision `boundName` exists for: the declaration goes into the setup
     // section under the learner's name, and a workspace variable of that name
@@ -234,6 +286,23 @@ describe('what stays an ordinary line, and why', () => {
       ''
     ].join('\n')
     expect(types(src)).not.toContain(PWM_ALIAS_BLOCK)
+    roundTrips(src)
+  })
+
+  it('reads the off line back as its block', () => {
+    const src = `${IMPORT}motor_a = PWM(Pin(15))\n\nmotor_a.deinit()\n`
+    expect(types(src)).toContain('snakie_pwm_off_named')
+    roundTrips(src)
+  })
+
+  it('reads a bare duty getter back as the socket block, not the fielded one', () => {
+    // The fielded twin regenerates through `pwm()`, which would build
+    // `pwm_motor_a = PWM(motor_a)` — so only one of the pair may claim this line,
+    // and it is the one that writes it back unchanged.
+    const src = `${IMPORT}motor_a = PWM(Pin(15))\n\nlevel = motor_a.duty_u16()\n`
+    expect(types(src)).toContain('snakie_pwm_read_named')
+    expect(types(src)).not.toContain('snakie_pwm_read')
+    expect(one(src, 'snakie_pwm_read_named')!.fields).toEqual({ UNIT: 'RAW' })
     roundTrips(src)
   })
 
