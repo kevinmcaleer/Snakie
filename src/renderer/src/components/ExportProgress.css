@@ -1,0 +1,142 @@
+/* --------------------------------------------------------------------------
+ * The floating PDF-export progress bar (#1114, epic #1105).
+ *
+ * Soft Shell card tokens throughout, so it reads in BOTH skins, and pinned
+ * above the status bar rather than over the middle of the editor — this is
+ * feedback, not an interruption.
+ * ------------------------------------------------------------------------ */
+
+.export-progress {
+  position: fixed;
+  right: 0.75rem;
+  /* Clear of the 1.6rem status bar, with a little air under the card. */
+  bottom: 2.4rem;
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: min(17rem, calc(100vw - 1.5rem));
+  padding: 0.5rem 0.65rem 0.55rem;
+  background: var(--card, var(--bg-elevated));
+  border: var(--border-w) solid var(--shellbd, var(--border));
+  border-radius: var(--radius);
+  box-shadow: var(--pixel-shadow);
+  font-family: var(--font-ui);
+  /* A progress bar nobody can click through to is a progress bar in the way. */
+  pointer-events: none;
+  animation: export-progress-in 160ms ease-out;
+}
+
+.export-progress__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.export-progress__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.72rem;
+  color: var(--head, var(--text));
+}
+
+.export-progress__pct {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--txt2, var(--text-muted));
+  font-variant-numeric: tabular-nums;
+}
+
+.export-progress--failed .export-progress__label {
+  color: var(--danger, #c0392b);
+}
+
+/* --- The bar itself -------------------------------------------------------- */
+
+.export-progress__track {
+  height: 0.4rem;
+  background: var(--panel2, var(--bg-sunken));
+  border: var(--border-w) solid var(--shellbd, var(--border));
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.export-progress__fill {
+  position: relative;
+  height: 100%;
+  min-width: 0.4rem;
+  overflow: hidden;
+  border-radius: inherit;
+  background: var(--grad-run, var(--accent));
+  transition: width 240ms ease-out;
+}
+
+.export-progress--failed .export-progress__fill {
+  background: var(--grad-danger, var(--danger, #c0392b));
+}
+
+/* The "still alive" stripe. It rides the FILL, and it is a transform animation
+   so the compositor keeps it moving on frames the export itself is eating. */
+.export-progress__sheen {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 45%;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0),
+    rgba(255, 255, 255, 0.38),
+    rgba(255, 255, 255, 0)
+  );
+  animation: export-progress-sheen 1.1s linear infinite;
+}
+
+@keyframes export-progress-sheen {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(240%);
+  }
+}
+
+@keyframes export-progress-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.35rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .export-progress {
+    animation: none;
+  }
+
+  .export-progress__fill {
+    transition: none;
+  }
+
+  /* Fade in place rather than sweeping across — still visibly alive, without
+     anything travelling for someone who asked for that not to happen. */
+  .export-progress__sheen {
+    width: 100%;
+    animation: export-progress-pulse 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes export-progress-pulse {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
