@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.85.4] - 2026-09-19
+
 ### Added
 
 - **3-D model for the Yellow TT Motor.** The Standard-library `tt-motor` part
@@ -9825,7 +9827,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.84.1...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.85.4...HEAD
+[0.85.4]: https://github.com/kevinmcaleer/Snakie/compare/v0.84.1...v0.85.4
 [0.84.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.68.8...v0.84.1
 [0.68.8]: https://github.com/kevinmcaleer/Snakie/compare/v0.56.0...v0.68.8
 [0.56.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.55.0...v0.56.0
