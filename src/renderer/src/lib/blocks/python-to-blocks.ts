@@ -447,6 +447,50 @@ export function registerCallRules(rules: readonly CallRule[]): void {
     if (at === -1) REGISTERED.push(rule)
     else REGISTERED[at] = rule
   }
+  publishRules()
+}
+
+/**
+ * THE VOCABULARY CAN ARRIVE AFTER THE QUESTION (#1170).
+ * ---------------------------------------------------------------------------
+ *
+ * Every rule above is registered as a SIDE EFFECT OF IMPORTING A PALETTE, and
+ * the palettes are imported by `BlocksCanvas`, which is lazy — while the thing
+ * that asks for a conversion is `BlocksSplit`, which is not. So on a cold load
+ * the race is real and it is silent: a file converted before the hardware
+ * palette finished importing is a file with NO hardware rules to match, and
+ * every `motor_a.value(1)` in it comes back as the generic *call value on
+ * (motor_a) with (1)* rather than as *set pin (motor_a) to (1 high)*. The
+ * result is then memoised on the file's text, so it never recovers — the same
+ * file opens right or wrong depending on how fast a chunk downloaded.
+ *
+ * A COUNTER AND A SUBSCRIPTION, rather than making the conversion wait for a
+ * palette it should not have to know about: the reader says when its vocabulary
+ * grew, and whoever converted against the smaller one can ask again. It is
+ * `useSyncExternalStore`'s exact shape, which is how `BlocksSplit` reads it.
+ *
+ * It settles immediately in practice — every palette registers once, at import
+ * — so this is a handful of bumps while the chunk lands and then silence.
+ */
+let generation = 0
+const ruleListeners = new Set<() => void>()
+
+/** How many times the rule tables have changed. Changes ⇒ ask again. */
+export function callRuleGeneration(): number {
+  return generation
+}
+
+/** Watch for the rule tables growing. Returns the unsubscribe. */
+export function subscribeCallRules(listener: () => void): () => void {
+  ruleListeners.add(listener)
+  return () => {
+    ruleListeners.delete(listener)
+  }
+}
+
+function publishRules(): void {
+  generation += 1
+  for (const listener of [...ruleListeners]) listener()
 }
 
 /**
@@ -492,6 +536,7 @@ export function readableBlockTypes(): Set<string> {
 export function resetCallRules(): void {
   REGISTERED.length = 0
   ALIASES.length = 0
+  publishRules()
 }
 
 // ---------------------------------------------------------------------------
@@ -535,8 +580,29 @@ export interface AliasRule {
    * here is what says so, rather than a field called `''` on every block.
    */
   modeField: string
-  /** Mode value → the exact expression the block writes, `{PIN}` for the number. */
+  /**
+   * Mode value → the exact expression the block writes.
+   *
+   * `{PIN}` stands for the pin number, and `{VALUE}` for the one other thing a
+   * declaration may carry — see {@link AliasRule.valueField}.
+   */
   modes: Readonly<Record<string, string>>
+  /**
+   * The field holding a `{VALUE}` the constructor takes, or absent for a rule
+   * whose templates have none (W10's pins, and the PWM until #1170).
+   *
+   * `pwm_motor_a = PWM(motor_a, freq=1000)` is the single commonest way a robot
+   * declares a drive channel, and it used to match no template at all — so the
+   * name was not a name, and every `pwm_motor_a.duty_u16(…)` under it came back
+   * as the generic *call* block instead of *set power*. A whole file's hardware
+   * turned grey over a keyword argument.
+   *
+   * ONE VALUE, NOT A LIST, and deliberately: this is the exact-match machinery,
+   * where a template is a thing the generator wrote character for character. A
+   * declaration with more in it than the block can hold is somebody else's line
+   * and stays one.
+   */
+  valueField?: string
   /**
    * The {@link CallReceiver} name whose calls a name declared this way may serve.
    *
@@ -556,6 +622,7 @@ export function registerAliasRules(rules: readonly AliasRule[]): void {
     if (at === -1) ALIASES.push(rule)
     else ALIASES[at] = rule
   }
+  publishRules()
 }
 
 /** One name a program declares for a pin, as read off its declaration line. */
@@ -565,6 +632,8 @@ interface Alias {
   pin: string
   /** Which of the rule's modes the constructor is. */
   mode: string
+  /** What the mode's `{VALUE}` matched, for a rule that has one. */
+  value?: string
 }
 
 /**
@@ -601,29 +670,72 @@ function declaredAliases(lines: readonly LogicalLine[]): Map<string, Alias> {
 function matchAlias(expr: string, declared?: ReadonlyMap<string, Alias>): Alias | null {
   for (const rule of ALIASES) {
     for (const [mode, template] of Object.entries(rule.modes)) {
-      const pattern = new RegExp(`^${escapeRe(template).replace('\\{PIN\\}', '(\\d+)')}$`)
-      const found = pattern.exec(expr)
-      if (found) return { rule, pin: found[1], mode }
-      const byName = namedPinTemplate(template).exec(expr)
+      const byNumber = readTemplate(template, '(\\d+)', expr)
+      if (byNumber) return { rule, mode, ...byNumber }
       // A RULE THAT DECLARES A PIN CANNOT BE BUILT ON ONE. `Pin(motor_left,
       // Pin.OUT)` is not a second name for a pin — `Pin` takes a number — so
       // only the rules that build something ON a pin (the PWM) take a name
       // here, and `Pin(x, Pin.OUT)` with a variable in it stays the raw line it
       // has always been.
-      if (byName && rule.receiver !== 'pin' && declared?.get(byName[1])?.rule.receiver === 'pin') {
-        return { rule, pin: byName[1], mode }
+      if (rule.receiver === 'pin' || !template.includes(PIN_OBJECT)) continue
+      // The pin OBJECT, not the number inside it: `PWM(motor_left)` is the
+      // whole `Pin({PIN})` replaced by the name that already stands for it.
+      const onName = template.replace(PIN_OBJECT, '{PIN}')
+      const byName = readTemplate(onName, '([A-Za-z_]\\w*)', expr)
+      if (byName && declared?.get(byName.pin)?.rule.receiver === 'pin') {
+        return { rule, mode, ...byName }
       }
     }
   }
   return null
 }
 
-/** The same template with a NAME where the pin number goes. */
-function namedPinTemplate(template: string): RegExp {
-  // `escapeRe` has already escaped the braces and the brackets, so the needle
-  // is the escaped spelling of `Pin({PIN})` — the whole constructor, because a
-  // name stands for the pin OBJECT and not for the number inside it.
-  return new RegExp(`^${escapeRe(template).replace('Pin\\(\\{PIN\\}\\)', '([A-Za-z_]\\w*)')}$`)
+/** The pin constructor a template builds something ON. See {@link matchAlias}. */
+const PIN_OBJECT = 'Pin({PIN})'
+
+/** The placeholders a mode template may carry, in the order it carries them. */
+const PLACEHOLDER = /\{(PIN|VALUE)\}/g
+
+/**
+ * What a `{VALUE}` may be.
+ *
+ * A LITERAL OR A NAME, never an expression — `freq=1000`, `freq=SPEED`,
+ * `freq=cfg.hz`. The whole of this machinery is exact matching against what the
+ * generator wrote, and the field this lands in is a text field: a declaration
+ * with arithmetic in it is somebody's own line and stays a raw one.
+ */
+const VALUE_CAPTURE = '([A-Za-z_][\\w.]*|\\d[\\w.]*)'
+
+/**
+ * Read `expr` against one mode template, with `pin` as the pin's capture.
+ *
+ * Built by walking the placeholders rather than by string replacement, so the
+ * captures come back in the order the template put them — which is what lets a
+ * template carry a second one at all.
+ */
+function readTemplate(
+  template: string,
+  pin: string,
+  expr: string
+): { pin: string; value?: string } | null {
+  const names: string[] = []
+  let source = '^'
+  let last = 0
+  PLACEHOLDER.lastIndex = 0
+  for (let m = PLACEHOLDER.exec(template); m; m = PLACEHOLDER.exec(template)) {
+    source += escapeRe(template.slice(last, m.index))
+    source += m[1] === 'PIN' ? pin : VALUE_CAPTURE
+    names.push(m[1])
+    last = m.index + m[0].length
+  }
+  source += `${escapeRe(template.slice(last))}$`
+  const found = new RegExp(source).exec(expr)
+  if (!found) return null
+  const at = (name: string): string | undefined => {
+    const i = names.indexOf(name)
+    return i === -1 ? undefined : found[i + 1]
+  }
+  return { pin: at('PIN') ?? '', value: at('VALUE') }
 }
 
 // ---------------------------------------------------------------------------
@@ -705,179 +817,46 @@ export function pythonToBlocks(source: string): Conversion {
 }
 
 /**
- * WHERE THE ROOTS GO (#1062).
+ * WHERE THE ROOTS GO — ORDER HERE, GEOMETRY ON THE CANVAS (#1170).
  * ---------------------------------------------------------------------------
  *
- * They used to be a fixed 240px apart, which is fine for the programs this was
- * written against and wrong for a real module. A class with eight methods is
- * well over a thousand pixels tall, so the next four `def`s were drawn ON TOP
- * of it — and blocks overlapping blocks is the one thing a block canvas must
- * never do, because the whole premise is that what you see is the structure.
+ * This used to be a LAYOUT: #1062 stacked each root under the measured bottom
+ * of the one before it, and #1145 re-measured the constants it did that with.
+ * Both worked, and both were the same mistake — a pure module that has never
+ * loaded Blockly estimating what Blockly draws, out of numbers somebody read
+ * off a screenshot. `ROW_HEIGHT = 56`, a step per level of nested value, a cap
+ * on the step, a fudge for the hat and one for an empty mouth: every one of
+ * them measured against the renderer of the day.
  *
- * So each root is placed under the measured bottom of the one before it. The
- * measurement is an ESTIMATE, because this module is pure — it emits Blockly's
- * serialisation as plain JSON and has never loaded Blockly, which is what lets
- * the whole converter be unit-tested in node. It counts rows instead, which it
- * can do exactly, and multiplies by the row height the Soft Shell renderer
- * actually uses.
+ * On the day #1170 moved the canvas to standard Blockly geometry, all of them
+ * were wrong at once and in both directions — a root the estimate called 520px
+ * tall rendered 283, and a `def` it called 424 rendered 445, so the same file
+ * had roots laid out most of a screen too far apart AND roots drawn on top of
+ * each other. An estimate that goes stale silently is worse than no estimate.
  *
- * THE CONSTANTS ARE MEASURED, not guessed. Rendering the turtle starter — one
- * `repeat` holding two statements — in the real canvas gives a root exactly
- * 176px tall, which is 48 + 2x48 + 32: one row for the header, one per block in
- * the mouth, and the arm underneath. That is what `ROW_HEIGHT` and
- * `MOUTH_BOTTOM` below are.
+ * So the canvas measures instead, where a rendered block can simply be asked
+ * (`lib/blocks/arrange.ts`), and what is left here is the one thing the canvas
+ * cannot work out later: WHICH ORDER THE FILE HAD THEM IN. Blockly's ordered
+ * `getTopBlocks` walks top blocks by position, so a stack of roots at one
+ * coordinate would be a program whose statements could come back in any order.
+ * A fixed step down the canvas says "this one, then this one", which is all
+ * this needs to say.
  *
- * Where it is still an estimate, it errs UPWARDS, and the gutter is wide. Being
- * a little too far apart costs a scroll; being too close costs the overlap this
- * exists to remove, and only one of those is a bug.
+ * The step is not a height and is not pretending to be one. It exists so that
+ * a consumer holding nothing but this JSON — the round-trip gate in
+ * `round-trip.ts`, a unit test, a future export — reads the program in the
+ * order it was written.
  */
 
 /** Where the first root goes, and the left margin for all of them. */
 const ROOT_ORIGIN = 40
 
-/** Clear space between one root's bottom and the next root's top. */
-const ROOT_GUTTER = 48
+/** The fixed step between one root and the next. See above: an order, not a size. */
+const ROOT_STEP = 400
 
-/**
- * One statement row, in px — `MIN_BLOCK_HEIGHT` plus the top and bottom strips
- * from `lib/blocks/renderer.ts`, rounded up.
- *
- * RE-MEASURED for #1145: a `set x to 1` renders 54px in the real canvas, so 48
- * was a tenth short on every row — invisible while the only thing under the
- * long chain was empty canvas, and an overlap the moment a `def` was laid out
- * beneath it.
- */
-const ROW_HEIGHT = 56
-
-/**
- * What one more level of nested value blocks adds to the row holding them.
- *
- * Measured the same way: `x = 1` is 54px, `x = a + b` 62, `x = a + b * c` 70 —
- * every socket inside a socket grows the row it is on by a fixed step. A row of
- * plain terms is the common case and pays nothing for this.
- */
-const NESTED_VALUE = 8
-
-/**
- * How many levels of that are worth counting.
- *
- * Not every nested block grows its row — a call inside a `print` does not — so
- * counting depth for ever would reserve a screen for a line that renders in one
- * row, which is the failure #1062 fixed in the other direction. Six steps holds
- * the deepest line in the corpus: `math.atan2(math.sqrt(1.0 - c * c), c) +
- * math.acos(max(-1.0, min(1.0, d)))` renders 94px, and six steps reserves 104.
- */
-const NESTED_VALUE_CAP = 6
-
-/** The arm under a C-block's mouth. Measured: see above. */
-const MOUTH_BOTTOM = 32
-
-/** The hat a `def` wears — real height above its first row, and only it has one. */
-const HAT_HEIGHT = 32
-
-/** Lay the roots out in one column, each clear of the one above it. */
+/** Lay the roots out top to bottom, in source order. */
 function stackRoots(roots: readonly BlockJson[]): BlockJson[] {
-  let y = ROOT_ORIGIN
-  return roots.map((block) => {
-    const placed = { ...block, x: ROOT_ORIGIN, y }
-    y += rootHeight(block) + ROOT_GUTTER
-    return placed
-  })
-}
-
-/** How tall a root renders, including everything chained below it. */
-function rootHeight(block: BlockJson): number {
-  const hat = block.type.startsWith('procedures_def') ? HAT_HEIGHT : 0
-  return hat + chainHeight(block)
-}
-
-/**
- * THE ROWS A `def` HAS THAT NOTHING ELSE DOES (#1145).
- *
- * Measured in the real canvas, which is the only way any of these constants
- * were arrived at: `def frame(i)` out of `examples/sprites/blinking_eyes.py` —
- * a docstring, no statements, one `return` — renders 157px, and the estimate
- * for it was 80. The next root was drawn 29px INSIDE it.
- *
- * Two rows were missing, and both are rows only a definition has:
- *
- *  - an EMPTY MOUTH still draws. Every other estimate here counts a statement
- *    input by what is in it, which is right for a socket that closes up when it
- *    is empty and wrong for the one a `def` always wears.
- *  - the RETURN socket of a `procedures_defreturn` is on a row of ITS OWN, under
- *    the mouth — unlike every other value socket, which sits on the row that
- *    has already been counted.
- *
- * It mattered less when every `def` was laid out first and the program hung
- * below them all; now that a root can be a `def` with a whole program under it,
- * an underestimate here is an overlap in the middle of the canvas.
- */
-function definitionExtra(block: BlockJson): number {
-  if (!block.type.startsWith('procedures_def')) return 0
-  const empty = block.inputs?.STACK?.block ? 0 : ROW_HEIGHT + MOUTH_BOTTOM
-  return empty + (block.type === 'procedures_defreturn' ? ROW_HEIGHT : 0)
-}
-
-/** A block and its `next` chain. */
-function chainHeight(block: BlockJson | undefined): number {
-  let total = 0
-  for (let b: BlockJson | undefined = block; b; b = b.next?.block) total += blockHeight(b)
-  return total
-}
-
-/** One block: its own row(s), plus any statement bodies it holds open. */
-function blockHeight(block: BlockJson): number {
-  // A comment block is one row PER LINE — which is the whole point of #1062's
-  // folding, and the case that would break a per-block estimate worst.
-  const lines = (block.extraState as { lines?: unknown[] } | undefined)?.lines
-  let total = Array.isArray(lines) && lines.length > 0 ? lines.length * ROW_HEIGHT : ROW_HEIGHT
-  // A socket inside a socket makes the row it is on taller, and a program built
-  // out of expressions is made of those rows.
-  total += Math.min(valueDepth(block), NESTED_VALUE_CAP) * NESTED_VALUE
-  total += definitionExtra(block)
-  for (const [name, input] of Object.entries(block.inputs ?? {})) {
-    // A VALUE socket sits on the row that is already counted; only a STATEMENT
-    // body adds height, and it brings the arm under the mouth with it.
-    if (input.block && isStatementBody(name)) total += chainHeight(input.block) + MOUTH_BOTTOM
-  }
-  return total
-}
-
-/** How far value sockets nest inside this block's own row. A plain term is 0. */
-function valueDepth(block: BlockJson): number {
-  let deepest = 0
-  for (const [name, input] of Object.entries(block.inputs ?? {})) {
-    if (!input.block || isStatementBody(name)) continue
-    deepest = Math.max(deepest, 1 + valueDepth(input.block))
-  }
-  return deepest
-}
-
-/**
- * Is this input a statement BODY — something that adds height — rather than a
- * value socket, which sits on a row already counted?
- *
- * Read off the INPUT NAME, and these are all of them: the converter writes
- * exactly `DO`, `DO0…DOn`, `ELSE` and `STACK`, and nothing else opens a mouth.
- *
- * Sniffing the block instead, which is what this did first, counted every value
- * socket's contents as vertical height — a comparison inside an `if` added
- * three rows that are not there. On the module in #1062 that reserved 1312px
- * for a root which renders 559, so the roots were laid out correct but a screen
- * apart. Measured against the real canvas; see the comment above.
- */
-function isStatementBody(input: string): boolean {
-  // `BODY` is the class and method blocks (W6), `TRY` and `FINALLY` the `try`
-  // block (W7). A body the estimator cannot see is a root measured short, and a
-  // root measured short is one the next root is drawn on top of.
-  return (
-    input === 'ELSE' ||
-    input === 'STACK' ||
-    input === 'BODY' ||
-    input === 'TRY' ||
-    input === 'FINALLY' ||
-    /^DO\d*$/.test(input)
-  )
+  return roots.map((block, i) => ({ ...block, x: ROOT_ORIGIN, y: ROOT_ORIGIN + i * ROOT_STEP }))
 }
 
 /**
@@ -2887,6 +2866,12 @@ class Converter {
       fields: {
         [alias.rule.pinField]: alias.pin,
         [alias.rule.nameField]: m[1],
+        // WHAT THE MODE'S `{VALUE}` MATCHED, where the rule has one — the
+        // frequency in `PWM(motor_a, freq=1000)`. Absent on a mode without one,
+        // which is what leaves the field blank and the constructor plain.
+        ...(alias.rule.valueField && alias.value !== undefined
+          ? { [alias.rule.valueField]: alias.value }
+          : {}),
         // A NAMING BLOCK WITH ONE MODE HAS NOWHERE TO PUT IT, and says so with
         // an empty `modeField`: a PWM has no direction to choose, where a pin
         // has four. Writing it anyway gave every such block a field called `""`

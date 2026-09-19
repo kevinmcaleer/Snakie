@@ -1,4 +1,13 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore
+} from 'react'
 import {
   Panel,
   PanelGroup,
@@ -8,7 +17,11 @@ import {
 import { useWorkspaceLayout } from '../store/layout'
 import { useWorkspace } from '../store/workspace'
 import { blocksDocumentFor } from '../lib/blocks/document'
-import { pythonToBlocks } from '../lib/blocks/python-to-blocks'
+import {
+  callRuleGeneration,
+  pythonToBlocks,
+  subscribeCallRules
+} from '../lib/blocks/python-to-blocks'
 import { syntaxOk, type DeviceExec } from '../lib/blocks/syntax-gate'
 import { verifyConversion, type ConversionHold } from '../lib/blocks/round-trip'
 import { blocksMayWrite, holdFor, type BlocksHold } from '../lib/blocks/hold'
@@ -90,10 +103,32 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   const file = openFiles.find((f) => f.id === activeId) ?? null
   const content = file?.content
   /**
+   * HOW MUCH PYTHON THE READER CURRENTLY KNOWS HOW TO READ (#1170).
+   *
+   * Every rule the conversion matches against is registered as a side effect of
+   * importing a palette, and the palettes come in with `BlocksCanvas`, which is
+   * lazy — while this component, which asks for the conversion, is not. Convert
+   * before that chunk lands and the answer is a file with no hardware in it:
+   * `motor_a.value(1)` as *call value on (motor_a) with (1)* instead of *set
+   * pin (motor_a) to (1 high)*, for every line, because the rules that would
+   * have matched did not exist yet. Memoised on the text, it never recovered.
+   *
+   * So the reader says when its vocabulary grew and the question gets asked
+   * again. It settles within a tick of the chunk arriving.
+   */
+  const vocabulary = useSyncExternalStore(subscribeCallRules, callRuleGeneration, callRuleGeneration)
+  /**
    * The document, as blocks and as code — see `lib/blocks/document.ts`, which
    * owns the three cases and the reason the middle one is not a modal.
    */
-  const doc = useMemo(() => blocksDocumentFor(content), [content])
+  const doc = useMemo(
+    () => blocksDocumentFor(content),
+    // `vocabulary` is not read in the callback and is not meant to be: it is a
+    // generation counter, and its only job is to say that the same text would
+    // now convert into something better. The rule cannot see that.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [content, vocabulary]
+  )
 
   const hostRef = useRef<HTMLDivElement>(null)
   const groupRef = useRef<ImperativePanelGroupHandle>(null)
@@ -223,6 +258,21 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   const [codeDraft, setCodeDraft] = useState<string | null>(null)
   /** Bumped when a CODE edit rebuilt the workspace, so the canvas re-reads it. */
   const [reloadNonce, setReloadNonce] = useState(0)
+  /**
+   * …and when the READER grew (#1170), which rebuilds it the same way.
+   *
+   * The canvas deliberately does not watch the workspace prop — that is the
+   * uncontrolled seam that stops an edit echoing back and re-loading under the
+   * learner's cursor — so a freshly converted document is not enough on its
+   * own. Re-deriving it against the full rule table and then not showing it
+   * would be the same bug with an extra step.
+   */
+  const vocabularyRef = useRef(vocabulary)
+  useEffect(() => {
+    if (vocabularyRef.current === vocabulary) return
+    vocabularyRef.current = vocabulary
+    setReloadNonce((n) => n + 1)
+  }, [vocabulary])
   const codeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   /**
    * The conversion was held back by the round-trip gate (#1068), and why.
@@ -476,6 +526,7 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
         paletteNonce={paletteNonce}
         onPartsUsed={setPartsUsed}
         reloadNonce={reloadNonce}
+        derived={doc.derived}
       />
     </Suspense>
   )

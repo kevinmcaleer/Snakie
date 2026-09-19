@@ -8,6 +8,39 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The functions get a column of their own, and nothing is drawn on top of
+  anything.** (#1170) Opening a MicroPython file in Blocks or Split laid every
+  top-level stack out in one tall column — so a file that defines four
+  functions opened with its program a screen and a half below the last of them,
+  and you scrolled past everything to find where it starts. Worse, the column
+  was spaced by an ESTIMATE: the converter is pure and has never loaded Blockly,
+  so it counted rows and multiplied by numbers somebody had read off a
+  screenshot. When the estimate came in short — which a `def` full of
+  arithmetic reliably did — the next stack was drawn straight over the one
+  above it.
+
+  Now the program runs down the left and the functions and methods stand beside
+  it in a second column, each clear of the one above, and the sizes are
+  MEASURED rather than guessed: the canvas asks each stack how big it actually
+  rendered. A layout you arranged yourself is still yours — a file whose footer
+  matched its code opens exactly as you left it, and a stack you drag aside
+  stays where you put it even as the code pane keeps re-converting around it.
+
+- **A PWM can be named with its frequency: `name PWM on pin [GP15 ▾] as
+  [motor_a] at [1000] Hz`.** (#1170) `pwm_motor_a = PWM(motor_a, freq=1000)` is
+  how nearly every robot tutorial opens, and it matched nothing this palette
+  writes — so `pwm_motor_a` was not a name the blocks knew, and every
+  `pwm_motor_a.duty_u16(int(50 * 65535 / 100))` under it came back as the
+  generic *call duty_u16 on (pwm_motor_a) with (turn (50 × 65535 ÷ 100) into a
+  whole number (int))*: five blocks and four levels of nesting for a line that
+  *set power of (pwm_motor_a) to (50) %* writes in one row. One keyword
+  argument at the top of a file turned the whole of its hardware grey.
+
+  The Hz box starts EMPTY and empty means "don't set one", so every program
+  saved before this field existed still writes the constructor it always wrote.
+  The separate *set frequency of (…) to (…) Hz* block is still how you change it
+  while the program runs; this is how you say what it starts at.
+
 - **Snakie says which board you are on, and opens with the board on screen.**
   (#1163) The web build connects its built-in simulator for you a moment after
   the page loads, so Run works without anyone hunting for the Connect control
@@ -1199,6 +1232,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A file no longer opens as grey `call` blocks depending on how fast a chunk
+  downloaded.** (#1170) Every rule the reader matches against is registered when
+  a palette module is imported, and the palettes arrive with the block canvas,
+  which is loaded on demand — while the component that asks for the conversion
+  is not. Lose that race and the file is converted against a reader that knows
+  no hardware at all: `motor_a.value(1)` as *call value on (motor_a) with (1)*
+  instead of *set pin (motor_a) to (1 high)*, for every line in the program. The
+  answer was then remembered against the file's text, so it never recovered —
+  the same file opened right or wrong depending on the network.
+
+  The reader now says when its vocabulary has grown, and a file converted
+  against a smaller one is simply converted again.
+
 - **No more grey `blank line` block hanging under the imports, and no column of
   them where the functions were lifted out** (#1164). Opening a file that starts
   with imports left a wide gap between them and the rest of the canvas, and the
@@ -1460,6 +1506,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the last PWM block takes `PWM` out of the import line with it.
 
 ### Changed
+
+- **The blocks are standard Blockly shapes again.** (#1170) The canvas rendered
+  on Zelos — Blockly's port of `scratch-blocks` — for the Scratch and MakeCode
+  feel, and on a real MicroPython file that choice was costing more than it
+  bought. Zelos's floor is twice the standard one (48px a block against 24, and
+  Snakie raised it again to 52), and its inline sockets pad their contents at
+  every level: `pwm.duty_u16(int(50 * 65535 / 100))` is four levels deep and
+  rendered about 90px tall, one statement taller than three. A forty-line
+  program looked like it had been left out in the rain, and values dropped into
+  other blocks sat at visibly different heights down a row.
+
+  It also made the geometry fragile in a way two previous bugs record: every
+  Blockly measurement is derived from the others, so a corner radius raised by
+  hand is a corner arc drawn into a row that was measured for the old one — a
+  hairline off every block's bottom-right corner, and a sliver of canvas under
+  every C-block's mouth, both of which had to be fixed with more arithmetic.
+
+  So the geometry is now Blockly's own, unmodified, and the Soft Shell direction
+  lives entirely in the skin: the palette, the fonts and the per-category
+  lettering are exactly as they were. Rows are about half as tall, an expression
+  stays the height of the row it is written on, and a plugged-in value lines up
+  with the block it is plugged into.
 
 - **`set brightness of [GP15 ▾] to [n] %` is now `set power of …`.** The block
   drives a pin; whether that dims an LED or slows a motor is the wiring's

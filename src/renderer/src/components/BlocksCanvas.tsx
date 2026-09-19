@@ -28,6 +28,7 @@ import {
 } from '../lib/blocks/palette/functions'
 import { argNamesHidden, hasArgNames, revealArgNames } from '../lib/blocks/palette/python'
 import { installSoftShellRenderer } from '../lib/blocks/renderer'
+import { arrangeWorkspaceRoots, rootsUnmoved, type RootPlacement } from '../lib/blocks/arrange'
 import { installShelfFlyout, installZoomReset } from '../lib/blocks/zoom'
 import {
   dispatchNeedLibrary,
@@ -174,6 +175,18 @@ export interface BlocksCanvasProps {
    * this is how it says so.
    */
   reloadNonce?: number
+  /**
+   * These blocks are Snakie's READING of somebody's Python (#1170), rather than
+   * an arrangement a learner made and saved.
+   *
+   * It decides one thing: whether the canvas may lay the top-level stacks out
+   * for itself. A converted file has no layout to respect — `python-to-blocks`
+   * only numbers the roots so their order survives — so the canvas measures
+   * them and puts the program in one column with the functions beside it. A
+   * file whose footer matched its code was arranged by the person who saved it,
+   * and tidying that up behind their back would throw away work.
+   */
+  derived?: boolean
 }
 
 // Blockly's message table is a precondition of `inject` — see `locale.ts`.
@@ -214,7 +227,8 @@ export function BlocksCanvas({
   onShowBlockPython,
   paletteNonce = 0,
   onPartsUsed,
-  reloadNonce = 0
+  reloadNonce = 0,
+  derived = false
 }: BlocksCanvasProps): JSX.Element {
   // BEFORE anything else: can this build read these blocks at all? A file made
   // by a newer Snakie, or with a part/plugin's blocks (#1017) that isn't
@@ -247,6 +261,14 @@ export function BlocksCanvas({
    * new file's blocks to wherever the old file's happened to sit.
    */
   const loadedFileRef = useRef<string | null>(null)
+  /**
+   * Where the last arrange put each root (#1170), or `null` for a workspace we
+   * did not arrange — a stored layout somebody made themselves.
+   *
+   * Kept so a late measurement can tell its own arrangement from a learner's:
+   * see the webfont effect below.
+   */
+  const arrangedRef = useRef<Map<string, RootPlacement> | null>(null)
   const onGenerateRef = useRef(onGenerate)
   onGenerateRef.current = onGenerate
   const onEditRef = useRef(onEdit)
@@ -721,8 +743,18 @@ export function BlocksCanvas({
     const places = new Map<string, { x: number; y: number }>()
     const selected = sameFile ? (Blockly.getSelected()?.id ?? null) : null
     if (sameFile) {
+      // A ROOT WE PUT THERE IS NOT A ROOT THEY PUT THERE (#1170). On a derived
+      // file the previous positions are mostly our own arrangement, and putting
+      // those back would pin the layout to whatever the program looked like
+      // when it was first opened — so a function that has since grown would be
+      // laid out for its old height and drawn over the one below it. Only the
+      // roots that have MOVED since we arranged them are the learner's, and
+      // only those are worth restoring; the rest take the fresh measurement.
+      const arranged = arrangedRef.current
       for (const block of ws.getTopBlocks(false)) {
         const at = block.getRelativeToSurfaceXY()
+        const ours = arranged?.get(block.id)
+        if (ours && ours.x === at.x && ours.y === at.y) continue
         places.set(block.id, { x: at.x, y: at.y })
       }
     }
@@ -735,6 +767,13 @@ export function BlocksCanvas({
     Blockly.Events.disable()
     try {
       Blockly.serialization.workspaces.load(workspace, ws)
+      // LAY THE ROOTS OUT, NOW THEY CAN BE MEASURED (#1170). The document only
+      // numbers them — the program in one column with the functions beside it
+      // is worked out here, from what Blockly actually drew. BEFORE the
+      // re-serialise below, so the positions this writes are part of the
+      // "nothing has changed since it loaded" baseline rather than an edit the
+      // listener would write back to the file for the crime of opening it.
+      arrangedRef.current = derived ? arrangeWorkspaceRoots(ws as Blockly.WorkspaceSvg) : null
       // What comes BACK OUT, not what went in: Blockly normalises as it loads
       // (fills in default fields, assigns ids, rounds coordinates), so a
       // re-serialise of an untouched workspace differs from the file's own
@@ -798,7 +837,41 @@ export function BlocksCanvas({
     }
     // `workspace` is intentionally not a dependency — see the comment above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fileId, reloadNonce, peek, blocked])
+  }, [fileId, reloadNonce, peek, blocked, derived])
+
+  /**
+   * MEASURE AGAIN ONCE THE FONT ARRIVES (#1170).
+   *
+   * The arrange above asks each block how big it is, and a block is only as big
+   * as the text in it — so a canvas laid out while Plus Jakarta Sans is still
+   * downloading is laid out against the fallback face. The difference is small
+   * and it is not nothing: the same file measured 506px for its first root on a
+   * cold load and 530px on a warm one, which is an overlap's worth.
+   *
+   * `document.fonts.ready` resolves immediately on a warm load, so this is
+   * normally one wasted comparison. When it does fire late, it re-arranges ONLY
+   * IF every root is still exactly where the arrange put it — the moment the
+   * learner has dragged anything, their layout is the layout and a webfont is
+   * not a reason to undo it.
+   */
+  useEffect(() => {
+    if (!derived || peek || blocked) return
+    let cancelled = false
+    void document.fonts?.ready.then(() => {
+      const ws = wsRef.current
+      const applied = arrangedRef.current
+      if (cancelled || !ws || !applied || !rootsUnmoved(ws, applied)) return
+      Blockly.Events.disable()
+      try {
+        arrangedRef.current = arrangeWorkspaceRoots(ws)
+      } finally {
+        Blockly.Events.enable()
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [fileId, reloadNonce, peek, blocked, derived])
 
   // Blockly sizes itself from its host and does not observe it, so a panel drag,
   // a workspace switch or a window resize leaves the canvas the wrong size with

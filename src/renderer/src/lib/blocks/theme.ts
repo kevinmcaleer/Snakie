@@ -440,10 +440,12 @@ export function buildSoftShellTheme(tokens: ThemeTokens): SoftShellThemeSpec {
     },
     // Plus Jakarta Sans — Soft Shell's UI face — on block text. The mono face
     // belongs inside code FIELDS, which is a per-field style, not a theme one.
-    // 12, not Blockly's 11: the blocks got roomier (see `renderer.ts`) and text
-    // that stayed put would have read as a small label floating in a large
-    // shape. This is also the size Blockly writes into the renderer's
-    // `FIELD_TEXT_FONTSIZE`, so the field boxes are measured around it.
+    // 12, not Blockly's 11. This is the size Blockly writes into the renderer's
+    // `FIELD_TEXT_FONTSIZE`, and the field boxes are measured around it — so it
+    // is the ONE dial that gives a block more room without touching a geometry
+    // constant, which is exactly why `renderer.ts` sends you here instead.
+    // Plus Jakarta Sans also runs a little smaller than Blockly's stock sans at
+    // the same nominal size, so 11 read as fine print on the palette.
     fontStyle: { family: 'Plus Jakarta Sans, system-ui, sans-serif', weight: '600', size: 12 },
     // A hat on every top-level block: it is the visual that says "programs start
     // here", which is the single most useful thing the canvas can tell a child
@@ -489,8 +491,8 @@ export const COMMENT_BLOCK_STYLE = 'comment_blocks'
 
 export function softShellWorkspaceOptions(tokens: ThemeTokens): Partial<BlocklyOptions> {
   return {
-    // Thrasos's row layout, wearing the Soft Shell geometry — rounder corners
-    // and room around a field. `installSoftShellRenderer()` must have run.
+    // Thrasos's row layout — standard Blockly geometry, flat outline — wearing
+    // the Soft Shell palette. `installSoftShellRenderer()` must have run.
     renderer: SOFT_SHELL_RENDERER,
     grid: { spacing: 24, length: 3, colour: tokens.line, snap: true },
     zoom: {
