@@ -9,7 +9,8 @@ import {
 } from '../src/renderer/src/lib/pdf/sections/wiring'
 import { blankRobot } from '../src/shared/robot'
 import { robotFromYaml } from '../src/shared/robot-yaml'
-import { pageStrings, pages, parsePdf } from './helpers/pdf-inspect'
+import { WIRING_INTRO } from '../src/renderer/src/lib/pdf/sections/narrative'
+import { pageContent, pageStrings, pages, parsePdf } from './helpers/pdf-inspect'
 
 /** The electronics wiring diagram page (#1110). */
 
@@ -107,5 +108,39 @@ describe('drawing the page', () => {
       height: a.height
     })
     expect(d.pageCount).toBe(1)
+  })
+})
+
+describe('the line above the picture (#1157)', () => {
+  const art = { image: { index: 0, width: 600, height: 400 }, width: 600, height: 400 }
+
+  it('says how to wire it up, above the diagram and before the caption', () => {
+    const doc = new PdfDocument()
+    drawWiringPage(doc, art, { intro: WIRING_INTRO, summary: '2 parts · 6 connections' })
+    const pdf = parsePdf(doc.build())
+    const text = pageStrings(pdf, pages(pdf)[0]).join(' ')
+    expect(text).toContain('Wire up the robot like the picture below')
+    expect(text).toContain('DuPont')
+    expect(text).toContain('2 parts · 6 connections')
+  })
+
+  it('takes the room for it out of the picture, not off the bottom of the page', () => {
+    // A TALL diagram, so the page's height is what limits it and the intro's
+    // room is visible in the scale.
+    const tall = { image: { index: 0, width: 300, height: 900 }, width: 300, height: 900 }
+    const withIntro = new PdfDocument()
+    drawWiringPage(withIntro, tall, { intro: WIRING_INTRO })
+    const without = new PdfDocument()
+    drawWiringPage(without, tall, {})
+    const heightOf = (doc: PdfDocument): number => {
+      const pdf = parsePdf(doc.build())
+      const content = pages(pdf)[0]
+      const drawn = /([\d.]+) 0 0 ([\d.]+) [\d.]+ ([\d.]+) cm/.exec(
+        pageContent(pdf, content)
+      )
+      return Number(drawn?.[2] ?? 0)
+    }
+    expect(heightOf(withIntro)).toBeGreaterThan(0)
+    expect(heightOf(withIntro)).toBeLessThan(heightOf(without))
   })
 })
