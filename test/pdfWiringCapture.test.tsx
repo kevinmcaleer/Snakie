@@ -44,6 +44,16 @@ import {
   resetBoardCaptureRegistry
 } from '../src/renderer/src/components/board-capture-registry'
 
+describe('the parts the photographed board can draw', () => {
+  it('resolves a placed part by id when its library is renamed or not installed', () => {
+    // The BOM already did this (#1170); the canvas drew a `part library not
+    // installed` box for the same part until it went through the same helper.
+    const canvas = SRC('components/WiringCanvas.tsx')
+    expect(canvas).toContain('findPart(libraries, lib, part)')
+    expect(canvas).not.toMatch(/libraries\.find\(\(l\) => l\.id === lib\)/)
+  })
+})
+
 describe('the registry the exporter asks for a board', () => {
   afterEach(() => resetBoardCaptureRegistry())
 

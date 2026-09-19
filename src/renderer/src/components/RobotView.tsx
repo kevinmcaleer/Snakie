@@ -129,6 +129,7 @@ import {
   type ManagedSequenceStep
 } from '../../../shared/managed-blocks'
 import { jointToServo } from '../../../shared/krf'
+import { findPart } from '../../../shared/part'
 import { prettyUrdf, robotNameOf, urdfExportPath } from '../../../shared/urdf-export'
 import { explodeDirections, explodeProgress, easeInOutCubic, orbitPosition, compensateAncestors, hierarchyDepths, resolveOverlaps, probeRecorderMime, extForMime, videoBytesLookValid, type PartBox } from './robot-explode'
 import { recordCanvasMp4, createGifSink } from './robot-video'
@@ -1768,7 +1769,7 @@ export function RobotView({
   }, [])
   const resolvePartDef = useCallback(
     (p: RobotPart): PartDefinition | undefined =>
-      partLibs.find((l) => l.id === p.lib)?.parts.find((d) => d.id === p.part),
+      findPart(partLibs, p.lib, p.part) ?? undefined,
     [partLibs]
   )
   const servoList = useMemo<BindableServo[]>(() => {

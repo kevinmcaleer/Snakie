@@ -21,7 +21,7 @@
  * you have to look up beats a row that silently is not there.
  */
 
-import type { PartDefinition, PartLibraryWithParts } from '../../../../../shared/part'
+import { findPart, type PartDefinition, type PartLibraryWithParts } from '../../../../../shared/part'
 import type { RobotDefinition } from '../../../../../shared/robot'
 import { type Box, type LaidOutPage, type PdfDocument, packUnits, wrapText } from '../layout'
 import { BRASS, INK, INK_MUTED, PANEL, PAPER, RULE } from '../theme'
@@ -60,22 +60,9 @@ export const CABLE_KEY = 'wire:cable'
  *  shopping list, not the part's help page. */
 const DETAIL_MAX = 140
 
-/** The part with `id` in `lib`, or — when the library was renamed or removed —
- *  the first part of that id anywhere, which is nearly always the same part.
- *  Shared with the connections table (#1170), which names the same parts. */
-export function findPart(
-  libraries: readonly PartLibraryWithParts[],
-  lib: string,
-  id: string
-): PartDefinition | null {
-  const own = libraries.find((l) => l.id === lib)?.parts?.find((p) => p.id === id)
-  if (own) return own
-  for (const l of libraries) {
-    const part = l.parts?.find((p) => p.id === id)
-    if (part) return part
-  }
-  return null
-}
+/** Shared with the connections table (#1170), which names the same parts.
+ *  Lives in `shared/part.ts` now so the wiring canvas resolves parts the same way. */
+export { findPart }
 
 /** Trim `text` to {@link DETAIL_MAX}, on a word boundary, with an ellipsis. */
 function shorten(text: string): string {

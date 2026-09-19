@@ -61,7 +61,8 @@ import { connectablePinCount,
   type PartPinSignals,
   type PartPinType,
   type PartPackage,
-  type PolygonPoint
+  type PolygonPoint,
+  findPart
 } from '../../../shared/part'
 import type { RobotPart } from '../../../shared/robot'
 import { coerceDisplay, coerceElectrical } from '../../../shared/part-yaml'
@@ -2602,7 +2603,7 @@ export function placedPartsNeedingDrivers(
   for (const rp of robot?.parts ?? []) {
     const key = `${rp.lib}:${rp.part}`
     if (seen.has(key)) continue
-    const part = libraries.find((l) => l.id === rp.lib)?.parts?.find((p) => p.id === rp.part)
+    const part = findPart(libraries, rp.lib, rp.part)
     if (!part || !part.drivers || part.drivers.length === 0) continue
     seen.add(key)
     out.push({

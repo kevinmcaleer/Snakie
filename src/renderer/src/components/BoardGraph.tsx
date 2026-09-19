@@ -66,6 +66,7 @@ import {
 import { PartsPanel } from './PartsPanel'
 import { PartHelpDrawer, type PartHelpItem } from './PartHelpDrawer'
 import type { RobotDefinition } from '../../../shared/robot'
+import { findPart } from '../../../shared/part'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
 import './BoardGraph.css'
 
@@ -466,7 +467,7 @@ export function BoardGraph({
     if (!robot) return null
     const partDefs = new Map<string, PartDefinition>()
     for (const rp of robot.parts ?? []) {
-      const pdef = (libraries ?? []).find((l) => l.id === rp.lib)?.parts.find((p) => p.id === rp.part)
+      const pdef = findPart(libraries, rp.lib, rp.part)
       if (pdef) partDefs.set(rp.id, pdef)
     }
     try {
@@ -650,7 +651,7 @@ export function BoardGraph({
     for (const rp of robot?.parts ?? []) {
       const k = `${rp.lib}:${rp.part}`
       if (seen.has(k)) continue
-      const pdef = (libraries ?? []).find((l) => l.id === rp.lib)?.parts.find((p) => p.id === rp.part)
+      const pdef = findPart(libraries, rp.lib, rp.part)
       const help = (pdef?.helpText ?? '').trim()
       if (!help) continue
       seen.add(k)

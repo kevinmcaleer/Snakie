@@ -1521,6 +1521,37 @@ export interface PartLibraryWithParts extends PartLibrary {
   parts: PartDefinition[]
 }
 
+/**
+ * The placed part `id` from library `lib` — or, when no installed library has
+ * that id, the first part of that id in ANY installed library.
+ *
+ * A `robot.yml` names a part by the library it was placed from, and that name
+ * does not follow the part around: a part promoted from `my-parts` into the
+ * Standard library keeps its old `lib` in every project that placed it, and a
+ * project made on the desktop opened in the web build — which ships only the
+ * Standard library — has no `my-parts` at all. The bill of materials already
+ * named such a part by falling back to the id (#1170); the wiring canvas drew
+ * it as a `part library not installed` box with no pins, so the same project
+ * printed a shopping list that knew the part and a diagram that did not.
+ *
+ * Exact match first: two libraries can legitimately carry different parts
+ * under one id, and the one the project asked for wins whenever it is there.
+ */
+export function findPart(
+  libraries: readonly { id: string; parts?: readonly PartDefinition[] }[] | undefined,
+  lib: string,
+  id: string
+): PartDefinition | null {
+  if (!libraries) return null
+  const own = libraries.find((l) => l.id === lib)?.parts?.find((p) => p.id === id)
+  if (own) return own
+  for (const l of libraries) {
+    const part = l.parts?.find((p) => p.id === id)
+    if (part) return part
+  }
+  return null
+}
+
 // --- Community registry (#129) ---------------------------------------------
 
 /** One approved library in the master registry (the GitHub-hosted index). */
