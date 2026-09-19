@@ -8,6 +8,42 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Casting is a block, and so is `global`.** Two lines every program with a
+  sensor or a function in it needs, and both were reachable only by typing Python
+  into a grey block.
+
+  ```
+  turn ( reading ) into [a whole number (int) ▾] → int(reading)
+  use the whole program’s [score ▾]              → global score
+  ```
+
+  **The cast names the Python on its face**, which is not the house style and is
+  right here: *as a whole number* on its own reads like rounding, and `int(3.7)`
+  is 3 while `round(3.7)` is 4 — a face that implies the wrong one of those
+  teaches the trap rather than the tool. One block with a dropdown rather than six
+  near-identical shapes in a drawer: `int`, `float`, `str`, `bool`, `list`,
+  `tuple`. Its output is deliberately unchecked, because what it produces depends
+  on the dropdown and a socket check is fixed when the block is built — a declared
+  `Number` would be a lie in five cases out of six.
+
+  An empty socket still generates something that RUNS — `int(0)`, `str('')` — and
+  the empty value is the one of the type going *in*, so the line says what the
+  block is for before it is filled.
+
+  **`global` takes a variable field, not text**, which is why it is its own block
+  rather than the escape hatch unhidden: the dropdown offers the variables this
+  program has, it follows a rename the way every other block in Variables does,
+  and it cannot say `global my score`. Reopening a program brings it back — a
+  plain `global name` is the new block, while `nonlocal` and `global low, high`
+  stay with the escape hatch that can hold them. So does `global list`: the
+  generator sanitises a reserved name to `list_`, and a declaration renamed out
+  from under itself would be a different program.
+
+  Six reader rules come with the cast, one per type, so a child can drag the block
+  out, save, reopen and get it back rather than the grey line it replaced. A base
+  conversion (`int('ff', 16)`) has a second argument and no socket for it, so it
+  stays raw instead of quietly losing the 16.
+
 - **Name a PWM, and set it directly.** A pin could be named since #1097; the PWM
   built on it could not — so every block that wanted one got `pwm_15`, a name the
   learner never chose on an object they had no way to refer to, and a rover's two

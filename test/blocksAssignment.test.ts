@@ -142,10 +142,20 @@ describe('augmented assignment', () => {
 })
 
 describe('scope', () => {
-  it('reads `global`', () => {
+  it('reads `global` as the Variables drawer\u2019s own block (#1118)', () => {
+    // A plain `global name` is a block with a VARIABLE FIELD, so the name
+    // follows a rename the way every other mention of that variable does. The
+    // escape hatch below keeps everything that shape cannot hold.
     const src = ['def go():', '    global total', '    total = 1', ''].join('\n')
-    expect(one(src, 'snakie_python_scope')!.fields).toEqual({ SCOPE: 'global', NAMES: 'total' })
+    expect(one(src, 'snakie_global')).toBeTruthy()
     roundTrips(src)
+  })
+
+  it('leaves `global` alone when the name is one Python has taken', () => {
+    // `global list` cannot become a variable field: the generator sanitises a
+    // reserved name to `list_`, which would write a different program back.
+    const src = ['def go():', '    global list', '    list = []', ''].join('\n')
+    expect(one(src, 'snakie_python_scope')!.fields).toEqual({ SCOPE: 'global', NAMES: 'list' })
   })
 
   it('reads `nonlocal`, and several names at once', () => {

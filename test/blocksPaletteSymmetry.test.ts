@@ -112,7 +112,11 @@ const READ_DIRECTLY: Record<string, string> = {
   // --- assignment and scope (W8, #1095)
   snakie_python_assign: 'a, b = b, a\n',
   snakie_python_augmented: 'total *= 2\n',
-  snakie_python_scope: 'def go():\n    global total\n    total = 1\n',
+  // `global x` alone is the Variables drawer's own block (#1118); the escape
+  // hatch keeps what its variable field cannot hold — `nonlocal`, and several
+  // names at once.
+  snakie_global: 'def go():\n    global total\n    total = 1\n',
+  snakie_python_scope: 'def go():\n    nonlocal low, high\n    low = 1\n',
   snakie_python_import_here: 'def go():\n    import ujson\n    print(ujson)\n',
   snakie_python_value: 'x = [v for v in things]\n',
   snakie_python_comment: '# a note\n',

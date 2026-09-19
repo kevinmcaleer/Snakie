@@ -1937,10 +1937,22 @@ class Converter {
     // --- `global` / `nonlocal` (W8, #1095) --------------------------------
     const scope = /^(global|nonlocal)\s+(.+)$/.exec(text)
     if (scope && /^[A-Za-z_]\w*(\s*,\s*[A-Za-z_]\w*)*$/.test(scope[2].trim())) {
+      const names = scope[2].trim()
+      // ONE NAME, AND `global`, IS THE NATIVE BLOCK (#1118). The Variables
+      // drawer has a `global` block whose name is a VARIABLE FIELD, so it
+      // renames with everything else that mentions that variable — and a
+      // learner who opens their program should get that block rather than the
+      // escape hatch whose name is text they can mistype.
+      //
+      // The escape hatch keeps the rest, which is exactly what it is for:
+      // `nonlocal`, and `global low, high`.
+      if (scope[1] === 'global' && /^[A-Za-z_]\w*$/.test(names) && !isReservedName(names)) {
+        return recognised([{ type: 'snakie_global', fields: { VAR: { id: this.variable(names) } } }])
+      }
       return recognised([
         {
           type: 'snakie_python_scope',
-          fields: { SCOPE: scope[1], NAMES: scope[2].trim() }
+          fields: { SCOPE: scope[1], NAMES: names }
         }
       ])
     }
