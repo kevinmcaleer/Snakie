@@ -1428,6 +1428,36 @@ export function AppShell(): JSX.Element {
     filesRef.current?.expand()
   }, [setActivityView, setLeftCollapsed])
 
+  /**
+   * Save the active file — what File ▸ Save, the menu's ⌘S accelerator, the
+   * editor's own ⌘S binding and the global ⌘S below all reach. Reads the ref so
+   * a listener set up once still saves the file that is active NOW.
+   */
+  const saveActive = useCallback((): void => {
+    if (!activeIdRef.current) return
+    void saveFile(activeIdRef.current).catch(
+      reporter('save', { notify: "Couldn't save the file." })
+    )
+  }, [saveFile])
+
+  // Ctrl/Cmd+S anywhere in the window -> save the active file. On the desktop
+  // the menu accelerator takes the key before `keydown` fires, and inside
+  // Monaco the editor's own binding does, so this is for everywhere else: the
+  // web build has no native menu, and with focus in the file tree, the shell or
+  // a panel, ⌘S otherwise reaches the browser's "Save page as…" dialog. Plain
+  // ⌘S only — ⇧⌘S is Save As, and the browser's default there is harmless.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return
+      if (e.key !== 's' && e.key !== 'S') return
+      e.preventDefault()
+      if (e.repeat) return
+      saveActive()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [saveActive])
+
   useEffect(() => {
     const off = window.api.menu.onCommand((id) => {
       runMenuCommand(id, {
@@ -1451,12 +1481,7 @@ export function AppShell(): JSX.Element {
           revealFiles()
           openFolderPath(folder)
         },
-        save: () => {
-          if (!activeIdRef.current) return
-          void saveFile(activeIdRef.current).catch(
-            reporter('save', { notify: "Couldn't save the file." })
-          )
-        },
+        save: saveActive,
         saveAs: () => {
           if (!activeIdRef.current) return
           void saveFileAs(activeIdRef.current).catch(
@@ -1510,7 +1535,7 @@ export function AppShell(): JSX.Element {
     openFolderPath,
     openFileDialog,
     newFile,
-    saveFile,
+    saveActive,
     saveFileAs,
     setActivityView,
     setLeftCollapsed,
