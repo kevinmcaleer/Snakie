@@ -103,6 +103,46 @@ offers, at the moment you are actually about to need it.
 into its folder, and a plugin can contribute blocks too. See
 [writing-plugins.md](writing-plugins.md#ship-blocks-with-your-plugin-1017).
 
+### Variables are kept on their own shelf
+
+Open **Variables** and the first thing in the drawer is **Create variable…**.
+Name it — `score`, `lives`, `speed` — and it appears in the drawer as a block of
+its own, alongside `set … to` and `change … by` for the one you just made.
+
+Every variable you create is on that shelf, one block each, sorted by name.
+There is no need to drag a block out and hunt through a dropdown to find the
+variable you wanted: the block with its name on it is already there to drag.
+
+Rename a variable (right-click the block, or use the dropdown on it) and every
+block using it follows, on the canvas and in the Python.
+
+### Types, and the name a function is allowed to change
+
+Two blocks in **Variables** are there for the two places a first program usually
+turns grey.
+
+**turn (…) into [a whole number (int) ▾]** is casting: `int('10')` is the number
+ten, `str(count)` is text you can join onto a message, `float(reading)` keeps the
+decimals. The dropdown names the Python — `int`, `float`, `str`, `bool`, plus
+list and tuple — because *as a whole number* on its own sounds like rounding, and
+it isn't: `int(3.7)` is 3, while the Maths drawer's **round** gives 4.
+
+**use the whole program's (score)** writes `global score`. It is the answer to
+the commonest puzzle in a first program with functions in it: a function sets
+`score`, and outside the function nothing changed. Python made a new name the
+moment the function wrote to it; this line says *no, I mean that one*. Drop it in
+at the top of the function, pick the variable, and assignment inside the function
+changes the real thing.
+
+### Copying a block you have already built
+
+**⌘D** on a Mac, **Ctrl+D** on Windows, Linux and the web, duplicates whatever
+block is selected — together with everything inside it. Select the `repeat` you
+just filled in, press it, and there is a second one to drag into place.
+
+It is the same *Duplicate* that lives on a block's right-click menu, on the key
+everyone tries first.
+
 ### When the block you need doesn't exist yet
 
 At the bottom of the toolbox is a category called **Python**, and the blocks in
