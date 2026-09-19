@@ -48,3 +48,13 @@ drive(0)           # stop
 - Gear ratios vary (48:1, 120:1, 298:1…) — higher ratio = slower but stronger.
 - Two of these plus a caster make a simple two-wheel-drive chassis; drive
   each motor from its own H-bridge channel.
+
+## 3-D model
+
+The model shown in the Robot View is the **3777 TT Motor** from
+[Adafruit_CAD_Parts](https://github.com/adafruit/Adafruit_CAD_Parts)
+(MIT licence, © 2016 Adafruit Industries), 1:48 gearbox with the standard
+double-sided 5.5 mm D-shaft. Dimensions are the real thing (≈ 22 × 37 × 70 mm
+including the shafts and motor can), so it lines up with wheel hubs and
+chassis mounts drawn to the same spec. STEP and Fusion 360 versions live in
+the same repository if you want to edit it.

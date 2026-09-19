@@ -8,6 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **3-D model for the Yellow TT Motor.** The Standard-library `tt-motor` part
+  now ships `model.stl` (mm) so it appears in the Robot View / build workspace
+  at true size. The mesh is Adafruit's 3777 TT Motor from the MIT-licensed
+  [Adafruit_CAD_Parts](https://github.com/adafruit/Adafruit_CAD_Parts)
+  repository; the help article credits it.
+
 - **⌘S / Ctrl+S saves the active file from anywhere in the window.** The
   shortcut already worked with the cursor in the code editor and, on the
   desktop, through the File menu's accelerator. Now a window-level listener
