@@ -2,7 +2,7 @@
  * The electronics wiring diagram page (#1110).
  *
  * Pure: the capture — which needs a live, mounted `<svg>` — is in
- * `lib/pdf/wiring-capture.tsx`. This decides whether there is a page to draw at
+ * `lib/pdf/wiring-capture.ts`. This decides whether there is a page to draw at
  * all, and where the picture goes on it.
  */
 
