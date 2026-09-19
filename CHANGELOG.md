@@ -8,6 +8,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Error handling is a drawer you can reach.** (#1131, epic #1119) The `try`
+  and `raise` blocks were built by #1094 and registered *hidden* — the reader
+  could produce them and no learner could drag one. #1119 re-takes that
+  decision, and `try` is the strongest candidate in the hidden set: on hardware,
+  error handling is the difference between a robot that stops dead when a sensor
+  is unplugged and one that carries on, and catching `KeyboardInterrupt` is how
+  you get out of a `while True:` cleanly.
+
+  Flipping the field was not the work. They live on a **When things go wrong**
+  shelf inside Control, so the drawer still opens on `forever`; they say **try
+  to …**, **if that goes wrong …**, **if nothing went wrong**, **either way,
+  afterwards** and **report a problem**, with Python's own words in the tooltip
+  and in the mirror; and the arms are reachable — a **+** for another
+  "if that goes wrong", ticks for the other two — which they were not, because
+  `updateShape_` was built for the reader, which knows how many arms a file has.
+
+  **The flyout copy arrives with `OSError` in it rather than empty**, which is a
+  safety decision rather than a default: a bare `except:` catches Ctrl-C, and a
+  program you cannot stop is the worst possible first experience of this block.
+
 - **`print` takes as many things as you like, and numbers can be formatted.**
   (#1125, epic #1119) Two gaps that meet in the same line of a sensor program.
 

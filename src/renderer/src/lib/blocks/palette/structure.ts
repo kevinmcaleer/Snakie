@@ -1,7 +1,7 @@
 import * as Blockly from 'blockly/core'
 import { Order } from '../generator'
 import type { MicroPythonGenerator } from '../generator'
-import type { BlockDefinition } from '../registry'
+import type { BlockDefinition, BlockGroup } from '../registry'
 import { sanitise } from '../names'
 
 /**
@@ -57,6 +57,17 @@ function nameOf(block: Blockly.Block, field: string, fallback: string): string {
   // are reading back. A legal identifier passes through untouched.
   return raw === '' ? fallback : sanitise(raw)
 }
+
+/**
+ * The Control sub-drawer error handling lives in (#1131, epic #1119).
+ *
+ * Control is the honest category — `try` really is control flow — and putting
+ * the two blocks loose in it takes a seven-block drawer to nine, half of which
+ * a first-day learner has no use for. A shelf keeps `forever`, `repeat` and
+ * `if` the first things in the flyout, which is what #1013's ordering argument
+ * was about, and gives the pair a name that says when to reach for them.
+ */
+const WHEN_WRONG: BlockGroup = { id: 'when-wrong', name: 'When things go wrong' }
 
 /** A statement input's body, or `pass` — an empty suite is a syntax error. */
 function body(block: Blockly.Block, gen: MicroPythonGenerator): string {
@@ -183,13 +194,32 @@ export const STRUCTURE_BLOCKS: BlockDefinition[] = [
   // All three are line-shaped headers, which is why none of them is an argument
   // for a parser.
   {
+    // DRAGGABLE SINCE #1131 (epic #1119). W7 built it and registered it
+    // `hidden: true`, on the rule §4.5 states: the reader is comprehensive and
+    // the toolbox is curated, and most of the time the answer is no.
+    //
+    // #1119 re-took that decision, and `try` is the strongest candidate in the
+    // hidden set. Error handling is not an advanced topic on hardware — it is
+    // the difference between a robot that stops dead when a sensor is unplugged
+    // and one that carries on — and `KeyboardInterrupt` is how you get out of a
+    // `while True:` cleanly, which is the first thing anybody hits.
+    //
+    // FLIPPING THE FIELD WAS NOT THE WORK. The wording was: `try`, `except`,
+    // `finally` are Python's words and not a child's, so the block says what it
+    // MEANS and the mirror shows the translation — the same job `is nothing`
+    // does for `is None`.
+    //
+    // THE FLYOUT COPY NAMES AN ERROR KIND, and that is a safety decision rather
+    // than a default. A bare `except:` catches `KeyboardInterrupt` too, which
+    // makes a program you cannot Ctrl-C out of — the worst possible first
+    // experience of this block. `OSError` is what an unplugged sensor raises.
     type: TRY_BLOCK,
     category: 'control',
-    help: 'ref-functions',
-    hidden: true,
+    group: WHEN_WRONG,
+    help: 'ref-exceptions',
     // No `json`: the arms come and go, so the shape is built in
     // `installStructureBlocks` — the same reason the call blocks are.
-    toolbox: { extraState: { excepts: [''], hasElse: false, hasFinally: false } },
+    toolbox: { extraState: { excepts: ['OSError'], hasElse: false, hasFinally: false } },
     code: (block, gen) => {
       const state = tryState(block)
       const arm = (name: string): string => gen.statementToCode(block, name) || `${gen.INDENT}pass\n`
@@ -291,18 +321,21 @@ export const STRUCTURE_BLOCKS: BlockDefinition[] = [
   },
   // ---------------------------------------------------------------------- raise
   {
+    // DRAGGABLE SINCE #1131, beside the block that catches what it throws. The
+    // two belong in one drawer: a learner who has just met "if that goes wrong"
+    // is one step from "stop, and say what went wrong".
     type: 'snakie_raise',
     category: 'control',
-    help: 'ref-functions',
-    hidden: true,
+    group: WHEN_WRONG,
+    help: 'ref-exceptions',
     json: {
-      message0: 'raise %1',
+      message0: 'report a problem %1',
       args0: [{ type: 'input_value', name: 'VALUE' }],
       inputsInline: true,
       previousStatement: null,
       nextStatement: null,
       tooltip:
-        'Stop, and report a problem the code around this cannot handle. With nothing plugged in it re-raises the error being handled, which is what a bare `raise` inside an `except` does.'
+        'Stop, and report a problem the code around this cannot handle — Python writes it `raise`. With nothing plugged in it reports the problem being handled again, which is what a bare `raise` inside an "if that goes wrong" does.'
     },
     // AN EMPTY SOCKET IS A BARE `raise`, exactly as it is on the return block: a
     // bare `raise` inside an `except` re-raises what is being handled, which is a
@@ -354,12 +387,16 @@ function tryBlockMixin(): Record<string, unknown> {
 
     init(this: Blockly.Block): void {
       this.setStyle('control_blocks')
-      this.appendDummyInput('HEAD').appendField('try')
+      // "try to" rather than "try": the block says what it MEANS and the mirror
+      // shows `try:`, which is the translation the mirror is there to make
+      // (#1131). Python's own words are in the tooltip, so the graduation is
+      // visible rather than sprung.
+      this.appendDummyInput('HEAD').appendField('try to')
       this.appendStatementInput('TRY')
       this.setPreviousStatement(true, null)
       this.setNextStatement(true, null)
       this.setTooltip(
-        'Try something that might go wrong, and say what to do when it does.'
+        'Try something that might go wrong — a sensor that may be unplugged, a network that may be down — and say what to do when it does. Python calls this try / except / finally.'
       )
       ;(this as unknown as { updateShape_: (s: TryState) => void }).updateShape_({
         excepts: [''],
@@ -389,23 +426,115 @@ function tryBlockMixin(): Record<string, unknown> {
       this.removeInput('ELSE', true)
       this.removeInput('FINALLY_LABEL', true)
       this.removeInput('FINALLY', true)
+      this.removeInput('ARMS', true)
       state.excepts.forEach((spec, i) => {
         this.appendDummyInput(`EXCEPT${i}`)
-          .appendField('except')
+          // The learner's words on the face; `except` in the mirror.
+          .appendField(i === 0 ? 'if that goes wrong' : 'or if it goes wrong')
           .appendField(new Blockly.FieldTextInput(spec), `EXCEPT${i}`)
         this.appendStatementInput(`DO${i}`)
       })
       if (state.hasElse) {
-        this.appendDummyInput('ELSE_LABEL').appendField('otherwise')
+        this.appendDummyInput('ELSE_LABEL').appendField('if nothing went wrong')
         this.appendStatementInput('ELSE')
       }
       if (state.hasFinally) {
-        this.appendDummyInput('FINALLY_LABEL').appendField('and in any case')
+        this.appendDummyInput('FINALLY_LABEL').appendField('either way, afterwards')
         this.appendStatementInput('FINALLY')
       }
+      // THE ARMS HAVE TO BE REACHABLE (#1131). W7 built `updateShape_` for the
+      // READER, which knows how many arms a file has; a learner dragging this
+      // out of a flyout had one `except` and no way to ask for another, or for
+      // a `finally`. Four buttons at the foot of the block say so.
+      //
+      // FieldImage BUTTONS RATHER THAN A CHECKBOX, and rather than Blockly's
+      // gear mutator, for the two reasons `python.ts` gives: the gear opens a
+      // miniature workspace in a bubble with nothing else like it in the app,
+      // and a click handler that rebuilds the block is a shape this codebase
+      // already runs safely. A checkbox validator would be disposed mid-update
+      // by the very rebuild it asked for.
+      this.appendDummyInput('ARMS')
+        .appendField(
+          new Blockly.FieldImage(armIcon('+'), 16, 16, 'another "if that goes wrong"', () =>
+            rebuild(this, { ...state, excepts: [...state.excepts, ''] })
+          ),
+          'ADD_EXCEPT'
+        )
+        .appendField(
+          new Blockly.FieldImage(armIcon('-'), 16, 16, 'one fewer', () =>
+            rebuild(this, {
+              ...state,
+              // NEVER TO ZERO. A `try` with no `except` and no `finally` is not
+              // valid Python, and `readTryState` already puts one back — which
+              // would make the button look like it did nothing.
+              excepts:
+                state.excepts.length > 1 || state.hasFinally
+                  ? state.excepts.slice(0, -1)
+                  : state.excepts
+            })
+          ),
+          'REMOVE_EXCEPT'
+        )
+        .appendField(
+          new Blockly.FieldImage(
+            armIcon(state.hasElse ? 'on' : 'off'),
+            16,
+            16,
+            'show "if nothing went wrong"',
+            () => rebuild(this, { ...state, hasElse: !state.hasElse })
+          ),
+          'TOGGLE_ELSE'
+        )
+        .appendField('if nothing went wrong')
+        .appendField(
+          new Blockly.FieldImage(
+            armIcon(state.hasFinally ? 'on' : 'off'),
+            16,
+            16,
+            'show "either way, afterwards"',
+            () => rebuild(this, { ...state, hasFinally: !state.hasFinally })
+          ),
+          'TOGGLE_FINALLY'
+        )
+        .appendField('either way')
       self.tryState_ = state
     }
   }
+}
+
+/**
+ * Rebuild a `try` block's arms, keeping the text already typed into them.
+ *
+ * `updateShape_` tears every arm down and puts it back, which would otherwise
+ * lose the exception kinds a learner has written — the fields are recreated
+ * from `state.excepts`, so the state has to carry them.
+ */
+function rebuild(block: Blockly.Block, next: TryState): void {
+  const excepts = next.excepts.map((spec, i) => {
+    const typed = block.getField(`EXCEPT${i}`)
+    return typed ? String(typed.getValue() ?? spec) : spec
+  })
+  ;(block as unknown as { updateShape_: (s: TryState) => void }).updateShape_({
+    ...next,
+    excepts
+  })
+}
+
+/**
+ * The little buttons at the foot of the `try` block, as data URIs.
+ *
+ * The same visual language as the `+`/`−` steppers on the growable blocks —
+ * a pale disc with a glyph — so the two read as one mechanism.
+ */
+function armIcon(kind: '+' | '-' | 'on' | 'off'): string {
+  const glyph = {
+    '+': '<path d="M8 4v8M4 8h8" stroke="#fff" stroke-width="2" stroke-linecap="round"/>',
+    '-': '<path d="M4 8h8" stroke="#fff" stroke-width="2" stroke-linecap="round"/>',
+    on: '<path d="M4.5 8.5l2.5 2.5 4.5-5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    off: ''
+  }[kind]
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="rgba(255,255,255,0.22)"/>${glyph}</svg>`
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
 }
 
 /** Register the blocks whose inputs come and go. Called before the definitions. */
