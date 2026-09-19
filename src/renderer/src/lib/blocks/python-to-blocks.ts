@@ -708,11 +708,27 @@ export function pythonToBlocks(source: string): Conversion {
  * exists to remove, and only one of those is a bug.
  */
 
-/** Where the first root goes, and the left margin for all of them. */
-const ROOT_ORIGIN = 40
+/**
+ * Where the first root goes, and the left margin for all of them.
+ *
+ * Exported for `tidy.ts`, which re-stacks this column against the heights the
+ * canvas actually rendered — see its header. The two must agree about the
+ * margin or every reopened file would shuffle sideways.
+ */
+export const ROOT_ORIGIN = 40
 
-/** Clear space between one root's bottom and the next root's top. */
-const ROOT_GUTTER = 48
+/**
+ * Clear space between one root's bottom and the next root's top.
+ *
+ * ONE GRID SQUARE (#1160). It was 48 — two — on the reasoning that this
+ * estimate errs upwards anyway and a scroll is cheaper than an overlap. It is,
+ * but the two mistakes compounded: a generous estimate plus a generous gutter
+ * put a hole between the imports and the first `def` wide enough to read as a
+ * missing block. `tidy.ts` now closes the gaps against the real heights, so this
+ * is only the starting point — and it is the gutter that pass uses too, so tight
+ * means the same thing whether or not a canvas has measured the column.
+ */
+export const ROOT_GUTTER = 24
 
 /**
  * One statement row, in px — `MIN_BLOCK_HEIGHT` plus the top and bottom strips

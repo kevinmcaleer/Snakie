@@ -36,6 +36,26 @@ import * as Blockly from 'blockly/core'
  * the glyph and the action are swapped. If a future Blockly renames the class
  * we look for, {@link installZoomReset} finds nothing and leaves the stock
  * reset control working — the canvas never loses a button over this.
+ *
+ * AND THE BUTTON IS THE WHOLE BUTTON (#1160). Swapping the sprite for a stroked
+ * path swapped the hit area with it: `+` and `-` are 32x32 `<image>`s, which are
+ * hit-testable across the whole square, and a path with `fill: none` is
+ * hit-testable only where the ink is. So the control answered a press on the
+ * four corner brackets — four 2px strokes, about a tenth of the square — and
+ * ignored the middle, which is exactly where anybody aims. {@link HIT_CLASS}
+ * puts the square back: an invisible 32x32 rect under the glyph, the same size
+ * as the sprite it replaced, so the press target and the hover are the control
+ * and not the drawing on it.
+ *
+ * AND "FIT" MEANS ALL OF IT (#1160). Blockly's own `zoomToFit` is a two-line
+ * ratio into `setScale`, and `setScale` CLAMPS to `minScale` — so a program
+ * taller than about three screens fitted to the floor (0.3) and stopped, with
+ * the top and the bottom of it off the canvas. A control labelled "zoom to fit"
+ * that shows two thirds of the program is worse than no control, because the
+ * learner has no way of knowing what it did not show them. {@link fitScale}
+ * works the scale out for real and {@link fitAll} lowers the floor to reach it:
+ * a floor is a sensible limit for the wheel and no limit at all on an explicit
+ * "show me everything".
  */
 
 /** A scale counts as "100%" within this much — `setScale` rounds to 1/1000. */
@@ -112,6 +132,76 @@ const FIT_LABEL = 'Zoom to fit, or back to 100%'
 /** Blockly's canvas transition is 500ms of CSS; end it once it has run. */
 const TRANSITION_MS = 500
 
+/**
+ * The invisible square that makes the control a button (#1160).
+ *
+ * 32x32 at the origin, which is the sprite's own box — the same target `+` and
+ * `-` have, so the four controls in that corner are pressed the same way as
+ * well as drawn the same way. `BlocksCanvas.css` gives it `pointer-events: all`,
+ * which is what makes an unpainted rect answer a press at all.
+ */
+const HIT_CLASS = 'blocks-zoom-hit'
+
+/** The sprite's box, and so the control's. */
+const CONTROL_SIZE = 32
+
+/**
+ * Clear space in SCREEN PIXELS between the blocks and the edge of the canvas
+ * after a fit.
+ *
+ * Pixels rather than workspace units because it is about the view: Blockly's
+ * own margin is 40 workspace units, which is 36px at 90% and 4px on the
+ * five-screen program that needs the room most.
+ */
+const FIT_PADDING = 24
+
+/**
+ * THE SCALE THAT SHOWS ALL OF IT, as arithmetic so it can be tested without a
+ * canvas.
+ *
+ * `view` is the visible canvas in pixels (Blockly's view metrics already have
+ * the toolbox taken off), `content` the blocks' bounding box in workspace
+ * units; the answer is px-per-unit, which is what `setScale` takes.
+ *
+ * Capped at the workspace's own `maxScale` — fitting a single small block would
+ * otherwise blow it up to fill the screen — and NOT floored: see the header.
+ */
+export function fitScale(
+  view: { width: number; height: number },
+  content: { width: number; height: number },
+  padding: number,
+  maxScale: number
+): number {
+  const room = (extent: number): number => Math.max(extent - 2 * padding, 1)
+  const fits = (extent: number, of: number): number => room(extent) / Math.max(of, 1)
+  return Math.min(fits(view.width, content.width), fits(view.height, content.height), maxScale)
+}
+
+/**
+ * Show every block at once, however many there are.
+ *
+ * Blockly's `zoomToFit` in longhand, with the two differences the header
+ * explains: a padding in pixels, and a floor that gives way. Lowering
+ * `minScale` STAYS lowered on purpose — put it back and the next notch of
+ * wheel-zoom-out would clamp up to 0.3, so scrolling out would zoom the canvas
+ * in. Having seen the whole program at this scale, the learner is allowed back
+ * to it.
+ */
+function fitAll(ws: Blockly.WorkspaceSvg): void {
+  const box = ws.getBlocksBoundingBox()
+  const view = ws.getMetricsManager().getViewMetrics()
+  const zoom = ws.options.zoomOptions
+  const scale = fitScale(
+    view,
+    { width: box.right - box.left, height: box.bottom - box.top },
+    FIT_PADDING,
+    zoom.maxScale
+  )
+  if (scale < zoom.minScale) zoom.minScale = scale
+  ws.setScale(scale)
+  ws.scrollCenter()
+}
+
 /** Apply {@link nextZoomAction} to a live workspace. */
 function toggleZoom(ws: Blockly.WorkspaceSvg): void {
   const action = nextZoomAction(ws.getScale(), ws.getTopBlocks(false).length > 0)
@@ -120,7 +210,7 @@ function toggleZoom(ws: Blockly.WorkspaceSvg): void {
   // buttons.
   ws.beginCanvasTransition()
   if (action === 'fit') {
-    ws.zoomToFit()
+    fitAll(ws)
   } else {
     ws.setScale(1)
     ws.scrollCenter()
@@ -146,6 +236,13 @@ export function installZoomReset(ws: Blockly.WorkspaceSvg): () => void {
   if (!control) return () => {}
 
   control.querySelector('image')?.remove()
+  // BEFORE the glyph, so the glyph is what a hover paints and this is only what
+  // a press lands on.
+  const hit = Blockly.utils.dom.createSvgElement(
+    Blockly.utils.Svg.RECT,
+    { width: CONTROL_SIZE, height: CONTROL_SIZE, x: 0, y: 0, class: HIT_CLASS },
+    control
+  )
   const icon = Blockly.utils.dom.createSvgElement(
     Blockly.utils.Svg.PATH,
     { d: FIT_ICON_PATH, class: FIT_ICON_CLASS },
@@ -171,6 +268,7 @@ export function installZoomReset(ws: Blockly.WorkspaceSvg): () => void {
     root.removeEventListener('pointerdown', activate, true)
     root.removeEventListener('keydown', activate, true)
     icon.remove()
+    hit.remove()
     if (stockLabel !== null) control.setAttribute('aria-label', stockLabel)
   }
 }

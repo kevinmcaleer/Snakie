@@ -1105,6 +1105,39 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The zoom control is a button again, the canvas opens tight, and "fit" fits**
+  (#1160). Three things about the block canvas, reported together.
+
+  **The press target is the whole control.** #1150 swapped Blockly's reset
+  sprite for a stroked corner-bracket glyph, and swapped the hit area with it: a
+  32×32 `<image>` answers a press anywhere on its square, a stroked path only
+  where the ink is. So the control took a press on the four hairline brackets
+  and ignored the middle — which is where anybody aims. The square is back,
+  invisible, exactly the size the sprite was, so the button is pressed and
+  hovered like the `+` and `-` above it.
+
+  **The auto layout closes up.** The converter has to estimate how tall each
+  stack renders — it is a pure module that has never loaded Blockly, so it
+  counts rows — and it errs upwards on purpose, because being too close costs an
+  overlap. Too far apart turns out to cost something too: on a six-line function
+  it reserved 552px for a stack 427px tall, so a file opened with a hole between
+  the imports and the first function wide enough to read as a missing block. The
+  canvas now measures the stacks it has just drawn and puts each one a single
+  grid square under the real bottom of the one above it — and the estimate's own
+  gutter comes down to match, so a program is laid out the same tight way
+  whether or not a canvas has measured it. A stack somebody has dragged
+  somewhere is left exactly where they put it: one stack off the column and the
+  whole canvas is theirs, untouched (#1036).
+
+  **Zoom to fit shows all of it.** Blockly's `zoomToFit` is a ratio into
+  `setScale`, and `setScale` clamps to the workspace's minimum zoom — so a
+  program taller than about three screens fitted to the floor and stopped, with
+  the top and the bottom of it still off the canvas and nothing to say so. The
+  fit now works the scale out for itself, in screen pixels and with room to
+  spare around the edges, and lets the floor give way to reach it: a limit that
+  makes sense for the wheel is no limit at all on an explicit "show me
+  everything".
+
 - **Zooming the canvas no longer resizes the shelf, and one press shows the
   whole program** (#1150). Blockly's flyout — the drawer a category opens — is a
   workspace of its own whose scale followed the canvas's, so zooming in to look

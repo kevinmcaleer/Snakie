@@ -22,6 +22,7 @@ import { blockDefinition, installBlockDefinitions } from '../lib/blocks/registry
 import { installCorePalette } from '../lib/blocks/palette'
 import { installSoftShellRenderer } from '../lib/blocks/renderer'
 import { installShelfFlyout, installZoomReset } from '../lib/blocks/zoom'
+import { tidyRoots } from '../lib/blocks/tidy'
 import {
   dispatchNeedLibrary,
   dispatchOpenHelp,
@@ -763,6 +764,13 @@ export function BlocksCanvas({
         const now = block.getRelativeToSurfaceXY()
         block.moveBy(at.x - now.x, at.y - now.y)
       }
+      // AND THE GAPS CLOSE UP (#1160). The converter can only estimate how tall
+      // each root renders, and it errs upwards by enough to leave a hole
+      // between the imports and the first `def` that reads as a missing block;
+      // here the blocks exist and can be measured. AFTER the restore above, so
+      // that a root somebody dragged is seen where they put it — and so is the
+      // signal that says hands off (see `tidy.ts`).
+      tidyRoots(ws)
       // And still selected, so a reconversion cannot steal the highlight out
       // from under #1016's link.
       if (selected) {

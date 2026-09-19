@@ -241,8 +241,24 @@
  * and the trashcan are drawn from. Taking a theme token here would make this
  * one button a different grey from the three above it in at least one skin.
  * ------------------------------------------------------------------------- */
+/* THE PRESS TARGET IS THE WHOLE CONTROL (#1160). The glyph below is a stroked
+   path, and a stroke is hit-testable only where the ink is — so the control
+   answered a press on the four corner brackets and ignored the middle. This is
+   the 32×32 square the sprite used to occupy, put back as an invisible rect:
+   `pointer-events: all` is the part that matters, because an unpainted shape is
+   not a target under SVG's default `visiblePainted`. It carries the `:hover`
+   too, so the glyph lights up from anywhere on the button. */
+.blocks-canvas__host .blocklyZoom > .blocks-zoom-hit {
+  fill: none;
+  pointer-events: all;
+}
+
 .blocks-canvas__host .blocklyZoom > .blocks-zoom-fit {
   fill: none;
+  /* And the glyph itself is not a target: a press on a bracket and a press on
+     the space beside it must be the same press, which they are when only the
+     rect above answers. */
+  pointer-events: none;
   stroke: #000;
   stroke-width: 2;
   stroke-linecap: round;
