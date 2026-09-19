@@ -180,3 +180,12 @@
   opacity: 0.55;
   cursor: default;
 }
+
+/* A row's outcome (a failed action, with its reason) — shown IN the dialog,
+   because the status bar is behind the scrim and the pop-out has none. */
+.esync__note {
+  flex: 1 1 100%;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  color: var(--danger, #b3261e);
+}
