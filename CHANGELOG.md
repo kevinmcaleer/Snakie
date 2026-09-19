@@ -8,6 +8,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Snakie says which board you are on, and opens with the board on screen.**
+  (#1163) The web build connects its built-in simulator for you a moment after
+  the page loads, so Run works without anyone hunting for the Connect control
+  first. That is the right default and it had one cost: the port dropdown is
+  disabled while anything is connected, so a user who then plugged in a real
+  Pico found a greyed-out list naming a device they never chose, and no visible
+  way out. The board was in their hand and the app looked like it could not see
+  it.
+
+  So a callout now sits above that dropdown while the simulator is connected,
+  pointing down at it: you are on Snakie's built-in offline board, and
+  **Disconnect** is how you get to yours — offered as a button, not just as
+  advice, because the step nobody guesses should not also be a step you have to
+  go and find. Dismissible, and the dismissal sticks: it explains a default, and
+  a default only needs explaining the first time you meet it.
+
+  The same launch now opens with the **instrument dock** beside the code rather
+  than behind the slim rail at the right edge, which is a control you have to
+  already know about. Snakie is a MicroPython editor for physical boards; the
+  board — a **Raspberry Pi Pico 2 W**, which has been the default all along and
+  now has a test saying so — belongs on screen when it opens, together with the
+  instrument bench and the pins your program is using. Closing the dock still
+  persists, and a layout you arranged is otherwise untouched: the stored
+  envelope moves to v6, which opens the dock once and changes nothing else.
+
 - **A bill of materials, and a document that says what to do.** (#1157, epic
   #1105) The printed project used to be a set of pictures under headings —
   `Blocks`, `MicroPython`, `Electronics` — which reads perfectly to whoever
