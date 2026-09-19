@@ -32,14 +32,32 @@ export const PX_TO_PT = 72 / 96
  *  block canvas instead of the workspace's. Removed again immediately. */
 const CAPTURE_ATTR = 'data-snakie-pdf-capture'
 
-/** Chrome that should never bake into a printed page. */
-const CHROME_SELECTORS = [
+/**
+ * Chrome that should never bake into a printed page.
+ *
+ * THE DESCRIPTION BUBBLE IS CHROME HERE, which is the one entry worth
+ * explaining. A `def` block's description — the speech bubble the `?` opens,
+ * which is the function's docstring (see {@link functionDescription}) — is
+ * already SET as the caption under the function's name by `sections/blocks.ts`.
+ * Left in the capture it printed a second time, as a picture of an open bubble;
+ * and because `serializeLiveSvg` strips the pan/zoom transform from the block
+ * canvas alone, the bubble layer kept its own and the picture landed wherever
+ * the canvas happened to be scrolled to.
+ *
+ * Excluded from the CLONE, so nothing on screen moves: a bubble the learner has
+ * open stays open, it simply does not travel into the PDF.
+ */
+export const CHROME_SELECTORS = [
   '.blocklyFlyout',
   '.blocklyScrollbarBackground',
   '.blocklyScrollbarHandle',
   '.blocklyZoom',
   '.blocklyTrash',
-  '.blocklyMainBackground'
+  '.blocklyMainBackground',
+  // The layer every bubble is drawn into, and the bubbles themselves — the
+  // second is belt and braces should Blockly ever move them off their own layer.
+  '.blocklyBubbleCanvas',
+  '.blocklyBubble'
 ]
 
 /** A top-level stack, serialised and measured. */
