@@ -39,6 +39,66 @@ describe('robot.yml round-trip', () => {
     expect(back.connections.map((c) => c.cable)).toEqual(['cable-x', 'cable-x'])
   })
 
+  it('round-trips the points a wire is PINNED through (#1173)', () => {
+    // The pinned route is the user's own work — a wire dragged clear of the parts
+    // it was lying over. It survives a save only if it passes BOTH whitelists
+    // (`robotToYaml`'s field-by-field writer and `coerceConnection`'s reader);
+    // a field missing from either is dropped silently, and the wire springs back.
+    const def = {
+      ...blankRobot(),
+      connections: [
+        {
+          id: 'a.SDA__b.SDA',
+          from: 'a.SDA#3',
+          to: 'b.SDA#3',
+          net: 'signal' as const,
+          waypoints: [
+            { x: 120, y: -40 },
+            { x: 260, y: 88.5 }
+          ]
+        }
+      ]
+    }
+    const back = robotFromYaml(robotToYaml(def))
+    expect(back.connections[0].waypoints).toEqual([
+      { x: 120, y: -40 },
+      { x: 260, y: 88.5 }
+    ])
+    // Order matters — it is the order the wire runs through them.
+    expect(back.connections[0].waypoints?.[0].x).toBe(120)
+    // An unpinned wire carries no `waypoints:` at all.
+    const bare = robotToYaml({ ...blankRobot(), connections: [{ id: 'c', from: 'a.X', to: 'b.Y' }] })
+    expect(bare).not.toMatch(/waypoints/)
+    expect(robotFromYaml(bare).connections[0].waypoints).toBeUndefined()
+    // And an empty list is not a route.
+    const empty = robotFromYaml(
+      robotToYaml({ ...blankRobot(), connections: [{ id: 'c', from: 'a.X', to: 'b.Y', waypoints: [] }] })
+    )
+    expect(empty.connections[0].waypoints).toBeUndefined()
+  })
+
+  it('drops hand-edited waypoints that are not points', () => {
+    // A half-written point would shift the wire to NaN and make it vanish.
+    const def = robotFromYaml(
+      [
+        'connections:',
+        '  - id: c',
+        '    from: a.X',
+        '    to: b.Y',
+        '    waypoints:',
+        '      - { x: 10, y: 20 }',
+        '      - { x: 30 }', // no y → not a point
+        '      - nonsense',
+        '      - { x: "40", y: "50" }', // strings coerce
+        ''
+      ].join('\n')
+    )
+    expect(def.connections[0].waypoints).toEqual([
+      { x: 10, y: 20 },
+      { x: 40, y: 50 }
+    ])
+  })
+
   it('round-trips the project name + description (and drops empties)', () => {
     const back = robotFromYaml(robotToYaml({ ...blankRobot(), name: 'Rover', description: 'A 2-wheel line follower' }))
     expect(back.name).toBe('Rover')

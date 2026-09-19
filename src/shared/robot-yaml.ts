@@ -7,7 +7,7 @@
  */
 
 import { parse, stringify } from 'yaml'
-import type { RobotConnection, RobotDefinition, RobotNet, RobotPart } from './robot'
+import type { RobotConnection, RobotDefinition, RobotNet, RobotPart, RobotWaypoint } from './robot'
 import { sanitiseRobotModel } from './krf'
 
 const NETS: RobotNet[] = ['vcc', 'gnd', 'signal']
@@ -54,6 +54,22 @@ function coercePart(raw: unknown): RobotPart | null {
   return out
 }
 
+/** Pinned wire waypoints (#1173). Anything without a finite x AND y is not a
+ *  point and is dropped, so a hand-edited list can't shift a wire to NaN. */
+function coerceWaypoints(raw: unknown): RobotWaypoint[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const pts: RobotWaypoint[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const r = item as Record<string, unknown>
+    const x = num(r.x)
+    const y = num(r.y)
+    if (x === undefined || y === undefined) continue
+    pts.push({ x, y })
+  }
+  return pts.length ? pts : undefined
+}
+
 function coerceConnection(raw: unknown): RobotConnection | null {
   if (!raw || typeof raw !== 'object') return null
   const r = raw as Record<string, unknown>
@@ -66,6 +82,8 @@ function coerceConnection(raw: unknown): RobotConnection | null {
   if (color) out.color = color
   const cable = str(r.cable)
   if (cable) out.cable = cable
+  const waypoints = coerceWaypoints(r.waypoints)
+  if (waypoints) out.waypoints = waypoints
   return out
 }
 
@@ -106,6 +124,7 @@ export function robotToYaml(def: RobotDefinition): string {
     if (c.net) o.net = c.net
     if (c.color) o.color = c.color
     if (c.cable) o.cable = c.cable
+    if (c.waypoints?.length) o.waypoints = c.waypoints.map((w) => ({ x: w.x, y: w.y }))
     return o
   })
   return stringify(obj, { lineWidth: 0 })
