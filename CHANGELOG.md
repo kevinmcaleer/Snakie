@@ -8,6 +8,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A little floating bar while the PDF exports.** (epic #1105) Rasterising the
+  blocks and the breadboard takes seconds on a real project, and until now the
+  only sign of it was a print icon that had gone grey — which says "no", not
+  "working". A small card now floats above the status bar for as long as the
+  export runs: the phase it is on (rendering the blocks, drawing the wiring,
+  laying out the pages, writing the PDF, then saving), a real progress bar
+  reading the builder's own progress events, and a moving sheen on the fill so
+  a long phase still looks alive rather than hung. It is not a dialog — nothing
+  is blocked, and clicks pass straight through it — and it takes itself away
+  once the export settles, staying up a moment longer when it failed. A save
+  dialog the user closed themselves gets no badge at all.
+
 - **`forget` and `do nothing` — and two decisions taken out loud.** (#1133,
   epic #1119) `del` is listed in `docs/blocks-coverage-epic.md` §10 as the
   statement *"no workstream claimed"*, and it is the only way to take a key out
