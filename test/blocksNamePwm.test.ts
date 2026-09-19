@@ -5,7 +5,11 @@ import { generateProgram } from '../src/renderer/src/lib/blocks/generator'
 import { installBlockDefinitions, resetBlockRegistry } from '../src/renderer/src/lib/blocks/registry'
 import { installCorePalette } from '../src/renderer/src/lib/blocks/palette'
 import { pythonToBlocks } from '../src/renderer/src/lib/blocks/python-to-blocks'
-import { PWM_ALIAS_BLOCK, pwmAliasesIn } from '../src/renderer/src/lib/blocks/board-pins'
+import {
+  PIN_ALIAS_BLOCK,
+  PWM_ALIAS_BLOCK,
+  pwmAliasesIn
+} from '../src/renderer/src/lib/blocks/board-pins'
 
 /**
  * NAMING A PWM, AND SETTING IT DIRECTLY.
@@ -123,6 +127,48 @@ describe('the blocks a learner drags', () => {
     // It emits NOTHING where it stands — so parking the naming block at the
     // bottom of the canvas cannot produce a `NameError`.
     expect(program([])).toBe('from machine import PWM, Pin\n\nmotor_a = PWM(Pin(15))\n')
+  })
+
+  it('builds the PWM on a pin the program has already named', () => {
+    // THE BUG THIS BLOCK HAD. Every pin dropdown lists the names the program
+    // declares ABOVE the numbers, so a learner who has named GP15 `motor_left`
+    // reaches for the name here — and the field was read with `Number`, so the
+    // name came out `NaN` and the block generated NOTHING: no declaration, no
+    // `PWM` import, nothing said. It builds on the pin OBJECT now, which is
+    // what `pinObject` does for every other block that takes a pin.
+    const ws = new Blockly.Workspace()
+    const pin = ws.newBlock(PIN_ALIAS_BLOCK)
+    pin.setFieldValue('15', 'PIN')
+    pin.setFieldValue('motor_left', 'NAME')
+    const pwm = ws.newBlock(PWM_ALIAS_BLOCK)
+    pwm.setFieldValue('motor_left', 'PIN')
+    pwm.setFieldValue('motor_a', 'NAME')
+    expect(generateProgram(ws).code).toBe(
+      'from machine import PWM, Pin\n\nmotor_left = Pin(15, Pin.OUT)\nmotor_a = PWM(motor_left)\n'
+    )
+
+    // AND THE IMPORT GOES WITH THE BLOCK. The import section is a consequence
+    // of what the blocks need, so the last PWM block leaving takes `PWM` with
+    // it — the other half of the same bug, and the half a learner notices when
+    // their program keeps an import for hardware it no longer has.
+    pwm.dispose(false)
+    expect(generateProgram(ws).code).toBe(
+      'from machine import Pin\n\nmotor_left = Pin(15, Pin.OUT)\n'
+    )
+  })
+
+  it('needs no `Pin` import when the pin it builds on is named', () => {
+    // `from machine import Pin` with no `Pin(` anywhere under it is the same
+    // untidiness the other way round: on a named pin the `name pin` block is
+    // what writes the constructor, and it is what declares the import.
+    const ws = new Blockly.Workspace()
+    const pwm = ws.newBlock(PWM_ALIAS_BLOCK)
+    // A name nothing declares still writes through unchanged — a `name pin`
+    // block deleted out from under this one. `NameError` is the honest answer;
+    // inventing a pin number would drive the wrong hardware silently.
+    pwm.setFieldValue('motor_left', 'PIN')
+    pwm.setFieldValue('motor_a', 'NAME')
+    expect(generateProgram(ws).code).toBe('from machine import PWM\n\nmotor_a = PWM(motor_left)\n')
   })
 
   it('writes the duty line a person would have written', () => {
@@ -271,21 +317,19 @@ describe('what stays an ordinary line, and why', () => {
     roundTrips(src)
   })
 
-  it('a PWM built on a pin that was itself named', () => {
-    // `PWM(motor_pin)` carries no number, and the alias template has exactly one
-    // `{PIN}` to fill. Reading it as this block would put a pin number in a
-    // field that never held one — so it stays as written.
-    // The blank line is the generator's own: `name pin` hoists its declaration
-    // into the setup section, which is written with a gap after it.
+  it('a PWM built on a pin that was itself named IS this block', () => {
+    // `PWM(motor_pin)` is what this block writes when its pin field holds a
+    // name, so it comes back as the block that wrote it — with the name in the
+    // field, which is what pin fields have held since #1097.
     const src = [
       'from machine import PWM, Pin',
       '',
       'motor_pin = Pin(15, Pin.OUT)',
-      '',
       'motor_a = PWM(motor_pin)',
       ''
     ].join('\n')
-    expect(types(src)).not.toContain(PWM_ALIAS_BLOCK)
+    expect(types(src)).toContain(PWM_ALIAS_BLOCK)
+    expect(one(src, PWM_ALIAS_BLOCK)!.fields).toEqual({ PIN: 'motor_pin', NAME: 'motor_a' })
     roundTrips(src)
   })
 
