@@ -539,6 +539,9 @@ describe('the hardware category (#1012)', () => {
       'snakie_led_set',
       'snakie_led_toggle',
       'snakie_pin_write',
+      // Its socket-driven twin (#1097): the same line, with the pin dropped in
+      // by name rather than picked off a menu of the board's pins.
+      'snakie_pin_write_named',
       'snakie_onboard_led',
       'snakie_pin_read',
       'snakie_pin_pressed',

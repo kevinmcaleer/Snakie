@@ -8,6 +8,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`set pin ( … ) to [high]` — a pin you have named, dropped in.** The existing
+  block asks for a pin off a menu of the board's twenty-nine. This one takes a
+  SOCKET, so the pin arrives as a value: usually the name a `name pin` block gave
+  it, but equally one held in a variable, picked out of a list, or worked out by
+  a loop — none of which a dropdown of hardware can express.
+
+  Two blocks now write one line, and only the NAME tells them apart. `led.value(1)`
+  opens as this block, because a name is how the learner wrote it;
+  `pin_15.value(1)` — an object the generator hoisted, whose pin lives in its
+  name rather than in the line — stays with the block that has the pin field.
+  They cannot race: an `onNamedPin` rule is reachable only in a pass of its own,
+  where the receiver has to be a bare name in the alias map, and every other `on`
+  rule sits that pass out.
+
+  `objectCall` learned to place a FIELD argument while it was there, as the
+  module and hoisted-object paths already could, so the `1` can be the high/low
+  setting rather than a socket. `led.value(brightness)` stays an ordinary line —
+  the setting has nowhere to put a variable, and a raw block says so honestly.
+
 - **`millisecond ticks`, beside the microsecond one it already had.** The Wait
   drawer shipped `ticks_us` and `ticks between` (#1011) and stopped there, on the
   argument that microseconds are the unit a datasheet quotes. That is true of the

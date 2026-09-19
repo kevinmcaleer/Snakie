@@ -165,6 +165,17 @@ export interface BlockDefinition {
      * method on whatever the learner called their list.
      */
     on?: string
+    /**
+     * This `on` rule claims a receiver the learner NAMED, and only that (#1097).
+     *
+     * `led.value(1)` and `pin_15.value(1)` are the same line twice over, and two
+     * blocks write it: this one, which takes the pin in a socket, and
+     * `snakie_pin_write`, whose pin is a dropdown and whose receiver is an
+     * object the generator hoisted. The name decides. A rule with this set is
+     * tried FIRST and only where the receiver is a name a `name pin` block gave
+     * out; every other `on` rule ignores that pass entirely.
+     */
+    onNamedPin?: boolean
     /** Fields this rule fixes — `min`/`max` are one block with two `OP`s. */
     fields?: Readonly<Record<string, string>>
     /** Socket name → the type that socket checks, for the ones that check. */

@@ -208,6 +208,59 @@ export const HARDWARE_BLOCKS: BlockDefinition[] = [
       `${digitalPin(gen, pinOf(block), block)}.value(${block.getFieldValue('VALUE')})\n`
   },
   {
+    /**
+     * SET A PIN YOU HAVE NAMED, by dropping the name in (#1097's other half).
+     *
+     * `set pin [GP15 ▾] to [high]` asks for a pin off a menu of the board's
+     * twenty-nine. This one takes a SOCKET, so the pin arrives as a value:
+     * usually the name a `name pin` block gave it, but equally one held in a
+     * variable, picked out of a list, or worked out by a loop — none of which a
+     * dropdown of hardware can express.
+     *
+     * IT WRITES THE SAME LINE AS `snakie_pin_write`, `led.value(1)`, and two
+     * blocks for one line means one of them cannot be read back. This one wins
+     * where the receiver is a NAME, because that is how the learner wrote it;
+     * `pin_15.value(1)` — the generator's own hoisted object, whose pin lives in
+     * its name — stays with the block that has the pin field, and
+     * `blocksHumanNamedPins.test.ts` is where that boundary is held.
+     */
+    type: 'snakie_pin_write_named',
+    category: 'hardware',
+    help: 'ref-pins',
+    read: {
+      fn: 'value',
+      on: 'PIN',
+      onNamedPin: true,
+      args: [] as const,
+      // The `1` is the dropdown, not a socket — see `objectCall`, which learned
+      // to place a field argument for this block.
+      argFields: { 0: { field: 'VALUE', values: { '1': '1', '0': '0' } } },
+      shape: 'statement' as const
+    },
+    json: {
+      message0: 'set pin %1 to %2',
+      args0: [
+        { type: 'input_value', name: 'PIN' },
+        {
+          type: 'field_dropdown',
+          name: 'VALUE',
+          options: [
+            ['1 (high)', '1'],
+            ['0 (low)', '0']
+          ]
+        }
+      ],
+      inputsInline: true,
+      previousStatement: null,
+      nextStatement: null,
+      tooltip:
+        'Drive a pin high or low, using a pin you have NAMED. Drop the name in — the one from a “name pin” block — rather than picking a GP number.'
+    },
+    imports: [],
+    code: (block, gen) =>
+      `${gen.valueToCode(block, 'PIN', Order.MEMBER) || 'pin'}.value(${block.getFieldValue('VALUE')})\n`
+  },
+  {
     type: 'snakie_onboard_led',
     circuitpython: {
       imports: CP_DIGITAL,
