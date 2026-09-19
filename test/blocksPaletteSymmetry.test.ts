@@ -86,6 +86,9 @@ const READ_DIRECTLY: Record<string, string> = {
   logic_operation: 'x = a and b\n',
   logic_negate: 'x = not a\n',
   snakie_is_none: 'x = reading is None\n',
+  // `is` / `is not` on anything else (#1128). `is None` is claimed first, so
+  // this sample deliberately is not about None.
+  snakie_identity: 'same = handle is other\n',
   // --- lists: the two subscript forms the block can write back exactly
   snakie_list_get: 'x = readings[0]\n',
   snakie_list_set: 'readings[0] = 1\n',

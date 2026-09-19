@@ -118,6 +118,7 @@ const OUTPUT_TYPE = new Map<string, SocketType>([
   ['logic_negate', 'Boolean'],
   ['logic_operation', 'Boolean'],
   ['snakie_is_none', 'Boolean'],
+  ['snakie_identity', 'Boolean'],
   ['snakie_list_contains', 'Boolean'],
   // `controls_forEach`'s LIST socket checks Array, and a `text` in it is the
   // same class of unloadable workspace the table above exists for (#1087):
@@ -2910,23 +2911,60 @@ class Converter {
     const operators = Object.keys(COMPARE)
     const isCompare = (tok: Token | undefined): boolean =>
       Boolean(tok) && tok!.kind === 'op' && operators.includes(tok!.text)
+    /**
+     * Is another comparison waiting, making this a CHAIN?
+     *
+     * `<` and friends, and also `in` and `is` — Python puts all three at one
+     * precedence level, so `a in b is c` is as much a chain as `0 <= n <= 59`
+     * and folding it left is as wrong. Refusing sends the whole expression to a
+     * raw value block, which regenerates it verbatim and means what was written.
+     */
+    const chained = (tok: Token | undefined): boolean =>
+      isCompare(tok) || (tok?.kind === 'keyword' && (tok.text === 'in' || tok.text === 'is'))
 
     const left = this.parseBitOr(tokens, at)
     if (!left) return null
 
-    // `x is None` → the Logic drawer's own block (W2, #1089).
+    // `x is None`, `x is not None`, and `a is b` → the Logic drawer's own two
+    // blocks (W2 #1089; the other three forms, #1128).
     //
-    // Python has it and Blockly does not, which is why `snakie_is_none` exists —
-    // and until now it was a block a learner could drag out of the drawer and
-    // never get back, because nothing read it. `is NOT None` is deliberately not
-    // here: `logic_negate` around this block writes `not x is None`, which is
-    // the same test and a different line, and rewriting somebody's line is the
-    // one thing this module does not do.
+    // `is not` IS ITS OWN OPERATOR rather than a `not` around the block: a
+    // `logic_negate` wrapper writes `not x is None`, which is the same test and
+    // a different line, and rewriting somebody's line is the one thing this
+    // module does not do. Both blocks carry a `MODE` setting that says it
+    // exactly, which is what let `is not None` be read at all.
+    //
+    // `None` FIRST, then the general identity — otherwise `x is None` would
+    // come back as the two-socket block with a `logic_null` in it, which is the
+    // same line written by the wrong block.
     const is = tokens[left.next]
-    if (is?.kind === 'keyword' && is.text === 'is' && tokens[left.next + 1]?.text === 'None') {
+    if (is?.kind === 'keyword' && is.text === 'is') {
+      const negated =
+        tokens[left.next + 1]?.kind === 'keyword' && tokens[left.next + 1].text === 'not'
+      const after = left.next + (negated ? 2 : 1)
+      const mode = negated ? 'IS_NOT' : 'IS'
+      if (tokens[after]?.text === 'None' && !isCompare(tokens[after + 1])) {
+        return {
+          block: {
+            type: 'snakie_is_none',
+            fields: { MODE: mode },
+            inputs: { VALUE: { block: left.block } }
+          },
+          next: after + 1
+        }
+      }
+      const right = this.parseBitOr(tokens, after)
+      if (!right) return null
+      // A CHAIN IS REFUSED, exactly as it is for `<` below: `a is b is c` folded
+      // left compares a Bool against `c`, which is a different program.
+      if (chained(tokens[right.next])) return null
       return {
-        block: { type: 'snakie_is_none', inputs: { VALUE: { block: left.block } } },
-        next: left.next + 2
+        block: {
+          type: 'snakie_identity',
+          fields: { MODE: mode },
+          inputs: { A: { block: left.block }, B: { block: right.block } }
+        },
+        next: right.next
       }
     }
 
@@ -2942,7 +2980,11 @@ class Converter {
     if ((is?.kind === 'keyword' && is.text === 'in') || notIn) {
       const right = this.parseBitOr(tokens, left.next + (notIn ? 2 : 1))
       if (!right) return null
-      if (!fitsSocket(right.block, 'Array')) return null
+      // NO `Array` REQUIREMENT ANY MORE (#1128). The block's haystack socket
+      // stopped checking, because `"c" in text`, `key in config` and
+      // `byte in buf` are all this same line and all had no block at all while
+      // it did.
+      if (chained(tokens[right.next])) return null
       return {
         block: {
           type: 'snakie_list_contains',
@@ -2958,7 +3000,7 @@ class Converter {
     const right = this.parseBitOr(tokens, left.next + 1)
     if (!right) return null
     // The third operator at this level is what makes it a chain.
-    if (isCompare(tokens[right.next])) return null
+    if (chained(tokens[right.next])) return null
     return {
       block: {
         type: 'logic_compare',

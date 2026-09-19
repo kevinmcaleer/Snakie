@@ -8,6 +8,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`in` works on text and dictionaries, and `is not None` has a block.**
+  (#1128, epic #1119) Membership existed in the palette exactly once and only
+  for lists: the haystack socket carried `check: 'Array'`, so `"c" in text`,
+  `key in config` and `byte in buf` were refused by the *shape* of the block and
+  had no block at all. #1086 measured `in`/`not in` at 214 lines across 31 of 73
+  projects, and almost none of it is a list.
+
+  There is still exactly **one** block writing `a in b` — two would have been
+  the outcome worth avoiding — and it kept its type, so a workspace saved before
+  this opens unchanged. What changed is that its check came off and it moved to
+  **Logic**, where every other Boolean test already lives and where it is
+  equidistant from Lists, Text and Dictionaries.
+
+  `is nothing` grew an **is / is not** setting, so "has this been set up yet?"
+  — `wifi is not None`, the commonest guard in a program that builds something
+  lazily — is a block rather than a `not` wrapped around one, which would have
+  written a different line. And there is a new **is the same thing as** block
+  for `a is b`: kept separate from `=` on purpose, because a learner who finds
+  `is` sitting beside `==` will reach for it on two numbers, be right by
+  accident, and be wrong later.
+
 - **The bits: masking, shifting, `//`, and hex you can actually type.** (#1127,
   epic #1119) The Maths drawer knew five operators — `+ - * / **` — so `&`, `|`,
   `^`, `~`, `<<`, `>>` and `//` could not be said in blocks at all. That is the

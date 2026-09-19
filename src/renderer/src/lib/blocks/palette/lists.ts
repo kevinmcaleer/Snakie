@@ -6,10 +6,13 @@ import { registerCallRules } from '../python-to-blocks'
  * LISTS (#1011, epic #1007).
  * =============================================================================
  *
- * Make one, add to it, read and write a position, how long it is, and whether
- * something is in it. That is the whole of what a first robot program needs a
+ * Make one, add to it, read and write a position, and how long it is. That is the whole of what a first robot program needs a
  * list for: a set of poses to play, a handful of readings to average, the pins a
  * row of LEDs is on.
+ *
+ * MEMBERSHIP MOVED OUT (#1128). `v in xs` used to live here with a `check: 'Array'`
+ * haystack, which is the block refusing by its shape to answer `"c" in text` or
+ * `key in config`. It is one general block in Logic now — see `logic.ts`.
  *
  * ONE-BASED ON THE BLOCK, ZERO-BASED IN THE CODE. Blockly's index blocks count
  * from 1, and Python counts from 0. This is a genuine fork in the road and the
@@ -126,43 +129,8 @@ export const LIST_BLOCKS: BlockDefinition[] = [
       const value = gen.valueToCode(block, 'VALUE', Order.NONE) || 'None'
       return `${list}[${index}] = ${value}\n`
     }
-  },
-  {
-    type: 'snakie_list_contains',
-    category: 'lists',
-    help: 'ref-types',
-    json: {
-      message0: '%1 %2 %3',
-      args0: [
-        { type: 'input_value', name: 'ITEM' },
-        {
-          // `not in` IS ITS OWN OPERATOR, not a `not` around this block (W8,
-          // #1095). Wrapping it in `logic_negate` writes `not x in xs`, which is
-          // the same test and a different line — and rewriting somebody's line
-          // is the one thing the reader does not do. A setting says it exactly.
-          //
-          // A block saved before this field existed has no `MODE` and gets the
-          // first option, which is what it always meant.
-          type: 'field_dropdown',
-          name: 'MODE',
-          options: [
-            ['is in', 'IN'],
-            ['is not in', 'NOT_IN']
-          ]
-        },
-        { type: 'input_value', name: 'LIST', check: 'Array' }
-      ],
-      inputsInline: true,
-      output: 'Boolean',
-      tooltip: 'True when the value appears somewhere in the list — or, the other way round, when it does not.'
-    },
-    code: (block, gen) => {
-      const item = gen.valueToCode(block, 'ITEM', Order.RELATIONAL) || 'None'
-      const list = gen.valueToCode(block, 'LIST', Order.RELATIONAL) || '[]'
-      const op = block.getFieldValue('MODE') === 'NOT_IN' ? 'not in' : 'in'
-      return [`${item} ${op} ${list}`, Order.RELATIONAL]
-    }
   }
+
 ]
 
 /**
