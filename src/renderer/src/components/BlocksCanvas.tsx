@@ -36,6 +36,7 @@ import {
 } from '../lib/blocks/traceback'
 import { ensureBlocklyLocale } from '../lib/blocks/locale'
 import { unknownBlockTypes } from '../lib/blocks/workspace-check'
+import { registerBlocksWorkspace } from '../lib/blocks/workspace-registry'
 import { buildToolbox } from '../lib/blocks/toolbox'
 import { installVariablesDrawer } from '../lib/blocks/variables-drawer'
 import { installDuplicateShortcut } from '../lib/blocks/duplicate'
@@ -330,6 +331,10 @@ export function BlocksCanvas({
       )
     })
     wsRef.current = ws
+    // Publish the workspace so things OUTSIDE this component — the PDF export's
+    // blocks pages (#1112) — can walk the learner's stacks. Unregistered in the
+    // cleanup below, because reading a disposed workspace is a crash.
+    const unregisterWorkspace = registerBlocksWorkspace(ws)
     toolboxDialectRef.current = dialectRef.current
 
     // THE FUNCTIONS DRAWER IS DYNAMIC (#1045). Every other category is a fixed
@@ -470,6 +475,7 @@ export function BlocksCanvas({
       ws.removeChangeListener(pointing)
       if (debounceRef.current) clearTimeout(debounceRef.current)
       ws.removeChangeListener(listener)
+      unregisterWorkspace()
       ws.dispose()
       wsRef.current = null
       lastLoadedRef.current = ''

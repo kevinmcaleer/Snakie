@@ -8,6 +8,38 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Export the whole project as a PDF** (epic #1105). A print icon next to New
+  and Save — and `File ▸ Export to PDF…`, ⌘P — writes a document of the project:
+  a title page with its name and date, the blocks with the functions first, the
+  generated MicroPython, the wiring diagram, and a closing page linking to
+  app.snakie.org and Buy Me a Coffee. It works on the desktop app (native save
+  dialog) and on the web build (download).
+
+  **No new dependency.** `buildImagePdf` already hand-assembled a one-page,
+  image-only PDF for the breadboard; that grew into a real writer under
+  `src/renderer/src/lib/pdf/` — a proper `/Pages` tree, base-14 text, image
+  XObjects and `/URI` link annotations, with every xref entry a byte offset and
+  every `/Length` taken from the encoded stream rather than `String.length`. The
+  breadboard's own export now goes through it, so there is one implementation of
+  "get the bytes right" instead of two.
+
+  **The code listing is real text**, not a screenshot of text: `/Courier`,
+  selectable and copyable, with line numbers in a gutter and long lines wrapped
+  at the measured column. A blocks project prints without its `snakie-blocks`
+  footer.
+
+  **A block is never cut in half.** Each top-level stack is captured as its own
+  image and whole stacks are packed onto pages, so the promise holds by
+  construction rather than by fiddling with offsets. Functions come first, from
+  the generator's own list of the `def`s it hoisted — so the pages and the
+  generated `.py` cannot disagree about what a function is.
+
+  **The wiring page renders off-screen on demand** when the Electronics view is
+  not open, which it usually is not when you press print. A project with no
+  blocks, or no wiring, or neither, simply leaves those sections out: the page
+  numbering stays right and nothing blank is left behind. If one section cannot
+  be captured, the export still produces the document and says what it left out.
+
 - **Every variable you make is on the Variables shelf, and a button makes one.**
   (#1117) The drawer was a fixed list of three nameless blocks however many
   variables a learner had: `score`, `lives` and `speed` all lived inside one
