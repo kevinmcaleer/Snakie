@@ -18,6 +18,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Zoom to fit centres the blocks.** Pressing the fit control on the blocks
+  canvas left the fitted stacks below the bottom edge, so the learner still had
+  to scroll. The canvas is now re-measured before the fit and the view is
+  scrolled so the blocks' bounding box sits in the middle of it.
+
 - **A pin's "hide label" flag now survives a save.** `parts.yml` dropped
   `labelHidden` on both read and write, so the Part Editor's checkbox reset on
   every reload.
