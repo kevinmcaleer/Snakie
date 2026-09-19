@@ -29,6 +29,7 @@ import {
 import { argNamesHidden, hasArgNames, revealArgNames } from '../lib/blocks/palette/python'
 import { installSoftShellRenderer } from '../lib/blocks/renderer'
 import { installShelfFlyout, installZoomReset } from '../lib/blocks/zoom'
+import { compactRootColumn } from '../lib/blocks/root-column'
 import {
   dispatchNeedLibrary,
   dispatchOpenHelp,
@@ -770,6 +771,14 @@ export function BlocksCanvas({
         const now = block.getRelativeToSurfaceXY()
         block.moveBy(at.x - now.x, at.y - now.y)
       }
+      // AND NOW THAT THEY ARE DRAWN, SPACE THEM BY WHAT THEY MEASURE. The
+      // document's own y for each root is an estimate made without Blockly (see
+      // `root-column.ts`), and on a real file it runs hundreds of pixels long —
+      // a screen of empty canvas under the imports, which reads as blocks that
+      // failed to render. After the restore above, so a root somebody dragged
+      // aside keeps its place and drops out of the column rather than being
+      // re-stacked into it.
+      compactRootColumn(ws)
       // And still selected, so a reconversion cannot steal the highlight out
       // from under #1016's link.
       if (selected) {

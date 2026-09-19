@@ -258,3 +258,20 @@
 .blocks-canvas__host .blocklyZoom:active > .blocks-zoom-fit {
   opacity: 1;
 }
+
+/* THE WHOLE BOX IS THE BUTTON.
+ *
+ * A stroked path only hit-tests where it is stroked, so with the sprite gone the
+ * only part of this control that answered a press was the 2px of the brackets
+ * themselves. `zoom.ts` puts an invisible rect the size of the control box under
+ * the glyph; `pointer-events: all` is what makes an unpainted rect a target, and
+ * `fill: none` is what keeps it out of the picture. The glyph above it then
+ * wants no pointer events of its own — the rect takes them all. */
+.blocks-canvas__host .blocklyZoom > .blocks-zoom-target {
+  fill: none;
+  pointer-events: all;
+}
+
+.blocks-canvas__host .blocklyZoom > .blocks-zoom-fit {
+  pointer-events: none;
+}
