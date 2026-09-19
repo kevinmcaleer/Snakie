@@ -262,3 +262,97 @@ test; #1126 needs §4.3's exception argued and accepted.
 4. **Whose curriculum?** The audit is measured against "what a learner meets
    while doing what Snakie encourages", which is a judgement, not a corpus. It
    is the same honest limitation #1086 §9.1 recorded about its own evidence.
+
+---
+
+## 7. What landed, and the answers to §6
+
+All fifteen sub-issues are implemented. §6's four open questions were answered
+by doing the work, and the answers are recorded here rather than left in a pull
+request nobody will find again.
+
+### 7.1 How big may a drawer get?
+
+**Sub-categories, as §4.1 assumed — and used more than it expected.** Four
+shelves were added rather than growing a flyout:
+
+| Shelf | In | Why |
+| --- | --- | --- |
+| **Working with text** | Text | Nine new blocks; the drawer's first four stay its first four. |
+| **When things go wrong** | Control | `try` and `raise` (#1131) would have taken Control from seven blocks to nine. |
+| **Files** | Control | The four file blocks (#1132). |
+| **Buffers** | Hardware | `bytes` / `bytearray` (#1135), next to the I²C blocks that ask for one. |
+
+Lists grew flat, from 6 blocks to 16, and that is the one place §6's worry
+lands. It is defensible — every one of them is a verb of a list, and a learner
+scanning for "how do I take something out" reads them in one pass — but it is
+the drawer to watch if the palette grows again.
+
+### 7.2 Two new drawers, or one?
+
+**One: Dictionaries.** Files became a shelf inside Control instead, and the
+reason is arithmetic rather than taste. The block palette carries fourteen
+vivid hues roughly 24° apart at one measured luminance, five of them anchored
+to the brand (#1098), and `blocksTheme.test.ts` holds them 20° apart. **There
+was no gap left that admits a fifteenth**, let alone a sixteenth.
+
+Dictionaries got in by taking the one hue that was never occupied *at the
+palette's depth*: the burnt orange two degrees off `--block-hardware`, which
+lives at a luminance of 0.37 rather than 0.15 and carries black lettering for
+that reason. A dark block and a bright one are told apart by lightness, exactly
+as the near-greys the hue test already excludes are — so the test gained that
+one narrow exclusion, with the argument, and `blocksContrast.test.ts` still
+fails if `hardware` ever drifts back onto the depth.
+
+**A sixteenth drawer would have to take a colour from somebody else**, and that
+is now a real constraint on the palette rather than a preference.
+
+### 7.3 Is `assert` in or out?
+
+**Out, explicitly** (#1133). §3.5 of #1086 declined it for the reader on
+evidence: 890 lines across 8 projects, almost all `pytest` files, which is test
+code and not device code. Authoring is a different question and came out the
+same way — on a board an `assert` stops the program with a traceback nobody is
+there to read, while **if … then report a problem** says the same thing and says
+*why*, from two blocks the palette has had since #1131. `snakie_python_scope`
+(`nonlocal`) stays hidden for the sibling reason: #1118's `global` block with a
+variable field is the better half of that pair, and `nonlocal` needs a function
+inside a function, which nothing in the curriculum reaches.
+
+### 7.4 The measure
+
+§5 proposed an escape-hatch count over a new fixture corpus. **The existing
+socket ratchet turned out to measure the same thing**, on a corpus that already
+exists and is already maintained — a grey value block inside a real block *is*
+an escape hatch, and `report.rawSockets` already counts them. So the floors in
+`blocksCoverageRatchet.test.ts` were raised rather than a second corpus built:
+
+| | W0 | before #1119 | after |
+| --- | --- | --- | --- |
+| Statements recognised | 53.31% | 97.94% | **98.53%** |
+| Sockets holding a real block | 53.88% | 73.17% | **82.25%** |
+| Files that open with no grey at all | 4.65% | 16.28% | **25.58%** |
+
+The socket number is the one this epic is about, and nine points is the largest
+single move it has had. The clean-file number is the strictest reading of §1's
+question — one grey line disqualifies a whole file — and it went from seven
+files in forty-three to eleven.
+
+### 7.5 Two decisions that recur
+
+Two rules were applied often enough across the fifteen issues to be worth
+naming, because they will come up again:
+
+**One line, one block.** Where a proposed block would have generated a line an
+existing block already writes, the existing block was widened instead of a twin
+being added: `in` lost its `Array` check and moved to Logic rather than the
+Dictionaries drawer gaining `has key`; `item n of` lost its check rather than
+Text gaining `letter n of`; neither Dictionaries nor Buffers has a `how many`,
+because `length of` counts them both.
+
+**A check that is too tight refuses the workspace, not the socket.** #1087
+found this the hard way, and it decided four sockets here: every slice socket,
+the membership haystack, `item n of`, and the output of the bitwise blocks —
+`if flags & 0x01:` is how every driver asks whether a bit is set, and declaring
+that result `Number` made Blockly refuse the `if` socket and cost two shipped
+`.py` files their whole canvas.

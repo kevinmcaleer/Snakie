@@ -91,12 +91,13 @@ describe('a list display is a real block now', () => {
     expect(roundTrip('readings = []\n')).toContain('readings = []')
   })
 
-  it('leaves a comprehension and a trailing comma alone', () => {
+  it('hands a comprehension over, and leaves a trailing comma alone', () => {
     // A comprehension has no top-level commas, so splitting would hand back one
-    // "item" holding the whole of it — half an expression, worse than none
-    // (#1126 is the block that really says it). And a trailing comma is the
-    // learner's text, which the block has nowhere to record.
-    expect(valueOf('xs = [v for v in things]\n').type).toBe('snakie_python_value')
+    // "item" holding the whole of it — half an expression, worse than none. It
+    // went to the grey block until #1126 gave it one of its own; either way it
+    // is never a list display. A trailing comma is the learner's text, which
+    // the block has nowhere to record.
+    expect(valueOf('xs = [v for v in things]\n').type).toBe('snakie_list_comprehension')
     expect(roundTrip('xs = [1, 2,]\n')).toContain('xs = [1, 2,]')
   })
 })
