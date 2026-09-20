@@ -660,6 +660,8 @@ export function partFromYaml(text: string): PartDefinition {
         const y = num((b as Record<string, unknown>)?.y)
         if (x === undefined || y === undefined) return null
         const btn: Record<string, unknown> = { label, x, y }
+        const gpio = num((b as Record<string, unknown>)?.gpio)
+        if (gpio !== undefined) btn.gpio = gpio
         readItemFlags(b as Record<string, unknown>, btn)
         return btn as unknown as PartButton
       })

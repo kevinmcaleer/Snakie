@@ -701,8 +701,36 @@ function templateMixin(options: TemplateOptions): Record<string, unknown> {
   }
 }
 
+/**
+ * `create text with` lays its sockets ACROSS, not down.
+ *
+ * Blockly's own `text_join` appends each socket as an external value input, so
+ * a two-piece join — by far the common case — stands two rows tall for the sake
+ * of two small sockets, and a flyout full of them scrolls for no reason. The
+ * block says one thing ("join these"), so it reads as one line. Patched onto
+ * Blockly's definition rather than replacing it, because the gear mutator, its
+ * serialisation and its socket names are all worth keeping exactly as they are:
+ * `inputsInline` survives `updateShape_` adding and removing rows, so setting
+ * it once in `init` is the whole change.
+ */
+function installInlineJoin(): void {
+  const def = Blockly.Blocks['text_join'] as unknown as {
+    init: (this: Blockly.Block) => void
+    snakieInline_?: boolean
+  }
+  // Installing the palette twice (every test does) must not wrap `init` twice.
+  if (!def || def.snakieInline_) return
+  const init = def.init
+  def.init = function (this: Blockly.Block): void {
+    init.call(this)
+    this.setInputsInline(true)
+  }
+  def.snakieInline_ = true
+}
+
 /** Register the blocks whose sockets come and go. */
 export function installTextBlocks(): void {
+  installInlineJoin()
   Blockly.Blocks['text_print'] = growableMixin({
     style: 'text_blocks',
     head: 'print',
