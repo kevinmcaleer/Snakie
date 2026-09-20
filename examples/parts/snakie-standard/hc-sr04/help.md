@@ -47,3 +47,14 @@ while True:
 - Soft or angled surfaces scatter the ping — readings get flaky; average a few
   samples for a steadier number.
 - Leave ~60 ms between pings so a late echo doesn't bleed into the next reading.
+
+## 3-D model
+
+The model shown in the Robot View is the **HC-SR04** from the
+[FreeCAD-library](https://github.com/FreeCAD/FreeCAD-library) (Electronics
+Parts → Ultrasonic Sensors; CC-BY 3.0, credited to its contributors in that
+repository's history). It is real-size in millimetres: the 45 × 20 mm board with
+its two Ø16 mm transducers standing 11 mm proud of it and the right-angle header
+pins hanging 3.5 mm below. The part carries the `meshOffset` that centres it and
+rests those pins on the ground plane; the file itself is untouched. The STEP and
+FreeCAD originals live in the same repository if you want to edit it.

@@ -11,7 +11,7 @@ package: THT
 pinSpacing: 2.54
 voltage: 1.8–5.5V
 partNumber: SC1634
-version: 1.0.7
+version: 1.1.0
 mcu: RP2350
 pcbColor: "#0f5a2e"
 aspect: 0.3943
@@ -655,6 +655,8 @@ imageLayer:
   w: 0.9309969220842635
   h: 0.9567124380906831
 help: help.md
+mesh: model.stl
+meshUnits: mm
 electrical:
   model: regulator
   maxCurrentA: 0.3
