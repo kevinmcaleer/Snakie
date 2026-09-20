@@ -53,6 +53,7 @@ import { ensureBlocklyLocale } from '../lib/blocks/locale'
 import { advancedBlockTypes, unknownBlockTypes } from '../lib/blocks/workspace-check'
 import { registerBlocksWorkspace } from '../lib/blocks/workspace-registry'
 import { buildToolbox } from '../lib/blocks/toolbox'
+import { installFunctionsDrawer } from '../lib/blocks/functions-drawer'
 import { SCAN_MODULES_BUTTON, requestModuleScan } from '../lib/blocks/module-scan'
 import { installVariablesDrawer } from '../lib/blocks/variables-drawer'
 import { installDuplicateShortcut } from '../lib/blocks/duplicate'
@@ -489,9 +490,15 @@ export function BlocksCanvas({
     // name and parameter sockets. Without this the drawer held two blank,
     // nameless caller blocks and a learner who had just written their first
     // function had no way to call it.
-    ws.registerToolboxCategoryCallback(
-      Blockly.PROCEDURE_CATEGORY_NAME,
-      Blockly.Procedures.flyoutCategory
+    //
+    // Since #1220 that list is the FIRST half of the drawer rather than all of
+    // it: `custom` replaces a category's contents, so the blocks the registry
+    // puts in this category — `return`, `super()`, the Classes shelf — were in
+    // no drawer at all. `functions-drawer.ts` adds them after Blockly's.
+    installFunctionsDrawer(
+      ws,
+      () => dialectRef.current,
+      () => blockLevelRef.current
     )
 
     // AND THE VARIABLES DRAWER, for the same reason one category along (#1117):

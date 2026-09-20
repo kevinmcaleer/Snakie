@@ -294,6 +294,7 @@ def block(
     imports: Optional[List[Any]] = None,
     tooltip: Optional[str] = None,
     help: Optional[str] = None,
+    level: Optional[str] = None,
     colour: Optional[str] = None,
     inline: Optional[bool] = None,
 ) -> Dict[str, Any]:
@@ -324,6 +325,12 @@ def block(
                 )
             ]
 
+    ``level`` is ``"simple"`` (the default) or ``"advanced"`` (#1213, epic
+    #1206): an advanced block is only offered while **Settings ▸ Appearance ▸
+    Show advanced blocks** is on, and a drawer whose every block is advanced is
+    not shown at all. It filters the toolbox and never the workspace — a program
+    already using the block still opens and still runs.
+
     Every field is optional except the three positional ones. Anything Snakie
     does not understand is reported back to you as a warning rather than being
     quietly dropped, so a typo in a key name is findable.
@@ -342,6 +349,8 @@ def block(
         item["tooltip"] = str(tooltip)
     if help is not None:
         item["help"] = str(help)
+    if level is not None:
+        item["level"] = str(level)
     if colour is not None:
         item["colour"] = str(colour)
     if inline is not None:

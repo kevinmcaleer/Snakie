@@ -11,8 +11,11 @@ import {
   pruneDynamicBlocks,
   blocksInCategory,
   registeredBlocks,
-  resetBlockRegistry
+  resetBlockRegistry,
+  type BlockLevel
 } from '../src/renderer/src/lib/blocks/registry'
+import { categoryContents } from '../src/renderer/src/lib/blocks/toolbox'
+import { BLOCK_CATEGORIES } from '../src/renderer/src/lib/blocks/theme'
 import {
   blockDefinitionsFrom,
   blockTypeFor,
@@ -449,6 +452,70 @@ blocks:
       id: 'part:snakie-standard.vl53l0x',
       name: 'VL53L0X'
     })
+  })
+})
+
+describe('a manifest block declares its level (#1213, epic #1206)', () => {
+  const MIXED = `
+blocks:
+  - id: read
+    message: distance
+    shape: value
+    output: Number
+    code: "sensor.read()"
+  - id: raw
+    message: raw register
+    shape: value
+    output: Number
+    level: advanced
+    code: "sensor.read_reg(0)"
+`
+
+  /** The part drawer's contents, at the level the learner has chosen. */
+  const drawer = (level: BlockLevel): Record<string, unknown>[] => {
+    const category = BLOCK_CATEGORIES.find((c) => c.id === 'parts')!
+    const contents = categoryContents(category, 'unknown', level)
+    // One sub-category per part (see `categoryContents`) — the part's drawer.
+    return (contents[0]?.contents as Record<string, unknown>[]) ?? []
+  }
+
+  it('keeps an advanced plugin block out of the drawer in simple mode', () => {
+    const type = install(MIXED, 'tof')
+    expect(drawer('advanced').map((b) => b.type)).toEqual([type('read'), type('raw')])
+    expect(drawer('simple').map((b) => b.type)).toEqual([type('read')])
+  })
+
+  it('takes the whole drawer away when every block in it is advanced', () => {
+    install(
+      `
+blocks:
+  - id: raw
+    message: raw register
+    level: advanced
+    code: "sensor.write_reg(0, 1)"
+`,
+      'rawonly'
+    )
+    const category = BLOCK_CATEGORIES.find((c) => c.id === 'parts')!
+    expect(categoryContents(category, 'unknown', 'advanced')).toHaveLength(1)
+    // Nothing survived the filter, so the group is never built — and the
+    // category falls back to a hint rather than an empty drawer.
+    const simple = categoryContents(category, 'unknown', 'simple')
+    expect(simple.every((c) => c.kind === 'label')).toBe(true)
+  })
+
+  it('leaves a block that says nothing at the beginner level', () => {
+    install(
+      `
+blocks:
+  - id: go
+    message: go
+    code: "robot.go()"
+`,
+      'plain'
+    )
+    expect(blocksInCategory('parts')[0].level).toBeUndefined()
+    expect(drawer('simple')).toHaveLength(1)
   })
 })
 
