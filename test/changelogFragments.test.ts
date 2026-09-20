@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 // Plain ESM build script — allowJs resolves it, no type declarations needed.
-import { parseName, bucketsOf, renderSections, unreleasedSection } from '../scripts/changelog.mjs'
+import {
+  parseName,
+  bucketsOf,
+  renderSections,
+  unreleasedSection,
+  conflictMarkersIn
+} from '../scripts/changelog.mjs'
 
 /**
  * Unit tests for the pure halves of `scripts/changelog.mjs` — the fragment
@@ -60,5 +66,20 @@ describe('unreleasedSection', () => {
 
   it('throws when there is no [Unreleased] heading to fold', () => {
     expect(() => unreleasedSection('# Changelog\n')).toThrow(/Unreleased/)
+  })
+})
+
+describe('conflictMarkersIn', () => {
+  it('reports each unresolved marker with its line number', () => {
+    const text = '- one\n<<<<<<< HEAD\n- mine\n=======\n- theirs\n>>>>>>> origin/master\n'
+    expect(conflictMarkersIn(text)).toEqual([
+      'line 2: <<<<<<< HEAD',
+      'line 4: =======',
+      'line 6: >>>>>>> origin/master'
+    ])
+  })
+
+  it('ignores markers quoted inside an entry, which the changelog really does', () => {
+    expect(conflictMarkersIn('- a merge left the `<<<<<<<` markers in place\n')).toEqual([])
   })
 })

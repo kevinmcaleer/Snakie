@@ -56,7 +56,6 @@ when a release is cut. See `changelog.d/README.md`.
   built in and no socket to unplug, and *( ) . speed* / *set ( ) . speed to …*
   for any other object. Files open with them automatically; method calls
   (`self.led.on()`) and deeper targets (`self.motor.speed`) are unchanged.
-<<<<<<< HEAD
 - **Advanced blocks in a simple-mode file are offered, never removed (#1212,
   epic #1206).** Opening a file that uses advanced blocks while the advanced
   drawers are off now shows one dismissable line — *"This file uses advanced
@@ -68,7 +67,6 @@ when a release is cut. See `changelog.d/README.md`.
   the canvas, and no line is quietly downgraded to a grey Python block because
   of a preference. The level decides what is in the drawer and nothing else.
 
-=======
 - **Courses can ask for the blocks they need (#1214, epic #1206).** A lesson —
   or a whole course — can now declare `level: advanced` in its `course.yml`, and
   opening it switches **Advanced blocks** on, with a one-line note in the Learn
@@ -185,7 +183,6 @@ when a release is cut. See `changelog.d/README.md`.
   list comes from upstream's catalog. It now has a board profile of its own —
   flashed as a UF2 like a Pico, with its own CircuitPython board id and a note
   about holding BOOT for the RPI-RP2 drive.
->>>>>>> origin/master
 - **Simple and advanced blocks (#1209, #1210, epic #1206).** Every block now
   declares a level, and a new **Settings ▸ Appearance ▸ Advanced blocks**
   switch decides whether the toolbox offers the advanced ones — classes, `try`,

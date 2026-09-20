@@ -172,6 +172,19 @@ function cmdPreview() {
  * The CI guard. A pull request that changes shipping code should carry a
  * fragment; one that only moves CI, docs or tests around need not.
  */
+/**
+ * Unresolved conflict markers have been committed to CHANGELOG.md before and
+ * shipped on master, which is what a file everybody edits at once eventually
+ * buys you. Cheap to catch, so catch it.
+ */
+export function conflictMarkersIn(text) {
+  return text
+    .split('\n')
+    .map((line, i) => ({ line, n: i + 1 }))
+    .filter(({ line }) => /^(<{7} |={7}$|>{7} )/.test(line))
+    .map(({ n, line }) => `line ${n}: ${line}`)
+}
+
 function cmdCheck(argv) {
   const base = argv[argv.indexOf('--base') + 1] || 'origin/master'
   const changed = argv.includes('--files')
@@ -179,6 +192,14 @@ function cmdCheck(argv) {
     : execSync(`git diff --name-only ${base}...HEAD`, { encoding: 'utf8' })
         .split('\n')
         .filter(Boolean)
+
+  for (const file of [CHANGELOG, ...changed.filter((f) => f.startsWith(`${DIR}/`))]) {
+    if (!existsSync(file)) continue
+    const markers = conflictMarkersIn(readFileSync(file, 'utf8'))
+    if (markers.length) {
+      throw new Error(`${file}: unresolved conflict markers\n${markers.map((m) => `  ${m}`).join('\n')}`)
+    }
+  }
 
   if (changed.some((f) => f.startsWith(`${DIR}/`) && f.endsWith('.md'))) {
     process.stdout.write('Changelog fragment present.\n')
