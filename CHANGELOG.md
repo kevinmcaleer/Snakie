@@ -8,6 +8,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+<<<<<<< HEAD
+- **Advanced blocks in a simple-mode file are offered, never removed (#1212,
+  epic #1206).** Opening a file that uses advanced blocks while the advanced
+  drawers are off now shows one dismissable line — *"This file uses advanced
+  blocks — show them in the toolbox?"* — with a **Show them** button that flips
+  the setting, and a caret that names the blocks. It appears once per file
+  open, not on every edit. Nothing about the file changes either way: the
+  reader takes no notice of the level, so the same Python becomes the same
+  blocks in both tiers, they render, drag, duplicate and generate normally on
+  the canvas, and no line is quietly downgraded to a grey Python block because
+  of a preference. The level decides what is in the drawer and nothing else.
+
+=======
 - **Courses can ask for the blocks they need (#1214, epic #1206).** A lesson —
   or a whole course — can now declare `level: advanced` in its `course.yml`, and
   opening it switches **Advanced blocks** on, with a one-line note in the Learn
@@ -113,6 +126,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   list comes from upstream's catalog. It now has a board profile of its own —
   flashed as a UF2 like a Pico, with its own CircuitPython board id and a note
   about holding BOOT for the RPI-RP2 drive.
+>>>>>>> origin/master
 - **Simple and advanced blocks (#1209, #1210, epic #1206).** Every block now
   declares a level, and a new **Settings ▸ Appearance ▸ Advanced blocks**
   switch decides whether the toolbox offers the advanced ones — classes, `try`,

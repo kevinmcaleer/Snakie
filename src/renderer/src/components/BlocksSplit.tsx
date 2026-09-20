@@ -31,6 +31,8 @@ import { useDynamicBlocks } from '../lib/blocks/use-dynamic-blocks'
 import { useModuleBlocks } from '../lib/blocks/use-module-blocks'
 import { useHelpDialect } from '../hooks/useHelpDialect'
 import { DriverInstallBanner } from './DriverInstallBanner'
+import { Notice } from './Notice'
+import { useEditorSettings } from '../store/settings'
 import type { PartDriverNeed } from './part-editor.util'
 import type { BlocksProgram } from './BlocksCanvas'
 import {
@@ -100,6 +102,10 @@ export interface BlocksSplitProps {
 export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Element {
   const { openFiles, activeId, updateBlocks, currentFolder } = useWorkspace()
   const layout = useWorkspaceLayout()
+  // The advanced-blocks tier (#1210). Read here for the offer below, which is
+  // the one thing in this component the level touches — the conversion, the
+  // round-trip gate and the canvas all ignore it (#1212).
+  const { blockLevel, setBlockLevel } = useEditorSettings()
   const file = openFiles.find((f) => f.id === activeId) ?? null
   const content = file?.content
   /**
@@ -475,6 +481,29 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   const [partsUsed, setPartsUsed] = useState<readonly { libraryId: string; partId: string }[]>([])
   useEffect(() => setPartsUsed([]), [file?.id])
   /**
+   * THIS FILE USES ADVANCED BLOCKS (#1212).
+   *
+   * Reading never depends on the level: the canvas beside this has already
+   * built every one of those blocks and they behave like any other. The only
+   * thing the learner is missing is the drawer they came out of, so the offer
+   * is exactly that — one line, one button that flips the setting, and a ✕.
+   *
+   * CARRIED WITH THE FILE ID it was reported for, rather than reset by an
+   * effect: the canvas is the child, so its report lands BEFORE any effect of
+   * ours could clear the previous file's, and a reset here would wipe the
+   * answer it just gave us. Dismissal is remembered per file for the same
+   * reason — it is a decision about this file, and re-opening it is a fair
+   * moment to be asked again.
+   */
+  const [advancedInFile, setAdvancedInFile] = useState<{
+    fileId: string
+    types: readonly string[]
+  } | null>(null)
+  const [advancedDismissed, setAdvancedDismissed] = useState<string | null>(null)
+  const handleAdvancedBlocks = useCallback((fileId: string, types: readonly string[]) => {
+    setAdvancedInFile({ fileId, types })
+  }, [])
+  /**
    * USING a part's block offers its driver (#1017) — the same consent-first
    * banner the Board View shows when the part is placed, in the workspace that
    * hides the Board View.
@@ -509,6 +538,13 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
     )
   }
 
+  // Advanced blocks on the canvas, advanced drawers off (#1212) — see above.
+  const offerAdvanced =
+    blockLevel === 'simple' &&
+    advancedInFile?.fileId === file.id &&
+    advancedInFile.types.length > 0 &&
+    advancedDismissed !== file.id
+
   const canvas = (
     <Suspense fallback={<div className="blocks-split__loading">Loading blocks…</div>}>
       <BlocksCanvas
@@ -525,6 +561,7 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
         onShowBlockPython={setPythonFor}
         paletteNonce={paletteNonce}
         onPartsUsed={setPartsUsed}
+        onAdvancedBlocks={handleAdvancedBlocks}
         reloadNonce={reloadNonce}
         derived={doc.derived}
       />
@@ -555,6 +592,35 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   return (
     <div className="blocks-split" ref={hostRef}>
       {driverNeeds.length > 0 && <DriverInstallBanner needs={driverNeeds} />}
+      {/* The blocks are all here — only the drawer they came from is missing (#1212). */}
+      {offerAdvanced && (
+        <Notice
+          summary="This file uses advanced blocks — show them in the toolbox?"
+          detail={
+            <>
+              <p>
+                They are on the canvas already and work exactly as they are — you can drag,
+                duplicate and run them, and your Python is unchanged. Turning them on adds their
+                drawers so you can build more of them, and you can turn them off again in
+                Settings ▸ Appearance ▸ Blocks.
+              </p>
+              <p>
+                In this file:{' '}
+                {advancedInFile.types.slice(0, 8).map((t, i) => (
+                  <span key={t}>
+                    {i > 0 && ', '}
+                    <code>{t}</code>
+                  </span>
+                ))}
+                {advancedInFile.types.length > 8 &&
+                  ` … and ${advancedInFile.types.length - 8} more`}
+              </p>
+            </>
+          }
+          action={{ label: 'Show them', onClick: () => setBlockLevel('advanced') }}
+          onDismiss={() => setAdvancedDismissed(file.id)}
+        />
+      )}
       {/* THE TWO VIEWS HAVE COME APART (#1068).
           Said quietly, and said at all: every one of these used to be silent,
           and a learner who is not told is a learner watching the blocks ignore
