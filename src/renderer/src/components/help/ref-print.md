@@ -9,6 +9,13 @@ print(f"pin={pin} val={v}")    # f-string
 print("loading", end="...")    # no newline
 ```
 
+## In Blocks
+
+The Text drawer's **print f"…"** block holds the f-string as its text: type
+`{}` wherever a value goes and a socket appears for it. `{:.1f}` in the text
+keeps its format. The same template is a value block, **f"…"**, on the
+*Working with text* shelf, for a display or a variable.
+
 ## The REPL
 
 The terminal is a live prompt on the board — type Python and press Enter to run it now:

@@ -1,4 +1,5 @@
 import type { BlocksWorkspace } from '../../../../shared/blocks-doc'
+import { readFString } from './fstring'
 // The layout constants live with the layout (`arrange.ts`), which is the module
 // that actually places the roots. A `import type * as Blockly` is all that file
 // takes from Blockly, so this stays as pure and as node-testable as it was.
@@ -544,9 +545,41 @@ function ruleKey(rule: CallRule): string {
   return `${receiver}.${rule.fn}/${rule.shape ?? 'statement'}${fields}`
 }
 
+/**
+ * RULES THAT COME AND GO WITH THE PROGRAM'S IMPORTS (#1048).
+ *
+ * A module's blocks are registered by `use-module-blocks.ts` for as long as the
+ * program imports the module, and replaced whole when the import set changes —
+ * so their reading rules have the same lifetime, and cannot live in
+ * {@link REGISTERED}, which nothing ever removes from. Keyed by the same source
+ * id the block registry uses, so one prune can sweep both.
+ *
+ * They are tried LAST. A module drawer for `time` says `time.sleep(seconds)` is
+ * one of its blocks, and it is — but the Wait drawer's `snakie_wait_seconds` is
+ * the block a learner should see for it, and the palette's own tables win.
+ */
+const DYNAMIC = new Map<string, CallRule[]>()
+
+/** Register (or replace) the reading rules of one dynamic block set. */
+export function registerDynamicCallRules(source: string, rules: readonly CallRule[]): void {
+  DYNAMIC.set(source, [...rules])
+  publishRules()
+}
+
+/** Forget every dynamic rule set under `prefix` whose source is not in `keep`. */
+export function pruneDynamicCallRules(keep: ReadonlySet<string>, prefix: string): void {
+  let changed = false
+  for (const source of [...DYNAMIC.keys()]) {
+    if (!source.startsWith(prefix) || keep.has(source)) continue
+    DYNAMIC.delete(source)
+    changed = true
+  }
+  if (changed) publishRules()
+}
+
 /** Every rule, palette-registered ones first so a palette can override. */
 function rules(): CallRule[] {
-  return [...REGISTERED, ...BUILT_IN_RULES]
+  return [...REGISTERED, ...BUILT_IN_RULES, ...[...DYNAMIC.values()].flat()]
 }
 
 /**
@@ -3095,6 +3128,37 @@ class Converter {
   }
 
   /**
+   * An f-string as a TEMPLATE BLOCK — `snakie_fstring`, or the `print` that
+   * holds one — or null when `text` is not an f-string this block can hold.
+   *
+   * The one f-string the format blocks write, `f"{t:.1f}"`, is left to them:
+   * they came first, they are the more specific reading, and a learner who
+   * dragged *to 1 decimal place* out should get it back rather than a template
+   * that happens to say the same thing.
+   */
+  private templateBlock(text: string, type: string): BlockJson | null {
+    const tokens = tokenize(text.trim())
+    if (!tokens || tokens.length !== 2) return null
+    const [f, str] = tokens
+    if (f.kind !== 'name' || f.text !== 'f' || str.kind !== 'string' || str.start !== f.end) {
+      return null
+    }
+    if (readFormatString(str.text)) return null
+    const read = readFString(`f${str.text}`)
+    if (!read) return null
+    const inputs: Record<string, { block: BlockJson }> = {}
+    read.exprs.forEach((expr, i) => {
+      inputs[`ADD${i}`] = { block: this.expression(expr) }
+    })
+    return {
+      type,
+      fields: { TEMPLATE: read.template },
+      extraState: { items: read.exprs.length },
+      inputs
+    }
+  }
+
+  /**
    * `print(a, b, c)` → the one block, with as many sockets as it needs (#1125).
    *
    * A `CallRule` names its sockets, so it cannot express "however many there
@@ -3114,6 +3178,13 @@ class Converter {
     // A trailing comma is the learner's text, as it is on any other call, and
     // a call that does not end the line is not this statement.
     if (!read || read.trailingComma || read.next !== tokens.length) return null
+    // `print(f"…")` WITH ONE f-STRING is the block that holds the whole line.
+    // A `print(f"{t:.1f}")` stays with `text_print` and the format block, as it
+    // always has — the template block is for an f-string with text in it.
+    if (read.args.length === 1) {
+      const formatted = this.templateBlock(read.args[0], 'snakie_print_format')
+      return formatted
+    }
     if (read.args.length < 2) return null
     const inputs: Record<string, { block: BlockJson }> = {}
     read.args.forEach((arg, i) => {
@@ -4094,17 +4165,27 @@ class Converter {
       tokens[at + 1].start === tok.end
     ) {
       const formatted = readFormatString(tokens[at + 1].text)
-      if (!formatted) return null
-      const value = this.readExpression(formatted.expr)
-      // ONLY WHEN THE VALUE ITSELF IS READABLE. `f"{values!r:>10}"` has a
-      // CONVERSION in it, and `values!r` is not an expression — reading the
-      // spec and leaving the rest grey would produce a block that regenerates
-      // a line the learner did not write. The whole f-string stays raw instead.
-      if (GREY_VALUE_TYPES.has(value.type)) return null
-      return {
-        block: { type: formatted.type, fields: formatted.fields, inputs: { VALUE: { block: value } } },
-        next: at + 2
+      if (formatted) {
+        const value = this.readExpression(formatted.expr)
+        // ONLY WHEN THE VALUE ITSELF IS READABLE. `f"{values!r:>10}"` has a
+        // CONVERSION in it, and `values!r` is not an expression — reading the
+        // spec and leaving the rest grey would produce a block that regenerates
+        // a line the learner did not write. The whole f-string stays raw instead.
+        if (GREY_VALUE_TYPES.has(value.type)) return null
+        return {
+          block: { type: formatted.type, fields: formatted.fields, inputs: { VALUE: { block: value } } },
+          next: at + 2
+        }
       }
+      // EVERY OTHER f-STRING IS A TEMPLATE. `f"ping.distance {ping.distance()}"`
+      // is the text with its values lifted out into sockets, and a value the
+      // reader cannot make sense of sits in its socket as a raw block — the
+      // template still regenerates the line exactly, so the learner gets the
+      // words they wrote as a block they can edit, and only the hard part is
+      // grey.
+      const template = this.templateBlock(`f${tokens[at + 1].text}`, 'snakie_fstring')
+      if (!template) return null
+      return this.chain({ block: template, next: at + 2 }, tokens)
     }
 
     if (tok.kind === 'string') {

@@ -53,6 +53,7 @@ import { ensureBlocklyLocale } from '../lib/blocks/locale'
 import { unknownBlockTypes } from '../lib/blocks/workspace-check'
 import { registerBlocksWorkspace } from '../lib/blocks/workspace-registry'
 import { buildToolbox } from '../lib/blocks/toolbox'
+import { SCAN_MODULES_BUTTON, requestModuleScan } from '../lib/blocks/module-scan'
 import { installVariablesDrawer } from '../lib/blocks/variables-drawer'
 import { installDuplicateShortcut } from '../lib/blocks/duplicate'
 import type { Dialect } from '../../../shared/dialect'
@@ -460,6 +461,12 @@ export function BlocksCanvas({
     // re-run on a runtime change, and the callback is asked afresh every time
     // the drawer opens, so it reads the current one anyway.
     installVariablesDrawer(ws, () => dialectRef.current)
+
+    // THE MODULES DRAWER'S SCAN BUTTON (#1048). The toolbox is built as data
+    // and knows no React; the press goes over a one-line bus to the hook in
+    // `BlocksSplit` that owns the module drawers, which lists the board and
+    // the project folder and registers a drawer per module it finds.
+    ws.registerButtonCallback(SCAN_MODULES_BUTTON, () => requestModuleScan())
 
     // ⌘D / Ctrl+D duplicates the selected block (#1117). Blockly's registry is
     // global rather than per workspace, hence a call that is safe to repeat.

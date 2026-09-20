@@ -14,7 +14,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   list comes from upstream's catalog. It now has a board profile of its own —
   flashed as a UF2 like a Pico, with its own CircuitPython board id and a note
   about holding BOOT for the RPI-RP2 drive.
-
+- **A `print` block that understands f-strings.** The Text drawer has a new
+  `print f"…"` block: type the text with a `{}` wherever a value goes —
+  `ping.distance {}` — and a socket appears for each hole, so
+  `print(f"ping.distance {ping.distance()}")` is one block with one socket
+  rather than a grey Python block. A `{:.1f}` or `{!r}` in the template keeps
+  its format spec. The same template is available as a value block (`f"…"`, on
+  the *Working with text* shelf) for a display, a `join` or a variable. Opening
+  a program reads every double-quoted f-string back into these blocks and
+  regenerates it byte for byte; a value the reader cannot make sense of sits in
+  its socket as a raw block instead of taking the whole line grey.
+- **Module blocks know about properties, return values and wiring.** The
+  Modules drawer reads a module's source more closely: a method with a
+  `return` is a *value* block (so `distance of (the RangeFinder)` fits inside
+  `print`), a `@property` or a `self.name = …` set in `__init__` is a value
+  block that reads the attribute with no brackets, and a constructor default
+  that is a plain number, string or `True`/`False` becomes a socket pre-filled
+  with it and written back as the keyword the author named —
+  `RangeFinder(echo_pin=0, trigger_pin=1)`. A module's method calls now read
+  back into its blocks when a program is opened, instead of the generic call
+  block.
+- **A "Scan modules on device and locally" button at the top of the Modules
+  drawer.** Pressing it lists the `.py` files beside the program and the ones
+  on the board (`/lib`, then `/`) and gives every one a drawer, without the
+  learner having to know its name and type the import first — dragging a block
+  out adds the import. The program's own file and the entry points (`main`,
+  `boot`, `code`) are left out.
 - **The Modules shelf shows what is actually there.** A new DETECTED section
   above the catalog lists every `.py` file at the top of the open folder and in
   the board's `/` and `/lib`, and unfolds each one into the classes (with their
