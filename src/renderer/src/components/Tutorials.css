@@ -245,6 +245,20 @@
   border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
   font-size: 13px;
 }
+/* A lesson that raised the block level says so, once, in one line (#1214).
+   Gold rather than the course accent: it is a note about the APP's state, not
+   another piece of the lesson. */
+.tp__level-note {
+  margin: 0 8px 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--goldbg);
+  color: var(--goldink);
+  border: 1px solid color-mix(in srgb, var(--gold) 55%, transparent);
+  font-size: 12px;
+  font-family: var(--font-ui);
+}
+
 .tp__tip-bulb {
   flex: none;
 }
