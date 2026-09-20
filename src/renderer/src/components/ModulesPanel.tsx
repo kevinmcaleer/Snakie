@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import './ModulesPanel.css'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
+import { DetectedModules } from './DetectedModules'
 import {
   groupByInstrument,
   MODULES,
@@ -231,6 +232,11 @@ export function ModulesPanel(): JSX.Element {
 
   return (
     <div className="mods">
+      {/* What is ALREADY there — every `.py` in the folder and on the board,
+          opened up to its classes, functions, constants and variables — sits
+          above the catalog of what could be installed. */}
+      <DetectedModules />
+
       <div className="mods__header">
         <span className="mods__title">MODULES</span>
         <span className="mods__count">

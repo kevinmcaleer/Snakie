@@ -1,0 +1,275 @@
+/*
+ * Styles co-located with DetectedModules — the "what is actually there"
+ * section at the top of the Modules shelf.
+ *
+ * Sits on the same felt as the catalog tags below it, using the same header
+ * rhythm (`.mods__header`), so the shelf reads as one instrument. Each file is
+ * a row that unfolds into an indented member list; kinds are labelled with a
+ * small uppercase tag in the accent colour, and everything is tokenised so it
+ * tracks both the skeuomorph and dark skins.
+ */
+
+.dmods {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+
+.dmods__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0.55rem 0.85rem 0.3rem;
+}
+
+.dmods__title {
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+}
+
+.dmods__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dmods__scanning {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 0.7rem;
+  color: var(--accent, #2f9b4a);
+}
+
+.dmods__rescan,
+.dmods__open {
+  padding: 0.15rem 0.5rem;
+  background: var(--bg-sunken);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+
+.dmods__rescan:hover:not(:disabled),
+.dmods__open:hover {
+  background: var(--bg-elevated);
+}
+
+.dmods__rescan:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.dmods__blurb {
+  margin: 0;
+  padding: 0 0.85rem 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.dmods__blurb code {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 0.75rem;
+}
+
+/* --- Groups: folder / board --------------------------------------------- */
+
+.dmods__group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.45rem 0.85rem 0.25rem;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dmods__group-count {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 0.68rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.dmods__hint {
+  margin: 0;
+  padding: 0.2rem 0.85rem 0.6rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.dmods__files {
+  margin: 0;
+  padding: 0 0.85rem 0.5rem;
+  list-style: none;
+}
+
+/* --- One file ----------------------------------------------------------- */
+
+.dmods__file {
+  margin: 0 0 0.35rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.dmods__file-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.3rem 0.5rem 0.3rem 0.4rem;
+}
+
+.dmods__toggle {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dmods__toggle:disabled {
+  cursor: default;
+}
+
+.dmods__chevron {
+  flex: 0 0 auto;
+  width: 0.9em;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.dmods__name {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dmods__import {
+  padding: 0.02rem 0.28rem;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.dmods__meta {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.dmods__count {
+  padding: 0 0.35rem;
+  color: var(--accent, #2f9b4a);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.dmods__skipped {
+  color: var(--warn);
+  font-style: italic;
+}
+
+/* --- Member list -------------------------------------------------------- */
+
+.dmods__body {
+  padding: 0.2rem 0.6rem 0.45rem 1.35rem;
+  border-top: 1px dashed var(--border);
+}
+
+.dmods__empty {
+  margin: 0.2rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.dmods__members {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dmods__members--nested {
+  margin-top: 0.15rem;
+  padding-left: 1rem;
+  border-left: 1px solid var(--border);
+}
+
+.dmods__member {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0.12rem 0;
+  line-height: 1.4;
+}
+
+.dmods__member--class {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+
+.dmods__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.dmods__kind {
+  flex: 0 0 auto;
+  min-width: 2.6em;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent, #2f9b4a);
+}
+
+.dmods__member--const .dmods__kind,
+.dmods__member--var .dmods__kind {
+  color: var(--text-muted);
+}
+
+.dmods__sig {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 0.76rem;
+  word-break: break-word;
+}
+
+.dmods__bases,
+.dmods__init {
+  color: var(--text-muted);
+}
