@@ -8,6 +8,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`self.x` and `obj.x` are blocks of their own (#1223, epic #1206).** Reading
+  and changing something an object remembers used to open as the grey Python
+  escape hatch — the second-biggest theme in the corpus, sitting in the drawer
+  for the Python the palette does not model. Four new advanced blocks claim it:
+  *self . speed* and *set self . speed to …*, which have the `self` decision
+  built in and no socket to unplug, and *( ) . speed* / *set ( ) . speed to …*
+  for any other object. Files open with them automatically; method calls
+  (`self.led.on()`) and deeper targets (`self.motor.speed`) are unchanged.
 <<<<<<< HEAD
 - **Advanced blocks in a simple-mode file are offered, never removed (#1212,
   epic #1206).** Opening a file that uses advanced blocks while the advanced
