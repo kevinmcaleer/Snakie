@@ -19,6 +19,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   keyword-name boxes and all. Opening a program reads `Robot(…)` back into the
   block wherever `Robot` is a class in the same file, and writes it out again
   byte for byte. Both are advanced blocks.
+- **A property block (#1222, epic #1206).** The Classes shelf has a new
+  advanced `property` block: it writes `@property def name(self)`, and ticking
+  **can be set too** adds the `@name.setter` half underneath, with the new
+  value's name — `value` by default — in a field of its own. The name is
+  written once and used in both lines, so the two halves cannot drift apart.
+  Opening a `.py` file folds a getter and the `@name.setter` under it back into
+  one block; a getter on its own becomes the block with the box unticked, and a
+  pair the block cannot hold exactly (an unusual signature, a lone setter, an
+  unexpected gap) is left as the method blocks it was.
 
 - **The method block, rebuilt around a real parameter list (#1221, epic
   #1206).** `def` inside a class took its whole signature as one box of text
@@ -124,6 +133,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The coverage corpus has classes in it, and they are measured (#1225, epic
+  #1206).** Four class-heavy fixtures joined `test/fixtures/coverage` —
+  `__init__` and `self.x`, a `@property` with a setter, `super()` and a
+  `@staticmethod`, two classes passing objects around — and the ratchet gained a
+  class-only slice with floors of its own, plus an assertion that every `class`
+  header in the corpus still reads as a real class block. The corpus-wide socket
+  floor goes up (81 → 82); the clean-file floor comes down a point (24 → 23) to
+  admit files no reader handles cleanly yet, which is argued for in the test.
+  New `docs/blocks-classes-epic.md` records the epic's decisions, the
+  before/after numbers, and the one win the ratchet cannot see.
 - **The `create text with` block is one row, not two.** Its sockets were
   Blockly's stacked external inputs, so the everyday two-piece join stood two
   rows tall and a Text flyout full of them scrolled for no reason. The sockets

@@ -163,6 +163,9 @@ const READ_DIRECTLY: Record<string, string> = {
   // --- structure (W6, #1093)
   snakie_class: 'class Thing:\n    def go(self):\n        print(1)\n',
   snakie_method: 'class Thing:\n    def go(self):\n        print(1)\n',
+  // The getter and the `@name.setter` under it, folded into one block (#1222).
+  snakie_property:
+    'class Thing:\n    @property\n    def speed(self):\n        return 1\n\n    @speed.setter\n    def speed(self, value):\n        pass\n',
   snakie_self: 'class Thing:\n    def go(self):\n        self.x = 1\n',
   // Only for a class THIS FILE defines (B5, #1224) — see `instanceCall`.
   snakie_new_instance: 'class Robot:\n    def __init__(self):\n        pass\n\nrobot = Robot()\n',
