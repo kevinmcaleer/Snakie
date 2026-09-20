@@ -65,6 +65,39 @@ export function extrasText(block: Blockly.Block): string {
   return String(block.getFieldValue(EXTRAS_FIELD) ?? '').trim()
 }
 
+/**
+ * The extra parameters as they stand — the same text as {@link extrasText}.
+ *
+ * Named for the pair it belongs to: the settings dialog (A4, #1218) reads with
+ * `getExtras` and writes with {@link setExtras}, and a reader following that
+ * call should not have to notice that one half is spelled differently.
+ */
+export function getExtras(block: Blockly.Block): string {
+  return extrasText(block)
+}
+
+/**
+ * Set the extra parameters, and put the row away when they are emptied.
+ *
+ * The one writing path the settings dialog (A4, #1218) uses. The field's own
+ * validator only ever SHOWS the row — hiding is left to the editor closing, so
+ * a learner who selects all and types over the text does not have the row
+ * pulled out from under them mid-edit. A dialog has no such moment: it commits
+ * once, when OK is pressed, and by then the answer is final.
+ *
+ * A TRAILING COMMA IS TIDIED AWAY, because the dialog is a box a learner types
+ * a list into and `times=3,` there means the same as `times=3`. The method
+ * block's own field keeps one verbatim (see `palette/structure.ts`) — that is
+ * about giving a file back exactly as it was read, which is a different job.
+ */
+export function setExtras(block: Blockly.Block, text: string): void {
+  const value = String(text ?? '')
+    .trim()
+    .replace(/,\s*$/, '')
+  block.setFieldValue(value, EXTRAS_FIELD)
+  setExtrasVisible(block, value !== '')
+}
+
 /** The extras row, shown iff `value` is non-blank. Used on load and on edit. */
 function syncExtras(field: Blockly.Field, value: string, allowHide: boolean): void {
   const block = field.getSourceBlock()

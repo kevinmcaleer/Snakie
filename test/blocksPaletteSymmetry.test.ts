@@ -163,10 +163,19 @@ const READ_DIRECTLY: Record<string, string> = {
   // --- structure (W6, #1093)
   snakie_class: 'class Thing:\n    def go(self):\n        print(1)\n',
   snakie_method: 'class Thing:\n    def go(self):\n        print(1)\n',
+  // `self` ON ITS OWN, since B4 (#1223) gave `self.x` a block with the decision
+  // baked in and no socket for a `self` block to sit in.
+  snakie_self: 'class Thing:\n    def go(self):\n        self.update()\n',
+  // --- attributes (B4, #1223)
+  snakie_self_attr_get: 'class Thing:\n    def go(self):\n        print(self.speed)\n',
+  snakie_self_attr_set: 'class Thing:\n    def go(self):\n        self.speed = 1\n',
+  snakie_attr_get: 'x = motor.speed\n',
+  snakie_attr_set: 'motor.speed = 3\n',
   // The getter and the `@name.setter` under it, folded into one block (#1222).
   snakie_property:
     'class Thing:\n    @property\n    def speed(self):\n        return 1\n\n    @speed.setter\n    def speed(self, value):\n        pass\n',
-  snakie_self: 'class Thing:\n    def go(self):\n        self.x = 1\n',
+  // Only for a class THIS FILE defines (B5, #1224) — see `instanceCall`.
+  snakie_new_instance: 'class Robot:\n    def __init__(self):\n        pass\n\nrobot = Robot()\n',
   // --- error handling and resources (W7, #1094)
   snakie_try: 'try:\n    print(1)\nexcept OSError as e:\n    print(e)\n',
   // `use … as` took the shape a learner meets (#1132); the text-field block
@@ -220,8 +229,11 @@ const READ_DIRECTLY: Record<string, string> = {
   snakie_fstring: 'x = f"distance {d}"\n',
   snakie_python_call: 'display.show()\n',
   snakie_python_call_value: 'x = sensor.read()\n',
-  snakie_python_attr_get: 'x = self.angle\n',
-  snakie_python_attr_set: 'self.angle = 0\n',
+  // The Python drawer's pair keeps what B4's native blocks do not claim: a
+  // target whose object is itself an attribute read, where the socket is
+  // carrying real structure rather than a bare name.
+  snakie_python_attr_get: 'x = self.motor.angle\n',
+  snakie_python_attr_set: 'self.motor.angle = 0\n',
   // --- a declaration rather than a call (W10, #1097)
   snakie_name_pin: 'echo = Pin(0, Pin.IN)\n',
   // Named hardware that is not a pin: the same `AliasRule` machinery, one mode.

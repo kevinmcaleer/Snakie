@@ -1,0 +1,141 @@
+/*
+ * Function settings dialog (FunctionSettingsDialog.tsx, #1218).
+ *
+ * The PromptModal / SimMemoryDialog overlay pattern — a centred card over a
+ * dimmed backdrop — in Soft Shell tokens, so it reads on both the parchment
+ * and the dark skin. No rule here paints a generic `.btn` from an ancestor
+ * (see modalStyleBleed.test.ts); the buttons keep the app's own treatment.
+ */
+
+.fnset-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 1rem;
+}
+
+.fnset {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  width: min(34rem, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  padding: 1rem 1.1rem;
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--pixel-shadow);
+  font-family: var(--font-ui);
+}
+
+.fnset__title {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.fnset__title code,
+.fnset__hint code,
+.fnset__note code {
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+}
+
+.fnset__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.6rem 0.7rem;
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+}
+
+.fnset__heading {
+  margin: 0;
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+}
+
+.fnset__hint,
+.fnset__empty,
+.fnset__note {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.fnset__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fnset__row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.fnset__at {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.fnset__input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.35rem 0.45rem;
+  color: var(--text);
+  background: var(--bg-elevated);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+}
+
+.fnset__input--code {
+  font-family: var(--font-mono);
+}
+
+.fnset__input--wide {
+  width: 100%;
+}
+
+.fnset__input:focus-visible {
+  outline: var(--border-w) solid var(--accent);
+  outline-offset: 2px;
+}
+
+.fnset__icon {
+  padding: 0.2rem 0.4rem;
+  line-height: 1;
+}
+
+.fnset__adders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.15rem;
+}
+
+.fnset__chip {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.fnset__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}

@@ -22,6 +22,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTutorials } from '../store/tutorials'
 import { useWorkspace } from '../store/workspace'
 import { useWorkspaceLayout } from '../store/layout'
+import { useEditorSettings } from '../store/settings'
 import { lessonFileName, seedAction } from '../lib/lesson-seed'
 import { formatCourseLink, parseCourseLink, resolveLessonIndex } from '../lib/course-link'
 import { dispatchBlocksViewMode } from './editorBridge'
@@ -29,6 +30,7 @@ import { Markdown } from './Markdown'
 import { BuildChecklist } from './BuildChecklist'
 import { DemoProjectCard } from './DemoProjectCard'
 import { BlocksStarterCard } from './BlocksStarterCard'
+import { lessonLevel, shouldRaiseBlockLevel } from '../lib/courses'
 import type { Course, CourseTrack } from '../lib/courses'
 import { BulbIcon, CourseIcon } from './ui-icons'
 import './Tutorials.css'
@@ -43,7 +45,12 @@ export function TutorialPanel(): JSX.Element {
   const { courses, course, lessonIndex, openCourse, start, next, prev, goto, close } = useTutorials()
   const { openBuffer, openFiles, setActive, updateContent } = useWorkspace()
   const { switchWorkspace } = useWorkspaceLayout()
+  const { blockLevel, setBlockLevel } = useEditorSettings()
   const [tipOpen, setTipOpen] = useState(false)
+  // Set when opening a lesson RAISED the block level (#1214), so the learner is
+  // told once, where they are reading, rather than finding new drawers with no
+  // explanation. Cleared on every lesson change.
+  const [raisedLevel, setRaisedLevel] = useState(false)
   // Seed the editor once per (course, lesson) — not on every re-render.
   const seeded = useRef<string>('')
   // Lessons whose overwrite prompt the user has already answered, so revisiting
@@ -171,6 +178,7 @@ export function TutorialPanel(): JSX.Element {
 
   useEffect(() => {
     setTipOpen(false)
+    setRaisedLevel(false)
     if (!course || !lesson) return
     const key = `${course.id}#${lessonIndex}`
     if (seeded.current === key) return
@@ -181,7 +189,18 @@ export function TutorialPanel(): JSX.Element {
     // workspace that hides its sidebar by default (Electronics/Build) — the one
     // case where opening a panel for the user is what they asked for (#…).
     if (lesson.view) switchWorkspace(lesson.view, { carryLesson: true })
-  }, [course, lesson, lessonIndex, seedLesson, switchWorkspace])
+    // A lesson built out of advanced blocks turns them on (#1214) — otherwise
+    // the drawer its words point at simply isn't there. One way only: leaving
+    // the lesson does not put them away again.
+    if (shouldRaiseBlockLevel(lessonLevel(course, lesson), blockLevel)) {
+      setBlockLevel('advanced')
+      setRaisedLevel(true)
+    }
+    // `blockLevel` is deliberately absent: this runs when the LESSON changes,
+    // and re-running it when the level changes would re-raise (and re-announce)
+    // a level the learner had just turned back down from Settings.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [course, lesson, lessonIndex, seedLesson, switchWorkspace, setBlockLevel])
 
   // ── Gallery: pick a course ────────────────────────────────────────────────
   if (!course) {
@@ -281,6 +300,12 @@ export function TutorialPanel(): JSX.Element {
           {/* Tip + nav are pinned to the bottom of the panel so the 💡 tip is
               always visible when toggled (not stranded below the scroll fold). */}
           <div className="tp__bottom">
+            {raisedLevel && (
+              <p className="tp__level-note" role="status">
+                This lesson uses advanced blocks, so they are now switched on in the toolbox. You
+                can switch them off again in Settings ▸ Appearance.
+              </p>
+            )}
             {tipOpen && lesson?.tip && (
               <div className="tp__tip" role="note">
                 <span className="tp__tip-bulb" aria-hidden>

@@ -31,6 +31,89 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   replace. A `/lib` copy that shadows the frozen one still reads as an ordinary
   install, because that copy is the one that actually imports.
 
+- **Function settings, in one place (#1218, epic #1206).** A `def` or method
+  block's right-click menu has a new **Function settings…** dialog holding both
+  of the things written around a function that are text rather than sockets:
+  its decorators (#1215), which had no editing UI at all, and its extra
+  parameters (#1134) — a default, a `*args`, a `**kwargs` — which were only
+  reachable through a hidden row on the block. Decorators can be added, typed,
+  reordered and removed, with `@property`, `@staticmethod`, `@classmethod` and
+  `@micropython.native` offered as one-click entries. The old **Add extra
+  parameters…** item stays as a shortcut into the same dialog, focused on the
+  extras box. The generated Python is unchanged — only where the text is edited
+  has moved — and the parameter list itself stays on Blockly's own cog, because
+  renaming a parameter there renames it in every call.
+
+- **`self.x` and `obj.x` are blocks of their own (#1223, epic #1206).** Reading
+  and changing something an object remembers used to open as the grey Python
+  escape hatch — the second-biggest theme in the corpus, sitting in the drawer
+  for the Python the palette does not model. Four new advanced blocks claim it:
+  *self . speed* and *set self . speed to …*, which have the `self` decision
+  built in and no socket to unplug, and *( ) . speed* / *set ( ) . speed to …*
+  for any other object. Files open with them automatically; method calls
+  (`self.led.on()`) and deeper targets (`self.motor.speed`) are unchanged.
+<<<<<<< HEAD
+- **Advanced blocks in a simple-mode file are offered, never removed (#1212,
+  epic #1206).** Opening a file that uses advanced blocks while the advanced
+  drawers are off now shows one dismissable line — *"This file uses advanced
+  blocks — show them in the toolbox?"* — with a **Show them** button that flips
+  the setting, and a caret that names the blocks. It appears once per file
+  open, not on every edit. Nothing about the file changes either way: the
+  reader takes no notice of the level, so the same Python becomes the same
+  blocks in both tiers, they render, drag, duplicate and generate normally on
+  the canvas, and no line is quietly downgraded to a grey Python block because
+  of a preference. The level decides what is in the drawer and nothing else.
+
+=======
+- **Courses can ask for the blocks they need (#1214, epic #1206).** A lesson —
+  or a whole course — can now declare `level: advanced` in its `course.yml`, and
+  opening it switches **Advanced blocks** on, with a one-line note in the Learn
+  panel saying so and where to switch them off again. Leaving the lesson does
+  not put the drawers away: the learner has now seen them. The blocks track's
+  "When the block you need doesn't exist yet" lesson carries the key, so the
+  grey Python blocks it teaches are in the toolbox even for a learner who
+  started in simple mode. A course that declares nothing never turns advanced
+  blocks on, and a declared level never lowers anyone's.
+- **The reader keeps the decorators on a `def` (#1216, epic #1206).** Opening a
+  file, one or more `@…` lines above a `def` or `async def` — at the top level
+  or in a class body — now become the method block's decorator list instead of
+  grey Python blocks. The text after the `@` is taken verbatim to the end of the
+  line, so a dotted name (`@micropython.native`), a decorator called with
+  arguments and a bracket inside a string (`@app.route("/(a)")`) and a stack of
+  several are all read the same way, and a comment between a decorator and its
+  `def` no longer separates them. `@property` and `@x.setter` still read as two
+  methods with one decorator each; the single property block is #1222.
+
+- **Decorators on function and method blocks (#1215, epic #1206).** The two
+  `def` blocks and the method block now carry an ordered list of decorators in
+  their mutation, written out as `@…` lines immediately above the `def` —
+  `@property`, `@micropython.native`, `@app.route("/")`. Entries are kept
+  verbatim without the `@`, the ones that need an import (`micropython.native`,
+  `micropython.viper`) declare it through the import manager like any other
+  block, and the method block's old `property` / `staticmethod` /
+  `classmethod` dropdown is read as a list of one, so a workspace saved before
+  this opens unchanged. Edited from the block’s **Function settings…** dialog (#1218).
+
+  this opens unchanged. No editing UI yet (#1217).
+- **"Show advanced blocks" in the toolbox, and a marker on the advanced ones
+  (#1211, epic #1206).** A small switch sits at the bottom of the block canvas's
+  toolbox column, so the advanced blocks can be turned on where the question is
+  asked rather than three menus away; it reads and writes the same
+  `snakie.blocks.level` preference as Settings ▸ Appearance ▸ Advanced blocks,
+  so the two are never out of step. With them on, each drawer gathers its
+  advanced blocks behind a quiet **Advanced** heading, so a learner can still see
+  which ones are the extras.
+- **A class arrives with its `__init__`, and a block that creates one (#1224,
+  epic #1206).** Dragging a **class** out of the drawer now brings a
+  `def __init__(self):` with it — the first line every class needs, and the one
+  nothing in the drawer used to hint at. A class read back from a file is
+  untouched, because the constructor is what the *flyout* hands out. Beside it,
+  a new **create ⟨Class⟩ with …** block writes `robot = Robot("Bob", speed=3)`:
+  the class name is a menu of the classes this program defines (with a text box
+  for one it does not), and the arguments are the call block's own growable row,
+  keyword-name boxes and all. Opening a program reads `Robot(…)` back into the
+  block wherever `Robot` is a class in the same file, and writes it out again
+  byte for byte. Both are advanced blocks.
 - **A property block (#1222, epic #1206).** The Classes shelf has a new
   advanced `property` block: it writes `@property def name(self)`, and ticking
   **can be set too** adds the `@name.setter` half underneath, with the new
@@ -40,6 +123,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   one block; a getter on its own becomes the block with the box unticked, and a
   pair the block cannot hold exactly (an unusual signature, a lone setter, an
   unexpected gap) is left as the method blocks it was.
+
+- **A lesson and help on decorators (#1219, epic #1206).** **Learn ▸ Blocks to
+  Python** gains an eighth, advanced lesson — *Make it faster with
+  `@micropython.native`* — which hands over an already-decorated function with a
+  clock either side of it, so the speed is something the learner measures rather
+  than is told. The **Writing Python in blocks** help page and
+  `docs/blocks.md` explain what a decorator is, why it rides on the function
+  block rather than sitting beside it, and that the gear for adding one follows
+  in a later release.
 
 - **The method block, rebuilt around a real parameter list (#1221, epic
   #1206).** `def` inside a class took its whole signature as one box of text
@@ -89,6 +181,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   list comes from upstream's catalog. It now has a board profile of its own —
   flashed as a UF2 like a Pico, with its own CircuitPython board id and a note
   about holding BOOT for the RPI-RP2 drive.
+>>>>>>> origin/master
 - **Simple and advanced blocks (#1209, #1210, epic #1206).** Every block now
   declares a level, and a new **Settings ▸ Appearance ▸ Advanced blocks**
   switch decides whether the toolbox offers the advanced ones — classes, `try`,
