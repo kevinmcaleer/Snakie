@@ -60,6 +60,35 @@ describe('buildRowStatuses', () => {
     expect(out['mpu6050']).toBe('error')
     expect(out['sh1106']).toBe('available')
   })
+
+  it('a module the FIRMWARE provides reads as built in, not installed (#1246)', () => {
+    // A vendor image (the Arduino Alvik's) bakes `modulino` in: it imports, so
+    // the import probe finds it, but there is no /lib copy to update and
+    // nothing Snakie could replace.
+    const out = buildRowStatuses(
+      MODULES,
+      new Set(['ssd1306']),
+      true,
+      {},
+      new Set(),
+      new Set(['ssd1306'])
+    )
+    expect(out['ssd1306']).toBe('frozen')
+  })
+
+  it('frozen outranks a stale /lib reading and an in-flight install', () => {
+    const frozen = new Set(['ssd1306'])
+    expect(
+      buildRowStatuses(MODULES, new Set(['ssd1306']), true, {}, new Set(['ssd1306']), frozen)[
+        'ssd1306'
+      ]
+    ).toBe('frozen')
+    expect(
+      buildRowStatuses(MODULES, new Set(), true, { ssd1306: installing }, new Set(), frozen)[
+        'ssd1306'
+      ]
+    ).toBe('frozen')
+  })
 })
 
 describe('countStatuses', () => {
@@ -69,6 +98,18 @@ describe('countStatuses', () => {
     expect(counts.total).toBe(MODULES.length)
     expect(counts.installed).toBe(2)
     expect(counts.available).toBe(MODULES.length - 2)
+  })
+
+  it('counts a firmware module as present — it IS on the board', () => {
+    const statuses = buildRowStatuses(
+      MODULES,
+      new Set(),
+      true,
+      {},
+      new Set(),
+      new Set(['ssd1306'])
+    )
+    expect(countStatuses(MODULES, statuses).installed).toBe(1)
   })
 
   it('treats installing/error/unknown as not-yet-installed (available)', () => {
@@ -84,6 +125,10 @@ describe('countStatuses', () => {
 describe('rowAction', () => {
   it('installed is a non-actionable stamp', () => {
     expect(rowAction('installed')).toEqual({ label: 'INSTALLED', actionable: false })
+  })
+
+  it('frozen is a non-actionable stamp of its own', () => {
+    expect(rowAction('frozen')).toEqual({ label: 'BUILT IN', actionable: false })
   })
 
   it('installing is disabled', () => {

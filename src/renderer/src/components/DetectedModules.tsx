@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import './DetectedModules.css'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { FILE_SAVED_EVENT, useWorkspace } from '../store/workspace'
@@ -10,6 +10,8 @@ import {
   type DetectedOrigin
 } from '../lib/module-scan'
 import type { ApiClass, ApiFunction, ApiParam } from '../lib/blocks/module-api'
+import { describeFirmware, firmwareOnlyNames } from '../../../shared/module-discovery'
+import { refreshDiscoveredModules, useDiscoveredModules } from '../hooks/useDiscoveredModules'
 
 /**
  * DETECTED MODULES — what is actually on the board and in the folder.
@@ -21,6 +23,19 @@ import type { ApiClass, ApiFunction, ApiParam } from '../lib/blocks/module-api'
  * their methods), functions, constants and variables it defines. Text-only —
  * `readModuleApi` never executes a file — so a driver of unknown provenance is
  * safe to inspect.
+ *
+ * AND A THIRD PLACE, which no file listing can reach: the FIRMWARE (#1246).
+ * A vendor image bakes modules into the binary — an Arduino Alvik's MicroPython
+ * carries `arduino_alvik`, `ucPack` and a frozen `modulino` — and they are not
+ * files, so `/` and `/lib` are empty of them and the learner is left with an
+ * import that works and a panel that says the module doesn't exist. Those come
+ * from `help('modules')` via the shared discovery probe.
+ *
+ * The firmware rows are HONESTLY THINNER than the file rows, and say so. There
+ * is no source to parse, so expanding one runs `dir()` on the board: names
+ * only, no signatures — freezing discards them — and no way to tell a class
+ * from a function. A firmware module cannot be opened in the editor either, so
+ * those rows have no OPEN button.
  *
  * RE-SCANNED when it could have changed: a board connects, a file is saved, a
  * driver is installed from any window (`modules.onChanged`), or the folder is
@@ -182,6 +197,97 @@ function ModuleRow({
   )
 }
 
+/**
+ * One module the firmware provides. Expanding it asks the board for `dir()` —
+ * the only way in, since there is no file to read — and the result is a flat
+ * list of names. No signatures, no docstrings, no class/function split: none of
+ * that survives being frozen into the image, so the row says so rather than
+ * inventing structure it does not have.
+ *
+ * Fetched once, lazily. A frozen package can be large and the import costs the
+ * board memory, so nothing is imported until the learner asks for this one.
+ */
+function FirmwareRow({ name, submodules }: { name: string; submodules: string[] }): JSX.Element {
+  const [open, setOpen] = useState(false)
+  const [members, setMembers] = useState<string[] | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  const toggle = useCallback((): void => {
+    setOpen((was) => {
+      const next = !was
+      if (next && members === null && !loading) {
+        setLoading(true)
+        void window.api.modules
+          .moduleMembers(name)
+          .catch(() => [])
+          .then((found) => {
+            setMembers(found)
+            setLoading(false)
+          })
+      }
+      return next
+    })
+  }, [name, members, loading])
+
+  return (
+    <li className="dmods__file">
+      <div className="dmods__file-head">
+        <button
+          type="button"
+          className="dmods__toggle"
+          aria-expanded={open}
+          onClick={toggle}
+          title={open ? 'Hide contents' : 'Ask the board what this module offers'}
+        >
+          <span className="dmods__chevron" aria-hidden="true">
+            {open ? '▾' : '▸'}
+          </span>
+          <span className="dmods__name">{name}</span>
+          <span className="dmods__import">import {name}</span>
+        </button>
+        <span className="dmods__meta">
+          {submodules.length > 0 && (
+            <span
+              className="dmods__count"
+              title={`Sub-modules: ${submodules.join(', ')}`}
+            >
+              {submodules.length} sub
+            </span>
+          )}
+          <span className="dmods__frozen" title="Compiled into the board's firmware">
+            built in
+          </span>
+        </span>
+      </div>
+      {open && (
+        <div className="dmods__body">
+          {loading ? (
+            <p className="dmods__empty">Asking the board…</p>
+          ) : members && members.length > 0 ? (
+            <>
+              <ul className="dmods__members" role="list">
+                {members.map((m) => (
+                  <NameRow key={`m:${m}`} name={m} kind="const" />
+                ))}
+              </ul>
+              <p className="dmods__frozen-note">
+                Names only — a frozen module keeps no source, so signatures and
+                docstrings are gone.
+              </p>
+            </>
+          ) : (
+            <p className="dmods__empty">
+              {members
+                ? 'Nothing to show — the board offered no public names.'
+                : 'The board could not be asked just now.'}
+            </p>
+          )}
+        </div>
+      )}
+    </li>
+  )
+}
+
 interface ScanState {
   rows: DetectedModule[]
   scanning: boolean
@@ -261,10 +367,32 @@ export function DetectedModules(): JSX.Element {
     return () => off?.()
   }, [])
 
+  // --- The firmware -------------------------------------------------------
+  // Shared with the catalog above, so connecting a board asks this question
+  // once rather than once per panel.
+  const discovery = useDiscoveredModules(connected)
+  const firmwareNames = useMemo(() => firmwareOnlyNames(discovery.found), [discovery.found])
+  const firmwareLabel = useMemo(
+    () => describeFirmware(discovery.found.firmware),
+    [discovery.found.firmware]
+  )
+  // `arduino_alvik.constants` → listed under `arduino_alvik`.
+  const submodulesByPackage = useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const dotted of discovery.found.frozenSubmodules) {
+      const head = dotted.split('.')[0]
+      const list = map.get(head)
+      if (list) list.push(dotted)
+      else map.set(head, [dotted])
+    }
+    return map
+  }, [discovery.found.frozenSubmodules])
+
   const rescan = useCallback((): void => {
     setProjectTick((t) => t + 1)
     setDeviceTick((t) => t + 1)
-  }, [])
+    refreshDiscoveredModules(connected)
+  }, [connected])
 
   const open = useCallback(
     (row: DetectedModule): void => {
@@ -275,7 +403,7 @@ export function DetectedModules(): JSX.Element {
     [openFile]
   )
 
-  const scanning = project.scanning || device.scanning
+  const scanning = project.scanning || device.scanning || discovery.scanning
 
   const renderGroup = (
     origin: DetectedOrigin,
@@ -326,7 +454,8 @@ export function DetectedModules(): JSX.Element {
       </div>
       <p className="dmods__blurb">
         Every <code>.py</code> beside your program and on the board, and what each one
-        defines. Read from the text, never run.
+        defines. Read from the text, never run. Plus the modules compiled into the
+        board&rsquo;s own firmware, which are not files at all.
       </p>
       {renderGroup(
         'project',
@@ -338,6 +467,38 @@ export function DetectedModules(): JSX.Element {
         device,
         connected ? null : 'Connect a board to see the modules installed on it.'
       )}
+      <section className="dmods__group">
+        <div className="dmods__group-head">
+          <span>Built into the firmware</span>
+          {connected && firmwareNames.length > 0 && (
+            <span className="dmods__group-count">
+              {firmwareNames.length} {firmwareNames.length === 1 ? 'module' : 'modules'}
+            </span>
+          )}
+        </div>
+        {!connected ? (
+          <p className="dmods__hint">
+            Connect a board to see the modules baked into its MicroPython build.
+          </p>
+        ) : firmwareNames.length === 0 ? (
+          <p className="dmods__hint">
+            {discovery.scanning ? 'Asking the board…' : 'The board listed no built-in modules.'}
+          </p>
+        ) : (
+          <>
+            {firmwareLabel && <p className="dmods__firmware">{firmwareLabel}</p>}
+            <ul className="dmods__files" role="list">
+              {firmwareNames.map((name) => (
+                <FirmwareRow
+                  key={`fw:${name}`}
+                  name={name}
+                  submodules={submodulesByPackage.get(name) ?? []}
+                />
+              ))}
+            </ul>
+          </>
+        )}
+      </section>
     </div>
   )
 }

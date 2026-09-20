@@ -39,18 +39,22 @@ export type ModuleRowStatus = ModuleStatus | 'installing' | 'error'
 /**
  * Combine the probe-derived status with any in-flight install transition into
  * the single status a row renders. Precedence (highest first):
- *   1. `installing`  — a click is in flight (spinner), regardless of the probe.
- *   2. `installed`   — the probe says it's importable, OR this session installed
+ *   1. `frozen`      — it is in the firmware; no click can change that, so it
+ *      outranks even an in-flight install (which can only have been started
+ *      before the discovery probe came back).
+ *   2. `installing`  — a click is in flight (spinner), regardless of the probe.
+ *   3. `installed`   — the probe says it's importable, OR this session installed
  *      it successfully (`done`) — so a just-installed (or just-updated, #707)
  *      module reads as INSTALLED even before the next probe runs.
- *   3. `error`       — the last click failed and the probe doesn't (yet) show it.
- *   4. the probe status (`outdated` / `available` / `unknown`).
+ *   4. `error`       — the last click failed and the probe doesn't (yet) show it.
+ *   5. the probe status (`outdated` / `available` / `unknown`).
  * Pure.
  */
 export function rowStatus(
   probe: ModuleStatus,
   ui: ModuleInstallUiState | undefined
 ): ModuleRowStatus {
+  if (probe === 'frozen') return 'frozen'
   if (ui?.status === 'installing') return 'installing'
   if (probe === 'installed' || ui?.status === 'done') return 'installed'
   if (ui?.status === 'error') return 'error'
@@ -71,9 +75,16 @@ export function buildRowStatuses(
   installedImportNames: ReadonlySet<string>,
   connected: boolean,
   ui: Record<string, ModuleInstallUiState>,
-  outdatedImportNames: ReadonlySet<string> = new Set()
+  outdatedImportNames: ReadonlySet<string> = new Set(),
+  frozenImportNames: ReadonlySet<string> = new Set()
 ): Record<string, ModuleRowStatus> {
-  const probe = diffInstalled(installedImportNames, connected, defs, outdatedImportNames)
+  const probe = diffInstalled(
+    installedImportNames,
+    connected,
+    defs,
+    outdatedImportNames,
+    frozenImportNames
+  )
   const out: Record<string, ModuleRowStatus> = {}
   for (const def of defs) {
     out[def.id] = rowStatus(probe[def.id] ?? 'available', ui[def.id])
@@ -90,8 +101,8 @@ export interface ModuleCounts {
 
 /**
  * Count how many catalog modules read as installed vs available. An `outdated`
- * module IS on the board (the header counts presence), so it counts as
- * installed; anything else — `installing` / `error` / `unknown` — is "not yet
+ * or `frozen` module IS on the board (the header counts presence), so it counts
+ * as installed; anything else — `installing` / `error` / `unknown` — is "not yet
  * on the board" and counts toward `available`. Pure.
  */
 export function countStatuses(
@@ -101,7 +112,7 @@ export function countStatuses(
   let installed = 0
   for (const def of defs) {
     const st = statuses[def.id]
-    if (st === 'installed' || st === 'outdated') installed++
+    if (st === 'installed' || st === 'outdated' || st === 'frozen') installed++
   }
   return { installed, available: defs.length - installed, total: defs.length }
 }
@@ -109,7 +120,9 @@ export function countStatuses(
 /**
  * The action a row's button should offer for a given status: the visible label
  * and whether it is actionable (a click should kick an install). `installed`
- * shows a non-actionable stamp; `outdated` offers an UPDATE (#707 — the install
+ * shows a non-actionable stamp; `frozen` likewise, worded so the difference is
+ * visible — it is in the firmware, so there is nothing to install and nothing
+ * Snakie could replace; `outdated` offers an UPDATE (#707 — the install
  * path already overwrites the `/lib` copy); `installing` is disabled; `error`
  * retries. Pure — drives the row button without branching in the component.
  */
@@ -117,6 +130,8 @@ export function rowAction(status: ModuleRowStatus): { label: string; actionable:
   switch (status) {
     case 'installed':
       return { label: 'INSTALLED', actionable: false }
+    case 'frozen':
+      return { label: 'BUILT IN', actionable: false }
     case 'outdated':
       return { label: 'UPDATE', actionable: true }
     case 'installing':
