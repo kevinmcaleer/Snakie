@@ -8,6 +8,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Function settings, in one place (#1218, epic #1206).** A `def` or method
+  block's right-click menu has a new **Function settings…** dialog holding both
+  of the things written around a function that are text rather than sockets:
+  its decorators (#1215), which had no editing UI at all, and its extra
+  parameters (#1134) — a default, a `*args`, a `**kwargs` — which were only
+  reachable through a hidden row on the block. Decorators can be added, typed,
+  reordered and removed, with `@property`, `@staticmethod`, `@classmethod` and
+  `@micropython.native` offered as one-click entries. The old **Add extra
+  parameters…** item stays as a shortcut into the same dialog, focused on the
+  extras box. The generated Python is unchanged — only where the text is edited
+  has moved — and the parameter list itself stays on Blockly's own cog, because
+  renaming a parameter there renames it in every call.
+
 - **Decorators on function and method blocks (#1215, epic #1206).** The two
   `def` blocks and the method block now carry an ordered list of decorators in
   their mutation, written out as `@…` lines immediately above the `def` —
@@ -16,7 +29,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `micropython.viper`) declare it through the import manager like any other
   block, and the method block's old `property` / `staticmethod` /
   `classmethod` dropdown is read as a list of one, so a workspace saved before
-  this opens unchanged. No editing UI yet (#1217).
+  this opens unchanged. Edited from the block’s **Function settings…** dialog (#1218).
 
 - **Simple and advanced blocks (#1209, #1210, epic #1206).** Every block now
   declares a level, and a new **Settings ▸ Appearance ▸ Advanced blocks**

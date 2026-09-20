@@ -106,6 +106,28 @@ export function extrasVisible(block: Blockly.Block): boolean {
   return !!block.getInput(EXTRAS_INPUT)?.isVisible()
 }
 
+/** The extra parameters as they stand: the field's text, trimmed. */
+export function getExtras(block: Blockly.Block): string {
+  return String(block.getFieldValue(EXTRAS_FIELD) ?? '').trim()
+}
+
+/**
+ * Set the extra parameters, and put the row away when they are emptied.
+ *
+ * The one writing path the settings dialog (A4, #1218) uses. The field's own
+ * validator only ever SHOWS the row — hiding is left to the editor closing, so
+ * a learner who selects all and types over the text does not have the row
+ * pulled out from under them mid-edit. A dialog has no such moment: it commits
+ * once, when OK is pressed, and by then the answer is final.
+ */
+export function setExtras(block: Blockly.Block, text: string): void {
+  const value = String(text ?? '')
+    .trim()
+    .replace(/,\s*$/, '')
+  block.setFieldValue(value, EXTRAS_FIELD)
+  setExtrasVisible(block, value !== '')
+}
+
 /** The extras row, shown iff `value` is non-blank. Used on load and on edit. */
 function syncExtras(field: Blockly.Field, value: string, allowHide: boolean): void {
   const block = field.getSourceBlock()
@@ -493,6 +515,10 @@ export const DECORATORS_EXTENSION = 'snakie_decorators'
 export function installDecoratorExtension(): void {
   if (Blockly.Extensions.isRegistered(DECORATORS_EXTENSION)) return
   Blockly.Extensions.registerMutator(DECORATORS_EXTENSION, {
+    // A marker the settings dialog can ask about (#1218). A block that took
+    // this mixin carries a decorator list, and there is nothing else to look
+    // at from the outside: the list itself is absent until an entry is added.
+    snakieDecoratorsMixin_: true,
     saveExtraState: function (this: Blockly.Block): object | null {
       const list = getDecorators(this)
       return list.length === 0 ? null : { [DECORATORS_KEY]: list }
@@ -502,6 +528,20 @@ export function installDecoratorExtension(): void {
       if (Array.isArray(list)) setDecorators(this, tidy(list))
     }
   })
+}
+
+/**
+ * Can this block hold decorators? (#1218)
+ *
+ * True for every block {@link installDecorators} has wrapped or that names
+ * {@link DECORATORS_EXTENSION} — the two `def` blocks and the method block —
+ * and false for everything else, which is what decides whether the settings
+ * dialog offers a decorators section at all.
+ */
+export function hasDecorators(block: Blockly.Block): boolean {
+  if ((block as unknown as { snakieDecoratorsMixin_?: boolean }).snakieDecoratorsMixin_) return true
+  const def = Blockly.Blocks[block.type] as unknown as SerialisingBlock | undefined
+  return def?.snakieDecoratorsInstalled_ === true
 }
 
 /** The four serialisation hooks, as they hang off a block definition. */
