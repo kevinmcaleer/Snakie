@@ -8,6 +8,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **"Show advanced blocks" in the toolbox, and a marker on the advanced ones
+  (#1211, epic #1206).** A small switch sits at the bottom of the block canvas's
+  toolbox column, so the advanced blocks can be turned on where the question is
+  asked rather than three menus away; it reads and writes the same
+  `snakie.blocks.level` preference as Settings ▸ Appearance ▸ Advanced blocks,
+  so the two are never out of step. With them on, each drawer gathers its
+  advanced blocks behind a quiet **Advanced** heading, so a learner can still see
+  which ones are the extras.
 - **Simple and advanced blocks (#1209, #1210, epic #1206).** Every block now
   declares a level, and a new **Settings ▸ Appearance ▸ Advanced blocks**
   switch decides whether the toolbox offers the advanced ones — classes, `try`,

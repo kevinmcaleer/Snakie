@@ -1,7 +1,13 @@
 import * as Blockly from 'blockly/core'
 import { inScope } from '../../../../shared/dialect-api'
 import { DIALECT_LABEL, type Dialect } from '../../../../shared/dialect'
-import { atLevel, blocksInCategory, type BlockDefinition, type BlockLevel } from './registry'
+import {
+  DEFAULT_BLOCK_LEVEL,
+  atLevel,
+  blocksInCategory,
+  type BlockDefinition,
+  type BlockLevel
+} from './registry'
 import { BLOCK_CATEGORIES, categoryStyleName } from './theme'
 import { SCAN_MODULES_BUTTON } from './module-scan'
 
@@ -75,6 +81,48 @@ export function buildToolbox(
 export const ADVANCED_OFF_HINT =
   'These are advanced blocks. Turn them on in Settings ▸ Appearance ▸ Blocks.'
 
+/** The heading that marks the advanced blocks inside a drawer (#1211). */
+export const ADVANCED_MARKER_LABEL = 'Advanced'
+
+/**
+ * The class the marker label wears, so the stylesheet can make it the quiet,
+ * amber thing it is meant to be rather than another category heading (#1211).
+ *
+ * Blockly puts a label's `web-class` on the text element it draws, which is the
+ * only hook there is: a flyout label is SVG, not DOM we own.
+ */
+export const ADVANCED_MARKER_CLASS = 'snakie-flyout-advanced'
+
+/** Whether a definition is one of the advanced ones. */
+function isAdvanced(def: BlockDefinition): boolean {
+  return (def.level ?? DEFAULT_BLOCK_LEVEL) === 'advanced'
+}
+
+/**
+ * A run of blocks, with the advanced ones moved to the end behind a marker
+ * (#1211).
+ *
+ * A learner in advanced mode has every drawer, and nothing in them says which
+ * blocks are the *extra* ones — so `try` sits beside `if` looking equally like
+ * the thing to reach for. One muted heading per drawer is the cheapest honest
+ * answer: it costs a beginner nothing (in simple mode there is nothing behind
+ * it, so no label is drawn) and it tells anyone who has switched the extras on
+ * where the line is.
+ *
+ * Order, not just a label: a heading with simple blocks after it would be a
+ * lie about the ones below it.
+ */
+function markAdvanced(defs: readonly BlockDefinition[]): Record<string, unknown>[] {
+  const simple = defs.filter((d) => !isAdvanced(d))
+  const advanced = defs.filter(isAdvanced)
+  if (advanced.length === 0) return simple.map(blockEntry)
+  return [
+    ...simple.map(blockEntry),
+    { kind: 'label', text: ADVANCED_MARKER_LABEL, 'web-class': ADVANCED_MARKER_CLASS },
+    ...advanced.map(blockEntry)
+  ]
+}
+
 /** One toolbox entry for a registered block. */
 function blockEntry(def: BlockDefinition): Record<string, unknown> {
   return {
@@ -132,7 +180,7 @@ export function categoryContents(
     entry.blocks.push(def)
     groups.set(def.group.id, entry)
   }
-  const contents: Record<string, unknown>[] = loose.map(blockEntry)
+  const contents: Record<string, unknown>[] = markAdvanced(loose)
   for (const [id, group] of groups) {
     contents.push({
       kind: 'category',
@@ -141,7 +189,7 @@ export function categoryContents(
       // parts` rather than as a category in its own right.
       categorystyle: categoryStyleName(category.id),
       toolboxitemid: id,
-      contents: group.blocks.map(blockEntry)
+      contents: markAdvanced(group.blocks)
     })
   }
   if (contents.length === 0) {
