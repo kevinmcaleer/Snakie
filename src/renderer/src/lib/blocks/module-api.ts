@@ -58,6 +58,12 @@ export interface ModuleApi {
   functions: readonly ApiFunction[]
   /** Module-level `UPPER_CASE = …` names, which are the constants worth having. */
   constants: readonly string[]
+  /**
+   * Every OTHER public module-level assignment — `i2c = I2C(0)`, `_buf` aside.
+   * Not offered as blocks (state is not an API), but the Modules shelf lists
+   * them so a learner can see what a file on the board or in their folder holds.
+   */
+  variables: readonly string[]
 }
 
 /** Is this name part of the module's public face? */
@@ -148,6 +154,7 @@ export function readModuleApi(module: string, source: string): ModuleApi {
   const classes: ApiClass[] = []
   const functions: ApiFunction[] = []
   const constants: string[] = []
+  const variables: string[] = []
   const lines = logicalLines(source)
 
   let current: { def: ApiClass; methods: ApiFunction[]; indent: number } | null = null
@@ -194,9 +201,28 @@ export function readModuleApi(module: string, source: string): ModuleApi {
     // and a block that reads one would be a block about the driver's insides.
     const assign = /^([A-Z][A-Z0-9_]*)\s*=/.exec(line.text)
     if (assign && line.indent === 0 && !constants.includes(assign[1])) constants.push(assign[1])
+    else if (line.indent === 0) {
+      // Any other public module-level name — `i2c = I2C(0)`, `x: int = 0`,
+      // `a, b = 1, 2` — is a VARIABLE. Recorded for the shelf, never for blocks.
+      // `==` is a comparison, not an assignment, hence the lookahead.
+      const stmt = /^([A-Za-z_][\w]*(?:\s*,\s*[A-Za-z_]\w*)*)\s*(?::[^=]*)?=(?!=)/.exec(line.text)
+      if (stmt) {
+        for (const raw of stmt[1].split(',')) {
+          const name = raw.trim()
+          if (
+            isPublic(name) &&
+            !constants.includes(name) &&
+            !variables.includes(name) &&
+            !/^(?:[A-Z][A-Z0-9_]*)$/.test(name)
+          ) {
+            variables.push(name)
+          }
+        }
+      }
+    }
   }
 
-  return { module, classes, functions, constants }
+  return { module, classes, functions, constants, variables }
 }
 
 /**
@@ -257,5 +283,5 @@ export function apiFromCurated(module: string, members: readonly CuratedMember[]
       constants.push(member.name)
     }
   }
-  return { module, classes, functions, constants }
+  return { module, classes, functions, constants, variables: [] }
 }

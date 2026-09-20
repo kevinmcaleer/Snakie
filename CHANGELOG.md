@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The Modules shelf shows what is actually there.** A new DETECTED section
+  above the catalog lists every `.py` file at the top of the open folder and in
+  the board's `/` and `/lib`, and unfolds each one into the classes (with their
+  `__init__` and methods), functions, constants and variables it defines — read
+  from the text, never run. It re-scans when a board connects, a file is
+  saved, a driver is installed or the folder changes, and on demand with
+  RESCAN; each row opens its file in the editor. The module reader behind it
+  now reports module-level variables as well as constants.
+
 ### Fixed
 
 - **Run does something again while a program is already running.** Pressing
