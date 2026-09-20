@@ -36,6 +36,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Clicking a part in the Build 3-D view no longer makes the components browser
+  flicker.** Selecting a body by clicking it in the scene rapidly bounced the
+  browser's highlight between the previous component and the clicked one. The
+  hierarchy tree was rebuilt with a new identity on every render (its robot.yml
+  model object was re-derived unmemoised), so the effect that pulls the shared
+  selection key into the 3-D view re-ran on the very render where the click had
+  changed the 3-D selection — dragging it back before the click was published,
+  after which the two sync effects chased each other forever. The model is now
+  memoised, and a not-yet-published 3-D pick always wins over the stale key.
 - **A refused Part Editor save now offers the way out.** (#750) When a save is
   refused because the part's `parts.yml` changed on disk since it was opened,
   the notice no longer flashes "close the editor and reopen the part" and fades

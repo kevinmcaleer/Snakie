@@ -891,14 +891,22 @@ export function RobotView({
   // Shared key → this view's selected link. A row with no 3-D body (a part that
   // hasn't been added to Build yet, a joint) leaves the 3-D selection alone —
   // the row still highlights, there is simply nothing to ring in the scene.
+  //
+  // Ordering matters: this effect runs BEFORE the publish effect below in the
+  // same commit. When a 3-D click has just changed `selectedLink` and it hasn't
+  // been published yet, the shared key is the OLD selection — pulling it in here
+  // would drag the 3-D pick back, the publish would then push the pick out, and
+  // the two would ping-pong forever (the browser flickering between the previous
+  // and the clicked part). A pending 3-D change wins; the key catches up next.
+  const publishedLinkRef = useRef<string | null>(null)
   useEffect(() => {
+    if (publishedLinkRef.current !== selectedLinkRef.current) return // pending publish
     const node = findHierarchyNode(hierarchy, hierarchyKey)
     if (node?.link && node.link !== selectedLinkRef.current) setSelectedLink(node.link)
   }, [hierarchyKey, hierarchy])
   // …and back: a 3-D click / an edit that moves the selection publishes it. Only
   // on an actual CHANGE — re-deriving it every render would drag the shared key
   // back onto a stale link whenever the other workspace selected a bodyless row.
-  const publishedLinkRef = useRef<string | null>(null)
   useEffect(() => {
     if (publishedLinkRef.current === selectedLink) return
     publishedLinkRef.current = selectedLink
