@@ -18,6 +18,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   was, so asking about a program never edits it, and a block this build has no
   description for says exactly that instead of guessing. Blocks with a help
   article offer a **Read more about this** button straight into the in-app help.
+- **Detect the modules baked into a board's firmware (#1246).** Snakie could
+  only ever see two kinds of module: the ones in its own catalog, and the `.py`
+  files sitting in `/` and `/lib`. A vendor MicroPython image compiles modules
+  INTO the binary — an Arduino Alvik's carries `arduino_alvik`, `ucPack` and a
+  frozen `modulino` — and none of them are files, so the Detected panel listed
+  nothing and the learner was left with an import that works and an app that
+  says the module isn't there. A new discovery probe asks the board to
+  enumerate itself: `help('modules')` for everything built in or frozen, a walk
+  of `sys.path` for the files (which `help('modules')` deliberately doesn't
+  scan), and `sys.modules` for whatever is already live. The Detected shelf
+  grows a **Built into the firmware** section, labelled with the board's own
+  description, and expanding a row runs `dir()` on that one module — the only
+  way to see inside something with no source file, and honest about what
+  freezing discards: names only, no signatures. Nothing is imported to build
+  the list, because importing a whole firmware's worth of modules is how an
+  ESP32 runs out of memory.
+
+- **A catalog module the firmware already provides now reads BUILT IN
+  (#1246).** It imports, so the old probe called it installed and offered an
+  UPDATE for something with no `/lib` copy to update and nothing Snakie could
+  replace. A `/lib` copy that shadows the frozen one still reads as an ordinary
+  install, because that copy is the one that actually imports.
 
 - **Function settings, in one place (#1218, epic #1206).** A `def` or method
   block's right-click menu has a new **Function settings…** dialog holding both

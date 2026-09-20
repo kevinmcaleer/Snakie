@@ -107,6 +107,12 @@ export type {
   ModuleStatus,
   InstrumentId
 } from '../shared/modules-catalog'
+// Firmware/filesystem module discovery (#1246) — what the board itself says it
+// can import, including the modules a vendor baked into its image.
+export type {
+  DiscoveredModules,
+  FirmwareIdentity
+} from '../shared/module-discovery'
 // Re-export the LLM chat types so the renderer's chat panel can import them
 // from the UI-facing preload module rather than reaching into `src/main`.
 export type {

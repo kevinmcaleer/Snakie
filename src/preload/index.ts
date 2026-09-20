@@ -48,6 +48,14 @@ import {
   MODULE_PRESENT,
   type ModuleDef
 } from '../shared/modules-catalog'
+import {
+  discoverSnippet,
+  emptyDiscovery,
+  moduleMembersSnippet,
+  parseDiscovery,
+  parseModuleMembers,
+  type DiscoveredModules
+} from '../shared/module-discovery'
 import { writeFailureMessage } from '../shared/install-messages'
 import type { RuntimeInfo } from '../shared/dialect'
 import { deviceDirsFor } from '../shared/mip-resolve'
@@ -670,6 +678,49 @@ const modules = {
         }
       }
       return importNames.filter((n) => present.has(n.replace(/[^A-Za-z0-9_]/g, '')))
+    } catch {
+      return []
+    }
+  },
+  /**
+   * EVERYTHING the board can import, firmware included (#1246).
+   *
+   * `probeInstalled` can only answer for names Snakie already knows; this asks
+   * the board to enumerate itself — `help('modules')` for the built-in and
+   * FROZEN modules a vendor image bakes in (`arduino_alvik`, `ucPack`, a frozen
+   * `modulino` on an Arduino Alvik), a `sys.path` walk for the files, and
+   * `sys.modules` for whatever is already live. One `device.exec`; imports
+   * nothing. Degrades to an empty result on any device error, like the probe
+   * above, so a busy or disconnected board costs the panel a section and never
+   * an exception.
+   */
+  discover: async (): Promise<DiscoveredModules> => {
+    try {
+      const exec = await unwrap<{ stdout: string; stderr: string }>(
+        ipcRenderer.invoke('device:exec', discoverSnippet())
+      )
+      return parseDiscovery(exec.stdout ?? '')
+    } catch {
+      return emptyDiscovery()
+    }
+  },
+  /**
+   * The public attribute names of ONE module on the board, via `dir()`.
+   *
+   * The only way to see inside a frozen module — there is no file to read, so
+   * the text-only reader the detected-modules scan uses cannot apply. Names
+   * only: no signatures and no docstrings survive freezing. Imports exactly one
+   * module and purges + collects afterwards, so a package that eagerly pulls in
+   * twenty submodules doesn't stay resident. Empty array on any failure.
+   */
+  moduleMembers: async (name: string): Promise<string[]> => {
+    const snippet = moduleMembersSnippet(name)
+    if (!snippet) return []
+    try {
+      const exec = await unwrap<{ stdout: string; stderr: string }>(
+        ipcRenderer.invoke('device:exec', snippet)
+      )
+      return parseModuleMembers(exec.stdout ?? '')
     } catch {
       return []
     }
