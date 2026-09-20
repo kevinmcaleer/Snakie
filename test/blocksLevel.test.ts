@@ -60,6 +60,8 @@ describe('which blocks are advanced (#1209)', () => {
         'snakie_class',
         'snakie_method',
         'snakie_self',
+        // …and the block that makes one of a class (B5, #1224).
+        'snakie_new_instance',
         'snakie_try',
         'snakie_with',
         'snakie_await',
