@@ -38,6 +38,7 @@ class BlockBuilderTest(unittest.TestCase):
             imports=["vl53l0x"],
             tooltip="How far away it is.",
             help="ref-pins",
+            level="advanced",
             colour="#d4553f",
             inline=False,
         )
@@ -47,8 +48,14 @@ class BlockBuilderTest(unittest.TestCase):
         self.assertEqual(b["imports"], ["vl53l0x"])
         self.assertEqual(b["tooltip"], "How far away it is.")
         self.assertEqual(b["help"], "ref-pins")
+        self.assertEqual(b["level"], "advanced")
         self.assertEqual(b["colour"], "#d4553f")
         self.assertIs(b["inline"], False)
+
+    def test_a_block_says_nothing_about_its_level_by_default(self):
+        # Absent means `simple` on the Snakie side (#1213), so the everyday
+        # block a plugin ships stays in the beginner's drawer without saying so.
+        self.assertNotIn("level", block("beep", "beep", "buzzer.beep()\n"))
 
     def test_an_unknown_shape_is_a_statement(self):
         # Statement is the safe default: it stacks, so a mistake shows up as a

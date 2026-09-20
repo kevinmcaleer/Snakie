@@ -13,10 +13,20 @@ import {
 } from './module-api'
 import { findModuleSource, type ModuleSourceReaders } from './module-source'
 import { memberProbeSnippet, readMemberProbe, type ProbedMembers } from './module-probe'
-import { manifestForModule, moduleGroupId, readRulesForModule } from './module-blocks'
+import {
+  manifestForModule,
+  moduleGroupId,
+  objectRulesForModule,
+  readRulesForModule
+} from './module-blocks'
 import { blockDefinitionsFrom, blockTypeFor, type BlockSource } from './manifest'
 import { defineDynamicBlocks, pruneDynamicBlocks } from './registry'
-import { pruneDynamicCallRules, registerDynamicCallRules } from './python-to-blocks'
+import {
+  pruneDynamicCallRules,
+  pruneDynamicObjectRules,
+  registerDynamicCallRules,
+  registerDynamicObjectRules
+} from './python-to-blocks'
 import { baseName, moduleNamesFrom, onModuleScan } from './module-scan'
 import { reportError } from '../report-error'
 
@@ -149,6 +159,7 @@ export function useModuleBlocks(
       if (names.length === 0) {
         pruneDynamicBlocks(new Set(), MODULE_SOURCE_PREFIX)
         pruneDynamicCallRules(new Set(), MODULE_SOURCE_PREFIX)
+        pruneDynamicObjectRules(new Set(), MODULE_SOURCE_PREFIX)
         setNonce((n) => n + 1)
         return
       }
@@ -187,13 +198,19 @@ export function useModuleBlocks(
         // AND HOW THOSE BLOCKS READ BACK, under the same id, so a program that
         // calls `ping.distance()` opens as the module's block and not as the
         // generic call block. Pruned together with the blocks below.
-        registerDynamicCallRules(id, readRulesForModule(api, (blockId) => blockTypeFor(from, blockId)))
+        const typeFor = (blockId: string): string => blockTypeFor(from, blockId)
+        registerDynamicCallRules(id, readRulesForModule(api, typeFor))
+        // AND THE TWO SHAPES A CALL RULE CANNOT SAY: `ping.unit`, which
+        // is not a call, and `ping = RangeFinder(…)`, which is a call with a
+        // name on its left. Same id, so one prune still sweeps everything.
+        registerDynamicObjectRules(id, objectRulesForModule(api, typeFor))
       }
       if (!live) return
       // Only OUR sources: a part's blocks are not this hook's to remove, and
       // `use-dynamic-blocks.ts` says the same about ours.
       pruneDynamicBlocks(keep, MODULE_SOURCE_PREFIX)
       pruneDynamicCallRules(keep, MODULE_SOURCE_PREFIX)
+      pruneDynamicObjectRules(keep, MODULE_SOURCE_PREFIX)
       setNonce((n) => n + 1)
     }
 
