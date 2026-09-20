@@ -29,6 +29,17 @@ import { SCAN_MODULES_BUTTON } from './module-scan'
 export const VARIABLES_CATEGORY_CALLBACK = 'SNAKIE_VARIABLES'
 
 /**
+ * The `custom` key the Functions category carries (#1220).
+ *
+ * OURS RATHER THAN `Blockly.PROCEDURE_CATEGORY_NAME` since B1: Blockly's own
+ * callback returns the `def` blocks and one caller per function and nothing
+ * else, so every other block registered in the category — `return`, `super()`,
+ * the Classes shelf — was unreachable. `functions-drawer.ts` calls Blockly's
+ * list first and then adds them; see the file for why.
+ */
+export const FUNCTIONS_CATEGORY_CALLBACK = 'SNAKIE_FUNCTIONS'
+
+/**
  * The toolbox: one category per entry in {@link BLOCK_CATEGORIES}, filled from
  * the block registry, for the runtime the learner is on (#1039, epic #209).
  *
@@ -50,7 +61,7 @@ export function buildToolbox(
     contents: BLOCK_CATEGORIES.map((c) =>
       // Functions and Variables are the two categories whose contents are a
       // question about the WORKSPACE rather than about the registry (#1045,
-      // #1117), so they hand the job to a callback — Blockly's own for
+      // #1117), so they hand the job to a callback — `functions-drawer.ts` for
       // functions, `variables-drawer.ts` for variables, both registered at
       // injection. Everything else is a curated list and stays one.
       c.id === 'functions' || c.id === 'variables'
@@ -58,8 +69,7 @@ export function buildToolbox(
             kind: 'category',
             name: c.name,
             categorystyle: categoryStyleName(c.id),
-            custom:
-              c.id === 'functions' ? Blockly.PROCEDURE_CATEGORY_NAME : VARIABLES_CATEGORY_CALLBACK
+            custom: c.id === 'functions' ? FUNCTIONS_CATEGORY_CALLBACK : VARIABLES_CATEGORY_CALLBACK
           }
         : {
             kind: 'category',
@@ -125,10 +135,14 @@ export function categoryContents(
     (b) => !b.hidden && inScope(b.scope, dialect) && atLevel(b, level)
   )
   const loose = blocks.filter((b) => !b.group)
-  const groups = new Map<string, { name: string; blocks: BlockDefinition[] }>()
+  const groups = new Map<string, { name: string; hint?: string; blocks: BlockDefinition[] }>()
   for (const def of blocks) {
     if (!def.group) continue
-    const entry = groups.get(def.group.id) ?? { name: def.group.name, blocks: [] }
+    const entry = groups.get(def.group.id) ?? {
+      name: def.group.name,
+      hint: def.group.hint,
+      blocks: []
+    }
     entry.blocks.push(def)
     groups.set(def.group.id, entry)
   }
@@ -141,7 +155,13 @@ export function categoryContents(
       // parts` rather than as a category in its own right.
       categorystyle: categoryStyleName(category.id),
       toolboxitemid: id,
-      contents: group.blocks.map(blockEntry)
+      // The group's own sentence first, where it is the first thing read
+      // (#1220). A label above the blocks rather than in place of them: the
+      // shelf is small, not empty.
+      contents: [
+        ...(group.hint ? [{ kind: 'label', text: group.hint }] : []),
+        ...group.blocks.map(blockEntry)
+      ]
     })
   }
   if (contents.length === 0) {

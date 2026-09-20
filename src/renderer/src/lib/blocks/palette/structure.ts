@@ -3,6 +3,15 @@ import { Order } from '../generator'
 import type { MicroPythonGenerator } from '../generator'
 import type { BlockDefinition, BlockGroup } from '../registry'
 import { sanitise } from '../names'
+import {
+  appendExtrasRow,
+  EXTRAS_FIELD,
+  EXTRAS_INPUT,
+  extrasText,
+  splitMethodSignature,
+  type MethodLead
+} from '../params'
+import { methodLead } from '../signature'
 
 /**
  * STRUCTURE: CLASSES AND METHODS (W6, #1093, epic #1086).
@@ -69,6 +78,28 @@ function nameOf(block: Blockly.Block, field: string, fallback: string): string {
  */
 const WHEN_WRONG: BlockGroup = { id: 'when-wrong', name: 'When things go wrong' }
 
+/**
+ * The Functions sub-drawer classes live in (#1220, epic #1206).
+ *
+ * EPIC #1206's OPEN QUESTION 2, ANSWERED: a shelf inside Functions rather than a
+ * top-level `classes` category with a colour of its own. A class is a named
+ * group of steps with a name in front of it — the same idea Functions is
+ * already about — and a tenth top-level category, one a simple-mode learner
+ * would never see open, is a bigger claim on the toolbox than three blocks
+ * earn. The shelf is also the cheap decision: promoting it later is a category
+ * entry and a token, and nothing a saved workspace can notice.
+ *
+ * THE HINT is the drawer's own sentence, because three blocks and no verbs
+ * reads like a drawer somebody forgot to finish. It says what the shelf is FOR
+ * rather than listing what is on it, which is the job the `My parts` and
+ * `Plugins` hints already do one level up.
+ */
+export const CLASSES: BlockGroup = {
+  id: 'classes',
+  name: 'Classes',
+  hint: 'A class is a kind of thing. Build one here, and use `self` inside it for the particular one a method was called on.'
+}
+
 /** A statement input's body, or `pass` — an empty suite is a syntax error. */
 function body(block: Blockly.Block, gen: MicroPythonGenerator): string {
   return gen.statementToCode(block, 'BODY') || `${gen.INDENT}pass\n`
@@ -80,10 +111,17 @@ export const TRY_BLOCK = 'snakie_try'
 export const STRUCTURE_BLOCKS: BlockDefinition[] = [
   // --------------------------------------------------------------------- class
   {
+    // DRAGGABLE SINCE #1220 (epic #1206, track B). W6 registered it `hidden`,
+    // on §4.5's rule that the reader is comprehensive and the toolbox curated.
+    // The simple/advanced switch (#1209/#1210) is what makes the answer change:
+    // "not in a ten-year-old's first drawer" is now a tier rather than a
+    // deletion, so a class can be offered to the learner who has turned the
+    // advanced blocks on without ever appearing in front of the one who has not.
     type: 'snakie_class',
+    level: 'advanced',
     category: 'functions',
-    help: 'ref-functions',
-    hidden: true,
+    group: CLASSES,
+    help: 'ref-classes',
     json: {
       message0: 'class %1 %2',
       args0: [
@@ -111,70 +149,35 @@ export const STRUCTURE_BLOCKS: BlockDefinition[] = [
   },
   // -------------------------------------------------------------------- method
   {
+    // DRAGGABLE SINCE #1221 (B2, epic #1206), on the Classes shelf B1 built.
+    // B1 left it hidden deliberately: a method block whose whole signature was
+    // one free-text box is a block a learner has to already know Python to
+    // fill in, and offering it before it had a real parameter list would have
+    // put `self` — the one name they must not rename — in an editable field
+    // with nothing to say so.
     type: 'snakie_method',
     category: 'functions',
-    help: 'ref-functions',
-    hidden: true,
-    json: {
-      message0: '%1 %2 %3 ( %4 )',
-      args0: [
-        {
-          // `@property` AS A MODIFIER, not a block of its own (#1093). A
-          // decorator on its own line would be a block that means nothing
-          // without the block under it, and could be dragged away from it.
-          type: 'field_dropdown',
-          name: 'DECORATOR',
-          options: [
-            ['method', 'NONE'],
-            ['property', 'property'],
-            ['static method', 'staticmethod'],
-            ['class method', 'classmethod']
-          ]
-        },
-        {
-          // `async` IS THE SAME KIND OF MODIFIER (W9, #1096), which is the whole
-          // argument for scheduling async last: once W6 had built a method block
-          // with settings on it, `async def` was one more setting rather than a
-          // new shape. A block saved before this field existed has no `KIND` and
-          // gets the first option, which is what it always meant.
-          type: 'field_dropdown',
-          name: 'KIND',
-          options: [
-            ['def', 'SYNC'],
-            ['async def', 'ASYNC']
-          ]
-        },
-        { type: 'field_input', name: 'NAME', text: 'go' },
-        // THE WHOLE PARAMETER LIST AS TEXT — `self`, `self, speed`,
-        // `self, flip_x=None`, `*args`. `procedures_def` can only hold bare
-        // names, because its parameters ARE workspace variables; #1063 records
-        // what that cost (`def load(path, flip_x=None)` came back as
-        // `def load(path)`, and every call to it still passed three arguments).
-        // A field holds any signature exactly.
-        { type: 'field_input', name: 'PARAMS', text: 'self' }
-      ],
-      message1: '%1',
-      args1: [{ type: 'input_statement', name: 'BODY' }],
-      inputsInline: true,
-      previousStatement: null,
-      nextStatement: null,
-      tooltip:
-        'Something this class can do. The first parameter is almost always `self` — the particular thing the method was called on.'
-    },
+    group: CLASSES,
+    help: 'ref-classes',
+    // No `json`: the parameters come and go, so the shape is built in
+    // `installStructureBlocks` — the same reason the `try` block's arms are.
+    toolbox: { extraState: { params: [], lead: 'self' } },
     code: (block, gen) => {
       const decorator = String(block.getFieldValue('DECORATOR') ?? 'NONE')
       const at = decorator === 'NONE' ? '' : `@${decorator}\n`
       const async = block.getFieldValue('KIND') === 'ASYNC' ? 'async ' : ''
-      const params = String(block.getFieldValue('PARAMS') ?? '').trim()
-      return `${at}${async}def ${nameOf(block, 'NAME', 'go')}(${params}):\n${body(block, gen)}`
+      return `${at}${async}def ${nameOf(block, 'NAME', 'go')}(${methodSignature(block)}):\n${body(block, gen)}`
     }
   },
   // ---------------------------------------------------------------------- self
   {
+    // DRAGGABLE SINCE #1220, beside the class block it belongs to: a class with
+    // no way to say `self` is a class whose methods cannot touch it.
     type: 'snakie_self',
+    level: 'advanced',
     category: 'functions',
-    help: 'ref-functions',
-    hidden: true,
+    group: CLASSES,
+    help: 'ref-classes',
     json: {
       message0: 'self',
       output: null,
@@ -222,7 +225,8 @@ export const STRUCTURE_BLOCKS: BlockDefinition[] = [
     toolbox: { extraState: { excepts: ['OSError'], hasElse: false, hasFinally: false } },
     code: (block, gen) => {
       const state = tryState(block)
-      const arm = (name: string): string => gen.statementToCode(block, name) || `${gen.INDENT}pass\n`
+      const arm = (name: string): string =>
+        gen.statementToCode(block, name) || `${gen.INDENT}pass\n`
       let out = `try:\n${arm('TRY')}`
       state.excepts.forEach((_, i) => {
         // The exception spec VERBATIM — `OSError`, `OSError as e`,
@@ -537,7 +541,250 @@ function armIcon(kind: '+' | '-' | 'on' | 'off'): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
 }
 
+// ---------------------------------------------------------------------------
+// The method block's parameter list (B2, #1221, epic #1206)
+// ---------------------------------------------------------------------------
+
+/** The block type, named here because the palette and the reader both want it. */
+export const METHOD_BLOCK = 'snakie_method'
+
+/** What a method block is holding: its fixed lead, and its plain parameters. */
+export interface MethodState {
+  /** `self`, `cls`, or none at all. Shown on the block, never editable. */
+  lead: MethodLead
+  /** One editable name field each — `PARAM0`, `PARAM1`, … */
+  params: string[]
+}
+
+/** A method block's state, read back off the block. */
+function methodState(block: Blockly.Block): MethodState {
+  return (block as unknown as { methodState_: MethodState }).methodState_ ?? {
+    lead: 'self',
+    params: []
+  }
+}
+
+/** Anything, as a `MethodState` — a saved file, a toolbox entry, a partial. */
+function readMethodState(state: unknown): MethodState {
+  const raw = (state ?? {}) as Partial<MethodState>
+  const lead = raw.lead === 'cls' || raw.lead === 'none' ? raw.lead : 'self'
+  return {
+    lead,
+    params: Array.isArray(raw.params) ? raw.params.map((p) => String(p)) : []
+  }
+}
+
+/** The parameter list a method block writes: lead, names, extras — in order. */
+function methodSignature(block: Blockly.Block): string {
+  const state = methodState(block)
+  const lead = methodLead(state.lead, String(block.getFieldValue('DECORATOR') ?? 'NONE'))
+  const names = state.params
+    .map((_, i) => String(block.getFieldValue(`PARAM${i}`) ?? '').trim())
+    // A NAME FIELD EMPTIED IS A PARAMETER REMOVED, not `def go(self, ):`. The
+    // `−` button is the way to take one off, and a half-finished rename should
+    // not write a syntax error into the mirror while it is happening.
+    .filter((name) => name !== '')
+    .map((name) => sanitise(name))
+  // THE EXTRAS VERBATIM, trailing comma and all — unlike the `def` blocks,
+  // which tidy one away. A `def load(path,):` the reader could not split at all
+  // lands here whole, and this is the block that promises to give it back.
+  const extras = extrasText(block)
+  return [...(lead === 'none' ? [] : [lead]), ...names, ...(extras === '' ? [] : [extras])].join(
+    ', '
+  )
+}
+
+/**
+ * The old free-text `PARAMS` field, migrated the moment a saved file sets it.
+ *
+ * EVERY WORKSPACE SAVED BEFORE #1221 carries `PARAMS: 'self, path, flip_x=None'`
+ * and no parameter list at all, so the block keeps the field — invisible, and
+ * spent as soon as it is filled. Splitting on load is exactly what the reader
+ * does with a `def` header, which is why both call the same splitter.
+ *
+ * THE FIELD IS EMPTIED once it has been read, so the block that gets saved back
+ * is a new-shaped one and the migration never runs twice — a second run after a
+ * learner had edited the parameters would put the old signature back.
+ */
+class LegacyParamsField extends Blockly.FieldLabel {
+  constructor() {
+    super('')
+  }
+
+  // `loadState`, NOT a validator: this has to fire for the value a saved file
+  // gives the field and for nothing else. An empty `PARAMS` is a real old
+  // signature — `def go():` — and a validator could not tell it apart from the
+  // blank the field is constructed with.
+  //
+  // A FieldLabel is not serialisable, so the migrated block saves no `PARAMS`
+  // at all and the migration can never run a second time over a learner's
+  // edits.
+  override loadState(state: unknown): void {
+    const { lead, params, extras } = splitMethodSignature(String(state ?? ''))
+    const block = this.getSourceBlock()
+    if (!block) return
+    updateMethodShape(block, { lead, params })
+    block.setFieldValue(extras, EXTRAS_FIELD)
+  }
+}
+
+/**
+ * THE METHOD BLOCK, REBUILT (B2, #1221, epic #1206).
+ *
+ * W6 (#1093) gave it one free-text field for the whole signature, and the
+ * argument was sound as far as it went: `procedures_def`'s parameters ARE
+ * workspace variables, so a default or a `*args` could not live on it and
+ * `def load(path, flip_x=None)` came back as `def load(path)`. A text box holds
+ * any signature exactly.
+ *
+ * WHAT IT COST was the block nobody could be offered. A learner dragging it out
+ * of a drawer got a box saying `self` and no way to know what else may go in
+ * it, `self` itself was editable — rename it here and the eleven `self.`
+ * blocks in the body mean nothing — and #1134's extras machinery, built for
+ * exactly the half of a signature a name field cannot hold, was sitting one
+ * file away being used by `def` alone.
+ *
+ * So: one editable field per plain name with `+`/`−` at the end of the row,
+ * `self` as a LABEL that no click can reach, and the shared extras row for the
+ * rest. The lead follows the decorator — `@staticmethod` takes none,
+ * `@classmethod` takes `cls` — which is the one thing a learner would otherwise
+ * have to know to go and do by hand.
+ *
+ * BUILT IN CODE rather than from JSON, and with `+`/`−` buttons rather than
+ * Blockly's gear, for the reasons the `try` block above records: the gear opens
+ * a miniature workspace in a bubble with nothing else like it in the app, and a
+ * field count that comes and goes is not a shape JSON can declare.
+ */
+function methodBlockMixin(): Record<string, unknown> {
+  return {
+    methodState_: { lead: 'self', params: [] } as MethodState,
+
+    init(this: Blockly.Block): void {
+      this.setStyle('functions_blocks')
+      this.appendDummyInput('HEAD')
+        .appendField(
+          // `@property` AS A MODIFIER, not a block of its own (#1093). A
+          // decorator on its own line would be a block that means nothing
+          // without the block under it, and could be dragged away from it.
+          // A1 (#1215) folds this dropdown into a decorators list; until it
+          // lands, the three Python has a setting for are the three here.
+          new Blockly.FieldDropdown(
+            [
+              ['method', 'NONE'],
+              ['property', 'property'],
+              ['static method', 'staticmethod'],
+              ['class method', 'classmethod']
+            ],
+            // The lead follows the setting, so the row is redrawn with the new
+            // one. The STATE is untouched — a method read out of a file whose
+            // signature has no lead never grows one.
+            (value) => {
+              if (this.getInput('PARAMS_ROW')) {
+                updateMethodShape(this, methodState(this), String(value))
+              }
+              return undefined
+            }
+          ),
+          'DECORATOR'
+        )
+        .appendField(
+          // `async` IS THE SAME KIND OF MODIFIER (W9, #1096). A block saved
+          // before this field existed has no `KIND` and gets the first option,
+          // which is what it always meant.
+          new Blockly.FieldDropdown([
+            ['def', 'SYNC'],
+            ['async def', 'ASYNC']
+          ]),
+          'KIND'
+        )
+        .appendField(new Blockly.FieldTextInput('go'), 'NAME')
+      // The pre-#1221 signature, invisible and spent on load — see
+      // {@link LegacyParamsField}.
+      this.appendDummyInput('LEGACY').appendField(new LegacyParamsField(), 'PARAMS').setVisible(false)
+      this.appendStatementInput('BODY')
+      // #1134's row, shared rather than rebuilt (`../params.ts`), above the
+      // body where the rest of the signature is.
+      appendExtrasRow(this, 'BODY')
+      this.setInputsInline(true)
+      this.setPreviousStatement(true, null)
+      this.setNextStatement(true, null)
+      this.setTooltip(
+        'Something this class can do. `self` is the particular thing it was called on — it is on the block rather than in a box because renaming it would break every `self.` inside.'
+      )
+      updateMethodShape(this, { lead: 'self', params: [] })
+    },
+
+    saveExtraState(this: Blockly.Block): MethodState {
+      return methodState(this)
+    },
+
+    loadExtraState(this: Blockly.Block, state: unknown): void {
+      updateMethodShape(this, readMethodState(state))
+    }
+  }
+}
+
+/**
+ * Rebuild the parameter row.
+ *
+ * Whole rather than diffed, as the `try` block's arms are — and for the same
+ * reason the `rebuild` below it exists, the names already typed into the fields
+ * are read back out first so a `+` does not wipe them.
+ */
+function updateMethodShape(
+  block: Blockly.Block,
+  next: MethodState,
+  decorator = String(block.getFieldValue('DECORATOR') ?? 'NONE')
+): void {
+  const self = block as unknown as { methodState_: MethodState }
+  const state: MethodState = {
+    lead: next.lead,
+    params: next.params.map((name, i) => {
+      const typed = block.getField(`PARAM${i}`)
+      return typed ? String(typed.getValue() ?? name) : name
+    })
+  }
+  block.removeInput('PARAMS_ROW', true)
+  const row = block.appendDummyInput('PARAMS_ROW').appendField('(')
+  const lead = methodLead(state.lead, decorator)
+  // A LABEL, NOT A FIELD: `self` is the one name in a method a learner must not
+  // rename, because the `self.` blocks in the body are not renamed with it.
+  if (lead !== 'none') row.appendField(lead)
+  state.params.forEach((name, i) => {
+    if (i > 0 || lead !== 'none') row.appendField(',')
+    row.appendField(new Blockly.FieldTextInput(name), `PARAM${i}`)
+  })
+  row
+    .appendField(
+      new Blockly.FieldImage(armIcon('+'), 16, 16, 'one more parameter', () =>
+        updateMethodShape(block, { ...state, params: [...state.params, nextParamName(state)] })
+      ),
+      'ADD_PARAM'
+    )
+    .appendField(
+      new Blockly.FieldImage(armIcon('-'), 16, 16, 'one fewer parameter', () =>
+        updateMethodShape(block, { ...state, params: state.params.slice(0, -1) })
+      ),
+      'REMOVE_PARAM'
+    )
+    .appendField(')')
+  // Above the extras row, which is the rest of the same signature, and so above
+  // the body under it.
+  if (block.getInput(EXTRAS_INPUT)) block.moveInputBefore('PARAMS_ROW', EXTRAS_INPUT)
+  self.methodState_ = state
+}
+
+/** A name for a new parameter that is not one of the names already there. */
+function nextParamName(state: MethodState): string {
+  const taken = new Set(state.params)
+  for (let n = 1; ; n++) {
+    const name = n === 1 ? 'value' : `value${n}`
+    if (!taken.has(name)) return name
+  }
+}
+
 /** Register the blocks whose inputs come and go. Called before the definitions. */
 export function installStructureBlocks(): void {
   Blockly.Blocks[TRY_BLOCK] = tryBlockMixin() as never
+  Blockly.Blocks[METHOD_BLOCK] = methodBlockMixin() as never
 }
