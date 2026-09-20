@@ -24,7 +24,7 @@ import type { RobotDefinition, RobotPart } from '../../../shared/robot'
 import { readRobotModel } from '../../../shared/krf'
 import { attachPartBody, mirroredOrigin } from './robot-part-mesh'
 import { errorMessage, reportError } from '../lib/report-error'
-import { BODY_CAP_PX, PX_PER_MM_DEFAULT } from './WiringCanvas'
+import { PX_PER_MM } from './WiringCanvas'
 
 /** What a board host lends the shared add sequence. `libraries` feeds part
  *  resolution for the canvas-scale maths (see {@link canvasPxPerMm}). */
@@ -60,32 +60,21 @@ function resolveDef(
 }
 
 /**
- * The wiring canvas's px-per-mm — the SAME formula WiringCanvas uses to draw
- * (#637: one scale so the widest/tallest body just fits {@link BODY_CAP_PX}),
- * over every body on the canvas: the board and all placed parts. RobotPart.x/y
- * are stored in this px space, so converting them to millimetres for the Build
- * mirror (#716) needs exactly this number — treating px as mm inflated every
- * position ~4-7.5×. Pure.
+ * The wiring canvas's px-per-mm — the SAME number WiringCanvas draws at. It is a
+ * FIXED scale ({@link PX_PER_MM}): adding a large part no longer rescales every
+ * other body (that used to leave the board's fixed-size pads overlapping), so a
+ * stored RobotPart.x/y always means the same millimetres. The Build mirror (#716)
+ * converts px to mm with exactly this number. The dims argument is accepted for
+ * call-site compatibility and ignored. Pure.
  */
-export function canvasPxPerMm(
-  dims: ({ width?: number; height?: number } | undefined)[]
-): number {
-  let widestMm = 0
-  let tallestMm = 0
-  for (const d of dims) {
-    if (d?.width && d.width > widestMm) widestMm = d.width
-    if (d?.height && d.height > tallestMm) tallestMm = d.height
-  }
-  if (widestMm <= 0 && tallestMm <= 0) return PX_PER_MM_DEFAULT
-  return Math.min(
-    widestMm > 0 ? BODY_CAP_PX / widestMm : Infinity,
-    tallestMm > 0 ? BODY_CAP_PX / tallestMm : Infinity
-  )
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function canvasPxPerMm(dims?: ({ width?: number; height?: number } | undefined)[]): number {
+  return PX_PER_MM
 }
 
 /** Every body's mm dimensions AFTER this add: board + existing parts + the new
- *  arrivals (a new widest part rescales the canvas, so the post-add scale is
- *  the one the stored positions will be drawn at). Pure. */
+ *  arrivals. (The canvas scale is fixed, so this no longer affects px/mm; kept
+ *  for callers that describe the post-add bodies.) Pure. */
 export function postAddBodyDims(
   robot: RobotDefinition,
   libraries: PartLibraryWithParts[],

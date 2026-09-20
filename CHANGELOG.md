@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Pins no longer shrink and pile up when a large part joins the breadboard.**
+  The Electronics canvas used to pick its px/mm so the *widest* body on the
+  canvas fitted a fixed cap — so dropping a big chassis rescaled the Pico (and
+  every other part) smaller while the pads kept their fixed pixel size, leaving
+  the pin connectors overlapping each other. The canvas now draws every body at
+  one fixed real-world scale (3.7 px/mm, a Pico stays ~190 px wide) whatever
+  else is placed, and a part with real dimensions is never clamped to a maximum
+  size, so a chassis is simply drawn big at its true size relative to the board
+  (pan/zoom to fit). The Build-workspace mirror uses the same fixed scale, so a
+  stored part position always means the same millimetres.
+
 ### Changed
 
 - **The Yellow TT Motor wears the better 2-D drawing.** The Standard library's

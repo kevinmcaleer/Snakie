@@ -363,24 +363,28 @@ export const BOARD_BODY_W = 190
 export const BOARD_BODY_H = 300
 const PART_BODY_W = 140
 
-// Real-world scale for the breadboard: parts are drawn at their REAL dimensions
-// (mm → px) relative to the board, so e.g. an HC-SR04 reads larger than a small
-// sensor. The board anchors the scale (it keeps BOARD_BODY_W and defines px/mm);
-// when its real width is unknown we fall back to a Pico-ish default (~51mm → 190px).
-export const PX_PER_MM_DEFAULT = 3.7
+// Real-world scale for the breadboard: every body — the board AND each placed
+// part — is drawn at its REAL dimensions (mm → px) at ONE FIXED px/mm, so e.g. an
+// HC-SR04 reads larger than a small sensor and a Pico is always the same size.
+// 3.7 px/mm puts a Pico-ish 51 mm board at ~190 px (BOARD_BODY_W). The scale is
+// deliberately NOT derived from what is on the canvas (the old #637 "fit the
+// widest body to a cap" rule): dropping a large chassis used to shrink every other
+// body while PartBody's pads kept their fixed pixel size, so the pins piled up on
+// top of each other. Pan/zoom is how a big part fits, not rescaling the parts.
+export const PX_PER_MM = 3.7
+/** @deprecated alias — the canvas scale is now always {@link PX_PER_MM}. */
+export const PX_PER_MM_DEFAULT = PX_PER_MM
 // Parts are rendered at a NATIVE reference size then uniformly scaled, so pads,
 // silk text and strokes shrink together (not just positions) — fixing labels that
-// looked huge on a small body. Clamp the final size so an odd dimension can't make
-// a part vanish or swamp the canvas.
+// looked huge on a small body. A part with real mm dimensions is never clamped
+// (that would break its true size relative to the board); only the legacy
+// dimension-less fallback footprint is bounded so an odd part can't vanish or
+// swamp the canvas.
 const PART_NATIVE_W = 300
 const PART_NATIVE_H = 300
 const PART_MIN_W = 48
 const PART_MAX_W = 380
 const PART_MAX_H = 380
-// The largest single body (board OR any placed part) is scaled to fit this px cap;
-// one px/mm is then derived from it so EVERY body — the board included — draws at
-// its real mm size, in the right relative proportion (#637).
-export const BODY_CAP_PX = 380
 // Pointer travel (screen px) below which a press counts as a click, not a drag.
 const DRAG_DEADZONE_PX = 3
 // Minimum clearance a Bézier wire leaves a pin along its outward normal (#182), so
@@ -1020,27 +1024,12 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
   // --- build the subjects ---------------------------------------------------
   const subjects: Subject[] = []
 
-  // Real-world scale (#637): pick ONE px/mm so the WIDEST/TALLEST body — the board
-  // OR any placed part — just fits the cap, then draw every body at its real mm
-  // size (in the right relative proportion). Previously the board was pinned to a
-  // fixed box and px/mm was derived from it, so a large carrier next to a small MCU
-  // rendered far too small (and any part > ~36mm hit the part clamp).
+  // Real-world scale: ONE fixed px/mm for every body (board + placed parts), so
+  // adding a large part never rescales the others (see PX_PER_MM). Pads are drawn
+  // at a fixed pixel size, so a shrinking body used to leave its pins overlapping.
   const boardMmW = boardPart?.dimensions?.width
   const boardMmH = boardPart?.dimensions?.height
-  let widestMm = boardMmW && boardMmW > 0 ? boardMmW : 0
-  let tallestMm = boardMmH && boardMmH > 0 ? boardMmH : 0
-  for (const rp of robot.parts) {
-    const d = resolvePart(rp.lib, rp.part)?.dimensions
-    if (d?.width && d.width > widestMm) widestMm = d.width
-    if (d?.height && d.height > tallestMm) tallestMm = d.height
-  }
-  const pxPerMm =
-    widestMm > 0 || tallestMm > 0
-      ? Math.min(
-          widestMm > 0 ? BODY_CAP_PX / widestMm : Infinity,
-          tallestMm > 0 ? BODY_CAP_PX / tallestMm : Infinity
-        )
-      : PX_PER_MM_DEFAULT
+  const pxPerMm = PX_PER_MM
   // The board's real drawn box at this scale. Falls back to the legacy fixed box
   // for a built-in board with no source part (no mm dimensions to scale from).
   const boardBoxW = boardMmW && boardMmW > 0 ? boardMmW * pxPerMm : BOARD_BODY_W
@@ -1114,8 +1103,7 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
       })
     }
   }
-  // (px-per-mm + the board box are computed up-front now, from the widest body —
-  // see the `pxPerMm` block above, #637.)
+  // (px-per-mm is the fixed PX_PER_MM; the board box is computed up-front above.)
   // Board stacking (#166): a seated board has no position of its own — it's drawn
   // at its mount on the carrier — so carriers must be laid out FIRST. Keep each
   // part's ORIGINAL index so the default scatter positions don't shift. One level
@@ -1174,14 +1162,21 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
       // pads, silk text and strokes shrink together (not just positions).
       const nativeBox = partBodyBox(def, { maxW: PART_NATIVE_W, maxH: PART_NATIVE_H })
       const dims = def.dimensions
-      // Target on-canvas width: real width × the board's px/mm, else the legacy
-      // fixed footprint. Clamped so a stray dimension can't make it tiny/huge.
-      const rawW = dims && dims.width > 0 ? dims.width * pxPerMm : PART_BODY_W
-      const targetW = Math.max(PART_MIN_W, Math.min(PART_MAX_W, rawW))
-      // Scale from width, then also cap by height so a tall/narrow part can't
-      // overflow the canvas (aspect is preserved either way).
-      let k = targetW / nativeBox.w
-      if (nativeBox.h * k > PART_MAX_H) k = PART_MAX_H / nativeBox.h
+      // Target on-canvas width: real width × the fixed px/mm — never clamped, so
+      // the part is its true size relative to the board however large it is (a
+      // chassis is simply big; pan/zoom to fit). Only the legacy dimension-less
+      // footprint is bounded so a stray part can't be tiny/huge.
+      const real = !!dims && dims.width > 0
+      let k: number
+      if (real) {
+        k = (dims.width * pxPerMm) / nativeBox.w
+      } else {
+        const targetW = Math.max(PART_MIN_W, Math.min(PART_MAX_W, PART_BODY_W))
+        // Scale from width, then also cap by height so a tall/narrow part can't
+        // overflow the canvas (aspect is preserved either way).
+        k = targetW / nativeBox.w
+        if (nativeBox.h * k > PART_MAX_H) k = PART_MAX_H / nativeBox.h
+      }
       // Scaled (pre-rotation) body size + its centre — the rotation pivot (#176).
       const bw = nativeBox.w * k
       const bh = nativeBox.h * k
