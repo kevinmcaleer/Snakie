@@ -100,7 +100,10 @@ describe('a class holds its body', () => {
     ) {
       chained.push(b.type as string)
     }
-    expect(chained.filter((t) => t === 'snakie_method')).toHaveLength(3)
+    // Two methods and the `@property`, which is a property block of its own
+    // since B3 (#1222) rather than a third method with a decorator on it.
+    expect(chained.filter((t) => t === 'snakie_method')).toHaveLength(2)
+    expect(chained.filter((t) => t === 'snakie_property')).toHaveLength(1)
   })
 
   it('round-trips the whole thing', () => {
@@ -156,9 +159,18 @@ describe('`self` is never a workspace variable', () => {
 })
 
 describe('decorators', () => {
-  it('reads @property as a setting on the method', () => {
+  /** The decorator list the reader put on the one method block in `src`. */
+  const decorators = (src: string): unknown =>
+    (one(src, 'snakie_method')!.extraState as { decorators?: unknown } | undefined)?.decorators
+
+  it('reads @property as a property block of its own (B3, #1222)', () => {
     const src = ['class T:', '    @property', '    def x(self):', '        return 1', ''].join('\n')
-    expect(one(src, 'snakie_method')!.fields).toMatchObject({ DECORATOR: 'property' })
+    // It used to be the method block with DECORATOR: 'property' on it. B3 gave
+    // the pair a block that can hold the `@x.setter` half as well, and a lone
+    // getter is that block with the setter switched off — see
+    // `blocksProperty.test.ts`. The method block's own setting is untouched,
+    // and is still what a `@property` this one refuses falls back to.
+    expect(one(src, 'snakie_property')!.fields).toMatchObject({ NAME: 'x', HAS_SETTER: false })
     expect(types(src)).not.toContain('snakie_python_statement')
     roundTrips(src)
   })
@@ -166,7 +178,7 @@ describe('decorators', () => {
   it('reads @staticmethod and @classmethod', () => {
     for (const decorator of ['staticmethod', 'classmethod']) {
       const src = ['class T:', `    @${decorator}`, '    def x(cls):', '        return 1', ''].join('\n')
-      expect(one(src, 'snakie_method')!.fields, decorator).toMatchObject({ DECORATOR: decorator })
+      expect(decorators(src), decorator).toEqual([decorator])
       roundTrips(src)
     }
   })
@@ -178,9 +190,104 @@ describe('decorators', () => {
     expect(report.raw).toBe(0)
   })
 
-  it('leaves a decorator it does not know alone, with its def under it', () => {
+  // --- A2 (#1216): ANY decorator, not the three that had a dropdown --------
+
+  it('reads a dotted decorator rather than leaving it grey', () => {
+    const src = [
+      'import micropython',
+      '',
+      'class T:',
+      '    @micropython.native',
+      '    def x(self):',
+      '        return 1',
+      ''
+    ].join('\n')
+    expect(decorators(src)).toEqual(['micropython.native'])
+    expect(types(src)).not.toContain('snakie_python_statement')
+    roundTrips(src)
+  })
+
+  it('takes a decorator with arguments verbatim, brackets in strings and all', () => {
+    const src = ['@app.route("/(a)", methods=["GET"])', 'def index():', '    return 1', ''].join('\n')
+    expect(decorators(src)).toEqual(['app.route("/(a)", methods=["GET"])'])
+    expect(types(src)).not.toContain('snakie_python_statement')
+    roundTrips(src)
+  })
+
+  it('keeps several decorators, in the order they are written', () => {
+    const src = [
+      'import micropython',
+      '',
+      'class T:',
+      '    @staticmethod',
+      '    @micropython.native',
+      '    def x():',
+      '        return 1',
+      ''
+    ].join('\n')
+    expect(decorators(src)).toEqual(['staticmethod', 'micropython.native'])
+    expect(types(src)).not.toContain('snakie_python_statement')
+    expect(pythonToBlocks(src).report.raw).toBe(0)
+    roundTrips(src)
+  })
+
+  it('reads a decorator separated from its def by a comment', () => {
+    const src = ['@app.route("/")', '# the home page', 'def index():', '    return 1', ''].join('\n')
+    expect(decorators(src)).toEqual(['app.route("/")'])
+    expect(types(src)).not.toContain('snakie_python_statement')
+  })
+
+  it('does not hoist a decorated top-level def away from its decorator', () => {
     const src = ['@app.route("/")', 'def index():', '    return 1', ''].join('\n')
+    expect(types(src)).not.toContain('procedures_defnoreturn')
+    expect(types(src)).toContain('snakie_method')
+  })
+
+  it('leaves a decorator with no def under it alone', () => {
+    const src = ['@something', 'x = 1', ''].join('\n')
     expect(types(src)).toContain('snakie_python_statement')
+    roundTrips(src)
+  })
+
+  it('reads a @property / @x.setter pair written with no blank line (B3, #1222)', () => {
+    const src = [
+      'class T:',
+      '    @property',
+      '    def x(self):',
+      '        return self._x',
+      '    @x.setter',
+      '    def x(self, value):',
+      '        self._x = value',
+      ''
+    ].join('\n')
+    // A2 (#1216) read this as two methods with a decorator each, and said so,
+    // because B3 had not landed. It has, and it folds the pair ONLY when the
+    // `@x.setter` has the one blank line above it that the generator writes.
+    // With the halves written tight, as here, the getter becomes the property
+    // block and the setter stays a method carrying its own decorator — which
+    // is lossless, as the round trip below shows.
+    expect(one(src, 'snakie_property')!.fields).toMatchObject({ NAME: 'x', HAS_SETTER: false })
+    const methods = blocks(src).filter((b) => b.type === 'snakie_method')
+    expect(methods.map((m) => (m.extraState as { decorators: string[] }).decorators)).toEqual([
+      ['x.setter']
+    ])
+    roundTrips(src)
+  })
+
+  it('folds the pair into one block when the blank line is there (B3, #1222)', () => {
+    const src = [
+      'class T:',
+      '    @property',
+      '    def x(self):',
+      '        return self._x',
+      '',
+      '    @x.setter',
+      '    def x(self, value):',
+      '        self._x = value',
+      ''
+    ].join('\n')
+    expect(blocks(src).filter((b) => b.type === 'snakie_method')).toHaveLength(0)
+    expect(one(src, 'snakie_property')!.fields).toMatchObject({ NAME: 'x', HAS_SETTER: true })
     roundTrips(src)
   })
 })
@@ -188,7 +295,55 @@ describe('decorators', () => {
 describe('a method’s own signature', () => {
   it('keeps defaults, which `procedures_def` could never hold (#1063)', () => {
     const src = ['class T:', '    def load(self, path, flip_x=None):', '        print(path)', ''].join('\n')
-    expect(one(src, 'snakie_method')!.fields).toMatchObject({ PARAMS: 'self, path, flip_x=None' })
+    const block = one(src, 'snakie_method')!
+    // Since B2 (#1221) the signature is a real list: `self` is the block's
+    // fixed lead, `path` is a name field, and the default goes in the extras
+    // field `def` has had since #1134 — one mechanism, not two.
+    expect(block.extraState).toEqual({ lead: 'self', params: ['path'] })
+    expect(block.fields).toMatchObject({ EXTRAS: 'flip_x=None' })
+    roundTrips(src)
+  })
+
+  it('splits `*args` and `**kwargs` into the extras field', () => {
+    const src = ['class T:', '    def go(self, *args, **kwargs):', '        print(1)', ''].join('\n')
+    const block = one(src, 'snakie_method')!
+    expect(block.extraState).toEqual({ lead: 'self', params: [] })
+    expect(block.fields).toMatchObject({ EXTRAS: '*args, **kwargs' })
+  })
+
+  it('takes `cls` as the lead of a class method, and no lead at all for a static one', () => {
+    const cls = ['class T:', '    @classmethod', '    def make(cls, n):', '        return n', ''].join('\n')
+    expect(one(cls, 'snakie_method')!.extraState).toEqual({
+      lead: 'cls',
+      params: ['n'],
+      // The decorator rides on the extra state as a list since A1 (#1215).
+      decorators: ['classmethod']
+    })
+    roundTrips(cls)
+    const stat = ['class T:', '    @staticmethod', '    def add(a, b):', '        return a', ''].join('\n')
+    expect(one(stat, 'snakie_method')!.extraState).toEqual({
+      lead: 'none',
+      params: ['a', 'b'],
+      decorators: ['staticmethod']
+    })
+    roundTrips(stat)
+  })
+
+  it('never invents a lead for a signature that has none', () => {
+    const src = ['class T:', '    def go():', '        print(1)', ''].join('\n')
+    expect(one(src, 'snakie_method')!.extraState).toEqual({ lead: 'none', params: [] })
+    roundTrips(src)
+  })
+
+  it('gives up the lead rather than let a decorator rewrite it', () => {
+    // `@classmethod` on a `def x(self)` is somebody's code, and the block
+    // would otherwise write `cls` into it.
+    const src = ['class T:', '    @classmethod', '    def go(self):', '        print(1)', ''].join('\n')
+    expect(one(src, 'snakie_method')!.extraState).toEqual({
+      lead: 'none',
+      params: ['self'],
+      decorators: ['classmethod']
+    })
     roundTrips(src)
   })
 
@@ -281,5 +436,145 @@ describe('the epic’s success test', () => {
     expect(report.raw).toBe(0)
     expect(report.rawSockets).toBe(0)
     roundTrips(src)
+  })
+})
+
+/**
+ * THE OLD `PARAMS` FIELD, MIGRATED (B2, #1221, epic #1206).
+ * =============================================================================
+ *
+ * Every workspace saved before #1221 carries the whole signature as one string
+ * and no parameter list at all. The block keeps the field, invisible, and
+ * spends it the moment a file sets it: the same splitter the reader uses turns
+ * it into the fixed lead, the name fields and the extras field — so an old file
+ * opens, generates exactly the Python it generated before, and is saved back in
+ * the new shape.
+ */
+describe('a workspace saved before the rebuild', () => {
+  /** A method block as it was serialised before #1221, loaded into a workspace. */
+  function legacy(fields: Record<string, string>): Blockly.Block {
+    const ws = new Blockly.Workspace()
+    Blockly.serialization.workspaces.load(
+      {
+        blocks: {
+          languageVersion: 0,
+          blocks: [{ type: 'snakie_method', id: 'm', fields }]
+        }
+      },
+      ws
+    )
+    return ws.getBlockById('m')!
+  }
+
+  /** The Python a loaded block generates, body and all. */
+  const code = (block: Blockly.Block): string => generateProgram(block.workspace).code
+
+  it('splits the signature into the lead, the names and the extras', () => {
+    const block = legacy({ NAME: 'load', PARAMS: 'self, path, flip_x=None', DECORATOR: 'NONE' })
+    expect(block.getFieldValue('PARAM0')).toBe('path')
+    expect(block.getFieldValue('EXTRAS')).toBe('flip_x=None')
+    expect(code(block)).toBe('def load(self, path, flip_x=None):\n    pass\n')
+  })
+
+  it('writes the same Python the old field did', () => {
+    for (const params of ['self', 'self, speed', 'self, *args, **kwargs', 'cls, n', '']) {
+      const block = legacy({ NAME: 'go', PARAMS: params })
+      expect(code(block), params).toBe(`def go(${params}):\n    pass\n`)
+    }
+  })
+
+  it('is saved back in the new shape, so the migration never runs twice', () => {
+    const block = legacy({ NAME: 'go', PARAMS: 'self, speed' })
+    const saved = Blockly.serialization.blocks.save(block) as unknown as Record<string, unknown>
+    expect(saved.extraState).toEqual({ lead: 'self', params: ['speed'] })
+    // Nothing left to re-run: a second pass over a learner's edits would put
+    // the old signature back.
+    expect((saved.fields as Record<string, string>).PARAMS).toBeUndefined()
+  })
+
+  it('keeps a signature nobody can split, trailing comma and all', () => {
+    const block = legacy({ NAME: 'load', PARAMS: 'path,' })
+    expect(code(block)).toBe('def load(path,):\n    pass\n')
+  })
+
+  it('keeps the decorator and the async setting working over the top', () => {
+    const block = legacy({ NAME: 'x', PARAMS: 'self', DECORATOR: 'property', KIND: 'ASYNC' })
+    expect(code(block)).toBe('@property\nasync def x(self):\n    pass\n')
+  })
+})
+
+describe('the method block a learner drags out', () => {
+  /** A fresh method block, with the state a saved file would give it. */
+  function fresh(state?: Record<string, unknown>): Blockly.Block {
+    const ws = new Blockly.Workspace()
+    Blockly.serialization.workspaces.load(
+      {
+        blocks: {
+          languageVersion: 0,
+          blocks: [{ type: 'snakie_method', id: 'm', ...(state ? { extraState: state } : {}) }]
+        }
+      },
+      ws
+    )
+    return ws.getBlockById('m')!
+  }
+
+  it('starts as `def go(self):`', () => {
+    expect(generateProgram(fresh().workspace).code).toBe('def go(self):\n    pass\n')
+  })
+
+  it('shows `self` as a label, not as a field a learner can rename', () => {
+    // Renaming it here would leave every `self.` block in the body meaning
+    // nothing — which is the whole reason `self` is not a variable (#1093).
+    const block = fresh()
+    expect(block.getField('SELF')).toBeNull()
+    expect(block.getFieldValue('PARAM0')).toBeNull()
+  })
+
+  it('follows the decorator: `cls` for a class method, nothing for a static one', () => {
+    const block = fresh({ lead: 'self', params: ['n'] })
+    block.setFieldValue('classmethod', 'DECORATOR')
+    expect(generateProgram(block.workspace).code).toBe('@classmethod\ndef go(cls, n):\n    pass\n')
+    block.setFieldValue('staticmethod', 'DECORATOR')
+    expect(generateProgram(block.workspace).code).toBe('@staticmethod\ndef go(n):\n    pass\n')
+  })
+
+  it('keeps the names already typed in when the row is rebuilt', () => {
+    const block = fresh({ lead: 'self', params: ['speed'] })
+    block.setFieldValue('fast', 'PARAM0')
+    block.setFieldValue('classmethod', 'DECORATOR')
+    expect(block.getFieldValue('PARAM0')).toBe('fast')
+  })
+
+  it('builds `class Robot:` with an `__init__` that has a default', () => {
+    // #1221's "done when", BUILT rather than read: the class block, a method
+    // inside it, a name field and the extras row.
+    const ws = new Blockly.Workspace()
+    Blockly.serialization.workspaces.load(
+      {
+        blocks: {
+          languageVersion: 0,
+          blocks: [
+            {
+              type: 'snakie_class',
+              fields: { NAME: 'Robot', BASES: '' },
+              inputs: {
+                BODY: {
+                  block: {
+                    type: 'snakie_method',
+                    fields: { NAME: '__init__', EXTRAS: 'speed=3' },
+                    extraState: { lead: 'self', params: ['name'] }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      ws
+    )
+    expect(generateProgram(ws).code).toBe(
+      'class Robot:\n    def __init__(self, name, speed=3):\n        pass\n'
+    )
   })
 })

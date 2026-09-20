@@ -62,6 +62,7 @@ and its block is selected on the canvas. Right-click a block and choose
 | **Control** | forever, repeat, if, for each, break |
 | **Logic · Maths · Text · Lists** | the everyday building blocks |
 | **Variables · Functions** | naming things, and naming groups of steps |
+| **Functions ▸ Classes** | `class`, `self` and `super()` — advanced blocks |
 | **Plugins** | blocks a Python plugin added (desktop only) |
 | **Python** | grey blocks holding code you type yourself |
 
@@ -73,6 +74,15 @@ minus the things a first-year class does not need to scroll past — classes,
 `del`, and the grey Python blocks. **Settings ▸ Appearance ▸ Advanced blocks**
 switches them on, and an open canvas re-filters straight away. A profile that
 used Snakie before this setting existed keeps every drawer.
+
+Classes live on a **Classes shelf inside Functions** rather than in a category
+of their own: `class` for a kind of thing, `self` for the particular one a
+method was called on, and `super()` for the class it was built on. The shelf
+opens with a line saying what it is for, and everything on it is advanced, so it
+is there for a learner who has switched advanced blocks on and absent for one
+who has not. The track that is filling it — methods, properties, `self.x`,
+`create instance` — and the coverage numbers behind it are in
+[`blocks-classes-epic.md`](blocks-classes-epic.md).
 
 Two things do not change with the switch. A program that already uses advanced
 blocks **still opens, renders and runs** in simple mode — the toolbox is what a

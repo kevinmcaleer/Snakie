@@ -5,6 +5,17 @@ import type { PyImport } from '../imports'
 import type { BlockDefinition } from '../registry'
 import * as Blockly from 'blockly/core'
 import { registerCallRules } from '../python-to-blocks'
+import { CLASSES } from './structure'
+import {
+  appendExtrasRow,
+  EXTRAS_FIELD,
+  extrasText,
+  extrasVisible,
+  getExtras,
+  hasExtrasRow,
+  setExtras,
+  setExtrasVisible
+} from '../params'
 
 /**
  * FUNCTIONS (#1011, epic #1007).
@@ -32,27 +43,21 @@ function params(block: Blockly.Block, gen: MicroPythonGenerator): string[] {
   const models = block.getVarModels?.() ?? []
   return models.map((m) => gen.variableName(m.getId(), m.getName()))
 }
-
 /**
  * THE PARAMETERS BLOCKLY'S LIST CANNOT HOLD (#1134, epic #1119).
  *
  * Blockly's procedure mutator models a parameter as a bare NAME — it becomes a
  * workspace variable, and renaming it renames every caller, which is exactly the
  * machinery `palette/index.ts` says is worth not rebuilding. A default value, a
- * `*args` or a `**kwargs` has nowhere to live on it, so
- * `def blink(times=3):` could not be built and `def load(path, flip=None):`
- * could not even be READ — `modellableParams` sent the whole `def` to a raw
- * suite rather than drop a parameter.
+ * `*args` or a `**kwargs` has nowhere to live on it, so `def blink(times=3):`
+ * could not be built and `def load(path, flip=None):` could not even be READ.
  *
- * SO THEY GO IN A FIELD, appended after the declared ones. That is the same
- * decision `snakie_method` made for its whole parameter list and `snakie_with`
- * made for its head: the text is exact for every form, where sockets would
- * model the common case and lose the rest.
- *
- * AND IT IS THE DECISION THAT KEEPS EVERY SAVED WORKSPACE LOADING. The issue
- * names extending the mutator's serialisation as the whole cost of this work;
- * a field on the block is serialised by name, a block saved before it existed
- * simply has none, and Blockly's own procedure machinery is untouched.
+ * SO THEY GO IN A FIELD, appended after the declared ones — and since B2
+ * (#1221) that field, the row it hides in and the splitter that fills it live
+ * in `../params.ts`, because the method block declares parameters too and
+ * #1221 asks for one mechanism rather than two. What is left here is the line
+ * that puts the two halves of a `def`'s signature together, and the re-exports
+ * `BlocksCanvas.tsx` and the extras tests reach for.
  *
  * A DEFAULTED PARAMETER GETS NO CALLER SOCKET, which is correct rather than a
  * shortcoming: it is optional at the call site, which is the whole reason for
@@ -60,105 +65,11 @@ function params(block: Blockly.Block, gen: MicroPythonGenerator): string[] {
  */
 function signature(block: Blockly.Block, gen: MicroPythonGenerator): string {
   const declared = params(block, gen)
-  const extra = String(block.getFieldValue(EXTRAS_FIELD) ?? '').trim().replace(/,\s*$/, '')
+  const extra = extrasText(block).replace(/,\s*$/, '')
   return [...declared, ...(extra === '' ? [] : [extra])].join(', ')
 }
 
-/** The field the extra parameters live in, and the input that carries it. */
-export const EXTRAS_FIELD = 'EXTRAS'
-const EXTRAS_INPUT = 'SNAKIE_EXTRAS'
-
-/**
- * THE ROW IS NOT THERE UNTIL IT HOLDS SOMETHING.
- *
- * `def` is the block a learner meets on their first afternoon, and a defaulted
- * parameter is a thing they will want in their second month. An always-visible
- * `extra parameters` row asks every one of them, every time, to wonder what it
- * is for — which is a poor trade for a field most programs never fill in.
- *
- * So the row is HIDDEN while it is empty, and appears the moment it has
- * something to say: the learner asks for it from the block's right-click menu
- * (`Add extra parameters…`, registered in `BlocksCanvas.tsx`), or a file being
- * read gives it a value. Nothing about what the field GENERATES changes — the
- * signature is built from the value, not from whether the row is on screen —
- * so a hidden empty row and no row at all write the same Python.
- *
- * SHOWING IS IMMEDIATE, HIDING WAITS for the editor to close (see
- * {@link syncExtras}). Blockly's text input commits its value on every
- * keystroke, so hiding on an empty one would pull the row — and the editor
- * attached to it — out from under a learner who has just selected all and typed
- * over it.
- */
-export function setExtrasVisible(block: Blockly.Block, visible: boolean): void {
-  const input = block.getInput(EXTRAS_INPUT)
-  if (!input || input.isVisible() === visible) return
-  input.setVisible(visible)
-  ;(block as Blockly.BlockSvg).queueRender?.()
-}
-
-/** Is this one of the two `def` blocks the extras row is installed on? */
-export function hasExtrasRow(block: Blockly.Block): boolean {
-  return !!block.getInput(EXTRAS_INPUT)
-}
-
-/** Is the extras row on screen? False for a block that has no such row. */
-export function extrasVisible(block: Blockly.Block): boolean {
-  return !!block.getInput(EXTRAS_INPUT)?.isVisible()
-}
-
-/** The extra parameters as they stand: the field's text, trimmed. */
-export function getExtras(block: Blockly.Block): string {
-  return String(block.getFieldValue(EXTRAS_FIELD) ?? '').trim()
-}
-
-/**
- * Set the extra parameters, and put the row away when they are emptied.
- *
- * The one writing path the settings dialog (A4, #1218) uses. The field's own
- * validator only ever SHOWS the row — hiding is left to the editor closing, so
- * a learner who selects all and types over the text does not have the row
- * pulled out from under them mid-edit. A dialog has no such moment: it commits
- * once, when OK is pressed, and by then the answer is final.
- */
-export function setExtras(block: Blockly.Block, text: string): void {
-  const value = String(text ?? '')
-    .trim()
-    .replace(/,\s*$/, '')
-  block.setFieldValue(value, EXTRAS_FIELD)
-  setExtrasVisible(block, value !== '')
-}
-
-/** The extras row, shown iff `value` is non-blank. Used on load and on edit. */
-function syncExtras(field: Blockly.Field, value: string, allowHide: boolean): void {
-  const block = field.getSourceBlock()
-  // No source block yet: the field is validated once while it is still being
-  // constructed, before `appendField` has attached it to anything.
-  if (!block) return
-  const wanted = String(value ?? '').trim() !== ''
-  if (wanted || allowHide) setExtrasVisible(block, wanted)
-}
-
-/**
- * The extras field: a text input that carries the row's visibility with it.
- *
- * A subclass rather than a plain {@link Blockly.FieldTextInput} with a
- * validator, because the two halves of the rule fire at different moments —
- * the validator on every committed value (a keystroke, and a workspace being
- * deserialised), `onFinishEditing_` once the editor closes.
- */
-class ExtrasField extends Blockly.FieldTextInput {
-  constructor() {
-    super('', (value) => {
-      syncExtras(this, value, false)
-      return value
-    })
-  }
-
-  override onFinishEditing_(value: string): void {
-    super.onFinishEditing_(value)
-    syncExtras(this, value, true)
-  }
-}
+export { EXTRAS_FIELD, extrasVisible, getExtras, hasExtrasRow, setExtras, setExtrasVisible }
 
 /**
  * DECORATORS, AS A LIST ON THE MUTATION (A1, #1215, epic #1206).
@@ -357,6 +268,8 @@ export const FUNCTION_BLOCKS: BlockDefinition[] = [
     type: 'snakie_super',
     level: 'advanced',
     category: 'functions',
+    // On the Classes shelf since #1220, with the class block it names.
+    group: CLASSES,
     help: 'ref-classes',
     read: { fn: 'super', args: [], shape: 'value' },
     json: {
@@ -479,16 +392,9 @@ export function installFunctionBlocks(): void {
     const init = def.init
     def.init = function (this: Blockly.Block): void {
       init.call(this)
-      this.appendDummyInput(EXTRAS_INPUT)
-        // `and also` said nothing about what belongs in the box. This names it.
-        .appendField('extra parameters:')
-        .appendField(new ExtrasField(), EXTRAS_FIELD)
-      // Above the body, where the rest of the signature is — `appendDummyInput`
-      // puts it at the bottom, under the `return` row.
-      if (this.getInput('STACK')) this.moveInputBefore(EXTRAS_INPUT, 'STACK')
-      // Empty, so out of the way — see {@link setExtrasVisible}. A block being
-      // deserialised turns it back on when the field takes its value.
-      setExtrasVisible(this, false)
+      // Above the body, where the rest of the signature is — appended, the row
+      // would land at the bottom, under the `return` row.
+      appendExtrasRow(this, 'STACK')
     }
     def.snakieExtras_ = true
   }
