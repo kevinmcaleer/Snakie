@@ -21,6 +21,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   of a preference. The level decides what is in the drawer and nothing else.
 
 =======
+- **A class arrives with its `__init__`, and a block that creates one (#1224,
+  epic #1206).** Dragging a **class** out of the drawer now brings a
+  `def __init__(self):` with it — the first line every class needs, and the one
+  nothing in the drawer used to hint at. A class read back from a file is
+  untouched, because the constructor is what the *flyout* hands out. Beside it,
+  a new **create ⟨Class⟩ with …** block writes `robot = Robot("Bob", speed=3)`:
+  the class name is a menu of the classes this program defines (with a text box
+  for one it does not), and the arguments are the call block's own growable row,
+  keyword-name boxes and all. Opening a program reads `Robot(…)` back into the
+  block wherever `Robot` is a class in the same file, and writes it out again
+  byte for byte. Both are advanced blocks.
 - **A property block (#1222, epic #1206).** The Classes shelf has a new
   advanced `property` block: it writes `@property def name(self)`, and ticking
   **can be set too** adds the `@name.setter` half underneath, with the new
