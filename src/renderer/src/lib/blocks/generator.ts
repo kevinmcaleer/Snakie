@@ -621,6 +621,31 @@ function assemble(
 }
 
 /**
+ * The Python ONE block writes, with the source markers taken back out (#1245).
+ *
+ * `generateProgram` answers "what does this program say"; this answers "what
+ * does this block say", which is the question the *What block is this?* panel
+ * asks of a block a learner has never seen before. Deliberately `thisOnly`: the
+ * stack under a `for` is a different block's answer, and pasting twenty lines
+ * into a panel that was asked about one of them helps nobody.
+ *
+ * The markers `scrub_` wraps each line in are NUL bytes carrying a block id for
+ * the source map. Nothing outside the assembler may see them — a NUL in a
+ * string a panel renders is invisible, uncopyable and, if it ever reached a
+ * file, corrupt Python — so they come off here.
+ */
+export function pythonForBlock(block: Blockly.Block, dialect: Dialect = 'micropython'): string {
+  const workspace = block.workspace
+  const gen = new MicroPythonGenerator()
+  gen.dialect = dialect
+  installEmitters(gen)
+  gen.init(workspace)
+  const out = gen.blockToCode(block, true)
+  const text = Array.isArray(out) ? out[0] : out
+  return String(text ?? '').replace(new RegExp(`${MARK}[^${MARK}]*${MARK}`, 'g'), '')
+}
+
+/**
  * Point the generator's emitter table at the registry.
  *
  * Done per generation rather than once at module load so a block registered

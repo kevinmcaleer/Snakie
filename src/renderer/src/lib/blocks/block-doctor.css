@@ -1,0 +1,209 @@
+/*
+ * The *What block is this?* zone (#1245).
+ *
+ * It lives INSIDE Blockly's injection div, over the canvas, so it is positioned
+ * against that rather than against any React layout — bottom-left, because the
+ * trashcan is bottom-right and the two must never be confused for one another.
+ *
+ * Soft Shell tokens throughout: a warm card with a gold hairline, the same
+ * surface the rest of the app's panels wear, and IBM Plex Mono wherever the
+ * content is code.
+ */
+.block-doctor {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 60;
+  box-sizing: border-box;
+  max-width: min(360px, calc(100% - 24px));
+  border: 1px solid var(--gold);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--text);
+  font-family: var(--font-ui), system-ui, sans-serif;
+  font-size: 12px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+}
+
+/*
+ * IDLE IS A TARGET, NOT A PANEL. It has to be big enough to hit with a block in
+ * hand and small enough to ignore — a dashed edge says "put something here" in
+ * the one idiom every drag surface already uses.
+ */
+.block-doctor--idle {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--card) 82%, transparent);
+  opacity: 0.85;
+}
+
+.block-doctor--idle:hover {
+  opacity: 1;
+}
+
+.block-doctor__invite {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  color: var(--text-muted);
+}
+
+.block-doctor__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--goldbg);
+  color: var(--goldink);
+  font-weight: 700;
+}
+
+/* A block is over the zone: the answer is one drop away, and it says so. */
+.block-doctor--over {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--card);
+  opacity: 1;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.block-doctor--open {
+  width: 340px;
+  max-height: min(60%, 420px);
+  display: flex;
+  flex-direction: column;
+}
+
+.block-doctor__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 12px;
+  border-bottom: 1px solid var(--gold);
+}
+
+.block-doctor__title {
+  flex: 1;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.block-doctor__close {
+  flex: none;
+  border: 0;
+  border-radius: 6px;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.block-doctor__close:hover {
+  background: var(--goldbg);
+  color: var(--goldink);
+}
+
+.block-doctor__body {
+  overflow: auto;
+  padding: 10px 12px 12px;
+}
+
+.block-doctor__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.block-doctor__chip {
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  padding: 1px 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.block-doctor__chip--category {
+  background: var(--goldbg);
+  color: var(--goldink);
+}
+
+.block-doctor__note {
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.block-doctor__row {
+  display: flex;
+  gap: 8px;
+  padding: 3px 0;
+  line-height: 1.45;
+}
+
+.block-doctor__key {
+  flex: none;
+  width: 92px;
+  color: var(--text-muted);
+}
+
+.block-doctor__value {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.block-doctor__value--mono,
+.block-doctor__code {
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+.block-doctor__label {
+  margin: 10px 0 4px;
+  color: var(--text-muted);
+}
+
+.block-doctor__code {
+  margin: 0;
+  border: 1px solid var(--gold);
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: var(--editor);
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.block-doctor__type {
+  margin-top: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 10.5px;
+  opacity: 0.8;
+  overflow-wrap: anywhere;
+}
+
+.block-doctor__help {
+  margin-top: 10px;
+  border: 1px solid var(--gold);
+  border-radius: 6px;
+  padding: 5px 10px;
+  background: var(--goldbg);
+  color: var(--goldink);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.block-doctor__help:hover {
+  background: var(--gold);
+  color: var(--accent-contrast);
+}

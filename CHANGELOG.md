@@ -8,6 +8,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **"What block is this?" (#1245).** A drop zone in the bottom-left corner of
+  the blocks canvas. Drag any block onto it — including one from a program
+  somebody else wrote — and it says what the block is: its shape and what that
+  shape means, the drawer it lives in, whether it came from Snakie's palette, a
+  part, a plugin or an imported module, the Python library it imports, the pin
+  it claims and which way it drives it, what is plugged into each socket, and
+  the Python that one block writes. The block springs straight back to where it
+  was, so asking about a program never edits it, and a block this build has no
+  description for says exactly that instead of guessing. Blocks with a help
+  article offer a **Read more about this** button straight into the in-app help.
 - **Detect the modules baked into a board's firmware (#1246).** Snakie could
   only ever see two kinds of module: the ones in its own catalog, and the `.py`
   files sitting in `/` and `/lib`. A vendor MicroPython image compiles modules
