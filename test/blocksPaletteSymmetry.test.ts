@@ -171,6 +171,9 @@ const READ_DIRECTLY: Record<string, string> = {
   snakie_self_attr_set: 'class Thing:\n    def go(self):\n        self.speed = 1\n',
   snakie_attr_get: 'x = motor.speed\n',
   snakie_attr_set: 'motor.speed = 3\n',
+  // The getter and the `@name.setter` under it, folded into one block (#1222).
+  snakie_property:
+    'class Thing:\n    @property\n    def speed(self):\n        return 1\n\n    @speed.setter\n    def speed(self, value):\n        pass\n',
   // --- error handling and resources (W7, #1094)
   snakie_try: 'try:\n    print(1)\nexcept OSError as e:\n    print(e)\n',
   // `use … as` took the shape a learner meets (#1132); the text-field block
