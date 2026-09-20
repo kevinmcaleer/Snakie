@@ -6,6 +6,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Detected shelf missed packages and `.mpy` modules on the board
+  (#1254).** On a real Arduino Alvik, `arduino_alvik` did not appear even
+  though the board imports it: the shelf's board section lists `.py` FILES in
+  `/` and `/lib`, and an Alvik's library is a `/lib` package — a directory the
+  filter skipped. A `.mpy`, and anything on a `sys.path` entry other than `/`
+  or `/lib`, were invisible the same way. The discovery probe already knew
+  about all of them; nothing rendered the list. Those names are now listed
+  beside the parsed files, with `dir()` on demand, at no extra cost to the
+  board.
+
+- **A probe that never got an answer no longer reads as an empty board
+  (#1254).** "The board listed no built-in modules" was shown both when the
+  board genuinely had none and when the probe failed — the two need opposite
+  words, and the second now says so and points at RESCAN.
+
+### Changed
+
+- **The Detected shelf's three groups are named for where a module lives
+  (#1254):** **Modules on computer**, **Modules on device** and **Modules in
+  firmware** — because where it lives is what decides what you can do with it.
+
 ### Added
 
 - **"What block is this?" (#1245).** A drop zone in the bottom-left corner of

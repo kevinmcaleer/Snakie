@@ -6,6 +6,7 @@ import {
   memberCount,
   scanDeviceModules,
   scanProjectModules,
+  unscannedDeviceNames,
   type DetectedModule,
   type DetectedOrigin
 } from '../lib/module-scan'
@@ -47,10 +48,19 @@ import { refreshDiscoveredModules, useDiscoveredModules } from '../hooks/useDisc
  * an error the learner has to dismiss.
  */
 
+/**
+ * The shelf's three subcategories, named for WHERE a module lives, because
+ * where it lives is what decides what you can do with it: one on the computer
+ * is yours to edit, one on the device is yours to open and replace, and one in
+ * the firmware is neither.
+ */
 const ORIGIN_TITLE: Record<DetectedOrigin, string> = {
-  project: 'In your folder',
-  device: 'On the board'
+  project: 'Modules on computer',
+  device: 'Modules on device'
 }
+
+/** The third subcategory, which has no files behind it and so no scan. */
+const FIRMWARE_TITLE = 'Modules in firmware'
 
 /** `(width, height, addr=0x3C, *args)` — a signature as the file wrote it. */
 function signature(params: readonly ApiParam[]): string {
@@ -198,16 +208,29 @@ function ModuleRow({
 }
 
 /**
- * One module the firmware provides. Expanding it asks the board for `dir()` —
- * the only way in, since there is no file to read — and the result is a flat
- * list of names. No signatures, no docstrings, no class/function split: none of
- * that survives being frozen into the image, so the row says so rather than
- * inventing structure it does not have.
+ * One module known only by NAME — because it is in the firmware, or because it
+ * is a package / `.mpy` / off-path module the file scan cannot read (#1254).
  *
- * Fetched once, lazily. A frozen package can be large and the import costs the
+ * Expanding it asks the board for `dir()`, which is the only way in when there
+ * is no single source file to parse, and the result is a flat list of names. No
+ * signatures, no docstrings, no class/function split: none of that survives
+ * freezing, and none of it is recovered by `dir()` either. The row says so
+ * rather than inventing structure it does not have.
+ *
+ * Fetched once, lazily. A vendor package can be large and the import costs the
  * board memory, so nothing is imported until the learner asks for this one.
  */
-function FirmwareRow({ name, submodules }: { name: string; submodules: string[] }): JSX.Element {
+function BoardModuleRow({
+  name,
+  submodules,
+  badge,
+  badgeTitle
+}: {
+  name: string
+  submodules: string[]
+  badge: string
+  badgeTitle: string
+}): JSX.Element {
   const [open, setOpen] = useState(false)
   const [members, setMembers] = useState<string[] | null>(null)
   const [loading, setLoading] = useState(false)
@@ -254,8 +277,8 @@ function FirmwareRow({ name, submodules }: { name: string; submodules: string[] 
               {submodules.length} sub
             </span>
           )}
-          <span className="dmods__frozen" title="Compiled into the board's firmware">
-            built in
+          <span className="dmods__frozen" title={badgeTitle}>
+            {badge}
           </span>
         </span>
       </div>
@@ -388,6 +411,15 @@ export function DetectedModules(): JSX.Element {
     return map
   }, [discovery.found.frozenSubmodules])
 
+  // The importable names on `sys.path` that the file scan could not account
+  // for: packages, `.mpy`s, and anything outside `/` and `/lib` (#1254). An
+  // Alvik's `arduino_alvik` is a `/lib` PACKAGE, so the `.py`-files-only scan
+  // saw nothing and the panel said the board had nothing on it.
+  const deviceExtras = useMemo(
+    () => unscannedDeviceNames(discovery.found.filesystem, device.rows),
+    [discovery.found.filesystem, device.rows]
+  )
+
   const rescan = useCallback((): void => {
     setProjectTick((t) => t + 1)
     setDeviceTick((t) => t + 1)
@@ -408,32 +440,47 @@ export function DetectedModules(): JSX.Element {
   const renderGroup = (
     origin: DetectedOrigin,
     state: ScanState,
-    absent: string | null
-  ): JSX.Element => (
-    <section className="dmods__group">
-      <div className="dmods__group-head">
-        <span>{ORIGIN_TITLE[origin]}</span>
-        {!absent && (
-          <span className="dmods__group-count">
-            {state.rows.length} {state.rows.length === 1 ? 'file' : 'files'}
-          </span>
+    absent: string | null,
+    // Importable names the file scan could not read (#1254) — listed by name
+    // beside the parsed files rather than left out of the panel entirely.
+    extras: string[] = []
+  ): JSX.Element => {
+    const total = state.rows.length + extras.length
+    return (
+      <section className="dmods__group">
+        <div className="dmods__group-head">
+          <span>{ORIGIN_TITLE[origin]}</span>
+          {!absent && (
+            <span className="dmods__group-count">
+              {total} {total === 1 ? 'module' : 'modules'}
+            </span>
+          )}
+        </div>
+        {absent ? (
+          <p className="dmods__hint">{absent}</p>
+        ) : total === 0 ? (
+          <p className="dmods__hint">
+            {state.scanning ? 'Looking for modules…' : 'No modules here.'}
+          </p>
+        ) : (
+          <ul className="dmods__files" role="list">
+            {state.rows.map((row) => (
+              <ModuleRow key={`${row.origin}:${row.path}`} row={row} onOpen={open} />
+            ))}
+            {extras.map((name) => (
+              <BoardModuleRow
+                key={`extra:${name}`}
+                name={name}
+                submodules={[]}
+                badge="package"
+                badgeTitle="A package, a .mpy, or a module outside / and /lib — importable, but not a single file to read"
+              />
+            ))}
+          </ul>
         )}
-      </div>
-      {absent ? (
-        <p className="dmods__hint">{absent}</p>
-      ) : state.rows.length === 0 ? (
-        <p className="dmods__hint">
-          {state.scanning ? 'Looking for .py files…' : 'No .py files here.'}
-        </p>
-      ) : (
-        <ul className="dmods__files" role="list">
-          {state.rows.map((row) => (
-            <ModuleRow key={`${row.origin}:${row.path}`} row={row} onOpen={open} />
-          ))}
-        </ul>
-      )}
-    </section>
-  )
+      </section>
+    )
+  }
 
   return (
     <div className="dmods">
@@ -453,9 +500,10 @@ export function DetectedModules(): JSX.Element {
         </span>
       </div>
       <p className="dmods__blurb">
-        Every <code>.py</code> beside your program and on the board, and what each one
-        defines. Read from the text, never run. Plus the modules compiled into the
-        board&rsquo;s own firmware, which are not files at all.
+        Every module beside your program and on the board, and what each one defines —
+        read from the text, never run. Packages and <code>.mpy</code> files are listed by
+        name, and so are the modules compiled into the board&rsquo;s own firmware, which
+        are not files at all.
       </p>
       {renderGroup(
         'project',
@@ -465,11 +513,12 @@ export function DetectedModules(): JSX.Element {
       {renderGroup(
         'device',
         device,
-        connected ? null : 'Connect a board to see the modules installed on it.'
+        connected ? null : 'Connect a board to see the modules installed on it.',
+        deviceExtras
       )}
       <section className="dmods__group">
         <div className="dmods__group-head">
-          <span>Built into the firmware</span>
+          <span>{FIRMWARE_TITLE}</span>
           {connected && firmwareNames.length > 0 && (
             <span className="dmods__group-count">
               {firmwareNames.length} {firmwareNames.length === 1 ? 'module' : 'modules'}
@@ -482,17 +531,26 @@ export function DetectedModules(): JSX.Element {
           </p>
         ) : firmwareNames.length === 0 ? (
           <p className="dmods__hint">
-            {discovery.scanning ? 'Asking the board…' : 'The board listed no built-in modules.'}
+            {discovery.scanning
+              ? 'Asking the board…'
+              : discovery.found.complete
+                ? 'The board listed no built-in modules.'
+                : // NOT the same sentence (#1254): an unanswered probe that
+                  // says "no built-in modules" is indistinguishable from a bare
+                  // board, and sends you looking in the wrong place.
+                  'The board could not be asked just now — it may have been busy. Press RESCAN.'}
           </p>
         ) : (
           <>
             {firmwareLabel && <p className="dmods__firmware">{firmwareLabel}</p>}
             <ul className="dmods__files" role="list">
               {firmwareNames.map((name) => (
-                <FirmwareRow
+                <BoardModuleRow
                   key={`fw:${name}`}
                   name={name}
                   submodules={submodulesByPackage.get(name) ?? []}
+                  badge="built in"
+                  badgeTitle="Compiled into the board's firmware"
                 />
               ))}
             </ul>

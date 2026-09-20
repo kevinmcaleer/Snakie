@@ -208,6 +208,16 @@ describe('parseDiscovery', () => {
     expect(parseDiscovery('')).toEqual(emptyDiscovery())
     expect(parseDiscovery('Traceback (most recent call last):')).toEqual(emptyDiscovery())
   })
+
+  it('reports whether the probe finished, so empty is not ambiguous (#1254)', () => {
+    // A board that answered and genuinely has nothing frozen, versus a probe
+    // that never got an answer. The panel needs opposite words for these.
+    expect(parseDiscovery(transcript()).complete).toBe(true)
+    expect(parseDiscovery('').complete).toBe(false)
+    expect(
+      parseDiscovery(`${DISCOVER_FIRMWARE}\nsysname=rp2\n${DISCOVER_PATH}`).complete
+    ).toBe(false)
+  })
 })
 
 describe('allModuleNames / firmwareOnlyNames', () => {
