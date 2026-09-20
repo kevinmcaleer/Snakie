@@ -23,6 +23,14 @@ import {
   MODULE_PRESENT,
   type ModuleDef
 } from '../../../shared/modules-catalog'
+import {
+  discoverSnippet,
+  emptyDiscovery,
+  moduleMembersSnippet,
+  parseDiscovery,
+  parseModuleMembers,
+  type DiscoveredModules
+} from '../../../shared/module-discovery'
 import { driverSources } from 'virtual:snakie-standard-parts'
 import { MODULE_STUBS } from './web-lib-sources'
 import { MipResolveError, resolveMipSpec } from '../../../shared/mip-resolve'
@@ -166,6 +174,31 @@ export function createWebModulesApi(): Record<string, unknown> {
           if (m.startsWith(`${MODULE_PRESENT} `)) present.add(m.slice(MODULE_PRESENT.length + 1).trim())
         }
         return importNames.filter((n) => present.has(n.replace(/[^A-Za-z0-9_]/g, '')))
+      } catch {
+        return []
+      }
+    },
+
+    /**
+     * Port of the preload's firmware/filesystem discovery (#1246) — the board
+     * enumerating ITSELF, so the web build sees a vendor's frozen modules too.
+     */
+    discover: async (): Promise<DiscoveredModules> => {
+      try {
+        const exec = await window.api.device.exec(discoverSnippet())
+        return parseDiscovery(exec.stdout ?? '')
+      } catch {
+        return emptyDiscovery()
+      }
+    },
+
+    /** Port of the preload's one-module `dir()` probe. */
+    moduleMembers: async (name: string): Promise<string[]> => {
+      const snippet = moduleMembersSnippet(name)
+      if (!snippet) return []
+      try {
+        const exec = await window.api.device.exec(snippet)
+        return parseModuleMembers(exec.stdout ?? '')
       } catch {
         return []
       }

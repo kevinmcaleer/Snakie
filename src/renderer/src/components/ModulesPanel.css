@@ -207,6 +207,14 @@
   border: 2px solid var(--success, #2f6b2a);
 }
 
+/* BUILT IN — in the firmware, not on the filesystem. Deliberately a different
+   colour from INSTALLED: it is not something Snakie put there, and not
+   something it can update or remove. */
+.mods__stamp--frozen {
+  color: var(--accent-ink, #b07d20);
+  border: 2px solid var(--accent-ink, #b07d20);
+}
+
 /* --- Result / notes / log ------------------------------------------------- */
 
 .mods__result {

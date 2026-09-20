@@ -17,6 +17,8 @@ import {
   type ModuleInstallUiState
 } from '../lib/modulesManager'
 import { probeOutdatedModules } from '../lib/moduleFreshness'
+import { useDiscoveredModules } from '../hooks/useDiscoveredModules'
+import { firmwareOnlyNames } from '../../../shared/module-discovery'
 import { enqueueDeviceTask } from '../lib/device-queue'
 import { installStepReporter } from '../lib/install-steps'
 import type { ModuleInstallProgress } from '../../../preload/index.d'
@@ -166,10 +168,23 @@ export function ModulesPanel(): JSX.Element {
     }
   }, [])
 
+  // What the FIRMWARE provides (#1246). A vendor image can bake a catalog
+  // module in — an Arduino Alvik ships a frozen `modulino` — and such a module
+  // imports fine, so the import probe reports it installed and the row offered
+  // an UPDATE for something with no `/lib` copy to update. Only names the
+  // firmware provides AND the filesystem does not count: a `/lib` copy shadows
+  // the frozen one and is what actually imports, so it stays an ordinary row.
+  const discovery = useDiscoveredModules(connected)
+  const frozenNames = useMemo(
+    () => new Set(firmwareOnlyNames(discovery.found)),
+    [discovery.found]
+  )
+
   const groups = useMemo(() => groupByInstrument(catalog), [catalog])
   const statuses = useMemo(
-    () => buildRowStatuses(catalog, installedNames, connected, installs, outdatedNames),
-    [catalog, installedNames, connected, installs, outdatedNames]
+    () =>
+      buildRowStatuses(catalog, installedNames, connected, installs, outdatedNames, frozenNames),
+    [catalog, installedNames, connected, installs, outdatedNames, frozenNames]
   )
   const counts = useMemo(() => countStatuses(catalog, statuses), [catalog, statuses])
 
@@ -180,6 +195,13 @@ export function ModulesPanel(): JSX.Element {
     const action =
       st === 'installed' ? (
         <span className="mods__stamp mods__stamp--installed">INSTALLED</span>
+      ) : st === 'frozen' ? (
+        <span
+          className="mods__stamp mods__stamp--frozen"
+          title={`${def.name} is built into this board's firmware — nothing to install`}
+        >
+          BUILT IN
+        </span>
       ) : (
         <button
           type="button"
