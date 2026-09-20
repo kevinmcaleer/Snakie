@@ -951,7 +951,14 @@ interface CommentRun extends Stmt {
  * one we understood or a raw line.
  */
 function decoratedAbove(node: Stmt, siblings: readonly Stmt[]): boolean {
-  const before = siblings[siblings.indexOf(node) - 1]
+  // PAST A COMMENT (A2, #1216). `@app.route("/")`, then `# the home page`, then
+  // the `def`: the decorator still belongs to it, and the reader now reads the
+  // three together. Hoisting the `def` anyway would build a CALLER block for a
+  // definition that is a method block instead — a workspace Blockly refuses to
+  // load, which costs the learner every block in the file.
+  let i = siblings.indexOf(node) - 1
+  while (i >= 0 && siblings[i].body.length === 0 && isCommentLine(siblings[i].line)) i -= 1
+  const before = siblings[i]
   return Boolean(before && before.line.text.startsWith('@') && before.body.length === 0)
 }
 
@@ -2508,12 +2515,11 @@ class Converter {
     }
     // A DECORATOR BELONGS TO THE `def` UNDER IT, so it is read with it rather
     // than as a block of its own — a decorator block could be dragged away from
-    // the thing it decorates, and would mean nothing where it landed. Only the
-    // three the method block has a setting for; anything else is somebody's own
-    // decorator and stays raw, header and body together.
-    const decorator = /^@(property|staticmethod|classmethod)$/.exec(text)
-    if (decorator) {
-      const decorated = this.decorated(node, siblings, decorator[1])
+    // the thing it decorates, and would mean nothing where it landed. ANY
+    // decorator since A2 (#1216); see {@link decorated}. One with no `def`
+    // under it at all still falls through and stays raw.
+    if (text.startsWith('@') && node.body.length === 0) {
+      const decorated = this.decorated(node, siblings)
       if (decorated) return recognised(decorated)
     }
     const method = DEF_HEADER.exec(text)
@@ -2544,7 +2550,7 @@ class Converter {
     // `procedures_defnoreturn` has no previous or next connection, so it can
     // never sit inside a class's body. Its parameter list is a FIELD, so any
     // signature comes back exactly as written.
-    if (method) return recognised([this.method(node, method, 'NONE')])
+    if (method) return recognised([this.method(node, method, [])])
 
     // --- simple statements -----------------------------------------------
     if (text === 'break' || text === 'continue') {
@@ -2658,48 +2664,90 @@ class Converter {
   }
 
   /**
-   * `@property` + the `def` under it → one method block (W6, #1093).
+   * The `@…` lines above a `def` → the method block's decorator list (A2, #1216).
    *
-   * The decorator line and the `def` line are two logical lines and one idea, so
-   * the second is CONSUMED — by identity, the way `ifChain` takes its `elif` and
+   * EVERY DECORATOR, NOT THREE OF THEM. This used to accept `@property`,
+   * `@staticmethod` and `@classmethod` — the three the block had a dropdown for
+   * — and leave `@micropython.native` and `@app.route("/")` as grey lines with
+   * the `def` under them. A1 (#1215) gave the block a LIST instead, so the only
+   * thing left to decide is where a decorator ENDS: at the end of its line, and
+   * the text between the `@` and there is taken verbatim. No parsing, which is
+   * what makes `@app.route("/(a)")` — a bracket inside a string inside a call —
+   * the same easy case as `@property`.
+   *
+   * THE LINES ARE CONSUMED — by identity, the way `ifChain` takes its `elif` and
    * `else` arms, because guessing from the text is what lost an `else` in #1068.
-   * Its line still has to be counted by hand: `statements()` skips a consumed
-   * node without counting it, on the reasoning that whoever consumed it did.
+   * Each still has to be counted by hand: `statements()` skips a consumed node
+   * without counting it, on the reasoning that whoever consumed it did.
    *
-   * Null when the next sibling is not a `def` we can hold, which leaves the
-   * decorator as an ordinary raw line with the `def` under it — exactly what
-   * both were before.
+   * A COMMENT BETWEEN A DECORATOR AND ITS `def` IS NOT CONSUMED. It is the
+   * learner's prose, and no block on the method holds it, so it is stepped over
+   * and stays the comment block it would have been — which the round-trip gate
+   * forgives, because it compares a bag of line signatures and the comment's is
+   * still in it.
+   *
+   * `@property` / `@x.setter` ARE NOT FOLDED TOGETHER here: a getter and a
+   * setter read as two methods with one decorator each. B3 (#1222) owns the
+   * single property block.
+   *
+   * Null when nothing under the decorators is a `def` we can hold, which leaves
+   * the decorator as an ordinary raw line with the `def` under it — exactly what
+   * it was before.
    */
-  private decorated(
-    node: Stmt,
-    siblings: readonly Stmt[],
-    decorator: string
-  ): BlockJson[] | null {
-    const next = siblings[siblings.indexOf(node) + 1]
-    if (!next || this.consumed.has(next)) return null
-    const def = DEF_HEADER.exec(next.line.text)
-    if (!def) return null
-    this.consumed.add(next)
+  private decorated(node: Stmt, siblings: readonly Stmt[]): BlockJson[] | null {
+    const decorators: string[] = []
+    const claimed: Stmt[] = []
+    let i = siblings.indexOf(node)
+    let def: RegExpExecArray | null = null
+    let header: Stmt | null = null
+    while (i < siblings.length) {
+      const next = siblings[i]
+      if (this.consumed.has(next)) return null
+      const text = next.line.text
+      if (next.body.length === 0 && text.startsWith('@') && text.slice(1).trim() !== '') {
+        decorators.push(text.slice(1).trim())
+        claimed.push(next)
+        i += 1
+        continue
+      }
+      // A comment between the decorators and the `def`: stepped over, left to
+      // be read as the comment block it is.
+      if (next.body.length === 0 && isCommentLine(next.line)) {
+        i += 1
+        continue
+      }
+      def = DEF_HEADER.exec(text)
+      header = next
+      break
+    }
+    if (!def || !header || decorators.length === 0) return null
+    for (const line of claimed.slice(1)) {
+      this.consumed.add(line)
+      this.report.total += 1
+      this.report.recognised += 1
+    }
+    this.consumed.add(header)
     this.report.total += 1
     this.report.recognised += 1
-    return [this.method(next, def, decorator)]
+    return [this.method(header, def, decorators)]
   }
 
   /** `def name(params):` as a STACKABLE block, with its body under it. */
-  private method(node: Stmt, header: RegExpExecArray, decorator: string): BlockJson {
-    return this.withBody(
-      {
-        type: 'snakie_method',
-        fields: {
-          NAME: header[2],
-          PARAMS: header[3].trim(),
-          DECORATOR: decorator,
-          KIND: header[1] ? 'ASYNC' : 'SYNC'
-        }
-      },
-      'BODY',
-      node
-    )
+  private method(node: Stmt, header: RegExpExecArray, decorators: readonly string[]): BlockJson {
+    const block: BlockJson = {
+      type: 'snakie_method',
+      fields: {
+        NAME: header[2],
+        PARAMS: header[3].trim(),
+        // THE DROPDOWN STAYS AT `NONE` and the list carries everything (A1,
+        // #1215): `getDecorators` prefers the list and only falls back to the
+        // field for a workspace saved before there was one.
+        DECORATOR: 'NONE',
+        KIND: header[1] ? 'ASYNC' : 'SYNC'
+      }
+    }
+    if (decorators.length > 0) block.extraState = { decorators: [...decorators] }
+    return this.withBody(block, 'BODY', node)
   }
 
   /** `if` / `elif` / `else`, gathered from the siblings that follow. */
