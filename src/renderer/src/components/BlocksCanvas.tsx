@@ -458,7 +458,6 @@ export function BlocksCanvas({
    */
   const dialectRef = useRef(dialect)
   dialectRef.current = dialect
-  /** The dialect the toolbox ON SCREEN was built for, so it isn't rebuilt twice. */
   /**
    * THE FOOT OF THE SHELF (#1211).
    *
@@ -470,6 +469,7 @@ export function BlocksCanvas({
    * it.
    */
   const [shelfFoot, setShelfFoot] = useState<HTMLElement | null>(null)
+  /** The dialect the toolbox ON SCREEN was built for, so it isn't rebuilt twice. */
   const toolboxDialectRef = useRef<Dialect | null>(null)
   /** And the level it was built for (#1210), for the same reason. */
   const toolboxLevelRef = useRef<BlockLevel | null>(null)
