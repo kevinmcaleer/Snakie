@@ -108,6 +108,36 @@ function body(block: Blockly.Block, gen: MicroPythonGenerator): string {
 /** The block type, named here because both the palette and the reader want it. */
 export const TRY_BLOCK = 'snakie_try'
 
+/** The property block's type, named here because the reader builds one too. */
+export const PROPERTY_BLOCK = 'snakie_property'
+/** The tick box that says this property can be set as well as read. */
+export const HAS_SETTER = 'HAS_SETTER'
+/** The row holding the setter's parameter name, hidden while the box is off. */
+const SETTER_ROW = 'SETTER_ROW'
+/** The extension that ties that tick box to the two rows it shows. */
+const PROPERTY_SETTER_EXTENSION = 'snakie_property_setter'
+
+/** Is the setter half of this property block switched on? */
+function hasSetter(block: Blockly.Block): boolean {
+  return block.getFieldValue(HAS_SETTER) === 'TRUE'
+}
+
+/**
+ * Show or hide the setter's two rows. Called when the box is ticked, and once
+ * as each block is built — including one being deserialised, whose field takes
+ * its saved value through the same validator.
+ */
+function setSetterVisible(block: Blockly.Block, visible: boolean): void {
+  let changed = false
+  for (const name of [SETTER_ROW, 'SET']) {
+    const input = block.getInput(name)
+    if (!input || input.isVisible() === visible) continue
+    input.setVisible(visible)
+    changed = true
+  }
+  if (changed) (block as Blockly.BlockSvg).queueRender?.()
+}
+
 export const STRUCTURE_BLOCKS: BlockDefinition[] = [
   // --------------------------------------------------------------------- class
   {
@@ -167,6 +197,68 @@ export const STRUCTURE_BLOCKS: BlockDefinition[] = [
       const at = decorator === 'NONE' ? '' : `@${decorator}\n`
       const async = block.getFieldValue('KIND') === 'ASYNC' ? 'async ' : ''
       return `${at}${async}def ${nameOf(block, 'NAME', 'go')}(${methodSignature(block)}):\n${body(block, gen)}`
+    }
+  },
+  // ------------------------------------------------------------------ property
+  {
+    // A PROPERTY IS A PAIR OF METHODS AND ONE IDEA (B3, #1222, epic #1206).
+    //
+    // `@property` is already a setting on `snakie_method`, which is enough to
+    // READ a getter and enough to build one. What it cannot do is hold the
+    // other half: a settable property is `@property def x(self)` and
+    // `@x.setter def x(self, value)` — two methods whose names must agree,
+    // whose decorators must agree, and which mean nothing apart. As two method
+    // blocks either can be dragged away from the other, and renaming one
+    // silently breaks the pair.
+    //
+    // So ONE block, with the name written once and used in both lines, and the
+    // setter behind a tick box: a read-only property is the common case, and
+    // the row for the new value is not on the block until it has a job.
+    type: PROPERTY_BLOCK,
+    level: 'advanced',
+    category: 'functions',
+    group: CLASSES,
+    help: 'ref-classes',
+    json: {
+      message0: 'property %1 can be set too %2',
+      args0: [
+        { type: 'field_input', name: 'NAME', text: 'name' },
+        { type: 'field_checkbox', name: HAS_SETTER, checked: false }
+      ],
+      message1: 'when it is read %1',
+      args1: [{ type: 'input_statement', name: 'GET' }],
+      // The setter's parameter as a FIELD: `value` is the convention, and a
+      // learner who would rather say `speed` can — the same trade the method
+      // block's PARAMS field makes.
+      message2: 'when it is set, call the new value %1 %2',
+      args2: [
+        { type: 'field_input', name: 'PARAM', text: 'value' },
+        { type: 'input_dummy', name: SETTER_ROW }
+      ],
+      message3: '%1',
+      args3: [{ type: 'input_statement', name: 'SET' }],
+      // THE ROWS COME AND GO BY VISIBILITY, not by being added and removed —
+      // the `def` block's extra-parameters row (`functions.ts`) rather than the
+      // `try` block's rebuild. A hidden input keeps what is plugged into it, so
+      // unticking the box and ticking it again gives back the setter body the
+      // learner wrote.
+      extensions: [PROPERTY_SETTER_EXTENSION],
+      previousStatement: null,
+      nextStatement: null,
+      tooltip:
+        'A value on this class that is worked out by running some steps — read it like `thing.name`, with no brackets. Tick the box to let it be set as well.'
+    },
+    code: (block, gen) => {
+      const name = nameOf(block, 'NAME', 'value')
+      const arm = (input: string): string =>
+        gen.statementToCode(block, input) || `${gen.INDENT}pass\n`
+      const getter = `@property\ndef ${name}(self):\n${arm('GET')}`
+      if (!hasSetter(block)) return getter
+      // ONE BLANK LINE BETWEEN THE TWO — what PEP 8 puts between two methods,
+      // and what the reader requires before it will fold a pair back into this
+      // block. So what this writes is exactly what reading it gives back.
+      const param = nameOf(block, 'PARAM', 'value')
+      return `${getter}\n@${name}.setter\ndef ${name}(self, ${param}):\n${arm('SET')}`
     }
   },
   // ---------------------------------------------------------------------- self
@@ -787,4 +879,17 @@ function nextParamName(state: MethodState): string {
 export function installStructureBlocks(): void {
   Blockly.Blocks[TRY_BLOCK] = tryBlockMixin() as never
   Blockly.Blocks[METHOD_BLOCK] = methodBlockMixin() as never
+  // The property block's tick box (#1222). An EXTENSION rather than a wrapped
+  // `init`: the block itself is ordinary JSON, and a validator is the one thing
+  // JSON cannot declare. Guarded, because `installCorePalette` runs again for
+  // every test file and Blockly throws on a name it has already been given.
+  if (!Blockly.Extensions.isRegistered(PROPERTY_SETTER_EXTENSION)) {
+    Blockly.Extensions.register(PROPERTY_SETTER_EXTENSION, function (this: Blockly.Block) {
+      this.getField(HAS_SETTER)?.setValidator((value: unknown) => {
+        setSetterVisible(this, value === true || value === 'TRUE')
+        return value
+      })
+      setSetterVisible(this, hasSetter(this))
+    })
+  }
 }

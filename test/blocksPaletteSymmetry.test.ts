@@ -163,6 +163,9 @@ const READ_DIRECTLY: Record<string, string> = {
   // --- structure (W6, #1093)
   snakie_class: 'class Thing:\n    def go(self):\n        print(1)\n',
   snakie_method: 'class Thing:\n    def go(self):\n        print(1)\n',
+  // The getter and the `@name.setter` under it, folded into one block (#1222).
+  snakie_property:
+    'class Thing:\n    @property\n    def speed(self):\n        return 1\n\n    @speed.setter\n    def speed(self, value):\n        pass\n',
   snakie_self: 'class Thing:\n    def go(self):\n        self.x = 1\n',
   // --- error handling and resources (W7, #1094)
   snakie_try: 'try:\n    print(1)\nexcept OSError as e:\n    print(e)\n',
