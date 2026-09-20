@@ -60,6 +60,11 @@ describe('which blocks are advanced (#1209)', () => {
         'snakie_class',
         'snakie_method',
         'snakie_self',
+        // Attributes (B4, #1223): `self.x` and `obj.x`, read and written.
+        'snakie_self_attr_get',
+        'snakie_self_attr_set',
+        'snakie_attr_get',
+        'snakie_attr_set',
         'snakie_try',
         'snakie_with',
         'snakie_await',

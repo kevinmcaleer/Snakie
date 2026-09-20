@@ -246,6 +246,24 @@ const PYTHON_ATTR_GET = 'snakie_python_attr_get'
 const PYTHON_ATTR_SET = 'snakie_python_attr_set'
 
 /**
+ * The NATIVE attribute blocks (B4, #1223, epic #1206).
+ *
+ * `self.speed` and `robot.speed` are not escape-hatch Python: they are what a
+ * class is made of, and `palette/structure.ts` gives them four blocks of their
+ * own. The reader reaches for those whenever the thing before the dot is a BARE
+ * NAME — `self`, or an ordinary variable — and leaves the Python drawer's pair
+ * to everything deeper, `self.motor.speed`, where the object really is an
+ * expression somebody has to see in a socket.
+ */
+const SELF_ATTR_GET = 'snakie_self_attr_get'
+const SELF_ATTR_SET = 'snakie_self_attr_set'
+const ATTR_GET = 'snakie_attr_get'
+const ATTR_SET = 'snakie_attr_set'
+
+/** The three readings of `<obj> . <name>`, for the assignment side to test. */
+const ATTR_GETS = new Set([SELF_ATTR_GET, ATTR_GET, PYTHON_ATTR_GET])
+
+/**
  * The most argument sockets a call block will grow to — `MAX_ARGS` in
  * `palette/python.ts`, restated here for the same reason as the types above.
  *
@@ -3041,12 +3059,12 @@ class Converter {
     // projects on its own (W1, #1088).
     const read = this.readChain(text, tokens.slice(0, at))
     if (read && read.next === at) {
-      if (read.block.type === PYTHON_ATTR_GET) {
-        return {
-          type: PYTHON_ATTR_SET,
-          fields: read.block.fields,
-          inputs: { ...read.block.inputs, VALUE: { block: this.expression(value) } }
-        }
+      // The setter that matches the reading: `self.speed = 3` is the native
+      // `self.` block since B4 (#1223), `motor.speed = 3` its object-socket
+      // twin, and a deeper target the Python drawer's block as before.
+      if (ATTR_GETS.has(read.block.type)) {
+        const set = attrSet(read.block, this.expression(value))
+        if (set) return set
       }
       if (read.block.type === 'snakie_list_get') {
         return {
@@ -4612,14 +4630,7 @@ class Converter {
         cur = { block, next: read.next }
         continue
       }
-      cur = {
-        block: {
-          type: PYTHON_ATTR_GET,
-          fields: { NAME: member.text },
-          inputs: { OBJ: { block: cur.block } }
-        },
-        next: cur.next + 2
-      }
+      cur = { block: attrGet(cur.block, member.text), next: cur.next + 2 }
     }
   }
 
@@ -4874,6 +4885,41 @@ function readCall(
   const read = readArgs(tokens, source, i)
   if (!read) return null
   return { module, fn, args: read.args, next: read.next, rest: tokens.slice(read.next) }
+}
+
+/**
+ * `<obj> . <name>` as the block that says it best (B4, #1223).
+ *
+ * THREE READINGS OF ONE SHAPE, and which one it is depends entirely on what is
+ * before the dot:
+ *
+ *     self.speed          → `snakie_self_attr_get`, with no socket at all
+ *     motor.speed         → `snakie_attr_get`, the name in its object socket
+ *     self.motor.speed    → the Python drawer's block, as it has always been
+ *
+ * The third case is honest rather than a gap: once the object is itself an
+ * attribute read, the line is no longer "something this thing remembers" and
+ * the socket is carrying structure a learner needs to see. Method calls go
+ * nowhere near here — `self.led.on()` is a call block, and its object is read
+ * by the rules above like any other.
+ */
+function attrGet(obj: BlockJson, name: string): BlockJson {
+  if (obj.type === 'snakie_self') return { type: SELF_ATTR_GET, fields: { ATTR: name } }
+  if (obj.type === 'variables_get') {
+    return { type: ATTR_GET, fields: { ATTR: name }, inputs: { OBJ: { block: obj } } }
+  }
+  return { type: PYTHON_ATTR_GET, fields: { NAME: name }, inputs: { OBJ: { block: obj } } }
+}
+
+/** The setter matching an {@link attrGet} reading, or null when there is none. */
+function attrSet(get: BlockJson, value: BlockJson): BlockJson | null {
+  const set = {
+    [SELF_ATTR_GET]: SELF_ATTR_SET,
+    [ATTR_GET]: ATTR_SET,
+    [PYTHON_ATTR_GET]: PYTHON_ATTR_SET
+  }[get.type]
+  if (!set) return null
+  return { type: set, fields: get.fields, inputs: { ...get.inputs, VALUE: { block: value } } }
 }
 
 /**
