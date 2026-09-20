@@ -7,6 +7,9 @@ import { ROOT_ORIGIN } from './arrange'
 import type { ArgField, CallReceiver, SocketType } from './registry'
 import { docstringComment } from './docstring'
 import { isReservedName, sanitise } from './names'
+// The signature splitters, shared with the blocks that hold a parameter list —
+// Blockly's two `def` blocks (#1134) and the method block B2 rebuilt (#1221).
+import { methodLead, splitMethodSignature, splitSignature } from './signature'
 import {
   isSuiteHeader,
   logicalLines,
@@ -1124,36 +1127,6 @@ function splitPair(text: string): [string, string] | null {
     }
   }
   return null
-}
-
-/**
- * A parameter list, split into the part Blockly's mutator can hold and the rest
- * (#1063, widened by #1134).
- *
- * Blockly's parameters are bare NAMES — they become workspace variables — so a
- * default (`flip_x=None`), a type annotation, `*args` or `**kwargs` has nowhere
- * to live in the mutator. This used to be a boolean, and a `def` carrying any
- * of them went to a raw suite whole: correct, and it meant
- * `def blink(times=3):` — a beginner-friendly helper, and nearly every driver's
- * `__init__` — came back as a grey wall.
- *
- * #1134 gave the block a FIELD for the rest, appended after the declared ones,
- * so the split is what this returns. Everything from the first parameter
- * Blockly cannot hold onwards goes into the field VERBATIM, which keeps
- * keyword-only parameters after a `*args` in the order Python needs and never
- * reorders anybody's signature.
- *
- * Null for a list that cannot be split at all — an empty piece, which means a
- * trailing comma the block has nowhere to record.
- */
-function splitSignature(params: string): { declared: string[]; extra: string } | null {
-  const pieces = params.split(',').map((p) => p.trim())
-  if (pieces.length === 1 && pieces[0] === '') return { declared: [], extra: '' }
-  if (pieces.some((p) => p === '')) return null
-  const plain = (p: string): boolean => /^[A-Za-z_]\w*$/.test(p)
-  let at = 0
-  while (at < pieces.length && plain(pieces[at])) at += 1
-  return { declared: pieces.slice(0, at), extra: pieces.slice(at).join(', ') }
 }
 
 // ---------------------------------------------------------------------------
@@ -2685,17 +2658,42 @@ class Converter {
     return [this.method(next, def, decorator)]
   }
 
-  /** `def name(params):` as a STACKABLE block, with its body under it. */
+  /**
+   * `def name(params):` as a STACKABLE block, with its body under it.
+   *
+   * THE SIGNATURE IS A PARAMETER LIST SINCE B2 (#1221, epic #1206), not the one
+   * free-text `PARAMS` field W6 gave it: the plain names become the block's own
+   * fields, a leading `self` or `cls` becomes its fixed lead, and everything
+   * neither can hold goes in the extras field `def` has had since #1134 —
+   * verbatim, so `*args`, a default and even the trailing comma in
+   * `def load(path,):` come back exactly as they were written.
+   *
+   * THE LEAD IS WHAT THE TEXT SAYS, not what the decorator implies. `@property`
+   * on a method whose first parameter is not `self` is somebody's code rather
+   * than a mistake to correct, so the lead is only taken when it is really
+   * there; {@link defaultLead} is what a block dragged out of the drawer starts
+   * with, and what the dropdown switches to when a learner changes it.
+   */
   private method(node: Stmt, header: RegExpExecArray, decorator: string): BlockJson {
+    const split = splitMethodSignature(header[3])
+    // WHEN THE DECORATOR WOULD REWRITE THE LEAD, THE TEXT WINS. `@classmethod`
+    // on a `def x(self)` is somebody's code, and the block would write `cls`
+    // into it; so the lead is given up and the name stays an ordinary
+    // parameter, which comes back out exactly as it went in.
+    const exact = methodLead(split.lead, decorator) === split.lead
+    const { lead, params, extras } = exact
+      ? split
+      : { lead: 'none' as const, params: [split.lead, ...split.params], extras: split.extras }
     return this.withBody(
       {
         type: 'snakie_method',
         fields: {
           NAME: header[2],
-          PARAMS: header[3].trim(),
           DECORATOR: decorator,
-          KIND: header[1] ? 'ASYNC' : 'SYNC'
-        }
+          KIND: header[1] ? 'ASYNC' : 'SYNC',
+          ...(extras === '' ? {} : { EXTRAS: extras })
+        },
+        extraState: { params, lead }
       },
       'BODY',
       node

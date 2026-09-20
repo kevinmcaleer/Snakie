@@ -8,6 +8,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The method block, rebuilt around a real parameter list (#1221, epic
+  #1206).** `def` inside a class took its whole signature as one box of text
+  you had to already know Python to fill in — including `self`, which was
+  editable, and renaming it there left every `self.` block in the body meaning
+  nothing. The block now has one field per parameter with `+`/`−` at the end of
+  the row, `self` printed on the block itself rather than in a box, and the
+  same **extra parameters** row the `def` blocks have had for defaults, `*args`
+  and `**kwargs` — one mechanism for both, not two. `self` follows the setting
+  in front of it: a **static method** shows none and a **class method** shows
+  `cls`. With that in place the block joins `class`, `self` and `super()` on
+  the **Functions ▸ Classes** shelf, where it had been held back. Workspaces
+  saved before this open unchanged — the old signature is split into the new
+  fields on load and writes exactly the Python it wrote before, down to a
+  trailing comma.
+
 - **A Classes drawer (#1220, epic #1206).** The `class` and `self` blocks were
   registered and read back but in no drawer; `super()` was in a category whose
   flyout could not show it. All three are now on a **Functions ▸ Classes**
