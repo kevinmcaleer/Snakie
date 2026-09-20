@@ -108,9 +108,27 @@ async function apiForModule(
   return null
 }
 
+/** What the Blocks view needs to know about the module palette. */
+export interface ModuleBlocks {
+  /** Bumped whenever the registered set changes; the canvas rebuilds on it. */
+  nonce: number
+  /**
+   * TRUE ONCE THE MODULES HAVE BEEN LOOKED FOR (#1252).
+   *
+   * Finding a module means reading files — beside the program, and over the
+   * serial link from `/lib` on the board — so for the first frames of a file's
+   * life the Modules drawer is empty whether or not `range_finder.py` is
+   * sitting on the device. A file built from that module's blocks is
+   * indistinguishable, in those frames, from one whose module is nowhere, and
+   * concluding the second is how a perfectly readable program got told its
+   * blocks were missing. So nothing concludes anything until this is true.
+   */
+  settled: boolean
+}
+
 /**
  * Register a Modules drawer for `source`'s imports. Returns a nonce the canvas
- * rebuilds its toolbox on.
+ * rebuilds its toolbox on, and whether the search has finished at least once.
  */
 export function useModuleBlocks(
   source: string,
@@ -118,8 +136,11 @@ export function useModuleBlocks(
   folder?: string | null,
   /** The program's own file, which a scan must not offer as a module. */
   filePath?: string | null
-): number {
+): ModuleBlocks {
   const [nonce, setNonce] = useState(0)
+  // False while a pass is in flight — including the very first one, before
+  // which we have not so much as looked at the board.
+  const [settled, setSettled] = useState(false)
   const lastKey = useRef('')
 
   // WHAT A SCAN FOUND (#1048's button), kept beside the folder it was found
@@ -152,6 +173,7 @@ export function useModuleBlocks(
     const key = `${dialect}|${folder ?? ''}|${imports}`
     if (key === lastKey.current) return
     lastKey.current = key
+    setSettled(false)
     let live = true
 
     const run = async (): Promise<void> => {
@@ -161,6 +183,7 @@ export function useModuleBlocks(
         pruneDynamicCallRules(new Set(), MODULE_SOURCE_PREFIX)
         pruneDynamicObjectRules(new Set(), MODULE_SOURCE_PREFIX)
         setNonce((n) => n + 1)
+        setSettled(true)
         return
       }
 
@@ -212,15 +235,22 @@ export function useModuleBlocks(
       pruneDynamicCallRules(keep, MODULE_SOURCE_PREFIX)
       pruneDynamicObjectRules(keep, MODULE_SOURCE_PREFIX)
       setNonce((n) => n + 1)
+      setSettled(true)
     }
 
-    run().catch((err) => reportError('blocks: registering module blocks', err))
+    // SETTLED EITHER WAY. A pass that threw has still had its look at the
+    // board, and leaving the flag false would hold the canvas on "Reading the
+    // blocks…" for as long as the file stayed open.
+    run().catch((err) => {
+      if (live) setSettled(true)
+      reportError('blocks: registering module blocks', err)
+    })
     return () => {
       live = false
     }
   }, [imports, dialect, folder])
 
-  return nonce
+  return { nonce, settled }
 }
 
 /**

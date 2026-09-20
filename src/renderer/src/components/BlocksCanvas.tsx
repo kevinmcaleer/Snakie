@@ -320,10 +320,15 @@ export function BlocksCanvas({
   // event would serialise that empty workspace back over the file — deleting
   // the program while claiming to display it. So the canvas does not mount at
   // all, which means there is no path from this screen to that file.
+  // `paletteNonce` is not read in the callback and is not meant to be: it is a
+  // generation counter, and its job is to say that a part's or a module's
+  // blocks have since been registered, so the same workspace may now be
+  // perfectly readable (#1252). Blockly's table cannot tell us that it grew.
   const unknown = useMemo(
     () =>
       unknownBlockTypes(workspace, (t) => Object.prototype.hasOwnProperty.call(Blockly.Blocks, t)),
-    [workspace]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [workspace, paletteNonce]
   )
   const blocked = unknown.length > 0
   const hostRef = useRef<HTMLDivElement>(null)
