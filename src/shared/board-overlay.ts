@@ -295,6 +295,7 @@ export const OVERLAY_BOARDS: OverlayBoard[] = [
       'same RP2040, the same 264 KB of RAM and the same 2 MB of flash as a Pico, so the Pico ' +
       'build is the one to flash. The board ships with CircuitPython on it, so flashing ' +
       'MicroPython replaces what is already there.',
+    profileId: 'cytron-maker-pi-rp2040',
     thumb: 'CYTRON_MAKER_PI_RP2040.jpg'
   },
   {

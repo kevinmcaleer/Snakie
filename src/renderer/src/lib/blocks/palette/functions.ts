@@ -5,6 +5,16 @@ import type { PyImport } from '../imports'
 import type { BlockDefinition } from '../registry'
 import * as Blockly from 'blockly/core'
 import { registerCallRules } from '../python-to-blocks'
+import { CLASSES } from './structure'
+import {
+  appendExtrasRow,
+  EXTRAS_FIELD,
+  EXTRAS_INPUT,
+  extrasText,
+  extrasVisible,
+  hasExtrasRow,
+  setExtrasVisible
+} from '../params'
 
 /**
  * FUNCTIONS (#1011, epic #1007).
@@ -32,27 +42,21 @@ function params(block: Blockly.Block, gen: MicroPythonGenerator): string[] {
   const models = block.getVarModels?.() ?? []
   return models.map((m) => gen.variableName(m.getId(), m.getName()))
 }
-
 /**
  * THE PARAMETERS BLOCKLY'S LIST CANNOT HOLD (#1134, epic #1119).
  *
  * Blockly's procedure mutator models a parameter as a bare NAME — it becomes a
  * workspace variable, and renaming it renames every caller, which is exactly the
  * machinery `palette/index.ts` says is worth not rebuilding. A default value, a
- * `*args` or a `**kwargs` has nowhere to live on it, so
- * `def blink(times=3):` could not be built and `def load(path, flip=None):`
- * could not even be READ — `modellableParams` sent the whole `def` to a raw
- * suite rather than drop a parameter.
+ * `*args` or a `**kwargs` has nowhere to live on it, so `def blink(times=3):`
+ * could not be built and `def load(path, flip=None):` could not even be READ.
  *
- * SO THEY GO IN A FIELD, appended after the declared ones. That is the same
- * decision `snakie_method` made for its whole parameter list and `snakie_with`
- * made for its head: the text is exact for every form, where sockets would
- * model the common case and lose the rest.
- *
- * AND IT IS THE DECISION THAT KEEPS EVERY SAVED WORKSPACE LOADING. The issue
- * names extending the mutator's serialisation as the whole cost of this work;
- * a field on the block is serialised by name, a block saved before it existed
- * simply has none, and Blockly's own procedure machinery is untouched.
+ * SO THEY GO IN A FIELD, appended after the declared ones — and since B2
+ * (#1221) that field, the row it hides in and the splitter that fills it live
+ * in `../params.ts`, because the method block declares parameters too and
+ * #1221 asks for one mechanism rather than two. What is left here is the line
+ * that puts the two halves of a `def`'s signature together, and the re-exports
+ * `BlocksCanvas.tsx` and the extras tests reach for.
  *
  * A DEFAULTED PARAMETER GETS NO CALLER SOCKET, which is correct rather than a
  * shortcoming: it is optional at the call site, which is the whole reason for
@@ -60,85 +64,11 @@ function params(block: Blockly.Block, gen: MicroPythonGenerator): string[] {
  */
 function signature(block: Blockly.Block, gen: MicroPythonGenerator): string {
   const declared = params(block, gen)
-  const extra = String(block.getFieldValue(EXTRAS_FIELD) ?? '')
-    .trim()
-    .replace(/,\s*$/, '')
+  const extra = extrasText(block).replace(/,\s*$/, '')
   return [...declared, ...(extra === '' ? [] : [extra])].join(', ')
 }
 
-/** The field the extra parameters live in, and the input that carries it. */
-export const EXTRAS_FIELD = 'EXTRAS'
-const EXTRAS_INPUT = 'SNAKIE_EXTRAS'
-
-/**
- * THE ROW IS NOT THERE UNTIL IT HOLDS SOMETHING.
- *
- * `def` is the block a learner meets on their first afternoon, and a defaulted
- * parameter is a thing they will want in their second month. An always-visible
- * `extra parameters` row asks every one of them, every time, to wonder what it
- * is for — which is a poor trade for a field most programs never fill in.
- *
- * So the row is HIDDEN while it is empty, and appears the moment it has
- * something to say: the learner asks for it from the block's right-click menu
- * (`Add extra parameters…`, registered in `BlocksCanvas.tsx`), or a file being
- * read gives it a value. Nothing about what the field GENERATES changes — the
- * signature is built from the value, not from whether the row is on screen —
- * so a hidden empty row and no row at all write the same Python.
- *
- * SHOWING IS IMMEDIATE, HIDING WAITS for the editor to close (see
- * {@link syncExtras}). Blockly's text input commits its value on every
- * keystroke, so hiding on an empty one would pull the row — and the editor
- * attached to it — out from under a learner who has just selected all and typed
- * over it.
- */
-export function setExtrasVisible(block: Blockly.Block, visible: boolean): void {
-  const input = block.getInput(EXTRAS_INPUT)
-  if (!input || input.isVisible() === visible) return
-  input.setVisible(visible)
-  ;(block as Blockly.BlockSvg).queueRender?.()
-}
-
-/** Is this one of the two `def` blocks the extras row is installed on? */
-export function hasExtrasRow(block: Blockly.Block): boolean {
-  return !!block.getInput(EXTRAS_INPUT)
-}
-
-/** Is the extras row on screen? False for a block that has no such row. */
-export function extrasVisible(block: Blockly.Block): boolean {
-  return !!block.getInput(EXTRAS_INPUT)?.isVisible()
-}
-
-/** The extras row, shown iff `value` is non-blank. Used on load and on edit. */
-function syncExtras(field: Blockly.Field, value: string, allowHide: boolean): void {
-  const block = field.getSourceBlock()
-  // No source block yet: the field is validated once while it is still being
-  // constructed, before `appendField` has attached it to anything.
-  if (!block) return
-  const wanted = String(value ?? '').trim() !== ''
-  if (wanted || allowHide) setExtrasVisible(block, wanted)
-}
-
-/**
- * The extras field: a text input that carries the row's visibility with it.
- *
- * A subclass rather than a plain {@link Blockly.FieldTextInput} with a
- * validator, because the two halves of the rule fire at different moments —
- * the validator on every committed value (a keystroke, and a workspace being
- * deserialised), `onFinishEditing_` once the editor closes.
- */
-class ExtrasField extends Blockly.FieldTextInput {
-  constructor() {
-    super('', (value) => {
-      syncExtras(this, value, false)
-      return value
-    })
-  }
-
-  override onFinishEditing_(value: string): void {
-    super.onFinishEditing_(value)
-    syncExtras(this, value, true)
-  }
-}
+export { EXTRAS_FIELD, extrasVisible, hasExtrasRow, setExtrasVisible }
 
 /**
  * DECORATORS, AS A LIST ON THE MUTATION (A1, #1215, epic #1206).
@@ -349,6 +279,8 @@ export const FUNCTION_BLOCKS: BlockDefinition[] = [
     type: 'snakie_super',
     level: 'advanced',
     category: 'functions',
+    // On the Classes shelf since #1220, with the class block it names.
+    group: CLASSES,
     help: 'ref-classes',
     read: { fn: 'super', args: [], shape: 'value' },
     json: {
@@ -471,79 +403,86 @@ export function installFunctionBlocks(): void {
     const init = def.init
     def.init = function (this: Blockly.Block): void {
       init.call(this)
-      this.appendDummyInput(EXTRAS_INPUT)
-        // `and also` said nothing about what belongs in the box. This names it.
-        .appendField('extra parameters:')
-        .appendField(new ExtrasField(), EXTRAS_FIELD)
-      // Above the body, where the rest of the signature is — `appendDummyInput`
-      // puts it at the bottom, under the `return` row.
-      if (this.getInput('STACK')) this.moveInputBefore(EXTRAS_INPUT, 'STACK')
-      // Empty, so out of the way — see {@link setExtrasVisible}. A block being
-      // deserialised turns it back on when the field takes its value.
-      setExtrasVisible(this, false)
+      // Above the body, where the rest of the signature is — appended, the row
+      // would land at the bottom, under the `return` row.
+      appendExtrasRow(this, 'STACK')
     }
     def.snakieExtras_ = true
   }
   installDecorators(['procedures_defnoreturn', 'procedures_defreturn'])
-  installDecoratorExtension()
   // The editing UI (A3, #1217): the Decorators section in the cog, and the
   // badge row. After the extras wrap, so the badge lands above the extras row.
   installDecoratorCss()
   installDecoratorMutator(['procedures_defnoreturn', 'procedures_defreturn'])
 }
 
-/** The extension a JSON-declared block names to gain the same list (#1215). */
-export const DECORATORS_EXTENSION = 'snakie_decorators'
-
 /**
- * The decorator list for a block declared as JSON — `snakie_method`.
+ * Give a block with no parameter mutator of its own a DECORATORS-ONLY cog.
  *
- * A mixin rather than a wrap, because a JSON block has no serialisation hooks
- * of its own to wrap: the list is the whole of its extra state. Named in the
- * block's own definition, which is where Blockly expects to be told, so the
- * pair is attached before the first block of that type is ever built.
+ * WHY THIS IS NOT {@link installDecoratorMutator}: that one wraps a
+ * `decompose`/`compose` pair Blockly already put on the block, and appends our
+ * section to the container it builds. `snakie_method` has no such pair. Since
+ * B2 (#1221) it is built in code with one text field per parameter and `+`/`−`
+ * buttons on the row (see `palette/structure.ts`), so there is no mini-workspace
+ * for the parameters at all — the cog it grows here holds the decorators and
+ * nothing else, and opens on {@link DECORATORS_CONTAINER_BLOCK}.
  *
- * A MUTATOR rather than a plain extension — Blockly refuses an extension that
- * adds serialisation hooks, by name, and a list that has to be saved is exactly
- * what a mutator is.
+ * A1 (#1215) did this through a `snakie_decorators` mutator EXTENSION, which
+ * was right while the block was declared as JSON and the decorator list was the
+ * whole of its extra state. It cannot be right now: the rebuilt block has a
+ * `saveExtraState` pair of its own for `{ lead, params }`, a second registered
+ * mutator would replace it rather than sit beside it, and `installDecorators`
+ * already folds `decorators` into that state. So only the EDITING half is
+ * installed here — hooks that Blockly's serialisation never looks at.
  *
- * A3 (#1217) GAVE IT `decompose`/`compose` TOO, so the block grows the cog the
- * `def` blocks have. Its bubble holds only the decorators — the method block's
- * whole parameter list is still one text field (B2, #1221, is what changes
- * that) — so it opens on a container of its own rather than Blockly's.
+ * `before` names the inputs the badge row should sit above, first one that
+ * exists winning, for the reason {@link addBadgeRow} gives.
+ *
+ * Idempotent, like every other installer in this file: `installCorePalette`
+ * runs once per test file and `Blockly.Blocks` is not reset between them.
  */
-export function installDecoratorExtension(): void {
-  if (Blockly.Extensions.isRegistered(DECORATORS_EXTENSION)) return
+export function installDecoratorCog(
+  types: readonly string[],
+  before: readonly string[] = ['PARAMS_ROW', EXTRAS_INPUT, 'BODY']
+): void {
   installDecoratorMutatorBlocks()
   installDecoratorCss()
-  Blockly.Extensions.registerMutator(
-    DECORATORS_EXTENSION,
-    {
-      saveExtraState: function (this: Blockly.Block): object | null {
-        const list = getDecorators(this)
-        return list.length === 0 ? null : { [DECORATORS_KEY]: list }
-      },
-      loadExtraState: function (this: Blockly.Block, state: object): void {
-        const list = (state as Record<string, unknown>)[DECORATORS_KEY]
-        if (Array.isArray(list)) setDecorators(this, tidy(list))
-      },
-      decompose: function (this: Blockly.Block, ws: Blockly.Workspace): Blockly.Block {
-        const container = ws.newBlock(DECORATORS_CONTAINER_BLOCK)
-        ;(container as Blockly.BlockSvg).initSvg?.()
-        fillContainer(container, getDecorators(this))
-        return container
-      },
-      compose: function (this: Blockly.Block, container: Blockly.Block): void {
-        setDecorators(this, containerDecorators(container))
-      }
-    },
-    // The badge row (#1217), above the body — `appendDummyInput` would put it
-    // underneath the whole method.
-    function (this: Blockly.Block): void {
-      addBadgeRow(this, ['BODY'])
-    },
-    [DECORATOR_ARG_BLOCK]
-  )
+  for (const type of types) {
+    const def = Blockly.Blocks[type] as unknown as
+      | {
+          init?: (this: Blockly.Block) => void
+          decompose?: (this: Blockly.Block, ws: Blockly.Workspace) => Blockly.Block
+          compose?: (this: Blockly.Block, container: Blockly.Block) => void
+          snakieDecoratorCog_?: boolean
+        }
+      | undefined
+    if (!def || def.snakieDecoratorCog_) continue
+    const init = def.init
+
+    def.init = function (this: Blockly.Block): void {
+      init?.call(this)
+      addBadgeRow(this, before)
+      const MutatorIcon = Blockly.icons.MutatorIcon
+      if (this.getIcon?.(MutatorIcon.TYPE)) this.removeIcon(MutatorIcon.TYPE)
+      // A no-op on a headless `Blockly.Block`, which is what the golden-file
+      // suites build — the hooks below are what those exercise.
+      this.setMutator(new MutatorIcon([DECORATOR_ARG_BLOCK], this as Blockly.BlockSvg))
+    }
+
+    def.decompose = function (this: Blockly.Block, ws: Blockly.Workspace): Blockly.Block {
+      const container = ws.newBlock(DECORATORS_CONTAINER_BLOCK)
+      ;(container as Blockly.BlockSvg).initSvg?.()
+      fillContainer(container, getDecorators(this))
+      return container
+    }
+
+    def.compose = function (this: Blockly.Block, container: Blockly.Block): void {
+      setDecorators(this, containerDecorators(container))
+      syncDecoratorBadge(this)
+    }
+
+    def.snakieDecoratorCog_ = true
+  }
 }
 
 /** The four serialisation hooks, as they hang off a block definition. */
@@ -568,7 +507,8 @@ interface SerialisingBlock {
  * workspace saved as XML. ONLY WHAT IS ALREADY THERE is wrapped — giving
  * `saveExtraState` to a block that has only `mutationToDom` would make Blockly
  * prefer ours and quietly drop the mutation it was saving before. A block with
- * neither takes {@link installDecoratorExtension} instead.
+ * neither would need a mixin of its own; the editing half is
+ * {@link installDecoratorCog}.
  *
  * Idempotent, because `installCorePalette` runs again for every test file and
  * `Blockly.Blocks` is not reset between them.
