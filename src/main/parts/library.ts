@@ -51,6 +51,7 @@ import {
 } from '../../shared/part-yaml'
 import {
   backfillTopLevel,
+  planPartPrune,
   planPartStatus,
   planPartSync,
   type BundledPartStatus,
@@ -244,6 +245,30 @@ async function syncBundledLibrary(src: string, dest: string): Promise<void> {
       // skip — already identical; record the baseline hash.
       hashes[folder] = hashText(localYml)
     }
+  }
+
+  // Parts the bundle no longer ships. The loop above only walks the BUNDLE, so
+  // without this a dropped part lives on in every existing install — which is
+  // how the typo'd `hr-sr04` duplicate outlived its removal and kept offering a
+  // driver-less HC-SR04 next to the real, driver-declaring one. Only untouched
+  // seeder-written copies go; a user's edit (or anything of unknown origin) stays.
+  const bundled = new Set(entries.filter((e) => e.isDirectory()).map((e) => e.name))
+  for (const folder of Object.keys(manifest?.parts ?? {})) {
+    if (bundled.has(folder)) continue
+    const destPart = join(dest, folder)
+    const localYml = existsSync(destPart) ? await readTextOrNull(join(destPart, 'parts.yml')) : null
+    const prune = planPartPrune({
+      localHash: localYml !== null ? hashText(localYml) : undefined,
+      seededHash: manifest?.parts?.[folder]
+    })
+    if (prune) {
+      await fsp.rm(destPart, { recursive: true, force: true }).catch(reporter('parts: seed prune'))
+    }
+    // Either way it is no longer ours to track: a pruned part is gone, and one we
+    // kept is the user's now (so a bundle that ever ships the id again backfills
+    // rather than overwrites it).
+    delete hashes[folder]
+    dirty = true
   }
 
   if (bundleVersion && dirty) {

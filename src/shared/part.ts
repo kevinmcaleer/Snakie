@@ -1543,6 +1543,8 @@ export interface PartLibraryWithParts extends PartLibrary {
  *
  * Exact match first: two libraries can legitimately carry different parts
  * under one id, and the one the project asked for wins whenever it is there.
+ * A {@link RETIRED_PART_IDS} id is tried last of all, so a project that placed
+ * a part we have since withdrawn still resolves — to the part that replaced it.
  */
 export function findPart(
   libraries: readonly { id: string; parts?: readonly PartDefinition[] }[] | undefined,
@@ -1555,6 +1557,13 @@ export function findPart(
   for (const l of libraries) {
     const part = l.parts?.find((p) => p.id === id)
     if (part) return part
+  }
+  const replacement = RETIRED_PART_IDS[id]
+  if (replacement) {
+    for (const l of libraries) {
+      const part = l.parts?.find((p) => p.id === replacement)
+      if (part) return part
+    }
   }
   return null
 }
@@ -1608,6 +1617,20 @@ export const DEFAULT_REGISTRY_URL =
 
 /** The standard 0.1" header pitch, in millimetres (grid-snap default). */
 export const STANDARD_PIN_SPACING_MM = 2.54
+
+/**
+ * Parts withdrawn from the bundled library, mapped to what replaced them.
+ *
+ * Withdrawing a part does not reach into projects that already placed it: its
+ * `robot.yml` row keeps naming the old id for good. `hr-sr04` was a typo'd
+ * duplicate of the HC-SR04 ultrasonic sensor, and every project that placed it
+ * kept a sensor that no library defines any more — so it drew as an uninstalled
+ * box and, because the duplicate never carried the `hcsr04` driver metadata the
+ * real part has, placing it prompted for no driver (#638).
+ */
+export const RETIRED_PART_IDS: Record<string, string> = {
+  'hr-sr04': 'hc-sr04'
+}
 
 /**
  * How many NAMED pins a part offers — on a header or on a connector.

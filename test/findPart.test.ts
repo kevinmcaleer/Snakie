@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { findPart, type PartDefinition, type PartLibraryWithParts } from '../src/shared/part'
+import {
+  findPart,
+  RETIRED_PART_IDS,
+  type PartDefinition,
+  type PartLibraryWithParts
+} from '../src/shared/part'
 
 /**
  * A placed part is named by the library it was placed FROM, and that name does
@@ -27,6 +32,21 @@ describe('findPart', () => {
   it('falls back to the same id in any installed library when that library is absent', () => {
     expect(findPart([standard], 'my-parts', 'sg90')?.name).toBe('SG90 (standard)')
     expect(findPart([standard], 'renamed-library', 'hc-sr04')?.name).toBe('HC-SR04')
+  })
+
+  it('resolves a withdrawn part to the one that replaced it (#638)', () => {
+    // hr-sr04 was a typo'd duplicate of the HC-SR04. Projects that placed it
+    // still say `hr-sr04`, and no library defines that id any more — so without
+    // this the sensor drew as an uninstalled box and prompted for no driver.
+    expect(RETIRED_PART_IDS['hr-sr04']).toBe('hc-sr04')
+    expect(findPart([standard], 'snakie-standard', 'hr-sr04')?.name).toBe('HC-SR04')
+  })
+
+  it('prefers a library that really has the retired id over its replacement', () => {
+    const legacy = lib('legacy', part('hr-sr04', 'HR SR04 (still installed)'))
+    expect(findPart([standard, legacy], 'snakie-standard', 'hr-sr04')?.name).toBe(
+      'HR SR04 (still installed)'
+    )
   })
 
   it('is null when no library has the part, and with no libraries at all', () => {
