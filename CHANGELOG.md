@@ -8,6 +8,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Courses can ask for the blocks they need (#1214, epic #1206).** A lesson —
+  or a whole course — can now declare `level: advanced` in its `course.yml`, and
+  opening it switches **Advanced blocks** on, with a one-line note in the Learn
+  panel saying so and where to switch them off again. Leaving the lesson does
+  not put the drawers away: the learner has now seen them. The blocks track's
+  "When the block you need doesn't exist yet" lesson carries the key, so the
+  grey Python blocks it teaches are in the toolbox even for a learner who
+  started in simple mode. A course that declares nothing never turns advanced
+  blocks on, and a declared level never lowers anyone's.
+
 - **Simple and advanced blocks (#1209, #1210, epic #1206).** Every block now
   declares a level, and a new **Settings ▸ Appearance ▸ Advanced blocks**
   switch decides whether the toolbox offers the advanced ones — classes, `try`,
