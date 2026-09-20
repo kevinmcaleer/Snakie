@@ -225,3 +225,40 @@ export const VIEW_ANIM_EASING = 'cubic-bezier(0.22, 0.75, 0.3, 1)'
 export function viewTransition(animating: boolean): string {
   return animating ? `transform ${VIEW_ANIM_MS}ms ${VIEW_ANIM_EASING}` : 'none'
 }
+
+/**
+ * The ease-out curve as a FUNCTION, for viewports that cannot use the CSS
+ * transition above — an SVG `<g transform="…">` is a presentation attribute, so
+ * it is tweened frame-by-frame in JS instead (the wiring canvas does this; its
+ * live SVG is also serialised for export, which a CSS transform would break).
+ *
+ * Matches {@link VIEW_ANIM_EASING} closely enough that the two viewports feel
+ * like the same control: quick to leave, soft to arrive.
+ */
+export function easeOutView(t: number): number {
+  const p = Math.min(1, Math.max(0, t))
+  return 1 - Math.pow(1 - p, 3)
+}
+
+/** Linear blend of two pan/zoom states at eased progress `t` (0…1). */
+export function lerpView<T extends { tx: number; ty: number; scale: number }>(
+  from: T,
+  to: T,
+  t: number
+): { tx: number; ty: number; scale: number } {
+  const k = easeOutView(t)
+  return {
+    tx: from.tx + (to.tx - from.tx) * k,
+    ty: from.ty + (to.ty - from.ty) * k,
+    scale: from.scale + (to.scale - from.scale) * k
+  }
+}
+
+/** True when the user has asked for reduced motion (SSR/test safe). */
+export function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+}

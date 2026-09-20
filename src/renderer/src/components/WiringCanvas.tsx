@@ -33,6 +33,7 @@ import { HierarchyPanel } from './HierarchyPanel'
 import { useHierarchy } from './use-hierarchy'
 import { useHierarchySelection } from './hierarchy-selection'
 import { linkBaseName } from './sync-plan'
+import { lerpView, prefersReducedMotion, VIEW_ANIM_MS } from './board-viewport'
 import { boardBox, layoutPads, mcuSymbolLayout, padKey, padLabelPlacement, type PadPoint } from './board-layout'
 import {
   partBodyBox,
@@ -851,6 +852,45 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
   const rootRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<Drag | null>(null)
   const [view, setView] = useState({ tx: 0, ty: 0, scale: 1 })
+  // Eased zoom: clicking a zoom control (− / + / the 100%↔fit readout, and a
+  // browser row's zoom-to-fit) GLIDES to its new pan+zoom instead of snapping,
+  // so the eye can follow where the board went. The content lives in an SVG
+  // `<g transform="…">` — a presentation attribute, which a CSS transition
+  // cannot touch and which the exporter serialises — so we tween the numbers
+  // frame-by-frame instead. Continuous input (wheel, pinch, drag-pan) is never
+  // eased and cancels an in-flight glide: it already tracks the pointer.
+  const viewRef = useRef(view)
+  viewRef.current = view
+  const easeRafRef = useRef<number | null>(null)
+  const cancelViewEase = (): void => {
+    if (easeRafRef.current !== null) {
+      cancelAnimationFrame(easeRafRef.current)
+      easeRafRef.current = null
+    }
+  }
+  useEffect(() => cancelViewEase, [])
+  /**
+   * Glide the viewport to `to`. Any change in scale is eased — however small —
+   * which is the whole point of the zoom controls easing: a 10% step reads as a
+   * move, not a jump. A pan-only change (same scale) lands immediately, so
+   * framing a part from the browser at the current zoom stays instant, as does
+   * a reduced-motion user's every change.
+   */
+  const easeViewTo = (to: { tx: number; ty: number; scale: number }): void => {
+    cancelViewEase()
+    const from = viewRef.current
+    if (prefersReducedMotion() || Math.abs(to.scale - from.scale) < 1e-4) {
+      setView(to)
+      return
+    }
+    const t0 = performance.now()
+    const step = (now: number): void => {
+      const t = Math.min(1, (now - t0) / VIEW_ANIM_MS)
+      setView(t >= 1 ? to : lerpView(from, to, t))
+      easeRafRef.current = t >= 1 ? null : requestAnimationFrame(step)
+    }
+    easeRafRef.current = requestAnimationFrame(step)
+  }
   // The SVG's pixel size, so the graph-paper grid fills the letterbox margins
   // (the viewBox is fitted + centred; the visible region is wider/taller).
   const [stageSize, setStageSize] = useState({ w: 0, h: 0 })
@@ -1989,6 +2029,9 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
   }
 
   const onPointerDown = (e: ReactPointerEvent<SVGSVGElement>): void => {
+    // Any pointer interaction (drag-pan, pinch, moving a part) takes the view
+    // back under direct control — a glide still playing would fight it.
+    cancelViewEase()
     ;(e.target as Element).setPointerCapture?.(e.pointerId)
     // Any new gesture supersedes the last refusal notice (#771).
     if (refusal) setRefusal(null)
@@ -2232,6 +2275,7 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
   }
 
   const onWheel = (e: WheelEvent<SVGSVGElement>): void => {
+    cancelViewEase()
     const svg = svgRef.current
     const ctm = svg?.getScreenCTM()
     setView((v) => {
@@ -2250,30 +2294,28 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
   // Button zoom (− / +): zoom about the viewBox centre so the framed content stays
   // centred, mirroring the node-graph + Part Editor zoom controls.
   const zoomBy = (factor: number): void => {
-    setView((v) => {
-      const scale = clampScale(v.scale * factor)
-      const cx = VIEW_W / 2
-      const cy = VIEW_H / 2
-      const wx = (cx - v.tx) / v.scale
-      const wy = (cy - v.ty) / v.scale
-      return { scale, tx: cx - wx * scale, ty: cy - wy * scale }
-    })
+    const v = viewRef.current
+    const scale = clampScale(v.scale * factor)
+    const cx = VIEW_W / 2
+    const cy = VIEW_H / 2
+    const wx = (cx - v.tx) / v.scale
+    const wy = (cy - v.ty) / v.scale
+    easeViewTo({ scale, tx: cx - wx * scale, ty: cy - wy * scale })
   }
 
   /** Jump to exactly 100%, keeping the viewport centre fixed. */
   const setZoom100 = (): void => {
-    setView((v) => {
-      const cx = VIEW_W / 2
-      const cy = VIEW_H / 2
-      const wx = (cx - v.tx) / v.scale
-      const wy = (cy - v.ty) / v.scale
-      return { scale: 1, tx: cx - wx, ty: cy - wy }
-    })
+    const v = viewRef.current
+    const cx = VIEW_W / 2
+    const cy = VIEW_H / 2
+    const wx = (cx - v.tx) / v.scale
+    const wy = (cy - v.ty) / v.scale
+    easeViewTo({ scale: 1, tx: cx - wx, ty: cy - wy })
   }
 
   /** The clickable zoom readout toggles between 100% and fit-all. */
   const toggleZoom = (): void => {
-    if (Math.abs(view.scale - 1) < 0.005) fitView()
+    if (Math.abs(view.scale - 1) < 0.005) fitView(true)
     else setZoom100()
   }
 
@@ -2281,24 +2323,37 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
    *  padded. When the floating browser is open we inset the area's left edge by
    *  its footprint so the framed content sits to the RIGHT of the browser (never
    *  hidden under it). */
-  const frameBounds = (minX: number, minY: number, maxX: number, maxY: number): void => {
+  const frameBounds = (
+    minX: number,
+    minY: number,
+    maxX: number,
+    maxY: number,
+    animate = false
+  ): void => {
     // Left inset ≈ the 14rem browser's share of the viewBox (it floats top-left).
     const insetL = browserOpen ? BROWSER_INSET : 0
     // Fit to what is visible across the whole STAGE, not to the viewBox — the SVG
     // letterboxes the viewBox whenever the pane's aspect differs from 1180:720.
     const a = stageViewArea(stageSize.w, stageSize.h)
-    setView(
-      fitTransform(
-        { minX, minY, maxX, maxY },
-        { areaX: a.x + insetL, areaW: a.w - insetL, areaY: a.y, areaH: a.h }
-      )
+    const next = fitTransform(
+      { minX, minY, maxX, maxY },
+      { areaX: a.x + insetL, areaW: a.w - insetL, areaY: a.y, areaH: a.h }
     )
+    if (animate) easeViewTo(next)
+    else {
+      cancelViewEase()
+      setView(next)
+    }
   }
 
   /** Frame all subjects within the viewBox (a "fit" reset). */
-  const fitView = (): void => {
+  const fitView = (animate = false): void => {
     if (subjects.length === 0) {
-      setView({ tx: 0, ty: 0, scale: 1 })
+      if (animate) easeViewTo({ tx: 0, ty: 0, scale: 1 })
+      else {
+        cancelViewEase()
+        setView({ tx: 0, ty: 0, scale: 1 })
+      }
       return
     }
     let minX = Infinity
@@ -2314,16 +2369,16 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
       maxX = Math.max(maxX, s.x + s.w)
       maxY = Math.max(maxY, s.y + s.h)
     }
-    frameBounds(minX, minY, maxX, maxY)
+    frameBounds(minX, minY, maxX, maxY, animate)
   }
 
   /** Frame a single subject by key (zoom-to-fit one placed item), or everything
    *  when the key is null. Driven by the placed-items browser (BoardGraph). */
-  const fitToKey = (key: string | null): void => {
-    if (!key) return fitView()
+  const fitToKey = (key: string | null, animate = false): void => {
+    if (!key) return fitView(animate)
     const s = subjects.find((sub) => sub.key === key)
     // The drawn body, for the same reason as `fitView`.
-    if (s) frameBounds(s.x, s.y, s.x + s.w, s.y + s.h)
+    if (s) frameBounds(s.x, s.y, s.x + s.w, s.y + s.h, animate)
   }
 
   /**
@@ -2349,7 +2404,7 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
       setSelectedWire(null)
       setRenameText(null)
     }
-    fitToKey(key)
+    fitToKey(key, true)
   }
 
   // Export the canvas as an image (#…): serialise the live SVG framed to its
@@ -2370,6 +2425,7 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
     // fit + restores the previous view WITHIN this call, so the serialise reads
     // the fit-state DOM while the user never sees the intermediate frame paint.
     const prev = { ...view }
+    cancelViewEase()
     flushSync(() => fitView())
     // The sheet colour lives in CSS on the stage (blueprint blue / schematic
     // white / dark mat) — read the LIVE computed value so the export matches
@@ -3603,7 +3659,7 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
               +
             </button>
             <span className="wc__zoom-sep" aria-hidden="true" />
-            <button type="button" className="wc__zoom-btn" onClick={fitView} title="Zoom to fit" aria-label="Zoom to fit">
+            <button type="button" className="wc__zoom-btn" onClick={() => fitView(true)} title="Zoom to fit" aria-label="Zoom to fit">
               <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                 <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
