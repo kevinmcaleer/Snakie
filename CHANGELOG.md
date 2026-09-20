@@ -16,7 +16,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `micropython.viper`) declare it through the import manager like any other
   block, and the method block's old `property` / `staticmethod` /
   `classmethod` dropdown is read as a list of one, so a workspace saved before
-  this opens unchanged. No editing UI yet (#1217).
+  this opens unchanged.
+
+- **Editing those decorators (#1217, epic #1206).** A `def` or method block's
+  cog now has a **decorators** section under its parameters: one `@ …` entry
+  per line, dragged in, reordered and taken out like any other block, with the
+  MicroPython decorators (`property`, `staticmethod`, `classmethod`,
+  `micropython.native`, `micropython.viper`) offered as suggestions and any
+  other decorator typeable. A right-click **Add decorator…** on the block adds
+  one without opening the cog, and a decorated block wears an `@property`
+  badge — with `+2` after it when there are more — so it says so on the canvas.
+  Blockly's mutator was extended rather than replaced by a popover of our own
+  (epic open question 3); the reasoning is §8 of `docs/blocks-language-epic.md`.
 
 - **Simple and advanced blocks (#1209, #1210, epic #1206).** Every block now
   declares a level, and a new **Settings ▸ Appearance ▸ Advanced blocks**
