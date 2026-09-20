@@ -60,14 +60,20 @@ describe('shouldRaiseBlockLevel', () => {
 })
 
 describe('bundled courses', () => {
-  it('declares advanced on the grey-Python-blocks lesson, and nowhere else', () => {
+  it('declares advanced on the lessons that need it, and nowhere else', () => {
     const blocks = loadCourses().find((c) => c.id === 'blocks')
     expect(blocks, 'the blocks course is bundled').toBeTruthy()
     const greys = blocks!.lessons.find((l) => l.title.startsWith('When the block you need'))
     expect(greys?.level).toBe('advanced')
-    // The rest of the on-ramp is beginner material and must stay silent.
+    // The on-ramp itself is beginner material: the course declares nothing, and
+    // a lesson only speaks up when the drawer it teaches is an advanced one.
+    // The grey Python blocks (#1214) and the decorator lesson A5 added (#1219)
+    // are both that; everything before them must stay silent.
     expect(blocks!.level).toBeUndefined()
-    expect(blocks!.lessons.filter((l) => l.level === 'advanced')).toHaveLength(1)
+    expect(blocks!.lessons.filter((l) => l.level === 'advanced').map((l) => l.title)).toEqual([
+      greys!.title,
+      'Make it faster with @micropython.native'
+    ])
   })
 
   it('leaves every other bundled course declaring nothing', () => {
