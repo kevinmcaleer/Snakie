@@ -1,0 +1,1 @@
+- **Toggling "Show advanced blocks" no longer opens the Turtle drawer.** The switch sits at the foot of Blockly's toolbox column, and a press on it was focusing that column, which made Blockly select its first category. The press now stays with the switch.
