@@ -19,6 +19,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `super()`, the new shelf) after Blockly's own `def` blocks and the caller for
   each function you have written, instead of only the latter.
 
+- **The Cytron Maker Pi RP2040 is in the flasher's board list.** It was in the
+  Board Finder gallery but not among the boards you can pick in the MicroPython
+  flasher, because MicroPython publishes no build under its name and the model
+  list comes from upstream's catalog. It now has a board profile of its own —
+  flashed as a UF2 like a Pico, with its own CircuitPython board id and a note
+  about holding BOOT for the RPI-RP2 drive.
 - **Simple and advanced blocks (#1209, #1210, epic #1206).** Every block now
   declares a level, and a new **Settings ▸ Appearance ▸ Advanced blocks**
   switch decides whether the toolbox offers the advanced ones — classes, `try`,
