@@ -58,6 +58,14 @@ import { installCorePalette } from '../src/renderer/src/lib/blocks/palette'
  * reader a line it had been leaving grey — `for name, value in rows:` and
  * `print("x:", x)`, both listed in §10 as still-grey (#1121, #1125), plus
  * `del`, `pass`, a list display and a `def` with a default on it.
+ *
+ * **98.58% with the class fixtures of epic #1206 (B6, #1225).** Four
+ * class-heavy files joined the corpus and the number did not move, which is the
+ * finding and not the disappointment: the reader has understood `class`, `def
+ * name(self)` and `self.x = …` since W6 of #1086. Two grey *lines* came in with
+ * them — an `@name.setter` header (B3, #1222 folds it) and a `super().blink(1)`
+ * used as a statement — and a good many grey *sockets*, which is the number
+ * below and where the classes track is actually visible.
  */
 const STATEMENT_FLOOR = 98
 
@@ -81,8 +89,27 @@ const STATEMENT_FLOOR = 98
  * mask, a hex address, a string method, a format spec, `*args` — every one of
  * them was a grey blob inside a real block, and each is now the block it says
  * it is.
+ *
+ * **83.70% with the class fixtures (B6, #1225), and the floor goes 81 → 82.**
+ * The floor had been left two and a half points under the measurement since
+ * #1119; the four new files take the denominator from 484 sockets to 552 and
+ * the measurement barely moves (83.88% → 83.70%), so the headroom is real and
+ * some of it is worth taking. What the new files put in the denominator is the
+ * classes track's own to-do list, counted rather than asserted: every
+ * `Motor(14, 15)`, `Queue()`, `Thermostat(19.5)` is a grey socket today and a
+ * `snakie_new_instance` once B5 (#1224) lands.
+ *
+ * **B4 (#1223) does not appear in this number, and we checked rather than
+ * assumed.** `self.speed` and `tail.next` read as `snakie_python_attr_get` /
+ * `_set`, and `GREY_VALUE_TYPES` in `python-to-blocks.ts` holds exactly
+ * `snakie_python_value` and `snakie_python_call_value` — the attribute pair was
+ * never counted as grey, and `attr_set` is a recognised statement, so
+ * `motor_driver.py` reports `raw: 0` with six `self.x = …` lines in it. Giving
+ * attributes native blocks is a real win for the learner and an invisible one
+ * to the ratchet. That is a gap in the measurement, not a reason to distrust
+ * B4; §5 of `docs/blocks-classes-epic.md` records it and what to do about it.
  */
-const SOCKET_FLOOR = 81
+const SOCKET_FLOOR = 82
 
 /**
  * Files that open with no grey at all. 4.65% at W0, 9.30% at W6, 16.28% at W10,
@@ -94,8 +121,20 @@ const SOCKET_FLOOR = 81
  * often a learner has to drop into the grey escape hatch to say an ordinary
  * thing*, and a file with no grey in it is a file where they never had to.
  * Eleven of forty-three now, from seven.
+ *
+ * **23.40% with the class fixtures (B6, #1225): the same eleven files, out of
+ * forty-seven. This floor goes DOWN, 24 → 23, deliberately and out loud.**
+ *
+ * Nothing regressed. Four files were added and none of them is clean, because
+ * a class-heavy file always constructs something — and a constructor call is a
+ * grey socket until B5 (#1224). Lowering a floor to admit harder fixtures is
+ * the one lowering this ratchet was always meant to allow: the alternative is
+ * a corpus that only ever gains files the reader already handles, which
+ * measures the reader against itself. The number to watch is what B5 and B3 do
+ * to it from here — `node_queue.py` is two grey sockets of `Node(value)` /
+ * `Queue()` away from clean, and `thermostat.py` one `@target.setter` line.
  */
-const CLEAN_FILE_FLOOR = 24
+const CLEAN_FILE_FLOOR = 23
 
 const FIXTURES = join(__dirname, 'fixtures', 'coverage')
 
@@ -175,6 +214,57 @@ describe('round-trip over the fixture corpus', () => {
       expect(await verifyConversion(file.source, workspace)).toEqual({ ok: true })
     })
   }
+})
+
+/**
+ * THE CLASS CLUSTER, MEASURED (B6, #1225, epic #1206).
+ * ---------------------------------------------------------------------------
+ *
+ * The three floors above are corpus-wide and a class-shaped change moves them
+ * by fractions of a point. This slice is the classes track's own number: the
+ * files that define a class, on their own, so that B2–B5 have somewhere to show
+ * up and a reader regression in the class cluster cannot hide inside
+ * forty-seven files of everything else.
+ *
+ * It asserts a floor the same way, and it asserts the *shape* too — every
+ * `class` header in the corpus reads as a real `snakie_class` block. A
+ * recogniser that quietly demoted one to grey would keep the percentages
+ * roughly where they are and fail here.
+ *
+ * Measured at B6: **15 files · 321 lines · statements 99.38% · sockets 88.18%
+ * (26/220 grey) · clean 3/15**. Both floors a point under, as above.
+ */
+const CLASS_SOCKET_FLOOR = 87
+const CLASS_STATEMENT_FLOOR = 99
+
+describe('the class-heavy slice of the corpus (B6, #1225)', () => {
+  const classFiles = files.filter((file) => /^class \w/m.test(file.source))
+  const totals = coverageOf(classFiles)
+
+  it('has enough class-heavy files to be a slice at all', () => {
+    // #1086's corpus had a handful; B6 added motor_driver, thermostat,
+    // blinker_subclass and node_queue to span __init__, properties, super(),
+    // staticmethod, instance creation and attribute get/set.
+    expect(classFiles.length).toBeGreaterThanOrEqual(10)
+  })
+
+  it('recognises at least the class statement floor', () => {
+    expect(`${coverageSummary(totals)}`).toBeTruthy()
+    expect(statementCoverage(totals)).toBeGreaterThanOrEqual(CLASS_STATEMENT_FLOOR)
+  })
+
+  it('fills at least the class socket floor with real blocks', () => {
+    expect(socketCoverage(totals)).toBeGreaterThanOrEqual(CLASS_SOCKET_FLOOR)
+  })
+
+  it('reads every class header as a real class block', () => {
+    for (const file of classFiles) {
+      const headers = (file.source.match(/^class \w/gm) ?? []).length
+      const { workspace } = pythonToBlocks(file.source)
+      const read = JSON.stringify(workspace).split('"snakie_class"').length - 1
+      expect({ file: file.name, read }).toEqual({ file: file.name, read: headers })
+    }
+  })
 })
 
 describe('the numbers each file contributes', () => {
