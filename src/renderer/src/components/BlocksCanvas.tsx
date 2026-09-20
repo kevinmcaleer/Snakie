@@ -50,12 +50,7 @@ import {
   PROGRAM_RUN_EVENT,
   type ProgramRunDetail
 } from './editorBridge'
-import {
-  blockForLine,
-  friendlyError,
-  isRealError,
-  TracebackWatcher
-} from '../lib/blocks/traceback'
+import { blockForLine, friendlyError, isRealError, TracebackWatcher } from '../lib/blocks/traceback'
 import { ensureBlocklyLocale } from '../lib/blocks/locale'
 import { advancedBlockTypes, unknownBlockTypes } from '../lib/blocks/workspace-check'
 import { registerBlocksWorkspace } from '../lib/blocks/workspace-registry'
@@ -793,7 +788,9 @@ export function BlocksCanvas({
       if (!block) return
       clearErrors()
       block.setWarningText(
-        friendly ? `${friendly.text}\n\n${parsed.error}: ${parsed.message}` : `${parsed.error}: ${parsed.message}`,
+        friendly
+          ? `${friendly.text}\n\n${parsed.error}: ${parsed.message}`
+          : `${parsed.error}: ${parsed.message}`,
         ERROR_WARNING
       )
       erroredRef.current = [block.id]
@@ -946,7 +943,9 @@ export function BlocksCanvas({
     // A reload rebuilds every block, so the view would jump back to the origin
     // each time the learner paused typing. Put it back where they left it.
     const scroll =
-      'scrollX' in ws ? { x: (ws as Blockly.WorkspaceSvg).scrollX, y: (ws as Blockly.WorkspaceSvg).scrollY } : null
+      'scrollX' in ws
+        ? { x: (ws as Blockly.WorkspaceSvg).scrollX, y: (ws as Blockly.WorkspaceSvg).scrollY }
+        : null
     // WHERE THE LEARNER PUT THINGS (#1036). A reload rebuilds every block from
     // the document, whose roots are laid out on a grid — so a root somebody
     // dragged aside goes back to the grid, once per typing pause. Ids are
@@ -1295,6 +1294,7 @@ function installBlockHelpMenu(): void {
   installBlockPythonMenu()
   installFunctionExtrasMenu()
   installCallArgNamesMenu()
+  installAddDecoratorMenu()
   const id = 'snakieBlockHelp'
   if (Blockly.ContextMenuRegistry.registry.getItem(id)) return
   // Blockly's OWN Help item comes first, and it opens `helpUrl` — which every
@@ -1422,6 +1422,50 @@ function installCallArgNamesMenu(): void {
       // After the render the boxes were just queued for, so the editor opens
       // over a field that is actually on screen.
       if (field) setTimeout(() => field.showEditor(), 0)
+    }
+  })
+}
+
+/**
+ * A `def` or method block's right-click **Add decorator…** (A3, #1217).
+ *
+ * The decorators live in the block's cog, next to its parameters — which is
+ * where a learner who is already editing the signature will find them. This is
+ * the other door, for the one who is not: a single box, the new entry appended
+ * to whatever is already there, and the `@` badge appears on the block.
+ *
+ * `Blockly.dialog.prompt` rather than `window.prompt`, which Electron's
+ * renderer does not implement. The canvas routes it through the in-app
+ * `usePrompt()` modal (see the effect above), so this item gets it for free
+ * rather than needing a second channel out of a module-level callback.
+ *
+ * Hidden for every block that cannot take a decorator, which is all of them but
+ * three.
+ */
+function installAddDecoratorMenu(): void {
+  const id = 'snakieAddDecorator'
+  if (Blockly.ContextMenuRegistry.registry.getItem(id)) return
+  Blockly.ContextMenuRegistry.registry.register({
+    id,
+    scopeType: Blockly.ContextMenuRegistry.ScopeType.BLOCK,
+    // Beside "Add extra parameters…": the same kind of item on the same block.
+    weight: 98,
+    displayText: 'Add decorator…',
+    preconditionFn: (scope) => (scope.block && hasDecorators(scope.block) ? 'enabled' : 'hidden'),
+    callback: (scope) => {
+      const block = scope.block
+      if (!block) return
+      Blockly.dialog.prompt(
+        'Decorator — the @ line above this function. For example: property, micropython.native',
+        '',
+        (value) => {
+          // Cancelled, or nothing typed: `setDecorators` would drop a blank
+          // entry anyway, but not writing at all leaves the undo stack clean.
+          const entry = String(value ?? '').trim()
+          if (entry === '') return
+          setDecorators(block, [...getDecorators(block), entry])
+        }
+      )
     }
   })
 }

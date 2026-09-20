@@ -356,3 +356,56 @@ the membership haystack, `item n of`, and the output of the bitwise blocks —
 `if flags & 0x01:` is how every driver asks whether a bit is set, and declaring
 that result `Number` made Blockly refuse the `if` socket and cost two shipped
 `.py` files their whole canvas.
+
+## 8. A later decision, taken here because this is where the reasons are (epic #1206)
+
+Epic #1206 asks, as its open question 3: **should Blockly's cog be replaced by a
+Snakie-owned popover that handles parameters, the extra-parameter text and the
+new decorator list in one place?** It was settled in #1217, and it belongs in
+this document because the argument is §4's argument, applied once more.
+
+**Decided: no. The cog is extended, not replaced.** A `def` block's mutator
+bubble gains a second section, *decorators*, below the parameters, holding one
+small `@ [____]` block per decorator. The entries are text with the known
+MicroPython decorators on a `<datalist>` — `property`, `staticmethod`,
+`classmethod`, `micropython.native`, `micropython.viper` — so the common ones
+are a click and `@app.route("/")` is still typeable. `micropython.asm_thumb` is
+deliberately not suggested: its body is not Python, so nothing else in the
+blocks editor could fill one in.
+
+Three reasons, in the order they weighed:
+
+1. **The parameter mutator is not a form.** Each `procedures_mutatorarg` in it
+   *is* a workspace variable; dragging, renaming or deleting one runs Blockly's
+   bookkeeping that renames every caller of the function and adds or removes
+   their sockets. A popover would have to reimplement `saveConnections`, the
+   caller sockets and the rename flow against internals with no public API — a
+   second copy of the machinery `palette/index.ts` says is worth not
+   rebuilding, in a second place that can disagree with the first. This is
+   exactly the cost #1134 refused when it put the extra parameters in a field.
+2. **The cog is already where the learner looks.** It is where they added the
+   parameters, and a decorator belongs to the same `def`. Two doors — a cog for
+   parameters, a popover for everything about parameters — is the split the epic
+   complains about in `snakie_method`'s decorator dropdown, rebuilt larger.
+3. **The wrap is the same shape as the one that already works.** A1 (#1215)
+   wrapped the four serialisation hooks rather than replacing them; #1217 wraps
+   `decompose`/`compose` the same way. Our section is read and written *around*
+   Blockly's, which never sees it, so the parameter half cannot be broken by
+   the decorator half.
+
+What the popover would have bought — one place for everything about a
+signature — is still reachable: #1218 can fold the extras row into this same
+bubble as a third section. That is one more section in a mechanism that works,
+not a different mechanism.
+
+Two things outside the cog carry the same decision:
+
+- **Right-click "Add decorator…"** on a `def` or method block, for the learner
+  who does not want to open the cog at all — the same door #1134 and #1163 put
+  on their own hidden rows. It goes through `Blockly.dialog.prompt`, which
+  `BlocksCanvas` has already routed to the in-app `usePrompt()` modal, because
+  `window.prompt` does nothing in Electron's renderer.
+- **An `@` badge on the block**, naming the first decorator (`@property`, with
+  `+2` after it when there are more) so a decorated function says so on the
+  canvas. Hidden while the list is empty, by the rule the extras row follows:
+  the ordinary `def` block stays ordinary.
