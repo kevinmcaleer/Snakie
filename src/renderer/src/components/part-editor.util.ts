@@ -2038,6 +2038,9 @@ export function normalisePart(part: PartDefinition): PartDefinition {
         x: clamp(b.x, 0, 1),
         y: clamp(b.y, 0, 1)
       }
+      // The GPIO a user button reads on (GP20 on a Maker Pi), so the blocks'
+      // pin dropdowns can offer it. BOOT / RESET have none.
+      if (typeof b.gpio === 'number' && Number.isFinite(b.gpio)) btn.gpio = b.gpio
       keepItemFlags(b, btn as unknown as Record<string, unknown>)
       return btn
     })

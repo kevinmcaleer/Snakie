@@ -19,6 +19,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Blocks can pick a board's button and LED pins.** The pin dropdowns only
+  knew the pins on a board's headers and connectors, so on the Cytron Maker
+  Pi RP2040 the two user buttons (GP20, GP21) and the NeoPixels (GP18) were
+  not offered at all. A part's buttons now carry an optional `gpio` (there is
+  a GPIO field in the Part Editor's button inspector, and the Maker Pi part
+  sets it), and both buttons and onboard LEDs with a GPIO join the dropdown.
+  A GPIO routed to two connectors (the Maker Pi's GP26, on Grove 5 and 6) is
+  also now listed once rather than twice.
+
 - **Run does something again while a program is already running.** Pressing
   Run while the board was still in a `while True:` loop (a Pico blink loop is
   the normal case) queued the new run behind the old one, which only ends when
