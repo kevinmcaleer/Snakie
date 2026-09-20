@@ -16,6 +16,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   built in and no socket to unplug, and *( ) . speed* / *set ( ) . speed to …*
   for any other object. Files open with them automatically; method calls
   (`self.led.on()`) and deeper targets (`self.motor.speed`) are unchanged.
+- **Courses can ask for the blocks they need (#1214, epic #1206).** A lesson —
+  or a whole course — can now declare `level: advanced` in its `course.yml`, and
+  opening it switches **Advanced blocks** on, with a one-line note in the Learn
+  panel saying so and where to switch them off again. Leaving the lesson does
+  not put the drawers away: the learner has now seen them. The blocks track's
+  "When the block you need doesn't exist yet" lesson carries the key, so the
+  grey Python blocks it teaches are in the toolbox even for a learner who
+  started in simple mode. A course that declares nothing never turns advanced
+  blocks on, and a declared level never lowers anyone's.
 - **The reader keeps the decorators on a `def` (#1216, epic #1206).** Opening a
   file, one or more `@…` lines above a `def` or `async def` — at the top level
   or in a class body — now become the method block's decorator list instead of
