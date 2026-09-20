@@ -20,6 +20,7 @@
  * having to mirror every method here by hand.
  */
 import { isElectron } from './platform'
+import { emptyDiscovery } from '../../../shared/module-discovery'
 
 const noop = (): void => {}
 const unsub = (): (() => void) => noop
@@ -165,6 +166,8 @@ if (!w.api) {
       installPlan: P({ id: '', importName: '', files: [], notes: [] }),
       install: P({ id: '', ok: false, log: '', notes: [] }),
       probeInstalled: P([]),
+      discover: P(emptyDiscovery()),
+      moduleMembers: P([]),
       notifyChanged: noop,
       onChanged: unsub
     },

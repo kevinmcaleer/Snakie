@@ -587,10 +587,13 @@ export function parseModuleVersion(source: string | null | undefined): string | 
  * the board (and, for a bundled module, its `/lib` copy matches the shipped
  * version where that was checked); `outdated` ⇒ importable but the `/lib` copy
  * is STALE against the version the catalog declares (#707 — offer an update,
- * not a lie); `available` ⇒ in the catalog but not (yet) on the board;
- * `unknown` ⇒ not probed (no connection / probe not run).
+ * not a lie); `frozen` ⇒ compiled INTO the board's firmware (a vendor image
+ * like the Arduino Alvik's bakes in `arduino_alvik` and `modulino`), so it is
+ * present, cannot be installed or updated, and offering either would be a lie;
+ * `available` ⇒ in the catalog but not (yet) on the board; `unknown` ⇒ not
+ * probed (no connection / probe not run).
  */
-export type ModuleStatus = 'installed' | 'outdated' | 'available' | 'unknown'
+export type ModuleStatus = 'installed' | 'outdated' | 'frozen' | 'available' | 'unknown'
 
 /**
  * Diff the catalog against the set of import-names found present on the board.
@@ -599,8 +602,19 @@ export type ModuleStatus = 'installed' | 'outdated' | 'available' | 'unknown'
  * {@link importProbeSnippet} for each module (or a bulk probe) and seeing the
  * {@link MODULE_PRESENT} sentinel. `outdatedImportNames` is the (possibly
  * empty) subset whose `/lib` copy read back STALE (#707) — only ever names that
- * also probed importable, and only bundled modules can appear in it. When
- * `connected` is false we don't know, so every module is `'unknown'`. Pure;
+ * also probed importable, and only bundled modules can appear in it.
+ * `frozenImportNames` is what the firmware itself provides, from
+ * `module-discovery`'s `help('modules')` sweep.
+ *
+ * FROZEN BEATS BOTH of the others. A module baked into the image imports
+ * perfectly, so it lands in `installedImportNames` and used to read as an
+ * ordinary install — which then offered an UPDATE for something that has no
+ * `/lib` copy to update and cannot be replaced from Snakie at all. It is only
+ * honoured for a name that ISN'T on the filesystem (the caller's
+ * `firmwareOnlyNames` does that filtering), because a `/lib` copy shadows the
+ * frozen one and is the copy that actually imports.
+ *
+ * When `connected` is false we don't know, so every module is `'unknown'`. Pure;
  * returns a fresh id→status map covering exactly the catalog ids — the Modules
  * manager reads it to render the INSTALLED vs AVAILABLE split.
  */
@@ -608,12 +622,15 @@ export function diffInstalled(
   installedImportNames: ReadonlySet<string>,
   connected: boolean,
   defs: ModuleDef[] = MODULES,
-  outdatedImportNames: ReadonlySet<string> = new Set()
+  outdatedImportNames: ReadonlySet<string> = new Set(),
+  frozenImportNames: ReadonlySet<string> = new Set()
 ): Record<string, ModuleStatus> {
   const out: Record<string, ModuleStatus> = {}
   for (const m of defs) {
     if (!connected) {
       out[m.id] = 'unknown'
+    } else if (frozenImportNames.has(m.importName)) {
+      out[m.id] = 'frozen'
     } else if (!installedImportNames.has(m.importName)) {
       out[m.id] = 'available'
     } else {
