@@ -312,6 +312,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Removed the duplicate "HR SR04" part.** A typo'd copy of the HC-SR04
+  ultrasonic sensor had made its way into the standard parts library
+  alongside the correctly-named `hc-sr04`. The `hr-sr04` part is gone.
+
 - **A file whose blocks this Snakie hasn't got now opens anyway, as Python
   blocks (#1252).** Opening a program saved with blocks from a part, plugin or
   module that isn't present here — `snakie_module_range_finder_new_rangefinder`

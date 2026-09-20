@@ -66,7 +66,7 @@ describe('example parts library', () => {
 
   it.each([
     ['snakie-standard', 'sg90', 9],
-    ['snakie-standard', 'hr-sr04', 8.5],
+    ['snakie-standard', 'hc-sr04', 8.5],
     ['snakie-standard', 'pico', 3]
   ])('%s/%s ships a real mass_g of %d grams (#554)', (lib, id, grams) => {
     const part = partFromYaml(read(lib, id, 'parts.yml'))
