@@ -163,6 +163,10 @@ describe('`self` is never a workspace variable', () => {
 })
 
 describe('decorators', () => {
+  /** The decorator list the reader put on the one method block in `src`. */
+  const decorators = (src: string): unknown =>
+    (one(src, 'snakie_method')!.extraState as { decorators?: unknown } | undefined)?.decorators
+
   it('reads @property as a property block of its own (B3, #1222)', () => {
     const src = ['class T:', '    @property', '    def x(self):', '        return 1', ''].join('\n')
     // It used to be the method block with DECORATOR: 'property' on it. B3 gave
@@ -177,10 +181,8 @@ describe('decorators', () => {
 
   it('reads @staticmethod and @classmethod', () => {
     for (const decorator of ['staticmethod', 'classmethod']) {
-      const src = ['class T:', `    @${decorator}`, '    def x(cls):', '        return 1', ''].join(
-        '\n'
-      )
-      expect(one(src, 'snakie_method')!.fields, decorator).toMatchObject({ DECORATOR: decorator })
+      const src = ['class T:', `    @${decorator}`, '    def x(cls):', '        return 1', ''].join('\n')
+      expect(decorators(src), decorator).toEqual([decorator])
       roundTrips(src)
     }
   })
@@ -192,9 +194,104 @@ describe('decorators', () => {
     expect(report.raw).toBe(0)
   })
 
-  it('leaves a decorator it does not know alone, with its def under it', () => {
+  // --- A2 (#1216): ANY decorator, not the three that had a dropdown --------
+
+  it('reads a dotted decorator rather than leaving it grey', () => {
+    const src = [
+      'import micropython',
+      '',
+      'class T:',
+      '    @micropython.native',
+      '    def x(self):',
+      '        return 1',
+      ''
+    ].join('\n')
+    expect(decorators(src)).toEqual(['micropython.native'])
+    expect(types(src)).not.toContain('snakie_python_statement')
+    roundTrips(src)
+  })
+
+  it('takes a decorator with arguments verbatim, brackets in strings and all', () => {
+    const src = ['@app.route("/(a)", methods=["GET"])', 'def index():', '    return 1', ''].join('\n')
+    expect(decorators(src)).toEqual(['app.route("/(a)", methods=["GET"])'])
+    expect(types(src)).not.toContain('snakie_python_statement')
+    roundTrips(src)
+  })
+
+  it('keeps several decorators, in the order they are written', () => {
+    const src = [
+      'import micropython',
+      '',
+      'class T:',
+      '    @staticmethod',
+      '    @micropython.native',
+      '    def x():',
+      '        return 1',
+      ''
+    ].join('\n')
+    expect(decorators(src)).toEqual(['staticmethod', 'micropython.native'])
+    expect(types(src)).not.toContain('snakie_python_statement')
+    expect(pythonToBlocks(src).report.raw).toBe(0)
+    roundTrips(src)
+  })
+
+  it('reads a decorator separated from its def by a comment', () => {
+    const src = ['@app.route("/")', '# the home page', 'def index():', '    return 1', ''].join('\n')
+    expect(decorators(src)).toEqual(['app.route("/")'])
+    expect(types(src)).not.toContain('snakie_python_statement')
+  })
+
+  it('does not hoist a decorated top-level def away from its decorator', () => {
     const src = ['@app.route("/")', 'def index():', '    return 1', ''].join('\n')
+    expect(types(src)).not.toContain('procedures_defnoreturn')
+    expect(types(src)).toContain('snakie_method')
+  })
+
+  it('leaves a decorator with no def under it alone', () => {
+    const src = ['@something', 'x = 1', ''].join('\n')
     expect(types(src)).toContain('snakie_python_statement')
+    roundTrips(src)
+  })
+
+  it('reads a @property / @x.setter pair written with no blank line (B3, #1222)', () => {
+    const src = [
+      'class T:',
+      '    @property',
+      '    def x(self):',
+      '        return self._x',
+      '    @x.setter',
+      '    def x(self, value):',
+      '        self._x = value',
+      ''
+    ].join('\n')
+    // A2 (#1216) read this as two methods with a decorator each, and said so,
+    // because B3 had not landed. It has, and it folds the pair ONLY when the
+    // `@x.setter` has the one blank line above it that the generator writes.
+    // With the halves written tight, as here, the getter becomes the property
+    // block and the setter stays a method carrying its own decorator — which
+    // is lossless, as the round trip below shows.
+    expect(one(src, 'snakie_property')!.fields).toMatchObject({ NAME: 'x', HAS_SETTER: false })
+    const methods = blocks(src).filter((b) => b.type === 'snakie_method')
+    expect(methods.map((m) => (m.extraState as { decorators: string[] }).decorators)).toEqual([
+      ['x.setter']
+    ])
+    roundTrips(src)
+  })
+
+  it('folds the pair into one block when the blank line is there (B3, #1222)', () => {
+    const src = [
+      'class T:',
+      '    @property',
+      '    def x(self):',
+      '        return self._x',
+      '',
+      '    @x.setter',
+      '    def x(self, value):',
+      '        self._x = value',
+      ''
+    ].join('\n')
+    expect(blocks(src).filter((b) => b.type === 'snakie_method')).toHaveLength(0)
+    expect(one(src, 'snakie_property')!.fields).toMatchObject({ NAME: 'x', HAS_SETTER: true })
     roundTrips(src)
   })
 })
@@ -220,10 +317,19 @@ describe('a method’s own signature', () => {
 
   it('takes `cls` as the lead of a class method, and no lead at all for a static one', () => {
     const cls = ['class T:', '    @classmethod', '    def make(cls, n):', '        return n', ''].join('\n')
-    expect(one(cls, 'snakie_method')!.extraState).toEqual({ lead: 'cls', params: ['n'] })
+    expect(one(cls, 'snakie_method')!.extraState).toEqual({
+      lead: 'cls',
+      params: ['n'],
+      // The decorator rides on the extra state as a list since A1 (#1215).
+      decorators: ['classmethod']
+    })
     roundTrips(cls)
     const stat = ['class T:', '    @staticmethod', '    def add(a, b):', '        return a', ''].join('\n')
-    expect(one(stat, 'snakie_method')!.extraState).toEqual({ lead: 'none', params: ['a', 'b'] })
+    expect(one(stat, 'snakie_method')!.extraState).toEqual({
+      lead: 'none',
+      params: ['a', 'b'],
+      decorators: ['staticmethod']
+    })
     roundTrips(stat)
   })
 
@@ -237,7 +343,11 @@ describe('a method’s own signature', () => {
     // `@classmethod` on a `def x(self)` is somebody's code, and the block
     // would otherwise write `cls` into it.
     const src = ['class T:', '    @classmethod', '    def go(self):', '        print(1)', ''].join('\n')
-    expect(one(src, 'snakie_method')!.extraState).toEqual({ lead: 'none', params: ['self'] })
+    expect(one(src, 'snakie_method')!.extraState).toEqual({
+      lead: 'none',
+      params: ['self'],
+      decorators: ['classmethod']
+    })
     roundTrips(src)
   })
 
