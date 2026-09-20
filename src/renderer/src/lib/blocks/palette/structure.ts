@@ -3,6 +3,7 @@ import { Order } from '../generator'
 import type { MicroPythonGenerator } from '../generator'
 import type { BlockDefinition, BlockGroup } from '../registry'
 import { sanitise } from '../names'
+import { decoratorLines, installDecorators } from './functions'
 import { DEFAULT_ARGS, argRowMixin, callArgs } from './python'
 import {
   appendExtrasRow,
@@ -223,10 +224,8 @@ export const STRUCTURE_BLOCKS: BlockDefinition[] = [
     // `installStructureBlocks` — the same reason the `try` block's arms are.
     toolbox: { extraState: { params: [], lead: 'self' } },
     code: (block, gen) => {
-      const decorator = String(block.getFieldValue('DECORATOR') ?? 'NONE')
-      const at = decorator === 'NONE' ? '' : `@${decorator}\n`
       const async = block.getFieldValue('KIND') === 'ASYNC' ? 'async ' : ''
-      return `${at}${async}def ${nameOf(block, 'NAME', 'go')}(${methodSignature(block)}):\n${body(block, gen)}`
+      return `${decoratorLines(block, gen)}${async}def ${nameOf(block, 'NAME', 'go')}(${methodSignature(block)}):\n${body(block, gen)}`
     }
   },
   // ------------------------------------------------------------------ property
@@ -950,8 +949,13 @@ function methodBlockMixin(): Record<string, unknown> {
           // `@property` AS A MODIFIER, not a block of its own (#1093). A
           // decorator on its own line would be a block that means nothing
           // without the block under it, and could be dragged away from it.
-          // A1 (#1215) folds this dropdown into a decorators list; until it
-          // lands, the three Python has a setting for are the three here.
+          // A1 (#1215) HAS LANDED, and the dropdown is now the FIRST entry of
+          // the decorators list rather than the only decorator there can be:
+          // `getDecorators` falls back to this field for a block that has no
+          // list of its own, so a workspace saved with `property` selected
+          // still writes `@property`, and `@micropython.native` — which this
+          // dropdown could never hold — rides alongside it. A3 (#1217) gives
+          // the list its editing UI.
           new Blockly.FieldDropdown(
             [
               ['method', 'NONE'],
@@ -1072,6 +1076,18 @@ export function installStructureBlocks(): void {
   Blockly.Blocks[TRY_BLOCK] = tryBlockMixin() as never
   Blockly.Blocks[NEW_INSTANCE] = newInstanceMixin() as never
   Blockly.Blocks[METHOD_BLOCK] = methodBlockMixin() as never
+  // THE DECORATOR LIST, WRAPPED ROUND THE MIXIN'S OWN HOOKS (A1, #1215).
+  //
+  // A1 hung the list off `snakie_method` through the `snakie_decorators`
+  // mutator extension, because the block was JSON and had no serialisation of
+  // its own. B2 (#1221) rebuilt it in code WITH a `saveExtraState` pair — the
+  // parameter list — so the extension would now be a second mutator on a block
+  // that already has one, and Blockly would take whichever was attached last.
+  // `installDecorators` is the wrap that was written for exactly this shape
+  // (Blockly's own `def` blocks), and it folds `decorators` into the state the
+  // mixin already saves rather than replacing it. After the mixin is
+  // registered, necessarily: it wraps what it finds.
+  installDecorators([METHOD_BLOCK])
   // The property block's tick box (#1222). An EXTENSION rather than a wrapped
   // `init`: the block itself is ordinary JSON, and a validator is the one thing
   // JSON cannot declare. Guarded, because `installCorePalette` runs again for
