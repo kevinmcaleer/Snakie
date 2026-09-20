@@ -6,8 +6,9 @@
  * from the UI-facing surface without reaching into `src/main`.
  *
  * The layer is provider-agnostic (issue #77): a registry of providers
- * (Anthropic Claude, OpenAI, Google Gemini, Grok/xAI, GitHub Copilot) lives in
- * `providers/`, and a request names the `providerId` + `model` it targets.
+ * (Anthropic Claude, OpenAI, Google Gemini, Grok/xAI, GitHub Copilot, Local
+ * LLM) lives in `providers/`, and a request names the `providerId` + `model`
+ * it targets.
  */
 
 /** A single chat turn in the conversation thread. */
@@ -65,6 +66,12 @@ export interface LlmProviderInfo {
   keyUrl?: string
   /** When true, the provider is wired but untested / has caveats (e.g. Copilot). */
   experimental?: boolean
+  /**
+   * When true, the user can type any model name instead of picking from a list.
+   * Used by the Local LLM provider where available models depend on the user's
+   * server and cannot be enumerated at registration time.
+   */
+  customModel?: boolean
 }
 
 /** Arguments for a chat completion request. */

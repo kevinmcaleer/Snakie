@@ -7,24 +7,6 @@ import {
 } from '../hooks/useChatProviders'
 import './ChatSettings.css'
 
-/**
- * CHAT SETTINGS — the Settings dialog's Chat tab (issue #83)
- * =========================================================
- *
- * Everything that used to live in the chat panel's inline ⚙ settings now lives
- * here, so the chat panel keeps only its quick footer selectors:
- *
- *   - the per-provider API-key form (save / remove, key hint, "Get a key" link),
- *     OR the GitHub Copilot device-flow sign-in / sign-out for the Copilot
- *     provider (moved here intact);
- *   - the inline-autocomplete settings (the enable toggle + the per-provider
- *     completion-model selector, issue #82).
- *
- * All values are the SAME persisted keys the chat uses, read/written through
- * {@link useChatProviders} (which broadcasts changes so the chat footer and this
- * tab stay in sync). Provider selection itself is a dropdown here so the user
- * can configure a key for any provider, not just the chat's active one.
- */
 export function ChatSettings(): JSX.Element {
   const {
     providers,
@@ -37,19 +19,35 @@ export function ChatSettings(): JSX.Element {
     setCompletionModel,
     keyStatus,
     refreshKeyStatus,
-    error
+    error,
+    baseUrl,
+    setBaseUrl,
+    model,
+    setModel,
+    availableModels,
+    fetchModels,
+    modelsLoading,
+    modelsError
   } = useChatProviders()
 
   const [keyInput, setKeyInput] = useState('')
   const [savingKey, setSavingKey] = useState(false)
   const [localError, setLocalError] = useState<string | null>(null)
+  const [baseUrlInput, setBaseUrlInput] = useState('')
+  const [modelInput, setModelInput] = useState('')
+  const [savingConfig, setSavingConfig] = useState(false)
 
-  // Reset the key field when switching providers so a half-typed key never
-  // leaks to another provider's form.
   useEffect(() => {
     setKeyInput('')
     setLocalError(null)
   }, [providerId])
+
+  useEffect(() => {
+    if (provider?.id === 'local') {
+      setBaseUrlInput(baseUrl)
+      setModelInput(model)
+    }
+  }, [provider?.id, baseUrl, model])
 
   const saveKey = useCallback(
     async (e: FormEvent): Promise<void> => {
@@ -85,6 +83,16 @@ export function ChatSettings(): JSX.Element {
     }
   }, [provider, refreshKeyStatus])
 
+  const saveLocalConfig = useCallback(async (): Promise<void> => {
+    setSavingConfig(true)
+    try {
+      await setBaseUrl(baseUrlInput)
+      setModel(modelInput)
+    } finally {
+      setSavingConfig(false)
+    }
+  }, [baseUrlInput, modelInput, setBaseUrl, setModel])
+
   const shown = localError ?? error
 
   return (
@@ -110,6 +118,72 @@ export function ChatSettings(): JSX.Element {
         </select>
       </section>
 
+      {provider && provider.id === 'local' && (
+        <section className="settings-section">
+          <h3 className="settings-section__title">Local LLM Connection</h3>
+          <label className="chat-settings__field">
+            <span className="chat-settings__field-label">Base URL</span>
+            <input
+              type="text"
+              className="chat-settings__input-text"
+              value={baseUrlInput}
+              onChange={(e) => setBaseUrlInput(e.target.value)}
+              placeholder="http://localhost:11434/v1"
+            />
+          </label>
+          <div className="chat-settings__row">
+            <button
+              type="button"
+              className="chat-settings__btn"
+              onClick={() => {
+                setModelInput('')
+                setModel('')
+                void fetchModels(baseUrlInput || baseUrl)
+              }}
+              disabled={modelsLoading || !(baseUrlInput || baseUrl)}
+            >
+              {modelsLoading ? 'Detecting…' : 'Detect models'}
+            </button>
+            {availableModels.length > 0 && !modelsError && (
+              <span className="chat-settings__found">{availableModels.length} models found</span>
+            )}
+          </div>
+          {modelsError && <p className="chat-settings__error">{modelsError}</p>}
+          <label className="chat-settings__field">
+            <span className="chat-settings__field-label">Model name</span>
+            <input
+              type="text"
+              className="chat-settings__input-text"
+              value={modelInput}
+              onChange={(e) => setModelInput(e.target.value)}
+              placeholder="e.g. llama3.2, mistral, qwen2.5"
+              list="local-model-suggestions"
+            />
+            {availableModels.length > 0 && (
+              <datalist id="local-model-suggestions">
+                {availableModels.map((m) => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
+            )}
+          </label>
+          <div className="chat-settings__row">
+            <button
+              type="button"
+              className="chat-settings__btn chat-settings__btn--primary"
+              onClick={() => void saveLocalConfig()}
+              disabled={savingConfig}
+            >
+              {savingConfig ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+          <p className="settings-section__hint">
+            Connect to any OpenAI-compatible local LLM server (Ollama, LM Studio, LocalAI, vLLM,
+            etc.). No API key is required unless your server enforces one.
+          </p>
+        </section>
+      )}
+
       {provider && provider.id === 'copilot' ? (
         <section className="settings-section">
           <h3 className="settings-section__title">{provider.label} sign-in</h3>
@@ -124,7 +198,7 @@ export function ChatSettings(): JSX.Element {
           />
         </section>
       ) : (
-        provider && (
+        provider && provider.id !== 'local' && (
           <form className="settings-section" onSubmit={saveKey}>
             <h3 className="settings-section__title">{provider.label} API key</h3>
             <input
@@ -217,13 +291,6 @@ export function ChatSettings(): JSX.Element {
   )
 }
 
-/**
- * GitHub Copilot sign-in via the OAuth device flow (moved from ChatPanel in
- * issue #83). A plain personal access token can't reach the Copilot token
- * endpoint, so the user approves a short code at github.com/login/device; the
- * main process then holds the resulting GitHub token (never exposed here) and
- * exchanges it for the Copilot token.
- */
 function CopilotSignIn({
   providerLabel,
   signedIn,
@@ -239,7 +306,6 @@ function CopilotSignIn({
   const [copied, setCopied] = useState(false)
   const cancelledRef = useRef(false)
 
-  // Stop polling if the dialog unmounts mid-flow.
   useEffect(() => {
     return () => {
       cancelledRef.current = true
@@ -273,7 +339,6 @@ function CopilotSignIn({
           continue
         }
         if (res.status === 'pending') continue
-        // denied / expired / error — terminal.
         setError(res.message || `Sign-in ${res.status}.`)
         setPhase('error')
         setDevice(null)
