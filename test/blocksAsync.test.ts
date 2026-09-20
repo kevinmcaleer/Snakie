@@ -96,7 +96,12 @@ describe('async def', () => {
     expect(one(src, 'snakie_method')!.fields).toMatchObject({ KIND: 'ASYNC' })
     // The decorator is an entry in the block's list since A2 (#1216), not the
     // dropdown it used to set.
-    expect(one(src, 'snakie_method')!.extraState).toEqual({ decorators: ['staticmethod'] })
+    expect(one(src, 'snakie_method')!.extraState).toEqual({
+      // Beside the parameter list B2 (#1221) put in the same extra state.
+      lead: 'none',
+      params: [],
+      decorators: ['staticmethod']
+    })
     roundTrips(src)
   })
 

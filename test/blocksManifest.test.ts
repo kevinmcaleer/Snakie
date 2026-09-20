@@ -411,6 +411,52 @@ blocks:
   })
 })
 
+describe('a manifest declares its level (#1213, epic #1206)', () => {
+  const withLevel = (level: string): string => `
+version: 1
+blocks:
+  - id: read
+    message: raw register
+    shape: value
+    output: Number
+    code: sensor.read_reg(0)
+    level: ${level}
+`
+
+  it('keeps an advanced block advanced', () => {
+    const { manifest, warnings } = parseBlocksManifest(withLevel('advanced'))
+    expect(warnings).toEqual([])
+    expect(manifest.blocks[0].level).toBe('advanced')
+  })
+
+  it('drops `simple`, which is the default anyway', () => {
+    const { manifest, warnings } = parseBlocksManifest(withLevel('simple'))
+    expect(warnings).toEqual([])
+    expect(manifest.blocks[0].level).toBeUndefined()
+  })
+
+  it('leaves a block that says nothing at the default', () => {
+    const { manifest } = parseBlocksManifest(ONE_BLOCK)
+    expect(manifest.blocks[0].level).toBeUndefined()
+  })
+
+  it('warns on a typo rather than hiding the block from everyone', () => {
+    // `level: advnced` must not read as "advanced" — nor as a level at all.
+    const { manifest, warnings } = parseBlocksManifest(withLevel('advnced'))
+    expect(warnings).toEqual(['block "read": level must be one of simple, advanced — ignored'])
+    expect(manifest.blocks[0].level).toBeUndefined()
+  })
+
+  it('holds a plugin to the same rule', () => {
+    const { manifest, warnings } = normaliseBlocksManifest({
+      version: 1,
+      blocks: [{ id: 'raw', message: 'raw', code: 'raw()\n', level: 'advanced' }]
+    })
+    expect(warnings).toEqual([])
+    expect(manifest.blocks[0].level).toBe('advanced')
+  })
+})
+
 describe('round trip (epic #856)', () => {
   it('writes a manifest that parses back to itself', () => {
     const source = `
@@ -436,6 +482,7 @@ blocks:
     tooltip: The sensor itself.
     help: ref-pins
     scope: micropython
+    level: advanced
     colour: '#d4553f'
     inline: false
   - id: read
