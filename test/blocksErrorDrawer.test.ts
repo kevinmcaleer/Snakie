@@ -61,11 +61,15 @@ describe('they can be reached', () => {
     expect(loose).not.toContain('snakie_try')
     const shelves = contents.filter((c) => c.kind === 'category') as {
       name: string
-      contents: { type: string }[]
+      contents: { kind: string; type?: string }[]
     }[]
     const shelf = shelves.find((c) => c.name === 'When things go wrong')!
     expect(shelf).toBeTruthy()
-    expect(shelf.contents.map((c) => c.type)).toEqual(['snakie_try', 'snakie_raise'])
+    // Both are advanced, so the shelf opens on the `Advanced` marker (#1211).
+    expect(shelf.contents.filter((c) => c.kind === 'block').map((c) => c.type)).toEqual([
+      'snakie_try',
+      'snakie_raise'
+    ])
   })
 })
 
