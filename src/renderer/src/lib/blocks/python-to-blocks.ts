@@ -247,6 +247,8 @@ const PYTHON_CALL = 'snakie_python_call'
 const PYTHON_CALL_VALUE = 'snakie_python_call_value'
 const PYTHON_ATTR_GET = 'snakie_python_attr_get'
 const PYTHON_ATTR_SET = 'snakie_python_attr_set'
+/** `Robot("Bob", speed=3)` — the create-an-instance block (B5, #1224). */
+const NEW_INSTANCE = 'snakie_new_instance'
 
 /**
  * The most argument sockets a call block will grow to — `MAX_ARGS` in
@@ -1782,6 +1784,18 @@ class Converter {
    * a workspace Blockly refuses to load.
    */
   private readonly definedHere = new Map<string, { params: string[]; returns: boolean }>()
+
+  /**
+   * Every class this program defines, for {@link instanceCall} (B5, #1224).
+   *
+   * A NAME IS ONLY A CLASS BECAUSE THIS FILE SAYS SO. `Robot("Bob")` and
+   * `sorted(xs)` are the same shape, and nothing about the call itself tells
+   * them apart — capitalisation is a convention, not a rule, and guessing from
+   * it would turn every `Pin(15)` into a create-instance block for a class
+   * nobody wrote. So only a name with a `class` header in the same file counts.
+   */
+  private readonly classesHere = new Set<string>()
+
   /**
    * The text the expression parser is currently reading, so an argument can be
    * sliced out of it verbatim. Saved and restored around every nested parse,
@@ -1806,6 +1820,12 @@ class Converter {
    */
   indexDefinitions(nodes: readonly Stmt[]): void {
     for (const node of nodes) {
+      // The classes too, on the same pass and for the same reason: a
+      // `robot = Robot("Bob")` above the `class Robot:` that defines it is
+      // ordinary Python inside a function, and a reader that had not read the
+      // header yet would take the line raw.
+      const klass = /^class\s+([A-Za-z_]\w*)\s*(?:\(.*\))?\s*:$/.exec(node.line.text)
+      if (klass) this.classesHere.add(klass[1])
       const def = /^def\s+([A-Za-z_]\w*)\(([^)]*)\):$/.exec(node.line.text)
       // THE SAME TEST `recognise` APPLIES, decorator and all. A `def` under a
       // decorator does not become a procedure block, and registering it here
@@ -1869,6 +1889,37 @@ class Converter {
       )
     }
     return block
+  }
+
+  /**
+   * `Robot("Bob", speed=3)` → the create-an-instance block (B5, #1224).
+   *
+   * ONLY FOR A CLASS THIS FILE DEFINES — see {@link classesHere} for why. The
+   * arguments are the call block's arguments, keyword names and all, because it
+   * is the same growable row under a different head: `speed=3` puts `speed` in
+   * the name box and `3` in the socket, which is exactly what the generator
+   * writes back.
+   */
+  private instanceCall(text: string): BlockJson | null {
+    const call = /^([A-Za-z_]\w*)\s*\((.*)\)$/.exec(text.trim())
+    if (!call || !this.classesHere.has(call[1])) return null
+    const args = splitArgs(call[2])
+    // More arguments than the block can grow to is not this block, so the line
+    // stays raw and regenerates verbatim — the rule everywhere else here.
+    if (!args || args.length > MAX_CALL_ARGS) return null
+    const fields: Record<string, string> = { CLASS: call[1] }
+    const inputs: Record<string, { block: BlockJson }> = {}
+    args.forEach((arg, i) => {
+      const keyword = keywordArgument(arg)
+      if (keyword) fields[`NAME${i}`] = keyword.name
+      inputs[`ARG${i}`] = { block: this.expression(keyword?.value ?? arg) }
+    })
+    return {
+      type: NEW_INSTANCE,
+      fields,
+      extraState: { args: args.length },
+      ...(args.length > 0 ? { inputs } : {})
+    }
   }
 
   /**
@@ -3945,6 +3996,10 @@ class Converter {
 
   private readExpression(text: string): BlockJson {
     const trimmed = text.trim()
+    // MAKING ONE OF THIS PROGRAM'S OWN CLASSES (B5, #1224), first: `Robot(…)`
+    // would otherwise be read as a call nothing recognises.
+    const made = this.instanceCall(trimmed)
+    if (made) return made
     // A CALL TO ONE OF THIS PROGRAM'S OWN FUNCTIONS, before the parser, which
     // would otherwise read `double(3)` as a call it does not recognise and hand
     // back a raw value block. Only a `def` that RETURNS has a value caller, so
@@ -4562,6 +4617,8 @@ class Converter {
         if (onObject) return this.chain({ block: onObject, next: call.next }, tokens)
         const known = this.matchCall(call, 'value')
         if (known) return this.chain({ block: known, next: call.next }, tokens)
+        const made = this.instanceCall(this.callText(tokens, at, call.next))
+        if (made) return this.chain({ block: made, next: call.next }, tokens)
         const own = this.procedureCall(this.callText(tokens, at, call.next), 'value')
         if (own) return this.chain({ block: own, next: call.next }, tokens)
       }
