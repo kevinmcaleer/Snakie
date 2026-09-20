@@ -44,6 +44,8 @@ import {
   labelCounterRotation,
   oneToOneTransform,
   rotateCW,
+  viewTransition,
+  VIEW_ANIM_MS,
   zoomAround,
   zoomIn as zoomInTransform,
   zoomOut as zoomOutTransform,
@@ -966,6 +968,43 @@ export function BoardGraph({
   // row-count changes so the board always opens nicely framed.
   const touchedRef = useRef(false)
 
+  // Eased zoom: DISCRETE viewport changes (−/+, fit, 100%, rotate) glide to
+  // their new transform; continuous gestures (wheel-zoom, drag-to-pan) never do —
+  // a transition on every frame of a gesture feels laggy and rubber-bandy. We
+  // switch the transition on for exactly one change and off again when it lands,
+  // so the stage is only ever animated while a stepped change is in flight.
+  const [animating, setAnimating] = useState(false)
+  const animTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reducedMotion = useRef(
+    typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+  /** Ease the NEXT view change (no-op when the user asked for reduced motion). */
+  const easeNextChange = useCallback((): void => {
+    if (reducedMotion.current) return
+    if (animTimerRef.current) clearTimeout(animTimerRef.current)
+    setAnimating(true)
+    animTimerRef.current = setTimeout(() => {
+      animTimerRef.current = null
+      setAnimating(false)
+    }, VIEW_ANIM_MS)
+  }, [])
+  /** Cancel any in-flight ease — a gesture must track the pointer exactly. */
+  const stopEasing = useCallback((): void => {
+    if (animTimerRef.current) {
+      clearTimeout(animTimerRef.current)
+      animTimerRef.current = null
+    }
+    setAnimating(false)
+  }, [])
+  useEffect(
+    () => () => {
+      if (animTimerRef.current) clearTimeout(animTimerRef.current)
+    },
+    []
+  )
+
   // Measure the canvas (clip) box and keep it current on resize. Re-runs on
   // `effectiveView` too: the node-graph canvas only mounts in the graph view, so
   // without this the measure never fired when switching INTO node graph and `vp`
@@ -996,28 +1035,32 @@ export function BoardGraph({
   // top stays on screen instead of the view ballooning out of the top-left corner.
   const onZoomIn = useCallback((): void => {
     touchedRef.current = true
+    easeNextChange()
     setView((v) => zoomAround(v, zoomInTransform(v.zoom), vp.w > 0 ? vp.w / 2 : v.panX, v.panY))
     setIsOneToOne(false)
-  }, [vp.w])
+  }, [vp.w, easeNextChange])
 
   const onZoomOut = useCallback((): void => {
     touchedRef.current = true
+    easeNextChange()
     setView((v) => zoomAround(v, zoomOutTransform(v.zoom), vp.w > 0 ? vp.w / 2 : v.panX, v.panY))
     setIsOneToOne(false)
-  }, [vp.w])
+  }, [vp.w, easeNextChange])
 
   const onFit = useCallback((): void => {
     touchedRef.current = true
+    easeNextChange()
     if (vp.w === 0 || vp.h === 0) return
     setView(fitTransform(stageW, stageH, vp.w, vp.h, rotation))
     setIsOneToOne(false)
-  }, [vp.w, vp.h, stageW, stageH, rotation])
+  }, [vp.w, vp.h, stageW, stageH, rotation, easeNextChange])
 
   // The zoom readout toggles between a centred 1:1 view and zoom-to-fit, keyed
   // on the LIVE zoom (like the breadboard) so clicking at 100% fits even when
   // the user got to 100% by hand.
   const onToggleOneToOne = useCallback((): void => {
     touchedRef.current = true
+    easeNextChange()
     if (vp.w === 0 || vp.h === 0) return
     if (Math.abs(view.zoom - 1) < 0.005) {
       setView(fitTransform(stageW, stageH, vp.w, vp.h, rotation))
@@ -1026,10 +1069,11 @@ export function BoardGraph({
       setView(oneToOneTransform(stageW, stageH, vp.w, vp.h, rotation))
       setIsOneToOne(true)
     }
-  }, [view.zoom, vp.w, vp.h, stageW, stageH, rotation])
+  }, [view.zoom, vp.w, vp.h, stageW, stageH, rotation, easeNextChange])
 
   const onRotate = useCallback((): void => {
     touchedRef.current = true
+    easeNextChange()
     const next = rotateCW(rotation)
     setRotation(next)
     // Re-fit for the new rotation so the rotated board stays fully framed.
@@ -1037,19 +1081,20 @@ export function BoardGraph({
       setView(fitTransform(stageW, stageH, vp.w, vp.h, next))
       setIsOneToOne(false)
     }
-  }, [rotation, vp.w, vp.h, stageW, stageH])
+  }, [rotation, vp.w, vp.h, stageW, stageH, easeNextChange])
 
   // Wheel-zoom (inside the fixed viewport) — anchored at the cursor so the spot
   // under the pointer stays put (the natural "zoom where you point").
   const onWheel = useCallback((e: React.WheelEvent): void => {
     touchedRef.current = true
+    stopEasing()
     const rect = canvasRef.current?.getBoundingClientRect()
     const ax = rect ? e.clientX - rect.left : vp.w / 2
     const ay = rect ? e.clientY - rect.top : vp.h / 2
     const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1
     setView((v) => zoomAround(v, v.zoom * factor, ax, ay))
     setIsOneToOne(false)
-  }, [vp.w, vp.h])
+  }, [vp.w, vp.h, stopEasing])
 
   // Drag-to-pan on empty canvas (pointer drag). Clicks on node cards / the
   // control cluster don't start a pan (their elements are excluded below).
@@ -1061,10 +1106,11 @@ export function BoardGraph({
         return
       }
       touchedRef.current = true
+      stopEasing()
       panRef.current = { x: e.clientX, y: e.clientY, panX: view.panX, panY: view.panY }
       ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
     },
-    [view.panX, view.panY]
+    [view.panX, view.panY, stopEasing]
   )
   const onPointerMove = useCallback((e: React.PointerEvent): void => {
     const p = panRef.current
@@ -1401,7 +1447,8 @@ export function BoardGraph({
                 width: stageW,
                 height: stageH,
                 transform: `translate(${view.panX}px, ${view.panY}px) scale(${view.zoom}) rotate(${rotation}deg)`,
-                transformOrigin: '0 0'
+                transformOrigin: '0 0',
+                transition: viewTransition(animating)
               }}
             >
               <svg

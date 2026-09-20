@@ -204,3 +204,24 @@ export function labelCounterRotation(rot: number): { counter: 0 | 180; net: 0 | 
 export function zoomPercent(zoom: number): string {
   return `${Math.round(zoom * 100)}%`
 }
+
+/**
+ * EASED ZOOM: how long a *discrete* viewport change (the −/+ buttons, the
+ * zoom-to-fit / 100% toggle, rotate) takes to glide to its new transform, and
+ * the curve it uses. Continuous gestures — wheel-zoom and drag-to-pan — must
+ * NOT be eased: they already track the input, and a transition on every frame
+ * makes them feel laggy and rubber-bandy.
+ */
+export const VIEW_ANIM_MS = 220
+/** Gentle ease-out: quick to leave, soft to arrive (a settling instrument). */
+export const VIEW_ANIM_EASING = 'cubic-bezier(0.22, 0.75, 0.3, 1)'
+
+/**
+ * The `transition` CSS for the transformed stage. `animating` is true only for
+ * the duration of a discrete change; the rest of the time it is `'none'` so the
+ * wheel/drag path stays frame-exact. Honouring `prefers-reduced-motion` is the
+ * caller's job (pass `animating: false` when the user asked for less motion).
+ */
+export function viewTransition(animating: boolean): string {
+  return animating ? `transform ${VIEW_ANIM_MS}ms ${VIEW_ANIM_EASING}` : 'none'
+}
