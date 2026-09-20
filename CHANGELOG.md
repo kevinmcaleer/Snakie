@@ -8,6 +8,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The reader keeps the decorators on a `def` (#1216, epic #1206).** Opening a
+  file, one or more `@…` lines above a `def` or `async def` — at the top level
+  or in a class body — now become the method block's decorator list instead of
+  grey Python blocks. The text after the `@` is taken verbatim to the end of the
+  line, so a dotted name (`@micropython.native`), a decorator called with
+  arguments and a bracket inside a string (`@app.route("/(a)")`) and a stack of
+  several are all read the same way, and a comment between a decorator and its
+  `def` no longer separates them. `@property` and `@x.setter` still read as two
+  methods with one decorator each; the single property block is #1222.
+
 - **Decorators on function and method blocks (#1215, epic #1206).** The two
   `def` blocks and the method block now carry an ordered list of decorators in
   their mutation, written out as `@…` lines immediately above the `def` —
