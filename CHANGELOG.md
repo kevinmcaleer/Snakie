@@ -8,6 +8,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Cytron Maker Pi RP2040 is in the flasher's board list.** It was in the
+  Board Finder gallery but not among the boards you can pick in the MicroPython
+  flasher, because MicroPython publishes no build under its name and the model
+  list comes from upstream's catalog. It now has a board profile of its own —
+  flashed as a UF2 like a Pico, with its own CircuitPython board id and a note
+  about holding BOOT for the RPI-RP2 drive.
+
 - **The Modules shelf shows what is actually there.** A new DETECTED section
   above the catalog lists every `.py` file at the top of the open folder and in
   the board's `/` and `/lib`, and unfolds each one into the classes (with their
