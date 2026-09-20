@@ -490,6 +490,13 @@ export interface PartButton {
   z?: number
   /** Silk label (e.g. `"BOOT"`, `"RESET"`, `"USR"`). */
   label: string
+  /**
+   * The GPIO a USER button is wired to, when it has one — `20` for the Maker Pi
+   * RP2040's GP20 button. Absent for BOOT / RESET, which are not readable pins.
+   * A button with a GPIO is a pin the board has, so the block dropdowns offer
+   * it (`boardPinsFromPart`) even though it sits on no header or connector.
+   */
+  gpio?: number
   /** Normalised X within the board outline. */
   x: number
   /** Normalised Y within the board outline. */
