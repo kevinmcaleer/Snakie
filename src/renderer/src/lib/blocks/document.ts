@@ -67,3 +67,34 @@ export function blocksDocumentFor(content: string | undefined): BlocksDocument |
     derived: true
   }
 }
+
+/**
+ * THE SAME PROGRAM, READ FROM ITS PYTHON INSTEAD (#1252).
+ *
+ * A stored footer can name block types this build cannot build: a part or
+ * plugin that isn't installed (#1017), a module whose `.py` is not beside the
+ * file and whose board is not plugged in (#1048 registers those blocks from the
+ * module's own source, so they come and go with it), or a file from a newer
+ * Snakie. Until now that was the end of the road — the canvas refused to mount
+ * and said "these blocks need a newer Snakie".
+ *
+ * But nothing is actually lost in that case. The footer's OTHER half is the
+ * Python those blocks generated, and `pythonToBlocks` cannot fail: a line it
+ * has no native block for becomes a raw Python block holding that exact line
+ * (#1019). So the honest answer is the one every other mismatch already gets —
+ * the code is the program, the blocks are our reading of it, and `derived` says
+ * so, which is what puts them behind #1069's round-trip gate before they may
+ * write anything back.
+ *
+ * The stored workspace is dropped rather than repaired, and only in the document
+ * we render: the FILE is untouched, so re-opening it with the missing part
+ * installed brings the learner's own arrangement straight back.
+ */
+export function documentFromCode(doc: BlocksDocument): BlocksDocument {
+  return {
+    code: doc.code,
+    workspace: pythonToBlocks(doc.code).workspace,
+    version: doc.version,
+    derived: true
+  }
+}

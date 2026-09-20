@@ -30,7 +30,7 @@
 
 import * as Blockly from 'blockly/core'
 import { arrangeWorkspaceRoots, separateWorkspaceRoots } from '../blocks/arrange'
-import { blocksDocumentFor } from '../blocks/document'
+import { blocksDocumentFor, documentFromCode } from '../blocks/document'
 import { ensureBlocklyLocale } from '../blocks/locale'
 import { installCorePalette } from '../blocks/palette'
 import { installBlockDefinitions } from '../blocks/registry'
@@ -92,7 +92,7 @@ function offscreenHost(): HTMLDivElement {
  * "exported without the blocks" report.
  */
 export function offscreenBlocksSource(input: BlocksSourceInput): BlocksSource {
-  const doc = blocksDocumentFor(input.stored ?? undefined)
+  let doc = blocksDocumentFor(input.stored ?? undefined)
   if (!doc) throw new Error('the file has no content to read blocks from')
 
   // Everything `Blockly.inject` needs to know first — the same calls, in the
@@ -103,13 +103,17 @@ export function offscreenBlocksSource(input: BlocksSourceInput): BlocksSource {
   installSoftShellRenderers()
   installShelfFlyout()
 
-  // The canvas refuses a file it cannot read rather than clearing it (see the
-  // `blocked` check in `BlocksCanvas`); the export refuses it too, out loud.
-  const unknown = unknownBlockTypes(doc.workspace, (t) =>
-    Object.prototype.hasOwnProperty.call(Blockly.Blocks, t)
-  )
-  if (unknown.length) {
-    throw new Error(`the file uses blocks this Snakie does not know: ${unknown.join(', ')}`)
+  // A footer can name blocks this build hasn't got — a part or plugin that
+  // isn't installed, or a module whose blocks were registered from a `.py` that
+  // isn't here (#1048). The canvas reads such a file back from its own Python
+  // rather than refusing it (#1252), and the export does the same: a printed
+  // page of the learner's program, some of it as plain Python blocks, beats an
+  // error where the page should be.
+  if (
+    unknownBlockTypes(doc.workspace, (t) => Object.prototype.hasOwnProperty.call(Blockly.Blocks, t))
+      .length > 0
+  ) {
+    doc = documentFromCode(doc)
   }
 
   const host = offscreenHost()

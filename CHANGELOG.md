@@ -234,6 +234,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A file whose blocks this Snakie hasn't got now opens anyway, as Python
+  blocks (#1252).** Opening a program saved with blocks from a part, plugin or
+  module that isn't present here — `snakie_module_range_finder_new_rangefinder`
+  and friends, whose blocks are read from the module's own `.py` and so come and
+  go with it — met *"These blocks need a newer Snakie"* and a canvas that never
+  mounted. The blocks view now falls back to the file's own Python, which always
+  converts: every line Snakie has a native block for becomes that block, and
+  everything else becomes a plain Python block holding the line. Those blocks are
+  marked as Snakie's reading of the code, so the existing round-trip check gates
+  them before they may write anything, and the file on disk is untouched —
+  install the missing part, or plug the board back in, and re-opening brings the
+  original arrangement straight back. The **Print blocks** export follows the
+  same path instead of refusing the page.
+
 - **Blocks can pick a board's button and LED pins.** The pin dropdowns only
   knew the pins on a board's headers and connectors, so on the Cytron Maker
   Pi RP2040 the two user buttons (GP20, GP21) and the NeoPixels (GP18) were
