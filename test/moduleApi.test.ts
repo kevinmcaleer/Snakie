@@ -202,3 +202,57 @@ describe('the curated tier (#1048)', () => {
     expect(api.classes[0].methods).toEqual([])
   })
 })
+
+describe('what a body tells us', () => {
+  const SRC = `
+class Sensor:
+    def __init__(self, pin=0):
+        self.pin = pin
+        self.unit = 'cm'
+        self._cache = None
+        self.pin = 1
+
+    @property
+    def ready(self):
+        return True
+
+    @ready.setter
+    def ready(self, v):
+        pass
+
+    def read(self):
+        if self.pin:
+            return 42
+        return 0
+
+    def reset(self):
+        self._cache = None
+        return
+
+
+def helper(x):
+    return x * 2
+
+
+def go():
+    pass
+`
+  const api = readModuleApi('sensor', SRC)
+
+  it('a method or function with a return value is a value', () => {
+    const [sensor] = api.classes
+    expect(sensor.methods.map((m) => [m.name, m.returns ?? false])).toEqual([
+      ['read', true],
+      ['reset', false]
+    ])
+    expect(api.functions.map((f) => [f.name, f.returns ?? false])).toEqual([
+      ['helper', true],
+      ['go', false]
+    ])
+  })
+
+  it('a @property and a public self.attribute are properties, and a setter is nothing new', () => {
+    expect(api.classes[0].properties).toEqual(['pin', 'unit', 'ready'])
+    expect(api.classes[0].methods.map((m) => m.name)).not.toContain('ready')
+  })
+})

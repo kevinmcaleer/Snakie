@@ -467,7 +467,7 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   // And the modules this program imports (#1048). Keyed on the DOCUMENT's code
   // rather than the draft, so a half-typed `import ss` does not register a
   // drawer and then take it away again a keystroke later.
-  const modulesNonce = useModuleBlocks(doc?.code ?? '', dialect, currentFolder)
+  const modulesNonce = useModuleBlocks(doc?.code ?? '', dialect, currentFolder, file?.path ?? null)
   const paletteNonce = partsNonce + modulesNonce
   // The parts whose blocks are on the canvas right now — the driver banner's
   // input. Empty until the canvas reports, which is also the state on a file

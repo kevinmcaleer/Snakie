@@ -3,6 +3,7 @@ import { Order } from '../generator'
 import type { MicroPythonGenerator } from '../generator'
 import { pyString } from '../py'
 import { growableMixin, itemCount } from './growable'
+import { countHoles, renderFString } from '../fstring'
 import { registerCallRules } from '../python-to-blocks'
 import type { BlockDefinition, BlockGroup } from '../registry'
 
@@ -84,7 +85,8 @@ export const TEXT_BLOCKS: BlockDefinition[] = [
         }
         const raw = gen.valueToCode(block, `ADD${i}`, Order.NONE)
         if (!raw) continue
-        parts.push(asFStringPart(raw))
+        // A template block in a socket is an f-string too; see `asHolePiece`.
+        parts.push(asFStringPart(asHolePiece(raw)))
       }
       if (parts.length === 0) return ["''", Order.ATOMIC]
       return [`f"${parts.join('')}"`, Order.ATOMIC]
@@ -129,6 +131,37 @@ export const TEXT_BLOCKS: BlockDefinition[] = [
       }
       return `print(${parts.join(', ')})\n`
     }
+  },
+  {
+    // `print` THAT UNDERSTANDS AN f-STRING.
+    //
+    // `print(f"ping.distance {ping.distance()}")` is how a sensor program says
+    // what it read, and it had no block: `print` takes values, `join` builds the
+    // f-string out of pieces, and neither looks like the line a learner is
+    // copying out of a tutorial. This block holds the f-string as its TEMPLATE
+    // — the text with a `{}` wherever a value goes — and grows one socket per
+    // hole as they type. The mirror shows the f-string exactly as Python has it.
+    //
+    // A PRINT VARIANT, which the format blocks above argued against for
+    // themselves — and the argument holds: they are about how ONE value looks,
+    // and belong in any socket. This is about the whole line, `print(f"…")`,
+    // which is the single commonest line in a hardware program's loop and
+    // deserves to be one block. `snakie_fstring` below is the same template as
+    // a value, for every other destination.
+    type: 'snakie_print_format',
+    category: 'text',
+    help: 'ref-print',
+    code: (block, gen) => `print(${fStringOf(block, gen)})\n`
+  },
+  {
+    // ON THE SECOND SHELF: the print above is the block a first-day learner
+    // reaches for, and this is the same template for every other destination —
+    // a display, a `join`, a variable.
+    type: 'snakie_fstring',
+    category: 'text',
+    group: TEXT_MORE,
+    help: 'ref-print',
+    code: (block, gen) => [fStringOf(block, gen), Order.ATOMIC]
   },
   {
     // FORMATTING IS ABOUT HOW A NUMBER LOOKS, not what it is (#1125).
@@ -556,6 +589,118 @@ function fString(spec: FormatSpec | null): string {
   return spec ? `f"{${spec.expr}:${spec.spec}}"` : "''"
 }
 
+/**
+ * The f-string a template block stands for: `f"ping.distance {ping.distance()}"`.
+ *
+ * One piece per hole, in order. A format block plugged into a hole is FOLDED
+ * into it rather than nested — `{t:.1f}`, not `{f"{t:.1f}"}`, which is a nested
+ * f-string reusing the outer quote and a syntax error before Python 3.12. Any
+ * other double-quoted f-string in a hole (a `join`, another template) has its
+ * quotes swapped for the same reason.
+ */
+function fStringOf(block: Blockly.Block, gen: MicroPythonGenerator): string {
+  const template = String(block.getFieldValue(TEMPLATE_FIELD) ?? '')
+  const pieces: string[] = []
+  for (let i = 0; i < countHoles(template); i++) {
+    const spec = formatOf(block.getInputTargetBlock(`ADD${i}`), gen)
+    if (spec) {
+      pieces.push(`${spec.expr}:${spec.spec}`)
+      continue
+    }
+    pieces.push(asHolePiece(gen.valueToCode(block, `ADD${i}`, Order.NONE)))
+  }
+  return renderFString(template, pieces)
+}
+
+/** A generated expression as it can sit inside a `"…"` f-string's hole. */
+function asHolePiece(code: string): string {
+  if (/^f"[^'"]*"$/.test(code)) return `f'${code.slice(2, -1)}'`
+  return code
+}
+
+/** The field a template block keeps its f-string text in. */
+export const TEMPLATE_FIELD = 'TEMPLATE'
+
+interface TemplateOptions {
+  /** The words before the `f"`: `print`, or nothing for the value. */
+  head: string
+  /** A value block (an output) rather than a statement. */
+  value?: boolean
+  /** What a freshly dragged block's template says. */
+  template: string
+  tooltip: string
+}
+
+/**
+ * The mixin for a block whose sockets FOLLOW ITS TEMPLATE.
+ *
+ * `growableMixin` grows on a `+` button; this grows on a `{`. Type `{}` into
+ * the template and a socket appears for it; take it out and the socket goes —
+ * but whatever was plugged in is UNPLUGGED rather than thrown away, because the
+ * field re-validates on every keystroke and a learner deleting a `}` to retype
+ * it must not lose the block they had built for that hole.
+ *
+ * The count is saved beside the template so a file reopens with its sockets
+ * before the field is even set, which is the order Blockly loads them in.
+ */
+function templateMixin(options: TemplateOptions): Record<string, unknown> {
+  return {
+    itemCount_: 0,
+
+    init(this: Blockly.Block): void {
+      this.setStyle('text_blocks')
+      const head = this.appendDummyInput('HEAD')
+      if (options.head) head.appendField(options.head)
+      const field = new Blockly.FieldTextInput(options.template, function (
+        this: Blockly.Field,
+        text: string
+      ) {
+        // `this` is the field: Blockly binds a validator so, and the constructor
+        // validates the initial value before the `const` above is assigned.
+        const block = this.getSourceBlock()
+        if (block) sync(block, countHoles(text))
+        return text
+      })
+      head.appendField('f"').appendField(field, TEMPLATE_FIELD).appendField('"')
+      this.setInputsInline(true)
+      if (options.value) this.setOutput(true, 'String')
+      else {
+        this.setPreviousStatement(true, null)
+        this.setNextStatement(true, null)
+      }
+      this.setTooltip(options.tooltip)
+      sync(this, countHoles(options.template))
+    },
+
+    saveExtraState(this: Blockly.Block): { items: number } {
+      return { items: (this as unknown as { itemCount_: number }).itemCount_ }
+    },
+
+    loadExtraState(this: Blockly.Block, state: { items?: number }): void {
+      sync(this, Math.max(0, Number(state?.items ?? 0)))
+    }
+  }
+
+  /** Add or remove `ADDn` sockets so there are exactly `n`. */
+  function sync(block: Blockly.Block, n: number): void {
+    const self = block as unknown as { itemCount_: number }
+    const have = self.itemCount_ ?? 0
+    for (let i = have; i > n; i--) {
+      const name = `ADD${i - 1}`
+      const plugged = block.getInput(name)?.connection?.targetBlock()
+      if (plugged && !plugged.isShadow()) plugged.unplug(true)
+      block.removeInput(name, true)
+    }
+    for (let i = have; i < n; i++) {
+      block
+        .appendValueInput(`ADD${i}`)
+        .setCheck(null)
+        .appendField(i === 0 ? 'with' : 'and')
+    }
+    self.itemCount_ = n
+  }
+}
+
 /** Register the blocks whose sockets come and go. */
 export function installTextBlocks(): void {
   Blockly.Blocks['text_print'] = growableMixin({
@@ -568,6 +713,19 @@ export function installTextBlocks(): void {
     firstSocket: 'TEXT',
     tooltip:
       'Say something in the console. Press + to print several things at once — Python puts a space between them.'
+  }) as never
+  Blockly.Blocks['snakie_print_format'] = templateMixin({
+    head: 'print',
+    template: 'distance {}',
+    tooltip:
+      'Print text with values dropped into it. Type {} wherever a value goes and a socket appears for it — Python calls this an f-string.'
+  }) as never
+  Blockly.Blocks['snakie_fstring'] = templateMixin({
+    head: '',
+    value: true,
+    template: 'distance {}',
+    tooltip:
+      'Text with values dropped into it — an f-string. Type {} wherever a value goes and a socket appears. Plug it into print, a display, or anywhere text goes.'
   }) as never
 }
 

@@ -38,6 +38,14 @@ export interface ApiParam {
 export interface ApiFunction {
   name: string
   params: readonly ApiParam[]
+  /**
+   * It `return`s something, so it is a VALUE — `ping.distance()` goes in a
+   * socket, `oled.show()` stands on a line of its own. Read off the body: a
+   * `return` with an expression after it, anywhere in the function. Absent
+   * means no such line was seen, which is the honest reading of a method that
+   * only does things.
+   */
+  returns?: boolean
 }
 
 /** A class, with the methods worth offering. */
@@ -48,6 +56,12 @@ export interface ApiClass {
   /** `__init__`'s parameters, `self` already dropped. Absent if it defines none. */
   init?: readonly ApiParam[]
   methods: readonly ApiFunction[]
+  /**
+   * The names read off the object without calling anything: a `@property`,
+   * and every public `self.name = …` in `__init__`. `ping.unit` is one of these,
+   * and it is not a method — a block that wrote `ping.unit()` would raise.
+   */
+  properties: readonly string[]
 }
 
 /** Everything a module offers, as far as reading it can tell. */
@@ -143,6 +157,12 @@ function readDef(text: string): ApiFunction | null {
  * `_private` names are skipped throughout — except `__init__`, which is not
  * private at all, it is how the class is built, and it is the single most useful
  * thing in the file.
+ *
+ * THE BODY IS READ TOO, for two facts a signature cannot give: a method with a
+ * `return <expr>` in it is a VALUE, and a `self.name = …` in `__init__` is a
+ * PROPERTY — as is a `@property` def. Both matter to the shape of the block:
+ * `ping.distance()` has to fit inside a `print`, and `ping.unit` must not
+ * come out as `ping.unit()`.
  */
 export function readModuleApi(module: string, source: string): ModuleApi {
   const classes: ApiClass[] = []
@@ -150,10 +170,34 @@ export function readModuleApi(module: string, source: string): ModuleApi {
   const constants: string[] = []
   const lines = logicalLines(source)
 
-  let current: { def: ApiClass; methods: ApiFunction[]; indent: number } | null = null
+  let current: { def: ApiClass; methods: ApiFunction[]; properties: string[]; indent: number } | null =
+    null
+  // The function whose body we are inside, for the two things a body tells us:
+  // whether it returns a value, and — in `__init__` — which attributes it sets.
+  let inside: { fn: ApiFunction; indent: number; init: boolean } | null = null
+  // Decorator lines seen since the last statement. `@property` is the one that
+  // matters; a `@name.setter` says the def is not a method either.
+  let decorators: string[] = []
+
   for (const line of lines) {
     // A line back at the class's own indent, or further out, ends it.
     if (current && line.indent <= current.indent) current = null
+    if (inside && line.indent <= inside.indent) inside = null
+
+    if (inside && line.indent > inside.indent) {
+      if (/^return\s+\S/.test(line.text)) inside.fn.returns = true
+      const attr = inside.init ? /^self\.([A-Za-z_]\w*)\s*=[^=]/.exec(line.text) : null
+      if (attr && current && isPublic(attr[1]) && !current.properties.includes(attr[1])) {
+        current.properties.push(attr[1])
+      }
+    }
+
+    if (line.text.startsWith('@')) {
+      decorators.push(line.text.slice(1).trim())
+      continue
+    }
+    const seen = decorators
+    decorators = []
 
     const klass = /^class\s+([A-Za-z_]\w*)\s*(?:\(([^)]*)\))?\s*:$/.exec(line.text)
     if (klass && line.indent === 0) {
@@ -164,9 +208,10 @@ export function readModuleApi(module: string, source: string): ModuleApi {
       const def: ApiClass = {
         name: klass[1],
         bases: splitParams(klass[2] ?? '').filter((b) => /^[A-Za-z_][\w.]*$/.test(b)),
-        methods: []
+        methods: [],
+        properties: []
       }
-      current = { def, methods: [], indent: line.indent }
+      current = { def, methods: [], properties: def.properties as string[], indent: line.indent }
       classes.push(def)
       continue
     }
@@ -179,13 +224,25 @@ export function readModuleApi(module: string, source: string): ModuleApi {
         const params = fn.params[0]?.name === 'self' ? fn.params.slice(1) : fn.params
         if (fn.name === '__init__') {
           ;(current.def as { init?: readonly ApiParam[] }).init = params
+          inside = { fn, indent: line.indent, init: true }
+        } else if (seen.some((d) => /\.(setter|deleter)$/.test(d))) {
+          // The other half of a property. Nothing to offer: the getter already did.
+        } else if (seen.includes('property')) {
+          if (isPublic(fn.name) && !current.properties.includes(fn.name)) {
+            current.properties.push(fn.name)
+          }
         } else if (isPublic(fn.name)) {
-          current.methods.push({ name: fn.name, params })
+          const method: ApiFunction = { name: fn.name, params }
+          current.methods.push(method)
           ;(current.def as { methods: readonly ApiFunction[] }).methods = current.methods
+          inside = { fn: method, indent: line.indent, init: false }
         }
         continue
       }
-      if (line.indent === 0 && isPublic(fn.name)) functions.push(fn)
+      if (line.indent === 0 && isPublic(fn.name)) {
+        functions.push(fn)
+        inside = { fn, indent: line.indent, init: false }
+      }
       continue
     }
 
@@ -250,7 +307,7 @@ export function apiFromCurated(module: string, members: readonly CuratedMember[]
       // inventing a constructor signature is exactly the guessing this file
       // refuses to do. The class still earns a drawer entry through its
       // constants and the module's functions around it.
-      classes.push({ name: member.name, bases: [], methods: [] })
+      classes.push({ name: member.name, bases: [], methods: [], properties: [] })
     } else if (member.kind === 'function') {
       functions.push({ name: member.name, params: paramsFromDetail(member.detail) })
     } else if (member.kind === 'constant') {

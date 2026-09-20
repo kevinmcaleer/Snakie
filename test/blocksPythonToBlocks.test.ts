@@ -361,11 +361,12 @@ describe('what it keeps as raw Python, and says so', () => {
     // expression stops mattering — and it is why f-strings appear in 44 projects
     // and account for five raw lines between them.
     //
-    // THE EXAMPLE HAD TO MOVE ON (#1134). `*args` is a real block now — the
-    // spread block, which is exactly the improvement that issue was for — so
-    // the grey socket here is an f-string with a conversion in it, which is
-    // still nobody's block.
-    const { report } = regenerate('thing.calibrate(f"{x!r}")\n')
+    // THE EXAMPLE HAD TO MOVE ON (#1134), AND AGAIN. `*args` is a real block
+    // now — the spread block — and so is an f-string with a conversion in it,
+    // which the template block holds. The grey socket here is an f-string with
+    // a `{x=}` debug field, which regenerates differently and is still nobody's
+    // block.
+    const { report } = regenerate('thing.calibrate(f"{x=}")\n')
     expect(report.raw).toBe(0)
     expect(report.recognised).toBe(1)
     expect(report.rawSockets).toBe(1)
