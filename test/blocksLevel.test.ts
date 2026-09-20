@@ -9,6 +9,8 @@ import {
   type BlockDefinition
 } from '../src/renderer/src/lib/blocks/registry'
 import {
+  ADVANCED_MARKER_CLASS,
+  ADVANCED_MARKER_LABEL,
   ADVANCED_OFF_HINT,
   buildToolbox,
   categoryContents
@@ -59,7 +61,10 @@ describe('which blocks are advanced (#1209)', () => {
         // Structure: class, method, self, try, with, await, raise.
         'snakie_class',
         'snakie_method',
+        'snakie_property',
         'snakie_self',
+        // …and the block that makes one of a class (B5, #1224).
+        'snakie_new_instance',
         'snakie_try',
         'snakie_with',
         'snakie_await',
@@ -173,6 +178,55 @@ describe('the toolbox filters on level (#1210)', () => {
     // deregistered would make every advanced program unopenable.
     for (const type of ['snakie_class', 'snakie_try', 'snakie_list_comprehension'])
       expect(registeredBlocks().some((b) => b.type === type)).toBe(true)
+  })
+})
+
+describe('the advanced marker in a drawer (#1211)', () => {
+  /** The `[label, …]` entries of a contents list, in order. */
+  const labels = (items: Record<string, unknown>[]): string[] =>
+    items.filter((i) => i.kind === 'label').map((i) => i.text as string)
+
+  it('heads the advanced blocks of a mixed drawer, in advanced mode only', () => {
+    // Maths is the mixed drawer: arithmetic and the bitwise shelf together.
+    const math = BLOCK_CATEGORIES.find((c) => c.id === 'math')!
+    expect(labels(categoryContents(math, 'micropython', 'advanced'))).toContain(
+      ADVANCED_MARKER_LABEL
+    )
+    // Nothing behind it in simple mode, so no heading either.
+    expect(labels(categoryContents(math, 'micropython', 'simple'))).not.toContain(
+      ADVANCED_MARKER_LABEL
+    )
+  })
+
+  it('marks a sub-category\'s advanced blocks too', () => {
+    const control = BLOCK_CATEGORIES.find((c) => c.id === 'control')!
+    const files = categoryContents(control, 'micropython', 'advanced').find(
+      (i) => i.name === 'Files'
+    )
+    expect(labels(files?.contents as Record<string, unknown>[])).toContain(ADVANCED_MARKER_LABEL)
+  })
+
+  it('carries the class the stylesheet styles it by', () => {
+    const math = BLOCK_CATEGORIES.find((c) => c.id === 'math')!
+    const marker = categoryContents(math, 'micropython', 'advanced').find(
+      (i) => i.kind === 'label' && i.text === ADVANCED_MARKER_LABEL
+    )
+    expect(marker?.['web-class']).toBe(ADVANCED_MARKER_CLASS)
+  })
+
+  it('puts every advanced block after the marker and every simple one before it', () => {
+    const level = (type: string): string =>
+      registeredBlocks().find((b) => b.type === type)?.level ?? 'simple'
+    const walk = (items: Record<string, unknown>[]): void => {
+      let seen = false
+      for (const item of items) {
+        if (item.kind === 'label' && item.text === ADVANCED_MARKER_LABEL) seen = true
+        if (item.kind === 'block') expect(level(item.type as string) === 'advanced').toBe(seen)
+        if (Array.isArray(item.contents)) walk(item.contents as Record<string, unknown>[])
+      }
+    }
+    for (const category of BLOCK_CATEGORIES)
+      walk(categoryContents(category, 'micropython', 'advanced'))
   })
 })
 

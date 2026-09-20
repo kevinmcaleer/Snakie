@@ -2,7 +2,11 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import * as Blockly from 'blockly/core'
 import 'blockly/blocks'
 import { generateProgram } from '../src/renderer/src/lib/blocks/generator'
-import { installBlockDefinitions, resetBlockRegistry } from '../src/renderer/src/lib/blocks/registry'
+import {
+  blockDefinition,
+  installBlockDefinitions,
+  resetBlockRegistry
+} from '../src/renderer/src/lib/blocks/registry'
 import { installCorePalette } from '../src/renderer/src/lib/blocks/palette'
 import { pythonToBlocks } from '../src/renderer/src/lib/blocks/python-to-blocks'
 
@@ -100,7 +104,10 @@ describe('a class holds its body', () => {
     ) {
       chained.push(b.type as string)
     }
-    expect(chained.filter((t) => t === 'snakie_method')).toHaveLength(3)
+    // Two methods and the `@property`, which is a property block of its own
+    // since B3 (#1222) rather than a third method with a decorator on it.
+    expect(chained.filter((t) => t === 'snakie_method')).toHaveLength(2)
+    expect(chained.filter((t) => t === 'snakie_property')).toHaveLength(1)
   })
 
   it('round-trips the whole thing', () => {
@@ -160,9 +167,14 @@ describe('decorators', () => {
   const decorators = (src: string): unknown =>
     (one(src, 'snakie_method')!.extraState as { decorators?: unknown } | undefined)?.decorators
 
-  it('reads @property into the list on the method', () => {
+  it('reads @property as a property block of its own (B3, #1222)', () => {
     const src = ['class T:', '    @property', '    def x(self):', '        return 1', ''].join('\n')
-    expect(decorators(src)).toEqual(['property'])
+    // It used to be the method block with DECORATOR: 'property' on it. B3 gave
+    // the pair a block that can hold the `@x.setter` half as well, and a lone
+    // getter is that block with the setter switched off — see
+    // `blocksProperty.test.ts`. The method block's own setting is untouched,
+    // and is still what a `@property` this one refuses falls back to.
+    expect(one(src, 'snakie_property')!.fields).toMatchObject({ NAME: 'x', HAS_SETTER: false })
     expect(types(src)).not.toContain('snakie_python_statement')
     roundTrips(src)
   })
@@ -241,7 +253,7 @@ describe('decorators', () => {
     roundTrips(src)
   })
 
-  it('reads @property and @x.setter as two methods, one decorator each (#1222)', () => {
+  it('reads a @property / @x.setter pair written with no blank line (B3, #1222)', () => {
     const src = [
       'class T:',
       '    @property',
@@ -252,12 +264,34 @@ describe('decorators', () => {
       '        self._x = value',
       ''
     ].join('\n')
+    // A2 (#1216) read this as two methods with a decorator each, and said so,
+    // because B3 had not landed. It has, and it folds the pair ONLY when the
+    // `@x.setter` has the one blank line above it that the generator writes.
+    // With the halves written tight, as here, the getter becomes the property
+    // block and the setter stays a method carrying its own decorator — which
+    // is lossless, as the round trip below shows.
+    expect(one(src, 'snakie_property')!.fields).toMatchObject({ NAME: 'x', HAS_SETTER: false })
     const methods = blocks(src).filter((b) => b.type === 'snakie_method')
-    expect(methods).toHaveLength(2)
     expect(methods.map((m) => (m.extraState as { decorators: string[] }).decorators)).toEqual([
-      ['property'],
       ['x.setter']
     ])
+    roundTrips(src)
+  })
+
+  it('folds the pair into one block when the blank line is there (B3, #1222)', () => {
+    const src = [
+      'class T:',
+      '    @property',
+      '    def x(self):',
+      '        return self._x',
+      '',
+      '    @x.setter',
+      '    def x(self, value):',
+      '        self._x = value',
+      ''
+    ].join('\n')
+    expect(blocks(src).filter((b) => b.type === 'snakie_method')).toHaveLength(0)
+    expect(one(src, 'snakie_property')!.fields).toMatchObject({ NAME: 'x', HAS_SETTER: true })
     roundTrips(src)
   })
 })
@@ -318,7 +352,9 @@ describe('a method’s own signature', () => {
   })
 
   it('keeps `*args` and `**kwargs`', () => {
-    const src = ['class T:', '    def go(self, *args, **kwargs):', '        print(1)', ''].join('\n')
+    const src = ['class T:', '    def go(self, *args, **kwargs):', '        print(1)', ''].join(
+      '\n'
+    )
     roundTrips(src)
   })
 
@@ -357,7 +393,9 @@ describe('what must not change', () => {
   })
 
   it('a top-level `def`’s docstring is still its comment bubble', () => {
-    const src = ['def distance():', '    """Returns the distance."""', '    return 1', ''].join('\n')
+    const src = ['def distance():', '    """Returns the distance."""', '    return 1', ''].join(
+      '\n'
+    )
     expect(types(src)).toContain('procedures_defreturn')
     roundTrips(src)
   })
@@ -406,6 +444,120 @@ describe('the epic’s success test', () => {
     expect(report.raw).toBe(0)
     expect(report.rawSockets).toBe(0)
     roundTrips(src)
+  })
+})
+
+/**
+ * `__init__` SEED AND `create <Class>(…)` (B5, #1224, epic #1206).
+ * =============================================================================
+ *
+ * The two halves of using a class: the constructor a class arrives with, and the
+ * line that makes one. The seed is a TOOLBOX preset, so it is what the flyout
+ * hands out and nothing about a class read from a file changes; the create
+ * block only ever claims a name this file has a `class` header for.
+ */
+describe('creating an instance (B5, #1224)', () => {
+  const ROBOT = [
+    'class Robot:',
+    '    def __init__(self, name, speed):',
+    '        self.name = name',
+    '        self.speed = speed',
+    '',
+    ''
+  ].join('\n')
+
+  /** A definition off the registry, which the palette has installed above. */
+  const definition = (type: string): NonNullable<ReturnType<typeof blockDefinition>> => {
+    const def = blockDefinition(type)
+    expect(def).toBeTruthy()
+    return def!
+  }
+
+  it('reads `Robot("Bob", speed=3)` as the create block, keywords and all', () => {
+    const src = `${ROBOT}robot = Robot('Bob', speed=3)\n`
+    const made = one(src, 'snakie_new_instance')
+    expect(made).toBeTruthy()
+    expect((made?.fields as Record<string, string>).CLASS).toBe('Robot')
+    // The keyword's NAME is the box's and its value is the socket's — the same
+    // split the generator writes (#1163).
+    expect((made?.fields as Record<string, string>).NAME1).toBe('speed')
+    expect(made?.extraState).toEqual({ args: 2 })
+  })
+
+  it('round-trips the line it was built from', () => {
+    roundTrips(`${ROBOT}robot = Robot('Bob', speed=3)\n`)
+    roundTrips(`${ROBOT}robot = Robot()\n`)
+  })
+
+  it('reads one inside a larger expression', () => {
+    expect(types(`${ROBOT}robots = [Robot('Bob', 1), Robot('Ann', 2)]\n`)).toContain(
+      'snakie_new_instance'
+    )
+  })
+
+  it('claims only a name this file defines as a class', () => {
+    // `sorted(xs)` and `Robot("Bob")` are the same shape; only the `class`
+    // header tells them apart, so a call to anything else is untouched.
+    expect(types(`${ROBOT}x = sorted(names)\n`)).not.toContain('snakie_new_instance')
+    expect(types("x = Robot('Bob')\n")).not.toContain('snakie_new_instance')
+  })
+
+  it('leaves a call with more arguments than the block can hold raw', () => {
+    const many = Array.from({ length: 9 }, (_, i) => String(i)).join(', ')
+    expect(types(`${ROBOT}robot = Robot(${many})\n`)).not.toContain('snakie_new_instance')
+  })
+
+  it('seeds a class dragged from the drawer with an `__init__`', () => {
+    const seed = (
+      definition('snakie_class').toolbox as {
+        inputs: {
+          BODY: {
+            block: {
+              type: string
+              fields: Record<string, string>
+              extraState: Record<string, unknown>
+            }
+          }
+        }
+      }
+    ).inputs.BODY.block
+    expect(seed.type).toBe('snakie_method')
+    expect(seed.fields.NAME).toBe('__init__')
+    // The rebuilt method block holds `self` as its fixed lead (#1221), not as
+    // text in the old free-text `PARAMS` field.
+    expect(seed.extraState).toEqual({ lead: 'self', params: [] })
+  })
+
+  it('generates the seeded class as `class Robot:` with its constructor', () => {
+    const ws = new Blockly.Workspace()
+    Blockly.serialization.workspaces.load(
+      {
+        blocks: {
+          languageVersion: 0,
+          blocks: [
+            {
+              type: 'snakie_class',
+              fields: { NAME: 'Robot', BASES: '' },
+              inputs: {
+                BODY: {
+                  block: {
+                    type: 'snakie_method',
+                    fields: { DECORATOR: 'NONE', KIND: 'SYNC', NAME: '__init__' },
+                    extraState: { lead: 'self', params: [] }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      } as never,
+      ws
+    )
+    expect(generateProgram(ws).code).toBe('class Robot:\n    def __init__(self):\n        pass\n')
+  })
+
+  it('is an advanced block', () => {
+    expect(definition('snakie_new_instance').level).toBe('advanced')
   })
 })
 

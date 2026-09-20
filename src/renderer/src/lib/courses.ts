@@ -13,6 +13,7 @@
  */
 import { parse } from 'yaml'
 import type { BlocksViewMode, WorkspaceId } from '../store/layout'
+import type { BlockLevel } from './blocks/registry'
 
 export interface Lesson {
   title: string
@@ -49,6 +50,19 @@ export interface Lesson {
    * canvas still peeking beside it — the layout saying what the words say.
    */
   viewMode?: BlocksViewMode
+  /**
+   * The blocks LEVEL this lesson needs (#1214).
+   *
+   * A lesson built out of advanced blocks — the grey Python escape hatch,
+   * classes, comprehensions — cannot be followed by a learner whose toolbox is
+   * filtered to `simple`: the drawer the words point at is not there. So the
+   * lesson says so, and opening it raises `snakie.blocks.level`.
+   *
+   * Only ever a RAISE, never a lowering: leaving the lesson does not put the
+   * drawers away again (they have now seen them), and a beginner course that
+   * declares nothing never turns advanced blocks on.
+   */
+  level?: BlockLevel
 }
 
 export type CourseTrack = 'beginner' | 'robotics' | 'urdf'
@@ -60,6 +74,11 @@ export interface Course {
   emoji: string
   accent: string
   track: CourseTrack
+  /**
+   * The blocks level the course as a whole needs (#1214) — inherited by every
+   * lesson that doesn't declare its own. Absent ⇒ `simple`, i.e. nothing.
+   */
+  level?: BlockLevel
   lessons: Lesson[]
 }
 
@@ -71,6 +90,7 @@ interface RawLesson {
   view?: string
   blocks?: unknown
   viewMode?: string
+  level?: string
 }
 interface RawCourse {
   title: string
@@ -78,6 +98,7 @@ interface RawCourse {
   emoji?: string
   accent?: string
   track?: CourseTrack
+  level?: string
   lessons: RawLesson[]
 }
 
@@ -157,6 +178,48 @@ export function coerceViewMode(raw: unknown): BlocksViewMode | undefined {
   return modes[v]
 }
 
+/**
+ * A declared blocks level, or `undefined` when absent/unknown (#1214).
+ *
+ * `simple` is accepted and meaningful as "this course is explicitly a beginner
+ * one" — but it is never applied as a change, because the flip only ever goes
+ * upwards. A typo degrades to "declares nothing", like every other hand-authored
+ * key here: a misspelt level must not throw the course away.
+ */
+export function coerceLevel(raw: unknown): BlockLevel | undefined {
+  const v = String(raw ?? '').trim().toLowerCase()
+  const levels: Record<string, BlockLevel> = {
+    simple: 'simple',
+    beginner: 'simple',
+    basic: 'simple',
+    advanced: 'advanced',
+    expert: 'advanced'
+  }
+  return levels[v]
+}
+
+/**
+ * The level a lesson effectively asks for: its own, else its course's (#1214).
+ */
+export function lessonLevel(course: Course, lesson: Lesson): BlockLevel | undefined {
+  return lesson.level ?? course.level
+}
+
+/**
+ * Should opening this lesson raise the learner's block level? Pure (#1214).
+ *
+ * The whole rule in one place, because the rule is the feature: raise when the
+ * lesson asks for `advanced` and the learner is on `simple`. Never the other
+ * way round — a course cannot take drawers away from someone who has chosen to
+ * have them, and leaving the lesson does not undo the raise.
+ */
+export function shouldRaiseBlockLevel(
+  declared: BlockLevel | undefined,
+  current: BlockLevel
+): boolean {
+  return declared === 'advanced' && current === 'simple'
+}
+
 /** `../courses/<id>/course.yml` → `<id>`. */
 const idOf = (path: string): string => path.replace(/.*\/courses\/([^/]+)\/.*/, '$1')
 
@@ -186,6 +249,7 @@ export function loadCourses(): Course[] {
           code: l.code,
           tip: l.tip,
           view: coerceView(l.view),
+          level: coerceLevel(l.level),
           blocks: coerceBlocks(l.blocks),
           viewMode: coerceViewMode(l.viewMode)
         }
@@ -199,6 +263,7 @@ export function loadCourses(): Course[] {
       emoji: raw.emoji ?? '📘',
       accent: raw.accent ?? '#34ad4f',
       track: raw.track ?? 'beginner',
+      level: coerceLevel(raw.level),
       lessons
     })
   }

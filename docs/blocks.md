@@ -77,7 +77,12 @@ used Snakie before this setting existed keeps every drawer.
 
 Classes live on a **Classes shelf inside Functions** rather than in a category
 of their own: `class` for a kind of thing, `self` for the particular one a
-method was called on, and `super()` for the class it was built on.
+method was called on, and `super()` for the class it was built on. The shelf
+opens with a line saying what it is for, and everything on it is advanced, so it
+is there for a learner who has switched advanced blocks on and absent for one
+who has not. The track that is filling it — methods, properties, `self.x`,
+`create instance` — and the coverage numbers behind it are in
+[`blocks-classes-epic.md`](blocks-classes-epic.md).
 
 Two things do not change with the switch. A program that already uses advanced
 blocks **still opens, renders and runs** in simple mode — the toolbox is what a

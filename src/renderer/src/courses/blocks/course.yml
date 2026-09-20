@@ -228,6 +228,10 @@ lessons:
 - title: When the block you need doesn't exist yet
   file: 06-python-block.md
   view: blocks
+  # The grey Python blocks are `advanced` (#1209), so a learner in simple mode
+  # would arrive at a lesson whose drawer isn't there. Declaring the level turns
+  # them on for this step and leaves them on (#1214).
+  level: advanced
   blocks:
     blocks:
       languageVersion: 0
