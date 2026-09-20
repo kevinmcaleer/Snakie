@@ -57,9 +57,10 @@ describe('the drawer', () => {
     )
     const shelf = (contents.filter((c) => c.kind === 'category') as {
       name: string
-      contents: { type: string }[]
+      contents: { kind: string; type?: string }[]
     }[]).find((c) => c.name === 'Files')!
-    expect(shelf.contents.map((c) => c.type)).toEqual([
+    // The whole shelf is advanced, so it opens on the `Advanced` marker (#1211).
+    expect(shelf.contents.filter((c) => c.kind === 'block').map((c) => c.type)).toEqual([
       'snakie_use',
       'snakie_file_open',
       'snakie_file_write',

@@ -476,7 +476,9 @@ blocks:
     const category = BLOCK_CATEGORIES.find((c) => c.id === 'parts')!
     const contents = categoryContents(category, 'unknown', level)
     // One sub-category per part (see `categoryContents`) — the part's drawer.
-    return (contents[0]?.contents as Record<string, unknown>[]) ?? []
+    // Blocks only: the drawer also carries the `Advanced` marker label (#1211).
+    const entries = (contents[0]?.contents as Record<string, unknown>[]) ?? []
+    return entries.filter((e) => e.kind === 'block')
   }
 
   it('keeps an advanced plugin block out of the drawer in simple mode', () => {
