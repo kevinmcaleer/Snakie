@@ -4,6 +4,7 @@ import type { MicroPythonGenerator } from '../generator'
 import type { BlockDefinition, BlockGroup } from '../registry'
 import { sanitise } from '../names'
 import { decoratorLines, installDecoratorCog, installDecorators } from './functions'
+import { DEFAULT_ARGS, argRowMixin, callArgs } from './python'
 import {
   appendExtrasRow,
   EXTRAS_FIELD,
@@ -109,6 +110,39 @@ function body(block: Blockly.Block, gen: MicroPythonGenerator): string {
 /** The block type, named here because both the palette and the reader want it. */
 export const TRY_BLOCK = 'snakie_try'
 
+/** The same, for the create-an-instance block (B5, #1224). */
+export const NEW_INSTANCE = 'snakie_new_instance'
+
+/** The property block's type, named here because the reader builds one too. */
+export const PROPERTY_BLOCK = 'snakie_property'
+/** The tick box that says this property can be set as well as read. */
+export const HAS_SETTER = 'HAS_SETTER'
+/** The row holding the setter's parameter name, hidden while the box is off. */
+const SETTER_ROW = 'SETTER_ROW'
+/** The extension that ties that tick box to the two rows it shows. */
+const PROPERTY_SETTER_EXTENSION = 'snakie_property_setter'
+
+/** Is the setter half of this property block switched on? */
+function hasSetter(block: Blockly.Block): boolean {
+  return block.getFieldValue(HAS_SETTER) === 'TRUE'
+}
+
+/**
+ * Show or hide the setter's two rows. Called when the box is ticked, and once
+ * as each block is built — including one being deserialised, whose field takes
+ * its saved value through the same validator.
+ */
+function setSetterVisible(block: Blockly.Block, visible: boolean): void {
+  let changed = false
+  for (const name of [SETTER_ROW, 'SET']) {
+    const input = block.getInput(name)
+    if (!input || input.isVisible() === visible) continue
+    input.setVisible(visible)
+    changed = true
+  }
+  if (changed) (block as Blockly.BlockSvg).queueRender?.()
+}
+
 export const STRUCTURE_BLOCKS: BlockDefinition[] = [
   // --------------------------------------------------------------------- class
   {
@@ -143,6 +177,32 @@ export const STRUCTURE_BLOCKS: BlockDefinition[] = [
       tooltip:
         'A class: a kind of thing, with the methods it can do inside it. The brackets after the name are the classes it builds on.'
     },
+    // A CLASS ARRIVES WITH ITS `__init__` ALREADY IN IT (B5, #1224).
+    //
+    // An empty class is not a class anybody can use: the first thing every
+    // learner has to do with one is write the method that makes a Thing, and
+    // `def __init__(self):` is a line nothing in the drawer hints at — the
+    // dunder name least of all. Seeding it means the block that comes out of
+    // the flyout is a class you can already create one of.
+    //
+    // A REAL BLOCK RATHER THAN A SHADOW, because a shadow disappears the moment
+    // anything is dropped on it and a learner filling the body would lose the
+    // constructor they were given. It is a toolbox preset, which is the other
+    // half of the rule: the seed is what the FLYOUT hands out, so a class read
+    // back from a file — empty or not — is untouched.
+    toolbox: {
+      inputs: {
+        BODY: {
+          block: {
+            type: 'snakie_method',
+            // The rebuilt method block's own shape (#1221): `self` is the
+            // fixed lead in the `extraState` rather than text in a field.
+            extraState: { lead: 'self', params: [] },
+            fields: { DECORATOR: 'NONE', KIND: 'SYNC', NAME: '__init__' }
+          }
+        }
+      }
+    },
     code: (block, gen) => {
       const bases = String(block.getFieldValue('BASES') ?? '').trim()
       return `class ${nameOf(block, 'NAME', 'Thing')}${bases}:\n${body(block, gen)}`
@@ -166,6 +226,68 @@ export const STRUCTURE_BLOCKS: BlockDefinition[] = [
     code: (block, gen) => {
       const async = block.getFieldValue('KIND') === 'ASYNC' ? 'async ' : ''
       return `${decoratorLines(block, gen)}${async}def ${nameOf(block, 'NAME', 'go')}(${methodSignature(block)}):\n${body(block, gen)}`
+    }
+  },
+  // ------------------------------------------------------------------ property
+  {
+    // A PROPERTY IS A PAIR OF METHODS AND ONE IDEA (B3, #1222, epic #1206).
+    //
+    // `@property` is already a setting on `snakie_method`, which is enough to
+    // READ a getter and enough to build one. What it cannot do is hold the
+    // other half: a settable property is `@property def x(self)` and
+    // `@x.setter def x(self, value)` — two methods whose names must agree,
+    // whose decorators must agree, and which mean nothing apart. As two method
+    // blocks either can be dragged away from the other, and renaming one
+    // silently breaks the pair.
+    //
+    // So ONE block, with the name written once and used in both lines, and the
+    // setter behind a tick box: a read-only property is the common case, and
+    // the row for the new value is not on the block until it has a job.
+    type: PROPERTY_BLOCK,
+    level: 'advanced',
+    category: 'functions',
+    group: CLASSES,
+    help: 'ref-classes',
+    json: {
+      message0: 'property %1 can be set too %2',
+      args0: [
+        { type: 'field_input', name: 'NAME', text: 'name' },
+        { type: 'field_checkbox', name: HAS_SETTER, checked: false }
+      ],
+      message1: 'when it is read %1',
+      args1: [{ type: 'input_statement', name: 'GET' }],
+      // The setter's parameter as a FIELD: `value` is the convention, and a
+      // learner who would rather say `speed` can — the same trade the method
+      // block's PARAMS field makes.
+      message2: 'when it is set, call the new value %1 %2',
+      args2: [
+        { type: 'field_input', name: 'PARAM', text: 'value' },
+        { type: 'input_dummy', name: SETTER_ROW }
+      ],
+      message3: '%1',
+      args3: [{ type: 'input_statement', name: 'SET' }],
+      // THE ROWS COME AND GO BY VISIBILITY, not by being added and removed —
+      // the `def` block's extra-parameters row (`functions.ts`) rather than the
+      // `try` block's rebuild. A hidden input keeps what is plugged into it, so
+      // unticking the box and ticking it again gives back the setter body the
+      // learner wrote.
+      extensions: [PROPERTY_SETTER_EXTENSION],
+      previousStatement: null,
+      nextStatement: null,
+      tooltip:
+        'A value on this class that is worked out by running some steps — read it like `thing.name`, with no brackets. Tick the box to let it be set as well.'
+    },
+    code: (block, gen) => {
+      const name = nameOf(block, 'NAME', 'value')
+      const arm = (input: string): string =>
+        gen.statementToCode(block, input) || `${gen.INDENT}pass\n`
+      const getter = `@property\ndef ${name}(self):\n${arm('GET')}`
+      if (!hasSetter(block)) return getter
+      // ONE BLANK LINE BETWEEN THE TWO — what PEP 8 puts between two methods,
+      // and what the reader requires before it will fold a pair back into this
+      // block. So what this writes is exactly what reading it gives back.
+      const param = nameOf(block, 'PARAM', 'value')
+      return `${getter}\n@${name}.setter\ndef ${name}(self, ${param}):\n${arm('SET')}`
     }
   },
   // ---------------------------------------------------------------------- self
@@ -347,8 +469,170 @@ export const STRUCTURE_BLOCKS: BlockDefinition[] = [
       const value = gen.valueToCode(block, 'VALUE', Order.NONE)
       return value === '' ? 'raise\n' : `raise ${value}\n`
     }
+  },
+  // ------------------------------------------------------------ create <Class>
+  {
+    // `robot = Robot("Bob", speed=3)` (B5, #1224) — the other half of a class.
+    // Defining one is half the job; the line that makes one is the line a
+    // learner writes next, and until now it was a grey block or a call block
+    // whose "call … on …" face is about METHODS and has no object to take.
+    //
+    // NO `json`: the arguments come and go, so the shape is built in
+    // `installStructureBlocks` the way the `try` and `call` blocks are.
+    type: NEW_INSTANCE,
+    category: 'functions',
+    help: 'ref-functions',
+    level: 'advanced',
+    code: (block, gen) => [`${instanceClass(block)}(${callArgs(block, gen)})`, Order.FUNCTION_CALL]
   }
 ]
+
+/**
+ * THE CLASS NAME IS A DROPDOWN OF THE CLASSES THIS PROGRAM DEFINES (#1224).
+ * ---------------------------------------------------------------------------
+ *
+ * A class name is not free text in the way a method name on a grey call block
+ * is: the class is right there on the canvas, and a learner who types `robto`
+ * gets a `NameError` from the board rather than anything the editor could have
+ * told them. So the field offers what the workspace has.
+ *
+ * AND FALLS BACK TO A TEXT BOX, which is not a nicety either — a workspace with
+ * no class block in it yet (a class in a module this file imports, a program
+ * being built top-down) would otherwise have an empty menu and no way to say
+ * any name at all. The last entry in the menu is "type a name…", and choosing
+ * it reveals the text field beside the dropdown; that is the same
+ * show-it-when-it-holds-something mechanism the call block's keyword-name boxes
+ * use (#1163), for the same reason: a box that is empty and inert is worse than
+ * no box.
+ *
+ * LIKE `FieldPin`, IT NEVER REJECTS A VALUE. A file naming a class the reader
+ * has not built a block for yet — the block is loaded before its class, or the
+ * class lives in another file — keeps saying what it says, rather than being
+ * silently reset to whatever happens to be first in the menu.
+ */
+const TYPE_A_NAME = 'type a name…'
+
+/**
+ * The dropdown value that means "the text box beside me holds the name".
+ *
+ * A `!` because no Python identifier can contain one: whatever a learner calls
+ * their class, it can never collide with this sentinel and turn a real name
+ * into the text box.
+ */
+const OWN_NAME = '!own'
+
+/** The fields the block's head carries: the menu, and the box behind it. */
+const CLASS_FIELD = 'CLASS'
+const TYPED_FIELD = 'TYPED'
+
+/** What a class is called when nothing says otherwise. */
+const DEFAULT_CLASS = 'Thing'
+
+/** Every class this workspace defines, in the order the canvas holds them. */
+function classNames(workspace: Blockly.Workspace | null): string[] {
+  if (!workspace) return []
+  const names: string[] = []
+  for (const block of workspace.getBlocksByType('snakie_class', false)) {
+    const name = String(block.getFieldValue('NAME') ?? '').trim()
+    if (name !== '' && !names.includes(name)) names.push(name)
+  }
+  return names
+}
+
+/** The menu: this program's classes, whatever the field holds, then the box. */
+function classOptions(this: Blockly.FieldDropdown): Blockly.MenuOption[] {
+  const names = classNames(this.getSourceBlock()?.workspace ?? null)
+  const held = String(this.getValue() ?? '')
+  if (held !== '' && held !== OWN_NAME && !names.includes(held)) names.push(held)
+  return [...names.map((name): Blockly.MenuOption => [name, name]), [TYPE_A_NAME, OWN_NAME]]
+}
+
+/** A dropdown of the workspace's classes that will take any name it is given. */
+class FieldClassName extends Blockly.FieldDropdown {
+  constructor() {
+    super(classOptions)
+  }
+
+  /** Accept a class this workspace has no block for. See the note above. */
+  protected override doClassValidation_(value?: string): string | null {
+    return value === undefined || value === null ? null : String(value)
+  }
+
+  /** The name, or the invitation to type one. */
+  override getText(): string {
+    const value = String(this.getValue() ?? '')
+    return value === OWN_NAME ? TYPE_A_NAME : value
+  }
+}
+
+/**
+ * Show the text box exactly when the menu is standing aside for it.
+ *
+ * NOTHING HAPPENS WHEN NOTHING CHANGED, which matters because `onchange` runs
+ * this for every event on the workspace: a re-render queued on each of them
+ * would be a block redrawn while somebody drags another one past it.
+ */
+function applyTypedName(block: Blockly.Block): void {
+  const typed = block.getField(TYPED_FIELD)
+  const wanted = block.getFieldValue(CLASS_FIELD) === OWN_NAME
+  if (!typed || typed.isVisible() === wanted) return
+  typed.setVisible(wanted)
+  ;(block as Blockly.BlockSvg).queueRender?.()
+}
+
+/** The class being created: the menu's choice, or the box behind it. */
+function instanceClass(block: Blockly.Block): string {
+  const chosen = String(block.getFieldValue(CLASS_FIELD) ?? '')
+  const raw = chosen === OWN_NAME ? String(block.getFieldValue(TYPED_FIELD) ?? '') : chosen
+  // `sanitise`, not `toPythonIdentifier`, for the reason {@link nameOf} gives:
+  // a class somebody called `Property` is theirs to call that.
+  const name = raw.trim()
+  return name === '' ? DEFAULT_CLASS : sanitise(name)
+}
+
+/**
+ * The create-instance block's shape: a class name, then the call block's own
+ * growable argument row — the same `+`/`−` steppers and the same keyword-name
+ * boxes, so `Robot("Bob", speed=3)` is built the way every other call is.
+ */
+function newInstanceMixin(): Record<string, unknown> {
+  return {
+    ...argRowMixin(),
+
+    init(this: Blockly.Block): void {
+      this.setStyle('functions_blocks')
+      this.appendDummyInput('HEAD')
+        .appendField('create')
+        // Cast because `appendField` is typed for a field whose value may be
+        // undefined and `FieldDropdown`'s never is; the dropdown IS one of the
+        // fields it takes, as every JSON `field_dropdown` in the palette is.
+        .appendField(new FieldClassName() as unknown as Blockly.Field, CLASS_FIELD)
+        .appendField(new Blockly.FieldTextInput(DEFAULT_CLASS), TYPED_FIELD)
+      this.setInputsInline(true)
+      this.setOutput(true, null)
+      this.setTooltip(
+        'Make one of a kind of thing — a new Robot, a new Dog — and hand it whatever its `__init__` asks for.'
+      )
+      ;(this as unknown as { updateArgs_: (n: number) => void }).updateArgs_(DEFAULT_ARGS)
+      // A CLASS ALREADY ON THE CANVAS IS THE ANSWER MOST OF THE TIME, so the
+      // block arrives holding the first one rather than the text box. In a
+      // flyout there are no class blocks, so it arrives ready to be typed into.
+      const first = classNames(this.workspace)[0]
+      this.setFieldValue(first ?? OWN_NAME, CLASS_FIELD)
+      applyTypedName(this)
+    },
+
+    /** The text box follows the menu, whoever moved it — a load, or a learner. */
+    loadExtraState(this: Blockly.Block, state: { args?: number }): void {
+      ;(argRowMixin().loadExtraState as (this: Blockly.Block, s: unknown) => void).call(this, state)
+      applyTypedName(this)
+    },
+
+    onchange(this: Blockly.Block): void {
+      applyTypedName(this)
+    }
+  }
+}
 
 /** What a `try` block is holding: its arms, and whether it has the two tails. */
 export interface TryState {
@@ -790,6 +1074,7 @@ function nextParamName(state: MethodState): string {
 /** Register the blocks whose inputs come and go. Called before the definitions. */
 export function installStructureBlocks(): void {
   Blockly.Blocks[TRY_BLOCK] = tryBlockMixin() as never
+  Blockly.Blocks[NEW_INSTANCE] = newInstanceMixin() as never
   Blockly.Blocks[METHOD_BLOCK] = methodBlockMixin() as never
   // THE DECORATOR LIST, WRAPPED ROUND THE MIXIN'S OWN HOOKS (A1, #1215).
   //
@@ -809,4 +1094,17 @@ export function installStructureBlocks(): void {
   // mini-workspace. So it gets the decorators-only cog and the `@` badge,
   // above the parameter row the decorators are written over.
   installDecoratorCog([METHOD_BLOCK])
+  // The property block's tick box (#1222). An EXTENSION rather than a wrapped
+  // `init`: the block itself is ordinary JSON, and a validator is the one thing
+  // JSON cannot declare. Guarded, because `installCorePalette` runs again for
+  // every test file and Blockly throws on a name it has already been given.
+  if (!Blockly.Extensions.isRegistered(PROPERTY_SETTER_EXTENSION)) {
+    Blockly.Extensions.register(PROPERTY_SETTER_EXTENSION, function (this: Blockly.Block) {
+      this.getField(HAS_SETTER)?.setValidator((value: unknown) => {
+        setSetterVisible(this, value === true || value === 'TRUE')
+        return value
+      })
+      setSetterVisible(this, hasSetter(this))
+    })
+  }
 }

@@ -366,7 +366,7 @@ export function BlocksCanvas({
   // Read here rather than passed down: it is a preference, not a property of
   // the document, and every caller of this component would just be forwarding
   // it.
-  const { blockShape, blockLevel } = useEditorSettings()
+  const { blockShape, blockLevel, setBlockLevel } = useEditorSettings()
   /**
    * Simple or advanced drawers (#1210) — a REF for the injection, like the
    * dialect below, and a dependency of the rebuild effect, so a flip in
@@ -1019,7 +1019,55 @@ export function BlocksCanvas({
     )
   }
 
-  return <div className="blocks-canvas__host" ref={hostRef} data-testid="blocks-canvas-host" />
+  return (
+    <div className="blocks-canvas">
+      <div className="blocks-canvas__host" ref={hostRef} data-testid="blocks-canvas-host" />
+      <AdvancedBlocksToggle level={blockLevel} onChange={setBlockLevel} />
+    </div>
+  )
+}
+
+/**
+ * THE IN-TOOLBOX "SHOW ADVANCED BLOCKS" TOGGLE (#1211, epic #1206).
+ * ===========================================================================
+ *
+ * The same `snakie.blocks.level` preference as Settings ▸ Appearance ▸ Advanced
+ * blocks (#1210) — one store, so the two are never out of step — put where the
+ * question is actually asked. A learner who cannot find `try` is looking at the
+ * drawers, not at a settings dialog three menus away, and a setting nobody can
+ * find is a setting nobody turns on.
+ *
+ * Drawn over the bottom of the toolbox column rather than inside it, because
+ * Blockly owns that SVG and has no slot for a control of ours. It is small,
+ * quiet and out of the way of the categories above it.
+ */
+function AdvancedBlocksToggle({
+  level,
+  onChange
+}: {
+  level: BlockLevel
+  onChange: (level: BlockLevel) => void
+}): JSX.Element {
+  const on = level === 'advanced'
+  return (
+    <label
+      className={`blocks-advanced${on ? ' is-on' : ''}`}
+      title={
+        on
+          ? 'Hide the advanced blocks — classes, try, comprehensions, slices, files and the grey Python blocks. Your program is not changed.'
+          : 'Show the advanced blocks — classes, try, comprehensions, slices, files and the grey Python blocks.'
+      }
+    >
+      <input
+        type="checkbox"
+        className="blocks-advanced__input"
+        checked={on}
+        onChange={(e) => onChange(e.target.checked ? 'advanced' : 'simple')}
+      />
+      <span className="blocks-advanced__switch" aria-hidden="true" />
+      <span className="blocks-advanced__label">Show advanced blocks</span>
+    </label>
+  )
 }
 
 /**
