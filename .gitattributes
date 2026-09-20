@@ -1,0 +1,6 @@
+# The changelog is append-only inside [Unreleased]; every branch adds bullets in
+# the same place, so a plain three-way merge conflicts on nearly every PR.
+# `merge=union` keeps both sides' lines instead of raising a conflict. Re-read
+# the [Unreleased] section after a merge: order is not guaranteed and duplicate
+# bullets are possible, so tidy it when cutting a release.
+CHANGELOG.md merge=union

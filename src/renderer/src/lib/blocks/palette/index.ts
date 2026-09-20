@@ -141,8 +141,8 @@ export function installCorePalette(): void {
     // #1220: `class` and `self` share the Classes shelf with `super()`, which
     // lives in `functions.ts`, and a shelf is ordered by registration — so the
     // drawer opens on the class block rather than on the thing it inherits
-    // from. `snakie_method` stays hidden until B2 (#1221) gives it a real
-    // parameter mutator.
+    // from. `snakie_method` joined them in B2 (#1221), which gave it a real
+    // parameter list in place of its one free-text signature.
     ...leveled('advanced', STRUCTURE_BLOCKS),
     ...FUNCTION_BLOCKS,
     // Last, and last in the toolbox: the escape hatches (#1018) are where you
