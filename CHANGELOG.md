@@ -8,6 +8,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Zoom in the Electronics board browser eases instead of jumping.** The
+  −/+ buttons, the fit / 100% toggle and rotate now glide the board to its new
+  transform over a short ease-out (220 ms) rather than snapping, so it is easy
+  to keep track of where you were. Continuous gestures are untouched — wheel
+  zoom and drag-to-pan still track the pointer frame-for-frame (an in-flight
+  glide is cancelled the moment one starts), and `prefers-reduced-motion` turns
+  the animation off entirely.
+
 - **The Yellow TT Motor wears the better 2-D drawing.** The Standard library's
   `tt-motor` now carries the artwork from the hand-drawn "TT Motor (Yellow)"
   part — yellow gearbox with the output boss, ribbed casing, motor can and the
