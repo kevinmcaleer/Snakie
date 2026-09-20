@@ -56,7 +56,7 @@ import {
   TracebackWatcher
 } from '../lib/blocks/traceback'
 import { ensureBlocklyLocale } from '../lib/blocks/locale'
-import { unknownBlockTypes } from '../lib/blocks/workspace-check'
+import { advancedBlockTypes, unknownBlockTypes } from '../lib/blocks/workspace-check'
 import { registerBlocksWorkspace } from '../lib/blocks/workspace-registry'
 import { buildToolbox } from '../lib/blocks/toolbox'
 import { installFunctionsDrawer } from '../lib/blocks/functions-drawer'
@@ -224,6 +224,15 @@ export interface BlocksCanvasProps {
    */
   onPartsUsed?: (parts: readonly { libraryId: string; partId: string }[]) => void
   /**
+   * The advanced blocks this FILE arrived with (#1212), reported once per file.
+   *
+   * Asked here rather than by the caller because the level of a block type is a
+   * question for the registry, and the registry is only populated once this
+   * module — the lazy Blockly chunk — has loaded. The caller renders the offer;
+   * the canvas renders the blocks either way.
+   */
+  onAdvancedBlocks?: (fileId: string, types: readonly string[]) => void
+  /**
    * Bumped when the workspace changed from OUTSIDE the canvas (#1034) — the
    * learner edited the code, and it was converted back into blocks.
    *
@@ -285,6 +294,7 @@ export function BlocksCanvas({
   onShowBlockPython,
   paletteNonce = 0,
   onPartsUsed,
+  onAdvancedBlocks,
   reloadNonce = 0,
   derived = false
 }: BlocksCanvasProps): JSX.Element {
@@ -347,6 +357,30 @@ export function BlocksCanvas({
   onShowBlockPythonRef.current = onShowBlockPython
   const onPartsUsedRef = useRef(onPartsUsed)
   onPartsUsedRef.current = onPartsUsed
+  const onAdvancedBlocksRef = useRef(onAdvancedBlocks)
+  onAdvancedBlocksRef.current = onAdvancedBlocks
+  /**
+   * THE ADVANCED BLOCKS IN THIS FILE (#1212).
+   *
+   * Note what is NOT here: a filter. Every one of these blocks is built,
+   * rendered, dragged, duplicated and generated exactly as it would be with the
+   * advanced drawers open — the level is a fact about the toolbox and nothing
+   * else, and downgrading a learner's class to a grey Python block because of a
+   * preference would be the app quietly damaging their file.
+   */
+  const advanced = useMemo(
+    () => advancedBlockTypes(workspace, (t) => blockDefinition(t)?.level),
+    [workspace]
+  )
+  const advancedRef = useRef(advanced)
+  advancedRef.current = advanced
+  // ONCE PER FILE OPEN, not once per edit: keyed on the file alone, and reading
+  // the walk through a ref. Keyed on `advanced` it would fire again the moment
+  // somebody typed in the code pane, which is a notice that reappears while you
+  // are working — the thing this is careful not to be.
+  useEffect(() => {
+    onAdvancedBlocksRef.current?.(fileId, advancedRef.current)
+  }, [fileId])
   /** Pending regeneration, so a drag doesn't generate once per mouse move. */
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   /**
