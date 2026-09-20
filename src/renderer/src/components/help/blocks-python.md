@@ -62,6 +62,46 @@ print(sensor.value)               # [value] of (sensor)
 led.brightness = 0.5              # set (led) . [brightness] to (0.5)
 ```
 
+## Decorators — the `@…` line above a `def`
+
+A decorator is a label on a function. It is not a step that runs on its own, so
+it is not a block on its own either: it rides on the **function block**, and the
+lines come out immediately above the `def`.
+
+| On the block | In the Python |
+| --- | --- |
+| a **function** block carrying `micropython.native` | `@micropython.native` above its `def` |
+| a **method** block carrying `property` | `@property` above its `def` |
+
+```python
+@micropython.native
+def count_up():          # compiled, not interpreted — faster, bigger
+    total = 0
+    for _ in range(200000):
+        total = total + 1
+    return total
+
+
+class Thermometer:
+    @property
+    def celsius(self):   # read as `t.celsius`, with no brackets
+        return 27 - (self.volts() - 0.706) / 0.001721
+```
+
+A function can carry more than one, and they are written in the order they were
+put on. Entries are stored without the `@` — `property`,
+`micropython.native`, `app.route("/")` — and the ones that need an import
+(`micropython.native`, `micropython.viper`) bring `import micropython` with them
+to the top of the file, the same as any other block.
+
+`@micropython.native` is the one worth trying first when something is too slow:
+it asks MicroPython to compile that function to machine code instead of reading
+it back a bytecode at a time. It costs flash, so time the function before and
+after rather than decorating everything.
+
+*A gear on the function block for adding and removing these arrives in a
+following release.*
+
 ## Snakie checks what you type
 
 Not to be fussy — because a missing bracket is much easier to fix when the block

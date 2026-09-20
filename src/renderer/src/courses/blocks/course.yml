@@ -277,3 +277,157 @@ lessons:
   blocks: *id001
   tip: Drag the divider between the panes — the white dot halfway along is the stop where
     you get both.
+# The decorator lesson (A5, #1219, epic #1206). It comes AFTER the handover to
+# Python, because a decorator is a line you read before it is a thing you add —
+# and on the canvas there is nothing to add it with until the gear lands
+# (#1217). `level: advanced` is what C6 reads to keep it out of a first-year
+# class's way; an older build ignores the key and simply shows the lesson.
+- title: Make it faster with @micropython.native
+  file: 08-native-decorator.md
+  view: blocks
+  viewMode: python
+  level: advanced
+  blocks:
+    blocks:
+      languageVersion: 0
+      blocks:
+      - type: procedures_defreturn
+        id: l8-def
+        x: 40
+        y: 40
+        extraState:
+          decorators:
+          - micropython.native
+        fields:
+          NAME: count up
+          EXTRAS: ''
+        inputs:
+          STACK:
+            block:
+              type: variables_set
+              id: l8-zero
+              fields:
+                VAR:
+                  id: l8-count
+              inputs:
+                VALUE:
+                  shadow:
+                    type: math_number
+                    fields:
+                      NUM: 0
+              next:
+                block:
+                  type: controls_repeat_ext
+                  id: l8-rep
+                  inputs:
+                    TIMES:
+                      shadow:
+                        type: math_number
+                        fields:
+                          NUM: 200000
+                    DO:
+                      block:
+                        type: variables_set
+                        id: l8-add
+                        fields:
+                          VAR:
+                            id: l8-count
+                        inputs:
+                          VALUE:
+                            block:
+                              type: math_arithmetic
+                              id: l8-plus
+                              fields:
+                                OP: ADD
+                              inputs:
+                                A:
+                                  block:
+                                    type: variables_get
+                                    id: l8-get
+                                    fields:
+                                      VAR:
+                                        id: l8-count
+                                B:
+                                  shadow:
+                                    type: math_number
+                                    fields:
+                                      NUM: 1
+          RETURN:
+            block:
+              type: variables_get
+              id: l8-ret
+              fields:
+                VAR:
+                  id: l8-count
+      - type: variables_set
+        id: l8-start
+        x: 40
+        y: 420
+        fields:
+          VAR:
+            id: l8-startvar
+        inputs:
+          VALUE:
+            block:
+              type: snakie_ticks_ms
+              id: l8-t0
+        next:
+          block:
+            type: variables_set
+            id: l8-answer
+            fields:
+              VAR:
+                id: l8-answervar
+            inputs:
+              VALUE:
+                block:
+                  type: procedures_callreturn
+                  id: l8-call
+                  extraState:
+                    name: count up
+            next:
+              block:
+                type: text_print
+                id: l8-say-answer
+                extraState:
+                  items: 1
+                inputs:
+                  TEXT:
+                    block:
+                      type: variables_get
+                      id: l8-getanswer
+                      fields:
+                        VAR:
+                          id: l8-answervar
+                next:
+                  block:
+                    type: text_print
+                    id: l8-say
+                    extraState:
+                      items: 1
+                    inputs:
+                      TEXT:
+                        block:
+                          type: snakie_ticks_diff
+                          id: l8-diff
+                          inputs:
+                            FROM:
+                              block:
+                                type: variables_get
+                                id: l8-getstart
+                                fields:
+                                  VAR:
+                                    id: l8-startvar
+                            TO:
+                              block:
+                                type: snakie_ticks_ms
+                                id: l8-t1
+    variables:
+    - name: count
+      id: l8-count
+    - name: start
+      id: l8-startvar
+    - name: answer
+      id: l8-answervar
+  tip: Time it first, then decorate the part the clock says is slow. `@micropython.native`
+    trades flash for speed, so it is for the one function that needs it.

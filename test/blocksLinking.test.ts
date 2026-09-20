@@ -192,15 +192,22 @@ describe('the blocks lesson track (#1016)', () => {
     }
   })
 
-  it('ends with the handover, opening Python-primary', () => {
-    // The visual form of the handover: the last lesson is "the same program, in
-    // Python", and it opens with the Python big and the blocks peeking.
-    const last = course!.lessons[course!.lessons.length - 1]
-    expect(last.title).toMatch(/Python/)
-    expect(last.viewMode).toBe('python')
-    // …and it is the ONLY one that asks, so the rest get the split default.
-    const asking = course!.lessons.filter((l) => l.viewMode !== undefined)
-    expect(asking).toHaveLength(1)
+  it('ends the beginner arc with the handover, opening Python-primary', () => {
+    // The visual form of the handover: "the same program, in Python" opens with
+    // the Python big and the blocks peeking.
+    //
+    // It is no longer the LAST lesson — the decorator coda (#1219, epic #1206)
+    // sits after it, marked advanced, because a decorator is a line you read in
+    // the Python pane and so only makes sense once the reader is living there.
+    // The arc the first seven lessons draw is unchanged: nothing before the
+    // handover asks to be Python-primary.
+    const titles = course!.lessons.map((l) => l.title)
+    const handover = titles.findIndex((t) => /same program, in Python/.test(t))
+    expect(handover).toBeGreaterThan(0)
+    expect(course!.lessons[handover].viewMode).toBe('python')
+    for (const lesson of course!.lessons.slice(0, handover)) {
+      expect(lesson.viewMode, lesson.title).toBeUndefined()
+    }
   })
 
   it('carries workspaces the canvas can actually read', () => {

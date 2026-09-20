@@ -168,6 +168,37 @@ just filled in, press it, and there is a second one to drag into place.
 It is the same *Duplicate* that lives on a block's right-click menu, on the key
 everyone tries first.
 
+### Decorators on a function block
+
+A decorator is the `@…` line above a `def` — `@property`,
+`@micropython.native`, `@app.route("/")`. It is not an instruction of its own:
+it belongs to the function under it and says something *about* that function.
+
+So in Snakie it is not a block of its own either. It is attached to the
+**function block**, saved with it, and written out immediately above the `def`
+whenever the Python is generated:
+
+```python
+@micropython.native
+def count_up():
+    ...
+```
+
+A function can carry several, and they come out in the order they were put on.
+Anything that needs an import to work — `@micropython.native` and
+`@micropython.viper` — brings its `import micropython` with it, at the top of
+the file, the same way every other block does.
+
+The three a class usually wants (`@property`, `@staticmethod`,
+`@classmethod`) work on the method block too; a program saved with the method
+block's old single-decorator dropdown opens unchanged, reading as a list of
+one.
+
+*The way to add and remove them on the canvas — a small gear on the function
+block — arrives in a following release; until it does, a block carries a
+decorator because a saved file or a course starter put one there. Lesson 8 of
+the course is about reading one.*
+
 ### When the block you need doesn't exist yet
 
 At the bottom of the toolbox is a category called **Python**, and the blocks in
@@ -263,7 +294,7 @@ either way, which is why none of this needs a warning.
 
 ## The course
 
-**Learn ▸ Blocks to Python** is seven lessons:
+**Learn ▸ Blocks to Python** is eight lessons:
 
 1. **Make a light blink** — forever, toggle, wait
 2. **Read a button** — if, and why pull-up resistors mean `not`
@@ -272,10 +303,12 @@ either way, which is why none of this needs a warning.
 5. **Read a sensor** — value blocks, and watching a number move
 6. **When the block you need doesn't exist yet** — the grey blocks, and a dice
 7. **The same program, in Python** — typing in the other pane
+8. **Make it faster with `@micropython.native`** — decorators, and timing a
+   function before you decide it is slow (marked advanced)
 
 Each lesson opens with its program already assembled, because a beginner's first
 minute should be something that works and which they then take apart. The last
-one opens with the divider at the code end and the blocks a sliver away.
+two open with the divider at the code end and the blocks a sliver away.
 
 ---
 
