@@ -60,21 +60,18 @@ describe('shouldRaiseBlockLevel', () => {
 })
 
 describe('bundled courses', () => {
-  it('declares advanced on the two advanced lessons, and nowhere else', () => {
+  it('declares advanced on the lessons that need it, and nowhere else', () => {
     const blocks = loadCourses().find((c) => c.id === 'blocks')
     expect(blocks, 'the blocks course is bundled').toBeTruthy()
     const greys = blocks!.lessons.find((l) => l.title.startsWith('When the block you need'))
     expect(greys?.level).toBe('advanced')
-    // The rest of the on-ramp is beginner material and must stay silent.
+    // The on-ramp itself is beginner material: the course declares nothing, and
+    // a lesson only speaks up when the drawer it teaches is an advanced one.
+    // The grey Python blocks (#1214) and the decorator lesson A5 added (#1219)
+    // are both that; everything before them must stay silent.
     expect(blocks!.level).toBeUndefined()
-    // TWO, BY DESIGN, and named rather than counted — a count is a number two
-    // lessons apart from the fact it stands for, and it went stale the moment
-    // the second advanced lesson landed. The grey Python blocks are advanced
-    // (#1209) and so is `@micropython.native` (#1217); naming them means a
-    // lesson that quietly acquires a level still fails this, and a deliberate
-    // third one fails it HERE, where the list says which lessons are meant.
     expect(blocks!.lessons.filter((l) => l.level === 'advanced').map((l) => l.title)).toEqual([
-      "When the block you need doesn't exist yet",
+      greys!.title,
       'Make it faster with @micropython.native'
     ])
   })
