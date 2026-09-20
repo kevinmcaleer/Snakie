@@ -51,6 +51,16 @@ export interface DynamicBlocks {
    * doesn't close the flyout the learner is reading.
    */
   nonce: number
+  /**
+   * TRUE ONCE EVERY SOURCE HAS ANSWERED (#1252).
+   *
+   * The parts and plugins arrive asynchronously, so for the first few frames
+   * of a file's life the palette is simply incomplete — and a file built from
+   * a part's blocks looks, in exactly those frames, like a file whose part is
+   * not installed. Nothing may conclude "we haven't got that block" until this
+   * is true; until then the honest state is "still reading".
+   */
+  settled: boolean
   /** Resolve a part reference to its definition (for the driver banner). */
   partFor: (libraryId: string, partId: string) => PartDefinition | undefined
   /** Anything a manifest said that we could not honour, newest load first. */
@@ -90,6 +100,13 @@ export function useDynamicBlocks(folder: string | null | undefined): DynamicBloc
   const [robotNonce, setRobotNonce] = useState(0)
   const [nonce, setNonce] = useState(0)
   const [warnings, setWarnings] = useState<readonly string[]>([])
+  // One flag per asynchronous source, so `settled` means "all three have
+  // answered" rather than "the first one has". Never reset once true: a folder
+  // change reloads the robot, and hiding a verdict we have already reached
+  // would flicker the notice off and on again.
+  const [robotReady, setRobotReady] = useState(false)
+  const [librariesReady, setLibrariesReady] = useState(false)
+  const [pluginsReady, setPluginsReady] = useState(false)
   const lastKey = useRef('')
 
   // robot.yml edits arrive from any window — the Board View, the pop-out, the
@@ -101,6 +118,7 @@ export function useDynamicBlocks(folder: string | null | undefined): DynamicBloc
       .load(folder ?? undefined)
       .then((d) => live && setRobot(d))
       .catch(() => live && setRobot(null))
+      .finally(() => live && setRobotReady(true))
     return () => {
       live = false
     }
@@ -113,6 +131,7 @@ export function useDynamicBlocks(folder: string | null | undefined): DynamicBloc
         .listLibraries()
         .then((libs) => live && setLibraries(libs ?? []))
         .catch(() => undefined)
+        .finally(() => live && setLibrariesReady(true))
     }
     load()
     // Absent on some backends (the web build has no library authoring).
@@ -129,7 +148,12 @@ export function useDynamicBlocks(folder: string | null | undefined): DynamicBloc
   useEffect(() => {
     let live = true
     const api = window.api.plugins
-    if (!api || typeof api.listBlocks !== 'function') return
+    if (!api || typeof api.listBlocks !== 'function') {
+      // No plugin host is the normal case on the web build — "answered", not
+      // "still to answer", or nothing would ever settle there.
+      setPluginsReady(true)
+      return
+    }
     api
       .listBlocks()
       .then((listing) => {
@@ -155,6 +179,7 @@ export function useDynamicBlocks(folder: string | null | undefined): DynamicBloc
       // Python, no web host, a plugin that crashed on import. The palette is
       // simply the core one plus whatever the parts contribute.
       .catch(() => undefined)
+      .finally(() => live && setPluginsReady(true))
     return () => {
       live = false
     }
@@ -275,5 +300,5 @@ export function useDynamicBlocks(folder: string | null | undefined): DynamicBloc
     [libraries]
   )
 
-  return { nonce, partFor, warnings }
+  return { nonce, settled: robotReady && librariesReady && pluginsReady, partFor, warnings }
 }

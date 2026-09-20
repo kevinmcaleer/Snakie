@@ -12,6 +12,19 @@ when a release is cut. See `changelog.d/README.md`.
 
 ### Fixed
 
+- **"Some blocks came from a part, plugin or module this Snakie hasn't got" no
+  longer fires before Snakie has looked (#1252).** A file whose footer named
+  `snakie_module_range_finder_*` blocks fell back to the Python and said the
+  module was missing, with `range_finder.py` sitting on the connected board the
+  whole time. The module palette is built by reading files — beside the
+  program, then `/lib/<name>.py` over serial — and the canvas was asking
+  Blockly for those block types before any of that had finished, so *not yet*
+  read as *not installed*. The parts/plugins palette and the modules palette
+  now each report when they have finished arriving, and neither the fallback
+  nor its notice happens until both have; until then the canvas shows its own
+  "Reading the blocks…" line. If the module really is nowhere, the notice
+  appears exactly as before, one pass later.
+
 - **The Detected shelf missed packages and `.mpy` modules on the board
   (#1254).** On a real Arduino Alvik, `arduino_alvik` did not appear even
   though the board imports it: the shelf's board section lists `.py` FILES in
