@@ -1,11 +1,23 @@
 id: tt-motor
 name: Yellow TT Motor
+description: The classic yellow-gearbox "TT" brushed DC gear motor — the standard drive motor bundled with almost every 2WD/4WD robot car chassis kit.
 manufacturer: Generic
 family: Motor
+tags:
+  - tt-motor
+  - dc-motor
+  - gearmotor
+  - robot-car
+  - chassis
+  - yellow
 package: THT
 pinSpacing: 2.54
-voltage: 6V
-version: 0.2.1
+voltage: 3-6V
+properties:
+  gearRatio: 48:1 (kits also sell 1:120 / 1:298 variants)
+  noLoadSpeed: ~200 RPM @ 6V
+  shaft: D-shaft, 5mm dia
+version: 0.3.0
 pcbColor: "#0f5a2e"
 aspect: 0.518
 dimensions:
@@ -15,107 +27,132 @@ shape:
   kind: rect
   cornerRadius: 0
 headers:
-  - edge: top
+  - edge: bottom
     pins:
       - name: VCC
         type: pwr
-        x: 0.62
-        y: 0.045
+        x: 0.4639
+        y: 0.966
       - name: GND
         type: gnd
-        x: 0.38
-        y: 0.045
+        x: 0.5361
+        y: 0.966
+mountingHoles:
+  - x: 0.2475
+    y: 0.2918
+    diameter: 3
+  - x: 0.7525
+    y: 0.2918
+    diameter: 3
 shapes:
   - kind: rect
-    x: 0.23
-    y: 0.03
-    fill: "#c0392b"
-    stroke: "#8a2f24"
-    strokeWidth: 0.01
-    w: 0.06
-    h: 0.14
+    x: 0.0
+    y: 0.1077
     z: 0
-    cornerRadius: 0
+    fill: "#b6bbc1"
+    stroke: "#6b7075"
+    strokeWidth: 1
+    w: 0.2455
+    h: 0.0708
   - kind: rect
-    x: 0.71
-    y: 0.03
-    fill: "#1c2227"
-    stroke: "#111417"
-    strokeWidth: 0.01
-    w: 0.06
-    h: 0.14
-    z: 1
-    cornerRadius: 0
-  - kind: rect
-    x: 0.16
-    y: 0.1
-    fill: "#8a8f96"
-    stroke: "#6b6f75"
-    strokeWidth: 0.01
-    w: 0.68
-    h: 0.4
-    z: 2
-    cornerRadius: 0.15
-  - kind: rect
-    x: 0.24
-    y: 0.12
-    fill: "#a8adb3"
-    stroke: "#6b6f75"
-    strokeWidth: 0
-    w: 0.52
-    h: 0.04
-    z: 3
-    cornerRadius: 0
-  - kind: rect
-    x: 0.02
-    y: 0.44
-    fill: "#e8c93a"
-    stroke: "#b89c1f"
-    strokeWidth: 0.015
-    w: 0.14
-    h: 0.1
+    x: 0.7545
+    y: 0.1077
+    z: 0
+    fill: "#b6bbc1"
+    stroke: "#6b7075"
+    strokeWidth: 1
+    w: 0.2455
+    h: 0.0708
+  - kind: circle
+    x: 0.5
+    y: 0.034
     z: 4
-    cornerRadius: 0.03
+    fill: "#c9ccd1"
+    stroke: "#6b7075"
+    strokeWidth: 1
+    r: 0.027
   - kind: rect
-    x: 0.84
-    y: 0.44
-    fill: "#e8c93a"
-    stroke: "#b89c1f"
-    strokeWidth: 0.015
-    w: 0.14
-    h: 0.1
-    z: 5
-    cornerRadius: 0.03
+    x: 0.2355
+    y: 0.0637
+    z: 0
+    fill: "#f2c50c"
+    stroke: "#a8790a"
+    strokeWidth: 1
+    w: 0.529
+    h: 0.4561
+    cornerRadius: 4
+  - kind: circle
+    x: 0.5
+    y: 0.1431
+    z: 1
+    fill: "#e0e0e0"
+    stroke: "#8a8f96"
+    strokeWidth: 1
+    r: 0.0541
   - kind: rect
-    x: 0.1
-    y: 0.48
-    fill: "#f2d93f"
-    stroke: "#b89c1f"
-    strokeWidth: 0.02
-    w: 0.8
-    h: 0.42
-    z: 6
-    cornerRadius: 0.06
-  - kind: rect
-    x: 0.16
-    y: 0.55
-    fill: "#d9bd2f"
-    stroke: "#b89c1f"
+    x: 0.2896
+    y: 0.3017
+    z: 1
+    fill: "#c99a0a"
+    stroke: none
     strokeWidth: 0
-    w: 0.68
-    h: 0.26
-    z: 7
-    cornerRadius: 0.04
+    w: 0.4208
+    h: 0.0297
   - kind: rect
-    x: 0.42
-    y: 0.9
-    fill: "#8a8f96"
-    stroke: "#6b6f75"
-    strokeWidth: 0.01
-    w: 0.16
-    h: 0.1
-    z: 8
-    cornerRadius: 0
+    x: 0.2896
+    y: 0.4405
+    z: 1
+    fill: "#c99a0a"
+    stroke: none
+    strokeWidth: 0
+    w: 0.4208
+    h: 0.0297
+  - kind: rect
+    x: 0.3077
+    y: 0.5397
+    z: 0
+    fill: "#9aa0a6"
+    stroke: "#5b6066"
+    strokeWidth: 1
+    w: 0.3847
+    h: 0.3371
+    cornerRadius: 6
+  - kind: rect
+    x: 0.3377
+    y: 0.5793
+    z: 2
+    fill: "#c7ccd1"
+    stroke: none
+    strokeWidth: 0
+    w: 0.0481
+    h: 0.2578
+  - kind: rect
+    x: 0.3798
+    y: 0.8669
+    z: 2
+    fill: "#4a4f54"
+    stroke: none
+    strokeWidth: 0
+    w: 0.2404
+    h: 0.0397
+  - kind: rect
+    x: 0.4459
+    y: 0.8966
+    z: 3
+    fill: "#c0392b"
+    stroke: none
+    strokeWidth: 0
+    w: 0.0361
+    h: 0.0992
+  - kind: rect
+    x: 0.518
+    y: 0.8966
+    z: 3
+    fill: "#1c2227"
+    stroke: none
+    strokeWidth: 0
+    w: 0.0361
+    h: 0.0992
 help: help.md
 mesh: model.stl
 meshUnits: mm
@@ -129,9 +166,9 @@ meshOffset:
   - 11.2
 electrical:
   model: consumer
-  maxCurrentA: 0.25
-  currentDrawA: 0.07
-  stallCurrentA: 0.25
+  maxCurrentA: 1.2
+  currentDrawA: 0.15
+  stallCurrentA: 1.2
   terminals:
     positive: VCC
     negative: GND
