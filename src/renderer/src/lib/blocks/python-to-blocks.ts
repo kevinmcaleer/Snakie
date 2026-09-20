@@ -1090,7 +1090,14 @@ interface CommentRun extends Stmt {
  * one we understood or a raw line.
  */
 function decoratedAbove(node: Stmt, siblings: readonly Stmt[]): boolean {
-  const before = siblings[siblings.indexOf(node) - 1]
+  // PAST A COMMENT (A2, #1216). `@app.route("/")`, then `# the home page`, then
+  // the `def`: the decorator still belongs to it, and the reader now reads the
+  // three together. Hoisting the `def` anyway would build a CALLER block for a
+  // definition that is a method block instead — a workspace Blockly refuses to
+  // load, which costs the learner every block in the file.
+  let i = siblings.indexOf(node) - 1
+  while (i >= 0 && siblings[i].body.length === 0 && isCommentLine(siblings[i].line)) i -= 1
+  const before = siblings[i]
   return Boolean(before && before.line.text.startsWith('@') && before.body.length === 0)
 }
 
@@ -2683,20 +2690,19 @@ class Converter {
     }
     // A DECORATOR BELONGS TO THE `def` UNDER IT, so it is read with it rather
     // than as a block of its own — a decorator block could be dragged away from
-    // the thing it decorates, and would mean nothing where it landed. Only the
-    // three the method block has a setting for; anything else is somebody's own
-    // decorator and stays raw, header and body together.
-    const decorator = /^@(property|staticmethod|classmethod)$/.exec(text)
-    if (decorator) {
+    // the thing it decorates, and would mean nothing where it landed. ANY
+    // decorator since A2 (#1216); see {@link decorated}. One with no `def`
+    // under it at all still falls through and stays raw.
+    if (text.startsWith('@') && node.body.length === 0) {
       // `@property` FIRST TRIES TO BE A PROPERTY BLOCK (B3, #1222): a getter,
       // with the `@name.setter` under it if there is one. Only when that does
-      // not fit does it fall back to the method block with a decorator on it,
+      // not fit does it fall back to a method block carrying the decorator,
       // which is what every `@property` came back as before.
-      if (decorator[1] === 'property') {
+      if (text === '@property') {
         const property = this.property(node, siblings)
         if (property) return recognised([property])
       }
-      const decorated = this.decorated(node, siblings, decorator[1])
+      const decorated = this.decorated(node, siblings)
       if (decorated) return recognised(decorated)
     }
     const method = DEF_HEADER.exec(text)
@@ -2727,7 +2733,7 @@ class Converter {
     // `procedures_defnoreturn` has no previous or next connection, so it can
     // never sit inside a class's body. Its parameter list is a FIELD, so any
     // signature comes back exactly as written.
-    if (method) return recognised([this.method(node, method, 'NONE')])
+    if (method) return recognised([this.method(node, method, [])])
 
     // --- simple statements -----------------------------------------------
     if (text === 'break' || text === 'continue') {
@@ -2841,31 +2847,72 @@ class Converter {
   }
 
   /**
-   * `@property` + the `def` under it → one method block (W6, #1093).
+   * The `@…` lines above a `def` → the method block's decorator list (A2, #1216).
    *
-   * The decorator line and the `def` line are two logical lines and one idea, so
-   * the second is CONSUMED — by identity, the way `ifChain` takes its `elif` and
+   * EVERY DECORATOR, NOT THREE OF THEM. This used to accept `@property`,
+   * `@staticmethod` and `@classmethod` — the three the block had a dropdown for
+   * — and leave `@micropython.native` and `@app.route("/")` as grey lines with
+   * the `def` under them. A1 (#1215) gave the block a LIST instead, so the only
+   * thing left to decide is where a decorator ENDS: at the end of its line, and
+   * the text between the `@` and there is taken verbatim. No parsing, which is
+   * what makes `@app.route("/(a)")` — a bracket inside a string inside a call —
+   * the same easy case as `@property`.
+   *
+   * THE LINES ARE CONSUMED — by identity, the way `ifChain` takes its `elif` and
    * `else` arms, because guessing from the text is what lost an `else` in #1068.
-   * Its line still has to be counted by hand: `statements()` skips a consumed
-   * node without counting it, on the reasoning that whoever consumed it did.
+   * Each still has to be counted by hand: `statements()` skips a consumed node
+   * without counting it, on the reasoning that whoever consumed it did.
    *
-   * Null when the next sibling is not a `def` we can hold, which leaves the
-   * decorator as an ordinary raw line with the `def` under it — exactly what
-   * both were before.
+   * A COMMENT BETWEEN A DECORATOR AND ITS `def` IS NOT CONSUMED. It is the
+   * learner's prose, and no block on the method holds it, so it is stepped over
+   * and stays the comment block it would have been — which the round-trip gate
+   * forgives, because it compares a bag of line signatures and the comment's is
+   * still in it.
+   *
+   * `@property` / `@x.setter` ARE NOT FOLDED TOGETHER here: a getter and a
+   * setter read as two methods with one decorator each. B3 (#1222) owns the
+   * single property block.
+   *
+   * Null when nothing under the decorators is a `def` we can hold, which leaves
+   * the decorator as an ordinary raw line with the `def` under it — exactly what
+   * it was before.
    */
-  private decorated(
-    node: Stmt,
-    siblings: readonly Stmt[],
-    decorator: string
-  ): BlockJson[] | null {
-    const next = siblings[siblings.indexOf(node) + 1]
-    if (!next || this.consumed.has(next)) return null
-    const def = DEF_HEADER.exec(next.line.text)
-    if (!def) return null
-    this.consumed.add(next)
+  private decorated(node: Stmt, siblings: readonly Stmt[]): BlockJson[] | null {
+    const decorators: string[] = []
+    const claimed: Stmt[] = []
+    let i = siblings.indexOf(node)
+    let def: RegExpExecArray | null = null
+    let header: Stmt | null = null
+    while (i < siblings.length) {
+      const next = siblings[i]
+      if (this.consumed.has(next)) return null
+      const text = next.line.text
+      if (next.body.length === 0 && text.startsWith('@') && text.slice(1).trim() !== '') {
+        decorators.push(text.slice(1).trim())
+        claimed.push(next)
+        i += 1
+        continue
+      }
+      // A comment between the decorators and the `def`: stepped over, left to
+      // be read as the comment block it is.
+      if (next.body.length === 0 && isCommentLine(next.line)) {
+        i += 1
+        continue
+      }
+      def = DEF_HEADER.exec(text)
+      header = next
+      break
+    }
+    if (!def || !header || decorators.length === 0) return null
+    for (const line of claimed.slice(1)) {
+      this.consumed.add(line)
+      this.report.total += 1
+      this.report.recognised += 1
+    }
+    this.consumed.add(header)
     this.report.total += 1
     this.report.recognised += 1
-    return [this.method(next, def, decorator)]
+    return [this.method(header, def, decorators)]
   }
 
   /**
@@ -2942,9 +2989,15 @@ class Converter {
    * THE SIGNATURE IS A PARAMETER LIST SINCE B2 (#1221, epic #1206), not the one
    * free-text `PARAMS` field W6 gave it: the plain names become the block's own
    * fields, a leading `self` or `cls` becomes its fixed lead, and everything
-   * neither can hold goes in the extras field `def` has had since #1134 —
+   * neither can hold goes in the extras field `def` has had since #1134 -
    * verbatim, so `*args`, a default and even the trailing comma in
    * `def load(path,):` come back exactly as they were written.
+   *
+   * THE DECORATORS ARE A LIST SINCE A1 (#1215): the dropdown stays at `NONE`
+   * and every `@...` line above the `def` rides on the block's extra state
+   * verbatim, so `@micropython.native` - which the dropdown could never hold -
+   * comes back as itself. `getDecorators` only falls back to the field for a
+   * workspace saved before there was a list.
    *
    * THE LEAD IS WHAT THE TEXT SAYS, not what the decorator implies. `@property`
    * on a method whose first parameter is not `self` is somebody's code rather
@@ -2952,13 +3005,16 @@ class Converter {
    * there; {@link defaultLead} is what a block dragged out of the drawer starts
    * with, and what the dropdown switches to when a learner changes it.
    */
-  private method(node: Stmt, header: RegExpExecArray, decorator: string): BlockJson {
+  private method(node: Stmt, header: RegExpExecArray, decorators: readonly string[]): BlockJson {
     const split = splitMethodSignature(header[3])
     // WHEN THE DECORATOR WOULD REWRITE THE LEAD, THE TEXT WINS. `@classmethod`
     // on a `def x(self)` is somebody's code, and the block would write `cls`
     // into it; so the lead is given up and the name stays an ordinary
-    // parameter, which comes back out exactly as it went in.
-    const exact = methodLead(split.lead, decorator) === split.lead
+    // parameter, which comes back out exactly as it went in. The decorator
+    // asked is the one that has anything to say about a lead - the list may
+    // also hold `@micropython.native`, which has none.
+    const leading = decorators.find((d) => d === 'staticmethod' || d === 'classmethod') ?? 'NONE'
+    const exact = methodLead(split.lead, leading) === split.lead
     const { lead, params, extras } = exact
       ? split
       : { lead: 'none' as const, params: [split.lead, ...split.params], extras: split.extras }
@@ -2967,11 +3023,18 @@ class Converter {
         type: 'snakie_method',
         fields: {
           NAME: header[2],
-          DECORATOR: decorator,
+          // THE DROPDOWN STAYS AT `NONE` and the list carries everything (A1,
+          // #1215): `getDecorators` prefers the list and only falls back to the
+          // field for a workspace saved before there was one.
+          DECORATOR: 'NONE',
           KIND: header[1] ? 'ASYNC' : 'SYNC',
           ...(extras === '' ? {} : { EXTRAS: extras })
         },
-        extraState: { params, lead }
+        extraState: {
+          params,
+          lead,
+          ...(decorators.length === 0 ? {} : { decorators: [...decorators] })
+        }
       },
       'BODY',
       node
