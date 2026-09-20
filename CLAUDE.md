@@ -45,10 +45,25 @@ Bump the version in `package.json` according to what a release contains:
 When a release groups several PRs, pick the **highest** applicable bump (any new
 feature in the batch ⇒ minor).
 
+**Changelog entries:** never edit `CHANGELOG.md` in a feature branch — every
+branch writing to the same place is what made nearly every PR conflict there
+(and `.gitattributes`' `merge=union` only fixes it locally; GitHub's
+server-side merge ignores merge drivers). Add a fragment instead:
+
+```bash
+npm run changelog -- new added "Short title" --issue 1246   # writes changelog.d/…
+npm run changelog -- preview                                # what the next release gets
+```
+
+One file per change, so branches never touch the same lines. CI asks any PR
+touching shipping code for a fragment unless it is labelled `no changelog`.
+Details in `changelog.d/README.md`.
+
 **Cutting a release:**
-1. Move everything from `CHANGELOG.md` `[Unreleased]` into a new dated
-   `[X.Y.Z]` section (Keep a Changelog format); add a fresh empty `[Unreleased]`
-   and update the compare links at the bottom.
+1. `npm run changelog -- release X.Y.Z` — folds the `changelog.d/` fragments
+   and anything still in `[Unreleased]` into a new dated `[X.Y.Z]` section,
+   merging duplicate headings, leaves a fresh empty `[Unreleased]`, updates the
+   compare links, and deletes the fragments. Review the diff.
 2. Set `package.json` version to `X.Y.Z` (`npm version X.Y.Z --no-git-tag-version`).
 3. Commit, push `master`.
 4. Tag and push: `git tag -a vX.Y.Z -m "…" && git push origin vX.Y.Z`. The

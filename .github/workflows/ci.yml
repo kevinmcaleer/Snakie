@@ -34,3 +34,23 @@ jobs:
 
       - name: Build (web)
         run: npm run build:web
+
+  changelog:
+    # A pull request that changes shipping code should carry a changelog.d
+    # fragment. Fragments exist so branches stop editing CHANGELOG.md in the
+    # same place and conflicting; see changelog.d/README.md.
+    if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'no changelog')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check for a changelog fragment
+        run: node scripts/changelog.mjs check --base "origin/${{ github.base_ref }}"

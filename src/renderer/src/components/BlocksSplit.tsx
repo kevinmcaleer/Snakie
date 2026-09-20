@@ -156,6 +156,46 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   const handleUnreadableBlocks = useCallback((fileId: string, types: readonly string[]) => {
     if (types.length > 0) setUnreadable({ fileId, types })
   }, [])
+  // The part- and plugin-contributed palette (#1017). Registered here rather
+  // than in the canvas because the canvas is lazily loaded and re-mounts on a
+  // view-mode change, and re-running a Python host round-trip for a layout
+  // change would be absurd.
+  //
+  // ABOVE the document, not beside it: whether the palette has finished
+  // arriving decides whether a missing block is news or just early (#1252),
+  // and the document below reads that verdict.
+  const { dialect } = useHelpDialect()
+  const { nonce: partsNonce, partFor, settled: partsSettled } = useDynamicBlocks(currentFolder)
+  // And the modules this program imports (#1048). Keyed on the STORED
+  // document's code — the same Python either way, since the fallback keeps it,
+  // and reading the stored one keeps this hook clear of the document it feeds.
+  const { nonce: modulesNonce, settled: modulesSettled } = useModuleBlocks(
+    storedDoc?.code ?? '',
+    dialect,
+    currentFolder,
+    file?.path ?? null
+  )
+  const paletteNonce = partsNonce + modulesNonce
+  /**
+   * HAS THE PALETTE FINISHED ARRIVING? (#1252)
+   *
+   * A part's blocks and a module's blocks both land asynchronously — the
+   * module tier goes as far as reading `/lib/<name>.py` off the board over
+   * serial — so on the first frames after a file opens, "Blockly has no such
+   * block type" means *not yet*, not *not installed*. Telling the learner
+   * their `range_finder` blocks came from something this Snakie hasn't got,
+   * while `range_finder.py` sits on the connected board waiting to be read,
+   * is the app answering before it has looked.
+   *
+   * So the fallback and its notice both wait for this. Until it is true the
+   * canvas shows its own "Reading the blocks…" line, which is what the file
+   * actually is at that moment.
+   */
+  const paletteSettled = partsSettled && modulesSettled
+  // The palette grew, so the blocks the footer named may exist now (#1252) —
+  // give the learner's own arrangement another go. If they still don't, the
+  // canvas says so again and we are back to the Python within a frame.
+  useEffect(() => setUnreadable(null), [paletteNonce])
   /**
    * The document to actually show: the stored one, or — when its blocks cannot
    * be built here — the same program read back from its own Python, which is
@@ -164,10 +204,12 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   const doc = useMemo(() => {
     if (!storedDoc || storedDoc.derived) return storedDoc
     if (!file || unreadable?.fileId !== file.id) return storedDoc
+    // Not until everything that could define those blocks has been looked for.
+    if (!paletteSettled) return storedDoc
     return documentFromCode(storedDoc)
     // `file.id` is the identity that matters here, not the file object.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storedDoc, unreadable, file?.id])
+  }, [storedDoc, unreadable, file?.id, paletteSettled])
 
   const hostRef = useRef<HTMLDivElement>(null)
   const groupRef = useRef<ImperativePanelGroupHandle>(null)
@@ -498,21 +540,6 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
     [file, updateBlocks]
   )
 
-  // The part- and plugin-contributed palette (#1017). Registered here rather
-  // than in the canvas because the canvas is lazily loaded and re-mounts on a
-  // view-mode change, and re-running a Python host round-trip for a layout
-  // change would be absurd.
-  const { dialect } = useHelpDialect()
-  const { nonce: partsNonce, partFor } = useDynamicBlocks(currentFolder)
-  // And the modules this program imports (#1048). Keyed on the DOCUMENT's code
-  // rather than the draft, so a half-typed `import ss` does not register a
-  // drawer and then take it away again a keystroke later.
-  const modulesNonce = useModuleBlocks(doc?.code ?? '', dialect, currentFolder, file?.path ?? null)
-  const paletteNonce = partsNonce + modulesNonce
-  // The palette grew, so the blocks the footer named may exist now (#1252) —
-  // give the learner's own arrangement another go. If they still don't, the
-  // canvas says so again and we are back to the Python within a frame.
-  useEffect(() => setUnreadable(null), [paletteNonce])
   // The parts whose blocks are on the canvas right now — the driver banner's
   // input. Empty until the canvas reports, which is also the state on a file
   // with no part blocks in it, so the banner simply never appears.
@@ -579,7 +606,8 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   // Advanced blocks on the canvas, advanced drawers off (#1212) — see above.
   // The canvas could not build the footer's blocks, so what is on it was read
   // back from the file's Python (#1252) — worth one quiet line.
-  const fellBackToPython = unreadable?.fileId === file.id && unreadable.types.length > 0
+  const fellBackToPython =
+    paletteSettled && unreadable?.fileId === file.id && unreadable.types.length > 0
 
   const offerAdvanced =
     blockLevel === 'simple' &&
