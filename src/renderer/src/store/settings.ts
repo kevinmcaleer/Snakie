@@ -21,14 +21,16 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useState,
   type ReactNode
 } from 'react'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { DEFAULT_EDITOR_THEME, editorThemeFor } from './editorThemes'
 import type { DialectPreference } from '../../../shared/dialect-api'
 import { DEFAULT_BLOCK_SHAPE, type BlockShape } from '../lib/blocks/theme'
+import type { BlockLevel } from '../lib/blocks/registry'
 
-export type { BlockShape }
+export type { BlockShape, BlockLevel }
 
 /** How the notebook paper is drawn behind the editor. */
 export type EditorPaper = 'lines' | 'dots' | 'off'
@@ -65,6 +67,13 @@ export interface SettingsStore {
    */
   blockShape: BlockShape
   /**
+   * Which blocks the toolbox offers (#1210, epic #1206): `simple` keeps the
+   * beginner's drawers, `advanced` adds classes, `try`, comprehensions, bitwise
+   * maths and the grey escape hatch. See `BlockDefinition.level`. A change
+   * re-filters the open canvas's toolbox in place; the program is untouched.
+   */
+  blockLevel: BlockLevel
+  /**
    * Which Python the help pages and editor completions should teach (#763).
    * `'auto'` (the default) follows the connected board; the explicit values are
    * the override for reading before anything is plugged in.
@@ -87,6 +96,8 @@ export interface SettingsStore {
   setHelpDialect: (pref: DialectPreference) => void
   /** Set the shape the block canvas draws its blocks in. */
   setBlockShape: (shape: BlockShape) => void
+  /** Show only the simple blocks, or all of them (#1210). */
+  setBlockLevel: (level: BlockLevel) => void
 }
 
 const SettingsContext = createContext<SettingsStore | null>(null)
@@ -114,6 +125,60 @@ export function storedBlockShape(): BlockShape {
   } catch {
     return DEFAULT_BLOCK_SHAPE
   }
+}
+
+/** Where the chosen block level is persisted (#1210). */
+export const BLOCK_LEVEL_KEY = 'snakie.blocks.level'
+
+/**
+ * The block level a profile starts on when it has never chosen one (#1210).
+ *
+ * `simple` for a FRESH profile — the toggle exists for beginners, and a first
+ * run that opens on a `class` drawer is the case it exists to prevent. But
+ * `advanced` for an EXISTING one: everybody who used Snakie before this setting
+ * had every drawer, and a release that quietly took half of them away would be
+ * read as a regression, not a curriculum. "Existing" is any `snakie.*` key in
+ * storage — a profile that has never saved a preference has never opened the
+ * app for long enough to miss anything.
+ */
+export function defaultBlockLevel(
+  storage: Pick<Storage, 'length' | 'key'> = window.localStorage
+): BlockLevel {
+  try {
+    for (let i = 0; i < storage.length; i++) {
+      const key = storage.key(i)
+      if (key !== null && key.startsWith('snakie.')) return 'advanced'
+    }
+  } catch {
+    // Unavailable storage is a fresh profile as far as anyone can tell.
+  }
+  return 'simple'
+}
+
+/**
+ * The stored level, or the default DECIDED AND WRITTEN DOWN (#1210).
+ *
+ * Written, because `useLocalStorage` never persists a default, and this one
+ * is not stable: a fresh profile is `simple` today and — after any other
+ * preference is saved — would read as "existing", and so `advanced`, at the
+ * next launch. A learner whose drawers changed because they resized a panel
+ * would be right to call that a bug. So the first answer is the answer.
+ */
+export function initialBlockLevel(): BlockLevel {
+  try {
+    const raw = window.localStorage.getItem(BLOCK_LEVEL_KEY)
+    const stored = raw === null ? null : (JSON.parse(raw) as BlockLevel)
+    if (stored === 'simple' || stored === 'advanced') return stored
+  } catch {
+    // Fall through to deciding afresh.
+  }
+  const level = defaultBlockLevel()
+  try {
+    window.localStorage.setItem(BLOCK_LEVEL_KEY, JSON.stringify(level))
+  } catch {
+    // Storage unavailable: the same default will be decided again next time.
+  }
+  return level
 }
 
 /** Clamp a spacing value to the supported range, rounding to whole px. */
@@ -151,6 +216,11 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
     BLOCK_SHAPE_KEY,
     DEFAULT_BLOCK_SHAPE
   )
+  // Decided once, on the first render, and persisted by `initialBlockLevel`
+  // itself — see its comment for why a default that is not written down would
+  // drift.
+  const [startLevel] = useState(initialBlockLevel)
+  const [blockLevel, setBlockLevel] = useLocalStorage<BlockLevel>(BLOCK_LEVEL_KEY, startLevel)
 
   // Apply the paper mode + spacing to the document root so the CSS ruled paper
   // and Monaco's line height both follow the same source of truth.
@@ -213,6 +283,7 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
       showTips,
       helpDialect,
       blockShape,
+      blockLevel,
       setPaper,
       setLineSpacing: (px: number) => setLineSpacingRaw(clampSpacing(px)),
       setEditorTheme,
@@ -221,7 +292,8 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
       setBreadboardBg,
       setShowTips,
       setHelpDialect,
-      setBlockShape
+      setBlockShape,
+      setBlockLevel
     }),
     [
       paper,
@@ -233,6 +305,7 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
       showTips,
       helpDialect,
       blockShape,
+      blockLevel,
       setPaper,
       setLineSpacingRaw,
       setEditorTheme,
@@ -241,7 +314,8 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
       setBreadboardBg,
       setShowTips,
       setHelpDialect,
-      setBlockShape
+      setBlockShape,
+      setBlockLevel
     ]
   )
 

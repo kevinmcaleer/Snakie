@@ -57,7 +57,7 @@ import { installVariablesDrawer } from '../lib/blocks/variables-drawer'
 import { installDuplicateShortcut } from '../lib/blocks/duplicate'
 import type { Dialect } from '../../../shared/dialect'
 import { useHelpDialect } from '../hooks/useHelpDialect'
-import { useEditorSettings } from '../store/settings'
+import { useEditorSettings, type BlockLevel } from '../store/settings'
 import { isStaleDeselect, putOutHighlight } from '../lib/blocks/highlight'
 import type { BlocksWorkspace } from '../../../shared/blocks-doc'
 import './BlocksCanvas.css'
@@ -366,7 +366,14 @@ export function BlocksCanvas({
   // Read here rather than passed down: it is a preference, not a property of
   // the document, and every caller of this component would just be forwarding
   // it.
-  const { blockShape } = useEditorSettings()
+  const { blockShape, blockLevel } = useEditorSettings()
+  /**
+   * Simple or advanced drawers (#1210) — a REF for the injection, like the
+   * dialect below, and a dependency of the rebuild effect, so a flip in
+   * Settings re-filters the toolbox of a canvas that is already open.
+   */
+  const blockLevelRef = useRef(blockLevel)
+  blockLevelRef.current = blockLevel
   /**
    * A REF as well, because the injection below must read the dialect WITHOUT
    * depending on it: re-injecting on a dialect change would tear the workspace
@@ -377,6 +384,8 @@ export function BlocksCanvas({
   dialectRef.current = dialect
   /** The dialect the toolbox ON SCREEN was built for, so it isn't rebuilt twice. */
   const toolboxDialectRef = useRef<Dialect | null>(null)
+  /** And the level it was built for (#1210), for the same reason. */
+  const toolboxLevelRef = useRef<BlockLevel | null>(null)
 
   const prompt = usePrompt()
 
@@ -419,7 +428,7 @@ export function BlocksCanvas({
     const tokens = readThemeTokens(document.documentElement)
     const ws = Blockly.inject(host, {
       ...softShellWorkspaceOptions(tokens, blockShape),
-      toolbox: buildToolbox(dialectRef.current),
+      toolbox: buildToolbox(dialectRef.current, blockLevelRef.current),
       theme: Blockly.Theme.defineTheme(
         'snakie-soft-shell',
         buildSoftShellTheme(tokens) as BlocklyThemeInput
@@ -431,6 +440,7 @@ export function BlocksCanvas({
     // cleanup below, because reading a disposed workspace is a crash.
     const unregisterWorkspace = registerBlocksWorkspace(ws)
     toolboxDialectRef.current = dialectRef.current
+    toolboxLevelRef.current = blockLevelRef.current
 
     // Blockly's "reset zoom" control becomes the fit/100% toggle (#1150). After
     // injection, because it works on the control Blockly has just drawn.
@@ -790,15 +800,21 @@ export function BlocksCanvas({
     if (!ws || peek || blocked) return
     // Nonce 0 with the dialect unchanged is the first pass, whose toolbox the
     // injection above already built.
-    if (paletteNonce === 0 && toolboxDialectRef.current === dialect) return
+    if (
+      paletteNonce === 0 &&
+      toolboxDialectRef.current === dialect &&
+      toolboxLevelRef.current === blockLevel
+    )
+      return
     try {
       installBlockDefinitions()
-      ws.updateToolbox(buildToolbox(dialect))
+      ws.updateToolbox(buildToolbox(dialect, blockLevel))
       toolboxDialectRef.current = dialect
+      toolboxLevelRef.current = blockLevel
     } catch (err) {
       console.warn('[blocks] could not rebuild the toolbox', err)
     }
-  }, [paletteNonce, dialect, peek, blocked])
+  }, [paletteNonce, dialect, blockLevel, peek, blocked])
 
   // Load the document. Keyed on the FILE — and on `reloadNonce`, which is the
   // one case where the outside is ahead of the canvas (#1034: the learner typed

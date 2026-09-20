@@ -8,6 +8,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Simple and advanced blocks (#1209, #1210, epic #1206).** Every block now
+  declares a level, and a new **Settings ▸ Appearance ▸ Advanced blocks**
+  switch decides whether the toolbox offers the advanced ones — classes, `try`,
+  `with` and files, comprehensions, slices, bitwise and base-N maths, `global`,
+  `del` and the grey Python escape hatches. A fresh profile starts simple; a
+  profile that used Snakie before keeps every drawer. The switch filters the
+  toolbox only: a program that uses advanced blocks still opens, renders and
+  generates with them off, and a drawer it empties says why instead of going
+  blank. Parts and plugin blocks are unaffected for now (#1213).
+
 - **The Modules shelf shows what is actually there.** A new DETECTED section
   above the catalog lists every `.py` file at the top of the open folder and in
   the board's `/` and `/lib`, and unfolds each one into the classes (with their

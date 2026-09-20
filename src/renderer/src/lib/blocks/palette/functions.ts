@@ -229,6 +229,7 @@ export const FUNCTION_BLOCKS: BlockDefinition[] = [
     // A VALUE BLOCK, so it goes in the object socket of a `call` block and
     // reads as what it is: *call (__init__) on (the class this is built on)*.
     type: 'snakie_super',
+    level: 'advanced',
     category: 'functions',
     help: 'ref-classes',
     read: { fn: 'super', args: [], shape: 'value' },

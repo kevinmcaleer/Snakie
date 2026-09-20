@@ -189,8 +189,16 @@ function AppearanceTab({
   theme: Theme
   setTheme: (t: Theme) => void
 }): JSX.Element {
-  const { breadboardBg, setBreadboardBg, showTips, setShowTips, blockShape, setBlockShape } =
-    useEditorSettings()
+  const {
+    breadboardBg,
+    setBreadboardBg,
+    showTips,
+    setShowTips,
+    blockShape,
+    setBlockShape,
+    blockLevel,
+    setBlockLevel
+  } = useEditorSettings()
   return (
     <>
       <section className="settings-section">
@@ -256,6 +264,24 @@ function AppearanceTab({
             </button>
           ))}
         </div>
+      </section>
+
+      <section className="settings-section">
+        <h3 className="settings-section__title">Advanced blocks</h3>
+        <p className="settings-section__hint">
+          The Blocks toolbox starts with the beginner&rsquo;s drawers. Switch this on to add
+          classes, <code>try</code>, comprehensions, slices, bitwise maths, files and the grey
+          Python blocks. A program that already uses them opens and runs either way &mdash; this
+          only changes what the toolbox offers.
+        </p>
+        <label className="settings-check">
+          <input
+            type="checkbox"
+            checked={blockLevel === 'advanced'}
+            onChange={(e) => setBlockLevel(e.target.checked ? 'advanced' : 'simple')}
+          />
+          Show advanced blocks
+        </label>
       </section>
 
       <section className="settings-section">
