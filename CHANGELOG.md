@@ -41,6 +41,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `classmethod` dropdown is read as a list of one, so a workspace saved before
   this opens unchanged. Edited from the block’s **Function settings…** dialog (#1218).
 
+  this opens unchanged. No editing UI yet (#1217).
+- **"Show advanced blocks" in the toolbox, and a marker on the advanced ones
+  (#1211, epic #1206).** A small switch sits at the bottom of the block canvas's
+  toolbox column, so the advanced blocks can be turned on where the question is
+  asked rather than three menus away; it reads and writes the same
+  `snakie.blocks.level` preference as Settings ▸ Appearance ▸ Advanced blocks,
+  so the two are never out of step. With them on, each drawer gathers its
+  advanced blocks behind a quiet **Advanced** heading, so a learner can still see
+  which ones are the extras.
+- **A class arrives with its `__init__`, and a block that creates one (#1224,
+  epic #1206).** Dragging a **class** out of the drawer now brings a
+  `def __init__(self):` with it — the first line every class needs, and the one
+  nothing in the drawer used to hint at. A class read back from a file is
+  untouched, because the constructor is what the *flyout* hands out. Beside it,
+  a new **create ⟨Class⟩ with …** block writes `robot = Robot("Bob", speed=3)`:
+  the class name is a menu of the classes this program defines (with a text box
+  for one it does not), and the arguments are the call block's own growable row,
+  keyword-name boxes and all. Opening a program reads `Robot(…)` back into the
+  block wherever `Robot` is a class in the same file, and writes it out again
+  byte for byte. Both are advanced blocks.
 - **A property block (#1222, epic #1206).** The Classes shelf has a new
   advanced `property` block: it writes `@property def name(self)`, and ticking
   **can be set too** adds the `@name.setter` half underneath, with the new
