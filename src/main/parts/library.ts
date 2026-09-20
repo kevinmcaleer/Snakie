@@ -167,15 +167,20 @@ async function hashInstalledParts(dir: string): Promise<Record<string, string>> 
  * New parts are copied in; parts untouched since we seeded them are refreshed to
  * the newer bundle; user-edited (or unknown-origin) parts keep their content but
  * gain any top-level fields the bundle added (e.g. a board's `footprint`) — so
- * board seating works for installs that predate those fields. Gated on the bundled
- * `library.yml` version so the per-part hashing only runs when the bundle changes.
+ * board seating works for installs that predate those fields.
+ *
+ * Deliberately NOT gated on the bundled `library.yml` version any more. That gate
+ * made the whole reconcile conditional on someone remembering to bump a number in
+ * a file they had no reason to touch: the TT motor gained `model.stl` and a `mesh:`
+ * key in 0.85.4 while `library.yml` stayed at 1.15.0, so every install that already
+ * had the part took the "up to date" fast path — which only copies wholly-NEW part
+ * folders — and the motor kept rendering as a footprint box in the Build workspace
+ * for good. Hashing ~60 small YAMLs at seed time is cheap; a silently stale library
+ * is not.
  */
 async function syncBundledLibrary(src: string, dest: string): Promise<void> {
   const bundleVersion = await readBundleVersion(src)
   const manifest = await readSeedManifest(dest)
-  // Fast path: this install already tracks the current bundle version — only pull
-  // in wholly-new part folders (matches the historical additive behaviour).
-  const upToDate = !!bundleVersion && manifest?.version === bundleVersion
 
   let entries: Dirent[]
   try {
@@ -185,7 +190,9 @@ async function syncBundledLibrary(src: string, dest: string): Promise<void> {
   }
 
   const hashes: Record<string, string> = { ...(manifest?.parts ?? {}) }
-  let dirty = manifest === null
+  // Re-stamp the manifest when the bundle's declared version moved, even if no part
+  // changed, so it keeps tracking the installed bundle.
+  let dirty = manifest === null || (!!bundleVersion && manifest.version !== bundleVersion)
 
   for (const e of entries) {
     if (!e.isDirectory()) continue
@@ -195,15 +202,6 @@ async function syncBundledLibrary(src: string, dest: string): Promise<void> {
     if (bundleYml === null) continue // not a part folder
     const destPart = join(dest, folder)
     const localYml = existsSync(destPart) ? await readTextOrNull(join(destPart, 'parts.yml')) : null
-
-    if (upToDate) {
-      if (localYml === null && !existsSync(destPart)) {
-        await fsp.cp(srcPart, destPart, { recursive: true }).catch(reporter('parts: seed copy-new'))
-        hashes[folder] = hashText(bundleYml)
-        dirty = true
-      }
-      continue
-    }
 
     const action = planPartSync({
       existsLocal: localYml !== null,

@@ -22,6 +22,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The Yellow TT Motor (and any other updated Standard part) now actually
+  reaches your install.** The motor gained `model.stl` and a `mesh:` key in
+  0.85.4, but `library.yml` stayed at version 1.15.0 — and the seeder's
+  reconcile was gated on that version, taking an "already up to date" fast path
+  that only copies wholly-NEW part folders. Every install that had already
+  seeded `tt-motor` therefore kept the meshless copy, so the Build workspace
+  drew a footprint box instead of the motor, with no way to tell why. The gate
+  is gone: the per-part reconcile (refresh what is untouched, backfill what you
+  have edited, copy in the files a backfilled key names) now runs on every
+  launch, so a changed part no longer depends on someone remembering to bump a
+  number in a file they had no reason to touch. The bundled library version is
+  bumped to 1.16.0 as well.
 - **A refused Part Editor save now offers the way out.** (#750) When a save is
   refused because the part's `parts.yml` changed on disk since it was opened,
   the notice no longer flashes "close the editor and reopen the part" and fades
