@@ -203,6 +203,22 @@ export const BOARD_PROFILES: BoardProfile[] = [
     notes: 'Hold BOOTSEL while plugging in, so the RP2350 drive appears.'
   },
   {
+    // Cytron's own page states the board carries the same RP2040, the same
+    // 264 KB of RAM and the same 2 MB of flash as a Pico, and names MicroPython
+    // for the Pico as a supported way to use it — so the generic Pico build is
+    // the right one and the mechanics are a Pico's. Its BOOT button is on the
+    // board rather than the module, which is the only thing that differs in
+    // practice, so the note says where to press.
+    id: 'cytron-maker-pi-rp2040',
+    vendor: 'Cytron',
+    model: 'Maker Pi RP2040',
+    label: 'Cytron Maker Pi RP2040',
+    ...RP2,
+    circuitPythonBoardId: 'cytron_maker_pi_rp2040',
+    notes:
+      'Hold the BOOT button while plugging in (or while tapping RESET), so the RPI-RP2 drive appears. The board ships with CircuitPython on it, so flashing MicroPython replaces what is already there.'
+  },
+  {
     id: 'esp32-devkit',
     vendor: 'Espressif',
     model: 'ESP32 DevKit',

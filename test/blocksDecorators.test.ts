@@ -163,7 +163,12 @@ describe('the method block’s decorators', () => {
   it('still writes the migrated dropdown value', () => {
     const { ws, block } = method()
     block.setFieldValue('classmethod', 'DECORATOR')
-    expect(generateProgram(ws).code).toContain('@classmethod\ndef speed(self):')
+    // `cls` RATHER THAN `self`, since B2 (#1221) rebuilt the block: the lead
+    // follows the setting in front of it, so a learner who picks `class method`
+    // off the dropdown does not then have to go and edit the first parameter by
+    // hand. The decorator line itself is what this test is about, and it is
+    // still the one the migrated dropdown value asks for.
+    expect(generateProgram(ws).code).toContain('@classmethod\ndef speed(cls):')
   })
 
   it('survives a round trip, dropdown and list alike', () => {

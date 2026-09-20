@@ -8,6 +8,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The reader keeps the decorators on a `def` (#1216, epic #1206).** Opening a
+  file, one or more `@…` lines above a `def` or `async def` — at the top level
+  or in a class body — now become the method block's decorator list instead of
+  grey Python blocks. The text after the `@` is taken verbatim to the end of the
+  line, so a dotted name (`@micropython.native`), a decorator called with
+  arguments and a bracket inside a string (`@app.route("/(a)")`) and a stack of
+  several are all read the same way, and a comment between a decorator and its
+  `def` no longer separates them. `@property` and `@x.setter` still read as two
+  methods with one decorator each; the single property block is #1222.
+
 - **Decorators on function and method blocks (#1215, epic #1206).** The two
   `def` blocks and the method block now carry an ordered list of decorators in
   their mutation, written out as `@…` lines immediately above the `def` —
@@ -27,6 +37,54 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   block rather than sitting beside it, and that the gear for adding one follows
   in a later release.
 
+- **The method block, rebuilt around a real parameter list (#1221, epic
+  #1206).** `def` inside a class took its whole signature as one box of text
+  you had to already know Python to fill in — including `self`, which was
+  editable, and renaming it there left every `self.` block in the body meaning
+  nothing. The block now has one field per parameter with `+`/`−` at the end of
+  the row, `self` printed on the block itself rather than in a box, and the
+  same **extra parameters** row the `def` blocks have had for defaults, `*args`
+  and `**kwargs` — one mechanism for both, not two. `self` follows the setting
+  in front of it: a **static method** shows none and a **class method** shows
+  `cls`. With that in place the block joins `class`, `self` and `super()` on
+  the **Functions ▸ Classes** shelf, where it had been held back. Workspaces
+  saved before this open unchanged — the old signature is split into the new
+  fields on load and writes exactly the Python it wrote before, down to a
+  trailing comma.
+
+- **A module's object is a variable you name** (epic #1007). Module blocks used to carry the
+  object in a socket, so the constructor — pins and all — was repeated inside
+  every call that used it: *distance of (the RangeFinder (0) (1))*. Now a class
+  gives you `make [ping] a RangeFinder  echo_pin (0)  trigger_pin (1)`, which
+  writes `ping = RangeFinder(echo_pin=0, trigger_pin=1)` on a line of its own,
+  and every other block on that class takes the name from a dropdown of your
+  variables. Rename `ping` on the canvas and the declaration and every use of it
+  move together.
+- **One block for everything a class can be asked.** `[ping] 's [distance() ▾]`
+  is a single value block whose menu lists every `@property`, every `__init__`
+  attribute and every method that takes nothing and returns something — with the
+  brackets shown in the menu, so `distance()` and `unit` are visibly different
+  kinds of thing. Its twin, `set [ping] 's [unit ▾] to ( )`, offers only the
+  members that can actually be assigned to. Methods that take arguments keep
+  their own blocks. Opening a sensor program now brings the whole thing back as
+  blocks, the `ping = RangeFinder(…)` line included — that line used to be the
+  one grey block left in the file.
+- **A Classes drawer (#1220, epic #1206).** The `class` and `self` blocks were
+  registered and read back but in no drawer; `super()` was in a category whose
+  flyout could not show it. All three are now on a **Functions ▸ Classes**
+  shelf, marked advanced — so they are there for a learner who has turned
+  **Advanced blocks** on and absent for one who has not — with a line at the
+  top of the shelf saying what it is for. The class block's brackets are
+  unchanged: the base classes are typed as they are written, `(Base, Mixin)`.
+  The Functions drawer now shows the blocks the registry puts in it (`return`,
+  `super()`, the new shelf) after Blockly's own `def` blocks and the caller for
+  each function you have written, instead of only the latter.
+- **The Cytron Maker Pi RP2040 is in the flasher's board list.** It was in the
+  Board Finder gallery but not among the boards you can pick in the MicroPython
+  flasher, because MicroPython publishes no build under its name and the model
+  list comes from upstream's catalog. It now has a board profile of its own —
+  flashed as a UF2 like a Pico, with its own CircuitPython board id and a note
+  about holding BOOT for the RPI-RP2 drive.
 - **Simple and advanced blocks (#1209, #1210, epic #1206).** Every block now
   declares a level, and a new **Settings ▸ Appearance ▸ Advanced blocks**
   switch decides whether the toolbox offers the advanced ones — classes, `try`,
@@ -35,7 +93,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   profile that used Snakie before keeps every drawer. The switch filters the
   toolbox only: a program that uses advanced blocks still opens, renders and
   generates with them off, and a drawer it empties says why instead of going
-  blank. Parts and plugin blocks are unaffected for now (#1213).
+  blank.
+
+- **`level:` in `blocks.yml` (#1213, epic #1206).** A part or plugin block can
+  now declare `level: simple` (the default) or `level: advanced`, and it lands
+  in the same toolbox filter the built-in blocks use: an advanced part block is
+  only offered while the advanced switch is on, and a part or plugin drawer
+  whose every block is advanced disappears with them. It filters the toolbox
+  only — a program already using the block still opens, renders and generates.
+  Python plugins pass `level=` to `snakie.block()`; the key is documented in
+  `docs/writing-plugins.md`.
 
 - **A `print` block that understands f-strings.** The Text drawer has a new
   `print f"…"` block: type the text with a `{}` wherever a value goes —

@@ -6,7 +6,11 @@ import {
   installBlockDefinitions,
   resetBlockRegistry
 } from '../src/renderer/src/lib/blocks/registry'
-import { buildToolbox, VARIABLES_CATEGORY_CALLBACK } from '../src/renderer/src/lib/blocks/toolbox'
+import {
+  FUNCTIONS_CATEGORY_CALLBACK,
+  buildToolbox,
+  VARIABLES_CATEGORY_CALLBACK
+} from '../src/renderer/src/lib/blocks/toolbox'
 import {
   CREATE_VARIABLE_BUTTON,
   variablesFlyout
@@ -78,7 +82,9 @@ describe('every variable the learner made is on the shelf (#1117)', () => {
     const set = items.find((i) => i.type === 'variables_set')
     expect(set?.inputs).toEqual({ VALUE: { shadow: { type: 'math_number', fields: { NUM: 0 } } } })
     const change = items.find((i) => i.type === 'math_change')
-    expect(change?.inputs).toEqual({ DELTA: { shadow: { type: 'math_number', fields: { NUM: 1 } } } })
+    expect(change?.inputs).toEqual({
+      DELTA: { shadow: { type: 'math_number', fields: { NUM: 1 } } }
+    })
   })
 
   it('never lists the same shape twice — the nameless originals stand down', () => {
@@ -145,9 +151,11 @@ describe('the drawer is wired to the category (#1117)', () => {
     expect(variables?.contents).toBeUndefined()
   })
 
-  it('and Functions still has its own, untouched', () => {
+  it('and Functions has one of its own (#1220 — ours now, wrapping Blockly’s)', () => {
     const toolbox = buildToolbox('micropython') as { contents: { name: string; custom?: string }[] }
-    expect(toolbox.contents.find((c) => c.name === 'Functions')?.custom).toBe('PROCEDURE')
+    expect(toolbox.contents.find((c) => c.name === 'Functions')?.custom).toBe(
+      FUNCTIONS_CATEGORY_CALLBACK
+    )
   })
 
   it('every other category is still the curated list', () => {
