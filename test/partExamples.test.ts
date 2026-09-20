@@ -220,7 +220,15 @@ describe('a placed Grove part asks for its driver (#638)', () => {
   // The gap this closes: adding the Grove IMU to a project prompted nothing, and
   // running the code failed with a bare `ImportError: no module named 'lsm6ds3'`.
   // Both notifications key off fields the part simply didn't have.
-  const grove = ['grove-6axis-lsm6ds3', 'grove-i2c-motor-tb6612', 'grove-ultrasonic-ranger', 'grove-led-bar']
+  // The plain HC-SR04 had the same gap: the Grove ranger prompted for its driver
+  // and the bare four-pin sensor beside it prompted for nothing.
+  const grove = [
+    'grove-6axis-lsm6ds3',
+    'grove-i2c-motor-tb6612',
+    'grove-ultrasonic-ranger',
+    'grove-led-bar',
+    'hc-sr04'
+  ]
 
   it.each(grove)('%s declares the module its code must import', (id) => {
     const part = partFromYaml(read('snakie-standard', id, 'parts.yml'))

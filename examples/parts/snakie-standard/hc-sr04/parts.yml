@@ -8,7 +8,7 @@ tags:
 package: THT
 pinSpacing: 2.54
 voltage: 3.3V
-version: 0.2.0
+version: 0.3.0
 pcbColor: "#0f5a2e"
 aspect: 0.5
 dimensions:
@@ -96,6 +96,17 @@ imageLayer:
   w: 1.3283409690856933
   h: 2.3701770232705512
 help: help.md
+# The `hcsr04` driver this part's code imports (#638). `library.module` is what
+# the "this file doesn't import…" / "your board is missing…" notices key off,
+# and `drivers` is what the Board View's install banner offers once the part is
+# placed — without both, adding the sensor prompted nothing and running the code
+# failed with a bare `ImportError: no module named 'hcsr04'`.
+library:
+  module: hcsr04
+drivers:
+  - source: module:hcsr04
+    target: lib/hcsr04.py
+    label: HC-SR04 ultrasonic driver
 mesh: model.stl
 meshUnits: mm
 meshOffset:
