@@ -199,6 +199,26 @@
   color: var(--text-muted);
 }
 
+/* The one thing a notice can offer to click (#750's "Reload from disk"). The
+   toast itself is pointer-events: none so it overlays the canvas; the button
+   opts back in. */
+.pe__status-action {
+  pointer-events: auto;
+  margin-left: 0.6rem;
+  padding: 0.15rem 0.55rem;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.pe__status-action:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
 /* --- Body --- */
 .pe__body {
   flex: 1 1 auto;

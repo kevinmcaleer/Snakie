@@ -22,6 +22,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A refused Part Editor save now offers the way out.** (#750) When a save is
+  refused because the part's `parts.yml` changed on disk since it was opened,
+  the notice no longer flashes "close the editor and reopen the part" and fades
+  out eight seconds later. It stays up and carries a **Reload from disk**
+  button, which re-reads the part as it is now on disk into the editor (with a
+  fresh read stamp, so the next save is accepted) and says to re-apply the
+  edit. The reload discards the unsaved edits by design: they were made against
+  a copy of the file that no longer exists. Closes the loop on #750, whose
+  writer-side guards (stamp-and-check, prune only what the part authored, a
+  mirror that never deletes and never reverts a newer file) shipped in 0.46.0.
 - **"Upgrade to mesh" in the Electronics ⇄ Build sync dialog looked dead.** When
   a Standard-library part gained a 3-D model (the TT motor in 0.85.4), an
   install whose copy of that part had been edited was backfilled with the new
