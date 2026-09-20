@@ -48,6 +48,13 @@ describe('board profiles', () => {
     }
   })
 
+  it('covers the Cytron Maker Pi RP2040, which Thonny\'s catalog does not list', () => {
+    const b = boardProfile('cytron-maker-pi-rp2040')!
+    expect(b.chipFamily).toBe('rp2')
+    expect(b.method).toBe('uf2')
+    expect(b.circuitPythonBoardId).toBe('cytron_maker_pi_rp2040')
+  })
+
   it('flags the native-USB boards, whose port changes after a flash', () => {
     expect(boardProfile('xiao-esp32s3')!.nativeUsb).toBe(true)
     expect(boardProfile('esp8266')!.nativeUsb).toBeUndefined()

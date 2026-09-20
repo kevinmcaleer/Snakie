@@ -20,6 +20,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   block wherever `Robot` is a class in the same file, and writes it out again
   byte for byte. Both are advanced blocks.
 
+- **A Classes drawer (#1220, epic #1206).** The `class` and `self` blocks were
+  registered and read back but in no drawer; `super()` was in a category whose
+  flyout could not show it. All three are now on a **Functions ▸ Classes**
+  shelf, marked advanced — so they are there for a learner who has turned
+  **Advanced blocks** on and absent for one who has not — with a line at the
+  top of the shelf saying what it is for. The class block's brackets are
+  unchanged: the base classes are typed as they are written, `(Base, Mixin)`.
+  The Functions drawer now shows the blocks the registry puts in it (`return`,
+  `super()`, the new shelf) after Blockly's own `def` blocks and the caller for
+  each function you have written, instead of only the latter.
+
+- **The Cytron Maker Pi RP2040 is in the flasher's board list.** It was in the
+  Board Finder gallery but not among the boards you can pick in the MicroPython
+  flasher, because MicroPython publishes no build under its name and the model
+  list comes from upstream's catalog. It now has a board profile of its own —
+  flashed as a UF2 like a Pico, with its own CircuitPython board id and a note
+  about holding BOOT for the RPI-RP2 drive.
 - **Simple and advanced blocks (#1209, #1210, epic #1206).** Every block now
   declares a level, and a new **Settings ▸ Appearance ▸ Advanced blocks**
   switch decides whether the toolbox offers the advanced ones — classes, `try`,
@@ -28,7 +45,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   profile that used Snakie before keeps every drawer. The switch filters the
   toolbox only: a program that uses advanced blocks still opens, renders and
   generates with them off, and a drawer it empties says why instead of going
-  blank. Parts and plugin blocks are unaffected for now (#1213).
+  blank.
+
+- **`level:` in `blocks.yml` (#1213, epic #1206).** A part or plugin block can
+  now declare `level: simple` (the default) or `level: advanced`, and it lands
+  in the same toolbox filter the built-in blocks use: an advanced part block is
+  only offered while the advanced switch is on, and a part or plugin drawer
+  whose every block is advanced disappears with them. It filters the toolbox
+  only — a program already using the block still opens, renders and generates.
+  Python plugins pass `level=` to `snakie.block()`; the key is documented in
+  `docs/writing-plugins.md`.
 
 - **A `print` block that understands f-strings.** The Text drawer has a new
   `print f"…"` block: type the text with a `{}` wherever a value goes —

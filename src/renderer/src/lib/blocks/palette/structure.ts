@@ -70,6 +70,28 @@ function nameOf(block: Blockly.Block, field: string, fallback: string): string {
  */
 const WHEN_WRONG: BlockGroup = { id: 'when-wrong', name: 'When things go wrong' }
 
+/**
+ * The Functions sub-drawer classes live in (#1220, epic #1206).
+ *
+ * EPIC #1206's OPEN QUESTION 2, ANSWERED: a shelf inside Functions rather than a
+ * top-level `classes` category with a colour of its own. A class is a named
+ * group of steps with a name in front of it — the same idea Functions is
+ * already about — and a tenth top-level category, one a simple-mode learner
+ * would never see open, is a bigger claim on the toolbox than three blocks
+ * earn. The shelf is also the cheap decision: promoting it later is a category
+ * entry and a token, and nothing a saved workspace can notice.
+ *
+ * THE HINT is the drawer's own sentence, because three blocks and no verbs
+ * reads like a drawer somebody forgot to finish. It says what the shelf is FOR
+ * rather than listing what is on it, which is the job the `My parts` and
+ * `Plugins` hints already do one level up.
+ */
+export const CLASSES: BlockGroup = {
+  id: 'classes',
+  name: 'Classes',
+  hint: 'A class is a kind of thing. Build one here, and use `self` inside it for the particular one a method was called on.'
+}
+
 /** A statement input's body, or `pass` — an empty suite is a syntax error. */
 function body(block: Blockly.Block, gen: MicroPythonGenerator): string {
   return gen.statementToCode(block, 'BODY') || `${gen.INDENT}pass\n`
@@ -84,10 +106,17 @@ export const NEW_INSTANCE = 'snakie_new_instance'
 export const STRUCTURE_BLOCKS: BlockDefinition[] = [
   // --------------------------------------------------------------------- class
   {
+    // DRAGGABLE SINCE #1220 (epic #1206, track B). W6 registered it `hidden`,
+    // on §4.5's rule that the reader is comprehensive and the toolbox curated.
+    // The simple/advanced switch (#1209/#1210) is what makes the answer change:
+    // "not in a ten-year-old's first drawer" is now a tier rather than a
+    // deletion, so a class can be offered to the learner who has turned the
+    // advanced blocks on without ever appearing in front of the one who has not.
     type: 'snakie_class',
+    level: 'advanced',
     category: 'functions',
-    help: 'ref-functions',
-    hidden: true,
+    group: CLASSES,
+    help: 'ref-classes',
     json: {
       message0: 'class %1 %2',
       args0: [
@@ -198,10 +227,13 @@ export const STRUCTURE_BLOCKS: BlockDefinition[] = [
   },
   // ---------------------------------------------------------------------- self
   {
+    // DRAGGABLE SINCE #1220, beside the class block it belongs to: a class with
+    // no way to say `self` is a class whose methods cannot touch it.
     type: 'snakie_self',
+    level: 'advanced',
     category: 'functions',
-    help: 'ref-functions',
-    hidden: true,
+    group: CLASSES,
+    help: 'ref-classes',
     json: {
       message0: 'self',
       output: null,

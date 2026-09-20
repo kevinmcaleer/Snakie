@@ -401,6 +401,15 @@ export interface BlockGroup {
   id: string
   /** What the drawer is called: the part's or the plugin's name. */
   name: string
+  /**
+   * A sentence at the top of the drawer, for a shelf whose blocks do not
+   * explain themselves (#1220). The category-level {@link BlockCategory.hint}
+   * fills an EMPTY drawer; this one introduces a small one — three class
+   * blocks read as an unfinished drawer without a line saying what they are
+   * for. Most groups (a part's, a plugin's) are named after the thing they
+   * came from and need none.
+   */
+  hint?: string
 }
 
 const REGISTRY = new Map<string, BlockDefinition>()
