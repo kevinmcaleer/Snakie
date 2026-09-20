@@ -11,7 +11,9 @@ import {
   EXTRAS_FIELD,
   extrasText,
   extrasVisible,
+  getExtras,
   hasExtrasRow,
+  setExtras,
   setExtrasVisible
 } from '../params'
 
@@ -67,7 +69,7 @@ function signature(block: Blockly.Block, gen: MicroPythonGenerator): string {
   return [...declared, ...(extra === '' ? [] : [extra])].join(', ')
 }
 
-export { EXTRAS_FIELD, extrasVisible, hasExtrasRow, setExtrasVisible }
+export { EXTRAS_FIELD, extrasVisible, getExtras, hasExtrasRow, setExtras, setExtrasVisible }
 
 /**
  * DECORATORS, AS A LIST ON THE MUTATION (A1, #1215, epic #1206).
@@ -419,6 +421,10 @@ export const DECORATORS_EXTENSION = 'snakie_decorators'
 export function installDecoratorExtension(): void {
   if (Blockly.Extensions.isRegistered(DECORATORS_EXTENSION)) return
   Blockly.Extensions.registerMutator(DECORATORS_EXTENSION, {
+    // A marker the settings dialog can ask about (#1218). A block that took
+    // this mixin carries a decorator list, and there is nothing else to look
+    // at from the outside: the list itself is absent until an entry is added.
+    snakieDecoratorsMixin_: true,
     saveExtraState: function (this: Blockly.Block): object | null {
       const list = getDecorators(this)
       return list.length === 0 ? null : { [DECORATORS_KEY]: list }
@@ -428,6 +434,20 @@ export function installDecoratorExtension(): void {
       if (Array.isArray(list)) setDecorators(this, tidy(list))
     }
   })
+}
+
+/**
+ * Can this block hold decorators? (#1218)
+ *
+ * True for every block {@link installDecorators} has wrapped or that names
+ * {@link DECORATORS_EXTENSION} — the two `def` blocks and the method block —
+ * and false for everything else, which is what decides whether the settings
+ * dialog offers a decorators section at all.
+ */
+export function hasDecorators(block: Blockly.Block): boolean {
+  if ((block as unknown as { snakieDecoratorsMixin_?: boolean }).snakieDecoratorsMixin_) return true
+  const def = Blockly.Blocks[block.type] as unknown as SerialisingBlock | undefined
+  return def?.snakieDecoratorsInstalled_ === true
 }
 
 /** The four serialisation hooks, as they hang off a block definition. */
