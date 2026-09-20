@@ -38,6 +38,26 @@ import { parse, stringify } from 'yaml'
 export const BLOCKS_MANIFEST_VERSION = 1
 
 /**
+ * The two tiers a manifest block can sit in (#1213, epic #1206).
+ *
+ * The same word, and the same meaning, as `BlockDefinition.level` in the
+ * renderer's registry — spelled again here because this module is the shared
+ * language and knows nothing about Blockly. `manifest.ts` hands one straight to
+ * the other.
+ */
+export type ManifestBlockLevel = 'simple' | 'advanced'
+
+/** The level a block means when it says nothing. */
+export const DEFAULT_MANIFEST_BLOCK_LEVEL: ManifestBlockLevel = 'simple'
+
+const BLOCK_LEVELS: readonly ManifestBlockLevel[] = ['simple', 'advanced']
+
+/** Is this one of the two levels? */
+export function isManifestBlockLevel(value: unknown): value is ManifestBlockLevel {
+  return typeof value === 'string' && BLOCK_LEVELS.includes(value as ManifestBlockLevel)
+}
+
+/**
  * What one argument IS — which decides both the shape on the block and how its
  * value reaches the template.
  *
@@ -46,6 +66,13 @@ export const BLOCKS_MANIFEST_VERSION = 1
  * value is fixed and always present.
  *
  * `statements` is the C-shape — a body of blocks, rendered already indented.
+ *
+ * `variable` is a field too, and the one that names something rather than
+ * describing it: a dropdown of the workspace's own variables, which is how a
+ * block says *the object the learner made*. Its value reaches the
+ * template as the Python identifier that variable generates as — so the block
+ * that writes `ping = RangeFinder(...)` and the block that reads
+ * `ping.distance()` agree on the name without either of them holding it.
  */
 export type BlockArgKind =
   | 'number'
@@ -58,6 +85,7 @@ export type BlockArgKind =
   | 'choice'
   | 'toggle'
   | 'pin'
+  | 'variable'
 
 /** Sockets take a plugged block; fields hold their own value. */
 export const SOCKET_KINDS: readonly BlockArgKind[] = ['number', 'text', 'boolean', 'any', 'statements']
@@ -68,7 +96,8 @@ const ARG_KINDS: readonly BlockArgKind[] = [
   'text-field',
   'choice',
   'toggle',
-  'pin'
+  'pin',
+  'variable'
 ]
 
 /** One option in a `choice` dropdown. */
@@ -184,6 +213,19 @@ export interface ManifestBlock {
    * HIDDEN, never unregistered, so a program already using it still opens.
    */
   scope?: DialectScope
+  /**
+   * SIMPLE OR ADVANCED (#1213, epic #1206) — who the block is offered to.
+   *
+   * The toolbox's third filter, and the one a manifest author is best placed to
+   * set: a drawer full of a part's raw register writes belongs behind "Show
+   * advanced blocks", while its `read distance` block does not. Absent means
+   * `simple`, so an existing `blocks.yml` keeps every block it had.
+   *
+   * Like `scope`, it filters the FLYOUT and never the registry: a program using
+   * an advanced block still opens, renders and generates in simple mode. And a
+   * plugin or part drawer whose every block is advanced simply isn't built.
+   */
+  level?: ManifestBlockLevel
   /** An explicit block colour. Omit it and the block wears its category's. */
   colour?: string
   /** Lay the arguments out in a row rather than stacked. Defaults to true. */
@@ -301,6 +343,7 @@ const BLOCK_KEYS = new Set([
   'tooltip',
   'help',
   'scope',
+  'level',
   'colour',
   'color',
   'inline'
@@ -529,6 +572,16 @@ function coerceBlock(raw: unknown, index: number, warnings: string[]): ManifestB
       )
     }
   }
+  if (raw.level !== undefined) {
+    const level = String(raw.level).trim().toLowerCase()
+    if (isManifestBlockLevel(level)) {
+      // `simple` is the default, so recording it would only make the definition
+      // noisier without changing anything.
+      if (level !== DEFAULT_MANIFEST_BLOCK_LEVEL) block.level = level
+    } else {
+      warnings.push(`${named}: level must be one of simple, advanced — ignored`)
+    }
+  }
   const colour = raw.colour ?? raw.color
   if (typeof colour === 'string' && colour.trim()) block.colour = colour.trim()
   if (typeof raw.inline === 'boolean') block.inline = raw.inline
@@ -702,6 +755,7 @@ export function blocksManifestToYaml(manifest: BlocksManifest): string {
     if (b.tooltip !== undefined) block.tooltip = b.tooltip
     if (b.help !== undefined) block.help = b.help
     if (b.scope !== undefined) block.scope = b.scope
+    if (b.level !== undefined) block.level = b.level
     if (b.colour !== undefined) block.colour = b.colour
     if (b.inline !== undefined) block.inline = b.inline
     return block

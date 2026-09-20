@@ -7,6 +7,9 @@ import { ROOT_ORIGIN } from './arrange'
 import type { ArgField, CallReceiver, SocketType } from './registry'
 import { docstringComment } from './docstring'
 import { isReservedName, sanitise } from './names'
+// The signature splitters, shared with the blocks that hold a parameter list —
+// Blockly's two `def` blocks (#1134) and the method block B2 rebuilt (#1221).
+import { methodLead, splitMethodSignature, splitSignature } from './signature'
 import {
   isSuiteHeader,
   logicalLines,
@@ -338,6 +341,21 @@ export interface CallRule {
    */
   on?: string
   /**
+   * THE RECEIVER IS A VARIABLE FIELD ON THE BLOCK, and this names it.
+   *
+   * A module's object blocks hold their object in a `field_variable` rather
+   * than a socket — `[ping] 's [distance() ▾]`, not a socket with a
+   * constructor plugged into it — so there is nowhere to put a receiver BLOCK.
+   * What goes in is the variable itself, which means only a bare name can
+   * match: `ping.distance()` is this rule, and `sensors[0].distance()` is not,
+   * and a line that isn't stays raw rather than losing the part that says
+   * which object it meant.
+   *
+   * Mutually exclusive with {@link CallRule.on} — a rule holds its receiver one
+   * way or the other.
+   */
+  onField?: string
+  /**
    * This `on` rule claims a receiver the learner NAMED, and only that (#1097).
    *
    * `led.value(1)` and `pin_15.value(1)` are the same line twice over, and two
@@ -558,9 +576,66 @@ function ruleKey(rule: CallRule): string {
   // A method-on-any-object rule (W2) shares nothing with a bare call of the same
   // name — `xs.append(v)` and a hypothetical `append(v)` are different lines —
   // so the receiver socket is part of the identity too.
-  const receiver = rule.on ? `*${rule.on}` : (rule.receiver?.name ?? rule.module ?? '')
+  const receiver = rule.on
+    ? `*${rule.on}`
+    : rule.onField
+      ? `@${rule.onField}`
+      : (rule.receiver?.name ?? rule.module ?? '')
   const fields = rule.fields ? `:${Object.entries(rule.fields).sort().join(',')}` : ''
   return `${receiver}.${rule.fn}/${rule.shape ?? 'statement'}${fields}`
+}
+
+/**
+ * A BLOCK THAT READS SOMETHING OFF AN OBJECT.
+ *
+ * `ping.unit` is not a call, so no {@link CallRule} can describe it; and the
+ * block that writes it is one block with a dropdown, so reading it back means
+ * choosing on that dropdown rather than picking a type. Hence a rule of its own,
+ * keyed on the ATTRIBUTE NAME — the same authority a call rule has over a
+ * function name, and with the same consequence: a module that calls a property
+ * `unit` claims every `x.unit` in a program that imports it. That is how
+ * `xs.append(v)` has always worked here, and the alternative is knowing the
+ * types of a learner's variables, which this file deliberately does not.
+ */
+export interface MemberRule {
+  /** The attribute: `unit` in `ping.unit`. */
+  attr: string
+  /** The value block type to build. */
+  type: string
+  /** The variable field the object's name goes into. */
+  onField: string
+  /** Fields the block wears — the member dropdown, chiefly. */
+  fields?: Readonly<Record<string, string>>
+  /**
+   * The statement block that ASSIGNS to it, for a member that may be assigned
+   * to, and the socket its value goes in. Absent for a read-only `@property`,
+   * whose `ping.ready = True` stays raw because no block should offer to write
+   * a line that raises.
+   */
+  set?: { type: string; value: string }
+}
+
+/**
+ * A BLOCK THAT MAKES AN OBJECT AND NAMES IT.
+ *
+ * `ping = RangeFinder(echo_pin=0, trigger_pin=1)` — the line the issue opened
+ * with, and the one line of a sensor program that used to come back grey. It is
+ * an assignment whose value is a constructor call, which is two shapes at once
+ * and neither of them a call rule.
+ */
+export interface ConstructRule {
+  /** The class, as the line names it: `RangeFinder`. */
+  klass: string
+  /** The module it came from, so the block's import is the one already there. */
+  module: string
+  /** The statement block type to build. */
+  type: string
+  /** The variable field the name on the left goes into. */
+  nameField: string
+  /** Socket names for the positional arguments, in order. */
+  args?: readonly string[]
+  /** Keyword name → the socket it fills. `echo_pin=0` → `ECHO_PIN`. */
+  keywords?: Readonly<Record<string, string>>
 }
 
 /**
@@ -595,6 +670,45 @@ export function pruneDynamicCallRules(keep: ReadonlySet<string>, prefix: string)
   if (changed) publishRules()
 }
 
+/**
+ * The member and constructor rules of the dynamic block sets, same lifetime.
+ *
+ * Kept beside {@link DYNAMIC} and swept by the same prune, because they are
+ * halves of one registration: a module's blocks and everything that says how
+ * they read back arrive and leave together.
+ */
+const DYNAMIC_OBJECTS = new Map<string, { members: MemberRule[]; constructs: ConstructRule[] }>()
+
+/** Register (or replace) the object rules of one dynamic block set. */
+export function registerDynamicObjectRules(
+  source: string,
+  rules: { members: readonly MemberRule[]; constructs: readonly ConstructRule[] }
+): void {
+  DYNAMIC_OBJECTS.set(source, { members: [...rules.members], constructs: [...rules.constructs] })
+  publishRules()
+}
+
+/** Forget every dynamic object rule set under `prefix` whose source is not in `keep`. */
+export function pruneDynamicObjectRules(keep: ReadonlySet<string>, prefix: string): void {
+  let changed = false
+  for (const source of [...DYNAMIC_OBJECTS.keys()]) {
+    if (!source.startsWith(prefix) || keep.has(source)) continue
+    DYNAMIC_OBJECTS.delete(source)
+    changed = true
+  }
+  if (changed) publishRules()
+}
+
+/** Every member rule currently registered. */
+function memberRules(): MemberRule[] {
+  return [...DYNAMIC_OBJECTS.values()].flatMap((set) => set.members)
+}
+
+/** Every constructor rule currently registered. */
+function constructRules(): ConstructRule[] {
+  return [...DYNAMIC_OBJECTS.values()].flatMap((set) => set.constructs)
+}
+
 /** Every rule, palette-registered ones first so a palette can override. */
 function rules(): CallRule[] {
   return [...REGISTERED, ...BUILT_IN_RULES, ...[...DYNAMIC.values()].flat()]
@@ -609,7 +723,12 @@ function rules(): CallRule[] {
  * exception to that should be a listed, argued one rather than an oversight.
  */
 export function readableBlockTypes(): Set<string> {
-  return new Set([...rules().map((rule) => rule.type), ...ALIASES.map((rule) => rule.type)])
+  return new Set([
+    ...rules().map((rule) => rule.type),
+    ...ALIASES.map((rule) => rule.type),
+    ...memberRules().flatMap((rule) => (rule.set ? [rule.type, rule.set.type] : [rule.type])),
+    ...constructRules().map((rule) => rule.type)
+  ])
 }
 
 /** Forget the registered rules — for tests, which must not leak into each other. */
@@ -1142,36 +1261,6 @@ function splitPair(text: string): [string, string] | null {
     }
   }
   return null
-}
-
-/**
- * A parameter list, split into the part Blockly's mutator can hold and the rest
- * (#1063, widened by #1134).
- *
- * Blockly's parameters are bare NAMES — they become workspace variables — so a
- * default (`flip_x=None`), a type annotation, `*args` or `**kwargs` has nowhere
- * to live in the mutator. This used to be a boolean, and a `def` carrying any
- * of them went to a raw suite whole: correct, and it meant
- * `def blink(times=3):` — a beginner-friendly helper, and nearly every driver's
- * `__init__` — came back as a grey wall.
- *
- * #1134 gave the block a FIELD for the rest, appended after the declared ones,
- * so the split is what this returns. Everything from the first parameter
- * Blockly cannot hold onwards goes into the field VERBATIM, which keeps
- * keyword-only parameters after a `*args` in the order Python needs and never
- * reorders anybody's signature.
- *
- * Null for a list that cannot be split at all — an empty piece, which means a
- * trailing comma the block has nowhere to record.
- */
-function splitSignature(params: string): { declared: string[]; extra: string } | null {
-  const pieces = params.split(',').map((p) => p.trim())
-  if (pieces.length === 1 && pieces[0] === '') return { declared: [], extra: '' }
-  if (pieces.some((p) => p === '')) return null
-  const plain = (p: string): boolean => /^[A-Za-z_]\w*$/.test(p)
-  let at = 0
-  while (at < pieces.length && plain(pieces[at])) at += 1
-  return { declared: pieces.slice(0, at), extra: pieces.slice(at).join(', ') }
 }
 
 // ---------------------------------------------------------------------------
@@ -2703,17 +2792,42 @@ class Converter {
     return [this.method(next, def, decorator)]
   }
 
-  /** `def name(params):` as a STACKABLE block, with its body under it. */
+  /**
+   * `def name(params):` as a STACKABLE block, with its body under it.
+   *
+   * THE SIGNATURE IS A PARAMETER LIST SINCE B2 (#1221, epic #1206), not the one
+   * free-text `PARAMS` field W6 gave it: the plain names become the block's own
+   * fields, a leading `self` or `cls` becomes its fixed lead, and everything
+   * neither can hold goes in the extras field `def` has had since #1134 —
+   * verbatim, so `*args`, a default and even the trailing comma in
+   * `def load(path,):` come back exactly as they were written.
+   *
+   * THE LEAD IS WHAT THE TEXT SAYS, not what the decorator implies. `@property`
+   * on a method whose first parameter is not `self` is somebody's code rather
+   * than a mistake to correct, so the lead is only taken when it is really
+   * there; {@link defaultLead} is what a block dragged out of the drawer starts
+   * with, and what the dropdown switches to when a learner changes it.
+   */
   private method(node: Stmt, header: RegExpExecArray, decorator: string): BlockJson {
+    const split = splitMethodSignature(header[3])
+    // WHEN THE DECORATOR WOULD REWRITE THE LEAD, THE TEXT WINS. `@classmethod`
+    // on a `def x(self)` is somebody's code, and the block would write `cls`
+    // into it; so the lead is given up and the name stays an ordinary
+    // parameter, which comes back out exactly as it went in.
+    const exact = methodLead(split.lead, decorator) === split.lead
+    const { lead, params, extras } = exact
+      ? split
+      : { lead: 'none' as const, params: [split.lead, ...split.params], extras: split.extras }
     return this.withBody(
       {
         type: 'snakie_method',
         fields: {
           NAME: header[2],
-          PARAMS: header[3].trim(),
           DECORATOR: decorator,
-          KIND: header[1] ? 'ASYNC' : 'SYNC'
-        }
+          KIND: header[1] ? 'ASYNC' : 'SYNC',
+          ...(extras === '' ? {} : { EXTRAS: extras })
+        },
+        extraState: { params, lead }
       },
       'BODY',
       node
@@ -3047,6 +3161,12 @@ class Converter {
     // `self` as a workspace variable through the back door (see {@link name}).
     if (/^[A-Za-z_]\w*$/.test(target)) {
       if (target === 'self' || isReservedName(target)) return null
+      // A MODULE'S CONSTRUCTOR FIRST. `ping = RangeFinder(echo_pin=0)`
+      // is the block that makes the sensor, and reading it as *set ping to
+      // (RangeFinder(…))* would hide the one line the rest of the program is
+      // about inside a grey value block.
+      const made = this.construct(target, value)
+      if (made) return made
       return {
         type: 'variables_set',
         fields: { VAR: { id: this.variable(target) } },
@@ -3059,6 +3179,21 @@ class Converter {
     // projects on its own (W1, #1088).
     const read = this.readChain(text, tokens.slice(0, at))
     if (read && read.next === at) {
+      // A MEMBER A MODULE'S BLOCK CAN SET. The read above has already
+      // turned `ping.unit` into the module's own value block, so the rule to
+      // find is the one that produced it — and only a member with a `set` has
+      // one, which is what keeps `ping.ready = True` off a block when `ready`
+      // is a `@property` with no setter.
+      for (const rule of memberRules()) {
+        if (!rule.set || read.block.type !== rule.type) continue
+        const fields = (read.block.fields ?? {}) as Record<string, unknown>
+        if (Object.entries(rule.fields ?? {}).some(([key, value]) => fields[key] !== value)) continue
+        return {
+          type: rule.set.type,
+          fields: read.block.fields,
+          inputs: { [rule.set.value]: { block: this.expression(value) } }
+        }
+      }
       // The setter that matches the reading: `self.speed = 3` is the native
       // `self.` block since B4 (#1223), `motor.speed = 3` its object-socket
       // twin, and a deeper target the Python drawer's block as before.
@@ -3538,6 +3673,107 @@ class Converter {
   }
 
   /**
+   * The variable a reading holds, for a rule whose receiver is a FIELD.
+   *
+   * Only a bare `variables_get` has one. Anything else — a call, a subscript, an
+   * attribute of an attribute — is an expression, and an expression cannot go in
+   * a dropdown of the workspace's variables.
+   */
+  private static variableFieldOf(block: BlockJson): unknown {
+    if (block.type !== 'variables_get') return null
+    return (block.fields as { VAR?: unknown } | undefined)?.VAR ?? null
+  }
+
+  /**
+   * `ping.unit` → the module block that reads it.
+   *
+   * The counterpart of {@link objectCall} for the half of an object's surface
+   * that is not a call at all. Null when no rule claims the attribute, which
+   * leaves the generic `snakie_python_attr_get` to do what it has always done.
+   */
+  private memberRead(object: BlockJson, attr: string): BlockJson | null {
+    const variable = Converter.variableFieldOf(object)
+    if (!variable) return null
+    for (const rule of memberRules()) {
+      if (rule.attr !== attr) continue
+      return { type: rule.type, fields: { ...(rule.fields ?? {}), [rule.onField]: variable } }
+    }
+    return null
+  }
+
+  /**
+   * `ping = RangeFinder(echo_pin=0, trigger_pin=1)` → the block that makes the
+   * object and names it.
+   *
+   * EXACTLY THE ARGUMENTS THE BLOCK CAN HOLD, positionally and by keyword, and
+   * nothing else: a learner who passed `addr=0x3C` to a constructor whose block
+   * has no socket for it still has a line the block cannot write, so it stays
+   * raw and regenerates verbatim rather than coming back missing an argument.
+   */
+  private construct(name: string, value: string): BlockJson | null {
+    const tokens = tokenize(value)
+    if (!tokens || tokens.length < 3) return null
+    const [head, open] = tokens
+    if (head.kind !== 'name' || open.kind !== 'open' || open.text !== '(') return null
+    // The token offsets are into `value`, so that is what the argument slicer
+    // has to read from — the same swap {@link readChain} makes, and for the
+    // same reason: an f-string or a comprehension inside an argument cannot be
+    // spaced back together from its tokens.
+    const outer = this.source
+    this.source = value
+    const read = ((): ReturnType<typeof readArgs> => {
+      try {
+        return readArgs(tokens, value, 1)
+      } finally {
+        this.source = outer
+      }
+    })()
+    if (!read || read.trailingComma || read.next !== tokens.length) return null
+    for (const rule of constructRules()) {
+      // The class as the line names it. `range_finder.RangeFinder(…)` is the
+      // other way to write it and is not this block, whose import is a `from`.
+      if (rule.klass !== head.text) continue
+      const positional = rule.args ?? []
+      const keywords = rule.keywords ?? {}
+      const inputs: Record<string, { block: BlockJson }> = {}
+      let index = 0
+      let fits = true
+      for (const arg of read.args) {
+        const keyword = /^([A-Za-z_]\w*)\s*=(?!=)([\s\S]*)$/.exec(arg)
+        if (keyword) {
+          const socket = keywords[keyword[1]]
+          if (!socket) {
+            fits = false
+            break
+          }
+          inputs[socket] = { block: this.expression(keyword[2].trim()) }
+          continue
+        }
+        const socket = positional[index++]
+        if (!socket) {
+          fits = false
+          break
+        }
+        inputs[socket] = { block: this.expression(arg) }
+      }
+      // EVERY SOCKET FILLED, or the block would come back holding its own
+      // defaults where the learner's line said something else.
+      if (!fits || index !== positional.length) continue
+      if (Object.values(keywords).some((socket) => !inputs[socket])) continue
+      // NO IMPORT TO ADD HERE. The `from range_finder import RangeFinder` line
+      // is already a block of its own (`snakie_python_from_import`), and the
+      // block this builds declares the same import — the generator merges the
+      // two into the one line the file started with.
+      return {
+        type: rule.type,
+        fields: { [rule.nameField]: { id: this.variable(name) } },
+        ...(Object.keys(inputs).length > 0 ? { inputs } : {})
+      }
+    }
+    return null
+  }
+
+  /**
    * `xs.append(v)` → the block the Lists drawer has always had (W2, #1089).
    *
    * The receiver is not a module and not something the generator hoisted: it is
@@ -3558,7 +3794,7 @@ class Converter {
     namedPinOnly = false
   ): BlockJson | null {
     for (const rule of rules()) {
-      if (!rule.on || rule.fn !== fn) continue
+      if ((!rule.on && !rule.onField) || rule.fn !== fn) continue
       // Exclusive both ways: a named-pin rule is unreachable outside its pass,
       // and an ordinary `on` rule never claims a line inside it.
       if (!!rule.onNamedPin !== namedPinOnly) continue
@@ -3571,10 +3807,20 @@ class Converter {
       // this rule expects is its sockets PLUS its fields.
       const fieldCount = Object.keys(argFields).length
       if (args.length !== names.length + fieldCount) continue
-      const want = rule.checks?.[rule.on]
-      if (want && !fitsSocket(object, want)) continue
-      const inputs: Record<string, { block: BlockJson }> = { [rule.on]: { block: object } }
-      const fields: Record<string, string> = { ...(rule.fields ?? {}) }
+      const inputs: Record<string, { block: BlockJson }> = {}
+      const fields: Record<string, unknown> = { ...(rule.fields ?? {}) }
+      if (rule.onField) {
+        // ONLY A BARE VARIABLE. The field holds a variable model, and the one
+        // reading that can produce one is the plain name — see
+        // {@link CallRule.onField}.
+        const variable = Converter.variableFieldOf(object)
+        if (!variable) continue
+        fields[rule.onField] = variable
+      } else {
+        const want = rule.checks?.[rule.on!]
+        if (want && !fitsSocket(object, want)) continue
+        inputs[rule.on!] = { block: object }
+      }
       let fits = true
       let socket = 0
       for (let i = 0; i < args.length && fits; i++) {
@@ -4630,7 +4876,12 @@ class Converter {
         cur = { block, next: read.next }
         continue
       }
-      cur = { block: attrGet(cur.block, member.text), next: cur.next + 2 }
+      // A MODULE'S OWN MEMBER BLOCK FIRST, on the same principle as
+      // `objectCall` above: `ping.unit` is the range finder's block, not a
+      // generic read of an attribute that happens to be called `unit`.
+      // Everything else is B4's reading of `<obj> . <name>` (#1223).
+      const attr = this.memberRead(cur.block, member.text)
+      cur = { block: attr ?? attrGet(cur.block, member.text), next: cur.next + 2 }
     }
   }
 
