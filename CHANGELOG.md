@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The Electronics canvas zoom controls ease too.** Clicking − / + , the
+  100% ↔ fit readout or zoom-to-fit on the wiring canvas now glides to the new
+  zoom over the same 220 ms ease-out the board browser uses, instead of
+  snapping — any change in zoom is eased, however small a step it is. Zooming
+  to a component from the placed-items browser glides as well. The content sits
+  in an SVG `transform` attribute (which CSS transitions can't touch, and which
+  the image exporter reads), so the pan/zoom is tweened frame-by-frame in JS.
+  Wheel zoom, pinch and drag-to-pan are deliberately never eased and cancel any
+  glide in flight, and `prefers-reduced-motion` turns the animation off.
+
 ### Fixed
 
 - **Pins no longer shrink and pile up when a large part joins the breadboard.**
