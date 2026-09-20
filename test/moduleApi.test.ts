@@ -153,7 +153,7 @@ describe('what it refuses to guess', () => {
     // parser. That is what a board-side `dir()` is for, and saying nothing is
     // the honest answer here.
     const api = readModuleApi('weird', 'for n in NAMES:\n    setattr(M, n, make(n))\n')
-    expect(api).toEqual({ module: 'weird', classes: [], functions: [], constants: [] })
+    expect(api).toEqual({ module: 'weird', classes: [], functions: [], constants: [], variables: [] })
   })
 
   it('a private class takes its methods with it', () => {

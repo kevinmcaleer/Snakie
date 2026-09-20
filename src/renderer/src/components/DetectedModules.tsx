@@ -1,0 +1,343 @@
+import { useCallback, useEffect, useState } from 'react'
+import './DetectedModules.css'
+import { useDeviceStatus } from '../hooks/useDeviceStatus'
+import { FILE_SAVED_EVENT, useWorkspace } from '../store/workspace'
+import {
+  memberCount,
+  scanDeviceModules,
+  scanProjectModules,
+  type DetectedModule,
+  type DetectedOrigin
+} from '../lib/module-scan'
+import type { ApiClass, ApiFunction, ApiParam } from '../lib/blocks/module-api'
+
+/**
+ * DETECTED MODULES — what is actually on the board and in the folder.
+ * =============================================================================
+ *
+ * The catalog half of the Modules shelf says what Snakie CAN install. This
+ * section says what is THERE: every `.py` at the top of the open project folder
+ * and in the board's `/` and `/lib`, each opened up to show the classes (with
+ * their methods), functions, constants and variables it defines. Text-only —
+ * `readModuleApi` never executes a file — so a driver of unknown provenance is
+ * safe to inspect.
+ *
+ * RE-SCANNED when it could have changed: a board connects, a file is saved, a
+ * driver is installed from any window (`modules.onChanged`), or the folder is
+ * re-rooted. And on demand, because a file copied in from Finder is none of
+ * those.
+ *
+ * Both scans run in the background and degrade to an empty list. No folder, no
+ * board, a read that fails: each is an ordinary state with its own line, never
+ * an error the learner has to dismiss.
+ */
+
+const ORIGIN_TITLE: Record<DetectedOrigin, string> = {
+  project: 'In your folder',
+  device: 'On the board'
+}
+
+/** `(width, height, addr=0x3C, *args)` — a signature as the file wrote it. */
+function signature(params: readonly ApiParam[]): string {
+  return params
+    .map((p) => {
+      const star = p.variadic ? '*' : ''
+      return p.default !== undefined ? `${star}${p.name}=${p.default}` : `${star}${p.name}`
+    })
+    .join(', ')
+}
+
+function FunctionRow({ fn, method }: { fn: ApiFunction; method?: boolean }): JSX.Element {
+  return (
+    <li className={`dmods__member dmods__member--${method ? 'method' : 'function'}`}>
+      <span className="dmods__kind" aria-hidden="true">
+        {method ? 'meth' : 'def'}
+      </span>
+      <code className="dmods__sig">
+        {fn.name}({signature(fn.params)})
+      </code>
+    </li>
+  )
+}
+
+function ClassRow({ cls }: { cls: ApiClass }): JSX.Element {
+  return (
+    <li className="dmods__member dmods__member--class">
+      <div className="dmods__line">
+        <span className="dmods__kind" aria-hidden="true">
+          class
+        </span>
+        <code className="dmods__sig">
+          {cls.name}
+          {cls.bases.length > 0 && <span className="dmods__bases">({cls.bases.join(', ')})</span>}
+          {cls.init && <span className="dmods__init"> · __init__({signature(cls.init)})</span>}
+        </code>
+      </div>
+      {cls.methods.length > 0 && (
+        <ul className="dmods__members dmods__members--nested" role="list">
+          {cls.methods.map((m) => (
+            <FunctionRow key={m.name} fn={m} method />
+          ))}
+        </ul>
+      )}
+    </li>
+  )
+}
+
+function NameRow({ name, kind }: { name: string; kind: 'const' | 'var' }): JSX.Element {
+  return (
+    <li className={`dmods__member dmods__member--${kind}`}>
+      <span className="dmods__kind" aria-hidden="true">
+        {kind}
+      </span>
+      <code className="dmods__sig">{name}</code>
+    </li>
+  )
+}
+
+/** Human-readable byte count for the row's size badge. */
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`
+}
+
+function ModuleRow({
+  row,
+  onOpen
+}: {
+  row: DetectedModule
+  onOpen: (row: DetectedModule) => void
+}): JSX.Element {
+  const [open, setOpen] = useState(false)
+  const count = memberCount(row.api)
+  const api = row.api
+  const empty = api && count === 0
+  return (
+    <li className="dmods__file">
+      <div className="dmods__file-head">
+        <button
+          type="button"
+          className="dmods__toggle"
+          aria-expanded={open}
+          disabled={!api}
+          onClick={() => setOpen((v) => !v)}
+          title={api ? (open ? 'Hide contents' : 'Show contents') : undefined}
+        >
+          <span className="dmods__chevron" aria-hidden="true">
+            {api ? (open ? '▾' : '▸') : '·'}
+          </span>
+          <span className="dmods__name">{row.name}</span>
+          <span className="dmods__import">import {row.name}</span>
+        </button>
+        <span className="dmods__meta">
+          {row.skipped === 'too-large' && (
+            <span className="dmods__skipped" title="Too big to read for its contents">
+              too large
+            </span>
+          )}
+          {row.skipped === 'unreadable' && (
+            <span className="dmods__skipped" title="The file could not be read">
+              unreadable
+            </span>
+          )}
+          {api && (
+            <span className="dmods__count" title="Classes, functions, constants and variables">
+              {count}
+            </span>
+          )}
+          {row.size !== undefined && <span className="dmods__size">{formatSize(row.size)}</span>}
+          <button
+            type="button"
+            className="dmods__open"
+            title={`Open ${row.path} in the editor`}
+            onClick={() => onOpen(row)}
+          >
+            OPEN
+          </button>
+        </span>
+      </div>
+      {open && api && (
+        <div className="dmods__body">
+          {empty ? (
+            <p className="dmods__empty">No classes, functions, constants or variables found.</p>
+          ) : (
+            <ul className="dmods__members" role="list">
+              {api.classes.map((c) => (
+                <ClassRow key={`c:${c.name}`} cls={c} />
+              ))}
+              {api.functions.map((f) => (
+                <FunctionRow key={`f:${f.name}`} fn={f} />
+              ))}
+              {api.constants.map((n) => (
+                <NameRow key={`k:${n}`} name={n} kind="const" />
+              ))}
+              {api.variables.map((n) => (
+                <NameRow key={`v:${n}`} name={n} kind="var" />
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </li>
+  )
+}
+
+interface ScanState {
+  rows: DetectedModule[]
+  scanning: boolean
+}
+
+const IDLE: ScanState = { rows: [], scanning: false }
+
+export function DetectedModules(): JSX.Element {
+  const status = useDeviceStatus()
+  const connected = status.state === 'connected'
+  const { currentFolder, openFile } = useWorkspace()
+
+  const [project, setProject] = useState<ScanState>(IDLE)
+  const [device, setDevice] = useState<ScanState>(IDLE)
+  // Bumped by every "it may have changed" signal; the effects below key on it.
+  const [projectTick, setProjectTick] = useState(0)
+  const [deviceTick, setDeviceTick] = useState(0)
+
+  // --- The folder ---------------------------------------------------------
+  useEffect(() => {
+    if (!currentFolder || !window.api?.fs?.readDir) {
+      setProject(IDLE)
+      return
+    }
+    let live = true
+    setProject((s) => ({ ...s, scanning: true }))
+    void scanProjectModules(currentFolder, {
+      list: (path) => window.api.fs.readDir(path),
+      read: (path) => window.api.fs.readFile(path)
+    }).then((rows) => {
+      if (live) setProject({ rows, scanning: false })
+    })
+    return () => {
+      live = false
+    }
+  }, [currentFolder, projectTick])
+
+  // A save into the open folder (a new driver written, an edit to one) is the
+  // commonest way its contents change.
+  useEffect(() => {
+    const onSaved = (e: Event): void => {
+      const detail = (e as CustomEvent<{ source: string; path: string }>).detail
+      if (detail?.source === 'local' && /\.py$/i.test(detail.path)) {
+        setProjectTick((t) => t + 1)
+      }
+      if (detail?.source === 'device' && /\.py$/i.test(detail.path)) {
+        setDeviceTick((t) => t + 1)
+      }
+    }
+    window.addEventListener(FILE_SAVED_EVENT, onSaved)
+    return () => window.removeEventListener(FILE_SAVED_EVENT, onSaved)
+  }, [])
+
+  // --- The board ----------------------------------------------------------
+  useEffect(() => {
+    if (!connected || !window.api?.device?.listDir) {
+      setDevice(IDLE)
+      return
+    }
+    let live = true
+    setDevice((s) => ({ ...s, scanning: true }))
+    void scanDeviceModules({
+      list: (path) => window.api.device.listDir(path),
+      read: (path) => window.api.device.readFile(path)
+    }).then((rows) => {
+      if (live) setDevice({ rows, scanning: false })
+    })
+    return () => {
+      live = false
+    }
+  }, [connected, deviceTick])
+
+  // A driver installed from any window (the catalog below, the Board View's
+  // banner) lands on the board without a save event.
+  useEffect(() => {
+    const off = window.api?.modules?.onChanged?.(() => setDeviceTick((t) => t + 1))
+    return () => off?.()
+  }, [])
+
+  const rescan = useCallback((): void => {
+    setProjectTick((t) => t + 1)
+    setDeviceTick((t) => t + 1)
+  }, [])
+
+  const open = useCallback(
+    (row: DetectedModule): void => {
+      void openFile(row.origin === 'project' ? 'local' : 'device', row.path).catch(() => {
+        // The tab shows its own error state; nothing to add here.
+      })
+    },
+    [openFile]
+  )
+
+  const scanning = project.scanning || device.scanning
+
+  const renderGroup = (
+    origin: DetectedOrigin,
+    state: ScanState,
+    absent: string | null
+  ): JSX.Element => (
+    <section className="dmods__group">
+      <div className="dmods__group-head">
+        <span>{ORIGIN_TITLE[origin]}</span>
+        {!absent && (
+          <span className="dmods__group-count">
+            {state.rows.length} {state.rows.length === 1 ? 'file' : 'files'}
+          </span>
+        )}
+      </div>
+      {absent ? (
+        <p className="dmods__hint">{absent}</p>
+      ) : state.rows.length === 0 ? (
+        <p className="dmods__hint">
+          {state.scanning ? 'Looking for .py files…' : 'No .py files here.'}
+        </p>
+      ) : (
+        <ul className="dmods__files" role="list">
+          {state.rows.map((row) => (
+            <ModuleRow key={`${row.origin}:${row.path}`} row={row} onOpen={open} />
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+
+  return (
+    <div className="dmods">
+      <div className="dmods__header">
+        <span className="dmods__title">DETECTED</span>
+        <span className="dmods__actions">
+          {scanning && <span className="dmods__scanning">scanning…</span>}
+          <button
+            type="button"
+            className="dmods__rescan"
+            onClick={rescan}
+            disabled={scanning}
+            title="Look again at the folder and the board"
+          >
+            RESCAN
+          </button>
+        </span>
+      </div>
+      <p className="dmods__blurb">
+        Every <code>.py</code> beside your program and on the board, and what each one
+        defines. Read from the text, never run.
+      </p>
+      {renderGroup(
+        'project',
+        project,
+        currentFolder ? null : 'Open a folder to see the modules beside your program.'
+      )}
+      {renderGroup(
+        'device',
+        device,
+        connected ? null : 'Connect a board to see the modules installed on it.'
+      )}
+    </div>
+  )
+}
