@@ -320,7 +320,7 @@ export interface CallRule {
    */
   on?: string
   /**
-   * THE RECEIVER IS A VARIABLE FIELD ON THE BLOCK, and this names it (#1209).
+   * THE RECEIVER IS A VARIABLE FIELD ON THE BLOCK, and this names it.
    *
    * A module's object blocks hold their object in a `field_variable` rather
    * than a socket — `[ping] 's [distance() ▾]`, not a socket with a
@@ -565,7 +565,7 @@ function ruleKey(rule: CallRule): string {
 }
 
 /**
- * A BLOCK THAT READS SOMETHING OFF AN OBJECT (#1209).
+ * A BLOCK THAT READS SOMETHING OFF AN OBJECT.
  *
  * `ping.unit` is not a call, so no {@link CallRule} can describe it; and the
  * block that writes it is one block with a dropdown, so reading it back means
@@ -595,7 +595,7 @@ export interface MemberRule {
 }
 
 /**
- * A BLOCK THAT MAKES AN OBJECT AND NAMES IT (#1209).
+ * A BLOCK THAT MAKES AN OBJECT AND NAMES IT.
  *
  * `ping = RangeFinder(echo_pin=0, trigger_pin=1)` — the line the issue opened
  * with, and the one line of a sensor program that used to come back grey. It is
@@ -3145,7 +3145,7 @@ class Converter {
     // `self` as a workspace variable through the back door (see {@link name}).
     if (/^[A-Za-z_]\w*$/.test(target)) {
       if (target === 'self' || isReservedName(target)) return null
-      // A MODULE'S CONSTRUCTOR FIRST (#1209). `ping = RangeFinder(echo_pin=0)`
+      // A MODULE'S CONSTRUCTOR FIRST. `ping = RangeFinder(echo_pin=0)`
       // is the block that makes the sensor, and reading it as *set ping to
       // (RangeFinder(…))* would hide the one line the rest of the program is
       // about inside a grey value block.
@@ -3163,7 +3163,7 @@ class Converter {
     // projects on its own (W1, #1088).
     const read = this.readChain(text, tokens.slice(0, at))
     if (read && read.next === at) {
-      // A MEMBER A MODULE'S BLOCK CAN SET (#1209). The read above has already
+      // A MEMBER A MODULE'S BLOCK CAN SET. The read above has already
       // turned `ping.unit` into the module's own value block, so the rule to
       // find is the one that produced it — and only a member with a `set` has
       // one, which is what keeps `ping.ready = True` off a block when `ready`
@@ -3657,7 +3657,7 @@ class Converter {
   }
 
   /**
-   * The variable a reading holds, for a rule whose receiver is a FIELD (#1209).
+   * The variable a reading holds, for a rule whose receiver is a FIELD.
    *
    * Only a bare `variables_get` has one. Anything else — a call, a subscript, an
    * attribute of an attribute — is an expression, and an expression cannot go in
@@ -3669,7 +3669,7 @@ class Converter {
   }
 
   /**
-   * `ping.unit` → the module block that reads it (#1209).
+   * `ping.unit` → the module block that reads it.
    *
    * The counterpart of {@link objectCall} for the half of an object's surface
    * that is not a call at all. Null when no rule claims the attribute, which
@@ -3687,7 +3687,7 @@ class Converter {
 
   /**
    * `ping = RangeFinder(echo_pin=0, trigger_pin=1)` → the block that makes the
-   * object and names it (#1209).
+   * object and names it.
    *
    * EXACTLY THE ARGUMENTS THE BLOCK CAN HOLD, positionally and by keyword, and
    * nothing else: a learner who passed `addr=0x3C` to a constructor whose block
@@ -4860,7 +4860,7 @@ class Converter {
         cur = { block, next: read.next }
         continue
       }
-      // A MODULE'S OWN MEMBER BLOCK FIRST (#1209), on the same principle as
+      // A MODULE'S OWN MEMBER BLOCK FIRST, on the same principle as
       // `objectCall` above: `ping.unit` is the range finder's block, not a
       // generic read of an attribute that happens to be called `unit`.
       const known = this.memberRead(cur.block, member.text)

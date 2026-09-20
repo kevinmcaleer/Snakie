@@ -156,7 +156,7 @@ describe('what a module offers', () => {
   it('makes the object once, on a line of its own, rather than inside every call', () => {
     // The wiring is typed on ONE block. Every other block on the class is two
     // dropdowns — which object, and which part of it — so a learner never
-    // re-states the pins to take a reading (#1209).
+    // re-states the pins to take a reading.
     const ctor = manifest().blocks.find((b) => b.id === 'new_SSD1306_I2C')!
     expect(ctor.shape).toBeUndefined()
     expect(ctor.setup).toBeUndefined()
@@ -213,7 +213,7 @@ describe('the whole chain, ending in MicroPython', () => {
     const code = generateProgram(ws).code
     expect(code).toContain('from ssd1306 import SSD1306_I2C')
     // ONE object, made once and named, then used by name — which is what the
-    // learner sees on the canvas as well (#1209).
+    // learner sees on the canvas as well.
     expect(code).toContain('oled = SSD1306_I2C(')
     expect(code).toContain('oled.show()')
   })
@@ -300,7 +300,7 @@ while True:
     const { workspace } = pythonToBlocks(PROGRAM)
     const json = JSON.stringify(workspace)
     expect(json).toContain('"type":"snakie_print_format"')
-    // THE CONSTRUCTOR LINE IS A BLOCK NOW (#1209). It used to be the one grey
+    // THE CONSTRUCTOR LINE IS A BLOCK NOW. It used to be the one grey
     // value in this program — the learner's own `ping = RangeFinder(…)` coming
     // back as raw Python above blocks that had forgotten they were about it.
     expect(json).toContain(`"type":"${typeFor('new_RangeFinder')}"`)

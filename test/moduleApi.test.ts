@@ -256,7 +256,7 @@ def go():
     expect(api.classes[0].methods.map((m) => m.name)).not.toContain('ready')
   })
 
-  it('an __init__ attribute is settable, and a @property only with a .setter (#1209)', () => {
+  it('an __init__ attribute is settable, and a @property only with a .setter', () => {
     // `ready` has one, so `sensor.ready = True` is a line somebody may write.
     // A getter-only property would not be here: assigning to one raises, and a
     // *set … to …* block offering it would be a block whose only outcome is an

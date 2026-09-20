@@ -200,7 +200,7 @@ export function useModuleBlocks(
         // generic call block. Pruned together with the blocks below.
         const typeFor = (blockId: string): string => blockTypeFor(from, blockId)
         registerDynamicCallRules(id, readRulesForModule(api, typeFor))
-        // AND THE TWO SHAPES A CALL RULE CANNOT SAY (#1209): `ping.unit`, which
+        // AND THE TWO SHAPES A CALL RULE CANNOT SAY: `ping.unit`, which
         // is not a call, and `ping = RangeFinder(…)`, which is a call with a
         // name on its left. Same id, so one prune still sweeps everything.
         registerDynamicObjectRules(id, objectRulesForModule(api, typeFor))

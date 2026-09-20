@@ -8,7 +8,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **A module's object is a variable you name.** Module blocks used to carry the
+- **A module's object is a variable you name** (epic #1007). Module blocks used to carry the
   object in a socket, so the constructor — pins and all — was repeated inside
   every call that used it: *distance of (the RangeFinder (0) (1))*. Now a class
   gives you `make [ping] a RangeFinder  echo_pin (0)  trigger_pin (1)`, which
@@ -25,6 +25,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   their own blocks. Opening a sensor program now brings the whole thing back as
   blocks, the `ping = RangeFinder(…)` line included — that line used to be the
   one grey block left in the file.
+- **Simple and advanced blocks (#1209, #1210, epic #1206).** Every block now
+  declares a level, and a new **Settings ▸ Appearance ▸ Advanced blocks**
+  switch decides whether the toolbox offers the advanced ones — classes, `try`,
+  `with` and files, comprehensions, slices, bitwise and base-N maths, `global`,
+  `del` and the grey Python escape hatches. A fresh profile starts simple; a
+  profile that used Snakie before keeps every drawer. The switch filters the
+  toolbox only: a program that uses advanced blocks still opens, renders and
+  generates with them off, and a drawer it empties says why instead of going
+  blank. Parts and plugin blocks are unaffected for now (#1213).
 
 - **A `print` block that understands f-strings.** The Text drawer has a new
   `print f"…"` block: type the text with a `{}` wherever a value goes —

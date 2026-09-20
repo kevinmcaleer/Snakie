@@ -12,7 +12,7 @@ import type { CallRule, ConstructRule, MemberRule } from './python-to-blocks'
  * the same `blockDefinitionsFrom` → `defineDynamicBlocks` path a part's
  * `blocks.yml` goes down, which is why this is a mapping and not a subsystem.
  *
- * AN OBJECT IS A VARIABLE (#1209). The first cut of this file hoisted the
+ * AN OBJECT IS A VARIABLE. The first cut of this file hoisted the
  * object instead: the constructor was a VALUE block, `the RangeFinder (0) (1)`,
  * and it plugged into the receiver socket of every method and property block.
  * That generated correct Python — one hoisted `rangefinder = …` above the
@@ -327,7 +327,7 @@ export function manifestForModule(api: ModuleApi): BlocksManifest {
  *
  *  - A METHOD is an `onField` rule — a call on WHATEVER the learner named the
  *    object, whose name goes into the block's variable field rather than into a
- *    socket, because that is where the block holds it (#1209).
+ *    socket, because that is where the block holds it.
  *  - A MODULE FUNCTION is a `module.fn` rule, `time.sleep`'s shape.
  *  - A ZERO-ARGUMENT READING and a PROPERTY are {@link objectRulesForModule}'s,
  *    because one block with a dropdown covers both and neither is a call the
@@ -386,7 +386,7 @@ export function readRulesForModule(api: ModuleApi, typeFor: (id: string) => stri
 }
 
 /**
- * THE TWO SHAPES A `CallRule` CANNOT DESCRIBE (#1209).
+ * THE TWO SHAPES A `CallRule` CANNOT DESCRIBE.
  *
  * `ping.unit` is not a call at all, and `ping = RangeFinder(echo_pin=0)` is a
  * call whose whole point is the name on its left — neither fits a table keyed

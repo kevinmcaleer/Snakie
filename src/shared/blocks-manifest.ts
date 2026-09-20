@@ -49,7 +49,7 @@ export const BLOCKS_MANIFEST_VERSION = 1
  *
  * `variable` is a field too, and the one that names something rather than
  * describing it: a dropdown of the workspace's own variables, which is how a
- * block says *the object the learner made* (#1209). Its value reaches the
+ * block says *the object the learner made*. Its value reaches the
  * template as the Python identifier that variable generates as — so the block
  * that writes `ping = RangeFinder(...)` and the block that reads
  * `ping.distance()` agree on the name without either of them holding it.
