@@ -8,6 +8,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A Classes drawer (#1220, epic #1206).** The `class` and `self` blocks were
+  registered and read back but in no drawer; `super()` was in a category whose
+  flyout could not show it. All three are now on a **Functions ▸ Classes**
+  shelf, marked advanced — so they are there for a learner who has turned
+  **Advanced blocks** on and absent for one who has not — with a line at the
+  top of the shelf saying what it is for. The class block's brackets are
+  unchanged: the base classes are typed as they are written, `(Base, Mixin)`.
+  The Functions drawer now shows the blocks the registry puts in it (`return`,
+  `super()`, the new shelf) after Blockly's own `def` blocks and the caller for
+  each function you have written, instead of only the latter.
+
 - **The Cytron Maker Pi RP2040 is in the flasher's board list.** It was in the
   Board Finder gallery but not among the boards you can pick in the MicroPython
   flasher, because MicroPython publishes no build under its name and the model
