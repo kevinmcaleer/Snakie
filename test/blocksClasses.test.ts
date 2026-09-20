@@ -142,7 +142,13 @@ describe('`self` is never a workspace variable', () => {
     // Blockly variables are global to the workspace and renameable from a
     // dropdown, so a learner renaming `self` in one method would rename it in
     // twelve and generate a class that no longer works.
-    expect(types(MOTOR)).toContain('snakie_self')
+    //
+    // `self` ON ITS OWN, which since B4 (#1223) is what a bare use of it is:
+    // `self.speed` no longer nests a `self` block inside an attribute block,
+    // because the native `self . speed` block has the decision baked in and no
+    // socket to nest one in. `self.update()` still reads as a call ON the
+    // block, which is the case this test is about.
+    expect(types('class T:\n    def go(self):\n        self.update()\n')).toContain('snakie_self')
     const { workspace } = pythonToBlocks(MOTOR)
     const declared = (workspace as { variables?: { name: string }[] }).variables ?? []
     expect(declared.map((v) => v.name)).not.toContain('self')
@@ -159,6 +165,84 @@ describe('`self` is never a workspace variable', () => {
   it('leaves `self = x` alone rather than declaring one by the back door', () => {
     expect(types('self = other\n')).toEqual(['snakie_python_statement'])
     roundTrips('self = other\n')
+  })
+})
+
+/**
+ * ATTRIBUTES AS BLOCKS OF THEIR OWN (B4, #1223, epic #1206).
+ * ---------------------------------------------------------------------------
+ *
+ * `self.speed = 3` and `robot.speed` used to open as the Python drawer's grey
+ * `snakie_python_attr_*` pair — the escape hatch, for the Python the palette
+ * does not model — which is a strange place for the second-largest theme in the
+ * corpus and the first thing a class is for. Four native blocks now claim them,
+ * and the Python drawer's pair keeps the deeper targets it is genuinely right
+ * for.
+ */
+describe('attributes (B4, #1223)', () => {
+  it('reads `self.x` as the block with `self` baked in', () => {
+    const src = 'class T:\n    def go(self):\n        print(self.speed)\n'
+    expect(types(src)).toContain('snakie_self_attr_get')
+    // NO `self` BLOCK IN A SOCKET, which is the whole shape: there is nothing
+    // to unplug and no variable dropdown offering to rename `self`.
+    expect(types(src)).not.toContain('snakie_self')
+    expect(one(src, 'snakie_self_attr_get')!.fields).toEqual({ ATTR: 'speed' })
+    roundTrips(src)
+  })
+
+  it('reads `self.x = y` as the setter that matches it', () => {
+    const src = 'class T:\n    def go(self, speed):\n        self.speed = speed\n'
+    expect(one(src, 'snakie_self_attr_set')!.fields).toEqual({ ATTR: 'speed' })
+    roundTrips(src)
+  })
+
+  it('reads `obj.x` and `obj.x = v` with the object in a socket', () => {
+    expect(types('angle = motor.speed\n')).toEqual([
+      'variables_set',
+      'snakie_attr_get',
+      'variables_get'
+    ])
+    expect(types('motor.speed = 3\n')).toEqual(['snakie_attr_set', 'variables_get', 'math_number'])
+    roundTrips('angle = motor.speed\n')
+    roundTrips('motor.speed = 3\n')
+  })
+
+  it('leaves a method call alone — that is still the call block', () => {
+    const src = 'class T:\n    def go(self):\n        self.led.on()\n'
+    expect(types(src)).toContain('snakie_python_call')
+    roundTrips(src)
+  })
+
+  it('keeps a deeper target on the Python drawer’s block', () => {
+    // Once the object is itself an attribute read, the socket is carrying real
+    // structure and the native pair is no longer the honest reading.
+    expect(types('self.motor.speed = 0\n')).toEqual([
+      'snakie_python_attr_set',
+      'snakie_self_attr_get',
+      'math_number'
+    ])
+    roundTrips('self.motor.speed = 0\n')
+  })
+
+  it('keeps an attribute that shadows a builtin exactly as written', () => {
+    // An attribute is a member of somebody else's object, not a name in this
+    // file's namespace, so the variable namer's renaming must not reach it.
+    roundTrips('class T:\n    def go(self):\n        self.next = 1\n')
+    roundTrips('node.next = None\n')
+  })
+
+  it('leaves `self.x += 1` to the augmented-assign block', () => {
+    // B4 declined the "change by" block: `snakie_python_augmented` keeps every
+    // operator, where a `+=`-only block would take those lines off it.
+    expect(types('self.total += 1\n')).toEqual(['snakie_python_augmented', 'math_number'])
+    roundTrips('self.total += 1\n')
+  })
+
+  it('opens the whole motor driver with no grey attribute left', () => {
+    expect(types(MOTOR)).toContain('snakie_self_attr_set')
+    expect(types(MOTOR)).not.toContain('snakie_python_attr_set')
+    expect(types(MOTOR)).not.toContain('snakie_python_attr_get')
+    roundTrips(MOTOR)
   })
 })
 

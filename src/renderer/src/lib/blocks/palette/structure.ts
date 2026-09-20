@@ -70,6 +70,26 @@ function nameOf(block: Blockly.Block, field: string, fallback: string): string {
 }
 
 /**
+ * An ATTRIBUTE name, kept exactly as written.
+ *
+ * `nameOf` sanitises, which is right for a class or method name a learner typed
+ * and wrong here: an attribute is a member of somebody else's object, so
+ * `thing.next` has to come back `thing.next` even though `next` is a builtin the
+ * variable namer would have renamed.
+ */
+function attrOf(block: Blockly.Block, fallback: string): string {
+  const raw = String(block.getFieldValue('ATTR') ?? '').trim()
+  return raw === '' ? fallback : raw
+}
+
+/** The object an `<obj> . <attr>` block is reading, bracketed if it must be. */
+function objectOf(block: Blockly.Block, gen: MicroPythonGenerator): string {
+  // `MEMBER`, so an object that is itself an expression gets its brackets:
+  // `(a or b).speed` rather than `a or b.speed`.
+  return gen.valueToCode(block, 'OBJ', Order.MEMBER) || 'None'
+}
+
+/**
  * The Control sub-drawer error handling lives in (#1131, epic #1119).
  *
  * Control is the honest category — `try` really is control flow — and putting
@@ -310,6 +330,113 @@ export const STRUCTURE_BLOCKS: BlockDefinition[] = [
     // drawer and be renameable from a dropdown that renames every use of it in
     // the file — twelve methods at once, and a class that no longer works.
     code: () => ['self', Order.ATOMIC]
+  },
+  // --------------------------------------------------------- attributes (B4)
+  //
+  // `self.speed` AND `robot.speed`, READ AND WRITTEN, AS BLOCKS OF THEIR OWN
+  // (#1223, epic #1206). Both shapes already had a reading — the Python
+  // drawer's `snakie_python_attr_get` / `_set`, which have taken an object
+  // socket since #1018 — and that is exactly what B4 is about: the
+  // second-largest theme in the corpus (2,649 raw lines of `self.x = …` across
+  // 45 projects) opened as the grey escape hatch, in a drawer a learner is told
+  // is for the Python the palette does not model. `self.speed` is not that. It
+  // is the first thing a class is FOR.
+  //
+  // FOUR BLOCKS RATHER THAN TWO, and the extra pair is the `self` decision from
+  // the top of this file made visible. `self` is not a workspace variable, so
+  // the `self.` blocks do not take an object socket at all: there is nothing to
+  // plug in, nothing to drag out by accident, and no dropdown offering to
+  // rename `self` in twelve methods at once. The learner reads *set self .
+  // speed to (speed)* on one block, which is the line.
+  //
+  // THE ATTRIBUTE IS A FIELD, not a socket and not a variable. It is a member of
+  // an object rather than a name in this file's namespace — `motor.speed` and a
+  // variable called `speed` have nothing to do with each other — so a variable
+  // dropdown would be actively wrong, and a text field holds any member name a
+  // library has, including the ones that shadow a builtin.
+  //
+  // NO `change self . x by n` BLOCK. #1223 lists it as a "consider", and the
+  // corpus does not carry it: `self.x += …` is a small tail beside the
+  // assignments, and `snakie_python_augmented` (W8, #1095) already keeps the
+  // operator and the target exactly as written — including `-=`, `*=` and `|=`,
+  // which a "change by" block could not say. Claiming only `+=` would take
+  // those lines off a block that says them all.
+  {
+    type: 'snakie_self_attr_get',
+    category: 'functions',
+    level: 'advanced',
+    help: 'ref-classes',
+    json: {
+      message0: 'self . %1',
+      args0: [{ type: 'field_input', name: 'ATTR', text: 'speed' }],
+      inputsInline: true,
+      output: null,
+      tooltip:
+        'Something this particular thing remembers — one of the values its setup gave it. Python writes it self.speed.'
+    },
+    // `MEMBER`, so plugging it into arithmetic needs no brackets around it and a
+    // call on it writes `self.speed.bit_length()` rather than wrapping it.
+    code: (block) => [`self.${attrOf(block, 'speed')}`, Order.MEMBER]
+  },
+  {
+    type: 'snakie_self_attr_set',
+    category: 'functions',
+    level: 'advanced',
+    help: 'ref-classes',
+    json: {
+      message0: 'set self . %1 to %2',
+      args0: [
+        { type: 'field_input', name: 'ATTR', text: 'speed' },
+        { type: 'input_value', name: 'VALUE' }
+      ],
+      inputsInline: true,
+      previousStatement: null,
+      nextStatement: null,
+      tooltip:
+        'Remember a value on this particular thing, so the rest of its methods can use it. Python writes it self.speed = ….'
+    },
+    code: (block, gen) =>
+      `self.${attrOf(block, 'speed')} = ${gen.valueToCode(block, 'VALUE', Order.NONE) || 'None'}\n`
+  },
+  {
+    type: 'snakie_attr_get',
+    category: 'functions',
+    level: 'advanced',
+    help: 'ref-classes',
+    json: {
+      message0: '%1 . %2',
+      args0: [
+        { type: 'input_value', name: 'OBJ' },
+        { type: 'field_input', name: 'ATTR', text: 'speed' }
+      ],
+      inputsInline: true,
+      output: null,
+      tooltip:
+        'Something another object remembers — a setting or a reading that is not a method call.'
+    },
+    code: (block, gen) => [`${objectOf(block, gen)}.${attrOf(block, 'speed')}`, Order.MEMBER]
+  },
+  {
+    type: 'snakie_attr_set',
+    category: 'functions',
+    level: 'advanced',
+    help: 'ref-classes',
+    json: {
+      message0: 'set %1 . %2 to %3',
+      args0: [
+        { type: 'input_value', name: 'OBJ' },
+        { type: 'field_input', name: 'ATTR', text: 'speed' },
+        { type: 'input_value', name: 'VALUE' }
+      ],
+      inputsInline: true,
+      previousStatement: null,
+      nextStatement: null,
+      tooltip: 'Change something another object remembers.'
+    },
+    code: (block, gen) => {
+      const value = gen.valueToCode(block, 'VALUE', Order.NONE) || 'None'
+      return `${objectOf(block, gen)}.${attrOf(block, 'speed')} = ${value}\n`
+    }
   },
   // ----------------------------------------------------------------- try / with
   //

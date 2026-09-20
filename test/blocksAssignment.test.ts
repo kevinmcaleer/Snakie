@@ -105,7 +105,9 @@ describe('targets that are not a plain name', () => {
     // attribute-set block; `xs[0]` is the Lists block. The generic one is what
     // is left.
     expect(types('x = 1\n')).toContain('variables_set')
-    expect(types('self.speed = 0\n')).toContain('snakie_python_attr_set')
+    // `self.speed` is the native attribute block since B4 (#1223), not the
+    // Python drawer's.
+    expect(types('self.speed = 0\n')).toContain('snakie_self_attr_set')
     expect(types('readings[0] = 1\n')).toContain('snakie_list_set')
   })
 })

@@ -92,9 +92,10 @@ describe('a method call on an object', () => {
     const src = 'self.display.fill(0)\n'
     expect(types(src)).toEqual([
       'snakie_python_call',
-      'snakie_python_attr_get',
-      // `self` is its own block rather than a workspace variable (W6, #1093).
-      'snakie_self',
+      // `self.display` is the native attribute block since B4 (#1223), with the
+      // `self` decision baked into it rather than a `self` block in a socket.
+      // The CALL is untouched, which is the rule B4 set for itself.
+      'snakie_self_attr_get',
       'math_number'
     ])
     roundTrips(src)
@@ -144,18 +145,20 @@ describe('a method call on an object', () => {
 describe('reading something off an object', () => {
   it('reads an attribute in an expression', () => {
     const src = 'angle = self.hip\n'
-    expect(types(src)).toEqual(['variables_set', 'snakie_python_attr_get', 'snakie_self'])
+    expect(types(src)).toEqual(['variables_set', 'snakie_self_attr_get'])
     roundTrips(src)
   })
 
   it('reads a chain of them', () => {
+    // The innermost one is B4's native `self . sensor`; once the object is
+    // itself an attribute read the Python drawer's block takes over, because
+    // the socket is then carrying structure rather than a bare name.
     const src = 'value = self.sensor.last.reading\n'
     expect(types(src)).toEqual([
       'variables_set',
       'snakie_python_attr_get',
       'snakie_python_attr_get',
-      'snakie_python_attr_get',
-      'snakie_self'
+      'snakie_self_attr_get'
     ])
     roundTrips(src)
   })
@@ -164,8 +167,7 @@ describe('reading something off an object', () => {
     const src = ['if self.running:', '    print(1)', ''].join('\n')
     expect(types(src)).toEqual([
       'controls_if',
-      'snakie_python_attr_get',
-      'snakie_self',
+      'snakie_self_attr_get',
       'text_print',
       'math_number'
     ])
@@ -176,19 +178,16 @@ describe('reading something off an object', () => {
 describe('assigning to something on an object', () => {
   it('reads `self.x = y` as the attribute-set block', () => {
     // 2,649 raw lines across 45 projects — the second-largest gap in the corpus.
+    // Native since B4 (#1223): *set self . speed to (speed)*, one block.
     const src = 'self.speed = speed\n'
-    expect(types(src)).toEqual([
-      'snakie_python_attr_set',
-      'snakie_self',
-      'variables_get'
-    ])
+    expect(types(src)).toEqual(['snakie_self_attr_set', 'variables_get'])
     roundTrips(src)
   })
 
   it('reads `obj.attr = value`', () => {
     roundTrips('motor.speed = 3\n')
     expect(types('motor.speed = 3\n')).toEqual([
-      'snakie_python_attr_set',
+      'snakie_attr_set',
       'variables_get',
       'math_number'
     ])
@@ -198,8 +197,7 @@ describe('assigning to something on an object', () => {
     const src = 'self.motor.speed = 0\n'
     expect(types(src)).toEqual([
       'snakie_python_attr_set',
-      'snakie_python_attr_get',
-      'snakie_self',
+      'snakie_self_attr_get',
       'math_number'
     ])
     roundTrips(src)
@@ -225,8 +223,7 @@ describe('assigning to something on an object', () => {
     // `i + 1` and would regenerate as `xs[i + 1 - 1]`.
     expect(types('self.rows[0] = 1\n')).toEqual([
       'snakie_list_set',
-      'snakie_python_attr_get',
-      'snakie_self',
+      'snakie_self_attr_get',
       'math_number',
       'math_number'
     ])
@@ -328,7 +325,7 @@ describe('a real class, end to end', () => {
     const built = types(src)
     // The class and its methods are blocks of their own since W6 (#1093), and
     // every line inside them is a real block, which was the point of W1.
-    expect(built).toContain('snakie_python_attr_set')
+    expect(built).toContain('snakie_self_attr_set')
     expect(built).toContain('snakie_python_call')
     expect(built).toContain('snakie_class')
     expect(built).toContain('snakie_method')
