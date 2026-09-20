@@ -172,7 +172,7 @@ export const MODULES: ModuleDef[] = [
     instrument: 'range',
     importName: 'hcsr04',
     // Small enough + MIT — bundled as a stub.
-    source: { kind: 'bundled', file: 'hcsr04.py', version: '1.0.0' },
+    source: { kind: 'bundled', file: 'hcsr04.py', version: '1.1.0' },
     license: 'MIT'
   },
   {
