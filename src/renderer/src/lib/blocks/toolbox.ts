@@ -1,7 +1,7 @@
 import * as Blockly from 'blockly/core'
 import { inScope } from '../../../../shared/dialect-api'
 import { DIALECT_LABEL, type Dialect } from '../../../../shared/dialect'
-import { blocksInCategory, type BlockDefinition } from './registry'
+import { atLevel, blocksInCategory, type BlockDefinition, type BlockLevel } from './registry'
 import { BLOCK_CATEGORIES, categoryStyleName } from './theme'
 import { SCAN_MODULES_BUTTON } from './module-scan'
 
@@ -41,7 +41,10 @@ export const VARIABLES_CATEGORY_CALLBACK = 'SNAKIE_VARIABLES'
  * shows everything, which is `inScope`'s own rule and the right default for a
  * workspace whose whole point is that it works with nothing plugged in.
  */
-export function buildToolbox(dialect: Dialect): Blockly.utils.toolbox.ToolboxDefinition {
+export function buildToolbox(
+  dialect: Dialect,
+  level: BlockLevel = 'advanced'
+): Blockly.utils.toolbox.ToolboxDefinition {
   return {
     kind: 'categoryToolbox',
     contents: BLOCK_CATEGORIES.map((c) =>
@@ -62,11 +65,15 @@ export function buildToolbox(dialect: Dialect): Blockly.utils.toolbox.ToolboxDef
             kind: 'category',
             name: c.name,
             categorystyle: categoryStyleName(c.id),
-            contents: categoryContents(c, dialect)
+            contents: categoryContents(c, dialect, level)
           }
     )
   }
 }
+
+/** What an advanced-only drawer says while the advanced blocks are off (#1210). */
+export const ADVANCED_OFF_HINT =
+  'These are advanced blocks. Turn them on in Settings ▸ Appearance ▸ Blocks.'
 
 /** One toolbox entry for a registered block. */
 function blockEntry(def: BlockDefinition): Record<string, unknown> {
@@ -95,7 +102,8 @@ function blockEntry(def: BlockDefinition): Record<string, unknown> {
  */
 export function categoryContents(
   category: (typeof BLOCK_CATEGORIES)[number],
-  dialect: Dialect
+  dialect: Dialect,
+  level: BlockLevel = 'advanced'
 ): Record<string, unknown>[] {
   // Out of dialect means out of the FLYOUT (#1039). The block stays registered —
   // an existing program that uses it still opens and still generates.
@@ -107,8 +115,14 @@ export function categoryContents(
   // the default is no: the toolbox is curated, the reader is comprehensive, and
   // conflating the two would undo #1007's framing. `hidden` is how a definition
   // says which it is.
+  //
+  // And the LEVEL (#1210, epic #1206), the third filter. `simple` keeps the
+  // beginner's blocks and nothing marked `advanced`; a sub-category whose every
+  // block was advanced is not built at all, because the groups below are made
+  // from what survives. The default here is `advanced` — everything — so a
+  // caller that has no opinion (a test, the PDF export) sees the whole palette.
   const blocks = blocksInCategory(category.id).filter(
-    (b) => !b.hidden && inScope(b.scope, dialect)
+    (b) => !b.hidden && inScope(b.scope, dialect) && atLevel(b, level)
   )
   const loose = blocks.filter((b) => !b.group)
   const groups = new Map<string, { name: string; blocks: BlockDefinition[] }>()
@@ -135,12 +149,19 @@ export function categoryContents(
     // filling it ("wire a part up in Electronics"), which is not the reason it
     // is empty here and would send the learner off to do something that will
     // not help.
+    //
+    // A drawer the LEVEL emptied says so too — the Python drawer, in simple
+    // mode, is the one this is written for. A blank category would read as a
+    // bug; this reads as a door.
     const theirs = blocksInCategory(category.id).find((b) => b.scope && b.scope !== 'both')?.scope
+    const advanced = blocksInCategory(category.id).some((b) => !b.hidden && !atLevel(b, level))
     const hint = theirs
       ? `These blocks are ${DIALECT_LABEL[theirs]}. Your board is running ${DIALECT_LABEL[dialect]}.`
-      : 'hint' in category && category.hint
-        ? category.hint
-        : null
+      : advanced
+        ? ADVANCED_OFF_HINT
+        : 'hint' in category && category.hint
+          ? category.hint
+          : null
     if (hint) contents.push({ kind: 'label', text: hint })
   }
   // THE MODULES DRAWER HAS A BUTTON (#1048). Its contents are the program's

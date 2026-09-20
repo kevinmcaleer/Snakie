@@ -65,6 +65,21 @@ and its block is selected on the canvas. Right-click a block and choose
 | **Plugins** | blocks a Python plugin added (desktop only) |
 | **Python** | grey blocks holding code you type yourself |
 
+### Simple and advanced blocks
+
+The toolbox has two tiers. A **fresh install starts simple**: the drawers above,
+minus the things a first-year class does not need to scroll past — classes,
+`try`, `with` and files, comprehensions, slices, bitwise maths, `global` and
+`del`, and the grey Python blocks. **Settings ▸ Appearance ▸ Advanced blocks**
+switches them on, and an open canvas re-filters straight away. A profile that
+used Snakie before this setting existed keeps every drawer.
+
+Two things do not change with the switch. A program that already uses advanced
+blocks **still opens, renders and runs** in simple mode — the toolbox is what a
+learner can reach for, not what Snakie understands. And the Python pane still
+shows everything, so a class a teacher pasted in is a class on the right even
+when there is no drawer for it on the left.
+
 **Turtle comes first** deliberately. It is the only category that needs nothing
 plugged in, and drawing a square is a better first ten minutes than wiring an
 LED.
