@@ -255,4 +255,21 @@ def go():
     expect(api.classes[0].properties).toEqual(['pin', 'unit', 'ready'])
     expect(api.classes[0].methods.map((m) => m.name)).not.toContain('ready')
   })
+
+  it('an __init__ attribute is settable, and a @property only with a .setter (#1209)', () => {
+    // `ready` has one, so `sensor.ready = True` is a line somebody may write.
+    // A getter-only property would not be here: assigning to one raises, and a
+    // *set … to …* block offering it would be a block whose only outcome is an
+    // `AttributeError`.
+    expect(api.classes[0].settable).toEqual(['pin', 'unit', 'ready'])
+  })
+
+  it('a getter-only @property is readable but not settable', () => {
+    const only = readModuleApi(
+      'sensor',
+      'class Sensor:\n    @property\n    def ready(self):\n        return True\n'
+    )
+    expect(only.classes[0].properties).toEqual(['ready'])
+    expect(only.classes[0].settable).toEqual([])
+  })
 })

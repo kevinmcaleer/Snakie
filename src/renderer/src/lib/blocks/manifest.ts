@@ -164,6 +164,14 @@ function fieldFor(arg: BlockArgSpec): Record<string, unknown> {
       return { type: 'field_input', name: arg.name, text: String(arg.default ?? '') }
     case 'toggle':
       return { type: 'field_checkbox', name: arg.name, checked: arg.default === true }
+    case 'variable':
+      // Blockly's own variable field, so the dropdown lists the workspace's
+      // variables and carries *Rename* and *New variable…* for free — and a
+      // block dragged out arrives holding `default`, creating it if the
+      // workspace has none by that name. THAT is what makes the object blocks
+      // work: the naming block and every block that uses the object point at
+      // one variable model, so a rename moves both.
+      return { type: 'field_variable', name: arg.name, variable: String(arg.default ?? 'item') }
     case 'statements':
       return { type: 'input_statement', name: arg.name, ...label }
     default:
@@ -266,6 +274,15 @@ function valueOf(arg: BlockArgSpec, block: Blockly.Block, gen: MicroPythonGenera
       // VERBATIM. A choice is usually a constant — `Pin.OUT`, `0x76`, `"fast"` —
       // and quoting it here would break every one that isn't a string.
       return String(block.getFieldValue(arg.name) ?? '')
+    case 'variable':
+      // The field holds the variable's ID; the generator turns that into the
+      // one identifier this pass uses for it, collisions and sanitising and
+      // all. Keyed on the ID rather than the name on purpose — see
+      // `MicroPythonGenerator.variableName`.
+      return gen.variableName(
+        String(block.getFieldValue(arg.name) ?? ''),
+        String(arg.default ?? 'item')
+      )
     case 'number-field':
     case 'pin':
     default:

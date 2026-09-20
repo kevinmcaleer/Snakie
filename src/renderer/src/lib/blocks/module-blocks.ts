@@ -1,7 +1,7 @@
 import type { BlockArgSpec, ManifestBlock, BlocksManifest } from '../../../../shared/blocks-manifest'
 import { BLOCKS_MANIFEST_VERSION } from '../../../../shared/blocks-manifest'
 import type { ApiClass, ApiFunction, ApiParam, ModuleApi } from './module-api'
-import type { CallRule } from './python-to-blocks'
+import type { CallRule, ConstructRule, MemberRule } from './python-to-blocks'
 
 /**
  * A MODULE'S API, AS BLOCKS (#1048, epic #1007).
@@ -12,18 +12,43 @@ import type { CallRule } from './python-to-blocks'
  * the same `blockDefinitionsFrom` → `defineDynamicBlocks` path a part's
  * `blocks.yml` goes down, which is why this is a mapping and not a subsystem.
  *
+ * AN OBJECT IS A VARIABLE (#1209). The first cut of this file hoisted the
+ * object instead: the constructor was a VALUE block, `the RangeFinder (0) (1)`,
+ * and it plugged into the receiver socket of every method and property block.
+ * That generated correct Python — one hoisted `rangefinder = …` above the
+ * program, however many blocks named it — and taught the wrong thing, because
+ * the learner saw the wiring repeated on every single call:
+ *
+ *     print(f"{ (distance of (the RangeFinder (0) (1))) }")
+ *
+ * Nobody writes that. What they write is the two lines the issue opened with —
+ * make the object once, give it a name, then use the name:
+ *
+ *     ping = RangeFinder(echo_pin=0, trigger_pin=1)
+ *     ping.distance()
+ *
+ * So the constructor is a STATEMENT that assigns to a `variable` field, and
+ * everything else on the class takes that same field. The pins are typed once,
+ * on the line that makes the object, and every other block is a pair of
+ * dropdowns: which object, and which part of it.
+ *
  * THE SHAPES, and why each one:
  *
- *  - **a class** → one constructor block, with a `setup` hoist so the object is
- *    built once above the program rather than every time it is used. That is
- *    the same rule the hardware palette follows, and for the same reason: a
- *    display re-initialised inside a loop is a display that flickers.
- *  - **a method** → one call block per public method, with a real socket per
- *    parameter. `self` is already gone — the hoisted object is the receiver. A
- *    method that RETURNS something is a value block, so `ping.distance()` fits
- *    inside a `print`; one that only does things stacks as a statement.
- *  - **a property** → one value block, `distance of (the RangeFinder)`, that
- *    writes `obj.distance` with no brackets — a `@property` or a `self.x = …`.
+ *  - **a class** → one `make [ping] a RangeFinder` statement, which writes
+ *    `ping = RangeFinder(...)` and brings `from range_finder import RangeFinder`
+ *    with it. The wiring lives in its sockets.
+ *  - **its readable members** → ONE value block, `[ping] 's [distance() ▾]`,
+ *    whose dropdown lists every `@property`, every `__init__` attribute and
+ *    every method that takes nothing and returns something. One block for the
+ *    whole read surface of the class, rather than one shelf entry per member:
+ *    the dropdown is also where a learner DISCOVERS what a sensor can tell
+ *    them, and it teaches the brackets by showing `distance()` beside `unit`.
+ *  - **its settable members** → one `set [ping] 's [unit ▾] to ( )` statement,
+ *    offering only what may actually be assigned: an `__init__` attribute or a
+ *    `@property` with a `.setter`. Writing to a getter-only property raises.
+ *  - **a method that takes arguments, or returns nothing** → one call block
+ *    each, with a real socket per parameter and the object in its variable
+ *    field. A dropdown cannot grow sockets, which is why these stay separate.
  *  - **a module function** → one call block.
  *  - **an UPPER_CASE constant** → one value block.
  *
@@ -128,51 +153,124 @@ function methodMessage(method: ApiFunction, params: readonly ApiParam[]): string
   return holes ? `${method.name} ${holes}` : method.name
 }
 
-/** One class → its constructor block, a block per method, a block per property. */
+/**
+ * `RangeFinder` → `range_finder`; `SSD1306_I2C` → `ssd1306_i2c`.
+ *
+ * The name the block arrives holding, so a learner who drags the constructor
+ * out and presses Run has a working line before they have named anything. It
+ * is the class's own name in the casing Python gives an object, which is what
+ * the module's README will have called it too.
+ *
+ * SAFE AGAINST THE IMPORT, which is the one collision that would matter: the
+ * constructor writes `from range_finder import RangeFinder`, and a `from`
+ * import binds only `RangeFinder` — so `range_finder` is still a free name.
+ *
+ * A NAME THAT ALREADY HAS AN UNDERSCORE IN IT IS ONLY LOWER-CASED. `SSD1306_I2C`
+ * is the author's own word-breaking, and splitting inside it on a case change
+ * gives `ssd1306_i2_c` — an acronym cut in half.
+ */
+export function objectNameFor(klass: string): string {
+  if (klass.includes('_')) return klass.toLowerCase()
+  return klass
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+    .toLowerCase()
+}
+
+/** The object every block on a class names: one variable, one dropdown. */
+function objectArg(klass: ApiClass): BlockArgSpec {
+  return { name: 'OBJ', kind: 'variable', default: objectNameFor(klass.name) }
+}
+
+/**
+ * A method the member dropdown can cover: it takes nothing and gives back
+ * something, so it reads exactly like a property with brackets on it.
+ *
+ * `ping.distance()` is this, and it is the single commonest thing anybody does
+ * with a sensor. A method with parameters cannot be here — a dropdown has
+ * nowhere to put them — and one that returns nothing is an instruction rather
+ * than a reading, so it keeps its own statement block.
+ */
+function readableMethod(method: ApiFunction): boolean {
+  return method.returns === true && method.params.length === 0
+}
+
+/** Everything `[ping] 's [ … ]` can read: attributes bare, methods bracketed. */
+function readableMembers(klass: ApiClass): { label: string; value: string }[] {
+  return [
+    ...klass.properties.map((name) => ({ label: name, value: name })),
+    ...klass.methods
+      .filter(readableMethod)
+      // THE BRACKETS ARE IN THE LABEL, not just in the generated line. A
+      // learner picking between `unit` and `distance()` is being shown the
+      // difference that trips everybody up — a reading you ASK for, and a value
+      // that is simply there — at the moment they choose between them.
+      .map((method) => ({ label: `${method.name}()`, value: `${method.name}()` }))
+  ]
+}
+
+/** One class → the block that makes one, the block that reads it, the one that sets it. */
 function classBlocks(module: string, klass: ApiClass): ManifestBlock[] {
   const out: ManifestBlock[] = []
   const init = klass.init ?? []
   const initParams = constructorSockets(init)
+  const obj = objectArg(klass)
   if (expressible(init)) {
     out.push({
       id: `new_${klass.name}`,
-      message: `the ${klass.name}${initParams.map((_, i) => ` %${i + 1}`).join('')}`,
-      shape: 'value',
-      output: 'Object',
-      args: args(initParams),
-      // Hoisted, so the object is built once above the program. The key is the
-      // construction itself, so two blocks naming the same object share one.
-      setup: {
-        name: klass.name.toLowerCase(),
-        expr: `${module}.${klass.name}(${callArgs(init, initParams)})`
-      },
-      code: '{SETUP}',
-      imports: [{ module }],
-      tooltip: `Make a ${klass.name} from ${module}, once, above your program.`
+      message: `make %1 a ${klass.name}${initParams.map((_, i) => ` %${i + 2}`).join('')}`,
+      args: [obj, ...args(initParams)],
+      // `from range_finder import RangeFinder`, so the line the block writes is
+      // the line the learner would have written. Importing the MODULE and
+      // saying `range_finder.RangeFinder(...)` is equally correct Python and
+      // not what any driver's own README shows.
+      imports: [{ module, name: klass.name }],
+      code: `{OBJ} = ${klass.name}(${callArgs(init, initParams)})`,
+      tooltip: `Make a ${klass.name} and give it a name. Put this above your loop — every other ${klass.name} block takes the name.`
     })
   }
-  const obj: BlockArgSpec = { name: 'OBJ', kind: 'any', label: 'on', shadow: `new_${klass.name}` }
+  const members = readableMembers(klass)
+  if (members.length > 0) {
+    out.push({
+      id: `${klass.name}_get`,
+      message: "%1 's %2",
+      shape: 'value',
+      args: [obj, { name: 'MEMBER', kind: 'choice', options: members }],
+      code: '{OBJ}.{MEMBER}',
+      tooltip: `Read something off a ${klass.name} — pick which from the menu.`
+    })
+  }
+  if (klass.settable.length > 0) {
+    out.push({
+      id: `${klass.name}_set`,
+      message: "set %1 's %2 to %3",
+      args: [
+        obj,
+        {
+          name: 'MEMBER',
+          kind: 'choice',
+          options: klass.settable.map((name) => ({ label: name, value: name }))
+        },
+        { name: 'VALUE', kind: 'any' }
+      ],
+      code: '{OBJ}.{MEMBER} = {VALUE}',
+      tooltip: `Change something on a ${klass.name}. Only the parts that can be changed are on the menu.`
+    })
+  }
   for (const method of klass.methods) {
+    // Already in the dropdown above, and two blocks writing one line would be
+    // two shelf entries for the same thing — and an ambiguity for the reader.
+    if (readableMethod(method)) continue
     if (!expressible(method.params)) continue
     const params = socketable(method.params)
     out.push({
       id: `${klass.name}_${method.name}`,
-      // The object comes first, as a socket: the constructor block plugs in.
-      message: `${methodMessage(method, params)} of %${params.length + 1}`,
+      // The object LAST, as it reads aloud: `text "hi" 0 0 on [oled]`.
+      message: `${methodMessage(method, params)} on %${params.length + 1}`,
       args: [...args(params), obj],
       ...(method.returns ? { shape: 'value' as const } : {}),
       code: `{OBJ}.${method.name}(${callArgs(method.params, params)})`,
       tooltip: `${klass.name}.${method.name}(${method.params.map((p) => p.name).join(', ')})`
-    })
-  }
-  for (const name of klass.properties) {
-    out.push({
-      id: `${klass.name}_${name}`,
-      message: `${name} of %1`,
-      shape: 'value',
-      args: [obj],
-      code: `{OBJ}.${name}`,
-      tooltip: `${klass.name}.${name} — read straight off the object, no brackets.`
     })
   }
   return out
@@ -227,9 +325,13 @@ export function manifestForModule(api: ModuleApi): BlocksManifest {
  * says what those lines look like coming the other way, so a program that uses
  * the module opens as module blocks rather than as the generic call block.
  *
- *  - A METHOD is an `on` rule — a call on WHATEVER the learner named the object,
- *    which is `xs.append(v)`'s own shape. The receiver goes in `OBJ`.
+ *  - A METHOD is an `onField` rule — a call on WHATEVER the learner named the
+ *    object, whose name goes into the block's variable field rather than into a
+ *    socket, because that is where the block holds it (#1209).
  *  - A MODULE FUNCTION is a `module.fn` rule, `time.sleep`'s shape.
+ *  - A ZERO-ARGUMENT READING and a PROPERTY are {@link objectRulesForModule}'s,
+ *    because one block with a dropdown covers both and neither is a call the
+ *    `CallRule` table can describe on its own.
  *
  * Only a signature with NO defaults reads back: the reader matches arguments by
  * position, and `col=1` written as a keyword is not a position. Such a line
@@ -248,10 +350,22 @@ export function readRulesForModule(api: ModuleApi, typeFor: (id: string) => stri
     for (const method of klass.methods) {
       const sockets = positional(method.params)
       if (!sockets) continue
+      if (readableMethod(method)) {
+        // `ping.distance()` is the member dropdown's, not a block of its own.
+        rules.push({
+          fn: method.name,
+          type: typeFor(`${klass.name}_get`),
+          onField: 'OBJ',
+          args: [],
+          fields: { MEMBER: `${method.name}()` },
+          shape: 'value'
+        })
+        continue
+      }
       rules.push({
         fn: method.name,
         type: typeFor(`${klass.name}_${method.name}`),
-        on: 'OBJ',
+        onField: 'OBJ',
         args: sockets,
         shape: method.returns ? 'value' : 'statement'
       })
@@ -269,4 +383,57 @@ export function readRulesForModule(api: ModuleApi, typeFor: (id: string) => stri
     })
   }
   return rules
+}
+
+/**
+ * THE TWO SHAPES A `CallRule` CANNOT DESCRIBE (#1209).
+ *
+ * `ping.unit` is not a call at all, and `ping = RangeFinder(echo_pin=0)` is a
+ * call whose whole point is the name on its left — neither fits a table keyed
+ * on "a function, and what goes in its sockets". They are what kept the
+ * constructor line grey in the first cut of this feature: the reader had
+ * nothing to say about it, so the learner's own declaration came back as a raw
+ * Python block sitting above blocks that had forgotten they were about it.
+ *
+ * ONE RULE PER CLASS, not one per member: the block is one block with a
+ * dropdown, so reading a member back means setting that dropdown.
+ */
+export function objectRulesForModule(
+  api: ModuleApi,
+  typeFor: (id: string) => string
+): { members: MemberRule[]; constructs: ConstructRule[] } {
+  const members: MemberRule[] = []
+  const constructs: ConstructRule[] = []
+  for (const klass of api.classes) {
+    for (const name of klass.properties) {
+      members.push({
+        attr: name,
+        type: typeFor(`${klass.name}_get`),
+        onField: 'OBJ',
+        fields: { MEMBER: name },
+        ...(klass.settable.includes(name)
+          ? { set: { type: typeFor(`${klass.name}_set`), value: 'VALUE' } }
+          : {})
+      })
+    }
+    const init = klass.init ?? []
+    if (!expressible(init)) continue
+    const sockets = constructorSockets(init)
+    constructs.push({
+      klass: klass.name,
+      module: api.module,
+      type: typeFor(`new_${klass.name}`),
+      nameField: 'OBJ',
+      // Exactly the sockets the block has, in the form the block writes them:
+      // a required parameter positionally, a defaulted one as its keyword. A
+      // line that says it any other way is somebody else's line and stays raw.
+      args: init.filter((p) => sockets.includes(p) && p.default === undefined).map((p) => placeholder(p.name)),
+      keywords: Object.fromEntries(
+        init
+          .filter((p) => sockets.includes(p) && p.default !== undefined)
+          .map((p) => [p.name, placeholder(p.name)])
+      )
+    })
+  }
+  return { members, constructs }
 }

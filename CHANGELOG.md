@@ -8,6 +8,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A module's object is a variable you name.** Module blocks used to carry the
+  object in a socket, so the constructor — pins and all — was repeated inside
+  every call that used it: *distance of (the RangeFinder (0) (1))*. Now a class
+  gives you `make [ping] a RangeFinder  echo_pin (0)  trigger_pin (1)`, which
+  writes `ping = RangeFinder(echo_pin=0, trigger_pin=1)` on a line of its own,
+  and every other block on that class takes the name from a dropdown of your
+  variables. Rename `ping` on the canvas and the declaration and every use of it
+  move together.
+- **One block for everything a class can be asked.** `[ping] 's [distance() ▾]`
+  is a single value block whose menu lists every `@property`, every `__init__`
+  attribute and every method that takes nothing and returns something — with the
+  brackets shown in the menu, so `distance()` and `unit` are visibly different
+  kinds of thing. Its twin, `set [ping] 's [unit ▾] to ( )`, offers only the
+  members that can actually be assigned to. Methods that take arguments keep
+  their own blocks. Opening a sensor program now brings the whole thing back as
+  blocks, the `ping = RangeFinder(…)` line included — that line used to be the
+  one grey block left in the file.
+
 - **A `print` block that understands f-strings.** The Text drawer has a new
   `print f"…"` block: type the text with a `{}` wherever a value goes —
   `ping.distance {}` — and a socket appears for each hole, so

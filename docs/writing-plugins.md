@@ -328,6 +328,13 @@ the block itself.
 | `choice` | a dropdown (`options`) | the option's value, **verbatim** |
 | `toggle` | a checkbox | `True` / `False` |
 | `pin` | a pin dropdown (`capability`) | the GPIO number |
+| `variable` | a dropdown of the workspace's variables (`default` names the one it arrives holding) | the Python identifier that variable generates as |
+
+`variable` is how a block says *the object the learner made*. One block writes
+`ping = RangeFinder(...)` into the variable, another reads `ping.distance()` out
+of it, and because both point at one variable model a rename on the canvas moves
+every line at once — so the wiring is typed once rather than restated inside
+every call.
 
 Two conveniences worth knowing:
 

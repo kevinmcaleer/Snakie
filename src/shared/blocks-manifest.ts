@@ -46,6 +46,13 @@ export const BLOCKS_MANIFEST_VERSION = 1
  * value is fixed and always present.
  *
  * `statements` is the C-shape — a body of blocks, rendered already indented.
+ *
+ * `variable` is a field too, and the one that names something rather than
+ * describing it: a dropdown of the workspace's own variables, which is how a
+ * block says *the object the learner made* (#1209). Its value reaches the
+ * template as the Python identifier that variable generates as — so the block
+ * that writes `ping = RangeFinder(...)` and the block that reads
+ * `ping.distance()` agree on the name without either of them holding it.
  */
 export type BlockArgKind =
   | 'number'
@@ -58,6 +65,7 @@ export type BlockArgKind =
   | 'choice'
   | 'toggle'
   | 'pin'
+  | 'variable'
 
 /** Sockets take a plugged block; fields hold their own value. */
 export const SOCKET_KINDS: readonly BlockArgKind[] = ['number', 'text', 'boolean', 'any', 'statements']
@@ -68,7 +76,8 @@ const ARG_KINDS: readonly BlockArgKind[] = [
   'text-field',
   'choice',
   'toggle',
-  'pin'
+  'pin',
+  'variable'
 ]
 
 /** One option in a `choice` dropdown. */
