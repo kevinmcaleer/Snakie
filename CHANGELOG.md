@@ -6,6 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The Yellow TT Motor wears the better 2-D drawing.** The Standard library's
+  `tt-motor` now carries the artwork from the hand-drawn "TT Motor (Yellow)"
+  part — yellow gearbox with the output boss, ribbed casing, motor can and the
+  red/black lead tails at the back — re-fitted from its 22 × 70 mm canvas onto
+  the part's mesh-true 36.6 × 70.6 mm footprint, so every feature keeps its real
+  size and the axle now runs the full 36.6 mm across. The terminals moved to the
+  back edge where the leads actually leave the can, and the two Ø3 mm mounting
+  holes came with it. The Adafruit 3777 mesh, its `meshRotation`/`meshOffset`
+  and the help article are unchanged. The part also gains the fuller
+  description, tags and spec properties (gear ratio, no-load speed, D-shaft),
+  a `3-6V` range in place of the flat `6V`, and a realistic 1.2 A stall current
+  for the circuit sim (it was 0.25 A, which is under the motor's free-running
+  draw).
+
 ### Added
 
 - **3-D models for the 2WD robot kit's electronics.** Four more Standard-library
