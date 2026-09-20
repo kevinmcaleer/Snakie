@@ -309,6 +309,7 @@ Both routes use the same schema and the same validator.
 | `tooltip` | Shown on hover. Write it for the learner, not the maintainer. |
 | `help` | An **in-app** help article id (`ref-pins`), not a URL — classrooms are often offline. |
 | `scope` | Which runtime the block is for: `both` (the default), `micropython` or `circuitpython`. An out-of-scope block is kept out of the toolbox — never unregistered, so a program already using it still opens. |
+| `level` | `simple` (the default) or `advanced`. An advanced block is only offered while **Settings ▸ Appearance ▸ Show advanced blocks** is on; a drawer whose every block is advanced disappears with them. Like `scope`, it filters the toolbox and never the workspace. |
 | `colour` | A `#rrggbb` override. Omit it and the block wears its category's colour. |
 | `inline` | `false` stacks the arguments vertically. Defaults to inline. |
 
@@ -335,6 +336,26 @@ the block itself.
 of it, and because both point at one variable model a rename on the canvas moves
 every line at once — so the wiring is typed once rather than restated inside
 every call.
+
+**Simple and advanced.** `level: advanced` is for the blocks a beginner should
+not meet on their first afternoon — raw register writes, a bus reconfigured by
+hand, anything whose tooltip has to explain a datasheet. Mark those and leave
+the everyday `read` and `set` blocks alone, and your drawer reads as a beginner's
+drawer until someone turns the advanced blocks on. From a Python plugin it is
+the `level=` keyword on `block()`:
+
+```python
+block(
+    "raw_write",
+    "write %1 to register %2 of the sensor",
+    "sensor.write_reg({REG}, {VALUE})\n",
+    args=[
+        {"name": "VALUE", "kind": "number", "default": 0},
+        {"name": "REG", "kind": "number", "default": 0},
+    ],
+    level="advanced",
+)
+```
 
 Two conveniences worth knowing:
 

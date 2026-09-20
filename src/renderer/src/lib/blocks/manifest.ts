@@ -130,6 +130,10 @@ function toDefinition(
     ...(block.help ? { help: block.help } : {}),
     // The manifest's own dialect scope (#1039), if it declared one.
     ...(block.scope ? { scope: block.scope } : {}),
+    // …and its own simple/advanced level (#1213), which is the same word the
+    // registry uses, so the toolbox filter needs no second rule for plugin and
+    // part blocks: a drawer whose every block is advanced is not built at all.
+    ...(block.level ? { level: block.level } : {}),
     json,
     ...(shadows ? { toolbox: { inputs: shadows } } : {}),
     imports: (block.imports ?? []).map((i) => ({
