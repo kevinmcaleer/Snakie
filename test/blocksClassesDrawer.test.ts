@@ -46,7 +46,7 @@ function classesShelf(
 
 describe('the three blocks can be reached', () => {
   it('is no longer hidden, and is advanced', () => {
-    for (const type of ['snakie_class', 'snakie_self', 'snakie_super']) {
+    for (const type of ['snakie_class', 'snakie_property', 'snakie_self', 'snakie_super']) {
       const def = blockDefinition(type)!
       expect(def.hidden, type).toBeUndefined()
       expect(def.level, type).toBe('advanced')
@@ -61,6 +61,9 @@ describe('the three blocks can be reached', () => {
     expect(shelf.contents[0]).toEqual({ kind: 'label', text: CLASSES.hint })
     expect(shelf.contents.filter((c) => c.kind === 'block').map((c) => c.type)).toEqual([
       'snakie_class',
+      // The property block joined the shelf in B3 (#1222), under the class it
+      // belongs inside and above the `self` its getter reads.
+      'snakie_property',
       'snakie_self',
       'snakie_super'
     ])
@@ -69,7 +72,7 @@ describe('the three blocks can be reached', () => {
   it('is not in the drawer at all in simple mode', () => {
     expect(classesShelf('simple')).toBeUndefined()
     const flat = JSON.stringify(functions('simple'))
-    for (const type of ['snakie_class', 'snakie_self', 'snakie_super'])
+    for (const type of ['snakie_class', 'snakie_property', 'snakie_self', 'snakie_super'])
       expect(flat, type).not.toContain(type)
   })
 

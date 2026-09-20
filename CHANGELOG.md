@@ -8,6 +8,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A property block (#1222, epic #1206).** The Classes shelf has a new
+  advanced `property` block: it writes `@property def name(self)`, and ticking
+  **can be set too** adds the `@name.setter` half underneath, with the new
+  value's name — `value` by default — in a field of its own. The name is
+  written once and used in both lines, so the two halves cannot drift apart.
+  Opening a `.py` file folds a getter and the `@name.setter` under it back into
+  one block; a getter on its own becomes the block with the box unticked, and a
+  pair the block cannot hold exactly (an unusual signature, a lone setter, an
+  unexpected gap) is left as the method blocks it was.
+
 - **A Classes drawer (#1220, epic #1206).** The `class` and `self` blocks were
   registered and read back but in no drawer; `super()` was in a category whose
   flyout could not show it. All three are now on a **Functions ▸ Classes**
