@@ -1,0 +1,151 @@
+id: tt-motor-yellow
+name: TT Motor (Yellow)
+description: The classic yellow-gearbox "TT" brushed DC gear motor — the standard drive motor bundled with almost every 2WD/4WD robot car chassis kit.
+manufacturer: Generic
+family: Motor
+tags:
+  - tt-motor
+  - dc-motor
+  - gearmotor
+  - robot-car
+  - chassis
+  - yellow
+package: THT
+pinSpacing: 2.54
+voltage: 3-6V
+properties:
+  gearRatio: 48:1 (kits also sell 1:120 / 1:298 variants)
+  noLoadSpeed: ~200 RPM @ 6V
+  shaft: D-shaft, 5mm dia
+version: 0.1.0
+aspect: 0.31
+dimensions:
+  width: 22
+  height: 70
+shape:
+  kind: rect
+  cornerRadius: 0
+headers:
+  - edge: bottom
+    pins:
+      - name: VCC
+        type: pwr
+        x: 0.44
+        y: 0.97
+      - name: GND
+        type: gnd
+        x: 0.56
+        y: 0.97
+mountingHoles:
+  - x: 0.08
+    y: 0.29
+    diameter: 3
+  - x: 0.92
+    y: 0.29
+    diameter: 3
+shapes:
+  - kind: circle
+    x: 0.5
+    y: 0.03
+    z: 4
+    fill: "#c9ccd1"
+    stroke: "#6b7075"
+    strokeWidth: 1
+    r: 0.045
+  - kind: rect
+    x: 0.06
+    y: 0.06
+    z: 0
+    fill: "#f2c50c"
+    stroke: "#a8790a"
+    strokeWidth: 1
+    w: 0.88
+    h: 0.46
+    cornerRadius: 4
+  - kind: circle
+    x: 0.5
+    y: 0.14
+    z: 1
+    fill: "#e0e0e0"
+    stroke: "#8a8f96"
+    strokeWidth: 1
+    r: 0.09
+  - kind: rect
+    x: 0.15
+    y: 0.3
+    z: 1
+    fill: "#c99a0a"
+    stroke: none
+    strokeWidth: 0
+    w: 0.7
+    h: 0.03
+  - kind: rect
+    x: 0.15
+    y: 0.44
+    z: 1
+    fill: "#c99a0a"
+    stroke: none
+    strokeWidth: 0
+    w: 0.7
+    h: 0.03
+  - kind: rect
+    x: 0.18
+    y: 0.54
+    z: 0
+    fill: "#9aa0a6"
+    stroke: "#5b6066"
+    strokeWidth: 1
+    w: 0.64
+    h: 0.34
+    cornerRadius: 6
+  - kind: rect
+    x: 0.23
+    y: 0.58
+    z: 2
+    fill: "#c7ccd1"
+    stroke: none
+    strokeWidth: 0
+    w: 0.08
+    h: 0.26
+  - kind: rect
+    x: 0.3
+    y: 0.87
+    z: 2
+    fill: "#4a4f54"
+    stroke: none
+    strokeWidth: 0
+    w: 0.4
+    h: 0.04
+  - kind: rect
+    x: 0.41
+    y: 0.9
+    z: 3
+    fill: "#c0392b"
+    stroke: none
+    strokeWidth: 0
+    w: 0.06
+    h: 0.1
+  - kind: rect
+    x: 0.53
+    y: 0.9
+    z: 3
+    fill: "#1c2227"
+    stroke: none
+    strokeWidth: 0
+    w: 0.06
+    h: 0.1
+help: help.md
+electrical:
+  model: consumer
+  maxCurrentA: 1.2
+  currentDrawA: 0.15
+  stallCurrentA: 1.2
+  terminals:
+    positive: VCC
+    negative: GND
+layerVisibility:
+  pcb: false
+  image: false
+  holes: true
+  pins: true
+  components: true
