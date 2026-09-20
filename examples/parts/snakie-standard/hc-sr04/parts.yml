@@ -8,7 +8,7 @@ tags:
 package: THT
 pinSpacing: 2.54
 voltage: 3.3V
-version: 0.1.3
+version: 0.2.0
 pcbColor: "#0f5a2e"
 aspect: 0.5
 dimensions:
@@ -96,6 +96,12 @@ imageLayer:
   w: 1.3283409690856933
   h: 2.3701770232705512
 help: help.md
+mesh: model.stl
+meshUnits: mm
+meshOffset:
+  - 0
+  - 2.5
+  - 3.5
 mass_g: 8.5
 electrical:
   model: consumer
