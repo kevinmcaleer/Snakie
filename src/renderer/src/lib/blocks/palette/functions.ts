@@ -4,6 +4,7 @@ import type { MicroPythonGenerator } from '../generator'
 import type { BlockDefinition } from '../registry'
 import * as Blockly from 'blockly/core'
 import { registerCallRules } from '../python-to-blocks'
+import { CLASSES } from './structure'
 
 /**
  * FUNCTIONS (#1011, epic #1007).
@@ -231,6 +232,8 @@ export const FUNCTION_BLOCKS: BlockDefinition[] = [
     type: 'snakie_super',
     level: 'advanced',
     category: 'functions',
+    // On the Classes shelf since #1220, with the class block it names.
+    group: CLASSES,
     help: 'ref-classes',
     read: { fn: 'super', args: [], shape: 'value' },
     json: {
