@@ -62,6 +62,15 @@ export interface ApiClass {
    * and it is not a method — a block that wrote `ping.unit()` would raise.
    */
   properties: readonly string[]
+  /**
+   * The subset of {@link ApiClass.properties} a program may ASSIGN to: an
+   * `__init__` attribute, or a `@property` the class also gives a `.setter`.
+   *
+   * Kept apart because writing to a getter-only `@property` raises at runtime,
+   * and a *set … to …* block offering one would be a block whose only outcome
+   * is an `AttributeError`.
+   */
+  settable: readonly string[]
 }
 
 /** Everything a module offers, as far as reading it can tell. */
@@ -177,8 +186,13 @@ export function readModuleApi(module: string, source: string): ModuleApi {
   const variables: string[] = []
   const lines = logicalLines(source)
 
-  let current: { def: ApiClass; methods: ApiFunction[]; properties: string[]; indent: number } | null =
-    null
+  let current: {
+    def: ApiClass
+    methods: ApiFunction[]
+    properties: string[]
+    settable: string[]
+    indent: number
+  } | null = null
   // The function whose body we are inside, for the two things a body tells us:
   // whether it returns a value, and — in `__init__` — which attributes it sets.
   let inside: { fn: ApiFunction; indent: number; init: boolean } | null = null
@@ -194,8 +208,11 @@ export function readModuleApi(module: string, source: string): ModuleApi {
     if (inside && line.indent > inside.indent) {
       if (/^return\s+\S/.test(line.text)) inside.fn.returns = true
       const attr = inside.init ? /^self\.([A-Za-z_]\w*)\s*=[^=]/.exec(line.text) : null
-      if (attr && current && isPublic(attr[1]) && !current.properties.includes(attr[1])) {
-        current.properties.push(attr[1])
+      if (attr && current && isPublic(attr[1])) {
+        if (!current.properties.includes(attr[1])) current.properties.push(attr[1])
+        // An `__init__` attribute is a plain slot on the object, so it is
+        // settable by definition — `ping.unit = 'in'` is a line somebody writes.
+        if (!current.settable.includes(attr[1])) current.settable.push(attr[1])
       }
     }
 
@@ -216,9 +233,16 @@ export function readModuleApi(module: string, source: string): ModuleApi {
         name: klass[1],
         bases: splitParams(klass[2] ?? '').filter((b) => /^[A-Za-z_][\w.]*$/.test(b)),
         methods: [],
-        properties: []
+        properties: [],
+        settable: []
       }
-      current = { def, methods: [], properties: def.properties as string[], indent: line.indent }
+      current = {
+        def,
+        methods: [],
+        properties: def.properties as string[],
+        settable: def.settable as string[],
+        indent: line.indent
+      }
       classes.push(def)
       continue
     }
@@ -233,7 +257,14 @@ export function readModuleApi(module: string, source: string): ModuleApi {
           ;(current.def as { init?: readonly ApiParam[] }).init = params
           inside = { fn, indent: line.indent, init: true }
         } else if (seen.some((d) => /\.(setter|deleter)$/.test(d))) {
-          // The other half of a property. Nothing to offer: the getter already did.
+          // The other half of a property. No block of its own — the getter
+          // already made one — but a `.setter` is the thing that says the
+          // property may be ASSIGNED to, which nothing else in the file does.
+          for (const decorator of seen) {
+            const owner = /^([A-Za-z_]\w*)\.setter$/.exec(decorator)
+            if (!owner || !current.properties.includes(owner[1])) continue
+            if (!current.settable.includes(owner[1])) current.settable.push(owner[1])
+          }
         } else if (seen.includes('property')) {
           if (isPublic(fn.name) && !current.properties.includes(fn.name)) {
             current.properties.push(fn.name)
@@ -333,7 +364,7 @@ export function apiFromCurated(module: string, members: readonly CuratedMember[]
       // inventing a constructor signature is exactly the guessing this file
       // refuses to do. The class still earns a drawer entry through its
       // constants and the module's functions around it.
-      classes.push({ name: member.name, bases: [], methods: [], properties: [] })
+      classes.push({ name: member.name, bases: [], methods: [], properties: [], settable: [] })
     } else if (member.kind === 'function') {
       functions.push({ name: member.name, params: paramsFromDetail(member.detail) })
     } else if (member.kind === 'constant') {
