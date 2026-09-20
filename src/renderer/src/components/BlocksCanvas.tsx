@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import * as Blockly from 'blockly/core'
 import { usePrompt } from './PromptModal'
 import {
@@ -453,6 +454,17 @@ export function BlocksCanvas({
   const dialectRef = useRef(dialect)
   dialectRef.current = dialect
   /** The dialect the toolbox ON SCREEN was built for, so it isn't rebuilt twice. */
+  /**
+   * THE FOOT OF THE SHELF (#1211).
+   *
+   * A slot of ours appended to Blockly's toolbox column, so the "show advanced
+   * blocks" switch sits UNDER the last category rather than floating over it.
+   * Blockly empties the toolbox's *category group* on `updateToolbox`, so the
+   * slot hangs off the outer `.blocklyToolbox` div, which survives a rebuild —
+   * a React portal into a node Blockly throws away would take the render with
+   * it.
+   */
+  const [shelfFoot, setShelfFoot] = useState<HTMLElement | null>(null)
   const toolboxDialectRef = useRef<Dialect | null>(null)
   /** And the level it was built for (#1210), for the same reason. */
   const toolboxLevelRef = useRef<BlockLevel | null>(null)
@@ -525,6 +537,15 @@ export function BlocksCanvas({
     // Blockly's "reset zoom" control becomes the fit/100% toggle (#1150). After
     // injection, because it works on the control Blockly has just drawn.
     const restoreZoomReset = installZoomReset(ws)
+
+    // The slot at the bottom of the category column (see `shelfFoot`). Blockly
+    // has no toolbox API for "add a control of mine", so this is the toolbox's
+    // own div with one child of ours appended to it.
+    const toolboxDiv = host.querySelector<HTMLElement>('.blocklyToolbox')
+    const foot = document.createElement('div')
+    foot.className = 'blocks-shelf-foot'
+    toolboxDiv?.append(foot)
+    setShelfFoot(toolboxDiv ? foot : null)
 
     // *WHAT BLOCK IS THIS?* (#1245). A drop zone in the bottom-left corner that
     // answers for whatever is dropped on it — and gives the block straight back,
@@ -692,6 +713,8 @@ export function BlocksCanvas({
     return () => {
       host.removeEventListener('mousemove', onMove)
       host.removeEventListener('mouseleave', onLeave)
+      setShelfFoot(null)
+      foot.remove()
       restoreZoomReset()
       removeBlockDoctor()
       ws.removeChangeListener(pointing)
@@ -1134,7 +1157,16 @@ export function BlocksCanvas({
   return (
     <div className="blocks-canvas">
       <div className="blocks-canvas__host" ref={hostRef} data-testid="blocks-canvas-host" />
-      <AdvancedBlocksToggle level={blockLevel} onChange={setBlockLevel} />
+      {/* In the shelf when there is one to sit in; floating over the canvas
+          corner only if Blockly's toolbox could not be found. */}
+      {shelfFoot ? (
+        createPortal(
+          <AdvancedBlocksToggle level={blockLevel} onChange={setBlockLevel} inShelf />,
+          shelfFoot
+        )
+      ) : (
+        <AdvancedBlocksToggle level={blockLevel} onChange={setBlockLevel} />
+      )}
       {settingsFor && settingsBlock && (
         <FunctionSettingsDialog
           name={String(settingsBlock.getFieldValue('NAME') ?? 'this function')}
@@ -1213,21 +1245,26 @@ function extraBlockState(block: Blockly.Block): string {
  * drawers, not at a settings dialog three menus away, and a setting nobody can
  * find is a setting nobody turns on.
  *
- * Drawn over the bottom of the toolbox column rather than inside it, because
- * Blockly owns that SVG and has no slot for a control of ours. It is small,
- * quiet and out of the way of the categories above it.
+ * It lives at the FOOT OF THE SHELF, under a divider that closes the list of
+ * categories — the toolbox column is where the drawers are, so that is where
+ * the switch that changes what is in them belongs. Blockly has no slot for a
+ * control of ours, so the canvas appends one to the toolbox div and portals
+ * this into it; with no toolbox to sit in it falls back to floating over the
+ * bottom-left corner of the canvas.
  */
 function AdvancedBlocksToggle({
   level,
-  onChange
+  onChange,
+  inShelf = false
 }: {
   level: BlockLevel
   onChange: (level: BlockLevel) => void
+  inShelf?: boolean
 }): JSX.Element {
   const on = level === 'advanced'
   return (
     <label
-      className={`blocks-advanced${on ? ' is-on' : ''}`}
+      className={`blocks-advanced${inShelf ? ' is-in-shelf' : ''}${on ? ' is-on' : ''}`}
       title={
         on
           ? 'Hide the advanced blocks — classes, try, comprehensions, slices, files and the grey Python blocks. Your program is not changed.'

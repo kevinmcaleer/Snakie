@@ -285,12 +285,24 @@
   min-width: 0;
 }
 
+/* THE FOOT OF THE SHELF (#1211).
+ *
+ * The last row of Blockly's toolbox column: a divider closing the list of
+ * categories, and the "show advanced blocks" switch under it. Appended to the
+ * toolbox div by `BlocksCanvas`, so it flows straight after the last category
+ * rather than floating over the canvas. */
+.blocks-shelf-foot {
+  margin-top: 6px;
+  padding: 8px 6px 6px;
+  border-top: 1px solid var(--line);
+}
+
 /* "SHOW ADVANCED BLOCKS" (#1211, epic #1206).
  *
- * Sat over the bottom of the toolbox column — Blockly owns that SVG, so this is
- * drawn on top of it rather than in it. Quiet by default (parchment, muted ink)
- * and amber when it is on, which is the same accent the advanced marker inside
- * the drawers wears. */
+ * In the shelf below that divider — or, with no toolbox to sit in, floating
+ * over the bottom-left of the canvas (the `position: absolute` below). Quiet by
+ * default (parchment, muted ink) and amber when it is on, which is the same
+ * accent the advanced marker inside the drawers wears. */
 .blocks-advanced {
   position: absolute;
   bottom: 10px;
@@ -311,6 +323,32 @@
   font-weight: 600;
   cursor: pointer;
   user-select: none;
+}
+
+/* In the shelf it is a row of the column, not a floating pill: full width, no
+   card of its own, and a label that wraps rather than widening the toolbox. */
+.blocks-advanced.is-in-shelf {
+  position: static;
+  width: 100%;
+  max-width: none;
+  padding: 4px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  box-shadow: none;
+  align-items: flex-start;
+}
+
+.blocks-advanced.is-in-shelf .blocks-advanced__switch {
+  margin-top: 1px;
+}
+
+.blocks-advanced.is-in-shelf .blocks-advanced__label {
+  white-space: normal;
+}
+
+.blocks-advanced.is-in-shelf:hover {
+  background: var(--card);
 }
 
 .blocks-advanced:hover {
