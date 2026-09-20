@@ -1,6 +1,7 @@
 import { commentDocstring } from '../docstring'
 import { Order } from '../generator'
 import type { MicroPythonGenerator } from '../generator'
+import type { PyImport } from '../imports'
 import type { BlockDefinition } from '../registry'
 import * as Blockly from 'blockly/core'
 import { registerCallRules } from '../python-to-blocks'
@@ -10,7 +11,9 @@ import {
   EXTRAS_FIELD,
   extrasText,
   extrasVisible,
+  getExtras,
   hasExtrasRow,
+  setExtras,
   setExtrasVisible
 } from '../params'
 
@@ -66,7 +69,107 @@ function signature(block: Blockly.Block, gen: MicroPythonGenerator): string {
   return [...declared, ...(extra === '' ? [] : [extra])].join(', ')
 }
 
-export { EXTRAS_FIELD, extrasVisible, hasExtrasRow, setExtrasVisible }
+export { EXTRAS_FIELD, extrasVisible, getExtras, hasExtrasRow, setExtras, setExtrasVisible }
+
+/**
+ * DECORATORS, AS A LIST ON THE MUTATION (A1, #1215, epic #1206).
+ * =============================================================================
+ *
+ * `@property`, `@micropython.native`, `@app.route("/")` — a decorator is not a
+ * statement of its own. It belongs to the `def` under it, and a block for it
+ * could be dragged away from the function it decorates, which is the same
+ * argument `snakie_method` made when it put `@property` in a dropdown (#1093).
+ * So the entries ride on the `def` block itself, as an ordered list.
+ *
+ * VERBATIM AND WITHOUT THE `@`, because the text between the `@` and the end of
+ * the line is arbitrary Python — a dotted name, a call with arguments — and the
+ * only representation that holds every form of it exactly is the text itself.
+ * Storing the `@` too would mean deciding, on every read, whether a saved entry
+ * had one.
+ *
+ * CARRIED IN THE MUTATION rather than in a field, because the list has no fixed
+ * length and Blockly serialises exactly the fields a block declares. Both
+ * halves of the serialisation are wrapped — the XML pair for old workspaces,
+ * the JSON pair for new ones — around whatever the block already had, so the
+ * procedure mutator's parameter list and the caller-rename bookkeeping go
+ * through untouched. See {@link installDecorators}.
+ */
+
+/** The mutation attribute / JSON key the list is stored under. */
+const DECORATORS_KEY = 'decorators'
+
+/** The list, as it hangs off a block instance. */
+interface DecoratedBlock {
+  snakieDecoratorList_?: string[]
+}
+
+/** One entry, tidied: no leading `@`, no surrounding space. Blank entries go. */
+function tidy(entries: readonly unknown[]): string[] {
+  return entries
+    .map((entry) => String(entry ?? '').trim().replace(/^@+\s*/, '').trim())
+    .filter((entry) => entry !== '')
+}
+
+/**
+ * The decorators on a block, in the order they are written.
+ *
+ * THE OLD DROPDOWN IS READ AS A LIST OF ONE. `snakie_method` shipped with a
+ * `DECORATOR` field (`property` / `staticmethod` / `classmethod`), and every
+ * workspace saved since carries it. A block with no list of its own therefore
+ * falls back to that field — so the migration happens the first time anything
+ * asks, and the answer is persisted by the next save. B2 (#1216) removes the
+ * field itself.
+ */
+export function getDecorators(block: Blockly.Block): string[] {
+  const stored = (block as unknown as DecoratedBlock).snakieDecoratorList_
+  if (stored) return [...stored]
+  const legacy = String(block.getFieldValue(LEGACY_DECORATOR_FIELD) ?? '')
+  return legacy === '' || legacy === 'NONE' ? [] : [legacy]
+}
+
+/** Set the decorators on a block. Entries are tidied on the way in. */
+export function setDecorators(block: Blockly.Block, entries: readonly string[]): void {
+  ;(block as unknown as DecoratedBlock).snakieDecoratorList_ = tidy(entries)
+}
+
+/** The dropdown `snakie_method` used to keep its one decorator in (#1093). */
+export const LEGACY_DECORATOR_FIELD = 'DECORATOR'
+
+/**
+ * The entries that only work once something is imported.
+ *
+ * `@micropython.native` and `@micropython.viper` are the two a MicroPython
+ * program actually reaches for, and both are a plain `import micropython` away
+ * from working. Declared through the import manager like any other block's
+ * `imports`, so they land in the file's head in the usual place rather than
+ * being a rule the learner has to know.
+ *
+ * Keyed on the entry up to its first bracket, so `@micropython.viper` and a
+ * decorator called with arguments are the same lookup.
+ */
+const DECORATOR_IMPORTS: Record<string, PyImport> = {
+  'micropython.native': { module: 'micropython' },
+  'micropython.viper': { module: 'micropython' }
+}
+
+/**
+ * The `@…` lines for a block, ready to sit immediately above its `def`.
+ *
+ * Empty for a block with no decorators, so the `def` line is the first line of
+ * the function and nothing about the source map changes for the programs that
+ * have none. For the ones that do, the lines are part of the same emitted
+ * chunk as the `def`, which is what keeps the block's own marker — and so the
+ * traceback mapping and the hover highlight — on the first of them.
+ */
+export function decoratorLines(block: Blockly.Block, gen: MicroPythonGenerator): string {
+  return getDecorators(block)
+    .map((entry) => {
+      const imp = DECORATOR_IMPORTS[entry.split('(')[0].trim()]
+      if (imp) gen.need(imp)
+      return `@${entry}\n`
+    })
+    .join('')
+}
 
 /** A statement input's body, or `pass` — an empty `def` is a syntax error. */
 function body(block: Blockly.Block, name: string, gen: MicroPythonGenerator): string {
@@ -103,7 +206,7 @@ export const FUNCTION_BLOCKS: BlockDefinition[] = [
       const stack = doc ? gen.statementToCode(block, 'STACK') : body(block, 'STACK', gen)
       gen.defineFunction(
         block.id,
-        `def ${name}(${signature(block, gen)}):\n${doc}${stack}`
+        `${decoratorLines(block, gen)}def ${name}(${signature(block, gen)}):\n${doc}${stack}`
       )
       return ''
     }
@@ -135,7 +238,10 @@ export const FUNCTION_BLOCKS: BlockDefinition[] = [
         docstring(block, gen) +
         gen.statementToCode(block, 'STACK') +
         `${gen.INDENT}return ${answer}\n`
-      gen.defineFunction(block.id, `def ${name}(${signature(block, gen)}):\n${inner}`)
+      gen.defineFunction(
+        block.id,
+        `${decoratorLines(block, gen)}def ${name}(${signature(block, gen)}):\n${inner}`
+      )
       return ''
     }
   },
@@ -291,5 +397,127 @@ export function installFunctionBlocks(): void {
       appendExtrasRow(this, 'STACK')
     }
     def.snakieExtras_ = true
+  }
+  installDecorators(['procedures_defnoreturn', 'procedures_defreturn'])
+  installDecoratorExtension()
+}
+
+/** The extension a JSON-declared block names to gain the same list (#1215). */
+export const DECORATORS_EXTENSION = 'snakie_decorators'
+
+/**
+ * The decorator list for a block declared as JSON — `snakie_method`.
+ *
+ * A mixin rather than a wrap, because a JSON block has no serialisation hooks
+ * of its own to wrap: the list is the whole of its extra state. Named in the
+ * block's own definition, which is where Blockly expects to be told, so the
+ * pair is attached before the first block of that type is ever built.
+ *
+ * A MUTATOR rather than a plain extension — Blockly refuses an extension that
+ * adds serialisation hooks, by name, and a list that has to be saved is exactly
+ * what a mutator is. No `compose`/`decompose`, so no mutator bubble on the
+ * block: A3 (#1217) gives the list its editing UI.
+ */
+export function installDecoratorExtension(): void {
+  if (Blockly.Extensions.isRegistered(DECORATORS_EXTENSION)) return
+  Blockly.Extensions.registerMutator(DECORATORS_EXTENSION, {
+    // A marker the settings dialog can ask about (#1218). A block that took
+    // this mixin carries a decorator list, and there is nothing else to look
+    // at from the outside: the list itself is absent until an entry is added.
+    snakieDecoratorsMixin_: true,
+    saveExtraState: function (this: Blockly.Block): object | null {
+      const list = getDecorators(this)
+      return list.length === 0 ? null : { [DECORATORS_KEY]: list }
+    },
+    loadExtraState: function (this: Blockly.Block, state: object): void {
+      const list = (state as Record<string, unknown>)[DECORATORS_KEY]
+      if (Array.isArray(list)) setDecorators(this, tidy(list))
+    }
+  })
+}
+
+/**
+ * Can this block hold decorators? (#1218)
+ *
+ * True for every block {@link installDecorators} has wrapped or that names
+ * {@link DECORATORS_EXTENSION} — the two `def` blocks and the method block —
+ * and false for everything else, which is what decides whether the settings
+ * dialog offers a decorators section at all.
+ */
+export function hasDecorators(block: Blockly.Block): boolean {
+  if ((block as unknown as { snakieDecoratorsMixin_?: boolean }).snakieDecoratorsMixin_) return true
+  const def = Blockly.Blocks[block.type] as unknown as SerialisingBlock | undefined
+  return def?.snakieDecoratorsInstalled_ === true
+}
+
+/** The four serialisation hooks, as they hang off a block definition. */
+interface SerialisingBlock {
+  mutationToDom?: (this: Blockly.Block, ...args: unknown[]) => Element | null
+  domToMutation?: (this: Blockly.Block, xml: Element) => void
+  saveExtraState?: (this: Blockly.Block, ...args: unknown[]) => object | null
+  loadExtraState?: (this: Blockly.Block, state: object) => void
+  snakieDecoratorsInstalled_?: boolean
+}
+
+/**
+ * Give a block type a `decorators` list that survives being saved (#1215).
+ *
+ * WRAPPING, NOT REPLACING — the same move {@link installFunctionBlocks} makes
+ * on `init`, and for the same reason: Blockly's `def` blocks keep their
+ * parameter list in exactly these four hooks, and a definition of our own would
+ * take the mutator, the caller sockets and the rename bookkeeping with it.
+ *
+ * BOTH PAIRS, because a block is serialised through whichever it has: the JSON
+ * pair when it defines one (Blockly's procedure blocks do), the XML pair for a
+ * workspace saved as XML. ONLY WHAT IS ALREADY THERE is wrapped — giving
+ * `saveExtraState` to a block that has only `mutationToDom` would make Blockly
+ * prefer ours and quietly drop the mutation it was saving before. A block with
+ * neither takes {@link installDecoratorExtension} instead.
+ *
+ * Idempotent, because `installCorePalette` runs again for every test file and
+ * `Blockly.Blocks` is not reset between them.
+ */
+export function installDecorators(types: readonly string[]): void {
+  for (const type of types) {
+    const def = Blockly.Blocks[type] as unknown as SerialisingBlock | undefined
+    if (!def || def.snakieDecoratorsInstalled_) continue
+
+    const { mutationToDom, domToMutation, saveExtraState, loadExtraState } = def
+    if (saveExtraState) {
+      def.saveExtraState = function (this: Blockly.Block, ...args: unknown[]): object | null {
+        const state = saveExtraState.apply(this, args) ?? null
+        const list = getDecorators(this)
+        if (list.length === 0) return state
+        return { ...(state ?? {}), [DECORATORS_KEY]: list }
+      }
+      def.loadExtraState = function (this: Blockly.Block, state: object): void {
+        loadExtraState?.call(this, state)
+        const list = (state as Record<string, unknown>)[DECORATORS_KEY]
+        if (Array.isArray(list)) setDecorators(this, tidy(list))
+      }
+    }
+
+    if (mutationToDom) {
+      def.mutationToDom = function (this: Blockly.Block, ...args: unknown[]): Element | null {
+        const xml = mutationToDom.apply(this, args)
+        const list = getDecorators(this)
+        if (xml && list.length > 0) xml.setAttribute(DECORATORS_KEY, JSON.stringify(list))
+        return xml
+      }
+      def.domToMutation = function (this: Blockly.Block, xml: Element): void {
+        domToMutation?.call(this, xml)
+        const raw = xml.getAttribute(DECORATORS_KEY)
+        if (raw === null) return
+        try {
+          const list: unknown = JSON.parse(raw)
+          if (Array.isArray(list)) setDecorators(this, tidy(list))
+        } catch {
+          // A hand-edited or truncated attribute is not worth refusing to open
+          // the file for: the function still loads, without its decorators.
+        }
+      }
+    }
+
+    def.snakieDecoratorsInstalled_ = true
   }
 }

@@ -3,6 +3,8 @@ import { Order } from '../generator'
 import type { MicroPythonGenerator } from '../generator'
 import type { BlockDefinition, BlockGroup } from '../registry'
 import { sanitise } from '../names'
+import { decoratorLines, installDecorators } from './functions'
+import { DEFAULT_ARGS, argRowMixin, callArgs } from './python'
 import {
   appendExtrasRow,
   EXTRAS_FIELD,
@@ -68,6 +70,26 @@ function nameOf(block: Blockly.Block, field: string, fallback: string): string {
 }
 
 /**
+ * An ATTRIBUTE name, kept exactly as written.
+ *
+ * `nameOf` sanitises, which is right for a class or method name a learner typed
+ * and wrong here: an attribute is a member of somebody else's object, so
+ * `thing.next` has to come back `thing.next` even though `next` is a builtin the
+ * variable namer would have renamed.
+ */
+function attrOf(block: Blockly.Block, fallback: string): string {
+  const raw = String(block.getFieldValue('ATTR') ?? '').trim()
+  return raw === '' ? fallback : raw
+}
+
+/** The object an `<obj> . <attr>` block is reading, bracketed if it must be. */
+function objectOf(block: Blockly.Block, gen: MicroPythonGenerator): string {
+  // `MEMBER`, so an object that is itself an expression gets its brackets:
+  // `(a or b).speed` rather than `a or b.speed`.
+  return gen.valueToCode(block, 'OBJ', Order.MEMBER) || 'None'
+}
+
+/**
  * The Control sub-drawer error handling lives in (#1131, epic #1119).
  *
  * Control is the honest category — `try` really is control flow — and putting
@@ -107,6 +129,9 @@ function body(block: Blockly.Block, gen: MicroPythonGenerator): string {
 
 /** The block type, named here because both the palette and the reader want it. */
 export const TRY_BLOCK = 'snakie_try'
+
+/** The same, for the create-an-instance block (B5, #1224). */
+export const NEW_INSTANCE = 'snakie_new_instance'
 
 /** The property block's type, named here because the reader builds one too. */
 export const PROPERTY_BLOCK = 'snakie_property'
@@ -172,6 +197,32 @@ export const STRUCTURE_BLOCKS: BlockDefinition[] = [
       tooltip:
         'A class: a kind of thing, with the methods it can do inside it. The brackets after the name are the classes it builds on.'
     },
+    // A CLASS ARRIVES WITH ITS `__init__` ALREADY IN IT (B5, #1224).
+    //
+    // An empty class is not a class anybody can use: the first thing every
+    // learner has to do with one is write the method that makes a Thing, and
+    // `def __init__(self):` is a line nothing in the drawer hints at — the
+    // dunder name least of all. Seeding it means the block that comes out of
+    // the flyout is a class you can already create one of.
+    //
+    // A REAL BLOCK RATHER THAN A SHADOW, because a shadow disappears the moment
+    // anything is dropped on it and a learner filling the body would lose the
+    // constructor they were given. It is a toolbox preset, which is the other
+    // half of the rule: the seed is what the FLYOUT hands out, so a class read
+    // back from a file — empty or not — is untouched.
+    toolbox: {
+      inputs: {
+        BODY: {
+          block: {
+            type: 'snakie_method',
+            // The rebuilt method block's own shape (#1221): `self` is the
+            // fixed lead in the `extraState` rather than text in a field.
+            extraState: { lead: 'self', params: [] },
+            fields: { DECORATOR: 'NONE', KIND: 'SYNC', NAME: '__init__' }
+          }
+        }
+      }
+    },
     code: (block, gen) => {
       const bases = String(block.getFieldValue('BASES') ?? '').trim()
       return `class ${nameOf(block, 'NAME', 'Thing')}${bases}:\n${body(block, gen)}`
@@ -193,10 +244,8 @@ export const STRUCTURE_BLOCKS: BlockDefinition[] = [
     // `installStructureBlocks` — the same reason the `try` block's arms are.
     toolbox: { extraState: { params: [], lead: 'self' } },
     code: (block, gen) => {
-      const decorator = String(block.getFieldValue('DECORATOR') ?? 'NONE')
-      const at = decorator === 'NONE' ? '' : `@${decorator}\n`
       const async = block.getFieldValue('KIND') === 'ASYNC' ? 'async ' : ''
-      return `${at}${async}def ${nameOf(block, 'NAME', 'go')}(${methodSignature(block)}):\n${body(block, gen)}`
+      return `${decoratorLines(block, gen)}${async}def ${nameOf(block, 'NAME', 'go')}(${methodSignature(block)}):\n${body(block, gen)}`
     }
   },
   // ------------------------------------------------------------------ property
@@ -281,6 +330,113 @@ export const STRUCTURE_BLOCKS: BlockDefinition[] = [
     // drawer and be renameable from a dropdown that renames every use of it in
     // the file — twelve methods at once, and a class that no longer works.
     code: () => ['self', Order.ATOMIC]
+  },
+  // --------------------------------------------------------- attributes (B4)
+  //
+  // `self.speed` AND `robot.speed`, READ AND WRITTEN, AS BLOCKS OF THEIR OWN
+  // (#1223, epic #1206). Both shapes already had a reading — the Python
+  // drawer's `snakie_python_attr_get` / `_set`, which have taken an object
+  // socket since #1018 — and that is exactly what B4 is about: the
+  // second-largest theme in the corpus (2,649 raw lines of `self.x = …` across
+  // 45 projects) opened as the grey escape hatch, in a drawer a learner is told
+  // is for the Python the palette does not model. `self.speed` is not that. It
+  // is the first thing a class is FOR.
+  //
+  // FOUR BLOCKS RATHER THAN TWO, and the extra pair is the `self` decision from
+  // the top of this file made visible. `self` is not a workspace variable, so
+  // the `self.` blocks do not take an object socket at all: there is nothing to
+  // plug in, nothing to drag out by accident, and no dropdown offering to
+  // rename `self` in twelve methods at once. The learner reads *set self .
+  // speed to (speed)* on one block, which is the line.
+  //
+  // THE ATTRIBUTE IS A FIELD, not a socket and not a variable. It is a member of
+  // an object rather than a name in this file's namespace — `motor.speed` and a
+  // variable called `speed` have nothing to do with each other — so a variable
+  // dropdown would be actively wrong, and a text field holds any member name a
+  // library has, including the ones that shadow a builtin.
+  //
+  // NO `change self . x by n` BLOCK. #1223 lists it as a "consider", and the
+  // corpus does not carry it: `self.x += …` is a small tail beside the
+  // assignments, and `snakie_python_augmented` (W8, #1095) already keeps the
+  // operator and the target exactly as written — including `-=`, `*=` and `|=`,
+  // which a "change by" block could not say. Claiming only `+=` would take
+  // those lines off a block that says them all.
+  {
+    type: 'snakie_self_attr_get',
+    category: 'functions',
+    level: 'advanced',
+    help: 'ref-classes',
+    json: {
+      message0: 'self . %1',
+      args0: [{ type: 'field_input', name: 'ATTR', text: 'speed' }],
+      inputsInline: true,
+      output: null,
+      tooltip:
+        'Something this particular thing remembers — one of the values its setup gave it. Python writes it self.speed.'
+    },
+    // `MEMBER`, so plugging it into arithmetic needs no brackets around it and a
+    // call on it writes `self.speed.bit_length()` rather than wrapping it.
+    code: (block) => [`self.${attrOf(block, 'speed')}`, Order.MEMBER]
+  },
+  {
+    type: 'snakie_self_attr_set',
+    category: 'functions',
+    level: 'advanced',
+    help: 'ref-classes',
+    json: {
+      message0: 'set self . %1 to %2',
+      args0: [
+        { type: 'field_input', name: 'ATTR', text: 'speed' },
+        { type: 'input_value', name: 'VALUE' }
+      ],
+      inputsInline: true,
+      previousStatement: null,
+      nextStatement: null,
+      tooltip:
+        'Remember a value on this particular thing, so the rest of its methods can use it. Python writes it self.speed = ….'
+    },
+    code: (block, gen) =>
+      `self.${attrOf(block, 'speed')} = ${gen.valueToCode(block, 'VALUE', Order.NONE) || 'None'}\n`
+  },
+  {
+    type: 'snakie_attr_get',
+    category: 'functions',
+    level: 'advanced',
+    help: 'ref-classes',
+    json: {
+      message0: '%1 . %2',
+      args0: [
+        { type: 'input_value', name: 'OBJ' },
+        { type: 'field_input', name: 'ATTR', text: 'speed' }
+      ],
+      inputsInline: true,
+      output: null,
+      tooltip:
+        'Something another object remembers — a setting or a reading that is not a method call.'
+    },
+    code: (block, gen) => [`${objectOf(block, gen)}.${attrOf(block, 'speed')}`, Order.MEMBER]
+  },
+  {
+    type: 'snakie_attr_set',
+    category: 'functions',
+    level: 'advanced',
+    help: 'ref-classes',
+    json: {
+      message0: 'set %1 . %2 to %3',
+      args0: [
+        { type: 'input_value', name: 'OBJ' },
+        { type: 'field_input', name: 'ATTR', text: 'speed' },
+        { type: 'input_value', name: 'VALUE' }
+      ],
+      inputsInline: true,
+      previousStatement: null,
+      nextStatement: null,
+      tooltip: 'Change something another object remembers.'
+    },
+    code: (block, gen) => {
+      const value = gen.valueToCode(block, 'VALUE', Order.NONE) || 'None'
+      return `${objectOf(block, gen)}.${attrOf(block, 'speed')} = ${value}\n`
+    }
   },
   // ----------------------------------------------------------------- try / with
   //
@@ -440,8 +596,170 @@ export const STRUCTURE_BLOCKS: BlockDefinition[] = [
       const value = gen.valueToCode(block, 'VALUE', Order.NONE)
       return value === '' ? 'raise\n' : `raise ${value}\n`
     }
+  },
+  // ------------------------------------------------------------ create <Class>
+  {
+    // `robot = Robot("Bob", speed=3)` (B5, #1224) — the other half of a class.
+    // Defining one is half the job; the line that makes one is the line a
+    // learner writes next, and until now it was a grey block or a call block
+    // whose "call … on …" face is about METHODS and has no object to take.
+    //
+    // NO `json`: the arguments come and go, so the shape is built in
+    // `installStructureBlocks` the way the `try` and `call` blocks are.
+    type: NEW_INSTANCE,
+    category: 'functions',
+    help: 'ref-functions',
+    level: 'advanced',
+    code: (block, gen) => [`${instanceClass(block)}(${callArgs(block, gen)})`, Order.FUNCTION_CALL]
   }
 ]
+
+/**
+ * THE CLASS NAME IS A DROPDOWN OF THE CLASSES THIS PROGRAM DEFINES (#1224).
+ * ---------------------------------------------------------------------------
+ *
+ * A class name is not free text in the way a method name on a grey call block
+ * is: the class is right there on the canvas, and a learner who types `robto`
+ * gets a `NameError` from the board rather than anything the editor could have
+ * told them. So the field offers what the workspace has.
+ *
+ * AND FALLS BACK TO A TEXT BOX, which is not a nicety either — a workspace with
+ * no class block in it yet (a class in a module this file imports, a program
+ * being built top-down) would otherwise have an empty menu and no way to say
+ * any name at all. The last entry in the menu is "type a name…", and choosing
+ * it reveals the text field beside the dropdown; that is the same
+ * show-it-when-it-holds-something mechanism the call block's keyword-name boxes
+ * use (#1163), for the same reason: a box that is empty and inert is worse than
+ * no box.
+ *
+ * LIKE `FieldPin`, IT NEVER REJECTS A VALUE. A file naming a class the reader
+ * has not built a block for yet — the block is loaded before its class, or the
+ * class lives in another file — keeps saying what it says, rather than being
+ * silently reset to whatever happens to be first in the menu.
+ */
+const TYPE_A_NAME = 'type a name…'
+
+/**
+ * The dropdown value that means "the text box beside me holds the name".
+ *
+ * A `!` because no Python identifier can contain one: whatever a learner calls
+ * their class, it can never collide with this sentinel and turn a real name
+ * into the text box.
+ */
+const OWN_NAME = '!own'
+
+/** The fields the block's head carries: the menu, and the box behind it. */
+const CLASS_FIELD = 'CLASS'
+const TYPED_FIELD = 'TYPED'
+
+/** What a class is called when nothing says otherwise. */
+const DEFAULT_CLASS = 'Thing'
+
+/** Every class this workspace defines, in the order the canvas holds them. */
+function classNames(workspace: Blockly.Workspace | null): string[] {
+  if (!workspace) return []
+  const names: string[] = []
+  for (const block of workspace.getBlocksByType('snakie_class', false)) {
+    const name = String(block.getFieldValue('NAME') ?? '').trim()
+    if (name !== '' && !names.includes(name)) names.push(name)
+  }
+  return names
+}
+
+/** The menu: this program's classes, whatever the field holds, then the box. */
+function classOptions(this: Blockly.FieldDropdown): Blockly.MenuOption[] {
+  const names = classNames(this.getSourceBlock()?.workspace ?? null)
+  const held = String(this.getValue() ?? '')
+  if (held !== '' && held !== OWN_NAME && !names.includes(held)) names.push(held)
+  return [...names.map((name): Blockly.MenuOption => [name, name]), [TYPE_A_NAME, OWN_NAME]]
+}
+
+/** A dropdown of the workspace's classes that will take any name it is given. */
+class FieldClassName extends Blockly.FieldDropdown {
+  constructor() {
+    super(classOptions)
+  }
+
+  /** Accept a class this workspace has no block for. See the note above. */
+  protected override doClassValidation_(value?: string): string | null {
+    return value === undefined || value === null ? null : String(value)
+  }
+
+  /** The name, or the invitation to type one. */
+  override getText(): string {
+    const value = String(this.getValue() ?? '')
+    return value === OWN_NAME ? TYPE_A_NAME : value
+  }
+}
+
+/**
+ * Show the text box exactly when the menu is standing aside for it.
+ *
+ * NOTHING HAPPENS WHEN NOTHING CHANGED, which matters because `onchange` runs
+ * this for every event on the workspace: a re-render queued on each of them
+ * would be a block redrawn while somebody drags another one past it.
+ */
+function applyTypedName(block: Blockly.Block): void {
+  const typed = block.getField(TYPED_FIELD)
+  const wanted = block.getFieldValue(CLASS_FIELD) === OWN_NAME
+  if (!typed || typed.isVisible() === wanted) return
+  typed.setVisible(wanted)
+  ;(block as Blockly.BlockSvg).queueRender?.()
+}
+
+/** The class being created: the menu's choice, or the box behind it. */
+function instanceClass(block: Blockly.Block): string {
+  const chosen = String(block.getFieldValue(CLASS_FIELD) ?? '')
+  const raw = chosen === OWN_NAME ? String(block.getFieldValue(TYPED_FIELD) ?? '') : chosen
+  // `sanitise`, not `toPythonIdentifier`, for the reason {@link nameOf} gives:
+  // a class somebody called `Property` is theirs to call that.
+  const name = raw.trim()
+  return name === '' ? DEFAULT_CLASS : sanitise(name)
+}
+
+/**
+ * The create-instance block's shape: a class name, then the call block's own
+ * growable argument row — the same `+`/`−` steppers and the same keyword-name
+ * boxes, so `Robot("Bob", speed=3)` is built the way every other call is.
+ */
+function newInstanceMixin(): Record<string, unknown> {
+  return {
+    ...argRowMixin(),
+
+    init(this: Blockly.Block): void {
+      this.setStyle('functions_blocks')
+      this.appendDummyInput('HEAD')
+        .appendField('create')
+        // Cast because `appendField` is typed for a field whose value may be
+        // undefined and `FieldDropdown`'s never is; the dropdown IS one of the
+        // fields it takes, as every JSON `field_dropdown` in the palette is.
+        .appendField(new FieldClassName() as unknown as Blockly.Field, CLASS_FIELD)
+        .appendField(new Blockly.FieldTextInput(DEFAULT_CLASS), TYPED_FIELD)
+      this.setInputsInline(true)
+      this.setOutput(true, null)
+      this.setTooltip(
+        'Make one of a kind of thing — a new Robot, a new Dog — and hand it whatever its `__init__` asks for.'
+      )
+      ;(this as unknown as { updateArgs_: (n: number) => void }).updateArgs_(DEFAULT_ARGS)
+      // A CLASS ALREADY ON THE CANVAS IS THE ANSWER MOST OF THE TIME, so the
+      // block arrives holding the first one rather than the text box. In a
+      // flyout there are no class blocks, so it arrives ready to be typed into.
+      const first = classNames(this.workspace)[0]
+      this.setFieldValue(first ?? OWN_NAME, CLASS_FIELD)
+      applyTypedName(this)
+    },
+
+    /** The text box follows the menu, whoever moved it — a load, or a learner. */
+    loadExtraState(this: Blockly.Block, state: { args?: number }): void {
+      ;(argRowMixin().loadExtraState as (this: Blockly.Block, s: unknown) => void).call(this, state)
+      applyTypedName(this)
+    },
+
+    onchange(this: Blockly.Block): void {
+      applyTypedName(this)
+    }
+  }
+}
 
 /** What a `try` block is holding: its arms, and whether it has the two tails. */
 export interface TryState {
@@ -758,8 +1076,13 @@ function methodBlockMixin(): Record<string, unknown> {
           // `@property` AS A MODIFIER, not a block of its own (#1093). A
           // decorator on its own line would be a block that means nothing
           // without the block under it, and could be dragged away from it.
-          // A1 (#1215) folds this dropdown into a decorators list; until it
-          // lands, the three Python has a setting for are the three here.
+          // A1 (#1215) HAS LANDED, and the dropdown is now the FIRST entry of
+          // the decorators list rather than the only decorator there can be:
+          // `getDecorators` falls back to this field for a block that has no
+          // list of its own, so a workspace saved with `property` selected
+          // still writes `@property`, and `@micropython.native` — which this
+          // dropdown could never hold — rides alongside it. A3 (#1217) gives
+          // the list its editing UI.
           new Blockly.FieldDropdown(
             [
               ['method', 'NONE'],
@@ -878,7 +1201,20 @@ function nextParamName(state: MethodState): string {
 /** Register the blocks whose inputs come and go. Called before the definitions. */
 export function installStructureBlocks(): void {
   Blockly.Blocks[TRY_BLOCK] = tryBlockMixin() as never
+  Blockly.Blocks[NEW_INSTANCE] = newInstanceMixin() as never
   Blockly.Blocks[METHOD_BLOCK] = methodBlockMixin() as never
+  // THE DECORATOR LIST, WRAPPED ROUND THE MIXIN'S OWN HOOKS (A1, #1215).
+  //
+  // A1 hung the list off `snakie_method` through the `snakie_decorators`
+  // mutator extension, because the block was JSON and had no serialisation of
+  // its own. B2 (#1221) rebuilt it in code WITH a `saveExtraState` pair — the
+  // parameter list — so the extension would now be a second mutator on a block
+  // that already has one, and Blockly would take whichever was attached last.
+  // `installDecorators` is the wrap that was written for exactly this shape
+  // (Blockly's own `def` blocks), and it folds `decorators` into the state the
+  // mixin already saves rather than replacing it. After the mixin is
+  // registered, necessarily: it wraps what it finds.
+  installDecorators([METHOD_BLOCK])
   // The property block's tick box (#1222). An EXTENSION rather than a wrapped
   // `init`: the block itself is ordinary JSON, and a validator is the one thing
   // JSON cannot declare. Guarded, because `installCorePalette` runs again for

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as Blockly from 'blockly/core'
 import { usePrompt } from './PromptModal'
 import {
@@ -21,11 +21,17 @@ import { loadSelectedBoard, watchSelectedBoard } from './board-pin-source'
 import { blockDefinition, installBlockDefinitions } from '../lib/blocks/registry'
 import { installCorePalette } from '../lib/blocks/palette'
 import {
-  EXTRAS_FIELD,
-  extrasVisible,
+  getDecorators,
+  getExtras,
+  hasDecorators,
   hasExtrasRow,
-  setExtrasVisible
+  setDecorators,
+  setExtras
 } from '../lib/blocks/palette/functions'
+import {
+  FunctionSettingsDialog,
+  type FunctionSettingsDraft
+} from './FunctionSettingsDialog'
 import { argNamesHidden, hasArgNames, revealArgNames } from '../lib/blocks/palette/python'
 import { installSoftShellRenderers } from '../lib/blocks/renderer'
 import {
@@ -51,7 +57,7 @@ import {
   TracebackWatcher
 } from '../lib/blocks/traceback'
 import { ensureBlocklyLocale } from '../lib/blocks/locale'
-import { unknownBlockTypes } from '../lib/blocks/workspace-check'
+import { advancedBlockTypes, unknownBlockTypes } from '../lib/blocks/workspace-check'
 import { registerBlocksWorkspace } from '../lib/blocks/workspace-registry'
 import { buildToolbox } from '../lib/blocks/toolbox'
 import { installFunctionsDrawer } from '../lib/blocks/functions-drawer'
@@ -219,6 +225,15 @@ export interface BlocksCanvasProps {
    */
   onPartsUsed?: (parts: readonly { libraryId: string; partId: string }[]) => void
   /**
+   * The advanced blocks this FILE arrived with (#1212), reported once per file.
+   *
+   * Asked here rather than by the caller because the level of a block type is a
+   * question for the registry, and the registry is only populated once this
+   * module — the lazy Blockly chunk — has loaded. The caller renders the offer;
+   * the canvas renders the blocks either way.
+   */
+  onAdvancedBlocks?: (fileId: string, types: readonly string[]) => void
+  /**
    * Bumped when the workspace changed from OUTSIDE the canvas (#1034) — the
    * learner edited the code, and it was converted back into blocks.
    *
@@ -280,6 +295,7 @@ export function BlocksCanvas({
   onShowBlockPython,
   paletteNonce = 0,
   onPartsUsed,
+  onAdvancedBlocks,
   reloadNonce = 0,
   derived = false
 }: BlocksCanvasProps): JSX.Element {
@@ -342,6 +358,30 @@ export function BlocksCanvas({
   onShowBlockPythonRef.current = onShowBlockPython
   const onPartsUsedRef = useRef(onPartsUsed)
   onPartsUsedRef.current = onPartsUsed
+  const onAdvancedBlocksRef = useRef(onAdvancedBlocks)
+  onAdvancedBlocksRef.current = onAdvancedBlocks
+  /**
+   * THE ADVANCED BLOCKS IN THIS FILE (#1212).
+   *
+   * Note what is NOT here: a filter. Every one of these blocks is built,
+   * rendered, dragged, duplicated and generated exactly as it would be with the
+   * advanced drawers open — the level is a fact about the toolbox and nothing
+   * else, and downgrading a learner's class to a grey Python block because of a
+   * preference would be the app quietly damaging their file.
+   */
+  const advanced = useMemo(
+    () => advancedBlockTypes(workspace, (t) => blockDefinition(t)?.level),
+    [workspace]
+  )
+  const advancedRef = useRef(advanced)
+  advancedRef.current = advanced
+  // ONCE PER FILE OPEN, not once per edit: keyed on the file alone, and reading
+  // the walk through a ref. Keyed on `advanced` it would fire again the moment
+  // somebody typed in the code pane, which is a notice that reappears while you
+  // are working — the thing this is careful not to be.
+  useEffect(() => {
+    onAdvancedBlocksRef.current?.(fileId, advancedRef.current)
+  }, [fileId])
   /** Pending regeneration, so a drag doesn't generate once per mouse move. */
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   /**
@@ -369,7 +409,7 @@ export function BlocksCanvas({
   // Read here rather than passed down: it is a preference, not a property of
   // the document, and every caller of this component would just be forwarding
   // it.
-  const { blockShape, blockLevel } = useEditorSettings()
+  const { blockShape, blockLevel, setBlockLevel } = useEditorSettings()
   /**
    * Simple or advanced drawers (#1210) — a REF for the injection, like the
    * dialect below, and a dependency of the rebuild effect, so a flip in
@@ -389,6 +429,16 @@ export function BlocksCanvas({
   const toolboxDialectRef = useRef<Dialect | null>(null)
   /** And the level it was built for (#1210), for the same reason. */
   const toolboxLevelRef = useRef<BlockLevel | null>(null)
+
+  /**
+   * The block whose **Function settings…** dialog is open (#1218), and which
+   * section it was opened on. Null while there is none — which is nearly
+   * always, so nothing is rendered over the canvas.
+   */
+  const [settingsFor, setSettingsFor] = useState<{
+    blockId: string
+    focus: 'decorators' | 'extras'
+  } | null>(null)
 
   const prompt = usePrompt()
 
@@ -745,6 +795,17 @@ export function BlocksCanvas({
     }
   }, [peek, blocked])
 
+  // And the same claim for Function settings… (#1218): the item is registered
+  // once for the app, the dialog is rendered by the canvas that is on screen.
+  useEffect(() => {
+    if (peek || blocked) return
+    openFunctionSettings = (blockId, focus) => setSettingsFor({ blockId, focus })
+    return () => {
+      openFunctionSettings = null
+      setSettingsFor(null)
+    }
+  }, [peek, blocked])
+
   // A line was clicked in the Python (#1016): select its block and bring it into
   // view. The other half of the link, and the half that does the teaching —
   // "that line came from THIS", pointed at from the side they are learning to
@@ -1029,7 +1090,121 @@ export function BlocksCanvas({
     )
   }
 
-  return <div className="blocks-canvas__host" ref={hostRef} data-testid="blocks-canvas-host" />
+  const settingsBlock = settingsFor ? (wsRef.current?.getBlockById(settingsFor.blockId) ?? null) : null
+
+  return (
+    <div className="blocks-canvas">
+      <div className="blocks-canvas__host" ref={hostRef} data-testid="blocks-canvas-host" />
+      <AdvancedBlocksToggle level={blockLevel} onChange={setBlockLevel} />
+      {settingsFor && settingsBlock && (
+        <FunctionSettingsDialog
+          name={String(settingsBlock.getFieldValue('NAME') ?? 'this function')}
+          canDecorate={hasDecorators(settingsBlock)}
+          canExtras={hasExtrasRow(settingsBlock)}
+          focus={settingsFor.focus}
+          value={{
+            decorators: getDecorators(settingsBlock),
+            extras: getExtras(settingsBlock)
+          }}
+          onClose={() => setSettingsFor(null)}
+          onSave={(draft) => {
+            applyFunctionSettings(settingsBlock, draft)
+            setSettingsFor(null)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+/**
+ * Write a dialog's answer back onto the block, as ONE undoable step (#1218).
+ *
+ * The extras are a field, so changing one fires its own event and the mirror
+ * follows. The decorators are not — they live in the block's extra state, which
+ * nothing watches — so the change is announced the way Blockly announces every
+ * other mutation: a `BlockChange` carrying the serialised state before and
+ * after. That is what puts the edit in the undo stack and what tells the
+ * canvas's change listener to regenerate the Python.
+ *
+ * Both halves share an event group, so one Ctrl-Z takes the whole dialog back
+ * rather than the extras and then the decorators.
+ */
+function applyFunctionSettings(block: Blockly.Block, draft: FunctionSettingsDraft): void {
+  const group = Blockly.Events.getGroup()
+  Blockly.Events.setGroup(group || Blockly.utils.idGenerator.genUid())
+  try {
+    if (hasExtrasRow(block)) setExtras(block, draft.extras)
+    if (hasDecorators(block)) {
+      const before = extraBlockState(block)
+      setDecorators(block, draft.decorators)
+      const after = extraBlockState(block)
+      if (before !== after) {
+        Blockly.Events.fire(
+          new Blockly.Events.BlockChange(block, 'mutation', null, before, after)
+        )
+      }
+    }
+  } finally {
+    Blockly.Events.setGroup(group)
+  }
+}
+
+/** A block's extra state as the `mutation` event carries it — JSON, or XML text. */
+function extraBlockState(block: Blockly.Block): string {
+  const hooks = block as unknown as {
+    saveExtraState?: (full?: boolean) => object | null
+    mutationToDom?: () => Element | null
+  }
+  if (hooks.saveExtraState) {
+    const state = hooks.saveExtraState(true)
+    return state ? JSON.stringify(state) : ''
+  }
+  const dom = hooks.mutationToDom?.()
+  return dom ? Blockly.Xml.domToText(dom) : ''
+}
+
+/**
+ * THE IN-TOOLBOX "SHOW ADVANCED BLOCKS" TOGGLE (#1211, epic #1206).
+ * ===========================================================================
+ *
+ * The same `snakie.blocks.level` preference as Settings ▸ Appearance ▸ Advanced
+ * blocks (#1210) — one store, so the two are never out of step — put where the
+ * question is actually asked. A learner who cannot find `try` is looking at the
+ * drawers, not at a settings dialog three menus away, and a setting nobody can
+ * find is a setting nobody turns on.
+ *
+ * Drawn over the bottom of the toolbox column rather than inside it, because
+ * Blockly owns that SVG and has no slot for a control of ours. It is small,
+ * quiet and out of the way of the categories above it.
+ */
+function AdvancedBlocksToggle({
+  level,
+  onChange
+}: {
+  level: BlockLevel
+  onChange: (level: BlockLevel) => void
+}): JSX.Element {
+  const on = level === 'advanced'
+  return (
+    <label
+      className={`blocks-advanced${on ? ' is-on' : ''}`}
+      title={
+        on
+          ? 'Hide the advanced blocks — classes, try, comprehensions, slices, files and the grey Python blocks. Your program is not changed.'
+          : 'Show the advanced blocks — classes, try, comprehensions, slices, files and the grey Python blocks.'
+      }
+    >
+      <input
+        type="checkbox"
+        className="blocks-advanced__input"
+        checked={on}
+        onChange={(e) => onChange(e.target.checked ? 'advanced' : 'simple')}
+      />
+      <span className="blocks-advanced__switch" aria-hidden="true" />
+      <span className="blocks-advanced__label">Show advanced blocks</span>
+    </label>
+  )
 }
 
 /**
@@ -1118,40 +1293,58 @@ function installBlockHelpMenu(): void {
 let showBlockPython: ((blockId: string) => void) | null = null
 
 /**
- * A `def` block's right-click **Add extra parameters…** (#1134).
+ * A function block's right-click **Function settings…** (A4, #1218).
  *
- * The parameters Blockly's mutator cannot model — a default value, a `*args`,
- * a `**kwargs` — live in a text field on the block, and that field's row is
- * hidden while it is empty so the ordinary `def` block stays ordinary. This is
- * how a learner asks for it: the row appears and its editor opens, ready to be
- * typed into. Emptied and closed again, it puts itself away.
+ * The two things written around a `def` that are text rather than sockets —
+ * its decorators (#1215) and its extra parameters (#1134) — used to be in two
+ * different places, one of them a hidden row and the other nowhere at all.
+ * They are one dialog now; see `FunctionSettingsDialog.tsx` for why they
+ * belong together and why the parameter list itself stays on Blockly's cog.
  *
- * Hidden — rather than greyed out — for a block that already shows the row, and
- * for every block that has no such row at all, which is all of them but two.
+ * **Add extra parameters…** is kept below it as the shortcut it always was,
+ * opening the same dialog with the extras box focused — the learner who knows
+ * what they came for does not have to find the section.
+ *
+ * Both are hidden — rather than greyed out — for every block that has neither,
+ * which is all of them but three.
  */
+let openFunctionSettings: ((blockId: string, focus: 'decorators' | 'extras') => void) | null = null
+
+/** Has this block anything the settings dialog can edit? */
+function hasFunctionSettings(block: Blockly.Block | null | undefined): boolean {
+  return !!block && (hasExtrasRow(block) || hasDecorators(block))
+}
+
 function installFunctionExtrasMenu(): void {
-  const id = 'snakieFunctionExtras'
-  if (Blockly.ContextMenuRegistry.registry.getItem(id)) return
+  const settingsId = 'snakieFunctionSettings'
+  if (Blockly.ContextMenuRegistry.registry.getItem(settingsId)) return
   Blockly.ContextMenuRegistry.registry.register({
-    id,
+    id: settingsId,
     scopeType: Blockly.ContextMenuRegistry.ScopeType.BLOCK,
     // Below "Show me the Python" and Help: it edits this block rather than
     // explaining it, so it sits with Blockly's own editing items.
     weight: 98,
+    displayText: 'Function settings…',
+    preconditionFn: (scope) =>
+      hasFunctionSettings(scope.block) && openFunctionSettings ? 'enabled' : 'hidden',
+    callback: (scope) => {
+      if (scope.block) openFunctionSettings?.(scope.block.id, 'decorators')
+    }
+  })
+  Blockly.ContextMenuRegistry.registry.register({
+    id: 'snakieFunctionExtras',
+    scopeType: Blockly.ContextMenuRegistry.ScopeType.BLOCK,
+    weight: 98,
     displayText: 'Add extra parameters…',
     preconditionFn: (scope) => {
       const block = scope.block
-      if (!block || !hasExtrasRow(block)) return 'hidden'
-      return extrasVisible(block) ? 'hidden' : 'enabled'
+      if (!block || !hasExtrasRow(block) || !openFunctionSettings) return 'hidden'
+      // Only while there are none: with extras already on the block the
+      // settings item above says the same thing, better.
+      return getExtras(block) === '' ? 'enabled' : 'hidden'
     },
     callback: (scope) => {
-      const block = scope.block
-      if (!block) return
-      setExtrasVisible(block, true)
-      // After the render the row was just queued for, so the editor opens over
-      // a field that is actually on screen.
-      const field = block.getField(EXTRAS_FIELD)
-      if (field) setTimeout(() => field.showEditor(), 0)
+      if (scope.block) openFunctionSettings?.(scope.block.id, 'extras')
     }
   })
 }

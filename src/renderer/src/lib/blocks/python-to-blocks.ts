@@ -247,6 +247,26 @@ const PYTHON_CALL = 'snakie_python_call'
 const PYTHON_CALL_VALUE = 'snakie_python_call_value'
 const PYTHON_ATTR_GET = 'snakie_python_attr_get'
 const PYTHON_ATTR_SET = 'snakie_python_attr_set'
+/** `Robot("Bob", speed=3)` — the create-an-instance block (B5, #1224). */
+const NEW_INSTANCE = 'snakie_new_instance'
+
+/**
+ * The NATIVE attribute blocks (B4, #1223, epic #1206).
+ *
+ * `self.speed` and `robot.speed` are not escape-hatch Python: they are what a
+ * class is made of, and `palette/structure.ts` gives them four blocks of their
+ * own. The reader reaches for those whenever the thing before the dot is a BARE
+ * NAME — `self`, or an ordinary variable — and leaves the Python drawer's pair
+ * to everything deeper, `self.motor.speed`, where the object really is an
+ * expression somebody has to see in a socket.
+ */
+const SELF_ATTR_GET = 'snakie_self_attr_get'
+const SELF_ATTR_SET = 'snakie_self_attr_set'
+const ATTR_GET = 'snakie_attr_get'
+const ATTR_SET = 'snakie_attr_set'
+
+/** The three readings of `<obj> . <name>`, for the assignment side to test. */
+const ATTR_GETS = new Set([SELF_ATTR_GET, ATTR_GET, PYTHON_ATTR_GET])
 
 /**
  * The most argument sockets a call block will grow to — `MAX_ARGS` in
@@ -1070,7 +1090,14 @@ interface CommentRun extends Stmt {
  * one we understood or a raw line.
  */
 function decoratedAbove(node: Stmt, siblings: readonly Stmt[]): boolean {
-  const before = siblings[siblings.indexOf(node) - 1]
+  // PAST A COMMENT (A2, #1216). `@app.route("/")`, then `# the home page`, then
+  // the `def`: the decorator still belongs to it, and the reader now reads the
+  // three together. Hoisting the `def` anyway would build a CALLER block for a
+  // definition that is a method block instead — a workspace Blockly refuses to
+  // load, which costs the learner every block in the file.
+  let i = siblings.indexOf(node) - 1
+  while (i >= 0 && siblings[i].body.length === 0 && isCommentLine(siblings[i].line)) i -= 1
+  const before = siblings[i]
   return Boolean(before && before.line.text.startsWith('@') && before.body.length === 0)
 }
 
@@ -1782,6 +1809,18 @@ class Converter {
    * a workspace Blockly refuses to load.
    */
   private readonly definedHere = new Map<string, { params: string[]; returns: boolean }>()
+
+  /**
+   * Every class this program defines, for {@link instanceCall} (B5, #1224).
+   *
+   * A NAME IS ONLY A CLASS BECAUSE THIS FILE SAYS SO. `Robot("Bob")` and
+   * `sorted(xs)` are the same shape, and nothing about the call itself tells
+   * them apart — capitalisation is a convention, not a rule, and guessing from
+   * it would turn every `Pin(15)` into a create-instance block for a class
+   * nobody wrote. So only a name with a `class` header in the same file counts.
+   */
+  private readonly classesHere = new Set<string>()
+
   /**
    * The text the expression parser is currently reading, so an argument can be
    * sliced out of it verbatim. Saved and restored around every nested parse,
@@ -1806,6 +1845,12 @@ class Converter {
    */
   indexDefinitions(nodes: readonly Stmt[]): void {
     for (const node of nodes) {
+      // The classes too, on the same pass and for the same reason: a
+      // `robot = Robot("Bob")` above the `class Robot:` that defines it is
+      // ordinary Python inside a function, and a reader that had not read the
+      // header yet would take the line raw.
+      const klass = /^class\s+([A-Za-z_]\w*)\s*(?:\(.*\))?\s*:$/.exec(node.line.text)
+      if (klass) this.classesHere.add(klass[1])
       const def = /^def\s+([A-Za-z_]\w*)\(([^)]*)\):$/.exec(node.line.text)
       // THE SAME TEST `recognise` APPLIES, decorator and all. A `def` under a
       // decorator does not become a procedure block, and registering it here
@@ -1869,6 +1914,37 @@ class Converter {
       )
     }
     return block
+  }
+
+  /**
+   * `Robot("Bob", speed=3)` → the create-an-instance block (B5, #1224).
+   *
+   * ONLY FOR A CLASS THIS FILE DEFINES — see {@link classesHere} for why. The
+   * arguments are the call block's arguments, keyword names and all, because it
+   * is the same growable row under a different head: `speed=3` puts `speed` in
+   * the name box and `3` in the socket, which is exactly what the generator
+   * writes back.
+   */
+  private instanceCall(text: string): BlockJson | null {
+    const call = /^([A-Za-z_]\w*)\s*\((.*)\)$/.exec(text.trim())
+    if (!call || !this.classesHere.has(call[1])) return null
+    const args = splitArgs(call[2])
+    // More arguments than the block can grow to is not this block, so the line
+    // stays raw and regenerates verbatim — the rule everywhere else here.
+    if (!args || args.length > MAX_CALL_ARGS) return null
+    const fields: Record<string, string> = { CLASS: call[1] }
+    const inputs: Record<string, { block: BlockJson }> = {}
+    args.forEach((arg, i) => {
+      const keyword = keywordArgument(arg)
+      if (keyword) fields[`NAME${i}`] = keyword.name
+      inputs[`ARG${i}`] = { block: this.expression(keyword?.value ?? arg) }
+    })
+    return {
+      type: NEW_INSTANCE,
+      fields,
+      extraState: { args: args.length },
+      ...(args.length > 0 ? { inputs } : {})
+    }
   }
 
   /**
@@ -2614,20 +2690,19 @@ class Converter {
     }
     // A DECORATOR BELONGS TO THE `def` UNDER IT, so it is read with it rather
     // than as a block of its own — a decorator block could be dragged away from
-    // the thing it decorates, and would mean nothing where it landed. Only the
-    // three the method block has a setting for; anything else is somebody's own
-    // decorator and stays raw, header and body together.
-    const decorator = /^@(property|staticmethod|classmethod)$/.exec(text)
-    if (decorator) {
+    // the thing it decorates, and would mean nothing where it landed. ANY
+    // decorator since A2 (#1216); see {@link decorated}. One with no `def`
+    // under it at all still falls through and stays raw.
+    if (text.startsWith('@') && node.body.length === 0) {
       // `@property` FIRST TRIES TO BE A PROPERTY BLOCK (B3, #1222): a getter,
       // with the `@name.setter` under it if there is one. Only when that does
-      // not fit does it fall back to the method block with a decorator on it,
+      // not fit does it fall back to a method block carrying the decorator,
       // which is what every `@property` came back as before.
-      if (decorator[1] === 'property') {
+      if (text === '@property') {
         const property = this.property(node, siblings)
         if (property) return recognised([property])
       }
-      const decorated = this.decorated(node, siblings, decorator[1])
+      const decorated = this.decorated(node, siblings)
       if (decorated) return recognised(decorated)
     }
     const method = DEF_HEADER.exec(text)
@@ -2658,7 +2733,7 @@ class Converter {
     // `procedures_defnoreturn` has no previous or next connection, so it can
     // never sit inside a class's body. Its parameter list is a FIELD, so any
     // signature comes back exactly as written.
-    if (method) return recognised([this.method(node, method, 'NONE')])
+    if (method) return recognised([this.method(node, method, [])])
 
     // --- simple statements -----------------------------------------------
     if (text === 'break' || text === 'continue') {
@@ -2772,31 +2847,72 @@ class Converter {
   }
 
   /**
-   * `@property` + the `def` under it → one method block (W6, #1093).
+   * The `@…` lines above a `def` → the method block's decorator list (A2, #1216).
    *
-   * The decorator line and the `def` line are two logical lines and one idea, so
-   * the second is CONSUMED — by identity, the way `ifChain` takes its `elif` and
+   * EVERY DECORATOR, NOT THREE OF THEM. This used to accept `@property`,
+   * `@staticmethod` and `@classmethod` — the three the block had a dropdown for
+   * — and leave `@micropython.native` and `@app.route("/")` as grey lines with
+   * the `def` under them. A1 (#1215) gave the block a LIST instead, so the only
+   * thing left to decide is where a decorator ENDS: at the end of its line, and
+   * the text between the `@` and there is taken verbatim. No parsing, which is
+   * what makes `@app.route("/(a)")` — a bracket inside a string inside a call —
+   * the same easy case as `@property`.
+   *
+   * THE LINES ARE CONSUMED — by identity, the way `ifChain` takes its `elif` and
    * `else` arms, because guessing from the text is what lost an `else` in #1068.
-   * Its line still has to be counted by hand: `statements()` skips a consumed
-   * node without counting it, on the reasoning that whoever consumed it did.
+   * Each still has to be counted by hand: `statements()` skips a consumed node
+   * without counting it, on the reasoning that whoever consumed it did.
    *
-   * Null when the next sibling is not a `def` we can hold, which leaves the
-   * decorator as an ordinary raw line with the `def` under it — exactly what
-   * both were before.
+   * A COMMENT BETWEEN A DECORATOR AND ITS `def` IS NOT CONSUMED. It is the
+   * learner's prose, and no block on the method holds it, so it is stepped over
+   * and stays the comment block it would have been — which the round-trip gate
+   * forgives, because it compares a bag of line signatures and the comment's is
+   * still in it.
+   *
+   * `@property` / `@x.setter` ARE NOT FOLDED TOGETHER here: a getter and a
+   * setter read as two methods with one decorator each. B3 (#1222) owns the
+   * single property block.
+   *
+   * Null when nothing under the decorators is a `def` we can hold, which leaves
+   * the decorator as an ordinary raw line with the `def` under it — exactly what
+   * it was before.
    */
-  private decorated(
-    node: Stmt,
-    siblings: readonly Stmt[],
-    decorator: string
-  ): BlockJson[] | null {
-    const next = siblings[siblings.indexOf(node) + 1]
-    if (!next || this.consumed.has(next)) return null
-    const def = DEF_HEADER.exec(next.line.text)
-    if (!def) return null
-    this.consumed.add(next)
+  private decorated(node: Stmt, siblings: readonly Stmt[]): BlockJson[] | null {
+    const decorators: string[] = []
+    const claimed: Stmt[] = []
+    let i = siblings.indexOf(node)
+    let def: RegExpExecArray | null = null
+    let header: Stmt | null = null
+    while (i < siblings.length) {
+      const next = siblings[i]
+      if (this.consumed.has(next)) return null
+      const text = next.line.text
+      if (next.body.length === 0 && text.startsWith('@') && text.slice(1).trim() !== '') {
+        decorators.push(text.slice(1).trim())
+        claimed.push(next)
+        i += 1
+        continue
+      }
+      // A comment between the decorators and the `def`: stepped over, left to
+      // be read as the comment block it is.
+      if (next.body.length === 0 && isCommentLine(next.line)) {
+        i += 1
+        continue
+      }
+      def = DEF_HEADER.exec(text)
+      header = next
+      break
+    }
+    if (!def || !header || decorators.length === 0) return null
+    for (const line of claimed.slice(1)) {
+      this.consumed.add(line)
+      this.report.total += 1
+      this.report.recognised += 1
+    }
+    this.consumed.add(header)
     this.report.total += 1
     this.report.recognised += 1
-    return [this.method(next, def, decorator)]
+    return [this.method(header, def, decorators)]
   }
 
   /**
@@ -2873,9 +2989,15 @@ class Converter {
    * THE SIGNATURE IS A PARAMETER LIST SINCE B2 (#1221, epic #1206), not the one
    * free-text `PARAMS` field W6 gave it: the plain names become the block's own
    * fields, a leading `self` or `cls` becomes its fixed lead, and everything
-   * neither can hold goes in the extras field `def` has had since #1134 —
+   * neither can hold goes in the extras field `def` has had since #1134 -
    * verbatim, so `*args`, a default and even the trailing comma in
    * `def load(path,):` come back exactly as they were written.
+   *
+   * THE DECORATORS ARE A LIST SINCE A1 (#1215): the dropdown stays at `NONE`
+   * and every `@...` line above the `def` rides on the block's extra state
+   * verbatim, so `@micropython.native` - which the dropdown could never hold -
+   * comes back as itself. `getDecorators` only falls back to the field for a
+   * workspace saved before there was a list.
    *
    * THE LEAD IS WHAT THE TEXT SAYS, not what the decorator implies. `@property`
    * on a method whose first parameter is not `self` is somebody's code rather
@@ -2883,13 +3005,16 @@ class Converter {
    * there; {@link defaultLead} is what a block dragged out of the drawer starts
    * with, and what the dropdown switches to when a learner changes it.
    */
-  private method(node: Stmt, header: RegExpExecArray, decorator: string): BlockJson {
+  private method(node: Stmt, header: RegExpExecArray, decorators: readonly string[]): BlockJson {
     const split = splitMethodSignature(header[3])
     // WHEN THE DECORATOR WOULD REWRITE THE LEAD, THE TEXT WINS. `@classmethod`
     // on a `def x(self)` is somebody's code, and the block would write `cls`
     // into it; so the lead is given up and the name stays an ordinary
-    // parameter, which comes back out exactly as it went in.
-    const exact = methodLead(split.lead, decorator) === split.lead
+    // parameter, which comes back out exactly as it went in. The decorator
+    // asked is the one that has anything to say about a lead - the list may
+    // also hold `@micropython.native`, which has none.
+    const leading = decorators.find((d) => d === 'staticmethod' || d === 'classmethod') ?? 'NONE'
+    const exact = methodLead(split.lead, leading) === split.lead
     const { lead, params, extras } = exact
       ? split
       : { lead: 'none' as const, params: [split.lead, ...split.params], extras: split.extras }
@@ -2898,11 +3023,18 @@ class Converter {
         type: 'snakie_method',
         fields: {
           NAME: header[2],
-          DECORATOR: decorator,
+          // THE DROPDOWN STAYS AT `NONE` and the list carries everything (A1,
+          // #1215): `getDecorators` prefers the list and only falls back to the
+          // field for a workspace saved before there was one.
+          DECORATOR: 'NONE',
           KIND: header[1] ? 'ASYNC' : 'SYNC',
           ...(extras === '' ? {} : { EXTRAS: extras })
         },
-        extraState: { params, lead }
+        extraState: {
+          params,
+          lead,
+          ...(decorators.length === 0 ? {} : { decorators: [...decorators] })
+        }
       },
       'BODY',
       node
@@ -3269,12 +3401,12 @@ class Converter {
           inputs: { [rule.set.value]: { block: this.expression(value) } }
         }
       }
-      if (read.block.type === PYTHON_ATTR_GET) {
-        return {
-          type: PYTHON_ATTR_SET,
-          fields: read.block.fields,
-          inputs: { ...read.block.inputs, VALUE: { block: this.expression(value) } }
-        }
+      // The setter that matches the reading: `self.speed = 3` is the native
+      // `self.` block since B4 (#1223), `motor.speed = 3` its object-socket
+      // twin, and a deeper target the Python drawer's block as before.
+      if (ATTR_GETS.has(read.block.type)) {
+        const set = attrSet(read.block, this.expression(value))
+        if (set) return set
       }
       if (read.block.type === 'snakie_list_get') {
         return {
@@ -3945,6 +4077,10 @@ class Converter {
 
   private readExpression(text: string): BlockJson {
     const trimmed = text.trim()
+    // MAKING ONE OF THIS PROGRAM'S OWN CLASSES (B5, #1224), first: `Robot(…)`
+    // would otherwise be read as a call nothing recognises.
+    const made = this.instanceCall(trimmed)
+    if (made) return made
     // A CALL TO ONE OF THIS PROGRAM'S OWN FUNCTIONS, before the parser, which
     // would otherwise read `double(3)` as a call it does not recognise and hand
     // back a raw value block. Only a `def` that RETURNS has a value caller, so
@@ -4562,6 +4698,8 @@ class Converter {
         if (onObject) return this.chain({ block: onObject, next: call.next }, tokens)
         const known = this.matchCall(call, 'value')
         if (known) return this.chain({ block: known, next: call.next }, tokens)
+        const made = this.instanceCall(this.callText(tokens, at, call.next))
+        if (made) return this.chain({ block: made, next: call.next }, tokens)
         const own = this.procedureCall(this.callText(tokens, at, call.next), 'value')
         if (own) return this.chain({ block: own, next: call.next }, tokens)
       }
@@ -4954,15 +5092,9 @@ class Converter {
       // A MODULE'S OWN MEMBER BLOCK FIRST, on the same principle as
       // `objectCall` above: `ping.unit` is the range finder's block, not a
       // generic read of an attribute that happens to be called `unit`.
-      const known = this.memberRead(cur.block, member.text)
-      cur = {
-        block: known ?? {
-          type: PYTHON_ATTR_GET,
-          fields: { NAME: member.text },
-          inputs: { OBJ: { block: cur.block } }
-        },
-        next: cur.next + 2
-      }
+      // Everything else is B4's reading of `<obj> . <name>` (#1223).
+      const attr = this.memberRead(cur.block, member.text)
+      cur = { block: attr ?? attrGet(cur.block, member.text), next: cur.next + 2 }
     }
   }
 
@@ -5217,6 +5349,41 @@ function readCall(
   const read = readArgs(tokens, source, i)
   if (!read) return null
   return { module, fn, args: read.args, next: read.next, rest: tokens.slice(read.next) }
+}
+
+/**
+ * `<obj> . <name>` as the block that says it best (B4, #1223).
+ *
+ * THREE READINGS OF ONE SHAPE, and which one it is depends entirely on what is
+ * before the dot:
+ *
+ *     self.speed          → `snakie_self_attr_get`, with no socket at all
+ *     motor.speed         → `snakie_attr_get`, the name in its object socket
+ *     self.motor.speed    → the Python drawer's block, as it has always been
+ *
+ * The third case is honest rather than a gap: once the object is itself an
+ * attribute read, the line is no longer "something this thing remembers" and
+ * the socket is carrying structure a learner needs to see. Method calls go
+ * nowhere near here — `self.led.on()` is a call block, and its object is read
+ * by the rules above like any other.
+ */
+function attrGet(obj: BlockJson, name: string): BlockJson {
+  if (obj.type === 'snakie_self') return { type: SELF_ATTR_GET, fields: { ATTR: name } }
+  if (obj.type === 'variables_get') {
+    return { type: ATTR_GET, fields: { ATTR: name }, inputs: { OBJ: { block: obj } } }
+  }
+  return { type: PYTHON_ATTR_GET, fields: { NAME: name }, inputs: { OBJ: { block: obj } } }
+}
+
+/** The setter matching an {@link attrGet} reading, or null when there is none. */
+function attrSet(get: BlockJson, value: BlockJson): BlockJson | null {
+  const set = {
+    [SELF_ATTR_GET]: SELF_ATTR_SET,
+    [ATTR_GET]: ATTR_SET,
+    [PYTHON_ATTR_GET]: PYTHON_ATTR_SET
+  }[get.type]
+  if (!set) return null
+  return { type: set, fields: get.fields, inputs: { ...get.inputs, VALUE: { block: value } } }
 }
 
 /**

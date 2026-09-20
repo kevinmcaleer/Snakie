@@ -51,4 +51,17 @@ describe('bundled courses', () => {
     const beginner = loadCourses().find((c) => c.id === 'beginner')
     expect(beginner!.lessons.every((l) => l.view === undefined)).toBe(true)
   })
+
+  it('keeps the decorator on the blocks lesson that is about one (#1219)', async () => {
+    // The lesson hands over a function that is ALREADY decorated — there is no
+    // way to put one on from the canvas until the gear lands (#1217), so a
+    // starter that lost its `decorators` would be a lesson about a line the
+    // learner cannot see.
+    const { loadCourses } = await import('../src/renderer/src/lib/courses')
+    const lesson = loadCourses()
+      .find((c) => c.id === 'blocks')
+      ?.lessons.find((l) => l.title.includes('micropython.native'))
+    expect(lesson, 'the decorator lesson is bundled').toBeTruthy()
+    expect(JSON.stringify(lesson!.blocks)).toContain('micropython.native')
+  })
 })
