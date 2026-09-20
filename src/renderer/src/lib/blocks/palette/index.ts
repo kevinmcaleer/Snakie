@@ -137,10 +137,14 @@ export function installCorePalette(): void {
     // Dictionaries, each at the end of the drawer it belongs to.
     ...leveled('advanced', COMPREHENSION_BLOCKS),
     ...VARIABLE_BLOCKS,
-    ...FUNCTION_BLOCKS,
-    // Class, method and `self` (#1093). Registered, never listed — a class is
-    // the reader's vocabulary rather than a first drawer's; see §4.5.
+    // Class, method and `self` (#1093). BEFORE the function blocks since
+    // #1220: `class` and `self` share the Classes shelf with `super()`, which
+    // lives in `functions.ts`, and a shelf is ordered by registration — so the
+    // drawer opens on the class block rather than on the thing it inherits
+    // from. `snakie_method` stays hidden until B2 (#1221) gives it a real
+    // parameter mutator.
     ...leveled('advanced', STRUCTURE_BLOCKS),
+    ...FUNCTION_BLOCKS,
     // Last, and last in the toolbox: the escape hatches (#1018) are where you
     // go when nothing above does what you need, and a palette is a curriculum.
     //
