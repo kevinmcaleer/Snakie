@@ -98,6 +98,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pair the block cannot hold exactly (an unusual signature, a lone setter, an
   unexpected gap) is left as the method blocks it was.
 
+- **A lesson and help on decorators (#1219, epic #1206).** **Learn ▸ Blocks to
+  Python** gains an eighth, advanced lesson — *Make it faster with
+  `@micropython.native`* — which hands over an already-decorated function with a
+  clock either side of it, so the speed is something the learner measures rather
+  than is told. The **Writing Python in blocks** help page and
+  `docs/blocks.md` explain what a decorator is, why it rides on the function
+  block rather than sitting beside it, and that the gear for adding one follows
+  in a later release.
+
 - **The method block, rebuilt around a real parameter list (#1221, epic
   #1206).** `def` inside a class took its whole signature as one box of text
   you had to already know Python to fill in — including `self`, which was

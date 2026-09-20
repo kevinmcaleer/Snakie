@@ -455,11 +455,14 @@ describe('the escape-hatch lesson (#1018)', () => {
     )
   })
 
-  it('comes before the handover, which stays last', () => {
+  it('comes immediately before the handover', () => {
     // Reaching for raw Python is a step ON THE WAY to graduating, not after it.
+    // The handover is no longer the last lesson in the course — the decorator
+    // coda (#1219) follows it — but nothing has come between these two.
     const course = loadCourses().find((c) => c.id === 'blocks')!
     const titles = course.lessons.map((l) => l.title)
-    expect(titles[titles.length - 1]).toMatch(/Python/)
-    expect(titles.findIndex((t) => /doesn't exist yet/.test(t))).toBe(titles.length - 2)
+    const handover = titles.findIndex((t) => /same program, in Python/.test(t))
+    expect(handover).toBeGreaterThan(0)
+    expect(titles.findIndex((t) => /doesn't exist yet/.test(t))).toBe(handover - 1)
   })
 })
