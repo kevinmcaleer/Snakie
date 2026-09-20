@@ -22,7 +22,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   profile that used Snakie before keeps every drawer. The switch filters the
   toolbox only: a program that uses advanced blocks still opens, renders and
   generates with them off, and a drawer it empties says why instead of going
-  blank. Parts and plugin blocks are unaffected for now (#1213).
+  blank.
+
+- **`level:` in `blocks.yml` (#1213, epic #1206).** A part or plugin block can
+  now declare `level: simple` (the default) or `level: advanced`, and it lands
+  in the same toolbox filter the built-in blocks use: an advanced part block is
+  only offered while the advanced switch is on, and a part or plugin drawer
+  whose every block is advanced disappears with them. It filters the toolbox
+  only — a program already using the block still opens, renders and generates.
+  Python plugins pass `level=` to `snakie.block()`; the key is documented in
+  `docs/writing-plugins.md`.
 
 - **A `print` block that understands f-strings.** The Text drawer has a new
   `print f"…"` block: type the text with a `{}` wherever a value goes —
