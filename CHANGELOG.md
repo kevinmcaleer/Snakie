@@ -112,6 +112,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The coverage corpus has classes in it, and they are measured (#1225, epic
+  #1206).** Four class-heavy fixtures joined `test/fixtures/coverage` —
+  `__init__` and `self.x`, a `@property` with a setter, `super()` and a
+  `@staticmethod`, two classes passing objects around — and the ratchet gained a
+  class-only slice with floors of its own, plus an assertion that every `class`
+  header in the corpus still reads as a real class block. The corpus-wide socket
+  floor goes up (81 → 82); the clean-file floor comes down a point (24 → 23) to
+  admit files no reader handles cleanly yet, which is argued for in the test.
+  New `docs/blocks-classes-epic.md` records the epic's decisions, the
+  before/after numbers, and the one win the ratchet cannot see.
 - **The `create text with` block is one row, not two.** Its sockets were
   Blockly's stacked external inputs, so the everyday two-piece join stood two
   rows tall and a Text flyout full of them scrolled for no reason. The sockets
