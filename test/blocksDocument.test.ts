@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import * as Blockly from 'blockly/core'
 import 'blockly/blocks'
-import { blocksDocumentFor } from '../src/renderer/src/lib/blocks/document'
+import { blocksDocumentFor, documentFromCode } from '../src/renderer/src/lib/blocks/document'
 import { generateProgram } from '../src/renderer/src/lib/blocks/generator'
 import { installBlockDefinitions, resetBlockRegistry } from '../src/renderer/src/lib/blocks/registry'
 import { installCorePalette } from '../src/renderer/src/lib/blocks/palette'
@@ -75,5 +75,52 @@ describe('blocksDocumentFor', () => {
   it('keeps the footer version it found, so a stale footer is not silently upgraded', () => {
     const edited = MATCHING.replace("print('one')", "print('two')")
     expect(blocksDocumentFor(edited)?.version).toBe(blocksDocumentFor(MATCHING)?.version)
+  })
+})
+
+
+/**
+ * FALLING BACK TO THE PYTHON (#1252).
+ *
+ * A footer can name a block type this build cannot build — a part or plugin
+ * that isn't installed, or (the case this was reported for) a module whose
+ * blocks #1048 registered from a `.py` that is not beside the file and a board
+ * that is not plugged in. The canvas used to refuse to mount at all and say
+ * "these blocks need a newer Snakie". It falls back to the code instead, which
+ * always converts.
+ */
+describe('documentFromCode', () => {
+  const MODULE_CODE = "ping = RangeFinder(echo_pin=0, trigger_pin=1)\nprint(ping.distance())\n"
+  /** What a file saved with a module's blocks (#1048) looks like here. */
+  const WITH_MODULE_BLOCKS = writeBlocksFooter(MODULE_CODE, {
+    blocks: {
+      blocks: [
+        { type: 'snakie_module_range_finder_new_rangefinder', id: 'r0' },
+        { type: 'snakie_module_range_finder_rangefinder_get', id: 'r1' }
+      ]
+    }
+  } as never)
+
+  it('the stored document still carries the types this build has never heard of', () => {
+    const stored = blocksDocumentFor(WITH_MODULE_BLOCKS)
+    expect(stored?.derived).toBe(false)
+    expect(JSON.stringify(stored?.workspace)).toContain('snakie_module_range_finder_new_rangefinder')
+  })
+
+  it('re-reads the program from its Python, keeping the code byte-for-byte', () => {
+    const stored = blocksDocumentFor(WITH_MODULE_BLOCKS)
+    const fallback = documentFromCode(stored!)
+    expect(fallback.code).toBe(stored!.code)
+    // Our reading of their Python, so it goes behind the round-trip gate.
+    expect(fallback.derived).toBe(true)
+    // …and nothing in it needs a block this build hasn't got.
+    expect(JSON.stringify(fallback.workspace)).not.toContain('snakie_module_')
+  })
+
+  it('the blocks it falls back to regenerate the same program', () => {
+    const fallback = documentFromCode(blocksDocumentFor(WITH_MODULE_BLOCKS)!)
+    expect(regenerate(fallback.workspace as Record<string, unknown>).trimEnd()).toBe(
+      fallback.code.trimEnd()
+    )
   })
 })

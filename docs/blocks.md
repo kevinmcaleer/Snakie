@@ -343,10 +343,16 @@ follow the code — that is what makes the two panes two views rather than a sou
 and a copy. Snakie can also work blocks out from a `.py` it never wrote, so a
 file from a lesson sheet or a web page opens in blocks like any other.
 
-**What if a file has blocks from a newer Snakie?** It refuses to open on the
-canvas rather than opening a version of it with pieces missing, and offers to
-show you the Python instead. This is deliberate: an editor that silently drops
-what it does not understand will eventually save that over someone's work.
+**What if a file has blocks this Snakie hasn't got?** — a newer version, an
+uninstalled part or plugin, or a module whose `.py` isn't beside the file and
+whose board isn't plugged in. The canvas shows the program anyway, read back
+from the file's own Python, with a plain Python block wherever there is no
+native block for a line. Those blocks are marked as Snakie's *reading* of the
+code, so they go behind the round-trip check before they may write anything, and
+the file on disk is untouched: install what was missing, re-open, and the
+original blocks come back exactly as they were arranged. What must never happen
+— and does not — is the canvas quietly dropping the pieces it does not
+understand and saving that over someone's work.
 
 **What about screen readers and keyboard-only use?** Blockly's keyboard
 navigation and screen-reader support are built in. Every block's right-click

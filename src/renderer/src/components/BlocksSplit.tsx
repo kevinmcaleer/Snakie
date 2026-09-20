@@ -16,7 +16,7 @@ import {
 } from 'react-resizable-panels'
 import { useWorkspaceLayout } from '../store/layout'
 import { useWorkspace } from '../store/workspace'
-import { blocksDocumentFor } from '../lib/blocks/document'
+import { blocksDocumentFor, documentFromCode } from '../lib/blocks/document'
 import {
   callRuleGeneration,
   pythonToBlocks,
@@ -127,7 +127,7 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
    * The document, as blocks and as code — see `lib/blocks/document.ts`, which
    * owns the three cases and the reason the middle one is not a modal.
    */
-  const doc = useMemo(
+  const storedDoc = useMemo(
     () => blocksDocumentFor(content),
     // `vocabulary` is not read in the callback and is not meant to be: it is a
     // generation counter, and its only job is to say that the same text would
@@ -135,6 +135,39 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [content, vocabulary]
   )
+  /**
+   * THE FOOTER NAMED BLOCKS THIS BUILD HASN'T GOT (#1252).
+   *
+   * Reported BY the canvas, because whether a type exists is a question for
+   * Blockly's own table and Blockly lives in the lazy chunk. Set only when
+   * there is something to report; cleared by the two things that can change
+   * the answer — a different file, and a palette that has since grown (a part
+   * scan finishing, a module's source turning up, a board being plugged in).
+   *
+   * NEVER cleared by a canvas that then reports nothing, which would be a loop:
+   * the fallback document contains only blocks we have, so of course the next
+   * report is empty, and clearing on it would put the unreadable workspace
+   * straight back.
+   */
+  const [unreadable, setUnreadable] = useState<{
+    fileId: string
+    types: readonly string[]
+  } | null>(null)
+  const handleUnreadableBlocks = useCallback((fileId: string, types: readonly string[]) => {
+    if (types.length > 0) setUnreadable({ fileId, types })
+  }, [])
+  /**
+   * The document to actually show: the stored one, or — when its blocks cannot
+   * be built here — the same program read back from its own Python, which is
+   * every bit of it a canvas can show and a raw Python block for the rest.
+   */
+  const doc = useMemo(() => {
+    if (!storedDoc || storedDoc.derived) return storedDoc
+    if (!file || unreadable?.fileId !== file.id) return storedDoc
+    return documentFromCode(storedDoc)
+    // `file.id` is the identity that matters here, not the file object.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storedDoc, unreadable, file?.id])
 
   const hostRef = useRef<HTMLDivElement>(null)
   const groupRef = useRef<ImperativePanelGroupHandle>(null)
@@ -327,6 +360,7 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
     setCodeDraft(null)
     setHeldBack(null)
     setOpenedHold(null)
+    setUnreadable(null)
   }, [file?.id])
   useEffect(
     () => () => {
@@ -475,6 +509,10 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   // drawer and then take it away again a keystroke later.
   const modulesNonce = useModuleBlocks(doc?.code ?? '', dialect, currentFolder, file?.path ?? null)
   const paletteNonce = partsNonce + modulesNonce
+  // The palette grew, so the blocks the footer named may exist now (#1252) —
+  // give the learner's own arrangement another go. If they still don't, the
+  // canvas says so again and we are back to the Python within a frame.
+  useEffect(() => setUnreadable(null), [paletteNonce])
   // The parts whose blocks are on the canvas right now — the driver banner's
   // input. Empty until the canvas reports, which is also the state on a file
   // with no part blocks in it, so the banner simply never appears.
@@ -539,6 +577,10 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
   }
 
   // Advanced blocks on the canvas, advanced drawers off (#1212) — see above.
+  // The canvas could not build the footer's blocks, so what is on it was read
+  // back from the file's Python (#1252) — worth one quiet line.
+  const fellBackToPython = unreadable?.fileId === file.id && unreadable.types.length > 0
+
   const offerAdvanced =
     blockLevel === 'simple' &&
     advancedInFile?.fileId === file.id &&
@@ -562,6 +604,7 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
         paletteNonce={paletteNonce}
         onPartsUsed={setPartsUsed}
         onAdvancedBlocks={handleAdvancedBlocks}
+        onUnreadableBlocks={handleUnreadableBlocks}
         reloadNonce={reloadNonce}
         derived={doc.derived}
       />
@@ -619,6 +662,38 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
           }
           action={{ label: 'Show them', onClick: () => setBlockLevel('advanced') }}
           onDismiss={() => setAdvancedDismissed(file.id)}
+        />
+      )}
+      {/* THE FOOTER NAMED BLOCKS WE HAVEN'T GOT, SO THE PYTHON IS DRIVING (#1252).
+          Not an error and not a wall: the program is on the canvas, built out
+          of this build's own blocks, with a raw Python block wherever there was
+          nothing better. The file is untouched, so installing the part (or
+          plugging in the board whose module these came from) and re-opening
+          brings the learner's own arrangement back. */}
+      {fellBackToPython && (
+        <Notice
+          summary="Some blocks came from a part, plugin or module this Snakie hasn't got — showing the Python instead"
+          detail={
+            <>
+              <p>
+                Your program is all here and still runs exactly as it did — it is built from this
+                version&rsquo;s own blocks, with a plain Python block wherever there was no better
+                match. Your file has not been changed: install the part or plugin those blocks came
+                from (or plug in the board whose module they came from) and re-open it, and the
+                original blocks come back just as you arranged them.
+              </p>
+              <p>
+                Missing here:{' '}
+                {unreadable.types.slice(0, 8).map((t, i) => (
+                  <span key={t}>
+                    {i > 0 && ', '}
+                    <code>{t}</code>
+                  </span>
+                ))}
+                {unreadable.types.length > 8 && ` … and ${unreadable.types.length - 8} more`}
+              </p>
+            </>
+          }
         />
       )}
       {/* THE TWO VIEWS HAVE COME APART (#1068).

@@ -233,6 +233,24 @@ export interface BlocksCanvasProps {
    */
   onAdvancedBlocks?: (fileId: string, types: readonly string[]) => void
   /**
+   * THIS FILE'S FOOTER NAMES BLOCKS THIS BUILD CANNOT BUILD (#1252).
+   *
+   * A part uninstalled, a plugin that isn't here, a module whose `.py` is not
+   * beside the file and whose board isn't plugged in (#1048's blocks are
+   * registered from a module's own source, so they come and go with it), or a
+   * file from a newer Snakie. The canvas cannot show those blocks — but the
+   * PYTHON beside them is intact, and converting that back gives a canvas made
+   * of blocks this build definitely has, with a raw Python block wherever there
+   * is nothing better (#1019). So the canvas reports up rather than refusing:
+   * the caller re-derives the document from the code and hands it back, and
+   * what the learner gets is their program, not a wall.
+   *
+   * Reported whenever it is true, not once per file: the palette grows
+   * asynchronously (a part scan, a module read, a board probe), so the same
+   * file can be unreadable at mount and perfectly readable a tick later.
+   */
+  onUnreadableBlocks?: (fileId: string, types: readonly string[]) => void
+  /**
    * Bumped when the workspace changed from OUTSIDE the canvas (#1034) — the
    * learner edited the code, and it was converted back into blocks.
    *
@@ -295,6 +313,7 @@ export function BlocksCanvas({
   paletteNonce = 0,
   onPartsUsed,
   onAdvancedBlocks,
+  onUnreadableBlocks,
   reloadNonce = 0,
   derived = false
 }: BlocksCanvasProps): JSX.Element {
@@ -381,6 +400,19 @@ export function BlocksCanvas({
   useEffect(() => {
     onAdvancedBlocksRef.current?.(fileId, advancedRef.current)
   }, [fileId])
+  /**
+   * TELL THE CALLER, SO IT CAN FALL BACK TO THE PYTHON (#1252).
+   *
+   * Through a ref like every other callback here, and in an effect rather than
+   * during render — a parent that re-derives the document in response is a
+   * `setState`, and doing that from a render body is the one thing React will
+   * not have.
+   */
+  const onUnreadableBlocksRef = useRef(onUnreadableBlocks)
+  onUnreadableBlocksRef.current = onUnreadableBlocks
+  useEffect(() => {
+    if (unknown.length > 0) onUnreadableBlocksRef.current?.(fileId, unknown)
+  }, [fileId, unknown])
   /** Pending regeneration, so a drag doesn't generate once per mouse move. */
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   /**
@@ -1067,7 +1099,15 @@ export function BlocksCanvas({
   const expand = useCallback(() => onExpand?.(), [onExpand])
 
   if (blocked) {
-    return <BlocksUnreadable types={unknown} />
+    // A caller that can fall back re-derives the document from the file's own
+    // Python and hands it straight back (#1252), so this is one frame, not a
+    // destination. Without such a caller — the PDF exporter, a test — the old
+    // notice is still the honest answer.
+    return onUnreadableBlocks ? (
+      <div className="blocks-canvas__loading">Reading the blocks&hellip;</div>
+    ) : (
+      <BlocksUnreadable types={unknown} />
+    )
   }
 
   if (peek) {
