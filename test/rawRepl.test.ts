@@ -31,6 +31,12 @@ class MockBoard implements SerialTransport {
   /** A wedged/absent board: never answers the raw-REPL handshake (#712). */
   silent = false
   closed = false
+  /** The next program LOOPS: after `OK` + stdout the board never sends the
+   *  terminating `\x04` until it is interrupted (Ctrl-C), like `while True:`. */
+  nextHangs = false
+  private hanging = false
+  /** Ctrl-C bytes the board received. */
+  interrupts = 0
 
   onData(cb: (c: Uint8Array) => void): void {
     this.cb = cb
@@ -58,8 +64,21 @@ class MockBoard implements SerialTransport {
         // Ctrl-D in raw mode → execute the buffered code, frame the response.
         this.execCount++
         this.buf = ''
-        this.emit('OK' + this.nextStdout + '\x04' + this.nextStderr + '\x04>')
-      } else if (ch !== '\x03') {
+        if (this.nextHangs) {
+          this.nextHangs = false
+          this.hanging = true
+          this.emit('OK' + this.nextStdout)
+        } else {
+          this.emit('OK' + this.nextStdout + '\x04' + this.nextStderr + '\x04>')
+        }
+      } else if (ch === '\x03') {
+        this.interrupts++
+        if (this.hanging) {
+          // KeyboardInterrupt: the traceback, then the framing the loop withheld.
+          this.hanging = false
+          this.emit('\x04Traceback (most recent call last):\nKeyboardInterrupt: \n\x04>')
+        }
+      } else {
         this.buf += ch
       }
     }
@@ -182,6 +201,26 @@ describe('RawReplClient', () => {
     expect(s.console).toContain('ran\n')
     expect(s.console).not.toContain('MicroPython v')
     expect(s.console).not.toContain('help()')
+  })
+
+  it('Run while a program is still running interrupts it and runs the new one', async () => {
+    const s = setup() as unknown as { board: MockBoard; client: RawReplClient; console: string }
+    // A `while True:` blink loop: never finishes on its own.
+    s.board.nextHangs = true
+    s.board.nextStdout = 'blink\n'
+    const first = s.client.runProgram('while True: blink()')
+    await new Promise((r) => setTimeout(r, 5))
+    expect(s.console).toContain('blink\n') // it IS running and streaming
+    expect(s.board.execCount).toBe(1)
+    // Run again with an edited program. Before the fix this queued behind the
+    // loop forever — Run appeared to do nothing until the user pressed Stop.
+    s.board.nextStdout = 'v2\n'
+    const second = s.client.runProgram('print("v2")')
+    await Promise.all([first, second])
+    expect(s.board.interrupts).toBeGreaterThan(0)
+    expect(s.board.execCount).toBe(2)
+    expect(s.console).toContain('KeyboardInterrupt') // the old run's end is shown…
+    expect(s.console).toContain('v2\n') // …and the new program ran
   })
 
   it('runProgram streams a traceback (stderr) to the console, still no echo (#612)', async () => {
