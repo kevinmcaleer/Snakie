@@ -1,5 +1,15 @@
 Classes — bundle state + behaviour into your own types (every driver is one).
 
+## In Blocks
+
+The `class` block, `self` and `super()` are on the **Classes** shelf inside the
+**Functions** drawer. They are *advanced* blocks, so the shelf only appears once
+**Advanced blocks** is on — Settings ▸ Appearance, or the switch at the bottom of
+the toolbox. Turning it off never takes a class off your canvas: a program that
+uses classes still opens, renders and runs whichever tier you are in. The shelf
+is where the class, its methods and its properties are built; a class you paste
+into the Python pane comes back as those same blocks.
+
 ## Defining & using
 
 ```python

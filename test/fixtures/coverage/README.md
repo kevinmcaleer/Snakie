@@ -19,6 +19,17 @@ The ratchet asserts three things over every file (§2.3):
   be blind to it;
 - **round-trip** — every file still converts and regenerates to the same program.
 
-Floors go UP when a workstream lands, never down. A change that lowers one is
+Since **B6 of epic #1206** (#1225) it also asserts a fourth thing over the
+**class-heavy slice** — the fixtures with a `class` header in them, measured on
+their own so that the classes track has a number of its own, and so that every
+`class` header still reads as a real `snakie_class` block. `motor_driver.py`,
+`thermostat.py`, `blinker_subclass.py` and `node_queue.py` were added for it and
+span `__init__`, `self.x` get and set, `obj.x` on someone else's object, a
+`@property` with a setter, `super()`, `@staticmethod`, and constructing an
+instance. `docs/blocks-classes-epic.md` has the numbers.
+
+Floors go UP when a workstream lands, never down —
+except when new fixtures make the corpus harder, which is what happened at B6
+and is argued for in the test beside the floor it lowered. A change that lowers one is
 either a regression or a deliberate trade, and either way it should be argued for
 in a pull request rather than absorbed silently.

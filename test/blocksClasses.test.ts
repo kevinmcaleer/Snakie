@@ -100,7 +100,10 @@ describe('a class holds its body', () => {
     ) {
       chained.push(b.type as string)
     }
-    expect(chained.filter((t) => t === 'snakie_method')).toHaveLength(3)
+    // Two methods and the `@property`, which is a property block of its own
+    // since B3 (#1222) rather than a third method with a decorator on it.
+    expect(chained.filter((t) => t === 'snakie_method')).toHaveLength(2)
+    expect(chained.filter((t) => t === 'snakie_property')).toHaveLength(1)
   })
 
   it('round-trips the whole thing', () => {
@@ -160,9 +163,14 @@ describe('decorators', () => {
   const decorators = (src: string): unknown =>
     (one(src, 'snakie_method')!.extraState as { decorators?: unknown } | undefined)?.decorators
 
-  it('reads @property into the list on the method', () => {
+  it('reads @property as a property block of its own (B3, #1222)', () => {
     const src = ['class T:', '    @property', '    def x(self):', '        return 1', ''].join('\n')
-    expect(decorators(src)).toEqual(['property'])
+    // It used to be the method block with DECORATOR: 'property' on it. B3 gave
+    // the pair a block that can hold the `@x.setter` half as well, and a lone
+    // getter is that block with the setter switched off — see
+    // `blocksProperty.test.ts`. The method block's own setting is untouched,
+    // and is still what a `@property` this one refuses falls back to.
+    expect(one(src, 'snakie_property')!.fields).toMatchObject({ NAME: 'x', HAS_SETTER: false })
     expect(types(src)).not.toContain('snakie_python_statement')
     roundTrips(src)
   })
@@ -241,7 +249,7 @@ describe('decorators', () => {
     roundTrips(src)
   })
 
-  it('reads @property and @x.setter as two methods, one decorator each (#1222)', () => {
+  it('reads a @property / @x.setter pair written with no blank line (B3, #1222)', () => {
     const src = [
       'class T:',
       '    @property',
@@ -252,12 +260,34 @@ describe('decorators', () => {
       '        self._x = value',
       ''
     ].join('\n')
+    // A2 (#1216) read this as two methods with a decorator each, and said so,
+    // because B3 had not landed. It has, and it folds the pair ONLY when the
+    // `@x.setter` has the one blank line above it that the generator writes.
+    // With the halves written tight, as here, the getter becomes the property
+    // block and the setter stays a method carrying its own decorator — which
+    // is lossless, as the round trip below shows.
+    expect(one(src, 'snakie_property')!.fields).toMatchObject({ NAME: 'x', HAS_SETTER: false })
     const methods = blocks(src).filter((b) => b.type === 'snakie_method')
-    expect(methods).toHaveLength(2)
     expect(methods.map((m) => (m.extraState as { decorators: string[] }).decorators)).toEqual([
-      ['property'],
       ['x.setter']
     ])
+    roundTrips(src)
+  })
+
+  it('folds the pair into one block when the blank line is there (B3, #1222)', () => {
+    const src = [
+      'class T:',
+      '    @property',
+      '    def x(self):',
+      '        return self._x',
+      '',
+      '    @x.setter',
+      '    def x(self, value):',
+      '        self._x = value',
+      ''
+    ].join('\n')
+    expect(blocks(src).filter((b) => b.type === 'snakie_method')).toHaveLength(0)
+    expect(one(src, 'snakie_property')!.fields).toMatchObject({ NAME: 'x', HAS_SETTER: true })
     roundTrips(src)
   })
 })

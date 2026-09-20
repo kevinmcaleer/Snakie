@@ -1335,6 +1335,23 @@ function mentions(text: string, name: string): boolean {
 const DEF_HEADER = /^(async\s+)?def\s+([A-Za-z_]\w*)\((.*)\)\s*:$/
 
 /**
+ * The name a property setter calls its new value, out of a `def` header (#1222).
+ *
+ * `def x(self, value):` → `value`. Null for anything else — an `async` setter,
+ * a default, a type annotation, a third parameter: all real Python that the
+ * property block's one plain field cannot hold, and all of which therefore stay
+ * the decorated method they were.
+ */
+function setterParam(text: string, name: string): string | null {
+  const def = DEF_HEADER.exec(text)
+  // And it has to be the SAME name: `@x.setter` over `def y(...)` binds `y`,
+  // which is a different thing entirely from the property above it.
+  if (!def || def[1] || def[2] !== name) return null
+  const params = /^self\s*,\s*([A-Za-z_]\w*)$/.exec(def[3].trim())
+  return params ? params[1] : null
+}
+
+/**
  * Blocks whose 1-based setting writes `<call> + 1` (#1122, #1124).
  *
  * `xs.index(v)` and `s.find(n)` both answer 0-based, and both drawers count
@@ -2608,6 +2625,14 @@ class Converter {
     // decorator since A2 (#1216); see {@link decorated}. One with no `def`
     // under it at all still falls through and stays raw.
     if (text.startsWith('@') && node.body.length === 0) {
+      // `@property` FIRST TRIES TO BE A PROPERTY BLOCK (B3, #1222): a getter,
+      // with the `@name.setter` under it if there is one. Only when that does
+      // not fit does it fall back to a method block carrying the decorator,
+      // which is what every `@property` came back as before.
+      if (text === '@property') {
+        const property = this.property(node, siblings)
+        if (property) return recognised([property])
+      }
       const decorated = this.decorated(node, siblings)
       if (decorated) return recognised(decorated)
     }
@@ -2819,6 +2844,74 @@ class Converter {
     this.report.total += 1
     this.report.recognised += 1
     return [this.method(header, def, decorators)]
+  }
+
+  /**
+   * `@property` + its `def`, and the `@name.setter` pair under it → one block
+   * (B3, #1222, epic #1206).
+   *
+   * A2 (#1216) reads a decorated `def` as a method block carrying that one
+   * decorator, which makes a settable property TWO blocks that have to agree
+   * about a name: rename one and the class quietly stops working. `@property`
+   * is the one decorator whose pair is a single idea, so it gets a block that
+   * holds both halves and writes the name once.
+   *
+   * WHAT IT REFUSES, each falling back to the method block that was there
+   * before:
+   *
+   *  - a getter that is not exactly `def name(self):` — an `async` one, or one
+   *    with parameters a property cannot have;
+   *  - a setter whose decorator does not name this very property, or whose
+   *    signature is not `self` plus one plain name;
+   *  - a setter separated from its getter by anything other than the one blank
+   *    line the generator writes, because the block has nowhere to record the
+   *    gap and a round trip that reflows somebody's file is a round trip that
+   *    changed it.
+   *
+   * A LONE `@name.setter` is not this block's business at all: with no getter
+   * above it there is no property to fold, and it stays the decorated method
+   * A2 reads it as.
+   */
+  private property(node: Stmt, siblings: readonly Stmt[]): BlockJson | null {
+    const at = siblings.indexOf(node)
+    const getterNode = siblings[at + 1]
+    if (!getterNode || this.consumed.has(getterNode)) return null
+    const getter = DEF_HEADER.exec(getterNode.line.text)
+    if (!getter || getter[1] || getter[3].trim() !== 'self') return null
+    const name = getter[2]
+    const block: BlockJson = {
+      // The type and the field names as literals, like every other block this
+      // file builds: the palette imports Blockly and the reader stays pure.
+      type: 'snakie_property',
+      fields: { NAME: name, HAS_SETTER: false, PARAM: 'value' }
+    }
+    this.consume(getterNode)
+    this.withBody(block, 'GET', getterNode)
+
+    const setterAt = siblings[at + 2]
+    const setterDef = siblings[at + 3]
+    const param =
+      setterAt &&
+      setterDef &&
+      !this.consumed.has(setterAt) &&
+      !this.consumed.has(setterDef) &&
+      (setterAt.line.blankBefore ?? 0) === 1 &&
+      setterAt.line.text === `@${name}.setter`
+        ? setterParam(setterDef.line.text, name)
+        : null
+    if (param === null) return block
+    this.consume(setterAt!)
+    this.consume(setterDef!)
+    block.fields!.HAS_SETTER = true
+    block.fields!.PARAM = param
+    return this.withBody(block, 'SET', setterDef!)
+  }
+
+  /** Take a sibling line with this one, and count it as read. */
+  private consume(node: Stmt): void {
+    this.consumed.add(node)
+    this.report.total += 1
+    this.report.recognised += 1
   }
 
   /**
