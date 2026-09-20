@@ -17,6 +17,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   RESCAN; each row opens its file in the editor. The module reader behind it
   now reports module-level variables as well as constants.
 
+### Changed
+
+- **The `create text with` block is one row, not two.** Its sockets were
+  Blockly's stacked external inputs, so the everyday two-piece join stood two
+  rows tall and a Text flyout full of them scrolled for no reason. The sockets
+  now sit side by side on a single row — the gear mutator, the socket names and
+  saved workspaces are untouched, and the block stays inline as rows are added
+  or removed.
+
 ### Fixed
 
 - **Run does something again while a program is already running.** Pressing

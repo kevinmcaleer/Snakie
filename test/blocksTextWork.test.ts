@@ -135,3 +135,23 @@ describe('a serial command parser', () => {
     expect(await verifyConversion(source, workspace as never)).toEqual({ ok: true })
   })
 })
+
+describe('`create text with` (#1125)', () => {
+  it('lays its sockets across one row, not down', () => {
+    const ws = new Blockly.Workspace()
+    const block = ws.newBlock('text_join')
+    expect(block.getInputsInline()).toBe(true)
+  })
+
+  it('stays inline after the mutator adds a socket', () => {
+    const ws = new Blockly.Workspace()
+    const block = ws.newBlock('text_join') as Blockly.Block & {
+      itemCount_: number
+      updateShape_: () => void
+    }
+    block.itemCount_ = 3
+    block.updateShape_()
+    expect(block.getInput('ADD2')).not.toBeNull()
+    expect(block.getInputsInline()).toBe(true)
+  })
+})
