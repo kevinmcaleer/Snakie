@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parse } from 'yaml'
-import { planPartSync, planPartStatus, backfillTopLevel } from '../src/shared/bundled-seed'
+import { planPartSync, planPartStatus, planPartPrune, backfillTopLevel } from '../src/shared/bundled-seed'
 
 describe('planPartSync (#166 bundled seed policy)', () => {
   it('copies a part that is not installed', () => {
@@ -149,5 +149,25 @@ describe('planPartStatus (#643 stranded-part visibility)', () => {
       const action = planPartSync({ existsLocal: true, ...c })
       expect(planPartStatus(c).edited).toBe(action === 'backfill')
     }
+  })
+})
+
+describe('planPartPrune (#638 — parts the bundle stopped shipping)', () => {
+  it('prunes a copy untouched since the seeder wrote it', () => {
+    // The hr-sr04 case: we seeded it, the user never touched it, the bundle
+    // dropped it — nothing of theirs is lost by taking it back out.
+    expect(planPartPrune({ localHash: 'seeded', seededHash: 'seeded' })).toBe(true)
+  })
+
+  it('keeps a copy the user has edited', () => {
+    expect(planPartPrune({ localHash: 'edited', seededHash: 'seeded' })).toBe(false)
+  })
+
+  it('keeps a part of unknown provenance (no manifest record)', () => {
+    expect(planPartPrune({ localHash: 'mine' })).toBe(false)
+  })
+
+  it('prunes nothing when there is no readable parts.yml', () => {
+    expect(planPartPrune({ seededHash: 'seeded' })).toBe(false)
   })
 })

@@ -156,3 +156,31 @@ export function planPartStatus(args: {
     behind: !!args.bundledVersion && isNewer(args.bundledVersion, args.localVersion ?? null)
   }
 }
+
+/**
+ * Whether an installed bundled part that the app no longer ships should be
+ * REMOVED from the install (#638 follow-up).
+ *
+ * {@link planPartSync} only ever walks the folders the bundle still has, so a
+ * part dropped from the bundle lingers in `<userData>/parts` for good. That is
+ * how the typo'd `hr-sr04` duplicate of the HC-SR04 survived its removal: every
+ * existing install still offers it in the catalog, and because the copy predates
+ * the driver metadata the real `hc-sr04` gained, placing it prompts for no
+ * driver at all — the exact symptom the HC-SR04 fix was meant to end.
+ *
+ * Only a copy the seeder itself wrote and nobody has touched since is pruned
+ * (its hash still matches the manifest). Anything the user edited — or of
+ * unknown provenance, including a part of their own that happens to live in the
+ * bundled library folder — is kept, on the same "never clobber an edit" rule the
+ * rest of this module follows. Pure.
+ */
+export function planPartPrune(args: {
+  /** sha256 of the installed `parts.yml` (undefined ⇒ nothing readable there). */
+  localHash?: string
+  /** The hash the seed manifest recorded for this part, if any. */
+  seededHash?: string
+}): boolean {
+  const { localHash, seededHash } = args
+  if (localHash === undefined || seededHash === undefined) return false
+  return localHash === seededHash
+}
