@@ -36,6 +36,7 @@ import {
   type RootPlacement
 } from '../lib/blocks/arrange'
 import { installShelfFlyout, installZoomReset } from '../lib/blocks/zoom'
+import { installBlockDoctor } from '../lib/blocks/block-doctor'
 import {
   dispatchNeedLibrary,
   dispatchOpenHelp,
@@ -448,6 +449,16 @@ export function BlocksCanvas({
     // injection, because it works on the control Blockly has just drawn.
     const restoreZoomReset = installZoomReset(ws)
 
+    // *WHAT BLOCK IS THIS?* (#1245). A drop zone in the bottom-left corner that
+    // answers for whatever is dropped on it — and gives the block straight back,
+    // so asking about somebody else's program never edits it. The dialect comes
+    // from the REF so this effect does not re-run on a runtime change; the zone
+    // asks afresh each time it is used.
+    const removeBlockDoctor = installBlockDoctor(ws, {
+      dialect: () => dialectRef.current,
+      onHelp: (article) => dispatchOpenHelp(article)
+    })
+
     // THE FUNCTIONS DRAWER IS DYNAMIC (#1045). Every other category is a fixed
     // list from the registry, which is right for them and wrong for this one:
     // its contents depend on what the learner has defined. Blockly's own
@@ -605,6 +616,7 @@ export function BlocksCanvas({
       host.removeEventListener('mousemove', onMove)
       host.removeEventListener('mouseleave', onLeave)
       restoreZoomReset()
+      removeBlockDoctor()
       ws.removeChangeListener(pointing)
       if (debounceRef.current) clearTimeout(debounceRef.current)
       const separation = separationTimers.get(ws)

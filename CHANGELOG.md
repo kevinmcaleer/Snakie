@@ -8,6 +8,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **"What block is this?" (#1245).** A drop zone in the bottom-left corner of
+  the blocks canvas. Drag any block onto it — including one from a program
+  somebody else wrote — and it says what the block is: its shape and what that
+  shape means, the drawer it lives in, whether it came from Snakie's palette, a
+  part, a plugin or an imported module, the Python library it imports, the pin
+  it claims and which way it drives it, what is plugged into each socket, and
+  the Python that one block writes. The block springs straight back to where it
+  was, so asking about a program never edits it, and a block this build has no
+  description for says exactly that instead of guessing. Blocks with a help
+  article offer a **Read more about this** button straight into the in-app help.
+
 - **A property block (#1222, epic #1206).** The Classes shelf has a new
   advanced `property` block: it writes `@property def name(self)`, and ticking
   **can be set too** adds the `@name.setter` half underneath, with the new
