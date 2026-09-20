@@ -133,6 +133,7 @@ export const VARIABLE_BLOCKS: BlockDefinition[] = [
     // cannot say `global my score`. The escape hatch keeps everything this
     // shape cannot hold: `nonlocal`, and several names at once.
     type: 'snakie_global',
+    level: 'advanced',
     category: 'variables',
     help: 'ref-types',
     json: {
@@ -164,6 +165,7 @@ export const VARIABLE_BLOCKS: BlockDefinition[] = [
     // offers the variables the program actually has, it follows a rename, and
     // it cannot say `del my score`.
     type: 'snakie_forget',
+    level: 'advanced',
     category: 'variables',
     help: 'ref-types',
     json: {
@@ -192,6 +194,7 @@ export const VARIABLE_BLOCKS: BlockDefinition[] = [
   // is what a learner meets only when the line really is one of these.
   {
     type: 'snakie_python_assign',
+    level: 'advanced',
     category: 'variables',
     help: 'blocks-python',
     hidden: true,
@@ -223,6 +226,7 @@ export const VARIABLE_BLOCKS: BlockDefinition[] = [
     // a string, a list, a byte array and a number are all the same statement,
     // and a socket that claimed otherwise would be the same bug again.
     type: 'snakie_python_augmented',
+    level: 'advanced',
     category: 'variables',
     help: 'blocks-python',
     hidden: true,
@@ -267,6 +271,7 @@ export const VARIABLE_BLOCKS: BlockDefinition[] = [
     // rather than a statement: it says which scope a name belongs to, and there
     // is nothing to compute, so it is two fields and no sockets.
     type: 'snakie_python_scope',
+    level: 'advanced',
     category: 'variables',
     help: 'blocks-python',
     hidden: true,

@@ -3,7 +3,7 @@
 // which of them a learner can actually reach is decided by the registry below,
 // and the ones we don't register appear in no category and no flyout.
 import 'blockly/blocks'
-import { defineBlocks, scoped, scopedByEmitters } from '../registry'
+import { defineBlocks, leveled, scoped, scopedByEmitters } from '../registry'
 import { installBlockMessages } from './messages'
 import { installPinField } from '../pin-field'
 import { installColourField } from '../colour-field'
@@ -102,7 +102,7 @@ export function installCorePalette(): void {
     // `scopedByEmitters`, unlike everything above: these four are plain Python,
     // core and identical in both runtimes, so they stay unscoped like the rest
     // of the plain-Python palette. See the file header.
-    ...BUFFER_BLOCKS,
+    ...leveled('advanced', BUFFER_BLOCKS),
     // INSTRUMENTS STAY MICROPYTHON (#1040). `instruments.py` is telemetry over
     // `print()`, which CircuitPython runs happily — but the sensor reads
     // underneath it are `machine`-based, and #1038 made those DEGRADE rather
@@ -117,7 +117,7 @@ export function installCorePalette(): void {
     // Files, and the `use … as` that closes them (#1132, epic #1119). A shelf
     // inside Control rather than a category of its own — see the file header
     // for why the palette has no sixteenth colour to give.
-    ...FILE_BLOCKS,
+    ...leveled('advanced', FILE_BLOCKS),
     ...LOGIC_BLOCKS,
     ...MATHS_BLOCKS,
     ...TEXT_BLOCKS,
@@ -129,20 +129,26 @@ export function installCorePalette(): void {
     ...TUPLE_BLOCKS,
     // Slicing (#1123, epic #1119) — one set of blocks for lists, strings and
     // buffers, with no `Array` check on any socket. See the file header.
-    ...SLICE_BLOCKS,
+    ...leveled('advanced', SLICE_BLOCKS),
     // The Dictionaries drawer (#1120, epic #1119) — the biggest hole the audit
     // found, and the only one that was a whole missing CATEGORY.
     ...DICT_BLOCKS,
     // Comprehensions (#1126, epic #1119) — one in Lists and one in
     // Dictionaries, each at the end of the drawer it belongs to.
-    ...COMPREHENSION_BLOCKS,
+    ...leveled('advanced', COMPREHENSION_BLOCKS),
     ...VARIABLE_BLOCKS,
     ...FUNCTION_BLOCKS,
     // Class, method and `self` (#1093). Registered, never listed — a class is
     // the reader's vocabulary rather than a first drawer's; see §4.5.
-    ...STRUCTURE_BLOCKS,
+    ...leveled('advanced', STRUCTURE_BLOCKS),
     // Last, and last in the toolbox: the escape hatches (#1018) are where you
     // go when nothing above does what you need, and a palette is a curriculum.
-    ...PYTHON_BLOCKS
+    //
+    // WHICH PALETTES ARE ADVANCED (#1209, epic #1206): buffers, files, slices,
+    // comprehensions, structure (class, try, with, raise, await) and the escape
+    // hatches, whole; plus the bitwise and base-N blocks in Maths, `global`,
+    // `del` and the scope blocks in Variables, and `super()` in Functions,
+    // each marked on its own definition. Everything else is a beginner's.
+    ...leveled('advanced', PYTHON_BLOCKS)
   ])
 }

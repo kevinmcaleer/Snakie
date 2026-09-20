@@ -272,6 +272,46 @@ export interface BlockDefinition {
    * there, and Snakie declining to show it.
    */
   scope?: DialectScope
+  /**
+   * SIMPLE OR ADVANCED (#1209, epic #1206).
+   *
+   * The third filter on the toolbox, and orthogonal to the other two. `hidden`
+   * is a block we have decided NOBODY reaches for (§4.5); `scope` is a block the
+   * board in front of you cannot run. This one is a block a BEGINNER is not
+   * shown yet: a class, a comprehension, a `try`, a bitwise operator, the grey
+   * escape hatch. Absent means `'simple'`, so most of the palette needs no
+   * annotation and a block added tomorrow lands in the beginner drawer unless
+   * someone argues otherwise — which is the right default for a curriculum.
+   *
+   * Settings ▸ Appearance ▸ "Show advanced blocks" is the switch, and it FILTERS
+   * THE TOOLBOX, NEVER THE REGISTRY, for the same reason `scope` does: a file
+   * written with the advanced drawers open still opens, still renders every
+   * block, and still generates with them closed. Reading never depends on the
+   * level (#1212).
+   */
+  level?: BlockLevel
+}
+
+/** The two tiers a block can sit in (#1209). See {@link BlockDefinition.level}. */
+export type BlockLevel = 'simple' | 'advanced'
+
+/** The level a definition means when it says nothing. */
+export const DEFAULT_BLOCK_LEVEL: BlockLevel = 'simple'
+
+/** Whether a block is offered at `shown` — the toolbox's one level test. */
+export function atLevel(def: Pick<BlockDefinition, 'level'>, shown: BlockLevel): boolean {
+  return shown === 'advanced' || (def.level ?? DEFAULT_BLOCK_LEVEL) !== 'advanced'
+}
+
+/**
+ * Mark a whole palette with a {@link BlockDefinition.level} (#1209).
+ *
+ * The same shape as {@link scoped}, for the same reason: the Structure palette
+ * is advanced as a PALETTE, and a method block added to it next month is too.
+ * A definition that states its own level keeps it.
+ */
+export function leveled(level: BlockLevel, defs: readonly BlockDefinition[]): BlockDefinition[] {
+  return defs.map((def) => (def.level ? def : { ...def, level }))
 }
 
 /**

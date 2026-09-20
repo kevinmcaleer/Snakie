@@ -312,6 +312,7 @@ export const MATHS_BLOCKS: BlockDefinition[] = [
   // -------------------------------------------------------------------------
   {
     type: 'snakie_bitwise',
+    level: 'advanced',
     category: 'math',
     help: 'ref-bits',
     json: {
@@ -360,6 +361,7 @@ export const MATHS_BLOCKS: BlockDefinition[] = [
   },
   {
     type: 'snakie_bitwise_not',
+    level: 'advanced',
     category: 'math',
     help: 'ref-bits',
     json: {
@@ -379,6 +381,7 @@ export const MATHS_BLOCKS: BlockDefinition[] = [
   },
   {
     type: 'snakie_bit_shift',
+    level: 'advanced',
     category: 'math',
     help: 'ref-bits',
     json: {
@@ -421,6 +424,7 @@ export const MATHS_BLOCKS: BlockDefinition[] = [
     // The field here holds the DIGITS AS TEXT, so what the learner copied out of
     // a datasheet is what ends up in the mirror.
     type: 'snakie_hex_number',
+    level: 'advanced',
     category: 'math',
     help: 'ref-bits',
     json: {
@@ -434,6 +438,7 @@ export const MATHS_BLOCKS: BlockDefinition[] = [
   },
   {
     type: 'snakie_binary_number',
+    level: 'advanced',
     category: 'math',
     help: 'ref-bits',
     json: {
@@ -446,6 +451,7 @@ export const MATHS_BLOCKS: BlockDefinition[] = [
   },
   {
     type: 'snakie_bit_of',
+    level: 'advanced',
     category: 'math',
     help: 'ref-bits',
     json: {
@@ -490,6 +496,7 @@ export const MATHS_BLOCKS: BlockDefinition[] = [
     // of block that teaches nothing and looks broken. A block that says what it
     // does is the smaller thing.
     type: 'snakie_int_base',
+    level: 'advanced',
     category: 'math',
     help: 'ref-bits',
     read: { fn: 'int', args: ['TEXT', 'BASE'], shape: 'value', checks: { BASE: 'Number' } },

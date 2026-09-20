@@ -8,6 +8,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Simple and advanced blocks (#1209, #1210, epic #1206).** Every block now
+  declares a level, and a new **Settings ▸ Appearance ▸ Advanced blocks**
+  switch decides whether the toolbox offers the advanced ones — classes, `try`,
+  `with` and files, comprehensions, slices, bitwise and base-N maths, `global`,
+  `del` and the grey Python escape hatches. A fresh profile starts simple; a
+  profile that used Snakie before keeps every drawer. The switch filters the
+  toolbox only: a program that uses advanced blocks still opens, renders and
+  generates with them off, and a drawer it empties says why instead of going
+  blank. Parts and plugin blocks are unaffected for now (#1213).
+
 - **A `print` block that understands f-strings.** The Text drawer has a new
   `print f"…"` block: type the text with a `{}` wherever a value goes —
   `ping.distance {}` — and a socket appears for each hole, so
