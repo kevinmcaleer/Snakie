@@ -18,6 +18,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `classmethod` dropdown is read as a list of one, so a workspace saved before
   this opens unchanged. No editing UI yet (#1217).
 
+- **A lesson and help on decorators (#1219, epic #1206).** **Learn ▸ Blocks to
+  Python** gains an eighth, advanced lesson — *Make it faster with
+  `@micropython.native`* — which hands over an already-decorated function with a
+  clock either side of it, so the speed is something the learner measures rather
+  than is told. The **Writing Python in blocks** help page and
+  `docs/blocks.md` explain what a decorator is, why it rides on the function
+  block rather than sitting beside it, and that the gear for adding one follows
+  in a later release.
+
 - **Simple and advanced blocks (#1209, #1210, epic #1206).** Every block now
   declares a level, and a new **Settings ▸ Appearance ▸ Advanced blocks**
   switch decides whether the toolbox offers the advanced ones — classes, `try`,
