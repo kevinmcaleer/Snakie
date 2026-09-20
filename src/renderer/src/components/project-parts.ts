@@ -24,7 +24,7 @@ import type { RobotDefinition, RobotPart } from '../../../shared/robot'
 import { readRobotModel } from '../../../shared/krf'
 import { attachPartBody, mirroredOrigin } from './robot-part-mesh'
 import { errorMessage, reportError } from '../lib/report-error'
-import { BODY_CAP_PX, PX_PER_MM_DEFAULT } from './WiringCanvas'
+import { PX_PER_MM } from './WiringCanvas'
 
 /** What a board host lends the shared add sequence. `libraries` feeds part
  *  resolution for the canvas-scale maths (see {@link canvasPxPerMm}). */
@@ -43,59 +43,15 @@ export interface AddPartItem {
   pos?: { x: number; y: number }
 }
 
-/** Resolve a part definition from the installed libraries; with no `lib`, every
- *  library is searched (how the MCU board id resolves — boards are parts). */
-function resolveDef(
-  libraries: PartLibraryWithParts[],
-  lib: string | undefined,
-  partId: string | undefined
-): PartDefinition | undefined {
-  if (!partId) return undefined
-  for (const l of libraries) {
-    if (lib && l.id !== lib) continue
-    const hit = l.parts?.find((p) => p.id === partId)
-    if (hit) return hit
-  }
-  return undefined
-}
-
 /**
- * The wiring canvas's px-per-mm — the SAME formula WiringCanvas uses to draw
- * (#637: one scale so the widest/tallest body just fits {@link BODY_CAP_PX}),
- * over every body on the canvas: the board and all placed parts. RobotPart.x/y
- * are stored in this px space, so converting them to millimetres for the Build
- * mirror (#716) needs exactly this number — treating px as mm inflated every
- * position ~4-7.5×. Pure.
+ * The wiring canvas's px-per-mm — the SAME number WiringCanvas draws at. It is a
+ * FIXED scale ({@link PX_PER_MM}): adding a large part no longer rescales every
+ * other body (that used to leave the board's fixed-size pads overlapping), so a
+ * stored RobotPart.x/y always means the same millimetres. The Build mirror (#716)
+ * converts px to mm with exactly this number. Pure.
  */
-export function canvasPxPerMm(
-  dims: ({ width?: number; height?: number } | undefined)[]
-): number {
-  let widestMm = 0
-  let tallestMm = 0
-  for (const d of dims) {
-    if (d?.width && d.width > widestMm) widestMm = d.width
-    if (d?.height && d.height > tallestMm) tallestMm = d.height
-  }
-  if (widestMm <= 0 && tallestMm <= 0) return PX_PER_MM_DEFAULT
-  return Math.min(
-    widestMm > 0 ? BODY_CAP_PX / widestMm : Infinity,
-    tallestMm > 0 ? BODY_CAP_PX / tallestMm : Infinity
-  )
-}
-
-/** Every body's mm dimensions AFTER this add: board + existing parts + the new
- *  arrivals (a new widest part rescales the canvas, so the post-add scale is
- *  the one the stored positions will be drawn at). Pure. */
-export function postAddBodyDims(
-  robot: RobotDefinition,
-  libraries: PartLibraryWithParts[],
-  items: AddPartItem[]
-): ({ width?: number; height?: number } | undefined)[] {
-  return [
-    resolveDef(libraries, undefined, robot.board)?.dimensions,
-    ...robot.parts.map((p) => resolveDef(libraries, p.lib, p.part)?.dimensions),
-    ...items.map((i) => i.part.dimensions)
-  ]
+export function canvasPxPerMm(): number {
+  return PX_PER_MM
 }
 
 /** The planned outcome of an add: the new placed parts and the manifest to save
@@ -139,7 +95,7 @@ export function addPartsToProject(host: PartsProjectHost, items: AddPartItem[]):
   const { placed, next, urdfName } = planPartAdditions(host.robot, items, Boolean(folder))
   host.saveRobot(next)
   if (!folder) return
-  const pxPerMm = canvasPxPerMm(postAddBodyDims(host.robot, host.libraries, items))
+  const pxPerMm = canvasPxPerMm()
   void (async (): Promise<void> => {
     // Sequential on purpose: attachPartBody serialises on its own chain anyway,
     // and doing it here keeps link creation in placement order.

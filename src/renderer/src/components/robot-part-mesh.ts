@@ -163,15 +163,14 @@ export function partBodyPlan(
 /**
  * The mirrored Build-workspace position for a placed part (#716, decided under
  * epic #720). RobotPart.x/y are stored in the wiring canvas's viewBox PIXELS —
- * NOT millimetres — drawn at one dynamic px-per-mm (#637: the widest body fits
- * the cap), so the caller supplies that scale (`canvasPxPerMm`) and the px
+ * NOT millimetres — drawn at one fixed px-per-mm (`PX_PER_MM`), so the caller
+ * supplies that scale (`canvasPxPerMm`) and the px
  * divide out FIRST; the part's mm half-dimensions then re-centre the box (the
  * stored x/y is the part's top-left) and the result lands in metres on the
  * ground plane. Canvas y grows DOWN the screen while URDF y grows left, so y is
  * negated or the scene comes out mirror-imaged. `null` for a part placed
  * without a position (click-add auto-layout) — the caller falls back to the
- * legacy stagger. Best-effort mirroring by design: adding a new widest part
- * rescales the canvas under every stored position. Pure.
+ * legacy stagger. Pure.
  */
 export function mirroredOrigin(
   placed: Pick<RobotPart, 'x' | 'y'>,
