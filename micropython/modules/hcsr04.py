@@ -15,6 +15,16 @@ Usage on a board::
     while True:
         inst.distance(sensor.distance_mm())   # -> Range instrument
 
+`RangeFinder` is a thin alias over the same driver with the positional
+`trigger_pin` / `echo_pin` signature and a `distance` *property*, for scripts
+written against the standalone `range_finder.py` doing the rounds::
+
+    from hcsr04 import RangeFinder
+
+    sensor = RangeFinder(trigger_pin=0, echo_pin=1)
+    print(sensor.distance)     # millimetres
+    print(sensor.distance_cm)  # centimetres (a property too, no parens)
+
 The pure conversion (`echo_to_distance_mm`) is split out so it can be unit-tested
 under CPython without any `machine` hardware.
 """
@@ -23,7 +33,7 @@ under CPython without any `machine` hardware.
 # against the copy installed on the board and offers an update when they differ
 # (#707; a legacy copy with no `__version__` reads as out-of-date). Keep the
 # `__version__ = "X.Y.Z"` literal form so the IDE can parse it without importing.
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 # Speed of sound ~= 343 m/s = 0.343 mm/us. The echo pulse covers the round trip
 # (out and back), so distance = (pulse_us * 0.343) / 2.
@@ -81,3 +91,46 @@ class HCSR04:
         """Measure and return the distance in centimetres (``-1`` if no echo)."""
         mm = self.distance_mm()
         return -1 if mm < 0 else mm / 10
+
+
+class RangeFinder(HCSR04):
+    """`HCSR04` under the name (and signature) the standalone `range_finder.py` used.
+
+    Same sensor, same maths — it exists so scripts written against that loose
+    driver keep working once the module is installed from the Modules manager:
+    pin numbers are positional (`trigger_pin` / `echo_pin`), `distance` is a
+    PROPERTY, and each read also records `duration` (the echo pulse width, us)
+    and `distance_to_object` (mm) as attributes.
+
+    It inherits this module's timing, so an absent or out-of-range target returns
+    ``-1`` after `echo_timeout_us` instead of busy-waiting on the echo pin
+    forever (the one real bug in the standalone version).
+    """
+
+    def __init__(self, trigger_pin=0, echo_pin=1, echo_timeout_us=30000):
+        super().__init__(trigger_pin, echo_pin, echo_timeout_us)
+        self.duration = -1
+        self.distance_to_object = -1
+
+    @property
+    def distance(self):
+        """Measure and return the distance in MILLIMETRES (``-1`` if no echo).
+
+        Note the unit: the standalone driver's docstring said "cm" but its maths
+        (0.343 mm/us) has always produced millimetres, which is why its own
+        `distance_cm` divides by ten. Kept as-is so existing scripts read the
+        same numbers; use `distance_cm` for centimetres.
+        """
+        self.duration = self._pulse_us()
+        self.distance_to_object = echo_to_distance_mm(self.duration)
+        return round(self.distance_to_object, 2)
+
+    @property
+    def distance_cm(self):
+        """Measure and return the distance in centimetres (``-1`` if no echo).
+
+        A PROPERTY here, unlike `HCSR04.distance_cm()` which is a method — on a
+        `RangeFinder` read it as `sensor.distance_cm`, with no call parens.
+        """
+        mm = self.distance
+        return -1 if mm < 0 else round(mm / 10, 1)

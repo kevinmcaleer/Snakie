@@ -31,6 +31,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`RangeFinder` joins the bundled HC-SR04 driver (`hcsr04` 1.1.0).** The
+  standalone `range_finder.py` that circulates with HC-SR04 projects is now part
+  of the installable `hcsr04` module, as a `RangeFinder` class alongside
+  `HCSR04`: positional `trigger_pin` / `echo_pin` arguments, `distance` and
+  `distance_cm` as properties, and `duration` / `distance_to_object` recorded on
+  each read. Unlike the loose copy it replaces it inherits this driver's echo
+  timeout, so a missing or out-of-range target returns `-1` instead of
+  busy-waiting on the echo pin forever. Installing the HC-SR04 module from the
+  Modules manager now covers both styles of script; existing boards will be
+  offered the 1.1.0 update.
 - **"What block is this?" (#1245).** A drop zone in the bottom-left corner of
   the blocks canvas. Drag any block onto it — including one from a program
   somebody else wrote — and it says what the block is: its shape and what that

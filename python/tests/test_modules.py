@@ -49,6 +49,36 @@ class TestHcsr04(unittest.TestCase):
         self.assertEqual(hcsr04.echo_to_distance_mm(None), -1)
 
 
+class TestRangeFinder(unittest.TestCase):
+    """The `range_finder.py` compatibility face on the same driver (#120)."""
+
+    def _sensor(self, pulse_us):
+        # Built without __init__ so the lazy `from machine import Pin` never runs;
+        # only the pure pulse -> distance path is under test.
+        sensor = object.__new__(hcsr04.RangeFinder)
+        sensor._pulse_us = lambda: pulse_us
+        return sensor
+
+    def test_distance_is_a_property_in_mm(self):
+        sensor = self._sensor(5800)
+        self.assertAlmostEqual(sensor.distance, 994.7, places=1)
+
+    def test_distance_cm_is_a_property_too(self):
+        sensor = self._sensor(5800)
+        self.assertAlmostEqual(sensor.distance_cm, 99.5, places=1)
+
+    def test_read_records_duration_and_distance_to_object(self):
+        sensor = self._sensor(5800)
+        sensor.distance
+        self.assertEqual(sensor.duration, 5800)
+        self.assertAlmostEqual(sensor.distance_to_object, 994.7, places=1)
+
+    def test_timeout_is_out_of_range_not_a_hang(self):
+        sensor = self._sensor(-1)
+        self.assertEqual(sensor.distance, -1)
+        self.assertEqual(sensor.distance_cm, -1)
+
+
 class TestMpu6050(unittest.TestCase):
     def test_raw_to_g_signed(self):
         # +1 g at the default ±2 g full scale = +16384 LSB = 0x4000.
