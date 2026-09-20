@@ -212,6 +212,9 @@ const READ_DIRECTLY: Record<string, string> = {
   snakie_python_import: 'import time\n',
   snakie_python_import_as: 'import ujson as json\n',
   snakie_python_from_import: 'from machine import Pin\n',
+  // --- an f-string as a template (the print that holds one, and the value)
+  snakie_print_format: 'print(f"distance {d}")\n',
+  snakie_fstring: 'x = f"distance {d}"\n',
   snakie_python_call: 'display.show()\n',
   snakie_python_call_value: 'x = sensor.read()\n',
   snakie_python_attr_get: 'x = self.angle\n',

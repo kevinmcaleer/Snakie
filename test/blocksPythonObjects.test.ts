@@ -110,12 +110,12 @@ describe('a method call on an object', () => {
     // §4.2 of the delivery plan: recognise the statement, socket the rest. This
     // is the whole reason f-strings cost five raw lines in 44 projects.
     //
-    // THE EXAMPLE HAD TO MOVE ON (#1125). It used to be `f"{temp:.1f}"`, which
-    // is now a real format block — the argument stopped being grey, which is
-    // the improvement that issue was for. An f-string with a CONVERSION in it
-    // is still nobody's block: `temp!r` is not an expression, and claiming the
-    // spec while leaving the value grey would regenerate a line nobody wrote.
-    const src = 'self.display.text(f"{temp!r}", 0, 0)\n'
+    // THE EXAMPLE HAD TO MOVE ON (#1125), AND AGAIN. It used to be
+    // `f"{temp:.1f}"`, now a format block; then `f"{temp!r}"`, now the
+    // template block — each time the argument stopped being grey, which is the
+    // improvement those issues were for. An f-string with a `{temp=}` DEBUG
+    // FIELD is still nobody's block: the block would regenerate a different line.
+    const src = 'self.display.text(f"{temp=}", 0, 0)\n'
     expect(types(src)).toContain('snakie_python_value')
     expect(types(src)[0]).toBe('snakie_python_call')
     roundTrips(src)

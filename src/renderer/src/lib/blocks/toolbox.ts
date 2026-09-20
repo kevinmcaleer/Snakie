@@ -3,6 +3,7 @@ import { inScope } from '../../../../shared/dialect-api'
 import { DIALECT_LABEL, type Dialect } from '../../../../shared/dialect'
 import { blocksInCategory, type BlockDefinition } from './registry'
 import { BLOCK_CATEGORIES, categoryStyleName } from './theme'
+import { SCAN_MODULES_BUTTON } from './module-scan'
 
 /**
  * THE TOOLBOX (#1011/#1017/#1039, epic #1007).
@@ -141,6 +142,17 @@ export function categoryContents(
         ? category.hint
         : null
     if (hint) contents.push({ kind: 'label', text: hint })
+  }
+  // THE MODULES DRAWER HAS A BUTTON (#1048). Its contents are the program's
+  // imports, and a program with none yet has an empty drawer and no way to
+  // find out what is on the board. The button asks; `module-scan.ts` says
+  // what happens next. First, above the hint, because it is the thing to do.
+  if (category.id === 'modules') {
+    contents.unshift({
+      kind: 'button',
+      text: 'Scan modules on device and locally',
+      callbackkey: SCAN_MODULES_BUTTON
+    })
   }
   return contents
 }
