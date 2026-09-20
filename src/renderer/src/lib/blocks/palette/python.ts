@@ -92,7 +92,7 @@ const pythonField = (
 // ---------------------------------------------------------------------------
 
 /** How many argument sockets a fresh call block has. */
-const DEFAULT_ARGS = 1
+export const DEFAULT_ARGS = 1
 /** And the most it will grow to — past this the learner wants a variable. */
 const MAX_ARGS = 8
 
@@ -230,53 +230,20 @@ function stepperIcon(sign: '+' | '−'): string {
 }
 
 /**
- * The `call` blocks' shared behaviour: a method name, an object socket, and a
- * row of argument sockets that GROWS WITH A BUTTON.
+ * The growable argument row, on its own so more than one block can have one.
  *
- * A pair of `+` / `−` buttons rather than Blockly's gear mutator, which is the
- * conventional answer and the wrong one here. The gear opens a second, miniature
- * workspace in a bubble and asks the learner to drag rows into a container — a
- * mechanism with nothing else like it in the app, discovered by accident if at
- * all. Two buttons on the block are visible, obvious, and need no explanation.
- *
- * The count is serialised through `saveExtraState`/`loadExtraState`, so a saved
- * file re-opens with the sockets it had. Blockly 13's JSON serialisation is the
- * only mechanism here; there is no XML mutator to keep in step with it.
+ * The call blocks were the only blocks with an argument list when #1018 built
+ * this; the "create an instance" block (#1224) wants exactly the same row — the
+ * `+`/`−` steppers, the keyword-name boxes, the serialised count — under a
+ * different head. So the half that is ARGUMENTS lives here and the half that is
+ * the block's own face stays in each block's `init`.
  */
-function callBlockMixin(valueShape: boolean): Record<string, unknown> {
+export function argRowMixin(): Record<string, unknown> {
   return {
     // ZERO, not the default: `init` calls `updateArgs_(DEFAULT_ARGS)` and that
     // only adds the sockets it can see are missing. Starting at the target
     // would make it a no-op and build a block with no argument socket at all.
     argCount_: 0,
-
-    init(this: Blockly.Block): void {
-      this.setStyle('python_blocks')
-      const head = this.appendDummyInput('HEAD')
-      if (valueShape) {
-        head
-          .appendField(new Blockly.FieldTextInput('read'), 'METHOD')
-          .appendField('of')
-      } else {
-        head
-          .appendField('call')
-          .appendField(new Blockly.FieldTextInput('update'), 'METHOD')
-          .appendField('on')
-      }
-      this.appendValueInput('OBJ').setCheck(null)
-      this.setInputsInline(true)
-      if (valueShape) this.setOutput(true, null)
-      else {
-        this.setPreviousStatement(true, null)
-        this.setNextStatement(true, null)
-      }
-      this.setTooltip(
-        valueShape
-          ? 'Call a method on any object and use what it gives back. For a driver Snakie has never heard of.'
-          : 'Call a method on any object. For a driver Snakie has never heard of — type the name from its documentation.'
-      )
-      ;(this as unknown as { updateArgs_: (n: number) => void }).updateArgs_(DEFAULT_ARGS)
-    },
 
     /** Blockly 13's JSON serialisation — the only state this block carries. */
     saveExtraState(this: Blockly.Block): { args: number } {
@@ -336,8 +303,54 @@ function callBlockMixin(valueShape: boolean): Record<string, unknown> {
   }
 }
 
+/**
+ * The `call` blocks' shared behaviour: a method name, an object socket, and a
+ * row of argument sockets that GROWS WITH A BUTTON.
+ *
+ * A pair of `+` / `−` buttons rather than Blockly's gear mutator, which is the
+ * conventional answer and the wrong one here. The gear opens a second, miniature
+ * workspace in a bubble and asks the learner to drag rows into a container — a
+ * mechanism with nothing else like it in the app, discovered by accident if at
+ * all. Two buttons on the block are visible, obvious, and need no explanation.
+ *
+ * The count is serialised through `saveExtraState`/`loadExtraState`, so a saved
+ * file re-opens with the sockets it had. Blockly 13's JSON serialisation is the
+ * only mechanism here; there is no XML mutator to keep in step with it.
+ */
+function callBlockMixin(valueShape: boolean): Record<string, unknown> {
+  return {
+    ...argRowMixin(),
+
+    init(this: Blockly.Block): void {
+      this.setStyle('python_blocks')
+      const head = this.appendDummyInput('HEAD')
+      if (valueShape) {
+        head.appendField(new Blockly.FieldTextInput('read'), 'METHOD').appendField('of')
+      } else {
+        head
+          .appendField('call')
+          .appendField(new Blockly.FieldTextInput('update'), 'METHOD')
+          .appendField('on')
+      }
+      this.appendValueInput('OBJ').setCheck(null)
+      this.setInputsInline(true)
+      if (valueShape) this.setOutput(true, null)
+      else {
+        this.setPreviousStatement(true, null)
+        this.setNextStatement(true, null)
+      }
+      this.setTooltip(
+        valueShape
+          ? 'Call a method on any object and use what it gives back. For a driver Snakie has never heard of.'
+          : 'Call a method on any object. For a driver Snakie has never heard of — type the name from its documentation.'
+      )
+      ;(this as unknown as { updateArgs_: (n: number) => void }).updateArgs_(DEFAULT_ARGS)
+    }
+  }
+}
+
 /** The arguments a call block's sockets hold, empty ones dropped. */
-function callArgs(block: Blockly.Block, gen: MicroPythonGenerator): string {
+export function callArgs(block: Blockly.Block, gen: MicroPythonGenerator): string {
   const count = (block as unknown as { argCount_?: number }).argCount_ ?? 0
   const parts: string[] = []
   for (let i = 0; i < count; i++) {
