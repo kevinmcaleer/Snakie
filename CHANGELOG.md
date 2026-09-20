@@ -36,6 +36,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Clicking a part in the Build 3-D view no longer makes the components browser
+  flicker.** Selecting a body by clicking it in the scene rapidly bounced the
+  browser's highlight between the previous component and the clicked one. The
+  hierarchy tree was rebuilt with a new identity on every render (its robot.yml
+  model object was re-derived unmemoised), so the effect that pulls the shared
+  selection key into the 3-D view re-ran on the very render where the click had
+  changed the 3-D selection — dragging it back before the click was published,
+  after which the two sync effects chased each other forever. The model is now
+  memoised, and a not-yet-published 3-D pick always wins over the stale key.
 - **The Yellow TT Motor (and any other updated Standard part) now actually
   reaches your install.** The motor gained `model.stl` and a `mesh:` key in
   0.85.4, but `library.yml` stayed at version 1.15.0 — and the seeder's

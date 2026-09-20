@@ -103,7 +103,11 @@ export function useHierarchy(opts: UseHierarchyOptions): UseHierarchyResult {
   const robot = liveRobot ?? loadedRobot
   const libraries = liveLibs ?? loadedLibs
   const urdf = wantUrdf ? loadedUrdf : liveUrdf
-  const model = readRobotModel(robot)
+  // Memoised on `robot`: `readRobotModel` sanitises into a FRESH object every
+  // call, and `nodes` below keys on it — unmemoised, the tree got a new identity
+  // on every render of every mount, and any effect depending on `nodes` re-ran
+  // each render (the Build view's selection sync then ping-ponged).
+  const model = useMemo(() => readRobotModel(robot), [robot])
 
   const nodes = useMemo(
     () =>
