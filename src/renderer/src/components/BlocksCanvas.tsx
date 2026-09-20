@@ -54,6 +54,7 @@ import {
 import { blockForLine, friendlyError, isRealError, TracebackWatcher } from '../lib/blocks/traceback'
 import { ensureBlocklyLocale } from '../lib/blocks/locale'
 import { advancedBlockTypes, unknownBlockTypes } from '../lib/blocks/workspace-check'
+import { AdvancedBlocksToggle } from './AdvancedBlocksToggle'
 import { registerBlocksWorkspace } from '../lib/blocks/workspace-registry'
 import { buildToolbox } from '../lib/blocks/toolbox'
 import { installFunctionsDrawer } from '../lib/blocks/functions-drawer'
@@ -549,6 +550,15 @@ export function BlocksCanvas({
     const toolboxDiv = host.querySelector<HTMLElement>('.blocklyToolbox')
     const foot = document.createElement('div')
     foot.className = 'blocks-shelf-foot'
+    // A press on the foot is OURS, not the toolbox's (#1211). Blockly binds
+    // `pointerdown` on the toolbox column and runs `Toolbox.onClick_` for
+    // anything inside it; the switch down in `AdvancedBlocksToggle` is inside
+    // it. Natively here rather than in the component, because React's handlers
+    // are delegated to the app root — ABOVE this div — so by the time a React
+    // `onPointerDown` runs, Blockly's listener already has.
+    const stopInFoot = (e: Event): void => e.stopPropagation()
+    foot.addEventListener('pointerdown', stopInFoot)
+    foot.addEventListener('pointerup', stopInFoot)
     toolboxDiv?.append(foot)
     setShelfFoot(toolboxDiv ? foot : null)
 
@@ -1238,54 +1248,6 @@ function extraBlockState(block: Blockly.Block): string {
   }
   const dom = hooks.mutationToDom?.()
   return dom ? Blockly.Xml.domToText(dom) : ''
-}
-
-/**
- * THE IN-TOOLBOX "SHOW ADVANCED BLOCKS" TOGGLE (#1211, epic #1206).
- * ===========================================================================
- *
- * The same `snakie.blocks.level` preference as Settings ▸ Appearance ▸ Advanced
- * blocks (#1210) — one store, so the two are never out of step — put where the
- * question is actually asked. A learner who cannot find `try` is looking at the
- * drawers, not at a settings dialog three menus away, and a setting nobody can
- * find is a setting nobody turns on.
- *
- * It lives at the FOOT OF THE SHELF, under a divider that closes the list of
- * categories — the toolbox column is where the drawers are, so that is where
- * the switch that changes what is in them belongs. Blockly has no slot for a
- * control of ours, so the canvas appends one to the toolbox div and portals
- * this into it; with no toolbox to sit in it falls back to floating over the
- * bottom-left corner of the canvas.
- */
-function AdvancedBlocksToggle({
-  level,
-  onChange,
-  inShelf = false
-}: {
-  level: BlockLevel
-  onChange: (level: BlockLevel) => void
-  inShelf?: boolean
-}): JSX.Element {
-  const on = level === 'advanced'
-  return (
-    <label
-      className={`blocks-advanced${inShelf ? ' is-in-shelf' : ''}${on ? ' is-on' : ''}`}
-      title={
-        on
-          ? 'Hide the advanced blocks — classes, try, comprehensions, slices, files and the grey Python blocks. Your program is not changed.'
-          : 'Show the advanced blocks — classes, try, comprehensions, slices, files and the grey Python blocks.'
-      }
-    >
-      <input
-        type="checkbox"
-        className="blocks-advanced__input"
-        checked={on}
-        onChange={(e) => onChange(e.target.checked ? 'advanced' : 'simple')}
-      />
-      <span className="blocks-advanced__switch" aria-hidden="true" />
-      <span className="blocks-advanced__label">Show advanced blocks</span>
-    </label>
-  )
 }
 
 /**
