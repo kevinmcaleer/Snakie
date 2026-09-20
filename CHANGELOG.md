@@ -8,6 +8,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Decorators on function and method blocks (#1215, epic #1206).** The two
+  `def` blocks and the method block now carry an ordered list of decorators in
+  their mutation, written out as `@…` lines immediately above the `def` —
+  `@property`, `@micropython.native`, `@app.route("/")`. Entries are kept
+  verbatim without the `@`, the ones that need an import (`micropython.native`,
+  `micropython.viper`) declare it through the import manager like any other
+  block, and the method block's old `property` / `staticmethod` /
+  `classmethod` dropdown is read as a list of one, so a workspace saved before
+  this opens unchanged. No editing UI yet (#1217).
+
 - **Simple and advanced blocks (#1209, #1210, epic #1206).** Every block now
   declares a level, and a new **Settings ▸ Appearance ▸ Advanced blocks**
   switch decides whether the toolbox offers the advanced ones — classes, `try`,

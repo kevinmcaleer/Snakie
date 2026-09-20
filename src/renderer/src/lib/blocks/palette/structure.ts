@@ -3,6 +3,7 @@ import { Order } from '../generator'
 import type { MicroPythonGenerator } from '../generator'
 import type { BlockDefinition, BlockGroup } from '../registry'
 import { sanitise } from '../names'
+import { DECORATORS_EXTENSION, decoratorLines } from './functions'
 
 /**
  * STRUCTURE: CLASSES AND METHODS (W6, #1093, epic #1086).
@@ -158,15 +159,20 @@ export const STRUCTURE_BLOCKS: BlockDefinition[] = [
       inputsInline: true,
       previousStatement: null,
       nextStatement: null,
+      // THE DECORATORS ARE A LIST NOW (A1, #1215, epic #1206), carried in the
+      // block's extra state rather than in the dropdown above — `@property` is
+      // one of the entries it can hold, and `@micropython.native` or
+      // `@app.route("/")` are ones it never could. The dropdown stays until B2
+      // (#1216) rebuilds the block's face, and a workspace saved with it is
+      // read as a list of one; see `getDecorators`.
+      mutator: DECORATORS_EXTENSION,
       tooltip:
         'Something this class can do. The first parameter is almost always `self` — the particular thing the method was called on.'
     },
     code: (block, gen) => {
-      const decorator = String(block.getFieldValue('DECORATOR') ?? 'NONE')
-      const at = decorator === 'NONE' ? '' : `@${decorator}\n`
       const async = block.getFieldValue('KIND') === 'ASYNC' ? 'async ' : ''
       const params = String(block.getFieldValue('PARAMS') ?? '').trim()
-      return `${at}${async}def ${nameOf(block, 'NAME', 'go')}(${params}):\n${body(block, gen)}`
+      return `${decoratorLines(block, gen)}${async}def ${nameOf(block, 'NAME', 'go')}(${params}):\n${body(block, gen)}`
     }
   },
   // ---------------------------------------------------------------------- self
