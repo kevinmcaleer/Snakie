@@ -1,6 +1,9 @@
-# The changelog is append-only inside [Unreleased]; every branch adds bullets in
-# the same place, so a plain three-way merge conflicts on nearly every PR.
-# `merge=union` keeps both sides' lines instead of raising a conflict. Re-read
-# the [Unreleased] section after a merge: order is not guaranteed and duplicate
-# bullets are possible, so tidy it when cutting a release.
+# CHANGELOG.md is written only when a release is cut — day-to-day entries go in
+# `changelog.d/` as one file per change, so branches never edit the same lines.
+# See changelog.d/README.md.
+#
+# The union merge stays for the branches still carrying CHANGELOG.md edits, and
+# for release-time merges. Note it only helps LOCALLY: GitHub's server-side
+# merge ignores .gitattributes merge drivers, which is why every pull request
+# used to show a CHANGELOG conflict despite this line.
 CHANGELOG.md merge=union
