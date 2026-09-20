@@ -160,12 +160,6 @@ describe('canvasPxPerMm — the wiring canvas scale, shared (#716)', () => {
   it('is a FIXED scale — a large body on the canvas never rescales the others', () => {
     // Used to be 380/95 = 4 px/mm here (widest body fitted to a cap); a big chassis
     // then shrank the board under its fixed-size pads, which piled up on each other.
-    expect(canvasPxPerMm([{ width: 95, height: 25 }, { width: 51, height: 21 }])).toBeCloseTo(3.7)
-    expect(canvasPxPerMm([{ width: 300, height: 200 }])).toBeCloseTo(3.7)
-  })
-
-  it('is the same scale when nothing declares dimensions', () => {
-    expect(canvasPxPerMm([undefined, {}])).toBeCloseTo(3.7)
     expect(canvasPxPerMm()).toBeCloseTo(3.7)
   })
 })

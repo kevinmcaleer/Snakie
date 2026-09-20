@@ -43,48 +43,15 @@ export interface AddPartItem {
   pos?: { x: number; y: number }
 }
 
-/** Resolve a part definition from the installed libraries; with no `lib`, every
- *  library is searched (how the MCU board id resolves — boards are parts). */
-function resolveDef(
-  libraries: PartLibraryWithParts[],
-  lib: string | undefined,
-  partId: string | undefined
-): PartDefinition | undefined {
-  if (!partId) return undefined
-  for (const l of libraries) {
-    if (lib && l.id !== lib) continue
-    const hit = l.parts?.find((p) => p.id === partId)
-    if (hit) return hit
-  }
-  return undefined
-}
-
 /**
  * The wiring canvas's px-per-mm — the SAME number WiringCanvas draws at. It is a
  * FIXED scale ({@link PX_PER_MM}): adding a large part no longer rescales every
  * other body (that used to leave the board's fixed-size pads overlapping), so a
  * stored RobotPart.x/y always means the same millimetres. The Build mirror (#716)
- * converts px to mm with exactly this number. The dims argument is accepted for
- * call-site compatibility and ignored. Pure.
+ * converts px to mm with exactly this number. Pure.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function canvasPxPerMm(dims?: ({ width?: number; height?: number } | undefined)[]): number {
+export function canvasPxPerMm(): number {
   return PX_PER_MM
-}
-
-/** Every body's mm dimensions AFTER this add: board + existing parts + the new
- *  arrivals. (The canvas scale is fixed, so this no longer affects px/mm; kept
- *  for callers that describe the post-add bodies.) Pure. */
-export function postAddBodyDims(
-  robot: RobotDefinition,
-  libraries: PartLibraryWithParts[],
-  items: AddPartItem[]
-): ({ width?: number; height?: number } | undefined)[] {
-  return [
-    resolveDef(libraries, undefined, robot.board)?.dimensions,
-    ...robot.parts.map((p) => resolveDef(libraries, p.lib, p.part)?.dimensions),
-    ...items.map((i) => i.part.dimensions)
-  ]
 }
 
 /** The planned outcome of an add: the new placed parts and the manifest to save
@@ -128,7 +95,7 @@ export function addPartsToProject(host: PartsProjectHost, items: AddPartItem[]):
   const { placed, next, urdfName } = planPartAdditions(host.robot, items, Boolean(folder))
   host.saveRobot(next)
   if (!folder) return
-  const pxPerMm = canvasPxPerMm(postAddBodyDims(host.robot, host.libraries, items))
+  const pxPerMm = canvasPxPerMm()
   void (async (): Promise<void> => {
     // Sequential on purpose: attachPartBody serialises on its own chain anyway,
     // and doing it here keeps link creation in placement order.

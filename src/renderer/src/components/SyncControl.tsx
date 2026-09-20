@@ -6,7 +6,7 @@ import { readRobotModel } from '../../../shared/krf'
 import { computeSyncPlan, reAddedPartRow, type SyncItem } from './sync-plan'
 import { attachPartBody, mirroredOrigin, partBodyPlan, queueUrdfEdit } from './robot-part-mesh'
 import { errorMessage, reportError } from '../lib/report-error'
-import { canvasPxPerMm, postAddBodyDims } from './project-parts'
+import { canvasPxPerMm } from './project-parts'
 import {
   meshImportScale,
   readInertial,
@@ -98,7 +98,7 @@ export function SyncControl({ folder }: { folder: string | null | undefined }): 
       // without this record, every Build view keeps resolving "no model" and the
       // fresh body is invisible (and a re-click would mint a duplicate link).
       await window.api.robot.patchModel(folder, { ensureUrdf: urdfName }).catch(() => undefined)
-      const pxPerMm = canvasPxPerMm(postAddBodyDims(robot, libraries, []))
+      const pxPerMm = canvasPxPerMm()
       if (item.partId === 'board') {
         // The MCU: find its part def AND its library (attachPartBody needs the
         // lib id to resolve a bundled mesh, should the board part ever ship one).
