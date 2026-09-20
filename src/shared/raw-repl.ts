@@ -322,6 +322,10 @@ export class RawReplClient {
    * the desktop {@link MicroPythonDevice.runProgram}.
    */
   runProgram(code: string): Promise<void> {
+    // Run while a program is still running: interrupt it first (bypassing the
+    // queue) so the queued run can start — otherwise Run silently does nothing
+    // until Stop. Mirrors the desktop device.
+    if (this.streamPending) void this.write(CTRL_C).catch(() => undefined)
     const op = this.opQueue.then(() => this.runLocked(code))
     this.opQueue = op.catch(() => undefined)
     return op

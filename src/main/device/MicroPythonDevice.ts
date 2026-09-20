@@ -247,6 +247,12 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
           if (this.state === 'connected' || this.state === 'connecting') {
             this.port = null
             this.inRawRepl = false
+            // A read or a streaming Run waiting on a board that just vanished
+            // (unplugged, browned out by a servo) would otherwise wait FOREVER —
+            // and because every op queues behind the last, each later Run on
+            // the same device would sit silently behind it, even after the
+            // board reconnected. Fail them now so the queue drains.
+            this.failPending(new Error('Disconnected'))
             this.setState('disconnected')
           }
         })
@@ -717,6 +723,14 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
    * resolves only when Stopped (the interrupt yields the terminating `\x04`).
    */
   runProgram(code: string): Promise<void> {
+    // Run pressed while a program is still running (a `while True:` blink loop
+    // is the normal case on a Pico): the new run queues behind the old one,
+    // which only ends when the board is interrupted — so without this, Run
+    // does NOTHING until the user thinks to press Stop first. Interrupt the
+    // running program now (straight to the wire, bypassing the queue); the
+    // KeyboardInterrupt lands the old run's terminating `\x04`, it finishes,
+    // and the new program starts — what Run means on every other IDE.
+    if (this.streamPending) void this.write(CTRL_C).catch(() => undefined)
     const op = this.opQueue.then(() => this.runLocked(code))
     this.opQueue = op.catch(() => undefined)
     return op
@@ -743,6 +757,11 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
         await this.streamUntilCtrlD()
         // Consume the trailing prompt so the buffer is clean for the next op.
         await this.readUntil('>')
+      } catch (err) {
+        // Get the wire quiet before the console listens again (#700), exactly
+        // as a failed exec does — otherwise the next Run inherits the debris.
+        await this.resyncAfterFailure()
+        throw err
       } finally {
         if (enteredHere) {
           await this.exitRawRepl().catch(() => undefined)

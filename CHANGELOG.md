@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Run does something again while a program is already running.** Pressing
+  Run while the board was still in a `while True:` loop (a Pico blink loop is
+  the normal case) queued the new run behind the old one, which only ends when
+  the board is interrupted — so Run appeared to do nothing until the user
+  thought to press Stop first. Run now interrupts the running program itself
+  and starts the new one, on the desktop serial device and over Web Serial
+  alike. A board that drops mid-run (unplugged, or browned out by a servo) also
+  no longer leaves a run waiting forever — which used to wedge every later Run
+  on that device, even after the board came back.
+
 ### Changed
 
 - **The Electronics canvas zoom controls ease too.** Clicking − / + , the
