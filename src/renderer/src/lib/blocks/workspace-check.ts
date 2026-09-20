@@ -1,3 +1,5 @@
+import type { BlockLevel } from './registry'
+
 /**
  * "CAN THIS BUILD READ THESE BLOCKS?" (#1009, epic #1007).
  * =============================================================================
@@ -55,4 +57,25 @@ export function unknownBlockTypes(
   isKnown: (type: string) => boolean
 ): string[] {
   return collectBlockTypes(workspace).filter((t) => !isKnown(t))
+}
+
+/**
+ * The block types in `workspace` a beginner is not offered in the drawer (#1212).
+ *
+ * The level filters the TOOLBOX, never the reader: a file full of classes and
+ * comprehensions opens, renders and generates exactly the same in simple mode
+ * as in advanced — nothing is downgraded to a grey `snakie_python_*` block
+ * because of a setting. What such a file does earn is a one-line offer to put
+ * those blocks back in the drawer, and this is the walk that answers whether
+ * there is anything to offer.
+ *
+ * `levelOf` is injected for the same reason `isKnown` is above: this module
+ * knows about neither Blockly nor the registry, so the walk stays unit-tested
+ * rather than discovered.
+ */
+export function advancedBlockTypes(
+  workspace: unknown,
+  levelOf: (type: string) => BlockLevel | undefined
+): string[] {
+  return collectBlockTypes(workspace).filter((t) => levelOf(t) === 'advanced')
 }
