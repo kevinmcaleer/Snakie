@@ -275,3 +275,128 @@
 .blocks-canvas__host .blocklyZoom > .blocks-zoom-fit {
   pointer-events: none;
 }
+
+/* THE CANVAS SHELL (#1211). The Blockly host still fills the pane; this only
+   gives the in-toolbox toggle below something to be positioned against. */
+.blocks-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+}
+
+/* "SHOW ADVANCED BLOCKS" (#1211, epic #1206).
+ *
+ * Sat over the bottom of the toolbox column — Blockly owns that SVG, so this is
+ * drawn on top of it rather than in it. Quiet by default (parchment, muted ink)
+ * and amber when it is on, which is the same accent the advanced marker inside
+ * the drawers wears. */
+.blocks-advanced {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  z-index: 3;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  max-width: calc(100% - 20px);
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 18%);
+  color: var(--txt2);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+.blocks-advanced:hover {
+  border-color: var(--accent);
+  color: var(--head);
+}
+
+.blocks-advanced.is-on {
+  color: var(--head);
+}
+
+/* The real checkbox stays in the accessibility tree and keeps the keyboard
+   behaviour; the pill beside it is what anybody sees. */
+.blocks-advanced__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.blocks-advanced__switch {
+  position: relative;
+  flex: none;
+  width: 24px;
+  height: 13px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--shell);
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.blocks-advanced__switch::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--txt2);
+  transition:
+    transform 120ms ease,
+    background 120ms ease;
+}
+
+.blocks-advanced.is-on .blocks-advanced__switch {
+  border-color: var(--accent);
+  background: var(--accent-2);
+}
+
+.blocks-advanced.is-on .blocks-advanced__switch::after {
+  transform: translateX(11px);
+  background: var(--accent-contrast);
+}
+
+.blocks-advanced__input:focus-visible ~ .blocks-advanced__switch {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.blocks-advanced__label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* THE ADVANCED MARKER INSIDE A DRAWER (#1211).
+ *
+ * `ADVANCED_MARKER_CLASS` in `toolbox.ts` — a flyout label heading the extra
+ * blocks, so a learner with the advanced ones switched on can still see which
+ * are the extras. Smaller and lighter than a category heading (700, above), in
+ * the amber accent, because it is a note ABOUT the blocks below it rather than
+ * a name for them. Both skins get it — the tokens are redefined per skin — and
+ * so does each of the three block shapes, because a flyout label is chrome
+ * rather than a block and no renderer touches it. */
+.blocks-canvas__host .blocklyFlyoutLabelText.snakie-flyout-advanced {
+  fill: var(--accent);
+  font-family: var(--font-ui);
+  font-size: 9pt;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
