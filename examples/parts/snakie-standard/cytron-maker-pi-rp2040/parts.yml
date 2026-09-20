@@ -43,9 +43,11 @@ mountingHoles:
     diameter: 1.5
 buttons:
   - label: GP20
+    gpio: 20
     x: 0.845
     y: 0.588
   - label: GP21
+    gpio: 21
     x: 0.845
     y: 0.674
   - label: RST

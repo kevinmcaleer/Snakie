@@ -253,7 +253,7 @@ export const BLOCK_CATEGORIES = [
     id: 'modules',
     name: 'Modules',
     token: 'blockModules',
-    hint: 'Import a module and the blocks it offers appear here.'
+    hint: 'Import a module, or scan for the ones on your board and in your project, and the blocks it offers appear here.'
   },
   // Wait gets a category of its own rather than a corner of Control (#1011).
   // It is the single most-used block in any hardware lesson — every blink,

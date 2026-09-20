@@ -50,15 +50,24 @@ const valueOf = (source: string): Record<string, unknown> => {
   return (root.inputs as Record<string, { block: Record<string, unknown> }>).VALUE.block
 }
 
-describe('the drawer is still four blocks at a glance', () => {
+describe('the drawer is still five blocks at a glance', () => {
   it('puts the new ones on a shelf of their own', () => {
+    // Five since the `print f"…"` block arrived: it is the line every sensor
+    // program has in its loop, and belongs beside `print`. Its value twin, the
+    // template for every other destination, lives on the shelf.
     const text = BLOCK_CATEGORIES.find((c) => c.id === 'text')!
     const contents = categoryContents(text, 'micropython')
     const loose = contents.filter((c) => c.kind === 'block')
-    expect(loose.map((c) => c.type)).toEqual(['text', 'text_join', 'text_length', 'text_print'])
+    expect(loose.map((c) => c.type)).toEqual([
+      'text',
+      'text_join',
+      'text_length',
+      'text_print',
+      'snakie_print_format'
+    ])
     const shelf = contents.find((c) => c.kind === 'category') as { name: string; contents: [] }
     expect(shelf.name).toBe('Working with text')
-    expect(shelf.contents.length).toBe(12)
+    expect(shelf.contents.length).toBe(13)
   })
 
   it('still has no `text_prompt` — there is no keyboard on the board', () => {
@@ -133,5 +142,25 @@ describe('a serial command parser', () => {
     ].join('\n')
     const { workspace } = pythonToBlocks(source)
     expect(await verifyConversion(source, workspace as never)).toEqual({ ok: true })
+  })
+})
+
+describe('`create text with` (#1125)', () => {
+  it('lays its sockets across one row, not down', () => {
+    const ws = new Blockly.Workspace()
+    const block = ws.newBlock('text_join')
+    expect(block.getInputsInline()).toBe(true)
+  })
+
+  it('stays inline after the mutator adds a socket', () => {
+    const ws = new Blockly.Workspace()
+    const block = ws.newBlock('text_join') as Blockly.Block & {
+      itemCount_: number
+      updateShape_: () => void
+    }
+    block.itemCount_ = 3
+    block.updateShape_()
+    expect(block.getInput('ADD2')).not.toBeNull()
+    expect(block.getInputsInline()).toBe(true)
   })
 })

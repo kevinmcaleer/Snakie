@@ -97,4 +97,34 @@ describe('validateBusPins — guards', () => {
     })
     expect(pins.map((p) => p.gpio)).toEqual([0, 4])
   })
+
+  it('boardPinsFromPart includes a user button and an onboard LED that carry a gpio', () => {
+    // The Maker Pi RP2040: two buttons on GP20/GP21 and NeoPixels on GP18, none
+    // of them on any header — so before this they were pins the dropdowns
+    // could not offer (the whole reason a learner could not pick 20).
+    const pins = boardPinsFromPart({
+      connectors: [{ pins: [{ gpio: 0, name: 'GP0', capabilities: ['digital', 'i2c'] }] }],
+      buttons: [{ label: 'GP20', gpio: 20 }, { label: 'GP21', gpio: 21 }, { label: 'RST' }],
+      onboardLeds: [{ gpio: 18 }]
+    })
+    expect(pins.map((p) => [p.gpio, p.label, p.capabilities])).toEqual([
+      [0, 'GP0', ['digital', 'i2c']],
+      [20, 'GP20', ['digital']],
+      [21, 'GP21', ['digital']],
+      [18, 'GP18', ['digital', 'pwm']]
+    ])
+  })
+
+  it('boardPinsFromPart lists a gpio once however many connectors route it', () => {
+    // Maker Pi again: GP26 is on Grove 5 and Grove 6. Two GP26 rows in a menu is
+    // a bug; the first keeps its place and picks up any extra capability.
+    const pins = boardPinsFromPart({
+      connectors: [
+        { pins: [{ gpio: 26, name: 'GP26', capabilities: ['digital'] }] },
+        { pins: [{ gpio: 26, name: 'GP26', capabilities: ['digital', 'adc'] }] }
+      ],
+      onboardLeds: [{ gpio: 26 }]
+    })
+    expect(pins).toEqual([{ gpio: 26, label: 'GP26', capabilities: ['digital', 'adc', 'pwm'] }])
+  })
 })

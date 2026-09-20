@@ -4301,6 +4301,15 @@ function SelectionInspector({
             <span>Label</span>
             <input type="text" value={btn.label} onChange={(e) => upd({ label: e.target.value })} placeholder="e.g. BOOT" />
           </label>
+          <label className="pe__field" title="The GPIO a user button is wired to, so the Blocks pin dropdowns can offer it. Leave blank for BOOT / RESET.">
+            <span>GPIO</span>
+            <input
+              type="number"
+              value={btn.gpio ?? ''}
+              placeholder="none"
+              onChange={(e) => upd({ gpio: e.target.value === '' ? undefined : Number(e.target.value) })}
+            />
+          </label>
           <div className="pe__row">
             {num('x', btn.x, (v) => upd({ x: v }))}
             {num('y', btn.y, (v) => upd({ y: v }))}

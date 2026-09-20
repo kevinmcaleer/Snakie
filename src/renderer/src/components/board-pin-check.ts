@@ -258,26 +258,67 @@ export function validateBusPins(source: string, pins: BoardPinInfo[]): BusDiagno
   return out
 }
 
-/** Project a board part's pins (headers + connectors) into {@link BoardPinInfo}s. */
+/** The shape of a pin as any of a part's pin-bearing sections declares it. */
+type PartPinLike = { gpio?: number; name?: string; label?: string; capabilities?: string[]; signals?: BoardPinInfo['signals']; buses?: BoardPinInfo['buses'] }
+
+/**
+ * Project a board part's pins into {@link BoardPinInfo}s — ONE PER GPIO.
+ *
+ * Headers and connectors first, in the part's own order. Then the pins a board
+ * has that sit on NO header: a user button with a `gpio` (the Maker Pi RP2040's
+ * GP20/GP21 buttons) and an onboard LED / NeoPixel with one (its GP18). Those
+ * are real GPIOs a learner writes `Pin(20, Pin.IN)` for, and leaving them out
+ * meant the block dropdowns could not offer them at all. A button is a digital
+ * input; an LED is a digital output that can also be PWM-dimmed. A GPIO the
+ * headers already list keeps its header entry (which carries the bus signals)
+ * rather than gaining a second row.
+ *
+ * DEDUPED BY GPIO, because a board can route one GPIO to two connectors (the
+ * Maker Pi's GP26 is on Grove 5 AND Grove 6) and a dropdown that lists `GP26`
+ * twice reads as a bug. The first declaration wins; later ones only add
+ * capabilities the first did not claim.
+ */
 export function boardPinsFromPart(part: {
-  headers?: { pins?: Array<{ gpio?: number; name?: string; label?: string; capabilities?: string[]; signals?: BoardPinInfo['signals']; buses?: BoardPinInfo['buses'] }> }[]
-  connectors?: { pins?: Array<{ gpio?: number; name?: string; label?: string; capabilities?: string[]; signals?: BoardPinInfo['signals']; buses?: BoardPinInfo['buses'] }> }[]
+  headers?: { pins?: Array<PartPinLike> }[]
+  connectors?: { pins?: Array<PartPinLike> }[]
+  buttons?: Array<{ gpio?: number; label?: string }>
+  onboardLeds?: Array<{ gpio?: number; label?: string }>
 } | null | undefined): BoardPinInfo[] {
   if (!part) return []
-  const src = [
+  const src: PartPinLike[] = [
     ...(part.headers ?? []).flatMap((h) => h.pins ?? []),
-    ...(part.connectors ?? []).flatMap((c) => c.pins ?? [])
+    ...(part.connectors ?? []).flatMap((c) => c.pins ?? []),
+    ...(part.buttons ?? []).map((b) => ({ gpio: b.gpio, label: b.label, capabilities: ['digital'] })),
+    ...(part.onboardLeds ?? []).map((l) => ({ gpio: l.gpio, label: l.label, capabilities: ['digital', 'pwm'] }))
   ]
   const out: BoardPinInfo[] = []
+  const byGpio = new Map<number, BoardPinInfo>()
   for (const p of src) {
     if (typeof p.gpio !== 'number') continue
-    out.push({
+    const seen = byGpio.get(p.gpio)
+    if (seen) {
+      for (const c of p.capabilities ?? []) if (!seen.capabilities.includes(c)) seen.capabilities.push(c)
+      continue
+    }
+    // A button's silk label ("GP20") is its pin's label too; an LED's label
+    // ("PWR", "NeoPixel") is not, so anything that isn't a GP<n> falls back.
+    const label = pinLabelOf(p)
+    const info: BoardPinInfo = {
       gpio: p.gpio,
-      label: p.name || p.label || `GP${p.gpio}`,
-      capabilities: p.capabilities ?? [],
+      label,
+      capabilities: [...(p.capabilities ?? [])],
       signals: p.signals,
       buses: p.buses
-    })
+    }
+    byGpio.set(p.gpio, info)
+    out.push(info)
   }
   return out
+}
+
+/** The dropdown label for a pin: its declared name, else its silk label if that names a GPIO, else `GP<n>`. */
+function pinLabelOf(p: PartPinLike): string {
+  if (p.name) return p.name
+  if (p.label && /^GP\d+$/i.test(p.label.trim())) return p.label.trim()
+  return `GP${p.gpio}`
 }

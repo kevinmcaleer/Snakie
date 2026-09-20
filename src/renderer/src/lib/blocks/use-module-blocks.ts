@@ -13,9 +13,11 @@ import {
 } from './module-api'
 import { findModuleSource, type ModuleSourceReaders } from './module-source'
 import { memberProbeSnippet, readMemberProbe, type ProbedMembers } from './module-probe'
-import { manifestForModule, moduleGroupId } from './module-blocks'
-import { blockDefinitionsFrom } from './manifest'
+import { manifestForModule, moduleGroupId, readRulesForModule } from './module-blocks'
+import { blockDefinitionsFrom, blockTypeFor, type BlockSource } from './manifest'
 import { defineDynamicBlocks, pruneDynamicBlocks } from './registry'
+import { pruneDynamicCallRules, registerDynamicCallRules } from './python-to-blocks'
+import { baseName, moduleNamesFrom, onModuleScan } from './module-scan'
 import { reportError } from '../report-error'
 
 /**
@@ -100,13 +102,41 @@ async function apiForModule(
  * Register a Modules drawer for `source`'s imports. Returns a nonce the canvas
  * rebuilds its toolbox on.
  */
-export function useModuleBlocks(source: string, dialect: Dialect, folder?: string | null): number {
+export function useModuleBlocks(
+  source: string,
+  dialect: Dialect,
+  folder?: string | null,
+  /** The program's own file, which a scan must not offer as a module. */
+  filePath?: string | null
+): number {
   const [nonce, setNonce] = useState(0)
   const lastKey = useRef('')
 
+  // WHAT A SCAN FOUND (#1048's button), kept beside the folder it was found
+  // for: opening another project is a different set of files, and a stale
+  // list of drawers from the last one would be the wrong answer to the button.
+  const [scanned, setScanned] = useState<{ folder: string | null; names: string[] }>({
+    folder: null,
+    names: []
+  })
+  useEffect(
+    () =>
+      onModuleScan(() => {
+        scanModules(folder ?? null, filePath ?? null)
+          .then((names) => setScanned({ folder: folder ?? null, names }))
+          .catch((err) => reportError('blocks: scanning for modules', err))
+      }),
+    [folder, filePath]
+  )
+
   // The SET, sorted, so `import a, b` and `import b, a` are the same key and
-  // reordering imports does not churn the toolbox.
-  const imports = useMemo(() => [...parsePyImports(source)].sort().join(','), [source])
+  // reordering imports does not churn the toolbox. What a scan found joins
+  // the program's own imports, so a drawer opened by the button stays open
+  // once the learner drags a block out and the import line arrives.
+  const imports = useMemo(() => {
+    const found = scanned.folder === (folder ?? null) ? scanned.names : []
+    return [...new Set([...parsePyImports(source), ...found])].sort().join(',')
+  }, [source, scanned, folder])
 
   useEffect(() => {
     const key = `${dialect}|${folder ?? ''}|${imports}`
@@ -118,6 +148,7 @@ export function useModuleBlocks(source: string, dialect: Dialect, folder?: strin
       const names = imports ? imports.split(',') : []
       if (names.length === 0) {
         pruneDynamicBlocks(new Set(), MODULE_SOURCE_PREFIX)
+        pruneDynamicCallRules(new Set(), MODULE_SOURCE_PREFIX)
         setNonce((n) => n + 1)
         return
       }
@@ -151,20 +182,18 @@ export function useModuleBlocks(source: string, dialect: Dialect, folder?: strin
         if (manifest.blocks.length === 0) continue
         const id = moduleGroupId(module)
         keep.add(id)
-        defineDynamicBlocks(
-          id,
-          blockDefinitionsFrom(manifest, {
-            kind: 'module',
-            id: module,
-            name: module,
-            category: 'modules'
-          })
-        )
+        const from: BlockSource = { kind: 'module', id: module, name: module, category: 'modules' }
+        defineDynamicBlocks(id, blockDefinitionsFrom(manifest, from))
+        // AND HOW THOSE BLOCKS READ BACK, under the same id, so a program that
+        // calls `ping.distance()` opens as the module's block and not as the
+        // generic call block. Pruned together with the blocks below.
+        registerDynamicCallRules(id, readRulesForModule(api, (blockId) => blockTypeFor(from, blockId)))
       }
       if (!live) return
       // Only OUR sources: a part's blocks are not this hook's to remove, and
       // `use-dynamic-blocks.ts` says the same about ours.
       pruneDynamicBlocks(keep, MODULE_SOURCE_PREFIX)
+      pruneDynamicCallRules(keep, MODULE_SOURCE_PREFIX)
       setNonce((n) => n + 1)
     }
 
@@ -175,6 +204,36 @@ export function useModuleBlocks(source: string, dialect: Dialect, folder?: strin
   }, [imports, dialect, folder])
 
   return nonce
+}
+
+/**
+ * Every module the button can find: the `.py` files beside the program, and
+ * the ones on the board — `/lib`, where `mip` and the installer put things, and
+ * the root, where a learner drops a file by hand. Never throws: no folder, no
+ * board, a board that will not list, all of it is simply "nothing found here".
+ */
+async function scanModules(folder: string | null, filePath: string | null): Promise<string[]> {
+  const files: string[] = []
+  if (folder) {
+    try {
+      const entries = await window.api.fs.readDir(folder)
+      for (const entry of entries) if (!entry.isDir) files.push(entry.name)
+    } catch {
+      // No folder open, or one we cannot list.
+    }
+  }
+  if (connected()) {
+    for (const dir of ['/lib', '/']) {
+      try {
+        const entries = await window.api.device.listDir(dir)
+        for (const entry of entries) if (!entry.isDir) files.push(entry.name)
+      } catch {
+        // No board, or a board mid-run.
+      }
+    }
+  }
+  const own = filePath ? baseName(filePath).replace(/\.py$/, '') : null
+  return moduleNamesFrom(files, own ? [own] : [])
 }
 
 /** Is a board connected right now? Cheap, and re-read on every pass. */

@@ -1039,7 +1039,7 @@ describe('single item hierarchy — group / hidden / locked round-trip', () => {
       }
     ],
     mountingHoles: [{ x: 0.1, y: 0.1, diameter: 2.5, group: 'g1', hidden: true, locked: true, z: 3 }],
-    buttons: [{ label: 'BOOT', x: 0.2, y: 0.2, group: 'g1', hidden: true, locked: true, z: 4 }],
+    buttons: [{ label: 'BOOT', x: 0.2, y: 0.2, gpio: 20, group: 'g1', hidden: true, locked: true, z: 4 }],
     onboardLeds: [{ kind: 'single', x: 0.3, y: 0.3, group: 'g1', hidden: true, locked: true, z: 5 }],
     shapes: [{ kind: 'rect', x: 0.4, y: 0.4, w: 0.1, h: 0.1, group: 'g1', hidden: true, locked: true, z: 6 }],
     labels: [{ text: 'U1', x: 0.5, y: 0.5, group: 'g1', hidden: true, locked: true, z: 7 }],
@@ -1083,6 +1083,17 @@ describe('single item hierarchy — group / hidden / locked round-trip', () => {
   it('round-trips a group’s own hidden flag', () => {
     const back = partFromYaml(partToYaml(RICH_ITEMS))
     expect(back.groups).toEqual([{ id: 'g1', name: 'Grove I2C', hidden: true }])
+  })
+
+  it('round-trips a button’s gpio, and leaves it off a button that has none', () => {
+    // The Maker Pi RP2040's GP20/GP21 user buttons are readable pins; BOOT and
+    // RESET are not. The blocks' pin dropdowns read this off the part.
+    const back = partFromYaml(partToYaml(RICH_ITEMS))
+    expect(back.buttons?.[0].gpio).toBe(20)
+    const plain = partFromYaml(
+      partToYaml(normalisePart({ id: 'p', name: 'P', headers: [], buttons: [{ label: 'BOOT', x: 0.1, y: 0.1 }] }))
+    )
+    expect(plain.buttons?.[0]).not.toHaveProperty('gpio')
   })
 
   it('drops a group nothing is in — including one only nested under another', () => {
