@@ -112,6 +112,17 @@ export interface DiscoveredModules {
   searchPath: string[]
   /** What the board says it is; `{}` when nothing could be read. */
   firmware: FirmwareIdentity
+  /**
+   * The probe ran to completion — its closing sentinel arrived (#1254).
+   *
+   * Worth its own field because an empty result is otherwise AMBIGUOUS, and the
+   * two meanings want opposite words in the UI: a board that genuinely listed
+   * nothing, versus a probe that never got an answer (busy port, a drop
+   * mid-read, a port with no `help`). Reporting "this board has no built-in
+   * modules" for the second is how a broken probe looks exactly like a bare
+   * board, which is the hardest kind of bug to notice.
+   */
+  complete: boolean
 }
 
 /** An empty result — what every failure degrades to. */
@@ -122,7 +133,8 @@ export function emptyDiscovery(): DiscoveredModules {
     filesystem: [],
     imported: [],
     searchPath: [],
-    firmware: {}
+    firmware: {},
+    complete: false
   }
 }
 
@@ -333,6 +345,9 @@ export function parseDiscovery(stdout: string): DiscoveredModules {
   const help = parseHelpModules(section(out, DISCOVER_HELP, DISCOVER_END))
   result.frozen = help.top
   result.frozenSubmodules = help.dotted
+  // The closing sentinel is the one thing that distinguishes "the board
+  // answered, and this is all there was" from "the board never answered".
+  result.complete = out.includes(DISCOVER_END)
   return result
 }
 

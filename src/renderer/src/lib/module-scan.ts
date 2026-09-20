@@ -16,6 +16,20 @@ import { joinPath } from './blocks/module-source'
  * looks for a bare `import foo`) and the board's `/` and `/lib`, which is where
  * `mip` and Snakie's own installer put things.
  *
+ * WHAT THIS SCAN CANNOT SEE, and why it is not the whole story (#1254). It
+ * lists `.py` FILES in two fixed directories, so three kinds of real module are
+ * invisible to it: a PACKAGE (`/lib/arduino_alvik/__init__.py` — a directory,
+ * which the filter skips), a precompiled `.mpy`, and anything on a `sys.path`
+ * entry that is not `/` or `/lib`. All three are ordinary ways for a vendor
+ * library to arrive, and an Alvik's `arduino_alvik` is all three at once.
+ * Widening the filter is not the fix: reading and parsing a package tree over a
+ * serial link, file by file, is exactly the cost this scan is shaped to avoid.
+ * Instead the discovery probe (`module-discovery`) already enumerates every
+ * importable name on `sys.path` in ONE round-trip, and
+ * {@link unscannedDeviceNames} says which of those this scan could not account
+ * for, so the panel can list them by name rather than pretend they do not
+ * exist.
+ *
  * PURE AND INJECTED. Listing and reading are passed in, so the scanner is a
  * unit test rather than something that needs a board and a folder; the panel
  * wires the real `window.api.fs` / `window.api.device` in.
@@ -169,6 +183,26 @@ export async function scanDeviceModules(readers: ScanReaders): Promise<DetectedM
     }
   }
   return rows.sort(byName)
+}
+
+/**
+ * The importable names the discovery probe found on `sys.path` that
+ * {@link scanDeviceModules} did not account for (#1254).
+ *
+ * These are the packages, the `.mpy`s and the modules outside `/` and `/lib` —
+ * real, importable, and previously invisible in the panel, which is how a board
+ * whose whole vendor library is a `/lib` package appeared to have nothing on it.
+ * They come back as bare names because that is honestly all that is known
+ * without reading a tree of files: the panel offers `dir()` for the rest.
+ *
+ * Sorted and de-duplicated. Pure.
+ */
+export function unscannedDeviceNames(
+  filesystemNames: readonly string[],
+  scanned: readonly DetectedModule[]
+): string[] {
+  const covered = new Set(scanned.map((r) => r.name))
+  return [...new Set(filesystemNames.filter((n) => !covered.has(n)))].sort()
 }
 
 /** How many named things a parsed module offers — the row's badge. */

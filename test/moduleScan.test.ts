@@ -4,6 +4,8 @@ import {
   memberCount,
   scanDeviceModules,
   scanProjectModules,
+  unscannedDeviceNames,
+  type DetectedModule,
   type ScanEntry,
   type ScanReaders
 } from '../src/renderer/src/lib/module-scan'
@@ -183,5 +185,39 @@ describe('module-level variables', () => {
     ].join('\n'))
     expect(api.variables).toEqual(['i2c', 'width', 'a', 'b'])
     expect(api.constants).toEqual(['RATE'])
+  })
+})
+
+/**
+ * The gap between what the FILE scan can read and what the board can actually
+ * import (#1254) — the bug an Arduino Alvik exposed: its whole vendor library
+ * is a `/lib` PACKAGE, so a scan that lists `.py` files in two directories saw
+ * nothing and the panel reported an empty board.
+ */
+describe('unscannedDeviceNames', () => {
+  const row = (name: string): DetectedModule => ({
+    name,
+    origin: 'device',
+    path: `/lib/${name}.py`
+  })
+
+  it('names the importable modules the file scan could not account for', () => {
+    // `arduino_alvik` is a package directory, `ucPack` a .mpy — neither is a
+    // `.py` file in / or /lib, so neither can appear in the scanned rows.
+    expect(
+      unscannedDeviceNames(['arduino_alvik', 'ssd1306', 'ucPack'], [row('ssd1306')])
+    ).toEqual(['arduino_alvik', 'ucPack'])
+  })
+
+  it('says nothing about a module the scan already read', () => {
+    expect(unscannedDeviceNames(['ssd1306'], [row('ssd1306')])).toEqual([])
+  })
+
+  it('de-duplicates and sorts, so a re-scan never shuffles the list', () => {
+    expect(unscannedDeviceNames(['b', 'a', 'b'], [])).toEqual(['a', 'b'])
+  })
+
+  it('is empty when the probe found nothing — never invents a row', () => {
+    expect(unscannedDeviceNames([], [row('ssd1306')])).toEqual([])
   })
 })
