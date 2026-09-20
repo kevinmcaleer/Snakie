@@ -12,7 +12,9 @@ import {
   EXTRAS_INPUT,
   extrasText,
   extrasVisible,
+  getExtras,
   hasExtrasRow,
+  setExtras,
   setExtrasVisible
 } from '../params'
 
@@ -68,7 +70,7 @@ function signature(block: Blockly.Block, gen: MicroPythonGenerator): string {
   return [...declared, ...(extra === '' ? [] : [extra])].join(', ')
 }
 
-export { EXTRAS_FIELD, extrasVisible, hasExtrasRow, setExtrasVisible }
+export { EXTRAS_FIELD, extrasVisible, getExtras, hasExtrasRow, setExtras, setExtrasVisible }
 
 /**
  * DECORATORS, AS A LIST ON THE MUTATION (A1, #1215, epic #1206).
@@ -441,6 +443,27 @@ export function installFunctionBlocks(): void {
  * Idempotent, like every other installer in this file: `installCorePalette`
  * runs once per test file and `Blockly.Blocks` is not reset between them.
  */
+/** The mutator name a JSON block gives `mutator:` to carry a decorator list. */
+export const DECORATORS_EXTENSION = 'snakie_decorators'
+
+export function installDecoratorExtension(): void {
+  if (Blockly.Extensions.isRegistered(DECORATORS_EXTENSION)) return
+  Blockly.Extensions.registerMutator(DECORATORS_EXTENSION, {
+    // A marker the settings dialog can ask about (#1218). A block that took
+    // this mixin carries a decorator list, and there is nothing else to look
+    // at from the outside: the list itself is absent until an entry is added.
+    snakieDecoratorsMixin_: true,
+    saveExtraState: function (this: Blockly.Block): object | null {
+      const list = getDecorators(this)
+      return list.length === 0 ? null : { [DECORATORS_KEY]: list }
+    },
+    loadExtraState: function (this: Blockly.Block, state: object): void {
+      const list = (state as Record<string, unknown>)[DECORATORS_KEY]
+      if (Array.isArray(list)) setDecorators(this, tidy(list))
+    }
+  })
+}
+
 export function installDecoratorCog(
   types: readonly string[],
   before: readonly string[] = ['PARAMS_ROW', EXTRAS_INPUT, 'BODY']
@@ -483,6 +506,20 @@ export function installDecoratorCog(
 
     def.snakieDecoratorCog_ = true
   }
+}
+
+/**
+ * Can this block hold decorators? (#1218)
+ *
+ * True for every block {@link installDecorators} has wrapped or that names
+ * {@link DECORATORS_EXTENSION} — the two `def` blocks and the method block —
+ * and false for everything else, which is what decides whether the settings
+ * dialog offers a decorators section at all.
+ */
+export function hasDecorators(block: Blockly.Block): boolean {
+  if ((block as unknown as { snakieDecoratorsMixin_?: boolean }).snakieDecoratorsMixin_) return true
+  const def = Blockly.Blocks[block.type] as unknown as SerialisingBlock | undefined
+  return def?.snakieDecoratorsInstalled_ === true
 }
 
 /** The four serialisation hooks, as they hang off a block definition. */
@@ -740,18 +777,6 @@ export function decoratorBadgeVisible(block: Blockly.Block): boolean {
   return !!block.getInput(BADGE_INPUT)?.isVisible()
 }
 
-/**
- * Can this block take decorators? True for the two `def` blocks and the method
- * block, false for every other block on the canvas.
- *
- * Asked of the BLOCK rather than of a list of type names, because the badge row
- * is installed by the same call that gives the block its decorator list — so
- * the two can never get out of step, and a block type that gains the list later
- * gains the right-click item with it.
- */
-export function hasDecorators(block: Blockly.Block): boolean {
-  return !!block.getInput(BADGE_INPUT)
-}
 
 /**
  * Give a block the badge row, above the first of `before` it actually has.

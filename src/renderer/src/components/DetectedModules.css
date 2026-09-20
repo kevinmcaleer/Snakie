@@ -200,6 +200,34 @@
   font-style: italic;
 }
 
+/* "built in" — in the firmware, not on the filesystem. Brass rather than the
+   green of a file count, because it is a different KIND of thing: nothing here
+   can be opened, updated or deleted. */
+.dmods__frozen {
+  padding: 0 0.35rem;
+  color: var(--accent-ink, #b07d20);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+/* The board's own description, above its firmware modules. */
+.dmods__firmware {
+  margin: 0;
+  padding: 0 0.85rem 0.35rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+/* Why a firmware module shows bare names where a file shows signatures. */
+.dmods__frozen-note {
+  margin: 0.35rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  line-height: 1.45;
+  font-style: italic;
+}
+
 /* --- Member list -------------------------------------------------------- */
 
 .dmods__body {

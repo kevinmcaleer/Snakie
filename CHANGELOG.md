@@ -8,6 +8,42 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Detect the modules baked into a board's firmware (#1246).** Snakie could
+  only ever see two kinds of module: the ones in its own catalog, and the `.py`
+  files sitting in `/` and `/lib`. A vendor MicroPython image compiles modules
+  INTO the binary — an Arduino Alvik's carries `arduino_alvik`, `ucPack` and a
+  frozen `modulino` — and none of them are files, so the Detected panel listed
+  nothing and the learner was left with an import that works and an app that
+  says the module isn't there. A new discovery probe asks the board to
+  enumerate itself: `help('modules')` for everything built in or frozen, a walk
+  of `sys.path` for the files (which `help('modules')` deliberately doesn't
+  scan), and `sys.modules` for whatever is already live. The Detected shelf
+  grows a **Built into the firmware** section, labelled with the board's own
+  description, and expanding a row runs `dir()` on that one module — the only
+  way to see inside something with no source file, and honest about what
+  freezing discards: names only, no signatures. Nothing is imported to build
+  the list, because importing a whole firmware's worth of modules is how an
+  ESP32 runs out of memory.
+
+- **A catalog module the firmware already provides now reads BUILT IN
+  (#1246).** It imports, so the old probe called it installed and offered an
+  UPDATE for something with no `/lib` copy to update and nothing Snakie could
+  replace. A `/lib` copy that shadows the frozen one still reads as an ordinary
+  install, because that copy is the one that actually imports.
+
+- **Function settings, in one place (#1218, epic #1206).** A `def` or method
+  block's right-click menu has a new **Function settings…** dialog holding both
+  of the things written around a function that are text rather than sockets:
+  its decorators (#1215), which had no editing UI at all, and its extra
+  parameters (#1134) — a default, a `*args`, a `**kwargs` — which were only
+  reachable through a hidden row on the block. Decorators can be added, typed,
+  reordered and removed, with `@property`, `@staticmethod`, `@classmethod` and
+  `@micropython.native` offered as one-click entries. The old **Add extra
+  parameters…** item stays as a shortcut into the same dialog, focused on the
+  extras box. The generated Python is unchanged — only where the text is edited
+  has moved — and the parameter list itself stays on Blockly's own cog, because
+  renaming a parameter there renames it in every call.
+
 - **`self.x` and `obj.x` are blocks of their own (#1223, epic #1206).** Reading
   and changing something an object remembers used to open as the grey Python
   escape hatch — the second-biggest theme in the corpus, sitting in the drawer
@@ -68,6 +104,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   badge — with `+2` after it when there are more — so it says so on the canvas.
   Blockly's mutator was extended rather than replaced by a popover of our own
   (epic open question 3); the reasoning is §8 of `docs/blocks-language-epic.md`.
+  this opens unchanged. Edited from the block’s **Function settings…** dialog (#1218).
+
   this opens unchanged. No editing UI yet (#1217).
 - **"Show advanced blocks" in the toolbox, and a marker on the advanced ones
   (#1211, epic #1206).** A small switch sits at the bottom of the block canvas's
