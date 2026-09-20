@@ -9,6 +9,7 @@ import { CLASSES } from './structure'
 import {
   appendExtrasRow,
   EXTRAS_FIELD,
+  EXTRAS_INPUT,
   extrasText,
   extrasVisible,
   getExtras,
@@ -106,7 +107,12 @@ interface DecoratedBlock {
 /** One entry, tidied: no leading `@`, no surrounding space. Blank entries go. */
 function tidy(entries: readonly unknown[]): string[] {
   return entries
-    .map((entry) => String(entry ?? '').trim().replace(/^@+\s*/, '').trim())
+    .map((entry) =>
+      String(entry ?? '')
+        .trim()
+        .replace(/^@+\s*/, '')
+        .trim()
+    )
     .filter((entry) => entry !== '')
 }
 
@@ -127,9 +133,16 @@ export function getDecorators(block: Blockly.Block): string[] {
   return legacy === '' || legacy === 'NONE' ? [] : [legacy]
 }
 
-/** Set the decorators on a block. Entries are tidied on the way in. */
+/**
+ * Set the decorators on a block. Entries are tidied on the way in.
+ *
+ * EVERY WAY THE LIST CHANGES GOES THROUGH HERE — the cog, the right-click item,
+ * and both halves of deserialisation — so this is the one place the `@` badge
+ * (A3, #1217) needs to be brought back into step with it.
+ */
 export function setDecorators(block: Blockly.Block, entries: readonly string[]): void {
   ;(block as unknown as DecoratedBlock).snakieDecoratorList_ = tidy(entries)
+  syncDecoratorBadge(block)
 }
 
 /** The dropdown `snakie_method` used to keep its one decorator in (#1093). */
@@ -399,25 +412,40 @@ export function installFunctionBlocks(): void {
     def.snakieExtras_ = true
   }
   installDecorators(['procedures_defnoreturn', 'procedures_defreturn'])
-  installDecoratorExtension()
+  // The editing UI (A3, #1217): the Decorators section in the cog, and the
+  // badge row. After the extras wrap, so the badge lands above the extras row.
+  installDecoratorCss()
+  installDecoratorMutator(['procedures_defnoreturn', 'procedures_defreturn'])
 }
 
-/** The extension a JSON-declared block names to gain the same list (#1215). */
+/**
+ * Give a block with no parameter mutator of its own a DECORATORS-ONLY cog.
+ *
+ * WHY THIS IS NOT {@link installDecoratorMutator}: that one wraps a
+ * `decompose`/`compose` pair Blockly already put on the block, and appends our
+ * section to the container it builds. `snakie_method` has no such pair. Since
+ * B2 (#1221) it is built in code with one text field per parameter and `+`/`−`
+ * buttons on the row (see `palette/structure.ts`), so there is no mini-workspace
+ * for the parameters at all — the cog it grows here holds the decorators and
+ * nothing else, and opens on {@link DECORATORS_CONTAINER_BLOCK}.
+ *
+ * A1 (#1215) did this through a `snakie_decorators` mutator EXTENSION, which
+ * was right while the block was declared as JSON and the decorator list was the
+ * whole of its extra state. It cannot be right now: the rebuilt block has a
+ * `saveExtraState` pair of its own for `{ lead, params }`, a second registered
+ * mutator would replace it rather than sit beside it, and `installDecorators`
+ * already folds `decorators` into that state. So only the EDITING half is
+ * installed here — hooks that Blockly's serialisation never looks at.
+ *
+ * `before` names the inputs the badge row should sit above, first one that
+ * exists winning, for the reason {@link addBadgeRow} gives.
+ *
+ * Idempotent, like every other installer in this file: `installCorePalette`
+ * runs once per test file and `Blockly.Blocks` is not reset between them.
+ */
+/** The mutator name a JSON block gives `mutator:` to carry a decorator list. */
 export const DECORATORS_EXTENSION = 'snakie_decorators'
 
-/**
- * The decorator list for a block declared as JSON — `snakie_method`.
- *
- * A mixin rather than a wrap, because a JSON block has no serialisation hooks
- * of its own to wrap: the list is the whole of its extra state. Named in the
- * block's own definition, which is where Blockly expects to be told, so the
- * pair is attached before the first block of that type is ever built.
- *
- * A MUTATOR rather than a plain extension — Blockly refuses an extension that
- * adds serialisation hooks, by name, and a list that has to be saved is exactly
- * what a mutator is. No `compose`/`decompose`, so no mutator bubble on the
- * block: A3 (#1217) gives the list its editing UI.
- */
 export function installDecoratorExtension(): void {
   if (Blockly.Extensions.isRegistered(DECORATORS_EXTENSION)) return
   Blockly.Extensions.registerMutator(DECORATORS_EXTENSION, {
@@ -434,6 +462,50 @@ export function installDecoratorExtension(): void {
       if (Array.isArray(list)) setDecorators(this, tidy(list))
     }
   })
+}
+
+export function installDecoratorCog(
+  types: readonly string[],
+  before: readonly string[] = ['PARAMS_ROW', EXTRAS_INPUT, 'BODY']
+): void {
+  installDecoratorMutatorBlocks()
+  installDecoratorCss()
+  for (const type of types) {
+    const def = Blockly.Blocks[type] as unknown as
+      | {
+          init?: (this: Blockly.Block) => void
+          decompose?: (this: Blockly.Block, ws: Blockly.Workspace) => Blockly.Block
+          compose?: (this: Blockly.Block, container: Blockly.Block) => void
+          snakieDecoratorCog_?: boolean
+        }
+      | undefined
+    if (!def || def.snakieDecoratorCog_) continue
+    const init = def.init
+
+    def.init = function (this: Blockly.Block): void {
+      init?.call(this)
+      addBadgeRow(this, before)
+      const MutatorIcon = Blockly.icons.MutatorIcon
+      if (this.getIcon?.(MutatorIcon.TYPE)) this.removeIcon(MutatorIcon.TYPE)
+      // A no-op on a headless `Blockly.Block`, which is what the golden-file
+      // suites build — the hooks below are what those exercise.
+      this.setMutator(new MutatorIcon([DECORATOR_ARG_BLOCK], this as Blockly.BlockSvg))
+    }
+
+    def.decompose = function (this: Blockly.Block, ws: Blockly.Workspace): Blockly.Block {
+      const container = ws.newBlock(DECORATORS_CONTAINER_BLOCK)
+      ;(container as Blockly.BlockSvg).initSvg?.()
+      fillContainer(container, getDecorators(this))
+      return container
+    }
+
+    def.compose = function (this: Blockly.Block, container: Blockly.Block): void {
+      setDecorators(this, containerDecorators(container))
+      syncDecoratorBadge(this)
+    }
+
+    def.snakieDecoratorCog_ = true
+  }
 }
 
 /**
@@ -472,7 +544,8 @@ interface SerialisingBlock {
  * workspace saved as XML. ONLY WHAT IS ALREADY THERE is wrapped — giving
  * `saveExtraState` to a block that has only `mutationToDom` would make Blockly
  * prefer ours and quietly drop the mutation it was saving before. A block with
- * neither takes {@link installDecoratorExtension} instead.
+ * neither would need a mixin of its own; the editing half is
+ * {@link installDecoratorCog}.
  *
  * Idempotent, because `installCorePalette` runs again for every test file and
  * `Blockly.Blocks` is not reset between them.
@@ -521,3 +594,315 @@ export function installDecorators(types: readonly string[]): void {
     def.snakieDecoratorsInstalled_ = true
   }
 }
+
+/**
+ * THE DECORATOR LIST'S UI (A3, #1217, epic #1206).
+ * =============================================================================
+ *
+ * OPEN QUESTION 3 ON THE EPIC — *should the cog be replaced by a Snakie-owned
+ * popover covering parameters, extras and decorators together?* — IS DECIDED
+ * HERE AS **NO**: the mini-workspace mutator is EXTENDED, with a second
+ * section in the same bubble.
+ *
+ * The popover is the bigger, more tempting change, and the argument against it
+ * is the one this file already makes twice. Blockly's parameter mutator is not
+ * a form: each `procedures_mutatorarg` in it IS a workspace variable, and
+ * dragging, renaming or deleting one runs the bookkeeping that renames every
+ * caller of the function. A popover would have to reimplement all of it —
+ * `saveConnections`, the caller sockets, the rename flow — against Blockly
+ * internals with no public API, for the second time, in a second place that can
+ * disagree with the first. That is the cost #1134 refused when it put the extra
+ * parameters in a field rather than extending the mutator.
+ *
+ * AND THE COG IS ALREADY WHERE THE LEARNER LOOKS. It is where they added the
+ * parameters, and a decorator belongs to the same `def`. Two doors — a cog for
+ * parameters and a popover for everything about parameters — is the split the
+ * epic complains about in `snakie_method`'s dropdown, rebuilt at a larger size.
+ *
+ * WHAT IT COSTS INSTEAD is one mutator-only block type
+ * ({@link DECORATOR_ARG_BLOCK}) and a `decompose`/`compose` wrap in the same
+ * shape as the serialisation wrap above: our section is read and written around
+ * Blockly's, which never sees it. A learner who does not want to open the cog
+ * at all has the right-click **Add decorator…** (`BlocksCanvas.tsx`), which is
+ * the same door #1134 and #1163 put on their own hidden rows.
+ *
+ * #1218 may still fold the extras row into this bubble. That is a third section
+ * here, not a different mechanism.
+ */
+
+/**
+ * The decorators a MicroPython program actually reaches for, as suggestions.
+ *
+ * SUGGESTIONS, NOT A CHOICE. The field is a text input with these on a
+ * `<datalist>`, so `@app.route("/")` and anything else a library defines is
+ * typed in exactly as it is written — which is the whole reason the list is
+ * stored verbatim (see {@link getDecorators}).
+ *
+ * `micropython.asm_thumb` is DELIBERATELY ABSENT (the issue asks). It is not
+ * something you reach for without already knowing Thumb assembly, its body is
+ * not Python at all — so nothing else in the blocks editor could fill it in —
+ * and offering it beside `@property` would suggest otherwise. Typing it in
+ * still works, like any other entry.
+ */
+export const DECORATOR_SUGGESTIONS: readonly string[] = [
+  'property',
+  'staticmethod',
+  'classmethod',
+  'micropython.native',
+  'micropython.viper'
+]
+
+/** The mutator-only block that holds one entry, and the field on it. */
+export const DECORATOR_ARG_BLOCK = 'snakie_decorator_arg'
+const DECORATOR_ARG_FIELD = 'NAME'
+
+/** The container's section for them. */
+const DECORATORS_INPUT = 'SNAKIE_DECORATORS'
+
+/** The container a block with no parameter mutator of its own opens. */
+export const DECORATORS_CONTAINER_BLOCK = 'snakie_decorators_container'
+
+/** The badge row on a decorated block, and the label field in it. */
+const BADGE_INPUT = 'SNAKIE_DECORATOR_BADGE'
+export const DECORATOR_BADGE_FIELD = 'SNAKIE_BADGE'
+
+/** The id of the `<datalist>` every decorator field points at. */
+const DATALIST_ID = 'snakie-decorator-suggestions'
+
+/**
+ * The one `<datalist>` the suggestions live on, created on first use.
+ *
+ * On `document.body` rather than inside Blockly's widget div, because the
+ * widget div is emptied every time an editor closes and the list has to outlive
+ * that. Returns `null` outside a browser — the golden-file suites build these
+ * blocks in plain node, where there is no document to put it in.
+ */
+function decoratorDatalist(): HTMLElement | null {
+  if (typeof document === 'undefined') return null
+  const existing = document.getElementById(DATALIST_ID)
+  if (existing) return existing
+  const list = document.createElement('datalist')
+  list.id = DATALIST_ID
+  for (const name of DECORATOR_SUGGESTIONS) {
+    const option = document.createElement('option')
+    option.value = name
+    list.appendChild(option)
+  }
+  document.body.appendChild(list)
+  return list
+}
+
+/**
+ * A text field whose editor offers the known decorators (#1217).
+ *
+ * Blockly has no field for "a text box with suggestions" — `field_dropdown` is
+ * a closed choice and `field_input` has none. The editor it opens is a real
+ * `<input>` in the DOM, though, so the browser's own `list=` gives exactly the
+ * behaviour wanted: the five known names drop down, and anything at all can be
+ * typed over them.
+ *
+ * A leading `@` is stripped on the way in, so pasting `@property` — which is
+ * how the decorator is written everywhere else — stores `property` rather than
+ * putting a doubled `@@property` on the line.
+ */
+export class DecoratorField extends Blockly.FieldTextInput {
+  constructor() {
+    super('', (value) => String(value ?? '').replace(/^@+\s*/, ''))
+  }
+
+  protected override widgetCreate_(): HTMLInputElement | HTMLTextAreaElement {
+    const input = super.widgetCreate_()
+    if (decoratorDatalist() && input instanceof HTMLInputElement) {
+      input.setAttribute('list', DATALIST_ID)
+    }
+    return input
+  }
+}
+
+/** The entries on a container block's decorator stack, in order. */
+function containerDecorators(container: Blockly.Block): string[] {
+  const entries: string[] = []
+  let block: Blockly.Block | null = container.getInputTargetBlock(DECORATORS_INPUT)
+  while (block) {
+    if (block.type === DECORATOR_ARG_BLOCK) {
+      entries.push(String(block.getFieldValue(DECORATOR_ARG_FIELD) ?? ''))
+    }
+    block = block.getNextBlock()
+  }
+  return tidy(entries)
+}
+
+/** Give the container block one entry block per decorator, in order. */
+function fillContainer(container: Blockly.Block, entries: readonly string[]): void {
+  let connection = container.getInput(DECORATORS_INPUT)?.connection ?? null
+  for (const entry of entries) {
+    const arg = container.workspace.newBlock(DECORATOR_ARG_BLOCK)
+    arg.setFieldValue(entry, DECORATOR_ARG_FIELD)
+    ;(arg as Blockly.BlockSvg).initSvg?.()
+    connection?.connect(arg.previousConnection!)
+    connection = arg.nextConnection
+  }
+}
+
+/** Append the Decorators section to a container block the cog has just built. */
+function addContainerSection(container: Blockly.Block, entries: readonly string[]): void {
+  container.appendDummyInput().appendField('decorators')
+  container.appendStatementInput(DECORATORS_INPUT)
+  fillContainer(container, entries)
+}
+
+/**
+ * The badge that says a block is decorated, without opening the cog (#1217).
+ *
+ * The first decorator BY NAME — `@property` tells a reader what the block is,
+ * where a bare `@` only says that something is there — with `+2` after it when
+ * there are more. Hidden entirely when the list is empty, the rule the extras
+ * row follows and for the same reason: the ordinary `def` stays ordinary.
+ */
+export function syncDecoratorBadge(block: Blockly.Block): void {
+  const input = block.getInput(BADGE_INPUT)
+  const field = block.getField(DECORATOR_BADGE_FIELD)
+  if (!input || !field) return
+  const list = getDecorators(block)
+  const rest = list.length > 1 ? `  +${list.length - 1}` : ''
+  field.setValue(list.length === 0 ? '' : `@${list[0]}${rest}`)
+  if (input.isVisible() !== list.length > 0) {
+    input.setVisible(list.length > 0)
+    ;(block as Blockly.BlockSvg).queueRender?.()
+  }
+}
+
+/** Is the badge row on screen? False for a block that has no such row. */
+export function decoratorBadgeVisible(block: Blockly.Block): boolean {
+  return !!block.getInput(BADGE_INPUT)?.isVisible()
+}
+
+
+/**
+ * Give a block the badge row, above the first of `before` it actually has.
+ *
+ * `appendDummyInput` puts a row at the very bottom — under the `return` socket
+ * on `procedures_defreturn`, and under the whole body on the method block —
+ * which is nowhere near the `def` line the decorators belong to. The row is
+ * moved up to just above the signature it annotates.
+ */
+function addBadgeRow(block: Blockly.Block, before: readonly string[]): void {
+  if (block.getInput(BADGE_INPUT)) return
+  block
+    .appendDummyInput(BADGE_INPUT)
+    .appendField(new Blockly.FieldLabel('', 'snakieDecoratorBadge'), DECORATOR_BADGE_FIELD)
+  const anchor = before.find((name) => block.getInput(name))
+  if (anchor) block.moveInputBefore(BADGE_INPUT, anchor)
+  block.getInput(BADGE_INPUT)?.setVisible(false)
+}
+
+/**
+ * The mutator-only blocks: one entry, and a container for a block whose cog
+ * has nothing else in it.
+ *
+ * Defined straight on `Blockly.Blocks` rather than through the registry,
+ * because they only ever exist inside a mutator bubble: never in the toolbox,
+ * never on the canvas, never serialised into a file — so they need neither a
+ * generator emitter nor a place in the list of types `workspace-check` will
+ * open a file for.
+ */
+export function installDecoratorMutatorBlocks(): void {
+  if (!Blockly.Blocks[DECORATOR_ARG_BLOCK]) {
+    Blockly.Blocks[DECORATOR_ARG_BLOCK] = {
+      init: function (this: Blockly.Block): void {
+        this.appendDummyInput()
+          .appendField('@')
+          .appendField(new DecoratorField(), DECORATOR_ARG_FIELD)
+        this.setPreviousStatement(true)
+        this.setNextStatement(true)
+        this.setStyle('procedure_blocks')
+        this.setTooltip(
+          'One decorator, written on its own line above the function — property, micropython.native, or anything else you type.'
+        )
+      }
+    }
+  }
+  if (!Blockly.Blocks[DECORATORS_CONTAINER_BLOCK]) {
+    Blockly.Blocks[DECORATORS_CONTAINER_BLOCK] = {
+      init: function (this: Blockly.Block): void {
+        this.appendDummyInput().appendField('decorators')
+        this.appendStatementInput(DECORATORS_INPUT)
+        this.setStyle('procedure_blocks')
+        this.setTooltip('One @ line for every decorator dragged in here.')
+      }
+    }
+  }
+}
+
+/** The blocks a `def` block's cog offers: Blockly's parameter, and ours. */
+const DEF_MUTATOR_FLYOUT = ['procedures_mutatorarg', DECORATOR_ARG_BLOCK]
+
+/**
+ * Add the Decorators section to a block whose cog Blockly already built.
+ *
+ * WRAPPED, NOT REPLACED — the same move {@link installDecorators} makes on the
+ * serialisation hooks. `decompose` builds Blockly's container and we append one
+ * statement input to it; `compose` reads our section and then hands the very
+ * same container to Blockly's, which looks only at `STACK` and never sees ours.
+ *
+ * The cog's flyout is re-pointed at both block types in the `init` wrap, which
+ * is the one place the icon is built. `setMutator` is a no-op on a headless
+ * `Blockly.Block`, so the generator's node-only suites are unaffected.
+ */
+export function installDecoratorMutator(types: readonly string[]): void {
+  installDecoratorMutatorBlocks()
+  for (const type of types) {
+    const def = Blockly.Blocks[type] as unknown as {
+      init?: (this: Blockly.Block) => void
+      decompose?: (this: Blockly.Block, ws: Blockly.Workspace) => Blockly.Block
+      compose?: (this: Blockly.Block, container: Blockly.Block) => void
+      snakieDecoratorMutator_?: boolean
+    }
+    if (!def || def.snakieDecoratorMutator_ || !def.decompose || !def.compose) continue
+    const { init, decompose, compose } = def
+
+    def.init = function (this: Blockly.Block): void {
+      init?.call(this)
+      addBadgeRow(this, [EXTRAS_INPUT, 'STACK'])
+      // A FRESH ICON: `flyoutBlockTypes` is fixed when a MutatorIcon is built,
+      // and Blockly refuses a second icon of the same type on one block.
+      const MutatorIcon = Blockly.icons.MutatorIcon
+      if (this.getIcon?.(MutatorIcon.TYPE)) this.removeIcon(MutatorIcon.TYPE)
+      this.setMutator(new MutatorIcon(DEF_MUTATOR_FLYOUT, this as Blockly.BlockSvg))
+    }
+
+    def.decompose = function (this: Blockly.Block, ws: Blockly.Workspace): Blockly.Block {
+      const container = decompose.call(this, ws)
+      addContainerSection(container, getDecorators(this))
+      return container
+    }
+
+    def.compose = function (this: Blockly.Block, container: Blockly.Block): void {
+      setDecorators(this, containerDecorators(container))
+      compose.call(this, container)
+      syncDecoratorBadge(this)
+    }
+
+    def.snakieDecoratorMutator_ = true
+  }
+}
+
+/**
+ * The badge's own look: quieter than the block's own text, so it reads as a
+ * note about the block rather than part of the sentence on it. Registered with
+ * Blockly rather than written into a stylesheet, because a block is SVG and the
+ * Soft Shell font token is the one thing about it worth sharing with the DOM.
+ */
+export function installDecoratorCss(): void {
+  if (decoratorCssInstalled) return
+  decoratorCssInstalled = true
+  Blockly.Css.register(`
+.snakieDecoratorBadge {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.85em;
+  opacity: 0.85;
+}
+`)
+}
+
+let decoratorCssInstalled = false

@@ -51,15 +51,21 @@ describe('resolveBlocksSource', () => {
     expect(resolveBlocksSource({ entryFile: 'main.py', stored: null })).toBeNull()
   })
 
-  it('refuses, out loud, a file whose blocks this build cannot read', async () => {
+  it('prints the Python for a file whose stored blocks this build cannot read', async () => {
     const { resolveBlocksSource } = await import('../src/renderer/src/lib/pdf/blocks-source')
     const { writeBlocksFooter } = await import('../src/shared/blocks-doc')
     const stored = writeBlocksFooter('x = 1\n', {
       blocks: { blocks: [{ type: 'from_the_future', id: 'a' }] }
     })
-    // A type no palette registers: the off-screen path must throw rather than
-    // hand back an empty workspace and call the section complete.
-    expect(() => resolveBlocksSource({ entryFile: 'main.py', stored })).toThrow(/from_the_future/)
+    // A type no palette registers. The section is NOT abandoned (#1252): the
+    // file's own Python converts, so the page shows the learner's program —
+    // some of it as plain Python blocks — rather than an error.
+    const source = resolveBlocksSource({ entryFile: 'main.py', stored })
+    expect(source).not.toBeNull()
+    const types = (source?.workspace.getAllBlocks(false) ?? []).map((b) => b.type)
+    expect(types.length).toBeGreaterThan(0)
+    expect(types).not.toContain('from_the_future')
+    source?.dispose()
   })
 })
 

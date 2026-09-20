@@ -42,6 +42,7 @@ import {
   type RootPlacement
 } from '../lib/blocks/arrange'
 import { installShelfFlyout, installZoomReset } from '../lib/blocks/zoom'
+import { installBlockDoctor } from '../lib/blocks/block-doctor'
 import {
   dispatchNeedLibrary,
   dispatchOpenHelp,
@@ -49,12 +50,7 @@ import {
   PROGRAM_RUN_EVENT,
   type ProgramRunDetail
 } from './editorBridge'
-import {
-  blockForLine,
-  friendlyError,
-  isRealError,
-  TracebackWatcher
-} from '../lib/blocks/traceback'
+import { blockForLine, friendlyError, isRealError, TracebackWatcher } from '../lib/blocks/traceback'
 import { ensureBlocklyLocale } from '../lib/blocks/locale'
 import { advancedBlockTypes, unknownBlockTypes } from '../lib/blocks/workspace-check'
 import { registerBlocksWorkspace } from '../lib/blocks/workspace-registry'
@@ -233,6 +229,24 @@ export interface BlocksCanvasProps {
    */
   onAdvancedBlocks?: (fileId: string, types: readonly string[]) => void
   /**
+   * THIS FILE'S FOOTER NAMES BLOCKS THIS BUILD CANNOT BUILD (#1252).
+   *
+   * A part uninstalled, a plugin that isn't here, a module whose `.py` is not
+   * beside the file and whose board isn't plugged in (#1048's blocks are
+   * registered from a module's own source, so they come and go with it), or a
+   * file from a newer Snakie. The canvas cannot show those blocks — but the
+   * PYTHON beside them is intact, and converting that back gives a canvas made
+   * of blocks this build definitely has, with a raw Python block wherever there
+   * is nothing better (#1019). So the canvas reports up rather than refusing:
+   * the caller re-derives the document from the code and hands it back, and
+   * what the learner gets is their program, not a wall.
+   *
+   * Reported whenever it is true, not once per file: the palette grows
+   * asynchronously (a part scan, a module read, a board probe), so the same
+   * file can be unreadable at mount and perfectly readable a tick later.
+   */
+  onUnreadableBlocks?: (fileId: string, types: readonly string[]) => void
+  /**
    * Bumped when the workspace changed from OUTSIDE the canvas (#1034) — the
    * learner edited the code, and it was converted back into blocks.
    *
@@ -295,6 +309,7 @@ export function BlocksCanvas({
   paletteNonce = 0,
   onPartsUsed,
   onAdvancedBlocks,
+  onUnreadableBlocks,
   reloadNonce = 0,
   derived = false
 }: BlocksCanvasProps): JSX.Element {
@@ -381,6 +396,19 @@ export function BlocksCanvas({
   useEffect(() => {
     onAdvancedBlocksRef.current?.(fileId, advancedRef.current)
   }, [fileId])
+  /**
+   * TELL THE CALLER, SO IT CAN FALL BACK TO THE PYTHON (#1252).
+   *
+   * Through a ref like every other callback here, and in an effect rather than
+   * during render — a parent that re-derives the document in response is a
+   * `setState`, and doing that from a render body is the one thing React will
+   * not have.
+   */
+  const onUnreadableBlocksRef = useRef(onUnreadableBlocks)
+  onUnreadableBlocksRef.current = onUnreadableBlocks
+  useEffect(() => {
+    if (unknown.length > 0) onUnreadableBlocksRef.current?.(fileId, unknown)
+  }, [fileId, unknown])
   /** Pending regeneration, so a drag doesn't generate once per mouse move. */
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   /**
@@ -497,6 +525,16 @@ export function BlocksCanvas({
     // Blockly's "reset zoom" control becomes the fit/100% toggle (#1150). After
     // injection, because it works on the control Blockly has just drawn.
     const restoreZoomReset = installZoomReset(ws)
+
+    // *WHAT BLOCK IS THIS?* (#1245). A drop zone in the bottom-left corner that
+    // answers for whatever is dropped on it — and gives the block straight back,
+    // so asking about somebody else's program never edits it. The dialect comes
+    // from the REF so this effect does not re-run on a runtime change; the zone
+    // asks afresh each time it is used.
+    const removeBlockDoctor = installBlockDoctor(ws, {
+      dialect: () => dialectRef.current,
+      onHelp: (article) => dispatchOpenHelp(article)
+    })
 
     // THE FUNCTIONS DRAWER IS DYNAMIC (#1045). Every other category is a fixed
     // list from the registry, which is right for them and wrong for this one:
@@ -655,6 +693,7 @@ export function BlocksCanvas({
       host.removeEventListener('mousemove', onMove)
       host.removeEventListener('mouseleave', onLeave)
       restoreZoomReset()
+      removeBlockDoctor()
       ws.removeChangeListener(pointing)
       if (debounceRef.current) clearTimeout(debounceRef.current)
       const separation = separationTimers.get(ws)
@@ -749,7 +788,9 @@ export function BlocksCanvas({
       if (!block) return
       clearErrors()
       block.setWarningText(
-        friendly ? `${friendly.text}\n\n${parsed.error}: ${parsed.message}` : `${parsed.error}: ${parsed.message}`,
+        friendly
+          ? `${friendly.text}\n\n${parsed.error}: ${parsed.message}`
+          : `${parsed.error}: ${parsed.message}`,
         ERROR_WARNING
       )
       erroredRef.current = [block.id]
@@ -902,7 +943,9 @@ export function BlocksCanvas({
     // A reload rebuilds every block, so the view would jump back to the origin
     // each time the learner paused typing. Put it back where they left it.
     const scroll =
-      'scrollX' in ws ? { x: (ws as Blockly.WorkspaceSvg).scrollX, y: (ws as Blockly.WorkspaceSvg).scrollY } : null
+      'scrollX' in ws
+        ? { x: (ws as Blockly.WorkspaceSvg).scrollX, y: (ws as Blockly.WorkspaceSvg).scrollY }
+        : null
     // WHERE THE LEARNER PUT THINGS (#1036). A reload rebuilds every block from
     // the document, whose roots are laid out on a grid — so a root somebody
     // dragged aside goes back to the grid, once per typing pause. Ids are
@@ -1067,7 +1110,15 @@ export function BlocksCanvas({
   const expand = useCallback(() => onExpand?.(), [onExpand])
 
   if (blocked) {
-    return <BlocksUnreadable types={unknown} />
+    // A caller that can fall back re-derives the document from the file's own
+    // Python and hands it straight back (#1252), so this is one frame, not a
+    // destination. Without such a caller — the PDF exporter, a test — the old
+    // notice is still the honest answer.
+    return onUnreadableBlocks ? (
+      <div className="blocks-canvas__loading">Reading the blocks&hellip;</div>
+    ) : (
+      <BlocksUnreadable types={unknown} />
+    )
   }
 
   if (peek) {
@@ -1243,6 +1294,7 @@ function installBlockHelpMenu(): void {
   installBlockPythonMenu()
   installFunctionExtrasMenu()
   installCallArgNamesMenu()
+  installAddDecoratorMenu()
   const id = 'snakieBlockHelp'
   if (Blockly.ContextMenuRegistry.registry.getItem(id)) return
   // Blockly's OWN Help item comes first, and it opens `helpUrl` — which every
@@ -1370,6 +1422,50 @@ function installCallArgNamesMenu(): void {
       // After the render the boxes were just queued for, so the editor opens
       // over a field that is actually on screen.
       if (field) setTimeout(() => field.showEditor(), 0)
+    }
+  })
+}
+
+/**
+ * A `def` or method block's right-click **Add decorator…** (A3, #1217).
+ *
+ * The decorators live in the block's cog, next to its parameters — which is
+ * where a learner who is already editing the signature will find them. This is
+ * the other door, for the one who is not: a single box, the new entry appended
+ * to whatever is already there, and the `@` badge appears on the block.
+ *
+ * `Blockly.dialog.prompt` rather than `window.prompt`, which Electron's
+ * renderer does not implement. The canvas routes it through the in-app
+ * `usePrompt()` modal (see the effect above), so this item gets it for free
+ * rather than needing a second channel out of a module-level callback.
+ *
+ * Hidden for every block that cannot take a decorator, which is all of them but
+ * three.
+ */
+function installAddDecoratorMenu(): void {
+  const id = 'snakieAddDecorator'
+  if (Blockly.ContextMenuRegistry.registry.getItem(id)) return
+  Blockly.ContextMenuRegistry.registry.register({
+    id,
+    scopeType: Blockly.ContextMenuRegistry.ScopeType.BLOCK,
+    // Beside "Add extra parameters…": the same kind of item on the same block.
+    weight: 98,
+    displayText: 'Add decorator…',
+    preconditionFn: (scope) => (scope.block && hasDecorators(scope.block) ? 'enabled' : 'hidden'),
+    callback: (scope) => {
+      const block = scope.block
+      if (!block) return
+      Blockly.dialog.prompt(
+        'Decorator — the @ line above this function. For example: property, micropython.native',
+        '',
+        (value) => {
+          // Cancelled, or nothing typed: `setDecorators` would drop a blank
+          // entry anyway, but not writing at all leaves the undo stack clean.
+          const entry = String(value ?? '').trim()
+          if (entry === '') return
+          setDecorators(block, [...getDecorators(block), entry])
+        }
+      )
     }
   })
 }

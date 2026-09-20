@@ -6,6 +6,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Detected shelf missed packages and `.mpy` modules on the board
+  (#1254).** On a real Arduino Alvik, `arduino_alvik` did not appear even
+  though the board imports it: the shelf's board section lists `.py` FILES in
+  `/` and `/lib`, and an Alvik's library is a `/lib` package — a directory the
+  filter skipped. A `.mpy`, and anything on a `sys.path` entry other than `/`
+  or `/lib`, were invisible the same way. The discovery probe already knew
+  about all of them; nothing rendered the list. Those names are now listed
+  beside the parsed files, with `dir()` on demand, at no extra cost to the
+  board.
+
+- **A probe that never got an answer no longer reads as an empty board
+  (#1254).** "The board listed no built-in modules" was shown both when the
+  board genuinely had none and when the probe failed — the two need opposite
+  words, and the second now says so and points at RESCAN.
+
+### Changed
+
+- **The Detected shelf's three groups are named for where a module lives
+  (#1254):** **Modules on computer**, **Modules on device** and **Modules in
+  firmware** — because where it lives is what decides what you can do with it.
+
 ### Added
 
 - **`RangeFinder` joins the bundled HC-SR04 driver (`hcsr04` 1.1.0).** The
@@ -18,6 +41,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   busy-waiting on the echo pin forever. Installing the HC-SR04 module from the
   Modules manager now covers both styles of script; existing boards will be
   offered the 1.1.0 update.
+- **"What block is this?" (#1245).** A drop zone in the bottom-left corner of
+  the blocks canvas. Drag any block onto it — including one from a program
+  somebody else wrote — and it says what the block is: its shape and what that
+  shape means, the drawer it lives in, whether it came from Snakie's palette, a
+  part, a plugin or an imported module, the Python library it imports, the pin
+  it claims and which way it drives it, what is plugged into each socket, and
+  the Python that one block writes. The block springs straight back to where it
+  was, so asking about a program never edits it, and a block this build has no
+  description for says exactly that instead of guessing. Blocks with a help
+  article offer a **Read more about this** button straight into the in-app help.
 - **Detect the modules baked into a board's firmware (#1246).** Snakie could
   only ever see two kinds of module: the ones in its own catalog, and the `.py`
   files sitting in `/` and `/lib`. A vendor MicroPython image compiles modules
@@ -102,6 +135,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `micropython.viper`) declare it through the import manager like any other
   block, and the method block's old `property` / `staticmethod` /
   `classmethod` dropdown is read as a list of one, so a workspace saved before
+  this opens unchanged.
+
+- **Editing those decorators (#1217, epic #1206).** A `def` or method block's
+  cog now has a **decorators** section under its parameters: one `@ …` entry
+  per line, dragged in, reordered and taken out like any other block, with the
+  MicroPython decorators (`property`, `staticmethod`, `classmethod`,
+  `micropython.native`, `micropython.viper`) offered as suggestions and any
+  other decorator typeable. A right-click **Add decorator…** on the block adds
+  one without opening the cog, and a decorated block wears an `@property`
+  badge — with `+2` after it when there are more — so it says so on the canvas.
+  Blockly's mutator was extended rather than replaced by a popover of our own
+  (epic open question 3); the reasoning is §8 of `docs/blocks-language-epic.md`.
   this opens unchanged. Edited from the block’s **Function settings…** dialog (#1218).
 
   this opens unchanged. No editing UI yet (#1217).
@@ -266,6 +311,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or removed.
 
 ### Fixed
+
+- **A file whose blocks this Snakie hasn't got now opens anyway, as Python
+  blocks (#1252).** Opening a program saved with blocks from a part, plugin or
+  module that isn't present here — `snakie_module_range_finder_new_rangefinder`
+  and friends, whose blocks are read from the module's own `.py` and so come and
+  go with it — met *"These blocks need a newer Snakie"* and a canvas that never
+  mounted. The blocks view now falls back to the file's own Python, which always
+  converts: every line Snakie has a native block for becomes that block, and
+  everything else becomes a plain Python block holding the line. Those blocks are
+  marked as Snakie's reading of the code, so the existing round-trip check gates
+  them before they may write anything, and the file on disk is untouched —
+  install the missing part, or plug the board back in, and re-opening brings the
+  original arrangement straight back. The **Print blocks** export follows the
+  same path instead of refusing the page.
 
 - **Blocks can pick a board's button and LED pins.** The pin dropdowns only
   knew the pins on a board's headers and connectors, so on the Cytron Maker

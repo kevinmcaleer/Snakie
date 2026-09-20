@@ -3,7 +3,7 @@ import { Order } from '../generator'
 import type { MicroPythonGenerator } from '../generator'
 import type { BlockDefinition, BlockGroup } from '../registry'
 import { sanitise } from '../names'
-import { decoratorLines, installDecorators } from './functions'
+import { decoratorLines, installDecoratorCog, installDecorators } from './functions'
 import { DEFAULT_ARGS, argRowMixin, callArgs } from './python'
 import {
   appendExtrasRow,
@@ -1215,6 +1215,12 @@ export function installStructureBlocks(): void {
   // mixin already saves rather than replacing it. After the mixin is
   // registered, necessarily: it wraps what it finds.
   installDecorators([METHOD_BLOCK])
+  // AND THE EDITING HALF (A3, #1217). `installDecoratorMutator` is no use
+  // here: it wraps a `decompose`/`compose` pair Blockly built, and this block
+  // has neither — its parameters are fields with `+`/`−` buttons, not a
+  // mini-workspace. So it gets the decorators-only cog and the `@` badge,
+  // above the parameter row the decorators are written over.
+  installDecoratorCog([METHOD_BLOCK])
   // The property block's tick box (#1222). An EXTENSION rather than a wrapped
   // `init`: the block itself is ordinary JSON, and a validator is the one thing
   // JSON cannot declare. Guarded, because `installCorePalette` runs again for

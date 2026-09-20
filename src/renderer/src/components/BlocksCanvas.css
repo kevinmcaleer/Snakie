@@ -400,3 +400,18 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+
+/*
+ * The one frame between "this file names blocks we don't have" and the caller
+ * handing back the same program re-read from its Python (#1252). Styled like
+ * the split's own loading note so the swap reads as a load, not a failure.
+ */
+.blocks-canvas__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--txt4);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
