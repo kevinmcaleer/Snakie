@@ -17,6 +17,8 @@ browser is rooted at). With no folder open it falls back to
 ```yaml
 name: Line Follower            # optional project name
 board: pico2w                  # the microcontroller (a board id)
+language: de                   # optional: the language the project's blocks are
+                               # shown in (see docs/multilingual-blocks.md)
 boardX: 40                     # canvas placement of the MCU box
 boardY: 30
 parts:

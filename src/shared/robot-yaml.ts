@@ -9,6 +9,7 @@
 import { parse, stringify } from 'yaml'
 import type { RobotConnection, RobotDefinition, RobotNet, RobotPart, RobotWaypoint } from './robot'
 import { sanitiseRobotModel } from './krf'
+import { normaliseLanguage } from './languages'
 
 const NETS: RobotNet[] = ['vcc', 'gnd', 'signal']
 
@@ -93,6 +94,8 @@ export function robotToYaml(def: RobotDefinition): string {
   if (str(def.name)) obj.name = def.name
   if (str(def.description)) obj.description = def.description
   if (str(def.board)) obj.board = def.board
+  const language = normaliseLanguage(def.language)
+  if (language) obj.language = language
   if (typeof def.boardX === 'number') obj.boardX = def.boardX
   if (typeof def.boardY === 'number') obj.boardY = def.boardY
   if (def.boardMountedOn && def.boardMount) {
@@ -145,6 +148,10 @@ export function robotFromYaml(text: string): RobotDefinition {
   if (str(raw.name)) def.name = str(raw.name)
   if (str(raw.description)) def.description = str(raw.description)
   if (str(raw.board)) def.board = str(raw.board)
+  // A language Snakie doesn't list is dropped rather than kept verbatim: the
+  // file would otherwise promise a translation that never appears.
+  const language = normaliseLanguage(str(raw.language))
+  if (language) def.language = language
   const bx = num(raw.boardX)
   const by = num(raw.boardY)
   if (bx !== undefined) def.boardX = bx

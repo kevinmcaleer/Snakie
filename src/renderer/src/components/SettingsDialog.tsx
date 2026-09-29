@@ -16,6 +16,13 @@ import { ChatSettings } from './ChatSettings'
 import { BulbIcon } from './ui-icons'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { clearSuppressedPreviews, hasSuppressedPreviews } from './refactor-bus'
+import { LANGUAGES, languageInfo } from '../../../shared/languages'
+import { hasBlockCatalogue } from '../lib/blocks/i18n'
+import {
+  systemLanguage,
+  urlLanguage,
+  useProjectLanguage
+} from '../lib/blocks/use-blocks-language'
 import './SettingsDialog.css'
 
 /**
@@ -181,6 +188,89 @@ const BLOCK_SHAPE_OPTIONS: { value: BlockShape; label: string; hint: string }[] 
   }
 ]
 
+/** A language's name, with a note when Snakie's own blocks aren't translated yet. */
+function languageLabel(code: string): string {
+  const info = languageInfo(code)
+  const partial = code !== 'en' && !hasBlockCatalogue(code)
+  return partial ? `${info.name} (some blocks in English)` : info.name
+}
+
+/**
+ * The blocks' language (Settings ▸ Appearance): the learner's own choice, and —
+ * with a project open — the project's, which is saved into its robot.yml so it
+ * travels with the project. The project's wins over the learner's, and a web
+ * address's `?lang=` wins over both; the hints say so when that is happening,
+ * so a picker that seems to do nothing is never a mystery.
+ */
+function LanguageSection(): JSX.Element {
+  const { language, setLanguage } = useEditorSettings()
+  const project = useProjectLanguage()
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const fromUrl = urlLanguage()
+  const system = systemLanguage()
+  return (
+    <section className="settings-section">
+      <h3 className="settings-section__title">Language</h3>
+      <p className="settings-section__hint">
+        The language the blocks are shown in &mdash; the words on them, the toolbox and the
+        menus. The Python they make, and everything sent to and from the board, stay in English:
+        that is the language of the code you are learning to write.
+      </p>
+      <label className="settings-field">
+        <span>My language</span>
+        <select
+          className="settings-select"
+          value={language}
+          onChange={(e) => setLanguage(e.target.value)}
+        >
+          <option value="system">
+            Match my computer{system ? ` (${languageInfo(system).name})` : ''}
+          </option>
+          {LANGUAGES.map((l) => (
+            <option key={l.code} value={l.code} lang={l.code}>
+              {languageLabel(l.code)}
+            </option>
+          ))}
+        </select>
+      </label>
+      {project.folder && (
+        <label className="settings-field">
+          <span>This project (robot.yml)</span>
+          <select
+            className="settings-select"
+            value={project.language ?? ''}
+            onChange={(e) => {
+              setSaveError(null)
+              project.setLanguage(e.target.value || null).catch((err: unknown) => {
+                setSaveError(err instanceof Error ? err.message : String(err))
+              })
+            }}
+          >
+            <option value="">Everyone uses their own language</option>
+            {LANGUAGES.map((l) => (
+              <option key={l.code} value={l.code} lang={l.code}>
+                {languageLabel(l.code)}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {saveError && <p className="settings-section__hint">Couldn&rsquo;t save: {saveError}</p>}
+      {fromUrl ? (
+        <p className="settings-section__hint">
+          This page was opened with <code>?lang={fromUrl}</code>, so the blocks are in{' '}
+          {languageInfo(fromUrl).name} for now.
+        </p>
+      ) : project.language ? (
+        <p className="settings-section__hint">
+          This project asks for {languageInfo(project.language).name}, so its blocks are shown in
+          that.
+        </p>
+      ) : null}
+    </section>
+  )
+}
+
 /** The Appearance tab: the app-wide skin + the Board View breadboard background. */
 function AppearanceTab({
   theme,
@@ -265,6 +355,8 @@ function AppearanceTab({
           ))}
         </div>
       </section>
+
+      <LanguageSection />
 
       <section className="settings-section">
         <h3 className="settings-section__title">Advanced blocks</h3>
