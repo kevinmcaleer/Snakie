@@ -53,6 +53,7 @@ import {
 } from './editorBridge'
 import { blockForLine, friendlyError, isRealError, TracebackWatcher } from '../lib/blocks/traceback'
 import { ensureBlocklyLocale } from '../lib/blocks/locale'
+import { useBlocksLanguage } from '../lib/blocks/use-blocks-language'
 import { advancedBlockTypes, unknownBlockTypes } from '../lib/blocks/workspace-check'
 import { AdvancedBlocksToggle } from './AdvancedBlocksToggle'
 import { registerBlocksWorkspace } from '../lib/blocks/workspace-registry'
@@ -444,6 +445,11 @@ export function BlocksCanvas({
   // the document, and every caller of this component would just be forwarding
   // it.
   const { blockShape, blockLevel, setBlockLevel } = useEditorSettings()
+  // The blocks' LANGUAGE is like the shape: Blockly reads its messages as each
+  // block is built, so a change re-injects, and the load effect puts the file
+  // straight back — in the new words, the same program. It only changes once
+  // the new language's messages are loaded, so this re-injects exactly once.
+  const { language: blocksLanguage, rtl } = useBlocksLanguage()
   /**
    * Simple or advanced drawers (#1210) — a REF for the injection, like the
    * dialect below, and a dependency of the rebuild effect, so a flip in
@@ -526,6 +532,8 @@ export function BlocksCanvas({
     const tokens = readThemeTokens(document.documentElement)
     const ws = Blockly.inject(host, {
       ...softShellWorkspaceOptions(tokens, blockShape),
+      // Arabic, Hebrew, Persian, Sorani: the canvas reads right to left.
+      rtl,
       toolbox: buildToolbox(dialectRef.current, blockLevelRef.current),
       theme: Blockly.Theme.defineTheme(
         'snakie-soft-shell',
@@ -748,7 +756,7 @@ export function BlocksCanvas({
       arrangedRef.current = null
       loadedFileRef.current = null
     }
-  }, [peek, blocked, blockShape])
+  }, [peek, blocked, blockShape, blocksLanguage, rtl])
 
   // The pin dropdowns offer THIS board's pins (#1012). Loaded here rather than
   // by the blocks themselves because a Blockly field's option list is produced
@@ -1095,7 +1103,7 @@ export function BlocksCanvas({
     }
     // `workspace` is intentionally not a dependency — see the comment above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fileId, reloadNonce, peek, blocked, derived, blockShape])
+  }, [fileId, reloadNonce, peek, blocked, derived, blockShape, blocksLanguage])
 
   /**
    * MEASURE AGAIN ONCE THE FONT ARRIVES.
@@ -1129,7 +1137,7 @@ export function BlocksCanvas({
     return () => {
       cancelled = true
     }
-  }, [fileId, reloadNonce, peek, blocked, derived, blockShape])
+  }, [fileId, reloadNonce, peek, blocked, derived, blockShape, blocksLanguage])
 
   // Blockly sizes itself from its host and does not observe it, so a panel drag,
   // a workspace switch or a window resize leaves the canvas the wrong size with

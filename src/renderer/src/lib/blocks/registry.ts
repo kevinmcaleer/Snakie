@@ -3,6 +3,7 @@ import type { BlockCategoryId } from './theme'
 import type { PyImport } from './imports'
 import type { DialectScope } from '../../../../shared/dialect-api'
 import type { MicroPythonGenerator } from './generator'
+import { localiseBlockJson } from './i18n'
 
 /**
  * THE BLOCK REGISTRY (#1010, epic #1007).
@@ -500,7 +501,13 @@ export function installBlockDefinitions(): void {
     // Redefining it from an empty object would replace `controls_if` with a
     // block that has no inputs, which is a far worse failure than not trying.
     .filter((def) => def.json && Object.keys(def.json).length > 0)
-    .map((def) => ({ type: def.type, style: `${def.category}_blocks`, ...def.json }))
+    // In the current language (see `i18n/`): the wording only — the type,
+    // the fields' names and their stored values are the same in every one.
+    .map((def) => ({
+      type: def.type,
+      style: `${def.category}_blocks`,
+      ...localiseBlockJson(def.type, def.json as Record<string, unknown>)
+    }))
   if (defs.length > 0) Blockly.defineBlocksWithJsonArray(defs)
 }
 

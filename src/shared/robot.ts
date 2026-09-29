@@ -288,6 +288,10 @@ export interface RobotDefinition {
   description?: string
   /** The microcontroller board id (a built-in or user board, e.g. `pico2w`). */
   board?: string
+  /** The language the project's blocks are shown in, e.g. `de` or `pt-br`
+   *  (see `shared/languages.ts`). Presentation only — the generated Python and
+   *  everything sent to the board stay English. Absent = the viewer's own. */
+  language?: string
   /** Optional canvas position for the microcontroller box. */
   boardX?: number
   boardY?: number

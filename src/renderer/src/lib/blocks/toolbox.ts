@@ -9,6 +9,7 @@ import {
   type BlockLevel
 } from './registry'
 import { BLOCK_CATEGORIES, categoryStyleName } from './theme'
+import { blockText } from './i18n'
 import { SCAN_MODULES_BUTTON } from './module-scan'
 
 /**
@@ -73,13 +74,13 @@ export function buildToolbox(
       c.id === 'functions' || c.id === 'variables'
         ? {
             kind: 'category',
-            name: c.name,
+            name: blockText(`category.${c.id}`, c.name),
             categorystyle: categoryStyleName(c.id),
             custom: c.id === 'functions' ? FUNCTIONS_CATEGORY_CALLBACK : VARIABLES_CATEGORY_CALLBACK
           }
         : {
             kind: 'category',
-            name: c.name,
+            name: blockText(`category.${c.id}`, c.name),
             categorystyle: categoryStyleName(c.id),
             contents: categoryContents(c, dialect, level)
           }
@@ -128,7 +129,7 @@ function markAdvanced(defs: readonly BlockDefinition[]): Record<string, unknown>
   if (advanced.length === 0) return simple.map(blockEntry)
   return [
     ...simple.map(blockEntry),
-    { kind: 'label', text: ADVANCED_MARKER_LABEL, 'web-class': ADVANCED_MARKER_CLASS },
+    { kind: 'label', text: blockText('ui.advanced', ADVANCED_MARKER_LABEL), 'web-class': ADVANCED_MARKER_CLASS },
     ...advanced.map(blockEntry)
   ]
 }
@@ -198,7 +199,8 @@ export function categoryContents(
   for (const [id, group] of groups) {
     contents.push({
       kind: 'category',
-      name: group.name,
+      // A curated sub-drawer's name translates; a part's is its own name.
+      name: blockText(`group.${id}`, group.name),
       // The same style as the parent, so a part's drawer reads as part of `My
       // parts` rather than as a category in its own right.
       categorystyle: categoryStyleName(category.id),
@@ -227,7 +229,7 @@ export function categoryContents(
     const hint = theirs
       ? `These blocks are ${DIALECT_LABEL[theirs]}. Your board is running ${DIALECT_LABEL[dialect]}.`
       : advanced
-        ? ADVANCED_OFF_HINT
+        ? blockText('ui.advancedOff', ADVANCED_OFF_HINT)
         : 'hint' in category && category.hint
           ? category.hint
           : null

@@ -145,6 +145,27 @@
   color: var(--accent);
 }
 
+/* A labelled dropdown (the blocks' language). */
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+.settings-select {
+  align-self: flex-start;
+  min-width: 16rem;
+  max-width: 100%;
+  padding: 0.3rem 0.45rem;
+  font: inherit;
+  color: var(--text);
+  background: var(--card, var(--panel));
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+}
+
 /* Segmented Lines / Dots / Off control. */
 .settings-segment {
   display: inline-flex;

@@ -29,6 +29,7 @@ import { DEFAULT_EDITOR_THEME, editorThemeFor } from './editorThemes'
 import type { DialectPreference } from '../../../shared/dialect-api'
 import { DEFAULT_BLOCK_SHAPE, type BlockShape } from '../lib/blocks/theme'
 import type { BlockLevel } from '../lib/blocks/registry'
+import { DEFAULT_LANGUAGE, type LanguagePreference } from '../../../shared/languages'
 
 export type { BlockShape, BlockLevel }
 
@@ -79,6 +80,13 @@ export interface SettingsStore {
    * the override for reading before anything is plugged in.
    */
   helpDialect: DialectPreference
+  /**
+   * Which language the blocks are shown in: a `shared/languages.ts` code, or
+   * `system` to follow the computer. English by default, so nobody's canvas
+   * changes language under them on upgrade. A project's robot.yml `language:`
+   * and the web app's `?lang=` take precedence (see `resolveLanguage`).
+   */
+  language: LanguagePreference
   setPaper: (paper: EditorPaper) => void
   /** Set the line spacing (clamped to [MIN, MAX]). */
   setLineSpacing: (px: number) => void
@@ -98,6 +106,8 @@ export interface SettingsStore {
   setBlockShape: (shape: BlockShape) => void
   /** Show only the simple blocks, or all of them (#1210). */
   setBlockLevel: (level: BlockLevel) => void
+  /** Pick the blocks' language, or `system` (see {@link language}). */
+  setLanguage: (language: LanguagePreference) => void
 }
 
 const SettingsContext = createContext<SettingsStore | null>(null)
@@ -126,6 +136,9 @@ export function storedBlockShape(): BlockShape {
     return DEFAULT_BLOCK_SHAPE
   }
 }
+
+/** Where the chosen blocks language is persisted. */
+export const LANGUAGE_KEY = 'snakie.language'
 
 /** Where the chosen block level is persisted (#1210). */
 export const BLOCK_LEVEL_KEY = 'snakie.blocks.level'
@@ -221,6 +234,10 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
   // drift.
   const [startLevel] = useState(initialBlockLevel)
   const [blockLevel, setBlockLevel] = useLocalStorage<BlockLevel>(BLOCK_LEVEL_KEY, startLevel)
+  const [language, setLanguage] = useLocalStorage<LanguagePreference>(
+    LANGUAGE_KEY,
+    DEFAULT_LANGUAGE
+  )
 
   // Apply the paper mode + spacing to the document root so the CSS ruled paper
   // and Monaco's line height both follow the same source of truth.
@@ -284,6 +301,7 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
       helpDialect,
       blockShape,
       blockLevel,
+      language,
       setPaper,
       setLineSpacing: (px: number) => setLineSpacingRaw(clampSpacing(px)),
       setEditorTheme,
@@ -293,7 +311,8 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
       setShowTips,
       setHelpDialect,
       setBlockShape,
-      setBlockLevel
+      setBlockLevel,
+      setLanguage
     }),
     [
       paper,
@@ -306,6 +325,7 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
       helpDialect,
       blockShape,
       blockLevel,
+      language,
       setPaper,
       setLineSpacingRaw,
       setEditorTheme,
@@ -315,7 +335,8 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
       setShowTips,
       setHelpDialect,
       setBlockShape,
-      setBlockLevel
+      setBlockLevel,
+      setLanguage
     ]
   )
 
