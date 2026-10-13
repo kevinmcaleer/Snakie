@@ -11,7 +11,12 @@
  */
 import { anthropicProvider } from './anthropic'
 import { geminiProvider } from './gemini'
-import { copilotProvider, grokProvider, openaiProvider } from './openaiCompatible'
+import {
+  copilotProvider,
+  grokProvider,
+  localProvider,
+  openaiProvider
+} from './openaiCompatible'
 import type { Provider, ProviderInfo } from './types'
 
 /** All registered providers, in display order. */
@@ -20,7 +25,8 @@ const PROVIDERS: Provider[] = [
   openaiProvider,
   geminiProvider,
   grokProvider,
-  copilotProvider
+  copilotProvider,
+  localProvider
 ]
 
 const BY_ID = new Map<string, Provider>(PROVIDERS.map((p) => [p.info.id, p]))
