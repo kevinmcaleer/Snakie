@@ -1,0 +1,3790 @@
+{
+  "generated": "2026-10-15",
+  "scope": "src/renderer/src",
+  "health": {
+    "cssFiles": 114,
+    "cssLines": 36209,
+    "codeFiles": 468,
+    "reactComponentFiles": 138,
+    "classNames": 3204,
+    "buttonClassNames": 170
+  },
+  "tokens": {
+    "total": 148,
+    "themed": 67,
+    "lightOnly": [],
+    "darkOnly": [],
+    "identicalColour": [
+      {
+        "name": "--green",
+        "value": "#26a269"
+      },
+      {
+        "name": "--grad-run",
+        "value": "linear-gradient(180deg, #42b877, #2f9e63)"
+      },
+      {
+        "name": "--grad-danger",
+        "value": "linear-gradient(180deg, #e06a54, #cf4a37)"
+      },
+      {
+        "name": "--gold",
+        "value": "#d9a441"
+      },
+      {
+        "name": "--grad-gold",
+        "value": "linear-gradient(180deg, #f0dca6, #e7bf62)"
+      },
+      {
+        "name": "--bptext",
+        "value": "#cfe4f0"
+      },
+      {
+        "name": "--bpsurface",
+        "value": "rgba(12, 20, 28, 0.82)"
+      },
+      {
+        "name": "--bpedge",
+        "value": "rgba(220, 235, 245, 0.16)"
+      },
+      {
+        "name": "--pin-power",
+        "value": "#d4553f"
+      },
+      {
+        "name": "--pin-gpio",
+        "value": "#d9a441"
+      },
+      {
+        "name": "--pin-gnd",
+        "value": "#e8ecef"
+      }
+    ],
+    "sharedColour": [
+      {
+        "name": "--erc-error",
+        "value": "#ff6b5e",
+        "definedIn": [
+          "src/renderer/src/components/ErcPanel.css"
+        ]
+      },
+      {
+        "name": "--erc-error-bg",
+        "value": "rgba(255, 107, 94, 0.16)",
+        "definedIn": [
+          "src/renderer/src/components/ErcPanel.css"
+        ]
+      },
+      {
+        "name": "--erc-warning",
+        "value": "#e6ab30",
+        "definedIn": [
+          "src/renderer/src/components/ErcPanel.css"
+        ]
+      },
+      {
+        "name": "--erc-warning-bg",
+        "value": "rgba(230, 171, 48, 0.16)",
+        "definedIn": [
+          "src/renderer/src/components/ErcPanel.css"
+        ]
+      },
+      {
+        "name": "--erc-info",
+        "value": "#6fb4ee",
+        "definedIn": [
+          "src/renderer/src/components/ErcPanel.css"
+        ]
+      },
+      {
+        "name": "--erc-info-bg",
+        "value": "rgba(111, 180, 238, 0.16)",
+        "definedIn": [
+          "src/renderer/src/components/ErcPanel.css"
+        ]
+      },
+      {
+        "name": "--erc-ok",
+        "value": "#46e06a",
+        "definedIn": [
+          "src/renderer/src/components/ErcPanel.css"
+        ]
+      },
+      {
+        "name": "--block-parts",
+        "value": "#c63923",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ]
+      },
+      {
+        "name": "--block-hardware",
+        "value": "#d99541",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ]
+      },
+      {
+        "name": "--block-wait",
+        "value": "#766d15",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ]
+      },
+      {
+        "name": "--block-control",
+        "value": "#4e7715",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ]
+      },
+      {
+        "name": "--block-lists",
+        "value": "#227d16",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ]
+      },
+      {
+        "name": "--block-dicts",
+        "value": "#a25a0d",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ]
+      },
+      {
+        "name": "--block-turtle",
+        "value": "#167d38",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ]
+      },
+      {
+        "name": "--block-instruments",
+        "value": "#157965",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ]
+      },
+      {
+        "name": "--block-variables",
+        "value": "#1a7595",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ]
+      },
+      {
+        "name": "--block-math",
+        "value": "#2b66da",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ]
+      },
+      {
+        "name": "--block-text",
+        "value": "#6158e1",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ]
+      },
+      {
+        "name": "--block-logic",
+        "value": "#8c45de",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ]
+      },
+      {
+        "name": "--block-modules",
+        "value": "#b223c9",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ]
+      },
+      {
+        "name": "--block-functions",
+        "value": "#c22298",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ]
+      },
+      {
+        "name": "--block-plugins",
+        "value": "#cd2457",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ]
+      },
+      {
+        "name": "--block-python",
+        "value": "#676e60",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ]
+      },
+      {
+        "name": "--ongold",
+        "value": "#4a3209",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ]
+      }
+    ],
+    "componentLocal": 48,
+    "rows": [
+      {
+        "name": "--snakie-block-text",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BlocksCanvas.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--accent",
+        "light": "#b07d1e",
+        "dark": "#d6a23f",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BluetoothInstrument.css",
+          "src/renderer/src/components/ButtonInstrument.css",
+          "src/renderer/src/components/BuzzerInstrument.css",
+          "src/renderer/src/components/DisplayInstrument.css",
+          "src/renderer/src/components/EncoderInstrument.css",
+          "src/renderer/src/components/GamepadInstrument.css",
+          "src/renderer/src/components/I2cDetectInstrument.css",
+          "src/renderer/src/components/ImuInstrument.css",
+          "src/renderer/src/components/LedInstrument.css",
+          "src/renderer/src/components/PsuInstrument.css",
+          "src/renderer/src/components/RangeInstrument.css",
+          "src/renderer/src/components/RobotView.css",
+          "src/renderer/src/components/TurtleInstrument.css",
+          "src/renderer/src/components/WifiScanInstrument.css",
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--accent-border",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BluetoothInstrument.css",
+          "src/renderer/src/components/ButtonInstrument.css",
+          "src/renderer/src/components/BuzzerInstrument.css",
+          "src/renderer/src/components/DisplayInstrument.css",
+          "src/renderer/src/components/EncoderInstrument.css",
+          "src/renderer/src/components/GamepadInstrument.css",
+          "src/renderer/src/components/I2cDetectInstrument.css",
+          "src/renderer/src/components/ImuInstrument.css",
+          "src/renderer/src/components/LedInstrument.css",
+          "src/renderer/src/components/PsuInstrument.css",
+          "src/renderer/src/components/RangeInstrument.css",
+          "src/renderer/src/components/TurtleInstrument.css",
+          "src/renderer/src/components/WifiScanInstrument.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--bf-shell",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--bf-panel",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--bf-sunk",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--bf-card",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--bf-line",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--bf-line-hi",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--bf-ink",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--bf-ink2",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--bf-ink3",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--bf-ink4",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--bf-green",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--bf-green-ink",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--bf-green-pill",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--bf-gold",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--bf-gold-grad",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--bf-gold-ink",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--bf-inset",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--bf-cell-pad",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--bf-tint",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--bf-tint-edge",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--bf-peek-proud",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--bf-peek-off",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--ppv-chrome-bg",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css",
+          "src/renderer/src/components/PartPreview.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--ppv-chrome-ink",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css",
+          "src/renderer/src/components/PartPreview.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--ppv-chrome-line",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css",
+          "src/renderer/src/components/PartPreview.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--ppv-chrome-line-hi",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css",
+          "src/renderer/src/components/PartPreview.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--ppv-chrome-on",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css",
+          "src/renderer/src/components/PartPreview.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--ppv-chrome-on-ink",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css",
+          "src/renderer/src/components/PartPreview.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--ppv-pwr",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css",
+          "src/renderer/src/components/PartPreview.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--ppv-gnd",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/BoardFinder.css",
+          "src/renderer/src/components/PartPreview.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--erc-error",
+        "light": null,
+        "dark": null,
+        "shared": "#ff6b5e",
+        "definedIn": [
+          "src/renderer/src/components/ErcPanel.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--erc-error-bg",
+        "light": null,
+        "dark": null,
+        "shared": "rgba(255, 107, 94, 0.16)",
+        "definedIn": [
+          "src/renderer/src/components/ErcPanel.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--erc-warning",
+        "light": null,
+        "dark": null,
+        "shared": "#e6ab30",
+        "definedIn": [
+          "src/renderer/src/components/ErcPanel.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--erc-warning-bg",
+        "light": null,
+        "dark": null,
+        "shared": "rgba(230, 171, 48, 0.16)",
+        "definedIn": [
+          "src/renderer/src/components/ErcPanel.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--erc-info",
+        "light": null,
+        "dark": null,
+        "shared": "#6fb4ee",
+        "definedIn": [
+          "src/renderer/src/components/ErcPanel.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--erc-info-bg",
+        "light": null,
+        "dark": null,
+        "shared": "rgba(111, 180, 238, 0.16)",
+        "definedIn": [
+          "src/renderer/src/components/ErcPanel.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--erc-ok",
+        "light": null,
+        "dark": null,
+        "shared": "#46e06a",
+        "definedIn": [
+          "src/renderer/src/components/ErcPanel.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--screen-accent",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/GamepadInstrument.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--uhier-ink",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/HierarchyPanel.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--uhier-muted",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/HierarchyPanel.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--uhier-warn",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/HierarchyPanel.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--uhier-surface",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/HierarchyPanel.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--uhier-edge",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/HierarchyPanel.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--glow",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/LedInstrument.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--px",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/LedInstrument.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--pe-row-sel",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/PartEditor.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--pe-row-ink",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/PartEditor.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--ph-accent",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/PlaceholderInstrument.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--ph-border",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/PlaceholderInstrument.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--rack-silk",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/PluginsPanel.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--bg",
+        "light": "#e7e2d3",
+        "dark": "#1a1c20",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/RobotView.css",
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--bg-elevated",
+        "light": "#d8dce2",
+        "dark": "#2a2c30",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/RobotView.css",
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--bg-sunken",
+        "light": "#cdd1d8",
+        "dark": "#202226",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/RobotView.css",
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--border",
+        "light": "#9498a1",
+        "dark": "#3a3d44",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/RobotView.css",
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--accent-ink",
+        "light": "#5c3f0c",
+        "dark": "#d6a23f",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/RobotView.css",
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--accent-2",
+        "light": "#1c7a34",
+        "dark": "#3fae5a",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/RobotView.css",
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--accent-contrast",
+        "light": "#fffdf6",
+        "dark": "#15161a",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/RobotView.css",
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--sprthumb-panel",
+        "light": "#14161d",
+        "dark": null,
+        "shared": "#101216",
+        "definedIn": [
+          "src/renderer/src/components/SpriteDecorations.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--sprthumb-edge",
+        "light": "rgba(60, 45, 18, 0.5)",
+        "dark": null,
+        "shared": "rgba(226, 232, 245, 0.28)",
+        "definedIn": [
+          "src/renderer/src/components/SpriteDecorations.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--sprthumb-shadow",
+        "light": "rgba(92, 63, 12, 0.28)",
+        "dark": null,
+        "shared": "rgba(0, 0, 0, 0.5)",
+        "definedIn": [
+          "src/renderer/src/components/SpriteDecorations.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--sc-fill",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/WiringCanvas.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--sc-line",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/WiringCanvas.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--sc-hi",
+        "light": null,
+        "dark": null,
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/components/WiringCanvas.css"
+        ],
+        "localOnly": true
+      },
+      {
+        "name": "--block-parts",
+        "light": null,
+        "dark": null,
+        "shared": "#c63923",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--block-hardware",
+        "light": null,
+        "dark": null,
+        "shared": "#d99541",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--block-wait",
+        "light": null,
+        "dark": null,
+        "shared": "#766d15",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--block-control",
+        "light": null,
+        "dark": null,
+        "shared": "#4e7715",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--block-lists",
+        "light": null,
+        "dark": null,
+        "shared": "#227d16",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--block-dicts",
+        "light": null,
+        "dark": null,
+        "shared": "#a25a0d",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--block-turtle",
+        "light": null,
+        "dark": null,
+        "shared": "#167d38",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--block-instruments",
+        "light": null,
+        "dark": null,
+        "shared": "#157965",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--block-variables",
+        "light": null,
+        "dark": null,
+        "shared": "#1a7595",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--block-math",
+        "light": null,
+        "dark": null,
+        "shared": "#2b66da",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--block-text",
+        "light": null,
+        "dark": null,
+        "shared": "#6158e1",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--block-logic",
+        "light": null,
+        "dark": null,
+        "shared": "#8c45de",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--block-modules",
+        "light": null,
+        "dark": null,
+        "shared": "#b223c9",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--block-functions",
+        "light": null,
+        "dark": null,
+        "shared": "#c22298",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--block-plugins",
+        "light": null,
+        "dark": null,
+        "shared": "#cd2457",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--block-python",
+        "light": null,
+        "dark": null,
+        "shared": "#676e60",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--ongold",
+        "light": null,
+        "dark": null,
+        "shared": "#4a3209",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--radius",
+        "light": "8px",
+        "dark": "8px",
+        "shared": "8px",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--border-w",
+        "light": null,
+        "dark": "1px",
+        "shared": "1px",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--pixel-shadow",
+        "light": "0 1px 2px rgba(0, 0, 0, 0.22)",
+        "dark": "0 1px 2px rgba(0, 0, 0, 0.5)",
+        "shared": "0 1px 2px rgba(0, 0, 0, 0.22)",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--pixel-shadow-active",
+        "light": "inset 0 2px 4px rgba(0, 0, 0, 0.3)",
+        "dark": "inset 0 2px 4px rgba(0, 0, 0, 0.55)",
+        "shared": "inset 0 2px 4px rgba(0, 0, 0, 0.3)",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--font-mono",
+        "light": null,
+        "dark": "'IBM Plex Mono', 'JetBrains Mono', 'DejaVu Sans Mono', ui-monospace, monospace",
+        "shared": "'IBM Plex Mono', 'JetBrains Mono', 'DejaVu Sans Mono', ui-monospace, monospace",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--font-ui",
+        "light": null,
+        "dark": null,
+        "shared": "'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--font-pixel",
+        "light": null,
+        "dark": "var(--font-mono)",
+        "shared": "var(--font-mono)",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--font-learn",
+        "light": null,
+        "dark": null,
+        "shared": "'Nunito Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--toolbar-h",
+        "light": null,
+        "dark": "60px",
+        "shared": "60px",
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--text",
+        "light": "#34373d",
+        "dark": "#d8dbe0",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--text-muted",
+        "light": "#5c616a",
+        "dark": "#9aa0aa",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--danger",
+        "light": "#c4301f",
+        "dark": "#e3624f",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--success",
+        "light": "#1c7a34",
+        "dark": "#3fae5a",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--warn",
+        "light": "#9a6b1e",
+        "dark": "#d6a23f",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--disconnected",
+        "light": "#9498a1",
+        "dark": "#6c7078",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--handle",
+        "light": "#a9aeb8",
+        "dark": "#3a3d44",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--handle-hover",
+        "light": "#8d9099",
+        "dark": "#4d515a",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--editor-rule-spacing",
+        "light": "30px",
+        "dark": "30px",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--editor-paper-band",
+        "light": "#f6f1e3",
+        "dark": "#1f2128",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--editor-paper-rule",
+        "light": "#e0d4b2",
+        "dark": "#2c2f38",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--editor-paper-dot",
+        "light": "rgba(176, 150, 96, 0.22)",
+        "dark": "rgba(170, 180, 200, 0.14)",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--editor-region-bg",
+        "light": "#e9e3d2",
+        "dark": "#1c1e24",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--editor-margin-rule",
+        "light": "#d98a8a",
+        "dark": "#7a4a4a",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--desk",
+        "light": "#e6dfcf",
+        "dark": "#121410",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--shell",
+        "light": "#efe9dc",
+        "dark": "#1d201a",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--panel",
+        "light": "#f6f1e6",
+        "dark": "#21251f",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--panel2",
+        "light": "#ece5d6",
+        "dark": "#171a14",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--shellbd",
+        "light": "#e0d9c8",
+        "dark": "#31352b",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--stitch",
+        "light": "#cbb488",
+        "dark": "#6f6746",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--card",
+        "light": "#fff",
+        "dark": "#262a21",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--rail",
+        "light": "#e3e6df",
+        "dark": "#2a2e24",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--editor",
+        "light": "#f4eede",
+        "dark": "#191c15",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--gutter",
+        "light": "#ece2cd",
+        "dark": "#15180f",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--line",
+        "light": "#e7dcc4",
+        "dark": "#2a2e22",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--con",
+        "light": "#14160f",
+        "dark": "#0c0e08",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--conbd",
+        "light": "#2a2d24",
+        "dark": "#242a1c",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--head",
+        "light": "#2a2b28",
+        "dark": "#eef1ea",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--txt2",
+        "light": "#5f5c50",
+        "dark": "#9a9d8f",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--txt3",
+        "light": "#7a776a",
+        "dark": "#8b8e80",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--txt4",
+        "light": "#9a9686",
+        "dark": "#73766a",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--txt5",
+        "light": "#a5a08e",
+        "dark": "#73766a",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--green",
+        "light": "#26a269",
+        "dark": "#26a269",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--greentext",
+        "light": "#1c7a4d",
+        "dark": "#8fe6b6",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--greenpill",
+        "light": "linear-gradient(145deg, #eafaf1, #dbf3e6)",
+        "dark": "linear-gradient(145deg, #203f2d, #183324)",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--grad-run",
+        "light": "linear-gradient(180deg, #42b877, #2f9e63)",
+        "dark": "linear-gradient(180deg, #42b877, #2f9e63)",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--grad-danger",
+        "light": "linear-gradient(180deg, #e06a54, #cf4a37)",
+        "dark": "linear-gradient(180deg, #e06a54, #cf4a37)",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--gold",
+        "light": "#d9a441",
+        "dark": "#d9a441",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--goldbg",
+        "light": "#f0dca6",
+        "dark": "#4a3c1c",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--goldink",
+        "light": "#6b4e17",
+        "dark": "#f0dca6",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--grad-gold",
+        "light": "linear-gradient(180deg, #f0dca6, #e7bf62)",
+        "dark": "linear-gradient(180deg, #f0dca6, #e7bf62)",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--blueprint",
+        "light": "#1f4e6b",
+        "dark": "#16324a",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--bpline",
+        "light": "rgba(220, 235, 245, 0.09)",
+        "dark": "rgba(220, 235, 245, 0.07)",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--bptext",
+        "light": "#cfe4f0",
+        "dark": "#cfe4f0",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--bpsurface",
+        "light": "rgba(12, 20, 28, 0.82)",
+        "dark": "rgba(12, 20, 28, 0.82)",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--bpedge",
+        "light": "rgba(220, 235, 245, 0.16)",
+        "dark": "rgba(220, 235, 245, 0.16)",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--pin-power",
+        "light": "#d4553f",
+        "dark": "#d4553f",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--pin-gpio",
+        "light": "#d9a441",
+        "dark": "#d9a441",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--pin-gnd",
+        "light": "#e8ecef",
+        "dark": "#e8ecef",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--kw",
+        "light": "#a23b2e",
+        "dark": "#e08b7d",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--str",
+        "light": "#9c7a2e",
+        "dark": "#d8b96e",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--num",
+        "light": "#2f6f8f",
+        "dark": "#7fc4e0",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--com",
+        "light": "#a39877",
+        "dark": "#6f7a63",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--ident",
+        "light": "#3a362a",
+        "dark": "#cdd4cb",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--glass",
+        "light": "rgba(255, 255, 255, 0.78)",
+        "dark": "rgba(18, 22, 15, 0.74)",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      },
+      {
+        "name": "--pillinset",
+        "light": "rgba(255, 255, 255, 0.6)",
+        "dark": "rgba(255, 255, 255, 0.08)",
+        "shared": null,
+        "definedIn": [
+          "src/renderer/src/index.css"
+        ],
+        "localOnly": false
+      }
+    ]
+  },
+  "themeScopes": [
+    {
+      "file": "src/renderer/src/index.css",
+      "lightRules": 137,
+      "darkRules": 128,
+      "lightOnlyTargets": 9,
+      "darkOnlyTargets": 0,
+      "lightOnlyExamples": [
+        ".btn--ghost.btn--danger",
+        ".btn-seg .btn",
+        ".btn-seg .btn + .btn",
+        ".btn-seg .btn:hover:not(:disabled)",
+        ".btn-seg .btn:active:not(:disabled)",
+        ".btn-seg .btn.is-active"
+      ],
+      "darkOnlyExamples": []
+    },
+    {
+      "file": "src/renderer/src/components/FindReplace.css",
+      "lightRules": 24,
+      "darkRules": 0,
+      "lightOnlyTargets": 24,
+      "darkOnlyTargets": 0,
+      "lightOnlyExamples": [
+        ".find-replace",
+        ".find-replace__titlebar",
+        ".find-replace__grip-dots i",
+        ".find-replace__title",
+        ".find-replace__close",
+        ".find-replace__close:active"
+      ],
+      "darkOnlyExamples": []
+    },
+    {
+      "file": "src/renderer/src/components/ShellPanel.css",
+      "lightRules": 10,
+      "darkRules": 2,
+      "lightOnlyTargets": 7,
+      "darkOnlyTargets": 0,
+      "lightOnlyExamples": [
+        ".region--shell .shell-actions .shell-toggle",
+        ".region--shell .shell-actions .shell-toggle__btn",
+        ".region--shell .shell-actions .shell-toggle__btn--active",
+        ".shell-actions .shell-toggle",
+        ".shell-actions .shell-toggle__btn",
+        ".shell-actions .shell-toggle__btn:hover"
+      ],
+      "darkOnlyExamples": []
+    },
+    {
+      "file": "src/renderer/src/components/PartEditor.css",
+      "lightRules": 11,
+      "darkRules": 0,
+      "lightOnlyTargets": 11,
+      "darkOnlyTargets": 0,
+      "lightOnlyExamples": [
+        ".pe__btn--primary",
+        ".pe__seg-btn.is-active",
+        ".pe__tool.is-active",
+        ".pe__togglebtn.is-active",
+        ".pe__layer.is-active",
+        ".pe__chip.is-active"
+      ],
+      "darkOnlyExamples": []
+    },
+    {
+      "file": "src/renderer/src/components/RobotView.css",
+      "lightRules": 9,
+      "darkRules": 0,
+      "lightOnlyTargets": 9,
+      "darkOnlyTargets": 0,
+      "lightOnlyExamples": [
+        ".robotview__hud",
+        ".robotview__home",
+        ".robotview__minihome",
+        ".robotview__miniglasses",
+        ".robotview__minipose",
+        ".robotview__proj"
+      ],
+      "darkOnlyExamples": []
+    },
+    {
+      "file": "src/renderer/src/components/WiringCanvas.css",
+      "lightRules": 8,
+      "darkRules": 0,
+      "lightOnlyTargets": 8,
+      "darkOnlyTargets": 0,
+      "lightOnlyExamples": [
+        ".wc--schematic .wc__stage",
+        ".wc--schematic .wc__grid",
+        ".wc--schematic",
+        ".wc--schematic .sc__title",
+        ".wc--schematic .sc__sub",
+        ".wc--schematic .sc__pin-label"
+      ],
+      "darkOnlyExamples": []
+    },
+    {
+      "file": "src/renderer/src/components/PartCanvas.css",
+      "lightRules": 5,
+      "darkRules": 0,
+      "lightOnlyTargets": 5,
+      "darkOnlyTargets": 0,
+      "lightOnlyExamples": [
+        ".pcv__zoom-btn.is-active",
+        ".pcv__hint.is-active",
+        ".pcv__hint.is-active .pcv__hint-key",
+        ".pe .pcv__pin-label",
+        ".pe .pcv__pin-var"
+      ],
+      "darkOnlyExamples": []
+    },
+    {
+      "file": "src/renderer/src/components/RobotDockPanel.css",
+      "lightRules": 5,
+      "darkRules": 0,
+      "lightOnlyTargets": 4,
+      "darkOnlyTargets": 0,
+      "lightOnlyExamples": [
+        ".robotdock .robotdock__btn",
+        ".robotdock .robotdock__btn:hover",
+        ".robotdock .robotdock__btn--cta",
+        ".robotdock .robotdock__btn--cta:hover"
+      ],
+      "darkOnlyExamples": []
+    },
+    {
+      "file": "src/renderer/src/components/RobotBuildPanel.css",
+      "lightRules": 2,
+      "darkRules": 0,
+      "lightOnlyTargets": 2,
+      "darkOnlyTargets": 0,
+      "lightOnlyExamples": [
+        ".robotbuild__tab",
+        ".robotbuild__part"
+      ],
+      "darkOnlyExamples": []
+    },
+    {
+      "file": "src/renderer/src/components/RobotPropertiesDialog.css",
+      "lightRules": 1,
+      "darkRules": 0,
+      "lightOnlyTargets": 1,
+      "darkOnlyTargets": 0,
+      "lightOnlyExamples": [
+        ".robotprops"
+      ],
+      "darkOnlyExamples": []
+    },
+    {
+      "file": "src/renderer/src/components/SpriteDecorations.css",
+      "lightRules": 1,
+      "darkRules": 0,
+      "lightOnlyTargets": 0,
+      "darkOnlyTargets": 0,
+      "lightOnlyExamples": [],
+      "darkOnlyExamples": []
+    }
+  ],
+  "rawColours": {
+    "total": 2482,
+    "distinct": 873,
+    "byTheme": {
+      "unscoped": 1922,
+      "light": 337,
+      "dark": 219,
+      "both-scoped": 4
+    },
+    "byProperty": [
+      [
+        "background",
+        893
+      ],
+      [
+        "color",
+        670
+      ],
+      [
+        "box-shadow",
+        392
+      ],
+      [
+        "border",
+        345
+      ],
+      [
+        "fill",
+        78
+      ],
+      [
+        "stroke",
+        55
+      ],
+      [
+        "text-shadow",
+        24
+      ],
+      [
+        "filter",
+        14
+      ],
+      [
+        "outline",
+        7
+      ],
+      [
+        "border-top",
+        2
+      ],
+      [
+        "border-left",
+        1
+      ],
+      [
+        "accent",
+        1
+      ]
+    ],
+    "topValues": [
+      [
+        "#ffffff",
+        128
+      ],
+      [
+        "rgba(0,0,0,0.6)",
+        46
+      ],
+      [
+        "#0c0e10",
+        40
+      ],
+      [
+        "#9aa0a8",
+        37
+      ],
+      [
+        "rgba(0,0,0,0.4)",
+        37
+      ],
+      [
+        "#1c1f22",
+        36
+      ],
+      [
+        "rgba(0,0,0,0.5)",
+        36
+      ],
+      [
+        "#5a5f67",
+        31
+      ],
+      [
+        "#6b7079",
+        25
+      ],
+      [
+        "rgba(0,0,0,0.55)",
+        23
+      ],
+      [
+        "rgba(0,0,0,0.45)",
+        23
+      ],
+      [
+        "#15171a",
+        23
+      ],
+      [
+        "rgba(0,0,0,0.35)",
+        22
+      ],
+      [
+        "#26282b",
+        21
+      ],
+      [
+        "#86ffb6",
+        20
+      ],
+      [
+        "#3a3d44",
+        20
+      ],
+      [
+        "rgba(0,0,0,0.3)",
+        19
+      ],
+      [
+        "#0b7a6b",
+        19
+      ],
+      [
+        "rgba(255,255,255,0.12)",
+        18
+      ],
+      [
+        "#e6ab30",
+        18
+      ],
+      [
+        "rgba(255,255,255,0.08)",
+        17
+      ],
+      [
+        "#cfd3da",
+        17
+      ],
+      [
+        "rgba(255,255,255,0.5)",
+        16
+      ],
+      [
+        "#c0392b",
+        16
+      ],
+      [
+        "rgba(255,255,255,0.18)",
+        16
+      ],
+      [
+        "#aeb4bd",
+        15
+      ],
+      [
+        "#cdd2d8",
+        14
+      ],
+      [
+        "#9a6b1e",
+        14
+      ],
+      [
+        "#1c2621",
+        14
+      ],
+      [
+        "#cfd3d8",
+        13
+      ]
+    ],
+    "topFiles": [
+      [
+        "src/renderer/src/index.css",
+        446
+      ],
+      [
+        "src/renderer/src/components/PluginsPanel.css",
+        134
+      ],
+      [
+        "src/renderer/src/components/WiringCanvas.css",
+        106
+      ],
+      [
+        "src/renderer/src/components/HelpPanel.css",
+        93
+      ],
+      [
+        "src/renderer/src/components/InstrumentWindow.css",
+        91
+      ],
+      [
+        "src/renderer/src/components/BuzzerInstrument.css",
+        88
+      ],
+      [
+        "src/renderer/src/components/PartEditor.css",
+        74
+      ],
+      [
+        "src/renderer/src/components/RangeInstrument.css",
+        69
+      ],
+      [
+        "src/renderer/src/components/DisplayInstrument.css",
+        67
+      ],
+      [
+        "src/renderer/src/components/PartCanvas.css",
+        65
+      ],
+      [
+        "src/renderer/src/components/GamepadInstrument.css",
+        64
+      ],
+      [
+        "src/renderer/src/components/FirmwareFlasher.css",
+        59
+      ],
+      [
+        "src/renderer/src/components/Multimeter.css",
+        59
+      ],
+      [
+        "src/renderer/src/components/PartCatalog.css",
+        50
+      ],
+      [
+        "src/renderer/src/components/FindReplace.css",
+        49
+      ],
+      [
+        "src/renderer/src/components/PartDetailsView.css",
+        46
+      ],
+      [
+        "src/renderer/src/components/I2cDetectInstrument.css",
+        44
+      ],
+      [
+        "src/renderer/src/components/BoardGraph.css",
+        42
+      ],
+      [
+        "src/renderer/src/components/RobotView.css",
+        41
+      ],
+      [
+        "src/renderer/src/components/DataLoggerInstrument.css",
+        40
+      ],
+      [
+        "src/renderer/src/components/ImuInstrument.css",
+        39
+      ],
+      [
+        "src/renderer/src/components/Notice.css",
+        38
+      ],
+      [
+        "src/renderer/src/components/LedInstrument.css",
+        35
+      ],
+      [
+        "src/renderer/src/components/FontInstrument.css",
+        34
+      ],
+      [
+        "src/renderer/src/components/EnvInstrument.css",
+        33
+      ],
+      [
+        "src/renderer/src/components/Oscilloscope.css",
+        32
+      ],
+      [
+        "src/renderer/src/components/ShellPanel.css",
+        32
+      ],
+      [
+        "src/renderer/src/components/MiniBoardView.css",
+        31
+      ],
+      [
+        "src/renderer/src/components/WifiScanInstrument.css",
+        31
+      ],
+      [
+        "src/renderer/src/components/BluetoothInstrument.css",
+        30
+      ]
+    ],
+    "unscopedInkTotal": 1616,
+    "unscopedInkTopFiles": [
+      [
+        "src/renderer/src/components/PluginsPanel.css",
+        96
+      ],
+      [
+        "src/renderer/src/components/WiringCanvas.css",
+        93
+      ],
+      [
+        "src/renderer/src/components/HelpPanel.css",
+        85
+      ],
+      [
+        "src/renderer/src/components/InstrumentWindow.css",
+        79
+      ],
+      [
+        "src/renderer/src/components/BuzzerInstrument.css",
+        77
+      ],
+      [
+        "src/renderer/src/components/DisplayInstrument.css",
+        58
+      ],
+      [
+        "src/renderer/src/components/FirmwareFlasher.css",
+        58
+      ],
+      [
+        "src/renderer/src/components/RangeInstrument.css",
+        52
+      ],
+      [
+        "src/renderer/src/components/GamepadInstrument.css",
+        50
+      ],
+      [
+        "src/renderer/src/components/PartCanvas.css",
+        47
+      ],
+      [
+        "src/renderer/src/components/PartDetailsView.css",
+        46
+      ],
+      [
+        "src/renderer/src/components/PartCatalog.css",
+        42
+      ],
+      [
+        "src/renderer/src/components/Multimeter.css",
+        41
+      ],
+      [
+        "src/renderer/src/components/PartEditor.css",
+        40
+      ],
+      [
+        "src/renderer/src/components/I2cDetectInstrument.css",
+        39
+      ],
+      [
+        "src/renderer/src/components/Notice.css",
+        36
+      ],
+      [
+        "src/renderer/src/components/DataLoggerInstrument.css",
+        34
+      ],
+      [
+        "src/renderer/src/components/ImuInstrument.css",
+        34
+      ],
+      [
+        "src/renderer/src/components/FontInstrument.css",
+        33
+      ],
+      [
+        "src/renderer/src/components/EnvInstrument.css",
+        31
+      ],
+      [
+        "src/renderer/src/components/MiniBoardView.css",
+        31
+      ],
+      [
+        "src/renderer/src/components/LedInstrument.css",
+        29
+      ],
+      [
+        "src/renderer/src/components/BoardGraph.css",
+        26
+      ],
+      [
+        "src/renderer/src/components/RobotView.css",
+        26
+      ],
+      [
+        "src/renderer/src/components/WifiScanInstrument.css",
+        26
+      ],
+      [
+        "src/renderer/src/components/BluetoothInstrument.css",
+        25
+      ],
+      [
+        "src/renderer/src/components/SyncIndicator.css",
+        22
+      ],
+      [
+        "src/renderer/src/components/Oscilloscope.css",
+        20
+      ],
+      [
+        "src/renderer/src/components/DataView.css",
+        17
+      ],
+      [
+        "src/renderer/src/components/PartHelpDrawer.css",
+        17
+      ]
+    ]
+  },
+  "literalFallbacks": {
+    "total": 685,
+    "topTokens": [
+      [
+        "--accent",
+        133
+      ],
+      [
+        "--text",
+        91
+      ],
+      [
+        "--text-muted",
+        88
+      ],
+      [
+        "--border",
+        88
+      ],
+      [
+        "--danger",
+        32
+      ],
+      [
+        "--bg-sunken",
+        28
+      ],
+      [
+        "--shellbd",
+        25
+      ],
+      [
+        "--head",
+        19
+      ],
+      [
+        "--bptext",
+        16
+      ],
+      [
+        "--green",
+        15
+      ],
+      [
+        "--txt3",
+        14
+      ],
+      [
+        "--txt4",
+        14
+      ],
+      [
+        "--bg-elevated",
+        14
+      ],
+      [
+        "--accent-contrast",
+        13
+      ],
+      [
+        "--warn",
+        9
+      ],
+      [
+        "--bg",
+        8
+      ],
+      [
+        "--panel",
+        7
+      ],
+      [
+        "--panel2",
+        7
+      ],
+      [
+        "--txt2",
+        7
+      ],
+      [
+        "--card",
+        6
+      ],
+      [
+        "--gold",
+        6
+      ],
+      [
+        "--accent-border",
+        6
+      ],
+      [
+        "--grad-gold",
+        5
+      ],
+      [
+        "--success",
+        5
+      ],
+      [
+        "--req-accent",
+        4
+      ]
+    ],
+    "topFiles": [
+      [
+        "src/renderer/src/components/BoardGraph.css",
+        88
+      ],
+      [
+        "src/renderer/src/components/RobotPropertiesDialog.css",
+        59
+      ],
+      [
+        "src/renderer/src/components/PartEditor.css",
+        43
+      ],
+      [
+        "src/renderer/src/components/RobotView.css",
+        43
+      ],
+      [
+        "src/renderer/src/components/RobotBuildPanel.css",
+        41
+      ],
+      [
+        "src/renderer/src/components/WiringCanvas.css",
+        36
+      ],
+      [
+        "src/renderer/src/components/DataView.css",
+        33
+      ],
+      [
+        "src/renderer/src/components/RobotControls.css",
+        28
+      ],
+      [
+        "src/renderer/src/components/RobotSequencer.css",
+        26
+      ],
+      [
+        "src/renderer/src/components/ErcPanel.css",
+        23
+      ],
+      [
+        "src/renderer/src/components/ServoInstrument.css",
+        21
+      ],
+      [
+        "src/renderer/src/components/RobotTimeline.css",
+        20
+      ],
+      [
+        "src/renderer/src/components/PartsPanel.css",
+        18
+      ],
+      [
+        "src/renderer/src/components/DataColumnPanel.css",
+        17
+      ],
+      [
+        "src/renderer/src/components/SamInstrument.css",
+        13
+      ],
+      [
+        "src/renderer/src/components/Markdown.css",
+        12
+      ],
+      [
+        "src/renderer/src/components/PartHelpDrawer.css",
+        11
+      ],
+      [
+        "src/renderer/src/components/PoseInstrument.css",
+        11
+      ],
+      [
+        "src/renderer/src/components/PotentiometerInstrument.css",
+        11
+      ],
+      [
+        "src/renderer/src/components/RobotMotionDock.css",
+        10
+      ]
+    ]
+  },
+  "codeColours": {
+    "total": 700,
+    "files": 59,
+    "notThemeAware": 39,
+    "topFiles": [
+      {
+        "file": "src/renderer/src/components/part-body.tsx",
+        "count": 88,
+        "distinct": 54,
+        "themeAware": true
+      },
+      {
+        "file": "src/renderer/src/components/BoardGraph.tsx",
+        "count": 69,
+        "distinct": 38,
+        "themeAware": false
+      },
+      {
+        "file": "src/renderer/src/components/PartCanvas.tsx",
+        "count": 51,
+        "distinct": 18,
+        "themeAware": false
+      },
+      {
+        "file": "src/renderer/src/components/instruments-registry.ts",
+        "count": 48,
+        "distinct": 48,
+        "themeAware": false
+      },
+      {
+        "file": "src/renderer/src/components/Terminal.tsx",
+        "count": 42,
+        "distinct": 36,
+        "themeAware": true
+      },
+      {
+        "file": "src/renderer/src/store/editorThemes.ts",
+        "count": 42,
+        "distinct": 32,
+        "themeAware": false
+      },
+      {
+        "file": "src/renderer/src/lib/blocks/theme.ts",
+        "count": 40,
+        "distinct": 35,
+        "themeAware": true
+      },
+      {
+        "file": "src/renderer/src/components/RobotView.tsx",
+        "count": 31,
+        "distinct": 21,
+        "themeAware": true
+      },
+      {
+        "file": "src/renderer/src/components/help-content.ts",
+        "count": 24,
+        "distinct": 10,
+        "themeAware": false
+      },
+      {
+        "file": "src/renderer/src/components/WiringCanvas.tsx",
+        "count": 22,
+        "distinct": 12,
+        "themeAware": true
+      },
+      {
+        "file": "src/renderer/src/components/robot-bone-mode.ts",
+        "count": 17,
+        "distinct": 14,
+        "themeAware": false
+      },
+      {
+        "file": "src/renderer/src/components/Plotter.tsx",
+        "count": 14,
+        "distinct": 12,
+        "themeAware": true
+      },
+      {
+        "file": "src/renderer/src/lib/blocks/colour-field.ts",
+        "count": 14,
+        "distinct": 14,
+        "themeAware": false
+      },
+      {
+        "file": "src/renderer/src/components/robot-viewcube.ts",
+        "count": 13,
+        "distinct": 12,
+        "themeAware": false
+      },
+      {
+        "file": "src/renderer/src/components/cable.ts",
+        "count": 11,
+        "distinct": 7,
+        "themeAware": false
+      },
+      {
+        "file": "src/renderer/src/lib/pdf/theme.ts",
+        "count": 10,
+        "distinct": 10,
+        "themeAware": true
+      },
+      {
+        "file": "src/renderer/src/components/MiniBoardView.tsx",
+        "count": 9,
+        "distinct": 9,
+        "themeAware": false
+      },
+      {
+        "file": "src/renderer/src/components/monaco-theme.ts",
+        "count": 9,
+        "distinct": 7,
+        "themeAware": true
+      },
+      {
+        "file": "src/renderer/src/components/Oscilloscope.tsx",
+        "count": 8,
+        "distinct": 7,
+        "themeAware": true
+      },
+      {
+        "file": "src/renderer/src/components/parse-pins.ts",
+        "count": 8,
+        "distinct": 8,
+        "themeAware": true
+      },
+      {
+        "file": "src/renderer/src/components/part-editor.util.ts",
+        "count": 8,
+        "distinct": 7,
+        "themeAware": false
+      },
+      {
+        "file": "src/renderer/src/components/PartEditor.tsx",
+        "count": 7,
+        "distinct": 6,
+        "themeAware": false
+      },
+      {
+        "file": "src/renderer/src/components/PartMeshStage.tsx",
+        "count": 7,
+        "distinct": 6,
+        "themeAware": true
+      },
+      {
+        "file": "src/renderer/src/components/RangeInstrument.tsx",
+        "count": 7,
+        "distinct": 5,
+        "themeAware": true
+      },
+      {
+        "file": "src/renderer/src/components/robot-com-overlay.ts",
+        "count": 7,
+        "distinct": 5,
+        "themeAware": false
+      },
+      {
+        "file": "src/renderer/src/components/robot-ik-gizmo.ts",
+        "count": 7,
+        "distinct": 7,
+        "themeAware": false
+      },
+      {
+        "file": "src/renderer/src/components/DataLoggerInstrument.tsx",
+        "count": 6,
+        "distinct": 6,
+        "themeAware": false
+      },
+      {
+        "file": "src/renderer/src/components/HelpPanel.tsx",
+        "count": 6,
+        "distinct": 6,
+        "themeAware": false
+      },
+      {
+        "file": "src/renderer/src/components/PluginsPanel.tsx",
+        "count": 6,
+        "distinct": 6,
+        "themeAware": true
+      },
+      {
+        "file": "src/renderer/src/components/SpriteEditor.tsx",
+        "count": 6,
+        "distinct": 4,
+        "themeAware": true
+      }
+    ]
+  },
+  "typography": {
+    "fontSizes": [
+      [
+        "0.72rem",
+        87,
+        40
+      ],
+      [
+        "11px",
+        84,
+        40
+      ],
+      [
+        "13px",
+        65,
+        36
+      ],
+      [
+        "12px",
+        59,
+        33
+      ],
+      [
+        "0.7rem",
+        56,
+        27
+      ],
+      [
+        "0.8rem",
+        55,
+        28
+      ],
+      [
+        "0.66rem",
+        53,
+        26
+      ],
+      [
+        "9px",
+        52,
+        20
+      ],
+      [
+        "10px",
+        51,
+        26
+      ],
+      [
+        "0.62rem",
+        50,
+        23
+      ],
+      [
+        "0.78rem",
+        49,
+        25
+      ],
+      [
+        "8px",
+        48,
+        20
+      ],
+      [
+        "0.68rem",
+        40,
+        17
+      ],
+      [
+        "0.74rem",
+        39,
+        17
+      ],
+      [
+        "0.6rem",
+        38,
+        18
+      ],
+      [
+        "0.82rem",
+        28,
+        22
+      ],
+      [
+        "0.85rem",
+        23,
+        20
+      ],
+      [
+        "0.75rem",
+        20,
+        13
+      ],
+      [
+        "12.5px",
+        18,
+        11
+      ],
+      [
+        "0.56rem",
+        18,
+        9
+      ],
+      [
+        "0.9rem",
+        18,
+        17
+      ],
+      [
+        "14px",
+        17,
+        12
+      ],
+      [
+        "0.58rem",
+        17,
+        9
+      ],
+      [
+        "0.64rem",
+        17,
+        12
+      ],
+      [
+        "0.76rem",
+        15,
+        12
+      ],
+      [
+        "15px",
+        12,
+        11
+      ],
+      [
+        "10.5px",
+        12,
+        6
+      ],
+      [
+        "8.5px",
+        11,
+        8
+      ],
+      [
+        "1rem",
+        10,
+        7
+      ],
+      [
+        "11.5px",
+        9,
+        8
+      ],
+      [
+        "9.5px",
+        7,
+        5
+      ],
+      [
+        "0.54rem",
+        7,
+        6
+      ],
+      [
+        "16px",
+        6,
+        5
+      ],
+      [
+        "0.95rem",
+        6,
+        6
+      ],
+      [
+        "0.95em",
+        5,
+        5
+      ],
+      [
+        "13.5px",
+        5,
+        5
+      ],
+      [
+        "18px",
+        5,
+        4
+      ],
+      [
+        "7px",
+        5,
+        4
+      ],
+      [
+        "30px",
+        4,
+        4
+      ],
+      [
+        "0.55rem",
+        4,
+        1
+      ]
+    ],
+    "distinctFontSizes": 71,
+    "fontFamilies": [
+      [
+        "inherit",
+        90,
+        36
+      ],
+      [
+        "'JetBrains Mono', ui-monospace, monospace",
+        20,
+        10
+      ],
+      [
+        "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+        18,
+        6
+      ],
+      [
+        "Georgia, 'Times New Roman', serif",
+        9,
+        2
+      ],
+      [
+        "ui-monospace, 'JetBrains Mono', monospace",
+        2,
+        1
+      ],
+      [
+        "'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif",
+        2,
+        2
+      ],
+      [
+        "'Space Grotesk', system-ui, sans-serif",
+        2,
+        1
+      ],
+      [
+        "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+        2,
+        1
+      ],
+      [
+        "Helvetica, Arial, sans-serif",
+        1,
+        1
+      ],
+      [
+        "'Space Grotesk', Helvetica, sans-serif",
+        1,
+        1
+      ]
+    ],
+    "fontWeights": [
+      [
+        "700",
+        297,
+        79
+      ],
+      [
+        "600",
+        154,
+        65
+      ],
+      [
+        "800",
+        22,
+        12
+      ],
+      [
+        "650",
+        7,
+        5
+      ],
+      [
+        "500",
+        5,
+        4
+      ],
+      [
+        "400",
+        4,
+        4
+      ],
+      [
+        "900",
+        3,
+        2
+      ],
+      [
+        "750",
+        1,
+        1
+      ]
+    ]
+  },
+  "spacing": {
+    "distinct": 102,
+    "top": [
+      [
+        "0.5rem",
+        206,
+        55
+      ],
+      [
+        "0.4rem",
+        189,
+        58
+      ],
+      [
+        "0.3rem",
+        152,
+        49
+      ],
+      [
+        "8px",
+        144,
+        42
+      ],
+      [
+        "0.35rem",
+        137,
+        51
+      ],
+      [
+        "0.6rem",
+        125,
+        46
+      ],
+      [
+        "0.2rem",
+        113,
+        40
+      ],
+      [
+        "6px",
+        106,
+        43
+      ],
+      [
+        "10px",
+        100,
+        35
+      ],
+      [
+        "4px",
+        94,
+        38
+      ],
+      [
+        "0.25rem",
+        87,
+        36
+      ],
+      [
+        "2px",
+        76,
+        38
+      ],
+      [
+        "0.15rem",
+        74,
+        31
+      ],
+      [
+        "0.7rem",
+        69,
+        27
+      ],
+      [
+        "0.1rem",
+        68,
+        25
+      ],
+      [
+        "9px",
+        67,
+        26
+      ],
+      [
+        "12px",
+        64,
+        24
+      ],
+      [
+        "0.45rem",
+        63,
+        34
+      ],
+      [
+        "3px",
+        57,
+        30
+      ],
+      [
+        "7px",
+        57,
+        24
+      ],
+      [
+        "5px",
+        54,
+        25
+      ],
+      [
+        "0.55rem",
+        49,
+        31
+      ],
+      [
+        "1px",
+        44,
+        25
+      ],
+      [
+        "0.85rem",
+        40,
+        13
+      ],
+      [
+        "1rem",
+        36,
+        21
+      ],
+      [
+        "11px",
+        27,
+        16
+      ],
+      [
+        "0.28rem",
+        24,
+        18
+      ],
+      [
+        "14px",
+        23,
+        10
+      ],
+      [
+        "16px",
+        23,
+        11
+      ],
+      [
+        "1.1rem",
+        21,
+        15
+      ],
+      [
+        "0.9rem",
+        20,
+        15
+      ],
+      [
+        "0.12rem",
+        20,
+        11
+      ],
+      [
+        "0.22rem",
+        20,
+        15
+      ],
+      [
+        "0.8rem",
+        17,
+        13
+      ],
+      [
+        "0.05rem",
+        17,
+        12
+      ],
+      [
+        "0.75rem",
+        14,
+        9
+      ],
+      [
+        "24px",
+        12,
+        5
+      ],
+      [
+        "18px",
+        11,
+        6
+      ],
+      [
+        "20px",
+        9,
+        6
+      ],
+      [
+        "0.08rem",
+        9,
+        5
+      ]
+    ],
+    "offFourGrid": 22
+  },
+  "radius": {
+    "distinct": 34,
+    "top": [
+      [
+        "4px",
+        85,
+        35
+      ],
+      [
+        "6px",
+        74,
+        38
+      ],
+      [
+        "50%",
+        68,
+        35
+      ],
+      [
+        "5px",
+        60,
+        28
+      ],
+      [
+        "8px",
+        56,
+        36
+      ],
+      [
+        "999px",
+        40,
+        24
+      ],
+      [
+        "3px",
+        31,
+        20
+      ],
+      [
+        "7px",
+        25,
+        17
+      ],
+      [
+        "9px",
+        18,
+        10
+      ],
+      [
+        "10px",
+        17,
+        12
+      ],
+      [
+        "12px",
+        15,
+        10
+      ],
+      [
+        "0",
+        12,
+        4
+      ],
+      [
+        "2px",
+        11,
+        10
+      ],
+      [
+        "1px",
+        6,
+        6
+      ],
+      [
+        "0.35rem",
+        5,
+        2
+      ],
+      [
+        "14px",
+        4,
+        3
+      ],
+      [
+        "21px",
+        4,
+        1
+      ],
+      [
+        "16px",
+        3,
+        3
+      ],
+      [
+        "inherit",
+        2,
+        2
+      ],
+      [
+        "0.4rem",
+        2,
+        1
+      ]
+    ]
+  },
+  "shadow": {
+    "distinct": 200,
+    "top": [
+      [
+        "none",
+        21,
+        11
+      ],
+      [
+        "inset 0 1px 3px rgba(0, 0, 0, 0.6)",
+        19,
+        13
+      ],
+      [
+        "inset 0 2px 4px rgba(0, 0, 0, 0.6)",
+        7,
+        4
+      ],
+      [
+        "inset 0 2px 4px rgba(0, 0, 0, 0.5)",
+        5,
+        4
+      ],
+      [
+        "0 4px 12px rgba(0, 0, 0, 0.35)",
+        5,
+        3
+      ],
+      [
+        "inset 0 1px 0 #fff,\n    0 1px 2px rgba(0, 0, 0, 0.22)",
+        4,
+        2
+      ],
+      [
+        "inset 0 2px 4px rgba(0, 0, 0, 0.3)",
+        4,
+        2
+      ],
+      [
+        "inset 0 2px 5px rgba(0, 0, 0, 0.7)",
+        4,
+        4
+      ],
+      [
+        "inset 0 2px 5px rgba(0, 0, 0, 0.8)",
+        4,
+        1
+      ],
+      [
+        "inset 0 0 0 1px rgba(255, 255, 255, 0.03)",
+        3,
+        3
+      ]
+    ]
+  },
+  "zIndex": {
+    "distinct": 24,
+    "top": [
+      [
+        "1",
+        13,
+        9
+      ],
+      [
+        "2",
+        11,
+        7
+      ],
+      [
+        "5",
+        11,
+        9
+      ],
+      [
+        "1200",
+        10,
+        10
+      ],
+      [
+        "30",
+        7,
+        4
+      ],
+      [
+        "50",
+        6,
+        4
+      ],
+      [
+        "40",
+        5,
+        4
+      ],
+      [
+        "3",
+        4,
+        4
+      ],
+      [
+        "60",
+        4,
+        4
+      ],
+      [
+        "1000",
+        4,
+        4
+      ],
+      [
+        "4",
+        3,
+        2
+      ],
+      [
+        "6",
+        3,
+        3
+      ],
+      [
+        "8",
+        3,
+        2
+      ],
+      [
+        "200",
+        2,
+        2
+      ],
+      [
+        "1100",
+        2,
+        2
+      ],
+      [
+        "7",
+        1,
+        1
+      ],
+      [
+        "9",
+        1,
+        1
+      ],
+      [
+        "10",
+        1,
+        1
+      ],
+      [
+        "14",
+        1,
+        1
+      ],
+      [
+        "16",
+        1,
+        1
+      ],
+      [
+        "20",
+        1,
+        1
+      ],
+      [
+        "300",
+        1,
+        1
+      ],
+      [
+        "1150",
+        1,
+        1
+      ],
+      [
+        "1250",
+        1,
+        1
+      ]
+    ]
+  },
+  "patterns": [
+    {
+      "pattern": "Button",
+      "implementations": 49,
+      "classes": 129,
+      "files": 52
+    },
+    {
+      "pattern": "Panel / section header",
+      "implementations": 49,
+      "classes": 79,
+      "files": 52
+    },
+    {
+      "pattern": "Empty state",
+      "implementations": 44,
+      "classes": 60,
+      "files": 40
+    },
+    {
+      "pattern": "Tooltip / popover / hint",
+      "implementations": 41,
+      "classes": 51,
+      "files": 40
+    },
+    {
+      "pattern": "Input / field",
+      "implementations": 29,
+      "classes": 49,
+      "files": 29
+    },
+    {
+      "pattern": "Badge / chip / pill / tag",
+      "implementations": 25,
+      "classes": 55,
+      "files": 27
+    },
+    {
+      "pattern": "Dialog / modal",
+      "implementations": 24,
+      "classes": 53,
+      "files": 20
+    },
+    {
+      "pattern": "Segmented control / toggle",
+      "implementations": 23,
+      "classes": 44,
+      "files": 23
+    },
+    {
+      "pattern": "Close button",
+      "implementations": 22,
+      "classes": 22,
+      "files": 22
+    },
+    {
+      "pattern": "Slider / knob",
+      "implementations": 19,
+      "classes": 66,
+      "files": 19
+    },
+    {
+      "pattern": "Select / dropdown / picker",
+      "implementations": 16,
+      "classes": 17,
+      "files": 17
+    },
+    {
+      "pattern": "Tabs",
+      "implementations": 15,
+      "classes": 28,
+      "files": 12
+    },
+    {
+      "pattern": "Checkbox / switch",
+      "implementations": 12,
+      "classes": 15,
+      "files": 11
+    },
+    {
+      "pattern": "Icon button",
+      "implementations": 10,
+      "classes": 11,
+      "files": 11
+    },
+    {
+      "pattern": "Collapse chevron / caret",
+      "implementations": 10,
+      "classes": 13,
+      "files": 11
+    },
+    {
+      "pattern": "Notice / banner / toast",
+      "implementations": 9,
+      "classes": 40,
+      "files": 9
+    },
+    {
+      "pattern": "Card",
+      "implementations": 9,
+      "classes": 17,
+      "files": 9
+    },
+    {
+      "pattern": "Tree row",
+      "implementations": 6,
+      "classes": 52,
+      "files": 7
+    }
+  ],
+  "buttonClasses": [
+    "blocks-split__held-button",
+    "blocks-start__button",
+    "blocks-start__button--primary",
+    "blocks-start__button-hint",
+    "blocks-start__button-title",
+    "blocks-starter-card__button",
+    "blocks-viewmode__btn",
+    "boardgraph__help-btn",
+    "boardgraph__help-toast-btn",
+    "boardgraph__picker-btn",
+    "boardgraph__vbtn",
+    "boardgraph__vbtn--export",
+    "boardgraph__vbtn--pct",
+    "btn",
+    "btn--danger",
+    "btn--ghost",
+    "btn--icon",
+    "btn--knob",
+    "btn--lg",
+    "btn--primary",
+    "btn--sm",
+    "btn-seg",
+    "btn-seg--full",
+    "btn__glyph",
+    "btnpanel",
+    "btnpanel__cell",
+    "btnpanel__cell-lbl",
+    "btnpanel__cell-val",
+    "btnpanel__div",
+    "btnpanel__edges",
+    "btnpanel__edges-lbl",
+    "btnpanel__edges-num",
+    "btnpanel__empty",
+    "btnpanel__empty-hint",
+    "btnpanel__empty-icon",
+    "btnpanel__empty-text",
+    "btnpanel__led",
+    "btnpanel__led--on",
+    "btnpanel__list",
+    "btnpanel__name",
+    "btnpanel__readout",
+    "btnpanel__row",
+    "btnpanel__row--on",
+    "btnpanel__screen",
+    "btnpanel__state",
+    "bugpanel__linkbtn",
+    "bugpanel__thumb-btn",
+    "buzzer__btn",
+    "buzzer__btn--export",
+    "buzzer__btn--paste",
+    "buzzer__btn--play",
+    "buzzer__btn--stop",
+    "buzzer__pinwarn-btn",
+    "chat-settings__btn",
+    "chat-settings__btn--primary",
+    "chat__btn",
+    "chat__btn--primary",
+    "dlog__btn",
+    "dlog__btn--rec",
+    "dv__btn",
+    "esync__button",
+    "esync__button--due",
+    "find-replace__btn",
+    "find-replace__btn--gold",
+    "firmware-btn--ghost",
+    "gh-pub__btn",
+    "gh-pub__btn--primary",
+    "git__btn",
+    "git__btn--primary",
+    "git__icon-btn",
+    "git__link-btn",
+    "git__publish-btn",
+    "glyf__btn",
+    "glyf__btn--down",
+    "glyf__btn--icon",
+    "glyf__btn--left",
+    "glyf__btn--primary",
+    "glyf__btn--right",
+    "glyf__btn--up",
+    "gp__btn",
+    "gp__btn--on",
+    "gp__btns",
+    "i2cd__btn",
+    "i2cd__btn--play",
+    "i2cd__pinwarn-btn",
+    "imu__btn",
+    "imu__btn--active",
+    "mini-board__zoom-btn",
+    "miniviewer__seg-btn",
+    "motorpanel__btn",
+    "motorpanel__btn--latch",
+    "panel-collapse-btn",
+    "pcv__align-btn",
+    "pcv__align-btn--danger",
+    "pcv__btn-label",
+    "pcv__ctb-btn",
+    "pcv__ctb-btn--danger",
+    "pcv__ctb-tbtn",
+    "pcv__ctb-tbtns",
+    "pcv__zoom-btn",
+    "pe__btn",
+    "pe__btn--danger",
+    "pe__btn--primary",
+    "pe__iconbtn",
+    "pe__ordbtn",
+    "pe__seg-btn",
+    "pe__tbtn",
+    "pe__tbtns",
+    "pe__togglebtn",
+    "pe__togglebtn-dot",
+    "pkgs__search-btn",
+    "pl__btn",
+    "pl__btn--danger",
+    "pl__btn--has-update",
+    "pl__btn--icon",
+    "pl__btn--primary",
+    "pl__btn--small",
+    "pl__facet-btn",
+    "pl__part-btn",
+    "pl__seg-btn",
+    "posebench__pose-btns",
+    "ppv__flip-btn",
+    "range__btn",
+    "range__btn--play",
+    "range__pinwarn-btn",
+    "robotctl__btn",
+    "robotctl__btn--ok",
+    "robotdock__btn",
+    "robotdock__btn--cta",
+    "robotprops__btn",
+    "robotprops__btn--danger",
+    "robotprops__btn--ok",
+    "robotprops__minibtn",
+    "robotseq__btn",
+    "robottimeline__btn",
+    "robottimeline__btn--del",
+    "robottimeline__btn--export",
+    "robottool__btn",
+    "robottool__btn--add",
+    "robotview__zbtn",
+    "robotview__zbtn--pct",
+    "settings-segment__btn",
+    "shell-toggle__btn",
+    "shell-toggle__btn--active",
+    "shist__btn",
+    "shist__btn--danger",
+    "spred__btn",
+    "spred__btn--close",
+    "spred__btn--danger",
+    "spred__btn--on",
+    "spred__btn--play",
+    "spred__btn--primary",
+    "statusbar__update-btn",
+    "syncind__btn",
+    "syncind__btn--error",
+    "syncind__btn--off",
+    "syncind__btn--on",
+    "syncind__btn--syncing",
+    "tp__demo-btn",
+    "tp__tipbtn",
+    "tp__tipbtn--on",
+    "transfer__btn",
+    "transfer__btn--primary",
+    "upload-controls__btn",
+    "wc__parttb-btn",
+    "wc__parttb-btn--danger",
+    "wc__tree-caret--btn",
+    "wc__zoom-btn",
+    "wc__zoom-pct--btn",
+    "ws-switcher__btn"
+  ]
+}
