@@ -22,4 +22,5 @@ __pycache__/
 
 # Web build (epic #267 — Snakie for Web)
 dist-web/
+dist-embed/
 .mp-node-worker.built.mjs

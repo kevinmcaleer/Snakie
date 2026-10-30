@@ -1,0 +1,32 @@
+/* The box every embedded component draws in (snakie#1277). The bundle's other
+   CSS is scoped under .snakie-embed at build time, with its :root tokens moved
+   onto it, so a host can override any token on its own .snakie-embed rule. */
+.snakie-embed {
+  color: var(--text, #2a2a26);
+  font-family: var(--font-ui, 'Plus Jakarta Sans', system-ui, sans-serif);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.snakie-embed *,
+.snakie-embed *::before,
+.snakie-embed *::after {
+  box-sizing: border-box;
+}
+.snakie-embed--editor,
+.snakie-embed--wiring {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 480px;
+  overflow: hidden;
+  background: var(--editor, #f4efe3);
+}
+.snakie-embed--wiring > * {
+  height: 100%;
+}
+/* In the app the Part Editor is a full-window overlay; embedded, it fills
+   the host's box instead. A host wanting it full screen sizes the box so. */
+.snakie-embed.snakie-embed--editor > .pe {
+  position: absolute;
+  z-index: auto;
+}
