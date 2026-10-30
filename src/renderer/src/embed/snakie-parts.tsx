@@ -132,7 +132,8 @@ export function mountCatalog(el: HTMLElement, opts: CatalogOptions): Mounted {
 // ---------------------------------------------------------------- part editor
 
 export interface PartEditorOptions {
-  /** The part to edit; absent for a new one. Its photo is `imageData` (a URL). */
+  /** The part to edit; absent for a new one. Its photo is `imageData`: a URL,
+   *  or a `data:` URL so the editor's background removal can read the pixels. */
   part?: PartDefinition | null
   /** The library the part is saved into (shown in the editor). */
   libraryId?: string
@@ -156,8 +157,11 @@ export function mountPartEditor(el: HTMLElement, opts: PartEditorOptions): Mount
     parts: opts.part ? [opts.part] : []
   }
   currentLibraries = [own, ...(opts.libraries ?? []).filter((l) => l.id !== libraryId)]
+  const startImage = opts.part?.imageData
   saveHandler = async (_lib, part) => {
-    const image = dataUrlToBlob(part.imageData)
+    // Only a photo the user picked or changed in the editor is new: the one
+    // the host passed in (a URL, or a data URL it inlined) comes back as is.
+    const image = part.imageData !== startImage ? dataUrlToBlob(part.imageData) : null
     const res = await opts.onSave(part, image)
     return res ?? { ok: true, id: part.id, libraryId }
   }

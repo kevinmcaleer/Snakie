@@ -41,7 +41,9 @@ This opens the Part Editor: breadboard and schematic views, pins over a photo, s
 - `part`: the `PartDefinition` to edit. Leave it out for a new part.
 - `libraryId` / `libraryName`: what the "Saved to" picker shows.
 - `libraries`: other libraries, such as the standard one, for footprints and the boards a carrier imprints its pins from.
-- `onSave(part, image)`: receives the cleaned part. `image` is a `Blob` when the user picked a new photo in the editor, and `null` when the photo is unchanged. Resolve to `{ ok: false, error }` to show the error in the editor's status line.
+- `onSave(part, image)`: receives the cleaned part. `image` is a `Blob` when the user picked a new photo or changed it in the editor (background removal, say), and `null` when the photo is the one passed in.
+
+The editor's background removal reads the photo's pixels, which a browser only allows for a same-origin or `data:` image. Pass `imageData` as a `data:` URL for that to work on a photo from another origin. Resolve to `{ ok: false, error }` to show the error in the editor's status line.
 - `onClose()`: the editor's Done button.
 
 Linking a 3-D model happens in the host, not here: `importMesh` copies a file into a part folder, so the editor says it needs the desktop app.
