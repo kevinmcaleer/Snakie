@@ -62,9 +62,12 @@ It returns a handle:
 | Method | |
 | --- | --- |
 | `robot()` / `setRobot(robot)` | Read or replace the wiring. |
+| `setLibraries(libraries)` | Replace the libraries, e.g. with a part the host just added. Call it before `addParts`. |
 | `addParts([{ libraryId, part }])` | Place parts with fresh instance ids. This also fires `onChange`. |
 | `setView(view)` | Switch between life-like and schematic. |
 | `exportSvg()` | A `Promise<string>` of a standalone SVG. Computed colours are written in, and `<image>`s are read into `data:` URLs, so it renders through `<img>`. |
+| `exportPng(scale)` | The same drawing as a PNG `Blob`, at `scale` × its size (default 2). |
+| `warnings()` | Non-blocking pin checks, as `[{ kind, message }]` (`embed/wiring-checks.ts`). `short` means power is joined to ground, `rails` means two of the board's supplies are joined, `gpio` means two board GPIOs share a wire, `unwired` means a placed part's power or ground pin has no wire, and `missing` means a placed part isn't in the libraries. |
 | `bomMarkdown()` / `pinoutMarkdown()` | The Bill of Materials and pinout tables, as Markdown (`shared/robot-docs.ts`). |
 | `unmount()` | |
 

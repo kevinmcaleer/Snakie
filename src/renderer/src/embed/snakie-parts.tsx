@@ -40,8 +40,10 @@ import { partFromYaml, partToYaml } from '../../../shared/part-yaml'
 import { robotFromYaml, robotToYaml } from '../../../shared/robot-yaml'
 import { bomMarkdown as robotBomMarkdown, pinoutMarkdown as robotPinoutMarkdown } from '../../../shared/robot-docs'
 import { dataUrlToBlob, installPartsBackend, type EmbedWriteResult } from './parts-backend'
+import { wiringWarnings, type WiringWarning } from './wiring-checks'
 
 export type { PartsBackend } from './parts-backend'
+export type { WiringWarning } from './wiring-checks'
 export type { PartDefinition, PartLibraryWithParts, RobotDefinition }
 
 /** What every mount returns. */
@@ -204,11 +206,17 @@ export interface WiringHandle extends Mounted {
   robot(): RobotDefinition
   /** Replace the wiring (e.g. after the host's BOM changed). */
   setRobot(robot: RobotDefinition): void
+  /** Replace the libraries (a part the host just added, say). */
+  setLibraries(libraries: PartLibraryWithParts[]): void
   /** Place library parts, each with a fresh instance id. */
   addParts(items: { libraryId: string; part: PartDefinition }[]): void
   setView(view: WiringRenderMode): void
   /** The canvas as a standalone SVG document, its images inlined. */
   exportSvg(): Promise<string>
+  /** The same, drawn to a PNG at `scale` × its size (default 2). */
+  exportPng(scale?: number): Promise<Blob>
+  /** Non-blocking pin checks: shorts, joined supplies, unwired power (wiring-checks.ts). */
+  warnings(): WiringWarning[]
   /** The Bill of Materials and pinout tables, as Markdown. */
   bomMarkdown(): string
   pinoutMarkdown(): string
@@ -217,21 +225,21 @@ export interface WiringHandle extends Mounted {
 interface WiringState {
   robot: RobotDefinition
   view: WiringRenderMode
+  libraries: PartLibraryWithParts[]
 }
 
 function WiringHost({
   initial,
-  libraries,
   onChange,
   bind
 }: {
   initial: WiringState
-  libraries: PartLibraryWithParts[]
   onChange: (r: RobotDefinition) => void
   bind: (set: (fn: (s: WiringState) => WiringState) => void) => void
 }): JSX.Element {
   const [state, setState] = useState(initial)
   useEffect(() => bind(setState), [bind])
+  const libraries = state.libraries
   const boards = useMemo(() => resolveBoards(libraries, []), [libraries])
   const def = boards.find((b) => b.id === state.robot.board) ?? boards[0] ?? BUILTIN_BOARDS[0]
   const boardPart = useMemo(() => boardPartFor(libraries, def.id), [libraries, def.id])
@@ -320,10 +328,32 @@ export async function svgDocument(svg: SVGSVGElement): Promise<string> {
   return '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(copy)
 }
 
+/** Draw an SVG document onto a canvas and read it back as a PNG. */
+export async function svgToPng(svgText: string, scale = 2): Promise<Blob> {
+  const url = URL.createObjectURL(new Blob([svgText], { type: 'image/svg+xml' }))
+  try {
+    const img = new Image()
+    await new Promise<void>((ok, fail) => {
+      img.onload = () => ok()
+      img.onerror = () => fail(new Error('The drawing could not be rendered'))
+      img.src = url
+    })
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale))
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale))
+    canvas.getContext('2d')?.drawImage(img, 0, 0, canvas.width, canvas.height)
+    return await new Promise<Blob>((ok, fail) =>
+      canvas.toBlob((b) => (b ? ok(b) : fail(new Error('The drawing could not be rendered'))), 'image/png')
+    )
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
 /** Open the wiring canvas in `el`. */
 export function mountWiring(el: HTMLElement, opts: WiringOptions): WiringHandle {
   currentLibraries = opts.libraries
-  let state: WiringState = { robot: opts.robot, view: opts.view ?? 'lifelike' }
+  let state: WiringState = { robot: opts.robot, view: opts.view ?? 'lifelike', libraries: opts.libraries }
   let set: ((fn: (s: WiringState) => WiringState) => void) | null = null
   const update = (fn: (s: WiringState) => WiringState): void => {
     state = fn(state)
@@ -334,13 +364,18 @@ export function mountWiring(el: HTMLElement, opts: WiringOptions): WiringHandle 
     opts.onChange(next)
   }
   const { root, box } = rootFor(el, opts.theme, 'snakie-embed--wiring')
-  const resolve = (lib: string, id: string): PartDefinition | null => findPart(opts.libraries, lib, id)
-  const mcu = (): PartDefinition | null => boardPartFor(opts.libraries, state.robot.board ?? '')
+  const resolve = (lib: string, id: string): PartDefinition | null => findPart(state.libraries, lib, id)
+  const mcu = (): PartDefinition | null => boardPartFor(state.libraries, state.robot.board ?? '')
+  const exportSvg = (): Promise<string> => {
+    // The canvas's own drawing, not the toolbar icons around it.
+    const area = (e: Element): number => e.getBoundingClientRect().width * e.getBoundingClientRect().height
+    const svg = ([...box.querySelectorAll('svg')] as SVGSVGElement[]).sort((a, b) => area(b) - area(a))[0]
+    return svg ? svgDocument(svg) : Promise.resolve('')
+  }
   root.render(
     <StrictMode>
       <WiringHost
         initial={state}
-        libraries={opts.libraries}
         onChange={onChange}
         bind={(s) => {
           set = s
@@ -354,21 +389,19 @@ export function mountWiring(el: HTMLElement, opts: WiringOptions): WiringHandle 
     ...handle(root, box),
     robot: () => state.robot,
     setRobot: (robot) => update((s) => ({ ...s, robot })),
+    setLibraries: (libraries) => {
+      currentLibraries = libraries
+      update((s) => ({ ...s, libraries }))
+    },
     addParts: (items) => {
       const { next } = planPartAdditions(state.robot, items, false)
       update((s) => ({ ...s, robot: next }))
       opts.onChange(next)
     },
     setView: (view) => update((s) => ({ ...s, view })),
-    exportSvg: () => {
-      // The canvas's own drawing, not the toolbar icons around it.
-      const svgs = [...box.querySelectorAll('svg')] as SVGSVGElement[]
-      const svg = svgs.sort(
-        (a, b) => b.getBoundingClientRect().width * b.getBoundingClientRect().height -
-          a.getBoundingClientRect().width * a.getBoundingClientRect().height
-      )[0]
-      return svg ? svgDocument(svg) : Promise.resolve('')
-    },
+    exportSvg,
+    exportPng: async (scale = 2) => svgToPng(await exportSvg(), scale),
+    warnings: () => wiringWarnings(state.robot, state.libraries, mcu()),
     bomMarkdown: () => robotBomMarkdown(state.robot, resolve, { mcu: mcu() }),
     pinoutMarkdown: () => robotPinoutMarkdown(state.robot, resolve, { mcuName: mcu()?.name })
   }
