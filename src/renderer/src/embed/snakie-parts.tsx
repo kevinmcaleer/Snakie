@@ -296,12 +296,23 @@ export async function svgDocument(svg: SVGSVGElement): Promise<string> {
   const src = svg.querySelectorAll('*')
   const dst = copy.querySelectorAll('*')
   const props = ['fill', 'stroke', 'stroke-width', 'opacity', 'font-family', 'font-size', 'font-weight']
+  const hidden: Element[] = []
   src.forEach((node, i) => {
-    const cs = getComputedStyle(node as Element)
     const out = dst[i] as SVGElement
+    // Definitions (filters, patterns, gradients) are drawn by what uses
+    // them; painting their children would change what they make.
+    if ((node as Element).closest('defs')) return
+    const cs = getComputedStyle(node as Element)
+    // What the skin's CSS hides (the paper texture on a dark mat, say) must
+    // stay hidden once that CSS is gone.
+    if (cs.display === 'none' || cs.visibility === 'hidden') {
+      hidden.push(out)
+      return
+    }
     const style = props.map((p) => `${p}:${cs.getPropertyValue(p)}`).join(';')
     out.setAttribute('style', `${style};${out.getAttribute('style') ?? ''}`)
   })
+  hidden.forEach((el) => el.remove())
   copy.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
   copy.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
   // A standalone file needs a real size: the canvas's own is "100%" of its box.
