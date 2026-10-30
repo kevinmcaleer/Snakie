@@ -9,6 +9,7 @@
  *  - {@link mountCatalog}     the full-screen parts catalog (PartCatalog)
  *  - {@link mountPartEditor}  the Part Editor (pins over a photo, symbol, shapes)
  *  - {@link mountWiring}      the wiring canvas, with BOM / pinout Markdown
+ *  - {@link mountPartView}    a read-only part: pins over its photo, and its symbol
  *
  * plus the `parts.yml` and `robot.yml` helpers. The host passes libraries and
  * callbacks; the components reach the libraries through `window.api.parts`,
@@ -28,6 +29,7 @@ import '../index.css'
 import './embed.css'
 import { PartCatalog, type CatalogItem } from '../components/PartCatalog'
 import { PartEditor } from '../components/PartEditor'
+import { PartPreview } from '../components/PartPreview'
 import { WiringCanvas, type WiringRenderMode } from '../components/WiringCanvas'
 import { boardPartFor, resolveBoards } from '../components/part-editor.util'
 import { BUILTIN_BOARDS } from '../components/board-defs'
@@ -366,6 +368,29 @@ export function mountWiring(el: HTMLElement, opts: WiringOptions): WiringHandle 
     bomMarkdown: () => robotBomMarkdown(state.robot, resolve, { mcu: mcu() }),
     pinoutMarkdown: () => robotPinoutMarkdown(state.robot, resolve, { mcuName: mcu()?.name })
   }
+}
+
+// ---------------------------------------------------------------- part view
+
+export interface PartViewOptions {
+  /** The part to show. Its photo is `imageData` (a URL). */
+  part: PartDefinition
+  /** Name each pin under the board as the pointer moves over it. Default true. */
+  pinout?: boolean
+  theme?: EmbedTheme
+}
+
+/** Show a part read-only in `el`: the board with its pins, and its schematic
+ *  symbol, on Snakie's preview tabs (PartPreview). No 3-D tab: a mesh resolves
+ *  only from a desktop parts folder, and the host has its own model viewer. */
+export function mountPartView(el: HTMLElement, opts: PartViewOptions): Mounted {
+  const { root, box } = rootFor(el, opts.theme, 'snakie-embed--view')
+  root.render(
+    <StrictMode>
+      <PartPreview part={opts.part} libraryId="host" pinout={opts.pinout ?? true} />
+    </StrictMode>
+  )
+  return handle(root, box)
 }
 
 // ---------------------------------------------------------------- formats

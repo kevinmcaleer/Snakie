@@ -5,7 +5,7 @@
 | File | What |
 | --- | --- |
 | `snakie-parts.js` | One IIFE that sets `window.SnakieParts`. React is bundled. Blockly, Monaco and MicroPython are not. About 1.4 MB, or 420 KB gzipped. |
-| `snakie-parts.css` | Every stylesheet the three components use, scoped under `.snakie-embed`. About 210 KB, or 34 KB gzipped. |
+| `snakie-parts.css` | Every stylesheet the components use, scoped under `.snakie-embed`. About 210 KB, or 34 KB gzipped. |
 | `assets/dc-solver.worker-*.js` | The circuit solver's worker. Serve it beside the script. |
 
 kevsrobots.com is the first host (kevinmcaleer/kevsrobots.com#254). Copy the whole folder to one place on the host's site.
@@ -65,6 +65,15 @@ It returns a handle:
 | `exportSvg()` | A `Promise<string>` of a standalone SVG. Computed colours are written in, and `<image>`s are read into `data:` URLs, so it renders through `<img>`. |
 | `bomMarkdown()` / `pinoutMarkdown()` | The Bill of Materials and pinout tables, as Markdown (`shared/robot-docs.ts`). |
 | `unmount()` | |
+
+## `mountPartView(el, opts)`
+
+This shows a part read-only, on the catalog preview's tabs: the board with its pins over the photo, and its schematic symbol.
+
+- `part`: the `PartDefinition` to show. Its `imageData` is the photo URL.
+- `pinout`: name each pin under the board as the pointer moves over it. It defaults to `true`.
+
+There is no 3-D tab, because a mesh only resolves from a desktop parts folder. It returns `{ unmount() }`.
 
 ## Formats
 
