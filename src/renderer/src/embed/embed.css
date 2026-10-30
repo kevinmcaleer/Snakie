@@ -24,3 +24,9 @@
 .snakie-embed--wiring > * {
   height: 100%;
 }
+/* In the app the Part Editor is a full-window overlay; embedded, it fills
+   the host's box instead. A host wanting it full screen sizes the box so. */
+.snakie-embed.snakie-embed--editor > .pe {
+  position: absolute;
+  z-index: auto;
+}
