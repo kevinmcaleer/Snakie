@@ -1,0 +1,95 @@
+# Open Duck Mini v2 part, built with the build-part-from-image skill.
+id: power-switch
+name: DPDT Slide Switch (power)
+description: Small 6-pin double-pole double-throw slide switch, used as the Open Duck Mini's main power
+  switch. Each pole has a middle common pin that connects to one end pin or the other.
+manufacturer: Generic
+family: Input
+tags:
+- switch
+- slide
+- dpdt
+- power
+- input
+package: THT
+voltage: 50V DC max
+partNumber: SS22F (2P2T)
+properties:
+  poles: 2 (DPDT)
+  rating: 0.5 A @ 50 V DC
+  body: 15.6 × 7.6 × 7 mm
+  actuator: 6 mm
+version: 0.1.0
+pcbColor: '#222222'
+aspect: 1.219
+dimensions:
+  width: 26
+  height: 21.3
+shape:
+  kind: rect
+  cornerRadius: 0
+headers:
+- edge: bottom
+  pins:
+  - name: A1
+    type: other
+    number: 1
+    shape: header
+    rotation: 90
+    x: 0.313
+    y: 0.825
+  - name: COM A
+    type: other
+    number: 2
+    shape: header
+    rotation: 90
+    x: 0.456
+    y: 0.88
+  - name: A2
+    type: other
+    number: 3
+    shape: header
+    rotation: 90
+    x: 0.605
+    y: 0.952
+  - name: B1
+    type: other
+    number: 4
+    shape: header
+    rotation: 90
+    x: 0.37
+    y: 0.77
+  - name: COM B
+    type: other
+    number: 5
+    shape: header
+    rotation: 90
+    x: 0.515
+    y: 0.825
+  - name: B2
+    type: other
+    number: 6
+    shape: header
+    rotation: 90
+    x: 0.665
+    y: 0.895
+image: image.png
+imageLayer:
+  x: 0
+  y: 0
+  w: 1
+  h: 1
+  opacity: 1
+mass_g: 2
+electrical:
+  model: switch
+  maxCurrentA: 0.5
+  terminals:
+    positive: COM A
+    negative: A1
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true

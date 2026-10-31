@@ -1,0 +1,69 @@
+# Open Duck Mini v2 part, built with the build-part-from-image skill.
+id: battery-holder-18650-2s
+name: 2× 18650 Battery Holder (2S)
+description: Holder for two 18650 cells wired in series, giving 7.4 V nominal (8.4 V full) on red (+)
+  and black (-) leads.
+manufacturer: Generic
+family: Power
+tags:
+- battery
+- holder
+- '18650'
+- 2s
+- power
+package: THT
+voltage: 7.4V (2S)
+properties:
+  cells: 2× 18650 (not included)
+  wiring: series
+  leads: red +, black -
+version: 0.1.0
+pcbColor: '#111111'
+aspect: 0.476
+dimensions:
+  width: 40
+  height: 84
+shape:
+  kind: rect
+  cornerRadius: 0
+headers:
+- edge: top
+  pins:
+  - name: V+
+    type: pwr
+    group: leads
+    shape: header
+    rotation: 270
+    x: 0.45
+    y: 0.02
+  - name: V-
+    type: gnd
+    group: leads
+    shape: header
+    rotation: 270
+    x: 0.56
+    y: 0.02
+mountingHoles:
+- x: 0.26
+  y: 0.53
+  diameter: 1.5
+- x: 0.74
+  y: 0.53
+  diameter: 1.5
+image: image.png
+imageLayer:
+  x: 0
+  y: 0
+  w: 1
+  h: 1
+  opacity: 1
+mass_g: 22
+groups:
+- id: leads
+  name: Battery leads
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true

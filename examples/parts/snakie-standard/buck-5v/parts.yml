@@ -1,0 +1,89 @@
+# Open Duck Mini v2 part, built with the build-part-from-image skill.
+id: buck-5v
+name: Mini560 5V Buck Converter
+description: 'Step-down regulator module: 7-20 V in, fixed 5 V out, up to 3 A continuous (5 A peak). Powers
+  the Raspberry Pi from the 2S battery.'
+manufacturer: Generic
+family: Power
+tags:
+- regulator
+- buck
+- 5v
+- power
+- dc-dc
+package: THT
+pinSpacing: 2.54
+voltage: IN 7-20V, OUT 5V
+partNumber: Mini560
+properties:
+  input: 7-20 V
+  output: 5 V fixed
+  current: 3 A continuous, 5 A peak
+  efficiency: up to 95%
+  EN pad: high/open = on, low = off
+version: 0.1.0
+pcbColor: '#1a5fb4'
+aspect: 1.85
+dimensions:
+  width: 30
+  height: 16.2
+shape:
+  kind: rect
+  cornerRadius: 0
+headers:
+- edge: left
+  pins:
+  - name: OUT-
+    type: gnd
+    number: 1
+    shape: header
+    rotation: 180
+    x: 0.068
+    y: 0.148
+  - name: OUT+
+    type: pwr
+    number: 2
+    shape: header
+    rotation: 180
+    x: 0.068
+    y: 0.78
+- edge: right
+  pins:
+  - name: IN-
+    type: gnd
+    number: 3
+    shape: header
+    rotation: 0
+    x: 0.918
+    y: 0.148
+  - name: IN+
+    type: pwr
+    number: 4
+    shape: header
+    rotation: 0
+    x: 0.918
+    y: 0.78
+image: image.png
+imageLayer:
+  x: 0
+  y: 0
+  w: 1
+  h: 1
+  opacity: 1
+mass_g: 2
+electrical:
+  model: regulator
+  inputRail: IN+
+  outputRail: OUT+
+  outputV: 5
+  dropoutV: 2
+  maxCurrentA: 3
+  operatingV:
+  - 7
+  - 20
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true

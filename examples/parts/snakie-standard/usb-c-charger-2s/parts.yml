@@ -1,0 +1,93 @@
+# Open Duck Mini v2 part, built with the build-part-from-image skill.
+id: usb-c-charger-2s
+name: USB-C 2S Li-ion Charger (8.4 V)
+description: 'Boost charger module (MRB045): 5 V USB-C or VIN in, charges a 2-cell lithium pack to 8.4
+  V at up to 2 A. Red CR LED while charging, OK LED when full. Wire BAT/GND to the pack side of the BMS
+  (P+/P-).'
+manufacturer: Adeept
+family: Power
+tags:
+- charger
+- usb-c
+- 2s
+- li-ion
+- power
+package: SMD
+voltage: IN 5V, OUT 8.4V
+partNumber: MRB045
+properties:
+  input: USB-C or VIN pad, 5 V (3-6 V)
+  output: 8.4 V CC/CV
+  charge current: 2 A (rear jumper 1A/2A/4A)
+  cells: 2S (rear jumper 2S/3S/4S)
+  size: 37 × 17 mm
+version: 0.1.0
+pcbColor: '#111111'
+aspect: 2.13
+dimensions:
+  width: 37
+  height: 17.4
+shape:
+  kind: rect
+  cornerRadius: 0
+headers:
+- edge: left
+  pins:
+  - name: BAT
+    type: pwr
+    number: 1
+    shape: round
+    rotation: 180
+    x: 0.049
+    y: 0.083
+  - name: BAT
+    type: pwr
+    number: 2
+    shape: square
+    rotation: 180
+    x: 0.049
+    y: 0.4
+  - name: GND
+    type: gnd
+    number: 3
+    shape: square
+    rotation: 180
+    x: 0.049
+    y: 0.6
+  - name: GND
+    type: gnd
+    number: 4
+    shape: round
+    rotation: 180
+    x: 0.049
+    y: 0.896
+- edge: right
+  pins:
+  - name: GND
+    type: gnd
+    number: 5
+    shape: square
+    rotation: 0
+    x: 0.923
+    y: 0.083
+  - name: VIN
+    type: pwr
+    number: 6
+    shape: square
+    rotation: 0
+    x: 0.923
+    y: 0.917
+image: image.png
+imageLayer:
+  x: 0
+  y: 0
+  w: 1
+  h: 1
+  opacity: 1
+mass_g: 3
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true
