@@ -1,89 +1,275 @@
-# Open Duck Mini v2 part, built with the build-part-from-image skill.
+# Open Duck Mini v2 part: HENGE 8A UBEC, drawn with shapes from a photo.
 id: buck-5v
-name: Mini560 5V Buck Converter
-description: 'Step-down regulator module: 7-20 V in, fixed 5 V out, up to 3 A continuous (5 A peak). Powers
-  the Raspberry Pi from the 2S battery.'
-manufacturer: Generic
+name: HENGE 8A UBEC (5 V)
+description: Switching UBEC on flying leads, the 5 V regulator in the Open Duck Mini BOM. 7-25.5 V in (2-6S LiPo),
+  5 V or 6 V out by jumper, 8 A continuous (12 A peak). Powers the Raspberry Pi from the 2S battery. Red leads are
+  +, black are -.
+manufacturer: HENGE
 family: Power
 tags:
 - regulator
 - buck
+- ubec
 - 5v
 - power
 - dc-dc
-package: THT
-pinSpacing: 2.54
-voltage: IN 7-20V, OUT 5V
-partNumber: Mini560
+package: Module
+voltage: IN 7-25.5V, OUT 5V/6V
+partNumber: UBEC 8A
 properties:
-  input: 7-20 V
-  output: 5 V fixed
-  current: 3 A continuous, 5 A peak
-  efficiency: up to 95%
-  EN pad: high/open = on, low = off
-version: 0.1.0
-pcbColor: '#1a5fb4'
-aspect: 1.85
+  input: 7-25.5 V (2-6S LiPo)
+  output: 5 V or 6 V, set by the jumper (7.4 V position also printed)
+  current: 8 A continuous, 12 A peak (<15 s)
+  EN header: enable/disable input on the output side
+  size: 39 × 21 × 6 mm (body)
+  buy: Amazon.fr B07DD9L6P6
+version: 0.1.1
+pcbColor: '#1f2a44'
+aspect: 2.429
 dimensions:
-  width: 30
-  height: 16.2
+  width: 51
+  height: 21
 shape:
   kind: rect
   cornerRadius: 0
 headers:
 - edge: left
   pins:
-  - name: OUT-
-    type: gnd
+  - name: IN+
+    type: pwr
     number: 1
     shape: header
     rotation: 180
-    x: 0.068
-    y: 0.148
-  - name: OUT+
-    type: pwr
+    x: 0.02
+    y: 0.29
+  - name: IN-
+    type: gnd
     number: 2
     shape: header
     rotation: 180
-    x: 0.068
-    y: 0.78
+    x: 0.02
+    y: 0.45
 - edge: right
   pins:
-  - name: IN-
-    type: gnd
+  - name: OUT+
+    type: pwr
     number: 3
     shape: header
     rotation: 0
-    x: 0.918
-    y: 0.148
-  - name: IN+
-    type: pwr
+    x: 0.98
+    y: 0.29
+  - name: OUT-
+    type: gnd
     number: 4
     shape: header
     rotation: 0
-    x: 0.918
-    y: 0.78
-image: image.png
-imageLayer:
-  x: 0
-  y: 0
-  w: 1
-  h: 1
-  opacity: 1
-mass_g: 2
+    x: 0.98
+    y: 0.45
+shapes:
+- kind: rect
+  x: 0.0
+  y: 0.24
+  z: 0
+  fill: '#d42a2a'
+  stroke: '#7a1010'
+  strokeWidth: 1
+  w: 0.14
+  h: 0.1
+  cornerRadius: 0.4
+- kind: rect
+  x: 0.86
+  y: 0.24
+  z: 1
+  fill: '#d42a2a'
+  stroke: '#7a1010'
+  strokeWidth: 1
+  w: 0.14
+  h: 0.1
+  cornerRadius: 0.4
+- kind: rect
+  x: 0.0
+  y: 0.4
+  z: 2
+  fill: '#222222'
+  stroke: '#000000'
+  strokeWidth: 1
+  w: 0.14
+  h: 0.1
+  cornerRadius: 0.4
+- kind: rect
+  x: 0.86
+  y: 0.4
+  z: 3
+  fill: '#222222'
+  stroke: '#000000'
+  strokeWidth: 1
+  w: 0.14
+  h: 0.1
+  cornerRadius: 0.4
+- kind: rect
+  x: 0.118
+  y: 0.04
+  z: 4
+  fill: '#1f2a44'
+  stroke: '#0d1424'
+  strokeWidth: 1
+  w: 0.764
+  h: 0.92
+  cornerRadius: 0.06
+- kind: rect
+  x: 0.3
+  y: 0.16
+  z: 5
+  fill: '#2b3a5e'
+  stroke: '#3d4f7a'
+  strokeWidth: 1
+  w: 0.4
+  h: 0.62
+  cornerRadius: 0.05
+- kind: rect
+  x: 0.155
+  y: 0.72
+  z: 6
+  fill: '#111111'
+  stroke: '#555555'
+  strokeWidth: 1
+  w: 0.03
+  h: 0.12
+- kind: rect
+  x: 0.2
+  y: 0.72
+  z: 7
+  fill: '#111111'
+  stroke: '#555555'
+  strokeWidth: 1
+  w: 0.03
+  h: 0.12
+- kind: rect
+  x: 0.245
+  y: 0.72
+  z: 8
+  fill: '#111111'
+  stroke: '#555555'
+  strokeWidth: 1
+  w: 0.03
+  h: 0.12
+- kind: rect
+  x: 0.15
+  y: 0.7
+  z: 9
+  fill: '#2a6fdb'
+  stroke: '#16418a'
+  strokeWidth: 1
+  w: 0.08
+  h: 0.16
+  cornerRadius: 0.15
+- kind: rect
+  x: 0.72
+  y: 0.1
+  z: 10
+  fill: '#111111'
+  stroke: '#555555'
+  strokeWidth: 1
+  w: 0.03
+  h: 0.12
+- kind: rect
+  x: 0.765
+  y: 0.1
+  z: 11
+  fill: '#111111'
+  stroke: '#555555'
+  strokeWidth: 1
+  w: 0.03
+  h: 0.12
+- kind: rect
+  x: 0.8099999999999999
+  y: 0.1
+  z: 12
+  fill: '#111111'
+  stroke: '#555555'
+  strokeWidth: 1
+  w: 0.03
+  h: 0.12
+labels:
+- text: HENGE UBEC
+  x: 0.5
+  y: 0.3
+  z: 13
+  fontSize: 8
+  color: '#e6e6e6'
+- text: 8A  MAX 12A
+  x: 0.5
+  y: 0.47
+  z: 14
+  fontSize: 6
+  color: '#f0c040'
+- text: IN 7-25.5V 2-6S
+  x: 0.5
+  y: 0.63
+  z: 15
+  fontSize: 5
+  color: '#e6e6e6'
+- text: INPUT
+  x: 0.2
+  y: 0.14
+  z: 16
+  fontSize: 4.5
+  color: '#e6e6e6'
+- text: +
+  x: 0.14
+  y: 0.29
+  z: 17
+  fontSize: 6
+  color: '#e6e6e6'
+- text: '-'
+  x: 0.14
+  y: 0.45
+  z: 18
+  fontSize: 6
+  color: '#e6e6e6'
+- text: 5.0 6.0 7.4V
+  x: 0.2
+  y: 0.92
+  z: 19
+  fontSize: 4
+  color: '#e6e6e6'
+- text: OUTPUT
+  x: 0.8
+  y: 0.92
+  z: 20
+  fontSize: 4.5
+  color: '#e6e6e6'
+- text: EN
+  x: 0.8
+  y: 0.29
+  z: 21
+  fontSize: 4.5
+  color: '#e6e6e6'
+- text: +
+  x: 0.86
+  y: 0.29
+  z: 22
+  fontSize: 6
+  color: '#e6e6e6'
+- text: '-'
+  x: 0.86
+  y: 0.45
+  z: 23
+  fontSize: 6
+  color: '#e6e6e6'
+mass_g: 14
 electrical:
   model: regulator
   inputRail: IN+
   outputRail: OUT+
   outputV: 5
-  dropoutV: 2
-  maxCurrentA: 3
+  maxCurrentA: 8
   operatingV:
   - 7
-  - 20
+  - 25.5
 layerVisibility:
   pcb: false
-  image: true
+  image: false
   holes: true
   pins: true
   components: true
