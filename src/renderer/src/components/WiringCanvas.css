@@ -102,7 +102,7 @@
    printing and screenshots. Unlike blueprint this inverts the SURFACE, so the
    ink has to go the other way — `isDark` in WiringCanvas.tsx turns off for this
    mat, which is what keeps a ground wire black instead of white-on-white. */
-[data-breadboard-bg='white'] .wc--lifelike .wc__stage {
+:is([data-breadboard-bg='white'], [data-breadboard-bg='transparent']) .wc--lifelike .wc__stage {
   background-color: #ffffff;
 }
 /* No grid at all — a plain white sheet. The whole point of this mat is a clean
@@ -113,39 +113,101 @@
   display: none;
 }
 /* No paper mottle — the point of this mat is a clean, flat sheet. */
-[data-breadboard-bg='white'] .wc--lifelike .wc__paper {
+:is([data-breadboard-bg='white'], [data-breadboard-bg='transparent']) .wc--lifelike .wc__paper {
   display: none;
 }
 /* The drop tint darkens the mat, which on white reads as the sheet going grey.
    Tint toward the accent instead so the drop zone still reads. */
-[data-breadboard-bg='white'] .wc--lifelike.wc--drop .wc__stage {
+:is([data-breadboard-bg='white'], [data-breadboard-bg='transparent']) .wc--lifelike.wc--drop .wc__stage {
   background-color: #eef4ff;
 }
 
 /* Ink for the white mat. Everything below is light-on-dark by default, mirroring
    the overrides the skeuomorph SCHEMATIC sheet already needed for exactly this
    reason — a light surface flips which way round the contrast goes. */
-[data-breadboard-bg='white'] .wc--lifelike .wc__body-title {
+:is([data-breadboard-bg='white'], [data-breadboard-bg='transparent']) .wc--lifelike .wc__body-title {
   fill: #1c2128;
 }
 /* The GND dot's fill is CSS (the wires are handled by `isDark` in JS). */
-[data-breadboard-bg='white'] .wc--lifelike .wc__dot--gnd {
+:is([data-breadboard-bg='white'], [data-breadboard-bg='transparent']) .wc--lifelike .wc__dot--gnd {
   fill: #2c333c;
 }
 /* The code label is dark text with a light halo here — its default is the
    reverse, and a dark halo on a white sheet reads as a smudge. */
-[data-breadboard-bg='white'] .wc--lifelike .wc__code-label {
+:is([data-breadboard-bg='white'], [data-breadboard-bg='transparent']) .wc--lifelike .wc__code-label {
   stroke: #ffffff;
 }
-[data-breadboard-bg='white'] .wc--lifelike .wc__net-tag-txt {
+:is([data-breadboard-bg='white'], [data-breadboard-bg='transparent']) .wc--lifelike .wc__net-tag-txt {
   fill: #1c2128;
 }
 /* The silk pin names. `.pcv__pin-label` is light grey — "light-on-dark
    everywhere outside the Part Editor", as PartPreview.css puts it — which on a
    white sheet leaves a board's pinout as pale grey on white, and the pinout is
    most of what a printed wiring diagram is for (#1168). */
-[data-breadboard-bg='white'] .wc--lifelike .pcv__pin-label {
+:is([data-breadboard-bg='white'], [data-breadboard-bg='transparent']) .wc--lifelike .pcv__pin-label {
   fill: #55606b;
+}
+
+/* TRANSPARENT background (the embed's background picker): a picture for
+   someone else's page. It reads as the white mat on screen (the same dark ink,
+   via the `:is(…)` rules above, and `isDark` in JS) but keeps a faint grid to
+   place parts by; the export drops the sheet and the grid (doExport, and the
+   embed's svgDocument). */
+[data-breadboard-bg='transparent'] .wc--lifelike .wc__stage {
+  background-color: #ffffff;
+}
+[data-breadboard-bg='transparent'] .wc--lifelike .wc__grid {
+  stroke: #8a94a6;
+  stroke-opacity: 0.35;
+}
+
+/* The background picker's swatches (transparent = a checkerboard). */
+.wc__bg-swatch {
+  display: inline-block;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid rgba(220, 235, 245, 0.45);
+  background-color: #fff;
+  background-image:
+    linear-gradient(45deg, #d5d9e0 25%, transparent 25%, transparent 75%, #d5d9e0 75%),
+    linear-gradient(45deg, #d5d9e0 25%, transparent 25%, transparent 75%, #d5d9e0 75%);
+  background-size: 6px 6px;
+  background-position: 0 0, 3px 3px;
+}
+.wc__bg-swatch[data-mat='dark'],
+.wc__bg-swatch[data-mat='blueprint'] {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.3) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.3) 1px, transparent 1px);
+  background-size: 4px 4px;
+  background-position: -1px -1px;
+}
+.wc__bg-swatch[data-mat='dark'] {
+  background-color: #121519;
+}
+.wc__bg-swatch[data-mat='blueprint'] {
+  background-color: #1f4f8f;
+}
+.wc__bg-menu {
+  min-width: 10rem;
+}
+.wc__bg-title {
+  padding: 0.3rem 0.45rem 0.2rem;
+  font-family: var(--font-ui), sans-serif;
+  font-size: 0.66rem;
+  color: var(--bptext, #d6dade);
+  opacity: 0.65;
+}
+.wc__bg-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.wc__bg-item[aria-checked='true'] {
+  font-weight: 600;
+  background: rgba(127, 196, 240, 0.16);
 }
 
 /* SCHEMATIC view sheet — follows the skin, never the blueprint/dark breadboard

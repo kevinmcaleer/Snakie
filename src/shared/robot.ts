@@ -309,7 +309,16 @@ export interface RobotDefinition {
   /** The KRF robot-model section (URDF, servo↔joint map, poses) — optional so a
    *  legacy wiring-only robot.yml is unaffected (epic #309). */
   robot?: RobotModel
+  /** The wiring canvas's background where the host lets it be chosen (the
+   *  kevsrobots project editor): transparent, or blueprint paper in black or
+   *  blue. Saved with the wiring so its exported picture is drawn the same
+   *  way. Absent = black blueprint. The desktop app ignores it (its mat is
+   *  Settings → Appearance). */
+  wiringBackground?: WiringBackground
 }
+
+/** See {@link RobotDefinition.wiringBackground}. */
+export type WiringBackground = 'transparent' | 'blueprint-dark' | 'blueprint'
 
 /** A fresh, empty robot definition. */
 export function blankRobot(): RobotDefinition {

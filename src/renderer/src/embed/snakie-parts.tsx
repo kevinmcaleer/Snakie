@@ -31,10 +31,12 @@ import { PartCatalog, type CatalogItem } from '../components/PartCatalog'
 import { PartEditor } from '../components/PartEditor'
 import { PartPreview } from '../components/PartPreview'
 import { WiringCanvas, type WiringRenderMode } from '../components/WiringCanvas'
+import { backgroundFor, matFor, withBackground } from './wiring-background'
+import { stageBackground } from '../components/svg-export'
 import { boardPartFor, resolveBoards } from '../components/part-editor.util'
 import { planPartAdditions } from '../components/project-parts'
 import { findPart, type PartDefinition, type PartLibraryWithParts } from '../../../shared/part'
-import type { RobotDefinition } from '../../../shared/robot'
+import type { RobotDefinition, WiringBackground } from '../../../shared/robot'
 import { partFromYaml, partToYaml } from '../../../shared/part-yaml'
 import { robotFromYaml, robotToYaml } from '../../../shared/robot-yaml'
 import { bomMarkdown as robotBomMarkdown, pinoutMarkdown as robotPinoutMarkdown } from '../../../shared/robot-docs'
@@ -44,7 +46,7 @@ import { withBoard } from './wiring-board'
 
 export type { PartsBackend } from './parts-backend'
 export type { WiringWarning } from './wiring-checks'
-export type { PartDefinition, PartLibraryWithParts, RobotDefinition }
+export type { PartDefinition, PartLibraryWithParts, RobotDefinition, WiringBackground }
 
 /** What every mount returns. */
 export interface Mounted {
@@ -204,6 +206,12 @@ export interface WiringOptions {
   projectMeta?: boolean
   /** What the empty canvas (no board, no parts) says. */
   emptyHint?: string
+  /**
+   * Show the background picker (transparent, black blueprint, blue blueprint)
+   * in the zoom toolbar. Default true. The pick is saved in the wiring itself
+   * (`robot.wiringBackground`, through `onChange`), and `exportSvg` draws it.
+   */
+  backgroundPicker?: boolean
 }
 
 export interface WiringHandle extends Mounted {
@@ -222,7 +230,12 @@ export interface WiringHandle extends Mounted {
    */
   setBoard(boardId: string | null): void
   setView(view: WiringRenderMode): void
-  /** The canvas as a standalone SVG document, its images inlined. */
+  /** The background the wiring is drawn on (`robot.wiringBackground`, default black blueprint). */
+  background(): WiringBackground
+  /** Change the background. Fires `onChange`, as the picker does. */
+  setBackground(background: WiringBackground): void
+  /** The canvas as a standalone SVG document, its images inlined: on its
+   *  background's paper, or with no sheet or grid when that is transparent. */
   exportSvg(): Promise<string>
   /** The same, drawn to a PNG at `scale` × its size (default 2). */
   exportPng(scale?: number): Promise<Blob>
@@ -239,6 +252,7 @@ interface WiringState {
   libraries: PartLibraryWithParts[]
   projectMeta: boolean
   emptyHint?: string
+  backgroundPicker: boolean
 }
 
 function WiringHost({
@@ -265,22 +279,32 @@ function WiringHost({
     },
     [onChange]
   )
+  const mat = matFor(state.robot.wiringBackground)
+  // The mat skins are CSS keyed off an ANCESTOR's `data-breadboard-bg`
+  // (WiringCanvas.css), and the embed's CSS is scoped under the box, so the
+  // attribute goes on a wrapper inside it.
   return (
-    <WiringCanvas
-      robot={state.robot}
-      onChange={change}
-      folder={null}
-      libraries={libraries}
-      boardDef={def}
-      boardPart={boardPart}
-      renderMode={state.view}
-      projectMeta={state.projectMeta}
-      emptyHint={state.emptyHint}
-      onDropPart={(libraryId, part, pos) => {
-        const { next } = planPartAdditions(state.robot, [{ libraryId, part, pos }], false)
-        change(next)
-      }}
-    />
+    <div className="snakie-embed__mat" data-breadboard-bg={mat}>
+      <WiringCanvas
+        robot={state.robot}
+        onChange={change}
+        folder={null}
+        libraries={libraries}
+        boardDef={def}
+        boardPart={boardPart}
+        renderMode={state.view}
+        mat={mat}
+        onMatChange={
+          state.backgroundPicker ? (m) => change(withBackground(state.robot, backgroundFor(m))) : undefined
+        }
+        projectMeta={state.projectMeta}
+        emptyHint={state.emptyHint}
+        onDropPart={(libraryId, part, pos) => {
+          const { next } = planPartAdditions(state.robot, [{ libraryId, part, pos }], false)
+          change(next)
+        }}
+      />
+    </div>
   )
 }
 
@@ -308,11 +332,27 @@ async function inlineImage(href: string): Promise<string | null> {
  * into a `data:` URL — an SVG shown through `<img>` loads nothing external, so
  * a part photo left as a link would be a blank box on the host's page.
  */
-export async function svgDocument(svg: SVGSVGElement): Promise<string> {
+export async function svgDocument(
+  svg: SVGSVGElement,
+  { transparent = false }: { transparent?: boolean } = {}
+): Promise<string> {
   const copy = svg.cloneNode(true) as SVGSVGElement
   const src = svg.querySelectorAll('*')
   const dst = copy.querySelectorAll('*')
-  const props = ['fill', 'stroke', 'stroke-width', 'opacity', 'font-family', 'font-size', 'font-weight']
+  // `filter` and `mix-blend-mode` carry the blue blueprint's ink-on-paper
+  // grid wobble and paper mottle; `stroke-opacity` the grid's strength.
+  const props = [
+    'fill',
+    'stroke',
+    'stroke-width',
+    'stroke-opacity',
+    'opacity',
+    'filter',
+    'mix-blend-mode',
+    'font-family',
+    'font-size',
+    'font-weight'
+  ]
   const hidden: Element[] = []
   src.forEach((node, i) => {
     const out = dst[i] as SVGElement
@@ -330,6 +370,8 @@ export async function svgDocument(svg: SVGSVGElement): Promise<string> {
     out.setAttribute('style', `${style};${out.getAttribute('style') ?? ''}`)
   })
   hidden.forEach((el) => el.remove())
+  // A transparent background is just the drawing: no grid, no paper.
+  if (transparent) copy.querySelectorAll('.wc__grid-layer, .wc__paper').forEach((el) => el.remove())
   copy.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
   copy.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
   // A standalone file needs a real size: the canvas's own is "100%" of its box.
@@ -339,6 +381,19 @@ export async function svgDocument(svg: SVGSVGElement): Promise<string> {
   const h = view?.height || box.height
   copy.setAttribute('width', String(Math.round(w)))
   copy.setAttribute('height', String(Math.round(h)))
+  // Otherwise the sheet the canvas sits on (it is CSS on the stage, not part
+  // of the SVG), so the picture looks as it does on screen wherever it goes.
+  if (!transparent) {
+    const sheet = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+    // `meet` letterboxes the viewBox inside the box; cover the margins too.
+    const pad = Math.max(w, h)
+    sheet.setAttribute('x', String((view?.width ? view.x : 0) - pad))
+    sheet.setAttribute('y', String((view?.height ? view.y : 0) - pad))
+    sheet.setAttribute('width', String(w + 2 * pad))
+    sheet.setAttribute('height', String(h + 2 * pad))
+    sheet.setAttribute('fill', stageBackground(svg))
+    copy.insertBefore(sheet, copy.firstChild)
+  }
   const images = [...copy.querySelectorAll('image')]
   const seen = new Map<string, Promise<string | null>>()
   await Promise.all(
@@ -386,7 +441,8 @@ export function mountWiring(el: HTMLElement, opts: WiringOptions): WiringHandle 
     view: opts.view ?? 'lifelike',
     libraries: opts.libraries,
     projectMeta: opts.projectMeta ?? false,
-    emptyHint: opts.emptyHint
+    emptyHint: opts.emptyHint,
+    backgroundPicker: opts.backgroundPicker ?? true
   }
   let set: ((fn: (s: WiringState) => WiringState) => void) | null = null
   const update = (fn: (s: WiringState) => WiringState): void => {
@@ -404,7 +460,8 @@ export function mountWiring(el: HTMLElement, opts: WiringOptions): WiringHandle 
     // The canvas's own drawing, not the toolbar icons around it.
     const area = (e: Element): number => e.getBoundingClientRect().width * e.getBoundingClientRect().height
     const svg = ([...box.querySelectorAll('svg')] as SVGSVGElement[]).sort((a, b) => area(b) - area(a))[0]
-    return svg ? svgDocument(svg) : Promise.resolve('')
+    const transparent = state.view === 'lifelike' && state.robot.wiringBackground === 'transparent'
+    return svg ? svgDocument(svg, { transparent }) : Promise.resolve('')
   }
   root.render(
     <StrictMode>
@@ -439,6 +496,13 @@ export function mountWiring(el: HTMLElement, opts: WiringOptions): WiringHandle 
       opts.onChange(next)
     },
     setView: (view) => update((s) => ({ ...s, view })),
+    background: () => state.robot.wiringBackground ?? 'blueprint-dark',
+    setBackground: (background) => {
+      const next = withBackground(state.robot, background)
+      if (next === state.robot) return
+      update((s) => ({ ...s, robot: next }))
+      opts.onChange(next)
+    },
     exportSvg,
     exportPng: async (scale = 2) => svgToPng(await exportSvg(), scale),
     warnings: () => wiringWarnings(state.robot, state.libraries, mcu()),

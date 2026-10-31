@@ -111,6 +111,20 @@ export type WiringRenderMode = 'lifelike' | 'schematic'
 const VIEW_W = 1180
 const VIEW_H = 720
 
+/**
+ * The mat a wiring canvas is drawn on. `transparent` is for a picture that
+ * goes on someone else's page: dark ink like the white mat, a faint grid on
+ * screen, and no sheet or grid in the export.
+ */
+export type WiringMat = 'dark' | 'blueprint' | 'white' | 'transparent'
+
+/** The choices the background picker offers, in order. */
+export const WIRING_MAT_CHOICES: { mat: WiringMat; label: string }[] = [
+  { mat: 'transparent', label: 'Transparent' },
+  { mat: 'dark', label: 'Black blueprint' },
+  { mat: 'blueprint', label: 'Blue blueprint' }
+]
+
 /** The breadboard "paper" grid pitch: the 2.54 mm (0.1") standard pin pitch. */
 const GRID_PITCH_MM = 2.54
 
@@ -734,7 +748,13 @@ export interface WiringCanvasProps {
    * that scopes the attribute to its own subtree — the PDF export, rendering
    * one board on the white print mat — has to say so here too.
    */
-  mat?: 'dark' | 'blueprint' | 'white'
+  mat?: WiringMat
+  /**
+   * When set, the zoom toolbar gets a background picker (transparent, black
+   * blueprint, blue blueprint) that reports the pick here; the host owns the
+   * value and hands it back as {@link mat}. The embed uses it (kevsrobots).
+   */
+  onMatChange?: (mat: WiringMat) => void
   /** Board pads used by the parsed code, keyed by board pad index (combine view). */
   usedByCode?: UsedByCode
   /** Where magic smoke pours out — the terminals an ERC **error** implicates
@@ -853,7 +873,7 @@ interface Drag {
   pinchWY?: number
 }
 
-export function WiringCanvas({ robot, onChange, history, folder, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, mat, usedByCode, smoking, onDropPart, onShowHelp, focusedChrome = false, voltage, live, highlight, nets, onHighlightNet, projectMeta = true, emptyHint }: WiringCanvasProps): JSX.Element {
+export function WiringCanvas({ robot, onChange, history, folder, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, mat, onMatChange, usedByCode, smoking, onDropPart, onShowHelp, focusedChrome = false, voltage, live, highlight, nets, onHighlightNet, projectMeta = true, emptyHint }: WiringCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
   // The focusable canvas root — focused when a part is selected so the Delete /
   // Backspace shortcut is scoped to THIS canvas (a selected part can't be nuked by
@@ -1063,6 +1083,8 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
   }
   // The image-export format menu (PNG / SVG / PDF) on the zoom toolbar.
   const [exportOpen, setExportOpen] = useState(false)
+  // The background picker's menu (only when the host passed `onMatChange`).
+  const [matOpen, setMatOpen] = useState(false)
 
   // By library, then by id anywhere (`findPart`): a part placed from a library
   // that has since been renamed, promoted or — on the web — never installed
@@ -2439,11 +2461,13 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
     // The sheet colour lives in CSS on the stage (blueprint blue / schematic
     // white / dark mat) — read the LIVE computed value so the export matches
     // exactly what's on screen, whatever the mode/theme.
-    const background = stageBackground(svg)
+    // A transparent mat exports no sheet and no grid: just the drawing.
+    const clear = mat === 'transparent' && renderMode === 'lifelike'
+    const background = clear ? undefined : stageBackground(svg)
     const res = serializeLiveSvg(svg, '.wc__content', {
       background,
       margin: 24,
-      exclude: ['.wc__sel-ring'],
+      exclude: clear ? ['.wc__sel-ring', '.wc__grid-layer', '.wc__paper'] : ['.wc__sel-ring'],
       // Frame to the parts, not the full-canvas grid/paper — they just fill it.
       bboxExclude: ['.wc__grid-layer', '.wc__paper'],
       fontCss
@@ -2456,7 +2480,8 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
     // by URL, which the sandboxed `<img>` cannot fetch — the board would export
     // without its own picture. After the restore above, so this await is free.
     const svgStr = await inlineImageHrefs(res.svg)
-    exportSvgString(svgStr, fmt, res.width, res.height, base).catch((err) => {
+    // A PDF page can't be see-through: white behind a transparent drawing.
+    exportSvgString(svgStr, fmt, res.width, res.height, base, clear ? '#ffffff' : undefined).catch((err) => {
       // Don't fail silently — a swallowed rejection here is exactly what made
       // PNG/PDF "do nothing" before. Surface it so the cause is visible.
       console.error(`Board export (${fmt}) failed:`, err)
@@ -2488,6 +2513,23 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
     document.addEventListener('pointerdown', onDown)
     return () => document.removeEventListener('pointerdown', onDown)
   }, [exportOpen])
+
+  // …and the background menu.
+  useEffect(() => {
+    if (!matOpen) return
+    const onDown = (e: PointerEvent): void => {
+      if (!(e.target as Element | null)?.closest?.('.wc__bg')) setMatOpen(false)
+    }
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setMatOpen(false)
+    }
+    document.addEventListener('pointerdown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [matOpen])
 
   // Auto fit-to-view when the CONTENT changes (view toggle, board change, a part
   // added/removed) — keyed on a signature that excludes positions/pan, so it
@@ -2817,7 +2859,7 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
   const isDark =
     renderMode === 'schematic'
       ? document.documentElement.getAttribute('data-theme') === 'dark'
-      : (mat ?? document.documentElement.getAttribute('data-breadboard-bg')) !== 'white'
+      : !['white', 'transparent'].includes(mat ?? document.documentElement.getAttribute('data-breadboard-bg') ?? '')
 
   // Selected part + the screen position of its mini-toolbar (#176). Only placed
   // parts in the breadboard view are selectable/rotatable.
@@ -3770,6 +3812,44 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
                 <path d="M4.8 3h4.2v3.2H4.8zM15 3h4.2v3.2H15z" fill="currentColor" />
               </svg>
             </button>
+            {/* Background picker (transparent / black / blue blueprint), when the
+                host keeps the choice (the embed saves it with the wiring). */}
+            {onMatChange && renderMode === 'lifelike' && (
+              <div className="wc__bg wc__export">
+                <button
+                  type="button"
+                  className="wc__zoom-btn"
+                  onClick={() => setMatOpen((o) => !o)}
+                  title={`Background: ${(WIRING_MAT_CHOICES.find((c) => c.mat === mat) ?? WIRING_MAT_CHOICES[1]).label}`}
+                  aria-label="Background"
+                  aria-haspopup="menu"
+                  aria-expanded={matOpen}
+                >
+                  <span className="wc__bg-swatch" data-mat={mat ?? 'dark'} aria-hidden="true" />
+                </button>
+                {matOpen && (
+                  <div className="wc__export-menu wc__bg-menu" role="menu" aria-label="Background">
+                    <span className="wc__bg-title">Background</span>
+                    {WIRING_MAT_CHOICES.map((c) => (
+                      <button
+                        key={c.mat}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={(mat ?? 'dark') === c.mat}
+                        className="wc__export-item wc__bg-item"
+                        onClick={() => {
+                          setMatOpen(false)
+                          if (c.mat !== (mat ?? 'dark')) onMatChange(c.mat)
+                        }}
+                      >
+                        <span className="wc__bg-swatch" data-mat={c.mat} aria-hidden="true" />
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
