@@ -23,7 +23,7 @@ I²C, 3.3–5 V. This is the balance sensor in the Open Duck Mini.
 from machine import I2C, Pin
 from bno055 import BNO055
 
-i2c = I2C(0, sda=Pin(4), scl=Pin(5), freq=100_000)
+i2c = I2C(0, sda=Pin(4), scl=Pin(5), freq=100_000)  # Pico pins: GP4/GP5; check your board
 imu = BNO055(i2c)
 print(imu.euler())        # (heading, roll, pitch) in degrees
 print(imu.quaternion())
