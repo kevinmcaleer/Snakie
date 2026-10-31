@@ -20,6 +20,7 @@ properties:
   encoder: 12-bit magnetic, 360°
   interface: half-duplex TTL serial bus, 1 Mbps default
   connector: 2× 5264-3P (daisy chain)
+  pinout: 'D V G, left to right with the horn up: data, VCC (middle), GND'
 version: 0.1.0
 pcbColor: '#26282b'
 aspect: 0.546

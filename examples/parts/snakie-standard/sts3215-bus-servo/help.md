@@ -16,6 +16,15 @@ port to a bus adapter and chain the rest.
 | V | servo supply, 6–8.4 V (a 2S Li-ion pack) |
 | G | GND, shared with the controller |
 
+**Pin order.** With the horn up and the ports facing you (the connector's
+notched side at the bottom), each port reads **D, V, G** from left to right.
+V is always the middle pin. Feetech's spec numbers them from the other end
+(pin 1 GND, pin 2 VCC, pin 3 signal) and Waveshare's adapter schematic from
+this end (pin 1 DATA), but the wiring is the same. The cable is straight
+through, so the order matches the D V G silk on the Waveshare adapter. Check
+with a meter before powering a new build: the G pin has continuity to the
+supply's minus on a working chain.
+
 Don't connect D straight to a microcontroller TX/RX pair. The bus is
 half-duplex, so it needs an adapter such as the Waveshare Bus Servo Adapter.
 
@@ -39,5 +48,6 @@ them.
 ## Links
 
 - [Waveshare ST3215 wiki (SDK, manual)](https://www.waveshare.com/wiki/ST3215_Servo)
-- [Feetech](https://www.feetechrc.com/)
+- [Feetech STS3215 spec (pin definition, section 6-7)](https://core-electronics.com.au/attachments/uploads/sts3215-smart-servo-datasheet-translated.pdf)
+- [Bus Servo Adapter (A) schematic](https://files.waveshare.com/wiki/Bus-Servo-Adapter-(A)/Bus%20Servo%20Adapter%20(A)-Sch.pdf)
 - [Open Duck Mini](https://github.com/apirrone/Open_Duck_Mini)
