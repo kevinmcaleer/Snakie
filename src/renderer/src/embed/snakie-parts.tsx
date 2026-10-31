@@ -32,6 +32,7 @@ import { PartEditor } from '../components/PartEditor'
 import { PartPreview } from '../components/PartPreview'
 import { WiringCanvas, type WiringRenderMode } from '../components/WiringCanvas'
 import { backgroundFor, matFor, withBackground } from './wiring-background'
+import { unquoteUrls } from './svg-urls'
 import { stageBackground } from '../components/svg-export'
 import { boardPartFor, resolveBoards } from '../components/part-editor.util'
 import { planPartAdditions } from '../components/project-parts'
@@ -366,7 +367,7 @@ export async function svgDocument(
       hidden.push(out)
       return
     }
-    const style = props.map((p) => `${p}:${cs.getPropertyValue(p)}`).join(';')
+    const style = props.map((p) => `${p}:${unquoteUrls(cs.getPropertyValue(p))}`).join(';')
     out.setAttribute('style', `${style};${out.getAttribute('style') ?? ''}`)
   })
   hidden.forEach((el) => el.remove())
