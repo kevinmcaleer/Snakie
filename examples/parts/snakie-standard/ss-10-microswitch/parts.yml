@@ -2,7 +2,7 @@
 id: ss-10-microswitch
 name: SS-10 Micro Switch
 description: Subminiature snap-action micro switch with a pin plunger. The Open Duck Mini puts one in
-  each foot (4 total) to sense ground contact. COM connects to NC at rest and to NO when pressed.
+  each foot (4 total) to sense ground contact. COM connects to NC at rest and to NO when pressed. Lugs left to right, plunger end first, are C (COM), NO and NC, as moulded on the body.
 manufacturer: Omron
 family: Input
 tags:
@@ -112,6 +112,24 @@ labels:
   y: 0.33
   z: 5
   fontSize: 9
+  color: '#e6e6e6'
+- text: C
+  x: 0.1
+  y: 0.7
+  z: 6
+  fontSize: 6
+  color: '#e6e6e6'
+- text: NO
+  x: 0.53
+  y: 0.7
+  z: 7
+  fontSize: 6
+  color: '#e6e6e6'
+- text: NC
+  x: 0.89
+  y: 0.7
+  z: 8
+  fontSize: 6
   color: '#e6e6e6'
 mass_g: 1.5
 electrical:
