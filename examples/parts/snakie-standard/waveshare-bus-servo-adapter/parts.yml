@@ -1,0 +1,163 @@
+# Open Duck Mini v2 part, built with the build-part-from-image skill.
+id: waveshare-bus-servo-adapter
+name: Waveshare Bus Servo Adapter (A)
+description: Drives Feetech/Waveshare serial bus servos (STS/SCS) from a USB-C port or a 3.3/5 V UART.
+  Jumpers pick A (UART) or B (USB). Two servo ports, servo power from the DC jack or DC+/DC- terminal.
+manufacturer: Waveshare
+family: Motor
+tags:
+- servo
+- bus
+- driver
+- usb
+- uart
+- sts3215
+package: THT
+pinSpacing: 2.54
+voltage: Servo supply per servo spec; UART 3.3/5V
+partNumber: Bus Servo Adapter (A)
+properties:
+  host: USB-C (CH343) or TX/RX UART header
+  servo ports: 2× 5264-3P (D V G)
+  jumpers: A = UART ↔ servo, B = USB ↔ servo
+version: 0.1.0
+pcbColor: '#111111'
+aspect: 1.233
+dimensions:
+  width: 42
+  height: 34
+shape:
+  kind: rect
+  cornerRadiusMm: 2
+headers:
+- edge: top
+  pins:
+  - name: D1
+    type: io
+    group: servo-1
+    label: D
+    shape: header
+    rotation: 270
+    x: 0.194
+    y: 0.06
+  - name: V1
+    type: pwr
+    group: servo-1
+    label: V
+    shape: header
+    rotation: 270
+    x: 0.251
+    y: 0.06
+  - name: G1
+    type: gnd
+    group: servo-1
+    label: G
+    shape: header
+    rotation: 270
+    x: 0.309
+    y: 0.06
+  - name: D2
+    type: io
+    group: servo-2
+    label: D
+    shape: header
+    rotation: 270
+    x: 0.478
+    y: 0.06
+  - name: V2
+    type: pwr
+    group: servo-2
+    label: V
+    shape: header
+    rotation: 270
+    x: 0.536
+    y: 0.06
+  - name: G2
+    type: gnd
+    group: servo-2
+    label: G
+    shape: header
+    rotation: 270
+    x: 0.593
+    y: 0.06
+  - name: TX
+    type: io
+    capabilities:
+    - uart
+    signals:
+      uart: TX
+    group: uart
+    shape: header
+    rotation: 270
+    x: 0.739
+    y: 0.052
+  - name: RX
+    type: io
+    capabilities:
+    - uart
+    signals:
+      uart: RX
+    group: uart
+    shape: header
+    rotation: 270
+    x: 0.796
+    y: 0.052
+  - name: GND
+    type: gnd
+    group: uart
+    shape: header
+    rotation: 270
+    x: 0.855
+    y: 0.052
+- edge: bottom
+  pins:
+  - name: DC+
+    type: pwr
+    group: power
+    shape: round
+    rotation: 90
+    x: 0.463
+    y: 0.897
+  - name: DC-
+    type: gnd
+    group: power
+    shape: round
+    rotation: 90
+    x: 0.536
+    y: 0.897
+mountingHoles:
+- x: 0.065
+  y: 0.08
+  diameter: 1.5
+- x: 0.926
+  y: 0.08
+  diameter: 1.5
+- x: 0.065
+  y: 0.897
+  diameter: 1.5
+- x: 0.926
+  y: 0.897
+  diameter: 1.5
+image: image.png
+imageLayer:
+  x: 0
+  y: 0
+  w: 1
+  h: 1
+  opacity: 1
+help: help.md
+groups:
+- id: servo-1
+  name: Servo port 1
+- id: servo-2
+  name: Servo port 2
+- id: uart
+  name: UART
+- id: power
+  name: DC terminal
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true

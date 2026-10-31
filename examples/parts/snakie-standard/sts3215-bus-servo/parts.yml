@@ -1,0 +1,128 @@
+# Open Duck Mini v2 part, built with the build-part-from-image skill.
+id: sts3215-bus-servo
+name: Feetech STS3215 Bus Servo
+description: Serial bus servo with a 360° magnetic encoder, position/speed/load feedback and ID-addressed
+  half-duplex TTL control. Two daisy-chain ports. The Open Duck Mini uses 14 of the 7.4 V version.
+manufacturer: Feetech
+family: Motor
+tags:
+- servo
+- bus
+- sts3215
+- motor
+- serial
+package: THT
+voltage: 6-8.4V (7.4V version)
+partNumber: STS3215
+properties:
+  torque: 19.5 kg·cm @ 7.4 V
+  speed: 0.222 s/60° @ 7.4 V
+  encoder: 12-bit magnetic, 360°
+  interface: half-duplex TTL serial bus, 1 Mbps default
+  connector: 2× 5264-3P (daisy chain)
+version: 0.1.0
+pcbColor: '#26282b'
+aspect: 0.546
+dimensions:
+  width: 24.7
+  height: 45.2
+shape:
+  kind: rect
+  cornerRadiusMm: 2
+headers:
+- edge: bottom
+  pins:
+  - name: D1
+    type: io
+    group: bus-1
+    label: D
+    shape: octagonal
+    rotation: 90
+    x: 0.197
+    y: 0.518
+  - name: V1
+    type: pwr
+    group: bus-1
+    label: V
+    shape: octagonal
+    rotation: 90
+    x: 0.295
+    y: 0.518
+  - name: G1
+    type: gnd
+    group: bus-1
+    label: G
+    shape: octagonal
+    rotation: 90
+    x: 0.396
+    y: 0.518
+  - name: D2
+    type: io
+    group: bus-2
+    label: D
+    shape: octagonal
+    rotation: 90
+    x: 0.607
+    y: 0.518
+  - name: V2
+    type: pwr
+    group: bus-2
+    label: V
+    shape: octagonal
+    rotation: 90
+    x: 0.707
+    y: 0.518
+  - name: G2
+    type: gnd
+    group: bus-2
+    label: G
+    shape: octagonal
+    rotation: 90
+    x: 0.803
+    y: 0.518
+mountingHoles:
+- x: 0.075
+  y: 0.415
+  diameter: 1
+- x: 0.925
+  y: 0.415
+  diameter: 1
+- x: 0.075
+  y: 0.955
+  diameter: 1
+- x: 0.925
+  y: 0.955
+  diameter: 1
+image: image.png
+imageLayer:
+  x: 0
+  y: 0
+  w: 1
+  h: 1
+  opacity: 1
+mass_g: 55
+help: help.md
+library:
+  module: scservo_sdk
+  docs: https://www.waveshare.com/wiki/ST3215_Servo
+electrical:
+  model: consumer
+  operatingV:
+  - 6.0
+  - 8.4
+  currentDrawA: 0.18
+  stallCurrentA: 2.7
+  terminals:
+    positive: V1
+    negative: G1
+groups:
+- id: bus-1
+  name: Bus port 1
+- id: bus-2
+  name: Bus port 2
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true

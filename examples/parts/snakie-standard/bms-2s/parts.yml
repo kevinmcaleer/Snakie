@@ -1,0 +1,82 @@
+# Open Duck Mini v2 part, built with the build-part-from-image skill.
+id: bms-2s
+name: 2S Li-ion BMS (8 A)
+description: 'Protection board for a 2-cell (7.4 V) lithium pack: over-charge, over-discharge, over-current
+  and short-circuit cut-off. Cells go on B-/BM/B+, the load and charger on P+/P-.'
+manufacturer: JZK
+family: Power
+tags:
+- battery
+- bms
+- protection
+- 2s
+- power
+package: SMD
+voltage: 7.4V / 8.4V
+properties:
+  working current: 8 A
+  peak current: 10 A
+  size: 41 × 16 × 3.5 mm
+version: 0.1.0
+pcbColor: '#1a5fb4'
+aspect: 2.547
+dimensions:
+  width: 41
+  height: 16.1
+shape:
+  kind: rect
+  cornerRadius: 0
+headers:
+- edge: left
+  pins:
+  - name: B+
+    type: pwr
+    number: 1
+    shape: square
+    rotation: 180
+    x: 0.049
+    y: 0.186
+  - name: B-
+    type: gnd
+    number: 2
+    shape: square
+    rotation: 180
+    x: 0.049
+    y: 0.784
+- edge: right
+  pins:
+  - name: BM
+    type: other
+    number: 3
+    shape: square
+    rotation: 0
+    x: 0.952
+    y: 0.186
+  - name: P+
+    type: pwr
+    number: 4
+    shape: round
+    rotation: 0
+    x: 0.923
+    y: 0.535
+  - name: P-
+    type: gnd
+    number: 5
+    shape: round
+    rotation: 0
+    x: 0.923
+    y: 0.796
+image: image.png
+imageLayer:
+  x: 0
+  y: 0
+  w: 1
+  h: 1
+  opacity: 1
+mass_g: 3
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true

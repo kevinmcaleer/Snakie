@@ -1,0 +1,536 @@
+# Open Duck Mini v2 part, built with the build-part-from-image skill.
+id: raspberry-pi-zero-2w
+name: Raspberry Pi Zero 2 W
+description: 'Tiny Linux computer: quad-core 64-bit Arm Cortex-A53 (RP3A0), 512 MB RAM, Wi-Fi + Bluetooth,
+  40-pin GPIO header. The Open Duck Mini''s brain.'
+manufacturer: Raspberry Pi
+family: Computer
+tags:
+- computer
+- raspberry-pi
+- linux
+- wifi
+- bluetooth
+- sbc
+package: THT
+pinSpacing: 2.54
+voltage: 5V (GPIO 3.3V)
+partNumber: SC1146
+properties:
+  soc: RP3A0 (BCM2710A1), 4× Cortex-A53 @ 1 GHz
+  ram: 512 MB
+  wireless: 2.4 GHz 802.11 b/g/n, Bluetooth 4.2 / BLE
+  gpio: 40-pin header (unpopulated), 3.3 V logic
+version: 0.1.0
+pcbColor: '#1f7a3a'
+aspect: 2.167
+dimensions:
+  width: 65
+  height: 30
+shape:
+  kind: rect
+  cornerRadiusMm: 3
+headers:
+- edge: top
+  pins:
+  - name: 3V3
+    type: pwr
+    number: 1
+    shape: square
+    rotation: 270
+    x: 0.127
+    y: 0.148
+  - name: 5V
+    type: pwr
+    number: 2
+    shape: header
+    rotation: 270
+    x: 0.127
+    y: 0.072
+  - name: GPIO2
+    type: io
+    number: 3
+    gpio: 2
+    capabilities:
+    - digital
+    - i2c
+    signals:
+      i2c: SDA
+    buses:
+      i2c: 1
+    label: GPIO2 (SDA)
+    shape: header
+    rotation: 270
+    x: 0.1655
+    y: 0.148
+  - name: 5V
+    type: pwr
+    number: 4
+    shape: header
+    rotation: 270
+    x: 0.1655
+    y: 0.072
+  - name: GPIO3
+    type: io
+    number: 5
+    gpio: 3
+    capabilities:
+    - digital
+    - i2c
+    signals:
+      i2c: SCL
+    buses:
+      i2c: 1
+    label: GPIO3 (SCL)
+    shape: header
+    rotation: 270
+    x: 0.2039
+    y: 0.148
+  - name: GND
+    type: gnd
+    number: 6
+    shape: header
+    rotation: 270
+    x: 0.2039
+    y: 0.072
+  - name: GPIO4
+    type: io
+    number: 7
+    gpio: 4
+    capabilities:
+    - digital
+    shape: header
+    rotation: 270
+    x: 0.2424
+    y: 0.148
+  - name: GPIO14
+    type: io
+    number: 8
+    gpio: 14
+    capabilities:
+    - digital
+    - uart
+    signals:
+      uart: TX
+    buses:
+      uart: 0
+    label: GPIO14 (TXD)
+    shape: header
+    rotation: 270
+    x: 0.2424
+    y: 0.072
+  - name: GND
+    type: gnd
+    number: 9
+    shape: header
+    rotation: 270
+    x: 0.2809
+    y: 0.148
+  - name: GPIO15
+    type: io
+    number: 10
+    gpio: 15
+    capabilities:
+    - digital
+    - uart
+    signals:
+      uart: RX
+    buses:
+      uart: 0
+    label: GPIO15 (RXD)
+    shape: header
+    rotation: 270
+    x: 0.2809
+    y: 0.072
+  - name: GPIO17
+    type: io
+    number: 11
+    gpio: 17
+    capabilities:
+    - digital
+    - spi
+    signals:
+      spi: CSn
+    buses:
+      spi: 1
+    shape: header
+    rotation: 270
+    x: 0.3194
+    y: 0.148
+  - name: GPIO18
+    type: io
+    number: 12
+    gpio: 18
+    capabilities:
+    - digital
+    - pwm
+    - spi
+    signals:
+      pwm: A
+      spi: CSn
+    buses:
+      spi: 1
+    label: GPIO18 (PWM0)
+    shape: header
+    rotation: 270
+    x: 0.3194
+    y: 0.072
+  - name: GPIO27
+    type: io
+    number: 13
+    gpio: 27
+    capabilities:
+    - digital
+    shape: header
+    rotation: 270
+    x: 0.3578
+    y: 0.148
+  - name: GND
+    type: gnd
+    number: 14
+    shape: header
+    rotation: 270
+    x: 0.3578
+    y: 0.072
+  - name: GPIO22
+    type: io
+    number: 15
+    gpio: 22
+    capabilities:
+    - digital
+    shape: header
+    rotation: 270
+    x: 0.3963
+    y: 0.148
+  - name: GPIO23
+    type: io
+    number: 16
+    gpio: 23
+    capabilities:
+    - digital
+    shape: header
+    rotation: 270
+    x: 0.3963
+    y: 0.072
+  - name: 3V3
+    type: pwr
+    number: 17
+    shape: header
+    rotation: 270
+    x: 0.4348
+    y: 0.148
+  - name: GPIO24
+    type: io
+    number: 18
+    gpio: 24
+    capabilities:
+    - digital
+    shape: header
+    rotation: 270
+    x: 0.4348
+    y: 0.072
+  - name: GPIO10
+    type: io
+    number: 19
+    gpio: 10
+    capabilities:
+    - digital
+    - spi
+    signals:
+      spi: TX
+    buses:
+      spi: 0
+    label: GPIO10 (MOSI)
+    shape: header
+    rotation: 270
+    x: 0.4733
+    y: 0.148
+  - name: GND
+    type: gnd
+    number: 20
+    shape: header
+    rotation: 270
+    x: 0.4733
+    y: 0.072
+  - name: GPIO9
+    type: io
+    number: 21
+    gpio: 9
+    capabilities:
+    - digital
+    - spi
+    signals:
+      spi: RX
+    buses:
+      spi: 0
+    label: GPIO9 (MISO)
+    shape: header
+    rotation: 270
+    x: 0.5117
+    y: 0.148
+  - name: GPIO25
+    type: io
+    number: 22
+    gpio: 25
+    capabilities:
+    - digital
+    shape: header
+    rotation: 270
+    x: 0.5117
+    y: 0.072
+  - name: GPIO11
+    type: io
+    number: 23
+    gpio: 11
+    capabilities:
+    - digital
+    - spi
+    signals:
+      spi: SCK
+    buses:
+      spi: 0
+    label: GPIO11 (SCLK)
+    shape: header
+    rotation: 270
+    x: 0.5502
+    y: 0.148
+  - name: GPIO8
+    type: io
+    number: 24
+    gpio: 8
+    capabilities:
+    - digital
+    - spi
+    signals:
+      spi: CSn
+    buses:
+      spi: 0
+    label: GPIO8 (CE0)
+    shape: header
+    rotation: 270
+    x: 0.5502
+    y: 0.072
+  - name: GND
+    type: gnd
+    number: 25
+    shape: header
+    rotation: 270
+    x: 0.5887
+    y: 0.148
+  - name: GPIO7
+    type: io
+    number: 26
+    gpio: 7
+    capabilities:
+    - digital
+    - spi
+    signals:
+      spi: CSn
+    buses:
+      spi: 0
+    label: GPIO7 (CE1)
+    shape: header
+    rotation: 270
+    x: 0.5887
+    y: 0.072
+  - name: GPIO0
+    type: io
+    number: 27
+    gpio: 0
+    capabilities:
+    - digital
+    label: GPIO0 (ID_SD)
+    shape: header
+    rotation: 270
+    x: 0.6272
+    y: 0.148
+  - name: GPIO1
+    type: io
+    number: 28
+    gpio: 1
+    capabilities:
+    - digital
+    label: GPIO1 (ID_SC)
+    shape: header
+    rotation: 270
+    x: 0.6272
+    y: 0.072
+  - name: GPIO5
+    type: io
+    number: 29
+    gpio: 5
+    capabilities:
+    - digital
+    shape: header
+    rotation: 270
+    x: 0.6656
+    y: 0.148
+  - name: GND
+    type: gnd
+    number: 30
+    shape: header
+    rotation: 270
+    x: 0.6656
+    y: 0.072
+  - name: GPIO6
+    type: io
+    number: 31
+    gpio: 6
+    capabilities:
+    - digital
+    shape: header
+    rotation: 270
+    x: 0.7041
+    y: 0.148
+  - name: GPIO12
+    type: io
+    number: 32
+    gpio: 12
+    capabilities:
+    - digital
+    - pwm
+    signals:
+      pwm: A
+    label: GPIO12 (PWM0)
+    shape: header
+    rotation: 270
+    x: 0.7041
+    y: 0.072
+  - name: GPIO13
+    type: io
+    number: 33
+    gpio: 13
+    capabilities:
+    - digital
+    - pwm
+    signals:
+      pwm: B
+    label: GPIO13 (PWM1)
+    shape: header
+    rotation: 270
+    x: 0.7426
+    y: 0.148
+  - name: GND
+    type: gnd
+    number: 34
+    shape: header
+    rotation: 270
+    x: 0.7426
+    y: 0.072
+  - name: GPIO19
+    type: io
+    number: 35
+    gpio: 19
+    capabilities:
+    - digital
+    - pwm
+    - spi
+    signals:
+      pwm: B
+      spi: RX
+    buses:
+      spi: 1
+    label: GPIO19 (PWM1)
+    shape: header
+    rotation: 270
+    x: 0.7811
+    y: 0.148
+  - name: GPIO16
+    type: io
+    number: 36
+    gpio: 16
+    capabilities:
+    - digital
+    - spi
+    signals:
+      spi: CSn
+    buses:
+      spi: 1
+    shape: header
+    rotation: 270
+    x: 0.7811
+    y: 0.072
+  - name: GPIO26
+    type: io
+    number: 37
+    gpio: 26
+    capabilities:
+    - digital
+    shape: header
+    rotation: 270
+    x: 0.8195
+    y: 0.148
+  - name: GPIO20
+    type: io
+    number: 38
+    gpio: 20
+    capabilities:
+    - digital
+    - spi
+    signals:
+      spi: TX
+    buses:
+      spi: 1
+    shape: header
+    rotation: 270
+    x: 0.8195
+    y: 0.072
+  - name: GND
+    type: gnd
+    number: 39
+    shape: header
+    rotation: 270
+    x: 0.858
+    y: 0.148
+  - name: GPIO21
+    type: io
+    number: 40
+    gpio: 21
+    capabilities:
+    - digital
+    - spi
+    signals:
+      spi: SCK
+    buses:
+      spi: 1
+    shape: header
+    rotation: 270
+    x: 0.858
+    y: 0.072
+mountingHoles:
+- x: 0.054
+  y: 0.1
+  diameter: 1.375
+- x: 0.946
+  y: 0.1
+  diameter: 1.375
+- x: 0.054
+  y: 0.9
+  diameter: 1.375
+- x: 0.946
+  y: 0.9
+  diameter: 1.375
+image: image.png
+imageLayer:
+  x: 0
+  y: 0
+  w: 1
+  h: 1
+  opacity: 1
+mass_g: 10
+electrical:
+  model: consumer
+  operatingV:
+  - 4.75
+  - 5.25
+  currentDrawA: 0.35
+  stallCurrentA: 0.8
+  terminals:
+    positive: 5V
+    negative: GND
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true

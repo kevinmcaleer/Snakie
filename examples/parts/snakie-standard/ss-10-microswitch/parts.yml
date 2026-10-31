@@ -1,0 +1,128 @@
+# Open Duck Mini v2 part, built with the build-part-from-image skill.
+id: ss-10-microswitch
+name: SS-10 Micro Switch
+description: Subminiature snap-action micro switch with a pin plunger. The Open Duck Mini puts one in
+  each foot (4 total) to sense ground contact. COM connects to NC at rest and to NO when pressed.
+manufacturer: Omron
+family: Input
+tags:
+- switch
+- microswitch
+- limit
+- contact
+- input
+package: THT
+voltage: 250V AC max
+partNumber: SS-10
+properties:
+  rating: 10.1 A @ 250 V AC
+  actuator: pin plunger
+  body: 19.8 × 10.2 × 6.4 mm
+version: 0.1.0
+pcbColor: '#1e1e1e'
+aspect: 1.65
+dimensions:
+  width: 19.8
+  height: 12
+shape:
+  kind: rect
+  cornerRadius: 0
+headers:
+- edge: bottom
+  pins:
+  - name: COM
+    type: other
+    number: 1
+    shape: header
+    rotation: 90
+    x: 0.1
+    y: 0.95
+  - name: 'NO'
+    type: other
+    number: 2
+    shape: header
+    rotation: 90
+    x: 0.53
+    y: 0.95
+  - name: NC
+    type: other
+    number: 3
+    shape: header
+    rotation: 90
+    x: 0.89
+    y: 0.95
+mountingHoles:
+- x: 0.27
+  y: 0.6
+  diameter: 1.15
+- x: 0.73
+  y: 0.6
+  diameter: 1.15
+shapes:
+- kind: rect
+  x: 0.02
+  y: 0.1
+  z: 0
+  fill: '#1e1e1e'
+  stroke: '#000000'
+  strokeWidth: 1
+  w: 0.96
+  h: 0.68
+  cornerRadius: 0.08
+- kind: rect
+  x: 0.3
+  y: 0.0
+  z: 1
+  fill: '#e8862b'
+  stroke: '#9a5410'
+  strokeWidth: 1
+  w: 0.1
+  h: 0.12
+  cornerRadius: 0.4
+- kind: rect
+  x: 0.085
+  y: 0.78
+  z: 2
+  fill: '#d9d9d9'
+  stroke: '#8a8f96'
+  strokeWidth: 1
+  w: 0.03
+  h: 0.2
+- kind: rect
+  x: 0.515
+  y: 0.78
+  z: 3
+  fill: '#d9d9d9'
+  stroke: '#8a8f96'
+  strokeWidth: 1
+  w: 0.03
+  h: 0.2
+- kind: rect
+  x: 0.875
+  y: 0.78
+  z: 4
+  fill: '#d9d9d9'
+  stroke: '#8a8f96'
+  strokeWidth: 1
+  w: 0.03
+  h: 0.2
+labels:
+- text: SS-10
+  x: 0.5
+  y: 0.33
+  z: 5
+  fontSize: 9
+  color: '#e6e6e6'
+mass_g: 1.5
+electrical:
+  model: switch
+  maxCurrentA: 10
+  terminals:
+    positive: COM
+    negative: 'NO'
+layerVisibility:
+  pcb: false
+  image: false
+  holes: true
+  pins: true
+  components: true

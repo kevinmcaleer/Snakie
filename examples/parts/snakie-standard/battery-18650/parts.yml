@@ -1,0 +1,70 @@
+# Open Duck Mini v2 part, built with the build-part-from-image skill.
+id: battery-18650
+name: 18650 Li-ion Cell
+description: Single 18650 lithium-ion cell, 3.6 V nominal (4.2 V full). Shown as the Molicel INR18650-P30B
+  (3000 mAh, 30 A) from the Open Duck Mini BOM. Two in series make a 2S 7.4 V pack.
+manufacturer: Molicel
+family: Power
+tags:
+- battery
+- '18650'
+- li-ion
+- power
+- source
+package: THT
+voltage: 3.6V
+partNumber: INR18650-P30B
+properties:
+  capacity: 3000 mAh
+  max discharge: 30 A
+  charge voltage: 4.2 V
+  size: Ø18.4 × 65 mm
+version: 0.1.0
+pcbColor: '#d9d4c3'
+aspect: 3.42
+dimensions:
+  width: 65
+  height: 19
+shape:
+  kind: rect
+  cornerRadius: 0.5
+headers:
+- edge: left
+  pins:
+  - name: +
+    type: pwr
+    shape: round
+    rotation: 180
+    x: 0.03
+    y: 0.5
+- edge: right
+  pins:
+  - name: '-'
+    type: gnd
+    shape: round
+    rotation: 0
+    x: 0.975
+    y: 0.5
+image: image.png
+imageLayer:
+  x: 0
+  y: 0
+  w: 1
+  h: 1
+  opacity: 1
+mass_g: 46
+electrical:
+  model: source
+  supplyV: 3.6
+  resistanceOhms: 0.015
+  maxCurrentA: 30
+  capacityMah: 3000
+  terminals:
+    positive: +
+    negative: '-'
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true

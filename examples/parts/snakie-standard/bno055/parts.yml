@@ -1,0 +1,163 @@
+# Open Duck Mini v2 part, built with the build-part-from-image skill.
+id: bno055
+name: BNO055 9-DOF Absolute Orientation
+description: 'Bosch BNO055 IMU breakout: accelerometer, gyro and magnetometer with on-chip sensor fusion,
+  so it reports orientation (Euler angles / quaternions) directly. I²C. The Open Duck Mini''s balance
+  sensor.'
+manufacturer: Adafruit
+family: Sensor
+tags:
+- sensor
+- imu
+- i2c
+- orientation
+- accelerometer
+- gyroscope
+- magnetometer
+package: THT
+pinSpacing: 2.54
+voltage: 3.3-5V
+partNumber: '2472'
+properties:
+  chip: Bosch BNO055
+  interface: 'I²C 0x28 (ADR high: 0x29)'
+  output: Euler, quaternion, linear accel, gravity
+  note: Uses I²C clock stretching
+version: 0.1.0
+pcbColor: '#1a5fb4'
+aspect: 0.76
+dimensions:
+  width: 20.3
+  height: 26.7
+shape:
+  kind: rect
+  cornerRadiusMm: 2
+headers:
+- edge: left
+  pins:
+  - name: Vin
+    type: pwr
+    number: 1
+    shape: header
+    rotation: 180
+    x: 0.073
+    y: 0.264
+  - name: 3vo
+    type: pwr
+    number: 2
+    shape: header
+    rotation: 180
+    x: 0.073
+    y: 0.357
+  - name: GND
+    type: gnd
+    number: 3
+    shape: header
+    rotation: 180
+    x: 0.073
+    y: 0.449
+  - name: SDA
+    type: io
+    number: 4
+    capabilities:
+    - i2c
+    signals:
+      i2c: SDA
+    shape: header
+    rotation: 180
+    x: 0.073
+    y: 0.545
+  - name: SCL
+    type: io
+    number: 5
+    capabilities:
+    - i2c
+    signals:
+      i2c: SCL
+    shape: header
+    rotation: 180
+    x: 0.073
+    y: 0.637
+  - name: RST
+    type: io
+    number: 6
+    capabilities:
+    - digital
+    shape: header
+    rotation: 180
+    x: 0.073
+    y: 0.725
+- edge: right
+  pins:
+  - name: PS0
+    type: other
+    number: 7
+    shape: header
+    rotation: 0
+    x: 0.924
+    y: 0.363
+  - name: PS1
+    type: other
+    number: 8
+    shape: header
+    rotation: 0
+    x: 0.924
+    y: 0.454
+  - name: INT
+    type: io
+    number: 9
+    capabilities:
+    - digital
+    shape: header
+    rotation: 0
+    x: 0.924
+    y: 0.545
+  - name: ADR
+    type: io
+    number: 10
+    capabilities:
+    - digital
+    shape: header
+    rotation: 0
+    x: 0.924
+    y: 0.637
+mountingHoles:
+- x: 0.14
+  y: 0.088
+  diameter: 1.25
+- x: 0.86
+  y: 0.088
+  diameter: 1.25
+- x: 0.14
+  y: 0.912
+  diameter: 1.25
+- x: 0.86
+  y: 0.912
+  diameter: 1.25
+image: image.png
+imageLayer:
+  x: 0
+  y: 0
+  w: 1
+  h: 1
+  opacity: 1
+mass_g: 3
+help: help.md
+library:
+  module: bno055
+  docs: https://github.com/micropython-IMU/micropython-bno055
+electrical:
+  model: consumer
+  operatingV:
+  - 3.3
+  - 5.0
+  currentDrawA: 0.0123
+  terminals:
+    positive: Vin
+    negative: GND
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true
