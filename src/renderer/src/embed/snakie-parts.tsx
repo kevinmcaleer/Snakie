@@ -32,7 +32,6 @@ import { PartEditor } from '../components/PartEditor'
 import { PartPreview } from '../components/PartPreview'
 import { WiringCanvas, type WiringRenderMode } from '../components/WiringCanvas'
 import { boardPartFor, resolveBoards } from '../components/part-editor.util'
-import { BUILTIN_BOARDS } from '../components/board-defs'
 import { planPartAdditions } from '../components/project-parts'
 import { findPart, type PartDefinition, type PartLibraryWithParts } from '../../../shared/part'
 import type { RobotDefinition } from '../../../shared/robot'
@@ -41,6 +40,7 @@ import { robotFromYaml, robotToYaml } from '../../../shared/robot-yaml'
 import { bomMarkdown as robotBomMarkdown, pinoutMarkdown as robotPinoutMarkdown } from '../../../shared/robot-docs'
 import { dataUrlToBlob, installPartsBackend, type EmbedWriteResult } from './parts-backend'
 import { wiringWarnings, type WiringWarning } from './wiring-checks'
+import { withBoard } from './wiring-board'
 
 export type { PartsBackend } from './parts-backend'
 export type { WiringWarning } from './wiring-checks'
@@ -199,6 +199,11 @@ export interface WiringOptions {
   /** Life-like breadboard (default) or schematic. */
   view?: WiringRenderMode
   theme?: EmbedTheme
+  /** Show the project name, description and mass readout in the canvas's
+   *  browser panel, as the app does. Default false: a host page has its own. */
+  projectMeta?: boolean
+  /** What the empty canvas (no board, no parts) says. */
+  emptyHint?: string
 }
 
 export interface WiringHandle extends Mounted {
@@ -210,6 +215,12 @@ export interface WiringHandle extends Mounted {
   setLibraries(libraries: PartLibraryWithParts[]): void
   /** Place library parts, each with a fresh instance id. */
   addParts(items: { libraryId: string; part: PartDefinition }[]): void
+  /**
+   * Make a library microcontroller (by board id, normally its part id) the
+   * board, or take the board away with `null`. Taking it away, or swapping it,
+   * drops the wires on the old board's pins. Fires `onChange`.
+   */
+  setBoard(boardId: string | null): void
   setView(view: WiringRenderMode): void
   /** The canvas as a standalone SVG document, its images inlined. */
   exportSvg(): Promise<string>
@@ -226,6 +237,8 @@ interface WiringState {
   robot: RobotDefinition
   view: WiringRenderMode
   libraries: PartLibraryWithParts[]
+  projectMeta: boolean
+  emptyHint?: string
 }
 
 function WiringHost({
@@ -241,8 +254,10 @@ function WiringHost({
   useEffect(() => bind(setState), [bind])
   const libraries = state.libraries
   const boards = useMemo(() => resolveBoards(libraries, []), [libraries])
-  const def = boards.find((b) => b.id === state.robot.board) ?? boards[0] ?? BUILTIN_BOARDS[0]
-  const boardPart = useMemo(() => boardPartFor(libraries, def.id), [libraries, def.id])
+  // No board set means no board: the app's picker defaults to the first one
+  // (a Pico 2 W), but a host's wiring starts empty until it names one.
+  const def = state.robot.board ? (boards.find((b) => b.id === state.robot.board) ?? null) : null
+  const boardPart = useMemo(() => (def ? boardPartFor(libraries, def.id) : null), [libraries, def])
   const change = useCallback(
     (next: RobotDefinition) => {
       setState((s) => ({ ...s, robot: next }))
@@ -259,6 +274,8 @@ function WiringHost({
       boardDef={def}
       boardPart={boardPart}
       renderMode={state.view}
+      projectMeta={state.projectMeta}
+      emptyHint={state.emptyHint}
       onDropPart={(libraryId, part, pos) => {
         const { next } = planPartAdditions(state.robot, [{ libraryId, part, pos }], false)
         change(next)
@@ -364,7 +381,13 @@ export async function svgToPng(svgText: string, scale = 2): Promise<Blob> {
 /** Open the wiring canvas in `el`. */
 export function mountWiring(el: HTMLElement, opts: WiringOptions): WiringHandle {
   currentLibraries = opts.libraries
-  let state: WiringState = { robot: opts.robot, view: opts.view ?? 'lifelike', libraries: opts.libraries }
+  let state: WiringState = {
+    robot: opts.robot,
+    view: opts.view ?? 'lifelike',
+    libraries: opts.libraries,
+    projectMeta: opts.projectMeta ?? false,
+    emptyHint: opts.emptyHint
+  }
   let set: ((fn: (s: WiringState) => WiringState) => void) | null = null
   const update = (fn: (s: WiringState) => WiringState): void => {
     state = fn(state)
@@ -406,6 +429,12 @@ export function mountWiring(el: HTMLElement, opts: WiringOptions): WiringHandle 
     },
     addParts: (items) => {
       const { next } = planPartAdditions(state.robot, items, false)
+      update((s) => ({ ...s, robot: next }))
+      opts.onChange(next)
+    },
+    setBoard: (boardId) => {
+      const next = withBoard(state.robot, boardId)
+      if (next === state.robot) return
       update((s) => ({ ...s, robot: next }))
       opts.onChange(next)
     },
