@@ -1,0 +1,1 @@
+- **Embedded wiring: saved pictures frame the whole drawing, not the current zoom and pan.** 

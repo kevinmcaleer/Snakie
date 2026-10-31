@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type JSX,
+  type MutableRefObject,
   type DragEvent as ReactDragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
@@ -755,6 +756,14 @@ export interface WiringCanvasProps {
    * value and hands it back as {@link mat}. The embed uses it (kevsrobots).
    */
   onMatChange?: (mat: WiringMat) => void
+  /**
+   * Filled with a function that runs `fn` against the canvas framed to fit
+   * everything on it, then puts the user's pan/zoom back, all before the next
+   * paint. A host saving a picture of the drawing (the embed's `exportSvg`)
+   * reads the DOM inside it, so the grid and paper — drawn for the current
+   * view — cover the whole drawing, whatever the user had zoomed to.
+   */
+  captureRef?: MutableRefObject<(<T>(fn: () => T) => T) | null>
   /** Board pads used by the parsed code, keyed by board pad index (combine view). */
   usedByCode?: UsedByCode
   /** Where magic smoke pours out — the terminals an ERC **error** implicates
@@ -873,7 +882,7 @@ interface Drag {
   pinchWY?: number
 }
 
-export function WiringCanvas({ robot, onChange, history, folder, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, mat, onMatChange, usedByCode, smoking, onDropPart, onShowHelp, focusedChrome = false, voltage, live, highlight, nets, onHighlightNet, projectMeta = true, emptyHint }: WiringCanvasProps): JSX.Element {
+export function WiringCanvas({ robot, onChange, history, folder, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, mat, onMatChange, captureRef, usedByCode, smoking, onDropPart, onShowHelp, focusedChrome = false, voltage, live, highlight, nets, onHighlightNet, projectMeta = true, emptyHint }: WiringCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
   // The focusable canvas root — focused when a part is selected so the Delete /
   // Backspace shortcut is scoped to THIS canvas (a selected part can't be nuked by
@@ -2401,6 +2410,21 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
       maxY = Math.max(maxY, s.y + s.h)
     }
     frameBounds(minX, minY, maxX, maxY, animate)
+  }
+
+  // The host's framed capture (see `captureRef`): the same fit → read →
+  // restore the image export below does, for a host that serialises itself.
+  if (captureRef) {
+    captureRef.current = <T,>(fn: () => T): T => {
+      const prev = { ...view }
+      cancelViewEase()
+      flushSync(() => fitView())
+      try {
+        return fn()
+      } finally {
+        flushSync(() => setView(prev))
+      }
+    }
   }
 
   /** Frame a single subject by key (zoom-to-fit one placed item), or everything

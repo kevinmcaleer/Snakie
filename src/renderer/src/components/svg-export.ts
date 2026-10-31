@@ -291,7 +291,7 @@ function childBoxInParent(
 
 /** Union bbox (in the group's own space) of a group's direct children, skipping
  *  `<defs>` + `exclude` selectors. Falls back to the full getBBox if none. */
-function bboxExcluding(
+export function bboxExcluding(
   content: SVGGraphicsElement,
   exclude: string[]
 ): { x: number; y: number; width: number; height: number } {
