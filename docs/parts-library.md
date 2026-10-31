@@ -194,6 +194,21 @@ first, so it's recoverable, then re-baselines the part so ordinary refreshes wor
 again. It is the equivalent of deleting the folder and letting Snakie re-seed it,
 without the restart or the data loss.
 
+## The kevsrobots.com catalog
+
+The Standard library is the master copy of the parts catalog on
+kevsrobots.com. The site pulls it in with
+`python -m projects_api.import_snakie_parts --github` (run inside the
+projects-api container), which downloads `examples/parts/snakie-standard/`
+from this repo's `master` branch and creates or updates each part by slug.
+
+Parts people create on the site don't flow back by themselves. To bring them
+into the library, run `npm run parts:promote` to list the catalog parts the
+library is missing (and site duplicates of library parts), then
+`npm run parts:promote -- --write <slug> …` to copy them in with their photo
+and mesh. Add pins and check the photo's licence before merging, then
+re-import on the site.
+
 ## Authoring parts
 
 You rarely hand-write `parts.yml`. The **Part Editor** authors it visually and
