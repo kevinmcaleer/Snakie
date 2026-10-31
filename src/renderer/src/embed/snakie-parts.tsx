@@ -19,7 +19,7 @@
  * and Snakie's never meet. Docs: docs/embed.md.
  */
 import '../lib/preloadFallback'
-import { StrictMode, useCallback, useEffect, useMemo, useState, type JSX } from 'react'
+import { StrictMode, useCallback, useEffect, useMemo, useState, type JSX, type MutableRefObject } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 // No @fontsource here: a lib build inlines every asset, and the two fonts
 // would be over half a megabyte of base64 in the CSS. The host loads IBM Plex
@@ -33,7 +33,7 @@ import { PartPreview } from '../components/PartPreview'
 import { WiringCanvas, type WiringRenderMode } from '../components/WiringCanvas'
 import { backgroundFor, matFor, withBackground } from './wiring-background'
 import { unquoteUrls } from './svg-urls'
-import { stageBackground } from '../components/svg-export'
+import { bboxExcluding, stageBackground } from '../components/svg-export'
 import { boardPartFor, resolveBoards } from '../components/part-editor.util'
 import { planPartAdditions } from '../components/project-parts'
 import { findPart, type PartDefinition, type PartLibraryWithParts } from '../../../shared/part'
@@ -259,11 +259,13 @@ interface WiringState {
 function WiringHost({
   initial,
   onChange,
-  bind
+  bind,
+  captureRef
 }: {
   initial: WiringState
   onChange: (r: RobotDefinition) => void
   bind: (set: (fn: (s: WiringState) => WiringState) => void) => void
+  captureRef: MutableRefObject<(<T>(fn: () => T) => T) | null>
 }): JSX.Element {
   const [state, setState] = useState(initial)
   useEffect(() => bind(setState), [bind])
@@ -295,6 +297,7 @@ function WiringHost({
         boardPart={boardPart}
         renderMode={state.view}
         mat={mat}
+        captureRef={captureRef}
         onMatChange={
           state.backgroundPicker ? (m) => change(withBackground(state.robot, backgroundFor(m))) : undefined
         }
@@ -327,16 +330,49 @@ async function inlineImage(href: string): Promise<string | null> {
   }
 }
 
+/** Room left around the drawing in a saved picture, in drawing units. */
+const FRAME_MARGIN = 24
+
 /**
  * The canvas as a standalone SVG file: computed colours written onto each
  * element (the CSS custom properties don't travel) and every `<image>` read
  * into a `data:` URL — an SVG shown through `<img>` loads nothing external, so
  * a part photo left as a link would be a blank box on the host's page.
+ *
+ * The picture is framed to the whole drawing — every part, label and wire,
+ * plus a margin — not to what the user happens to be zoomed or panned to, so
+ * nothing at the edges is cut off on the host's page. `capture` runs the
+ * synchronous copy with the canvas fitted to everything (WiringCanvas's
+ * `captureRef`), so the grid and paper, which are drawn for the current view,
+ * reach the frame's edges too.
  */
 export async function svgDocument(
   svg: SVGSVGElement,
-  { transparent = false }: { transparent?: boolean } = {}
+  {
+    transparent = false,
+    capture = (fn) => fn()
+  }: { transparent?: boolean; capture?: <T>(fn: () => T) => T } = {}
 ): Promise<string> {
+  const copy = capture(() => copyForDocument(svg, transparent))
+  const images = [...copy.querySelectorAll('image')]
+  const seen = new Map<string, Promise<string | null>>()
+  await Promise.all(
+    images.map(async (img) => {
+      const href = img.getAttribute('href') ?? img.getAttribute('xlink:href')
+      if (!href) return
+      if (!seen.has(href)) seen.set(href, inlineImage(href))
+      const data = await seen.get(href)
+      if (data) {
+        img.setAttribute('href', data)
+        img.removeAttribute('xlink:href')
+      }
+    })
+  )
+  return '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(copy)
+}
+
+/** The synchronous half of {@link svgDocument}: styled, framed, images still linked. */
+function copyForDocument(svg: SVGSVGElement, transparent: boolean): SVGSVGElement {
   const copy = svg.cloneNode(true) as SVGSVGElement
   const src = svg.querySelectorAll('*')
   const dst = copy.querySelectorAll('*')
@@ -371,45 +407,63 @@ export async function svgDocument(
     out.setAttribute('style', `${style};${out.getAttribute('style') ?? ''}`)
   })
   hidden.forEach((el) => el.remove())
+  // The selection ring is the editor's, not the drawing's.
+  copy.querySelectorAll('.wc__sel-ring').forEach((el) => el.remove())
   // A transparent background is just the drawing: no grid, no paper.
   if (transparent) copy.querySelectorAll('.wc__grid-layer, .wc__paper').forEach((el) => el.remove())
   copy.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
   copy.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
+
+  // Frame the drawing itself: measure the content group (less the grid and
+  // paper, which fill whatever is in view) in its own units, drop its pan/zoom
+  // and point the viewBox at that box.
+  const content = svg.querySelector<SVGGraphicsElement>('.wc__content')
+  let frame: { x: number; y: number; w: number; h: number } | null = null
+  if (content) {
+    try {
+      const b = bboxExcluding(content, ['.wc__grid-layer', '.wc__paper', '.wc__sel-ring'])
+      if (b.width > 0 && b.height > 0) {
+        frame = {
+          x: b.x - FRAME_MARGIN,
+          y: b.y - FRAME_MARGIN,
+          w: Math.round(b.width + 2 * FRAME_MARGIN),
+          h: Math.round(b.height + 2 * FRAME_MARGIN)
+        }
+      }
+    } catch {
+      frame = null
+    }
+  }
+  if (frame) {
+    copy.querySelector('.wc__content')?.removeAttribute('transform')
+    copy.setAttribute('viewBox', `${frame.x} ${frame.y} ${frame.w} ${frame.h}`)
+    copy.setAttribute('preserveAspectRatio', 'xMidYMid meet')
+  } else {
+    // An empty canvas: the view as it stands, sized like the viewBox.
+    const box = svg.getBoundingClientRect()
+    const view = svg.viewBox?.baseVal
+    frame = {
+      x: view?.width ? view.x : 0,
+      y: view?.height ? view.y : 0,
+      w: Math.round(view?.width || box.width),
+      h: Math.round(view?.height || box.height)
+    }
+  }
   // A standalone file needs a real size: the canvas's own is "100%" of its box.
-  const box = svg.getBoundingClientRect()
-  const view = svg.viewBox?.baseVal
-  const w = view?.width || box.width
-  const h = view?.height || box.height
-  copy.setAttribute('width', String(Math.round(w)))
-  copy.setAttribute('height', String(Math.round(h)))
+  copy.setAttribute('width', String(frame.w))
+  copy.setAttribute('height', String(frame.h))
   // Otherwise the sheet the canvas sits on (it is CSS on the stage, not part
   // of the SVG), so the picture looks as it does on screen wherever it goes.
   if (!transparent) {
     const sheet = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
-    // `meet` letterboxes the viewBox inside the box; cover the margins too.
-    const pad = Math.max(w, h)
-    sheet.setAttribute('x', String((view?.width ? view.x : 0) - pad))
-    sheet.setAttribute('y', String((view?.height ? view.y : 0) - pad))
-    sheet.setAttribute('width', String(w + 2 * pad))
-    sheet.setAttribute('height', String(h + 2 * pad))
+    sheet.setAttribute('x', String(frame.x))
+    sheet.setAttribute('y', String(frame.y))
+    sheet.setAttribute('width', String(frame.w))
+    sheet.setAttribute('height', String(frame.h))
     sheet.setAttribute('fill', stageBackground(svg))
     copy.insertBefore(sheet, copy.firstChild)
   }
-  const images = [...copy.querySelectorAll('image')]
-  const seen = new Map<string, Promise<string | null>>()
-  await Promise.all(
-    images.map(async (img) => {
-      const href = img.getAttribute('href') ?? img.getAttribute('xlink:href')
-      if (!href) return
-      if (!seen.has(href)) seen.set(href, inlineImage(href))
-      const data = await seen.get(href)
-      if (data) {
-        img.setAttribute('href', data)
-        img.removeAttribute('xlink:href')
-      }
-    })
-  )
-  return '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(copy)
+  return copy
 }
 
 /** Draw an SVG document onto a canvas and read it back as a PNG. */
@@ -457,18 +511,22 @@ export function mountWiring(el: HTMLElement, opts: WiringOptions): WiringHandle 
   const { root, box } = rootFor(el, opts.theme, 'snakie-embed--wiring')
   const resolve = (lib: string, id: string): PartDefinition | null => findPart(state.libraries, lib, id)
   const mcu = (): PartDefinition | null => boardPartFor(state.libraries, state.robot.board ?? '')
+  const captureRef: MutableRefObject<(<T>(fn: () => T) => T) | null> = { current: null }
   const exportSvg = (): Promise<string> => {
     // The canvas's own drawing, not the toolbar icons around it.
     const area = (e: Element): number => e.getBoundingClientRect().width * e.getBoundingClientRect().height
     const svg = ([...box.querySelectorAll('svg')] as SVGSVGElement[]).sort((a, b) => area(b) - area(a))[0]
     const transparent = state.view === 'lifelike' && state.robot.wiringBackground === 'transparent'
-    return svg ? svgDocument(svg, { transparent }) : Promise.resolve('')
+    // Framed to the whole drawing, not the user's current zoom and pan.
+    const capture = captureRef.current ?? undefined
+    return svg ? svgDocument(svg, { transparent, capture }) : Promise.resolve('')
   }
   root.render(
     <StrictMode>
       <WiringHost
         initial={state}
         onChange={onChange}
+        captureRef={captureRef}
         bind={(s) => {
           set = s
           // Anything the host did between mount and this first effect.
