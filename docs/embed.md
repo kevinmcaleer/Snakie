@@ -53,9 +53,11 @@ Linking a 3-D model happens in the host, not here: `importMesh` copies a file in
 This opens the wiring canvas, in life-like breadboard or schematic view.
 
 - `robot`: a `RobotDefinition` (robot.yml's shape: `board`, `parts`, `connections`). A board endpoint is `board.<pin>#<pad index>` and a part endpoint is `<instance>.<pin>#<index>`.
-- `libraries`: where the placed parts and the board resolve from. The board is the microcontroller part whose board id matches `robot.board`.
+- `libraries`: where the placed parts and the board resolve from. The board is the microcontroller part whose board id matches `robot.board`. With no `robot.board` there is no board: unlike the app, the embed doesn't fall back to a Pico 2 W.
 - `onChange(robot)`: fires on every edit.
 - `view`: `'lifelike'` (the default) or `'schematic'`.
+- `projectMeta`: show the project name, description and mass readout at the top of the canvas's browser panel. Defaults to `false`, since the host page has its own title.
+- `emptyHint`: what the empty canvas (no board, no parts) says, under "Nothing to wire yet."
 
 It returns a handle:
 
@@ -64,6 +66,7 @@ It returns a handle:
 | `robot()` / `setRobot(robot)` | Read or replace the wiring. |
 | `setLibraries(libraries)` | Replace the libraries, e.g. with a part the host just added. Call it before `addParts`. |
 | `addParts([{ libraryId, part }])` | Place parts with fresh instance ids. This also fires `onChange`. |
+| `setBoard(boardId)` | Make a library microcontroller the board, or pass `null` to take the board away. The wires on the old board's pins go with it. This also fires `onChange`. |
 | `setView(view)` | Switch between life-like and schematic. |
 | `exportSvg()` | A `Promise<string>` of a standalone SVG. Computed colours are written in, and `<image>`s are read into `data:` URLs, so it renders through `<img>`. |
 | `exportPng(scale)` | The same drawing as a PNG `Blob`, at `scale` × its size (default 2). |

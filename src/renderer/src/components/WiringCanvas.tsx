@@ -795,6 +795,15 @@ export interface WiringCanvasProps {
   /** Highlight a net by node id (null clears) — the Nets tab's "show" action reuses
    *  the ERC "Show me" spotlight. */
   onHighlightNet?: (id: string | null) => void
+  /**
+   * Show the project's name, description and mass readout at the top of the
+   * floating browser. Default true. An embedding host (kevsrobots.com) keeps
+   * those on its own page, so it hides them.
+   */
+  projectMeta?: boolean
+  /** What the canvas says when there's no board and no parts. Default: pick a
+   *  board above, then add parts from the library panel. */
+  emptyHint?: string
 }
 
 /** One net (netlist node) row for the Connections panel's "Nets" tab. */
@@ -844,7 +853,7 @@ interface Drag {
   pinchWY?: number
 }
 
-export function WiringCanvas({ robot, onChange, history, folder, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, mat, usedByCode, smoking, onDropPart, onShowHelp, focusedChrome = false, voltage, live, highlight, nets, onHighlightNet }: WiringCanvasProps): JSX.Element {
+export function WiringCanvas({ robot, onChange, history, folder, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, mat, usedByCode, smoking, onDropPart, onShowHelp, focusedChrome = false, voltage, live, highlight, nets, onHighlightNet, projectMeta = true, emptyHint }: WiringCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
   // The focusable canvas root — focused when a part is selected so the Delete /
   // Backspace shortcut is scoped to THIS canvas (a selected part can't be nuked by
@@ -3770,6 +3779,7 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
           name={robot.name ?? ''}
           description={robot.description ?? ''}
           onCommit={commitRobotMeta}
+          projectMeta={projectMeta}
           hierarchy={hierarchy}
           coverage={massCoverageInfo}
           compOpen={compOpen}
@@ -3786,7 +3796,7 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
         {!boardDef && robot.parts.length === 0 && (
           <div className="wc__empty">
             <p>Nothing to wire yet.</p>
-            <p className="wc__muted">Pick a board above, then add parts from the library panel.</p>
+            <p className="wc__muted">{emptyHint ?? 'Pick a board above, then add parts from the library panel.'}</p>
           </div>
         )}
       </div>
@@ -3834,6 +3844,7 @@ function BoardBrowser({
   name,
   description,
   onCommit,
+  projectMeta,
   hierarchy,
   coverage,
   compOpen,
@@ -3849,6 +3860,8 @@ function BoardBrowser({
   name: string
   description: string
   onCommit: (patch: { name?: string; description?: string }) => void
+  /** Show the name/description header and the mass readout. */
+  projectMeta: boolean
   /** The SHARED hierarchy (#718) — the same rows the Build workspace renders. */
   hierarchy: HierarchyNode[]
   /** How much of the robot is actually weighed (#719). */
@@ -3934,7 +3947,7 @@ function BoardBrowser({
         </button>
       </div>
 
-      <RobotHeader name={name} description={description} onCommit={onCommit} />
+      {projectMeta && <RobotHeader name={name} description={description} onCommit={onCommit} />}
 
       {/* The ONE hierarchy (#718) — the same component, the same rows, the same
           behaviours the Build workspace's dock shows. Build-only rows (joints,
@@ -3948,7 +3961,7 @@ function BoardBrowser({
           open={compOpen}
           onToggleOpen={() => onCompOpenChange(!compOpen)}
           onRemove={(node) => onRemovePart(node.key)}
-          coverage={coverage}
+          coverage={projectMeta ? coverage : null}
           emptyHint="No components yet — pick a board + add parts."
         />
       </div>
