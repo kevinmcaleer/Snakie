@@ -30,3 +30,22 @@
   position: absolute;
   z-index: auto;
 }
+
+/* The background picker's papers, in Mermaid Factory's colours so a project's
+   wiring and its diagrams match (mermaid-factory#73): blue #1f4f8f, black
+   #121519 with a blue-tinted grid. The app's own mats are left alone. */
+.snakie-embed.snakie-embed--wiring [data-breadboard-bg='dark'] .wc--lifelike .wc__stage {
+  background-color: #121519;
+}
+.snakie-embed.snakie-embed--wiring [data-breadboard-bg='dark'] .wc--lifelike .wc__grid {
+  stroke: #8cbeff;
+}
+.snakie-embed.snakie-embed--wiring [data-breadboard-bg='dark'] .wc--lifelike .wc__grid-layer {
+  opacity: 0.7;
+}
+.snakie-embed.snakie-embed--wiring [data-breadboard-bg='blueprint'] .wc--lifelike .wc__stage {
+  background-color: #1f4f8f;
+}
+.snakie-embed.snakie-embed--wiring [data-breadboard-bg='blueprint'] .wc--lifelike.wc--drop .wc__stage {
+  background-color: #245aa0;
+}

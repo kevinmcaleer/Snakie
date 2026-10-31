@@ -58,6 +58,7 @@ This opens the wiring canvas, in life-like breadboard or schematic view.
 - `view`: `'lifelike'` (the default) or `'schematic'`.
 - `projectMeta`: show the project name, description and mass readout at the top of the canvas's browser panel. Defaults to `false`, since the host page has its own title.
 - `emptyHint`: what the empty canvas (no board, no parts) says, under "Nothing to wire yet."
+- `backgroundPicker`: show the background button in the zoom toolbar (transparent, black blueprint, blue blueprint, in Mermaid Factory's colours). Defaults to `true`. The pick is saved in the wiring as `robot.wiringBackground` (`'transparent' | 'blueprint-dark' | 'blueprint'`, absent = black blueprint) and fires `onChange`, so it is saved with the rest. Transparent shows a white sheet with a faint grid on screen, and exports no sheet and no grid.
 
 It returns a handle:
 
@@ -68,7 +69,8 @@ It returns a handle:
 | `addParts([{ libraryId, part }])` | Place parts with fresh instance ids. This also fires `onChange`. |
 | `setBoard(boardId)` | Make a library microcontroller the board, or pass `null` to take the board away. The wires on the old board's pins go with it. This also fires `onChange`. |
 | `setView(view)` | Switch between life-like and schematic. |
-| `exportSvg()` | A `Promise<string>` of a standalone SVG. Computed colours are written in, and `<image>`s are read into `data:` URLs, so it renders through `<img>`. |
+| `background()` / `setBackground(bg)` | Read or change `robot.wiringBackground`. Setting it fires `onChange`. |
+| `exportSvg()` | A `Promise<string>` of a standalone SVG. Computed colours are written in, and `<image>`s are read into `data:` URLs, so it renders through `<img>`. It is drawn on the background's sheet, or with no sheet and no grid when the background is transparent. |
 | `exportPng(scale)` | The same drawing as a PNG `Blob`, at `scale` × its size (default 2). |
 | `warnings()` | Non-blocking pin checks, as `[{ kind, message }]` (`embed/wiring-checks.ts`). `short` means power is joined to ground, `rails` means two of the board's supplies are joined, `gpio` means two board GPIOs share a wire, `unwired` means a placed part's power or ground pin has no wire, and `missing` means a placed part isn't in the libraries. |
 | `bomMarkdown()` / `pinoutMarkdown()` | The Bill of Materials and pinout tables, as Markdown (`shared/robot-docs.ts`). |

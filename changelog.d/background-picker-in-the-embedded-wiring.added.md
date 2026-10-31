@@ -1,0 +1,1 @@
+- **Background picker in the embedded wiring canvas: transparent, black or blue blueprint, saved with the wiring.** 

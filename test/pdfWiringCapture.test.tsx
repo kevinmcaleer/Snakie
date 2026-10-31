@@ -202,7 +202,8 @@ describe('the pane says when it is ready (#1168)', () => {
       join(__dirname, '..', 'src', 'renderer', 'src', 'components', 'WiringCanvas.css'),
       'utf-8'
     )
-    expect(css).toContain("[data-breadboard-bg='white'] .wc--lifelike .wc__stage")
+    // The white rules are shared with the embed's transparent mat (`:is(…)`).
+    expect(css).toMatch(/\[data-breadboard-bg='white'\][^{]*\.wc--lifelike \.wc__stage/)
     expect(css).not.toContain(':root[data-breadboard-bg')
   })
 })
