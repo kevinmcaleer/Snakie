@@ -286,3 +286,15 @@
   letter-spacing: 0.03em;
   color: var(--danger, #c0392b);
 }
+
+/* Footer text input for local LLM model name. */
+.chat__footer-input {
+  width: 130px;
+  padding: 0.1rem 0.3rem;
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.72rem;
+}
