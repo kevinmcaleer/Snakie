@@ -1,0 +1,1 @@
+- **Open in Snakie from a code embed carries the code itself, so GitHub's rate limit can't stop it opening; gist files load from their raw address; narrower embeds sit at the left (#1285).** 

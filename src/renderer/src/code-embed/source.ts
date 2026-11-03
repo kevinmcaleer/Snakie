@@ -5,10 +5,11 @@
  * An embed shows one file from a GitHub gist or repo. Both are readable from a
  * browser with no key:
  *
- *  - **gists** through the Gist API (`api.github.com/gists/<id>`), which also
- *    tells us the file names and the owner. Unauthenticated, that API allows 60
- *    requests an hour per reader's IP, so when it refuses we fall back to the
- *    raw file on `gist.githubusercontent.com` — which needs the file name.
+ *  - **gists**: when the file name is known, straight from the raw file on
+ *    `gist.githubusercontent.com` (no rate limit). Otherwise through the Gist
+ *    API (`api.github.com/gists/<id>`), which tells us the file names and the
+ *    owner — but unauthenticated it allows only 60 requests an hour per
+ *    reader's IP, so when it refuses we fall back to the gist's raw first file.
  *  - **repo files** straight from `raw.githubusercontent.com`. With no `ref`
  *    we try `main`, then `master`, since both are still common.
  *
@@ -92,11 +93,32 @@ export function pickGistFile(files: Record<string, GistFile>, wanted: string | n
   return names.find((n) => /\.py$/i.test(n)) ?? names[0]
 }
 
+// The raw text of a gist file (or, with no name, its first file). The user
+// segment isn't checked by GitHub, but it has to be there.
+function rawGistUrl(source: Extract<EmbedSource, { kind: 'gist' }>, file: string | null): string {
+  const tail = [source.revision, file ? encodeURIComponent(file) : null].filter(Boolean).join('/')
+  return `https://gist.githubusercontent.com/${source.user ?? 'anonymous'}/${source.id}/raw${tail ? '/' + tail : ''}`
+}
+
+async function fetchText(fetcher: Fetcher, url: string): Promise<string | null> {
+  try {
+    const r = await fetcher(url)
+    return r.ok ? await r.text() : null
+  } catch {
+    return null
+  }
+}
+
 async function loadGist(
   source: Extract<EmbedSource, { kind: 'gist' }>,
   fetcher: Fetcher
 ): Promise<LoadedProgram> {
   const page = githubUrlFor(source)
+  // A named file needs no API call (and so no rate limit).
+  if (source.file) {
+    const code = await fetchText(fetcher, rawGistUrl(source, source.file))
+    if (code !== null) return { name: source.file, code, githubUrl: page, source }
+  }
   const api = `https://api.github.com/gists/${source.id}${source.revision ? '/' + source.revision : ''}`
   let res: Awaited<ReturnType<Fetcher>> | null = null
   try {
@@ -129,16 +151,12 @@ async function loadGist(
     return { name, code, githubUrl: githubUrlFor(resolved), source: resolved, ...(all ? { files: all } : {}) }
   }
   if (res && res.status === 404) throw new EmbedLoadError("That gist doesn't exist, or it is secret.", page)
-  // Rate-limited (403/429) or offline: the raw file still works, if we know its name.
-  if (source.file) {
-    // The user segment isn't checked by GitHub, but it has to be there.
-    const raw = `https://gist.githubusercontent.com/${source.user ?? 'anonymous'}/${source.id}/raw/${source.revision ? source.revision + '/' : ''}${encodeURIComponent(source.file)}`
-    try {
-      const r = await fetcher(raw)
-      if (r.ok) return { name: source.file, code: await r.text(), githubUrl: page, source }
-    } catch {
-      /* fall through to the error */
-    }
+  // Rate-limited (403/429) or offline, with no file name: the gist's raw
+  // address with no name gives its first file. We can't learn the name, so
+  // call it main.py.
+  if (!source.file) {
+    const code = await fetchText(fetcher, rawGistUrl(source, null))
+    if (code !== null) return { name: 'main.py', code, githubUrl: page, source }
   }
   throw new EmbedLoadError(
     'GitHub is busy (too many requests from this network), so the code could not load. Try again in a few minutes.',
@@ -200,20 +218,24 @@ export function sourceQuery(source: EmbedSource): URLSearchParams {
 }
 
 /**
- * The full app's URL with this file loaded (#1287). Edited code — or inline
- * code, which has nowhere else to live — rides in the hash, so it never
- * reaches a server log and the app can tell "the original" from "your edit".
+ * The full app's URL with this file loaded (#1287). The code the embed shows
+ * rides in the hash — `#code=` when the reader edited it, `#src=` for the
+ * original — so the app opens it without asking GitHub again (whose API may
+ * be rate-limiting this reader), and it never reaches a server log. The query
+ * still names the source, for the tab name and the "from" note.
  */
 export function openInSnakieUrl(
   appOrigin: string,
   source: EmbedSource,
-  editedCode: string | null,
-  name: string
+  code: string | null,
+  name: string,
+  edited = false
 ): string {
   const q = sourceQuery(source)
   if (source.kind === 'inline' && !q.has('name')) q.set('name', name)
+  if (source.kind === 'gist' && !q.has('file') && name) q.set('file', name)
   const query = q.toString()
-  const code = editedCode ?? (source.kind === 'inline' ? decodeCode(source.code) ?? source.code : null)
-  const hash = code !== null ? `#code=${encodeCode(code)}` : ''
+  const text = code ?? (source.kind === 'inline' ? decodeCode(source.code) ?? source.code : null)
+  const hash = text !== null ? `#${edited ? 'code' : 'src'}=${encodeCode(text)}` : ''
   return `${appOrigin.replace(/\/+$/, '')}/${query ? '?' + query : ''}${hash}`
 }
