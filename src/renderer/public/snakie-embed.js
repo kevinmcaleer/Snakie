@@ -8,7 +8,7 @@
  *   <script src="https://app.snakie.org/snakie-embed.js" defer></script>
  *
  * Each element becomes an iframe of /embed.html. Every other data-* attribute
- * (file, path, ref, lines, view, toolbox, run, autorun, theme, height, engine,
+ * (file, path, ref, lines, view, views, toolbox, run, autorun, theme, height, engine,
  * packages, code, name) is passed through as a URL parameter.
  *
  * Size: data-width="full|wide|medium|narrow|<px>|<n>%" (default full; a
@@ -36,7 +36,7 @@
   })()
   var PARAMS = [
     'gist', 'user', 'file', 'revision', 'repo', 'path', 'ref', 'lines', 'code', 'name',
-    'view', 'toolbox', 'run', 'autorun', 'theme', 'height', 'engine', 'packages'
+    'view', 'views', 'toolbox', 'run', 'autorun', 'theme', 'height', 'engine', 'packages'
   ]
   var DEFAULT_HEIGHT = 360
   var RADIUS = 12

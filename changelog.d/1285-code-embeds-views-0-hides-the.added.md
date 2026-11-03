@@ -1,0 +1,1 @@
+- **Code embeds: views=0 hides the Code / Split / Blocks switch (#1285).** 
