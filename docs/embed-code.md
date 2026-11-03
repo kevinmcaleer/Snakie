@@ -53,8 +53,8 @@ https://app.snakie.org/embed.html?code=<text or base64url deflate>&name=main.py
 | `run` | `1` (default) shows Run and the REPL. `0` makes a read-only viewer. |
 | `autorun` | `1` runs the program as soon as it loads. |
 | `theme` | `skeuomorph` (default, light) or `dark`. |
-| `height` | `auto` (default: sized to the code), `short` (320px), `medium` (460px), `tall` (640px), or a height in px. Longer code scrolls inside the box. |
-| `width` | `full` (default), `wide` (860px), `medium` (680px), `narrow` (520px), a width in px, or a percentage like `60%`. A narrower box is centred, and never wider than the page. Handled by `snakie-embed.js` (not an `/embed` URL parameter). |
+| `height` | `auto` (default: sized to the code), `short` (320px), `medium` (460px), `tall` (640px), or a height in px. The height is the whole box, Run bar and REPL included; longer code scrolls inside it. |
+| `width` | `full` (default), `wide` (860px), `medium` (680px), `narrow` (520px), a width in px, or a percentage like `60%`. A narrower box sits at the left, and is never wider than the page. Handled by `snakie-embed.js` (not an `/embed` URL parameter). |
 | `engine` | `micropython` (default) or `pyodide` (see below). |
 | `packages` | Pyodide packages to load before running, comma-separated. Imports are detected anyway. |
 | `id` | Echoed in the embed's `postMessage`s. The helper sets it. |

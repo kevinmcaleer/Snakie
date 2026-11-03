@@ -195,7 +195,7 @@ function EmbedShell({ params }: { params: EmbedParams }): JSX.Element {
     phase.kind === 'ready' ? githubUrlFor(phase.program.source, params.lines) : phase.kind === 'error' ? phase.githubUrl : null
   const snakieUrl =
     phase.kind === 'ready'
-      ? openInSnakieUrl(APP_ORIGIN, phase.program.source, edited ? content : null, phase.program.name)
+      ? openInSnakieUrl(APP_ORIGIN, phase.program.source, content, phase.program.name, edited)
       : null
   const name = phase.kind === 'ready' ? phase.program.name : ''
 

@@ -95,16 +95,26 @@ describe('loading code from GitHub (#1286)', () => {
     expect(one.code).toBe('b')
   })
 
-  it('falls back to the raw gist file when the API is rate-limited', async () => {
+  it('loads a named gist file from its raw address, with no API call', async () => {
     const f = fakeFetch({
       'https://api.github.com/gists/abc': { status: 403, body: '' },
       'https://gist.githubusercontent.com/anonymous/abc/raw/main.py': { body: 'print(2)' }
     })
     const p = await loadProgram({ kind: 'gist', id: 'abc', user: null, file: 'main.py', revision: null }, f)
     expect(p.code).toBe('print(2)')
+    expect(f.calls).toEqual(['https://gist.githubusercontent.com/anonymous/abc/raw/main.py'])
   })
 
-  it('says why when a rate-limited gist has no file name to fall back on', async () => {
+  it("falls back to the gist's raw first file when the API is rate-limited", async () => {
+    const f = fakeFetch({
+      'https://api.github.com/gists/abc': { status: 403, body: '' },
+      'https://gist.githubusercontent.com/kev/abc/raw': { body: 'print(3)' }
+    })
+    const p = await loadProgram({ kind: 'gist', id: 'abc', user: 'kev', file: null, revision: null }, f)
+    expect(p).toMatchObject({ name: 'main.py', code: 'print(3)' })
+  })
+
+  it('says why when a rate-limited gist cannot load at all', async () => {
     const f = fakeFetch({ 'https://api.github.com/gists/abc': { status: 403, body: '' } })
     await expect(loadProgram({ kind: 'gist', id: 'abc', user: null, file: null, revision: null }, f)).rejects.toBeInstanceOf(EmbedLoadError)
   })
@@ -149,12 +159,15 @@ describe('links out of the embed (#1286, #1287)', () => {
     )
   })
 
-  it('opens the original in Snakie with no hash, and edits in the hash', () => {
+  it('carries the code to Snakie in the hash: #src= the original, #code= an edit', () => {
     const src = { kind: 'gist' as const, id: 'abc', user: 'kev', file: 'main.py', revision: null }
     expect(openInSnakieUrl('https://app.snakie.org', src, null, 'main.py')).toBe(
       'https://app.snakie.org/?gist=kev%2Fabc&file=main.py'
     )
-    const url = openInSnakieUrl('https://app.snakie.org', src, 'print("edited")', 'main.py')
+    const orig = openInSnakieUrl('https://app.snakie.org', src, 'print(1)', 'main.py')
+    expect(orig.startsWith('https://app.snakie.org/?gist=kev%2Fabc&file=main.py#src=')).toBe(true)
+    expect(decodeCode(/#src=(.+)$/.exec(orig)?.[1] ?? '')).toBe('print(1)')
+    const url = openInSnakieUrl('https://app.snakie.org', src, 'print("edited")', 'main.py', true)
     const payload = /#code=(.+)$/.exec(url)?.[1] ?? ''
     expect(decodeCode(payload)).toBe('print("edited")')
   })

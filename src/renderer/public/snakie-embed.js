@@ -12,7 +12,7 @@
  * packages, code, name) is passed through as a URL parameter.
  *
  * Size: data-width="full|wide|medium|narrow|<px>|<n>%" (default full; a
- * narrower box is centred) and data-height="auto|short|medium|tall|<px>"
+ * narrower box sits at the left) and data-height="auto|short|medium|tall|<px>"
  * (default auto: the box grows to fit the code). The iframe is
  * created when the element nears the viewport, and its height follows the
  * embed's content (postMessage, origin-checked). Without JavaScript the
@@ -118,8 +118,6 @@
     el.style.borderRadius = RADIUS + 'px'
     el.style.overflow = 'hidden'
     el.style.maxWidth = width || ''
-    el.style.marginLeft = width ? 'auto' : ''
-    el.style.marginRight = width ? 'auto' : ''
     // Keep the fallback (a GitHub link) for screen readers until the frame loads.
     var fallback = Array.prototype.slice.call(el.childNodes)
     iframe.addEventListener('load', function () {

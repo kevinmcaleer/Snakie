@@ -25,9 +25,15 @@ export function OpenFromUrl(): null {
 
   useEffect(() => {
     const params = parseEmbedParams(window.location.search)
-    const hashCode = /(?:^#|&)code=([A-Za-z0-9_-]+)/.exec(window.location.hash)?.[1] ?? null
-    const edited = hashCode ? decodeCode(hashCode) : null
-    if (params.source.kind === 'none' && edited === null) return
+    // `#code=` is the reader's edit; `#src=` is the original, sent along so we
+    // needn't ask GitHub again (its API rate-limits readers to 60 an hour).
+    const hashOf = (key: string): string | null => {
+      const raw = new RegExp(`(?:^#|&)${key}=([A-Za-z0-9_-]+)`).exec(window.location.hash)?.[1]
+      return raw ? decodeCode(raw) : null
+    }
+    const edited = hashOf('code')
+    const carried = edited ?? hashOf('src')
+    if (params.source.kind === 'none' && carried === null) return
     let cancelled = false
 
     const clearUrl = (): void => {
@@ -58,21 +64,25 @@ export function OpenFromUrl(): null {
 
     void (async () => {
       let name = params.source.kind === 'inline' ? params.source.name : 'main.py'
-      let code = edited
+      let code = carried
       let from = 'the link'
-      if (params.source.kind === 'gist' || params.source.kind === 'repo') {
+      if (carried !== null && (params.source.kind === 'gist' || params.source.kind === 'repo')) {
+        // The embed sent the code: no need to load it again.
+        name =
+          params.source.kind === 'gist'
+            ? params.source.file ?? 'main.py'
+            : params.source.path.split('/').pop() ?? 'main.py'
+        from = params.source.kind === 'gist' ? 'a GitHub gist' : `${params.source.owner}/${params.source.name}`
+      } else if (params.source.kind === 'gist' || params.source.kind === 'repo') {
         try {
           const program = await loadProgram(params.source, (url) => fetch(url))
           name = program.name
-          code = edited ?? program.code
+          code = program.code
           from = params.source.kind === 'gist' ? 'a GitHub gist' : `${params.source.owner}/${params.source.name}`
         } catch (err) {
-          if (edited === null) {
-            if (!cancelled) status(`Couldn't open the shared code: ${err instanceof Error ? err.message : String(err)}`)
-            clearUrl()
-            return
-          }
-          name = params.source.kind === 'gist' ? params.source.file ?? 'main.py' : params.source.path.split('/').pop() ?? 'main.py'
+          if (!cancelled) status(`Couldn't open the shared code: ${err instanceof Error ? err.message : String(err)}`)
+          clearUrl()
+          return
         }
       } else if (params.source.kind === 'inline' && code === null) {
         code = decodeCode(params.source.code) ?? params.source.code
