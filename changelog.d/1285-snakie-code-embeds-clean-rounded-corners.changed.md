@@ -1,0 +1,1 @@
+- **Snakie code embeds: clean rounded corners on any page, and width/height sizes (narrow…full, short…tall) (#1285).** 

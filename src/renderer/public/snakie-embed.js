@@ -9,7 +9,11 @@
  *
  * Each element becomes an iframe of /embed.html. Every other data-* attribute
  * (file, path, ref, lines, view, toolbox, run, autorun, theme, height, engine,
- * packages, code, name) is passed through as a URL parameter. The iframe is
+ * packages, code, name) is passed through as a URL parameter.
+ *
+ * Size: data-width="full|wide|medium|narrow|<px>|<n>%" (default full; a
+ * narrower box is centred) and data-height="auto|short|medium|tall|<px>"
+ * (default auto: the box grows to fit the code). The iframe is
  * created when the element nears the viewport, and its height follows the
  * embed's content (postMessage, origin-checked). Without JavaScript the
  * element's own content (a GitHub link) stays visible.
@@ -35,6 +39,31 @@
     'view', 'toolbox', 'run', 'autorun', 'theme', 'height', 'engine', 'packages'
   ]
   var DEFAULT_HEIGHT = 360
+  var RADIUS = 12
+  // Named sizes, so a page can say "narrow" or "short" without picking pixels.
+  var WIDTHS = { full: '100%', wide: '860px', medium: '680px', narrow: '520px' }
+  var HEIGHTS = { short: 320, medium: 460, tall: 640 }
+
+  // '680px' / '60%' / null (full width) for a width option.
+  function widthFor(v) {
+    if (v === undefined || v === null || v === '') return null
+    v = String(v).trim().toLowerCase()
+    if (WIDTHS[v]) return v === 'full' ? null : WIDTHS[v]
+    var m = /^(\d+(?:\.\d+)?)(px|%)?$/.exec(v)
+    if (!m) return null
+    var n = Number(m[1])
+    if (m[2] === '%') return n >= 100 ? null : Math.max(20, n) + '%'
+    return Math.max(240, Math.round(n)) + 'px'
+  }
+
+  // A fixed height in px, or null for auto (follow the content).
+  function heightFor(v) {
+    if (v === undefined || v === null || v === '') return null
+    v = String(v).trim().toLowerCase()
+    if (HEIGHTS[v]) return HEIGHTS[v]
+    var m = /^(\d+)(px)?$/.exec(v)
+    return m ? Math.max(160, Math.min(2000, Number(m[1]))) : null
+  }
   var counter = 0
   var frames = {}
 
@@ -49,6 +78,7 @@
       if (d[key] !== undefined && opts[key] === undefined) opts[key] = d[key]
     }
     if (d.title) opts.title = d.title
+    if (d.width) opts.width = d.width
     return opts
   }
 
@@ -56,7 +86,7 @@
     var q = []
     for (var i = 0; i < PARAMS.length; i++) {
       var key = PARAMS[i]
-      var v = opts[key]
+      var v = key === 'height' ? heightFor(opts.height) : opts[key]
       if (v === undefined || v === null || v === '') continue
       if (v === true) v = '1'
       if (v === false) v = '0'
@@ -76,11 +106,20 @@
     iframe.loading = 'lazy'
     iframe.setAttribute('allow', 'clipboard-write')
     iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin')
-    var fixed = opts.height && /^\d+$/.test(String(opts.height)) ? Number(opts.height) : null
+    var fixed = heightFor(opts.height)
     iframe.style.cssText =
-      'display:block;width:100%;border:0;border-radius:12px;background:transparent;color-scheme:normal;' +
+      'display:block;width:100%;max-width:100%;border:0;margin:0;background:transparent;color-scheme:normal;' +
       'height:' + (fixed || DEFAULT_HEIGHT) + 'px;transition:height .15s ease'
+    iframe.style.setProperty('border-radius', RADIUS + 'px', 'important')
     el.classList.add('snakie-embed')
+    // The box clips the frame to its rounded corners itself, so a page rule on
+    // iframes (border-radius: 0, say) can't uncover the embed's own corners.
+    var width = widthFor(opts.width)
+    el.style.borderRadius = RADIUS + 'px'
+    el.style.overflow = 'hidden'
+    el.style.maxWidth = width || ''
+    el.style.marginLeft = width ? 'auto' : ''
+    el.style.marginRight = width ? 'auto' : ''
     // Keep the fallback (a GitHub link) for screen readers until the frame loads.
     var fallback = Array.prototype.slice.call(el.childNodes)
     iframe.addEventListener('load', function () {
@@ -139,7 +178,15 @@
     }
   }
 
-  window.SnakieEmbed = { version: '1', origin: ORIGIN, mount: mount, scan: scan, url: embedUrl }
+  window.SnakieEmbed = {
+    version: '1',
+    origin: ORIGIN,
+    mount: mount,
+    scan: scan,
+    url: embedUrl,
+    widths: WIDTHS,
+    heights: HEIGHTS
+  }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { scan() })
   else scan()
 })()
