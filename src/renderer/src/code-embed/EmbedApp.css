@@ -1,0 +1,248 @@
+/* THE CODE EMBED (#1286) — Soft Shell, in a box another page owns.
+ * The whole page is the embed: a bar (name, view switch, Run), the editor,
+ * the REPL, and a footer with the two links out. */
+
+:root[data-embed='code'] body {
+  background: var(--panel, var(--bg));
+  overflow: hidden;
+}
+
+.snk-embed {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--panel, var(--bg));
+  color: var(--text);
+  font-family: var(--font-ui);
+  border: 1px solid var(--shellbd, var(--border));
+  border-radius: 12px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.snk-embed__bar,
+.snk-embed__footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 0 10px;
+  background: var(--shell, var(--bg-elevated));
+  min-width: 0;
+}
+
+.snk-embed__bar {
+  height: 44px;
+  border-bottom: 1px solid var(--shellbd, var(--border));
+}
+
+.snk-embed__footer {
+  height: 34px;
+  border-top: 1px solid var(--shellbd, var(--border));
+  font-size: 12px;
+  color: var(--txt3, var(--text-muted));
+}
+
+.snk-embed__spacer {
+  flex: 1 1 auto;
+}
+
+.snk-embed__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--head, var(--text));
+}
+
+.snk-embed__edited {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--goldink, var(--accent-ink));
+  background: var(--goldbg, var(--bg-sunken));
+}
+
+.snk-embed__views {
+  flex: 0 0 auto;
+}
+
+.snk-embed__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+/* Every button with an icon: the icon dead centre beside its label. */
+.snk-embed .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.snk-embed__icon {
+  display: block;
+  flex: 0 0 auto;
+  width: auto;
+}
+
+.snk-embed__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.snk-embed__editor {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  background: var(--editor, var(--editor-region-bg));
+}
+
+/* The app's panes expect to fill a region; give them one. */
+.snk-embed__editor > * {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.snk-embed__message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+  color: var(--txt3, var(--text-muted));
+  font-size: 13px;
+}
+
+.snk-embed__message p {
+  margin: 0;
+  max-width: 46ch;
+}
+
+.snk-embed__message--error p {
+  color: var(--text);
+}
+
+.snk-embed__message a,
+.snk-embed__link {
+  color: var(--greentext, var(--accent-ink));
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.snk-embed__message a:hover,
+.snk-embed__link:hover {
+  text-decoration: underline;
+}
+
+.snk-embed__repl {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 170px;
+  min-height: 0;
+  border-top: 1px solid var(--shellbd, var(--border));
+}
+
+.snk-embed__repl--plots {
+  flex-basis: 400px;
+}
+
+.snk-embed__plots {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 230px;
+  padding: 8px;
+  overflow-x: auto;
+  background: var(--card, #fff);
+  border-bottom: 1px solid var(--shellbd, var(--border));
+}
+
+.snk-embed__plots img {
+  height: 100%;
+  width: auto;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.snk-embed__term-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.snk-embed__terminal {
+  height: 100%;
+}
+
+.snk-embed__term-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: #8fe6b6;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.snk-embed__term-hint strong {
+  margin: 0 0.3em;
+}
+
+.snk-embed__engine {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.snk-embed__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* Phone width: the engine note goes first, the links keep their words. */
+@media (max-width: 480px) {
+  .snk-embed__engine {
+    display: none;
+  }
+
+  .snk-embed__bar {
+    gap: 6px;
+    padding: 0 6px;
+  }
+
+  .snk-embed__views .btn {
+    padding-left: 7px;
+    padding-right: 7px;
+  }
+}
+
+/* Monaco draws a focus-blue outline round the whole editor; in a box this
+ * small it reads as a stray border. The caret and line highlight show focus. */
+.snk-embed .monaco-editor {
+  outline: none !important;
+}

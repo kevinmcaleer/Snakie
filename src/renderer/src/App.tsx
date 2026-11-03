@@ -13,6 +13,7 @@ import { FileSelectionProvider } from './store/file-selection'
 import { LayoutProvider } from './store/layout'
 import { TutorialsProvider } from './store/tutorials'
 import { IS_WEB } from './lib/env'
+import { OpenFromUrl } from './code-embed/OpenFromUrl'
 
 function App(): JSX.Element {
   return (
@@ -44,6 +45,9 @@ function App(): JSX.Element {
                         the providers — a BoardPane mounted in a React root of
                         its own has no workspace and throws. */}
                       <BoardCaptureHost />
+                      {/* "Open in Snakie" from a code embed (#1287): opens
+                        `?gist=` / `?repo=` as a new tab. Web only. */}
+                      {IS_WEB && <OpenFromUrl />}
                     </TutorialsProvider>
                   </ConsoleProvider>
                 </DiagnosticsProvider>

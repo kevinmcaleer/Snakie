@@ -88,7 +88,7 @@ const SKEUO_TERMINAL_THEME = {
  * skins — the light default and its dark variant (issue #91) — frame the console
  * as a recessed dark-glass screen, so both glow green phosphor; the plain `light`
  * skin keeps the dark REPL palette. */
-function terminalThemeFor(docTheme: string | null): typeof DARK_TERMINAL_THEME {
+export function terminalThemeFor(docTheme: string | null): typeof DARK_TERMINAL_THEME {
   return docTheme === 'skeuomorph' || docTheme === 'dark'
     ? SKEUO_TERMINAL_THEME
     : DARK_TERMINAL_THEME
