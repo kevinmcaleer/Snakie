@@ -139,6 +139,25 @@ function EmbedShell({ params }: { params: EmbedParams }): JSX.Element {
     setRunning(false)
   }, [engine])
 
+  /** Show another file of a multi-file gist (its original text). */
+  const switchFile = useCallback(
+    (name: string): void => {
+      if (phase.kind !== 'ready' || !file || name === phase.program.name) return
+      const next = phase.program.files?.find((f) => f.name === name)
+      if (!next) return
+      if (running) void stop()
+      const code = sliceLines(next.code, params.lines)
+      const source =
+        phase.program.source.kind === 'gist' ? { ...phase.program.source, file: name } : phase.program.source
+      closeFile(file.id)
+      openBuffer(name, code)
+      setPlots([])
+      setView(params.view ?? (params.engine === 'micropython' && hasBlocksFooter(code) ? 'blocks' : 'code'))
+      setPhase({ kind: 'ready', program: { ...phase.program, name, code, source }, original: code })
+    },
+    [phase, file, running, stop, params, closeFile, openBuffer]
+  )
+
   const reset = useCallback((): void => {
     if (phase.kind !== 'ready' || !file) return
     if (running) void stop()
@@ -193,10 +212,28 @@ function EmbedShell({ params }: { params: EmbedParams }): JSX.Element {
   return (
     <div className={`snk-embed snk-embed--${view}${runnable ? '' : ' snk-embed--viewer'}`}>
       <header className="snk-embed__bar">
-        <span className="snk-embed__name" title={name}>
-          {name || 'Snakie'}
-          {edited && <span className="snk-embed__edited">edited</span>}
-        </span>
+        {phase.kind === 'ready' && phase.program.files ? (
+          <span className="snk-embed__name">
+            <select
+              className="snk-embed__file"
+              value={name}
+              aria-label="File"
+              onChange={(e) => switchFile(e.target.value)}
+            >
+              {phase.program.files.map((f) => (
+                <option key={f.name} value={f.name}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+            {edited && <span className="snk-embed__edited">edited</span>}
+          </span>
+        ) : (
+          <span className="snk-embed__name" title={name}>
+            {name || 'Snakie'}
+            {edited && <span className="snk-embed__edited">edited</span>}
+          </span>
+        )}
         {blocksAllowed && phase.kind === 'ready' && (
           <div className="btn-seg snk-embed__views" role="group" aria-label="View">
             {(['code', 'split', 'blocks'] as const).map((v) => (

@@ -82,6 +82,19 @@ describe('loading code from GitHub (#1286)', () => {
     expect(p.githubUrl).toBe('https://gist.github.com/kev/abc#file-main-py')
   })
 
+  it('lists every file of a multi-file gist when none was named', async () => {
+    const f = fakeFetch({
+      'https://api.github.com/gists/m': {
+        body: JSON.stringify({ files: { 'a.py': { content: 'a' }, 'b.py': { content: 'b' } } })
+      }
+    })
+    const all = await loadProgram({ kind: 'gist', id: 'm', user: null, file: null, revision: null }, f)
+    expect(all.files?.map((x) => x.name)).toEqual(['a.py', 'b.py'])
+    const one = await loadProgram({ kind: 'gist', id: 'm', user: null, file: 'b.py', revision: null }, f)
+    expect(one.files).toBeUndefined()
+    expect(one.code).toBe('b')
+  })
+
   it('falls back to the raw gist file when the API is rate-limited', async () => {
     const f = fakeFetch({
       'https://api.github.com/gists/abc': { status: 403, body: '' },

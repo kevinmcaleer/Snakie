@@ -246,3 +246,15 @@
 .snk-embed .monaco-editor {
   outline: none !important;
 }
+
+/* A multi-file gist: pick the file, styled like the name it replaces. */
+.snk-embed__file {
+  max-width: 220px;
+  padding: 3px 24px 3px 8px;
+  border: 1px solid var(--shellbd, var(--border));
+  border-radius: 8px;
+  background: var(--card, var(--bg-sunken));
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}

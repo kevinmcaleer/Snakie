@@ -26,6 +26,11 @@ export interface LoadedProgram {
   githubUrl: string | null
   /** The source with every guess resolved (file name, ref) — for Open in Snakie. */
   source: EmbedSource
+  /**
+   * Every file of a gist, when it has more than one and the URL didn't name
+   * one — GitHub's own embed shows them all, so the toolbar offers the rest.
+   */
+  files?: { name: string; code: string }[]
 }
 
 export type Fetcher = (url: string) => Promise<{ ok: boolean; status: number; text(): Promise<string> }>
@@ -116,7 +121,12 @@ async function loadGist(
       if (raw.ok) code = await raw.text()
     }
     const resolved = { ...source, file: name, user: source.user ?? data.owner?.login ?? null }
-    return { name, code, githubUrl: githubUrlFor(resolved), source: resolved }
+    const names = Object.keys(files)
+    const all =
+      !source.file && names.length > 1
+        ? names.map((n) => ({ name: n, code: n === name ? code : files[n].content ?? '' }))
+        : undefined
+    return { name, code, githubUrl: githubUrlFor(resolved), source: resolved, ...(all ? { files: all } : {}) }
   }
   if (res && res.status === 404) throw new EmbedLoadError("That gist doesn't exist, or it is secret.", page)
   // Rate-limited (403/429) or offline: the raw file still works, if we know its name.
