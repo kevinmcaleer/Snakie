@@ -13,6 +13,16 @@ import { preferredHeight } from './layout'
 import { GitHubIcon, PlayIcon, ResetIcon, SnakieLogo, StopIcon } from './icons'
 import './EmbedApp.css'
 
+/** The code pane's header for a file Snakie doesn't run. */
+function languageLabel(name: string): string {
+  const ext = /\.([A-Za-z0-9]+)$/.exec(name)?.[1]?.toLowerCase() ?? ''
+  const known: Record<string, string> = {
+    ino: 'Arduino', cpp: 'C++', cc: 'C++', h: 'C / C++', hpp: 'C++', c: 'C', js: 'JavaScript', ts: 'TypeScript',
+    yml: 'YAML', yaml: 'YAML', json: 'JSON', md: 'Markdown', sh: 'Shell', toml: 'TOML', txt: 'Text', html: 'HTML', css: 'CSS'
+  }
+  return known[ext] ?? (ext ? ext.toUpperCase() : 'Code')
+}
+
 const PythonPane = lazy(() => import('../components/PythonPane'))
 const BlocksSplit = lazy(() => import('../components/BlocksSplit'))
 
@@ -57,7 +67,11 @@ function EmbedShell({ params }: { params: EmbedParams }): JSX.Element {
 
   const file = openFiles.find((f) => f.id === activeId) ?? null
   const content = file?.content ?? ''
-  const blocksAllowed = params.engine === 'micropython'
+  const loadedName = phase.kind === 'ready' ? phase.program.name : ''
+  // Only Python runs. A gist of C++ or YAML is shown in the same box, read-only.
+  const isPython = loadedName === '' || /\.(py|pyw)$/i.test(loadedName)
+  const runnable = params.run && isPython
+  const blocksAllowed = params.engine === 'micropython' && isPython
 
   // Load the program once.
   useEffect(() => {
@@ -67,7 +81,7 @@ function EmbedShell({ params }: { params: EmbedParams }): JSX.Element {
         if (cancelled) return
         const code = sliceLines(program.code, params.lines)
         openBuffer(program.name, code)
-        if (!params.view && blocksAllowed && hasBlocksFooter(code)) setView('blocks')
+        if (!params.view && params.engine === 'micropython' && hasBlocksFooter(code)) setView('blocks')
         setPhase({ kind: 'ready', program: { ...program, code }, original: code })
         document.title = `${program.name} · Snakie`
       })
@@ -136,10 +150,10 @@ function EmbedShell({ params }: { params: EmbedParams }): JSX.Element {
   // Autorun once the file is in the editor.
   const autoran = useRef(false)
   useEffect(() => {
-    if (!params.autorun || !params.run || autoran.current || phase.kind !== 'ready' || !file) return
+    if (!params.autorun || !runnable || autoran.current || phase.kind !== 'ready' || !file) return
     autoran.current = true
     void run()
-  }, [params.autorun, params.run, phase, file, run])
+  }, [params.autorun, runnable, phase, file, run])
 
   const edited = phase.kind === 'ready' && file !== null && content !== phase.original
 
@@ -151,12 +165,12 @@ function EmbedShell({ params }: { params: EmbedParams }): JSX.Element {
       height: preferredHeight({
         lines: phase.kind === 'ready' ? stripBlocksFooter(content).split('\n').length : 6,
         view,
-        repl: params.run,
+        repl: runnable,
         plots: plots.length > 0,
         error: phase.kind === 'error'
       })
     })
-  }, [params, phase.kind, content, view, plots.length])
+  }, [params, phase.kind, content, view, plots.length, runnable])
 
   const githubUrl =
     phase.kind === 'ready' ? githubUrlFor(phase.program.source, params.lines) : phase.kind === 'error' ? phase.githubUrl : null
@@ -173,11 +187,11 @@ function EmbedShell({ params }: { params: EmbedParams }): JSX.Element {
     [boot, engine]
   )
 
-  const codeTitle = params.engine === 'pyodide' ? 'Python' : 'MicroPython'
-  const showCodePane = view === 'code' && file !== null && !file.isBlocks
+  const codeTitle = !isPython ? languageLabel(loadedName) : params.engine === 'pyodide' ? 'Python' : 'MicroPython'
+  const showCodePane = (view === 'code' || !blocksAllowed) && file !== null && !file.isBlocks
 
   return (
-    <div className={`snk-embed snk-embed--${view}${params.run ? '' : ' snk-embed--viewer'}`}>
+    <div className={`snk-embed snk-embed--${view}${runnable ? '' : ' snk-embed--viewer'}`}>
       <header className="snk-embed__bar">
         <span className="snk-embed__name" title={name}>
           {name || 'Snakie'}
@@ -199,7 +213,7 @@ function EmbedShell({ params }: { params: EmbedParams }): JSX.Element {
           </div>
         )}
         <span className="snk-embed__spacer" />
-        {params.run && phase.kind === 'ready' && (
+        {runnable && phase.kind === 'ready' && (
           <div className="snk-embed__actions">
             {edited && (
               <button type="button" className="btn btn--sm btn--ghost" onClick={reset} title="Put the original code back">
@@ -242,7 +256,7 @@ function EmbedShell({ params }: { params: EmbedParams }): JSX.Element {
                   code={content}
                   onCodeChange={(code) => updateContent(file.id, code)}
                   title={codeTitle}
-                  readOnly={!params.run}
+                  readOnly={!runnable}
                 />
               ) : (
                 <BlocksSplit
@@ -253,7 +267,7 @@ function EmbedShell({ params }: { params: EmbedParams }): JSX.Element {
             </Suspense>
           )}
         </div>
-        {params.run && phase.kind !== 'error' && (
+        {runnable && phase.kind !== 'error' && (
           <section className={`snk-embed__repl${plots.length > 0 ? ' snk-embed__repl--plots' : ''}`} aria-label="Output">
             {plots.length > 0 && (
               <div className="snk-embed__plots">
@@ -281,7 +295,7 @@ function EmbedShell({ params }: { params: EmbedParams }): JSX.Element {
 
       <footer className="snk-embed__footer">
         <span className="snk-embed__engine">
-          {params.run ? `Runs ${engine.label} in your browser` : engine.label}
+          {runnable ? `Runs ${engine.label} in your browser` : isPython ? engine.label : 'Shown with Snakie'}
         </span>
         <span className="snk-embed__spacer" />
         {githubUrl && (
