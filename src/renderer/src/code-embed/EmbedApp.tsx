@@ -234,7 +234,7 @@ function EmbedShell({ params }: { params: EmbedParams }): JSX.Element {
             {edited && <span className="snk-embed__edited">edited</span>}
           </span>
         )}
-        {blocksAllowed && phase.kind === 'ready' && (
+        {blocksAllowed && params.views && phase.kind === 'ready' && (
           <div className="btn-seg snk-embed__views" role="group" aria-label="View">
             {(['code', 'split', 'blocks'] as const).map((v) => (
               <button

@@ -50,7 +50,8 @@ https://app.snakie.org/embed.html?code=<text or base64url deflate>&name=main.py
 | `lines` | Show only these lines: `10-40`, `10` or `10-`. |
 | `view` | `code`, `blocks` or `split`. Default: `blocks` if the file has Snakie's blocks footer, else `code`. Ordinary Python is turned into blocks too (#1019), with a raw Python block for any line no block matches. |
 | `toolbox` | `basic` (the default, the beginner's drawers) or `advanced`. |
-| `run` | `1` (default) shows Run and the REPL. `0` makes a read-only viewer. |
+| `views` | `1` (default) shows the Code / Split / Blocks switch; `0` hides it, so the box stays in its `view`. |
+| `run` | `1` (default) shows Run and the REPL. `0` makes a read-only viewer: just the code, no Run, no REPL. View on GitHub and Open in Snakie are always there. |
 | `autorun` | `1` runs the program as soon as it loads. |
 | `theme` | `skeuomorph` (default, light) or `dark`. |
 | `height` | `auto` (default: sized to the code), `short` (320px), `medium` (460px), `tall` (640px), or a height in px. The height is the whole box, Run bar and REPL included; longer code scrolls inside it. |

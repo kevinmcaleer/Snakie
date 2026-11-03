@@ -152,6 +152,14 @@ describe('loading code from GitHub (#1286)', () => {
   })
 })
 
+describe('embed switches', () => {
+  it('shows the view switch unless views=0', () => {
+    expect(parseEmbedParams('?gist=abc').views).toBe(true)
+    expect(parseEmbedParams('?gist=abc&views=0').views).toBe(false)
+    expect(parseEmbedParams('?gist=abc&run=0').run).toBe(false)
+  })
+})
+
 describe('links out of the embed (#1286, #1287)', () => {
   it('links repo files with their line range', () => {
     expect(githubUrlFor({ kind: 'repo', owner: 'o', name: 'r', path: 'a b.py', ref: 'main' }, { from: 3, to: 9 })).toBe(

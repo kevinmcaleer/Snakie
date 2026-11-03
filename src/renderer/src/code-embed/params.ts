@@ -12,7 +12,7 @@
  * /embed.html?gist=<id>&file=main.py
  * /embed.html?repo=owner/name&path=src/main.py&ref=main&lines=10-40
  * /embed.html?code=<base64url deflate>&name=main.py   (inline, no GitHub)
- *   &view=code|blocks|split   &toolbox=basic|advanced   &run=0|1
+ *   &view=code|blocks|split   &views=0|1   &toolbox=basic|advanced   &run=0|1
  *   &autorun=1  &theme=skeuomorph|dark  &height=auto|<px>
  *   &engine=micropython|pyodide  &packages=numpy,pandas  &id=<host's id>
  * ```
@@ -41,6 +41,8 @@ export interface EmbedParams {
   lines: EmbedLines | null
   /** `null` = decide from the file (blocks if it carries a blocks footer). */
   view: EmbedView | null
+  /** Show the Code / Split / Blocks switch (when the file can be blocks). */
+  views: boolean
   toolbox: EmbedToolbox
   /** Show Run and the REPL. `false` is a read-only viewer. */
   run: boolean
@@ -175,6 +177,7 @@ export function parseEmbedParams(search: string): EmbedParams {
     lines: parseLines(q.get('lines')),
     // Pyodide runs CPython, which the blocks don't write — so it is code only.
     view: engine === 'pyodide' ? 'code' : view,
+    views: flag(q.get('views'), true),
     toolbox,
     run: flag(q.get('run'), true),
     autorun: flag(q.get('autorun'), false),
