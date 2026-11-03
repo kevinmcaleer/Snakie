@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { standardPartsPlugin } from './vite-plugin-standard-parts'
 import { blocklyMediaPlugin } from './vite-plugin-blockly-media'
-import { webConnectSrc } from './src/renderer/src/web/web-hosts'
+import { embedConnectSrc, webConnectSrc } from './src/renderer/src/web/web-hosts'
 
 // The desktop app reads its version from Electron's `app.getVersion()`; the web
 // build has no Electron, so inject package.json's version at build time and serve
@@ -85,7 +85,10 @@ export default defineConfig({
         index: resolve(__dirname, 'src/renderer/index.html'),
         board: resolve(__dirname, 'src/renderer/board.html'),
         instrument: resolve(__dirname, 'src/renderer/instrument.html'),
-        console: resolve(__dirname, 'src/renderer/console.html')
+        console: resolve(__dirname, 'src/renderer/console.html'),
+        // The code embed (#1286, epic #1285): editor + blocks + REPL only, for
+        // other sites to iframe. Its own entry, so the app shell never loads.
+        embed: resolve(__dirname, 'src/renderer/embed.html')
       },
       output: {
         manualChunks(id: string) {
@@ -155,7 +158,14 @@ export default defineConfig({
         // instrument window (#781) or a 760px console (#810). They are precached
         // in their own right, so exclude them and let the precache (or the
         // network) serve them.
-        navigateFallbackDenylist: [/^\/board\.html/, /^\/instrument\.html/, /^\/console\.html/]
+        // The code embed (#1286) too: `/embed?gist=…` answered with the shell
+        // would put the whole app inside somebody's tutorial.
+        navigateFallbackDenylist: [
+          /^\/board\.html/,
+          /^\/instrument\.html/,
+          /^\/console\.html/,
+          /^\/embed(\.html)?(\?|$)/
+        ]
       },
       manifest: {
         name: 'Snakie — MicroPython IDE',
@@ -200,12 +210,15 @@ export default defineConfig({
       // from `web-hosts.ts` — the SAME list the install path checks a URL
       // against before fetching it, so the policy and the code cannot drift.
       name: 'snakie-web-csp',
-      transformIndexHtml(html: string): string {
+      transformIndexHtml(html: string, ctx: { filename: string }): string {
+        // The code embed (#1286) also reads GitHub (the gist / repo file it
+        // shows) and loads Pyodide from jsDelivr (#1289).
+        const embed = /embed\.html$/.test(ctx.filename)
         return html.replace(
           /content="default-src 'self';[^"]*"/,
-          `content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; ` +
+          `content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'${embed ? ' https://cdn.jsdelivr.net' : ''}; ` +
             `style-src 'self' 'unsafe-inline'; img-src 'self' data:; ` +
-            `font-src 'self' data:; ${webConnectSrc()}"`
+            `font-src 'self' data:; ${embed ? embedConnectSrc() : webConnectSrc()}"`
         )
       }
     }

@@ -79,6 +79,11 @@ export interface PythonPaneProps {
    * The link itself still works; only the invitations to use it are hidden.
    */
   linked?: boolean
+  /** The header's language name. MicroPython unless the code is for another
+   *  Python — the embed's Pyodide engine runs CPython (#1289). */
+  title?: string
+  /** A viewer, not an editor (the embed with `run=0`, #1286). */
+  readOnly?: boolean
 }
 
 export function PythonPane({
@@ -87,7 +92,9 @@ export function PythonPane({
   highlightLines,
   onLineClick,
   revealLine,
-  linked = false
+  linked = false,
+  title = 'MicroPython',
+  readOnly = false
 }: PythonPaneProps): JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
@@ -173,6 +180,10 @@ export function PythonPane({
     }
   }, [])
 
+  useEffect(() => {
+    editorRef.current?.updateOptions({ readOnly })
+  }, [readOnly])
+
   // Follow the code. `setValue` rather than a fresh model so the scroll position
   // survives a regeneration — which happens on every block the learner drags,
   // and a pane that jumps to the top each time is a pane you cannot read.
@@ -236,14 +247,14 @@ export function PythonPane({
             this pane is graduating to the language named on it. The narrow
             layout's tab keeps the short word: it sits beside "Blocks" in a
             two-tab strip under 720px, where the long one does not fit. */}
-        <span className="python-pane__title">MicroPython</span>
+        <span className="python-pane__title">{title}</span>
         {/* The link is invisible until you try it, so say it once. This is the
             teaching mechanism of the whole epic and it should not be a secret. */}
         {onLineClick && linked && (
           <span className="python-pane__hint">click a line to find its block</span>
         )}
       </div>
-      {code === '' && (
+      {code === '' && !readOnly && (
         <p className="python-pane__empty">
           {linked
             ? 'Drag a block onto the canvas, or start typing here — they are the same program.'

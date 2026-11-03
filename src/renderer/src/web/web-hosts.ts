@@ -58,6 +58,23 @@ export function webConnectSrc(): string {
  * {@link WEB_CONNECT_ORIGINS} — CSP host-sources match no subdomains and no
  * other port, so neither does this. A URL that doesn't parse is a no.
  */
+/**
+ * What the code embed (#1286) may also reach: the GitHub gist / repo file it
+ * shows, and jsDelivr for the Pyodide engine (#1289). Kept separate so the
+ * full app's install path doesn't widen with it.
+ */
+export const EMBED_CONNECT_ORIGINS: readonly string[] = [
+  'https://api.github.com',
+  'https://gist.githubusercontent.com',
+  'https://raw.githubusercontent.com',
+  'https://cdn.jsdelivr.net'
+]
+
+export function embedConnectSrc(): string {
+  const all = Array.from(new Set([...WEB_CONNECT_ORIGINS, ...EMBED_CONNECT_ORIGINS]))
+  return `connect-src 'self' ${all.join(' ')}`
+}
+
 export function webCanFetch(url: string): boolean {
   let origin: string
   try {
