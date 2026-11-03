@@ -2,8 +2,13 @@
  * The whole page is the embed: a bar (name, view switch, Run), the editor,
  * the REPL, and a footer with the two links out. */
 
+/* No page colour of its own: outside the box's rounded corners the host page
+ * shows through (the frame is transparent), never the app's dark backdrop. */
+:root[data-embed='code'],
 :root[data-embed='code'] body {
-  background: var(--panel, var(--bg));
+  background: transparent;
+}
+:root[data-embed='code'] body {
   overflow: hidden;
 }
 
@@ -110,7 +115,9 @@
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
-  min-height: 0;
+  /* A short fixed-height box still shows a few lines of code: the REPL
+   * below gives way first. */
+  min-height: 96px;
   background: var(--editor, var(--editor-region-bg));
 }
 
@@ -156,8 +163,8 @@
 .snk-embed__repl {
   display: flex;
   flex-direction: column;
-  flex: 0 0 170px;
-  min-height: 0;
+  flex: 0 1 170px;
+  min-height: 72px;
   border-top: 1px solid var(--shellbd, var(--border));
 }
 
