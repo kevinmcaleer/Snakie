@@ -1,0 +1,55 @@
+# A connector housing: the plug on the end of a lead. Its 3D model is the same
+# one markdown-studio's 3D scenes put in a socket for a wire's end
+# (packages/layers/src/scene/connectors.ts, written by scripts/connector-stls.ts),
+# so the id matches the plug's connector id there.
+id: dupont-3
+name: "Dupont 3-way plug"
+description: "Female housing on the end of a jumper wire, 2.54 mm (0.1\") pitch, for header pins."
+manufacturer: Generic
+family: Connector
+tags:
+  - connector
+  - plug
+  - dupont
+package: Crimp housing
+pinSpacing: 2.54
+partNumber: "3P 2.54 mm"
+properties:
+  pitch: "2.54 mm"
+  ways: 3
+version: 0.1.0
+pcbColor: "#1d1d1d"
+aspect: 3.0
+dimensions:
+  width: 7.62
+  height: 2.54
+shape:
+  kind: rect
+  cornerRadius: 0.3
+# The back of the housing, where the wires go in, contact 1 on the left.
+headers:
+  - edge: bottom
+    pins:
+      - number: 1
+        name: "1"
+        label: "1"
+        type: io
+        shape: header
+        x: 0.1667
+        y: 0.55
+      - number: 2
+        name: "2"
+        label: "2"
+        type: io
+        shape: header
+        x: 0.5
+        y: 0.55
+      - number: 3
+        name: "3"
+        label: "3"
+        type: io
+        shape: header
+        x: 0.8333
+        y: 0.55
+mesh: model.stl
+meshUnits: mm

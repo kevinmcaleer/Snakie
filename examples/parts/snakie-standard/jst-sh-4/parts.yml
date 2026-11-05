@@ -1,0 +1,62 @@
+# A connector housing: the plug on the end of a lead. Its 3D model is the same
+# one markdown-studio's 3D scenes put in a socket for a wire's end
+# (packages/layers/src/scene/connectors.ts, written by scripts/connector-stls.ts),
+# so the id matches the plug's connector id there.
+id: jst-sh-4
+name: "JST SH 4-way plug"
+description: "Crimp housing (SHR) on the end of a lead, 1 mm pitch: the Qwiic / STEMMA QT I²C cable."
+manufacturer: JST
+family: Connector
+tags:
+  - connector
+  - plug
+  - jst-sh
+package: Crimp housing
+pinSpacing: 1.0
+partNumber: "SHR-4V-S"
+properties:
+  pitch: "1.0 mm"
+  ways: 4
+version: 0.1.0
+pcbColor: "#1d1d1d"
+aspect: 2.069
+dimensions:
+  width: 6
+  height: 2.9
+shape:
+  kind: rect
+  cornerRadius: 0.3
+# The back of the housing, where the wires go in, contact 1 on the left.
+headers:
+  - edge: bottom
+    pins:
+      - number: 1
+        name: "GND"
+        label: "GND"
+        type: gnd
+        shape: header
+        x: 0.25
+        y: 0.55
+      - number: 2
+        name: "3V3"
+        label: "3V3"
+        type: pwr
+        shape: header
+        x: 0.4167
+        y: 0.55
+      - number: 3
+        name: "SDA"
+        label: "SDA"
+        type: io
+        shape: header
+        x: 0.5833
+        y: 0.55
+      - number: 4
+        name: "SCL"
+        label: "SCL"
+        type: io
+        shape: header
+        x: 0.75
+        y: 0.55
+mesh: model.stl
+meshUnits: mm
