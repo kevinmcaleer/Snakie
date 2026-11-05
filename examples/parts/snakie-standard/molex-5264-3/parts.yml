@@ -1,0 +1,56 @@
+# A connector housing: the plug on the end of a lead. Its 3D model is the same
+# one markdown-studio's 3D scenes put in a socket for a wire's end
+# (packages/layers/src/scene/connectors.ts, written by scripts/connector-stls.ts),
+# so the id matches the plug's connector id there.
+id: molex-5264-3
+name: "Molex Mini-SPOX 5264 3-way plug"
+description: "Crimp housing on the end of a lead, 2.5 mm pitch. The lead on Feetech STS3215 bus servos (D V G)."
+manufacturer: Molex
+family: Connector
+tags:
+  - connector
+  - plug
+  - molex-5264
+package: Crimp housing
+pinSpacing: 2.5
+partNumber: "50-37-5003"
+properties:
+  pitch: "2.5 mm"
+  ways: 3
+  servo: "Feetech STS3215 (two per servo, daisy chained)"
+version: 0.1.0
+pcbColor: "#f1ecd9"
+aspect: 2.1522
+dimensions:
+  width: 9.9
+  height: 4.6
+shape:
+  kind: rect
+  cornerRadius: 0.3
+# The back of the housing, where the wires go in, contact 1 on the left.
+headers:
+  - edge: bottom
+    pins:
+      - number: 1
+        name: "D"
+        label: "D"
+        type: io
+        shape: header
+        x: 0.2475
+        y: 0.55
+      - number: 2
+        name: "V"
+        label: "V"
+        type: pwr
+        shape: header
+        x: 0.5
+        y: 0.55
+      - number: 3
+        name: "G"
+        label: "G"
+        type: gnd
+        shape: header
+        x: 0.7525
+        y: 0.55
+mesh: model.stl
+meshUnits: mm

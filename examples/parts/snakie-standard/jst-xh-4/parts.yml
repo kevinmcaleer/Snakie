@@ -1,0 +1,62 @@
+# A connector housing: the plug on the end of a lead. Its 3D model is the same
+# one markdown-studio's 3D scenes put in a socket for a wire's end
+# (packages/layers/src/scene/connectors.ts, written by scripts/connector-stls.ts),
+# so the id matches the plug's connector id there.
+id: jst-xh-4
+name: "JST XH 4-way plug"
+description: "Crimp housing (XHP) on the end of a lead, 2.5 mm pitch: LiPo balance leads and many hobby boards."
+manufacturer: JST
+family: Connector
+tags:
+  - connector
+  - plug
+  - jst-xh
+package: Crimp housing
+pinSpacing: 2.5
+partNumber: "XHP-4"
+properties:
+  pitch: "2.5 mm"
+  ways: 4
+version: 0.1.0
+pcbColor: "#f1ecd9"
+aspect: 2.1565
+dimensions:
+  width: 12.4
+  height: 5.75
+shape:
+  kind: rect
+  cornerRadius: 0.3
+# The back of the housing, where the wires go in, contact 1 on the left.
+headers:
+  - edge: bottom
+    pins:
+      - number: 1
+        name: "1"
+        label: "1"
+        type: io
+        shape: header
+        x: 0.1976
+        y: 0.55
+      - number: 2
+        name: "2"
+        label: "2"
+        type: io
+        shape: header
+        x: 0.3992
+        y: 0.55
+      - number: 3
+        name: "3"
+        label: "3"
+        type: io
+        shape: header
+        x: 0.6008
+        y: 0.55
+      - number: 4
+        name: "4"
+        label: "4"
+        type: io
+        shape: header
+        x: 0.8024
+        y: 0.55
+mesh: model.stl
+meshUnits: mm
