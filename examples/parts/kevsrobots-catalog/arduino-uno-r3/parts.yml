@@ -16,11 +16,15 @@ partNumber: A000066
 version: 0.1.0
 mcu: ATmega328P
 pcbColor: "#00878f"
+footprint: uno
 aspect: 0.7778
 dimensions:
   width: 53.34
   height: 68.58
 ledLabel: "13"
+# A shield (footprint uno-shield) drops onto the UNO; its headers join the UNO's by name.
+mounts:
+  - { id: shield, footprint: uno-shield, label: Shield, x: 0.5, y: 0.5 }
 image: image.png
 imageLayer: { x: 0, y: 0, w: 1, h: 1 }
 help: help.md
