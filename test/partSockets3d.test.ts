@@ -9,6 +9,7 @@ import { coerceSockets3d, partFromYaml, partToYaml } from '../src/shared/part-ya
  * Editor doesn't drop it.
  */
 const N20 = join(__dirname, '..', 'examples', 'parts', 'snakie-standard', 'n20-motor')
+const HCSR04 = join(__dirname, '..', 'examples', 'parts', 'snakie-standard', 'hc-sr04')
 
 /** A binary STL's corners, moved to the middle of its box (as a 3D scene reads it), and the box's size. */
 function centredStl(file: string): { pts: number[][]; size: number[] } {
@@ -56,5 +57,23 @@ describe('sockets3d', () => {
     // VCC is on the same side as on the 2-D picture (x > 0.5 is +x).
     const vcc = part.headers!.flatMap((h) => h.pins).find((p) => p.name === 'VCC')!
     expect(Math.sign((vcc.x ?? 0.5) - 0.5)).toBe(Math.sign(part.sockets3d!.sockets.find((s) => s.pin === 'VCC')!.point[0]))
+  })
+
+  it("puts the HC-SR04's four pins on the ends of its header pins, not on the board's face", () => {
+    const part = partFromYaml(readFileSync(join(HCSR04, 'parts.yml'), 'utf8'))
+    const { pts, size } = centredStl(join(HCSR04, 'model.stl'))
+    part.sockets3d!.size.forEach((v, i) => expect(Math.abs(v - size[i])).toBeLessThan(0.05))
+    const pins = part.headers!.flatMap((h) => h.pins)
+    expect(part.sockets3d!.sockets.map((s) => s.pin).sort()).toEqual(pins.map((p) => p.name).sort())
+    for (const s of part.sockets3d!.sockets) {
+      // On the pin's end face (nothing further out along the normal near it), in the pin's square.
+      const tip = pts.filter((p) => Math.abs(p[0] - s.point[0]) <= 0.5 && Math.abs(p[2] - s.point[2]) <= 0.5)
+      expect(tip.length).toBeGreaterThan(0)
+      const out = Math.max(...tip.map((p) => p[0] * s.normal[0] + p[1] * s.normal[1] + p[2] * s.normal[2]))
+      expect(Math.abs(out - (s.point[0] * s.normal[0] + s.point[1] * s.normal[1] + s.point[2] * s.normal[2]))).toBeLessThan(0.01)
+    }
+    // Left to right as on the 2-D picture.
+    const byX = [...part.sockets3d!.sockets].sort((a, b) => a.point[0] - b.point[0]).map((s) => s.pin)
+    expect(byX).toEqual([...pins].sort((a, b) => (a.x ?? 0) - (b.x ?? 0)).map((p) => p.name))
   })
 })

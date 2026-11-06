@@ -1,0 +1,1 @@
+- **HC-SR04: its four pins on its 3D model.** kevsrobots 3D scenes put the HC-SR04's wires on its pin ends (out of the board's bottom edge) instead of on the board's front face.
