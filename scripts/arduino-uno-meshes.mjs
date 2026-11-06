@@ -64,6 +64,84 @@ function cylZ(d, h, cx, cy, z0, segments = 32) {
   return g
 }
 
+/** The square opening of each female header socket (mm). */
+export const SOCKET_MM = 1.0
+
+/**
+ * A female header's body from z0 up h: the box x0..x1 × y0..y1 with a square
+ * socket right through it at each pin (the pins in a row along the box's long
+ * side), so each pin's opening is a place a shield's pin, or a 3-D scene
+ * joint, can find on the top face. Built face by face rather than by
+ * triangulating a shape with holes, which leaves gaps in a long row of them.
+ */
+export function socketBlock(x0, y0, x1, y1, z0, h, pins, w = SOCKET_MM) {
+  const along = x1 - x0 >= y1 - y0 ? 0 : 1
+  /** (a along the row, b across it) → x, y. */
+  const xy = (a, b) => (along === 0 ? [a, b] : [b, a])
+  const [a0, a1] = along === 0 ? [x0, x1] : [y0, y1]
+  const [b0, b1] = along === 0 ? [y0, y1] : [x0, x1]
+  const z1 = z0 + h
+  const out = []
+  const tri = (p, q, r, facing) => {
+    const u = [q[0] - p[0], q[1] - p[1], q[2] - p[2]]
+    const v = [r[0] - p[0], r[1] - p[1], r[2] - p[2]]
+    const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]
+    const same = n[0] * facing[0] + n[1] * facing[1] + n[2] * facing[2] >= 0
+    out.push(...p, ...(same ? q : r), ...(same ? r : q))
+  }
+  const quad = (p, q, r, t, facing) => {
+    tri(p, q, r, facing)
+    tri(p, r, t, facing)
+  }
+  /** A rectangle of the top and bottom faces, a..a' along, b..b' across. */
+  const caps = (aa, ab, ba, bb) => {
+    if (ab - aa < 1e-6 || bb - ba < 1e-6) return
+    for (const [z, up] of [[z1, 1], [z0, -1]]) {
+      const c = [xy(aa, ba), xy(ab, ba), xy(ab, bb), xy(aa, bb)].map(([x, y]) => [x, y, z])
+      quad(c[0], c[1], c[2], c[3], [0, 0, up])
+    }
+  }
+  const row = pins.map(([x, y]) => (along === 0 ? [x, y] : [y, x])).sort((p, q) => p[0] - q[0])
+  // A grid whose lines run along each socket's sides, so neighbouring
+  // rectangles share whole edges (a 3-D scene finds the top as one face).
+  const pb = row.length ? row[0][1] : (b0 + b1) / 2
+  const as = [a0, ...row.flatMap(([pa]) => [pa - w / 2, pa + w / 2]), a1]
+  const bs = [b0, pb - w / 2, pb + w / 2, b1]
+  for (let i = 0; i + 1 < as.length; i++)
+    for (let j = 0; j + 1 < bs.length; j++) {
+      // Odd columns are sockets; their middle row is the opening.
+      if (i % 2 === 1 && j === 1) continue
+      caps(as[i], as[i + 1], bs[j], bs[j + 1])
+    }
+  for (const [pa] of row) {
+    // The socket's four walls, facing into it.
+    const c = [xy(pa - w / 2, pb - w / 2), xy(pa + w / 2, pb - w / 2), xy(pa + w / 2, pb + w / 2), xy(pa - w / 2, pb + w / 2)]
+    const mid = xy(pa, pb)
+    for (let i = 0; i < 4; i++) {
+      const [p, q] = [c[i], c[(i + 1) % 4]]
+      const facing = [mid[0] - (p[0] + q[0]) / 2, mid[1] - (p[1] + q[1]) / 2, 0]
+      quad([p[0], p[1], z0], [q[0], q[1], z0], [q[0], q[1], z1], [p[0], p[1], z1], facing)
+    }
+  }
+  // The four outer sides.
+  const o = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2
+  for (let i = 0; i < 4; i++) {
+    const [p, q] = [o[i], o[(i + 1) % 4]]
+    const facing = [(p[0] + q[0]) / 2 - cx, (p[1] + q[1]) / 2 - cy, 0]
+    quad([p[0], p[1], z0], [q[0], q[1], z0], [q[0], q[1], z1], [p[0], p[1], z1], facing)
+  }
+  const g = new THREE.BufferGeometry()
+  g.setAttribute('position', new THREE.Float32BufferAttribute(out, 3))
+  g.computeVertexNormals()
+  return g
+}
+
+/** Every UNO header pin's centre, in the Eagle board frame (see UNO_R3). */
+export function headerPins(u = UNO_R3) {
+  return u.headers.flatMap((h) => Array.from({ length: h.count }, (_, i) => [h.x0 + i * 2.54, h.y]))
+}
+
 function holePath(x, y, d) {
   const p = new THREE.Path()
   p.absarc(x, y, d / 2, 0, Math.PI * 2, true)
@@ -176,8 +254,11 @@ export function unoR3Geometries(u = UNO_R3) {
   const pitch = 2.54
   for (const h of u.headers) {
     const len = h.count * pitch
-    const cx = h.x0 - pitch / 2 + len / 2
-    out.push({ name: h.name, geo: bodyAt(len, pitch, u.headerHeightMm, cx, h.y, t) })
+    // Portrait: the header's long side runs along y. Its pins, each with a socket.
+    const [ax, ay] = toPortrait(h.x0 - pitch / 2, h.y - pitch / 2)
+    const [bx, by] = toPortrait(h.x0 - pitch / 2 + len, h.y + pitch / 2)
+    const pins = Array.from({ length: h.count }, (_, i) => toPortrait(h.x0 + i * pitch, h.y))
+    out.push({ name: h.name, geo: socketBlock(Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by), t, u.headerHeightMm, pins) })
   }
   const usb = u.usb
   out.push({
@@ -258,11 +339,10 @@ export function stepTriangles(result) {
   let maxX = -Infinity
   let minY = Infinity
   let minZ = Infinity
-  for (const m of result.meshes) {
+  const bounds = result.meshes.map((m) => {
     const p = m.attributes.position.array
-    const idx = m.index.array
-    let mn = [Infinity, Infinity, Infinity]
-    let mx = [-Infinity, -Infinity, -Infinity]
+    const mn = [Infinity, Infinity, Infinity]
+    const mx = [-Infinity, -Infinity, -Infinity]
     for (let i = 0; i < p.length; i += 3)
       for (let k = 0; k < 3; k++) {
         mn[k] = Math.min(mn[k], p[i + k])
@@ -271,18 +351,35 @@ export function stepTriangles(result) {
     maxX = Math.max(maxX, mx[0])
     minY = Math.min(minY, mn[1])
     minZ = Math.min(minZ, mn[2])
+    return { mn, mx }
+  })
+  const pcbMinX0 = maxX - UNO_PCB.lengthMm
+  const pins = headerPins().map(([x, y]) => [x + pcbMinX0, y + minY])
+  const push = (g) => {
+    const bp = (g.index ? g.toNonIndexed() : g).attributes.position.array
+    for (let i = 0; i < bp.length; i += 9) raw.push([0, 3, 6].map((o) => [bp[i + o], bp[i + o + 1], bp[i + o + 2]]))
+  }
+  result.meshes.forEach((m, mi) => {
+    const p = m.attributes.position.array
+    const idx = m.index.array
+    const { mn, mx } = bounds[mi]
+    // A female header drawn as a plain box (the UNO Q's "simplified" model):
+    // the same box with a socket at each UNO header pin inside it.
+    const inside = pins.filter(([x, y]) => x > mn[0] && x < mx[0] && y > mn[1] && y < mx[1])
+    if (idx.length === 36 && mx[2] - mn[2] > 6 && Math.min(mx[0] - mn[0], mx[1] - mn[1]) < 3.2 && inside.length >= 2) {
+      push(socketBlock(mn[0], mn[1], mx[0], mx[1], mn[2], mx[2] - mn[2], inside))
+      return
+    }
     if (BOX_BODIES.test(m.name ?? '')) {
       const b = new THREE.BoxGeometry(mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2])
       b.translate((mn[0] + mx[0]) / 2, (mn[1] + mx[1]) / 2, (mn[2] + mx[2]) / 2)
-      const bp = b.toNonIndexed().attributes.position.array
-      for (let i = 0; i < bp.length; i += 9)
-        raw.push([0, 3, 6].map((o) => [bp[i + o], bp[i + o + 1], bp[i + o + 2]]))
-      continue
+      push(b)
+      return
     }
     for (let i = 0; i < idx.length; i += 3)
       raw.push([0, 1, 2].map((k) => [p[idx[i + k] * 3], p[idx[i + k] * 3 + 1], p[idx[i + k] * 3 + 2]]))
-  }
-  const pcbMinX = maxX - UNO_PCB.lengthMm
+  })
+  const pcbMinX = pcbMinX0
   return raw.map((tri) =>
     tri.map(([x, y, z]) => [...toPortrait(x, y, pcbMinX, minY), z - minZ])
   )

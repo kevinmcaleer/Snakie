@@ -17,7 +17,7 @@ package: THT
 pinSpacing: 2.54
 voltage: 3.3V
 partNumber: ABX00162
-version: 0.1.0
+version: 0.1.1
 mcu: STM32U585
 pcbColor: "#182b47"
 footprint: uno

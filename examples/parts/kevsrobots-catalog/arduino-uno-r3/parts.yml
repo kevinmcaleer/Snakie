@@ -13,7 +13,7 @@ package: THT
 pinSpacing: 2.54
 voltage: 5V
 partNumber: A000066
-version: 0.1.0
+version: 0.1.1
 mcu: ATmega328P
 pcbColor: "#00878f"
 footprint: uno

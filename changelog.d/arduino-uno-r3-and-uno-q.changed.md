@@ -1,0 +1,1 @@
+- **Arduino UNO R3 and UNO Q 3D models have a socket at each header pin, so a shield's pins line up on them in 3D scenes.** 
