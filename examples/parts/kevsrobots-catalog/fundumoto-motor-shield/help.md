@@ -6,9 +6,11 @@ ST **L298P** dual H-bridge. It drives **two DC motors** at up to **2 A each**
 servo, an ultrasonic sensor, a Bluetooth module, an RGB LED and six sensors.
 Sold as the FunduMoto shield and as the Keyes L298P (the silk says both).
 
-The UNO plugs in **underneath**: drop an UNO on the shield in the wiring view and
-it seats below it, and every UNO pin comes up through the shield's stacking
-headers.
+In the wiring view, **drop the shield onto an UNO** and it seats on it. The
+shield's stacking headers then *are* the UNO's pins, so its servo, ultrasonic,
+RGB and other headers are already wired to the right UNO pins. Drag the shield
+away to take it off; hold **Alt (Option)** while dragging to move the UNO and
+shield together.
 
 ## Motors
 

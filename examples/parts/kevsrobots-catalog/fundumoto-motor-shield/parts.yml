@@ -33,79 +33,70 @@ headers:
     pins:
       - name: NC
         type: other
-        locked: true
         number: 1
         labelHidden: true
-        shape: round
-        x: 0.053129333333333195
-        y: 0.40927845714285715
-        derived: uno
+        shape: header
+        rotation: 180
+        x: 0.0531
+        y: 0.4093
       - name: IOREF
         type: pwr
-        locked: true
         number: 2
         labelHidden: true
-        shape: round
-        x: 0.053129333333333195
-        y: 0.44552788571428575
-        derived: uno
+        shape: header
+        rotation: 180
+        x: 0.0531
+        y: 0.4455
       - name: RESET
         type: other
-        locked: true
         number: 3
         labelHidden: true
-        shape: round
-        x: 0.053129333333333195
-        y: 0.48187528571428573
-        derived: uno
+        shape: header
+        rotation: 180
+        x: 0.0531
+        y: 0.4819
       - name: 3V3
         type: pwr
-        locked: true
         number: 4
         labelHidden: true
-        shape: round
-        x: 0.053129333333333195
-        y: 0.5181247142857143
-        derived: uno
+        shape: header
+        rotation: 180
+        x: 0.0531
+        y: 0.5181
       - name: 5V
         type: pwr
-        locked: true
         number: 5
         labelHidden: true
-        shape: round
-        x: 0.053129333333333195
-        y: 0.5544721142857143
-        derived: uno
+        shape: header
+        rotation: 180
+        x: 0.0531
+        y: 0.5545
       - name: GND
         type: gnd
-        locked: true
         number: 6
         labelHidden: true
-        shape: round
-        x: 0.053129333333333195
-        y: 0.5907215428571428
-        derived: uno
+        shape: header
+        rotation: 180
+        x: 0.0531
+        y: 0.5907
       - name: GND
         type: gnd
-        locked: true
         number: 7
         labelHidden: true
-        shape: round
-        x: 0.053129333333333195
-        y: 0.6269709714285715
-        derived: uno
+        shape: header
+        rotation: 180
+        x: 0.0531
+        y: 0.627
       - name: VIN
         type: pwr
-        locked: true
         number: 8
         labelHidden: true
-        shape: round
-        x: 0.053129333333333195
-        y: 0.6633183714285714
-        derived: uno
+        shape: header
+        rotation: 180
+        x: 0.0531
+        y: 0.6633
       - name: A0
         type: io
-        locked: true
         number: 9
         gpio: 14
         capabilities:
@@ -114,13 +105,12 @@ headers:
         buses:
           adc: 0
         labelHidden: true
-        shape: round
-        x: 0.053129333333333195
-        y: 0.7358172285714286
-        derived: uno
+        shape: header
+        rotation: 180
+        x: 0.0531
+        y: 0.7358
       - name: A1
         type: io
-        locked: true
         number: 10
         gpio: 15
         capabilities:
@@ -129,13 +119,12 @@ headers:
         buses:
           adc: 1
         labelHidden: true
-        shape: round
-        x: 0.053129333333333195
-        y: 0.7721646285714285
-        derived: uno
+        shape: header
+        rotation: 180
+        x: 0.0531
+        y: 0.7722
       - name: A2
         type: io
-        locked: true
         number: 11
         gpio: 16
         capabilities:
@@ -144,13 +133,12 @@ headers:
         buses:
           adc: 2
         labelHidden: true
-        shape: round
-        x: 0.053129333333333195
-        y: 0.8084140571428571
-        derived: uno
+        shape: header
+        rotation: 180
+        x: 0.0531
+        y: 0.8084
       - name: A3
         type: io
-        locked: true
         number: 12
         gpio: 17
         capabilities:
@@ -159,13 +147,12 @@ headers:
         buses:
           adc: 3
         labelHidden: true
-        shape: round
-        x: 0.053129333333333195
-        y: 0.8447614571428571
-        derived: uno
+        shape: header
+        rotation: 180
+        x: 0.0531
+        y: 0.8448
       - name: A4
         type: io
-        locked: true
         number: 13
         gpio: 18
         capabilities:
@@ -178,13 +165,12 @@ headers:
           i2c: 0
           adc: 4
         labelHidden: true
-        shape: round
-        x: 0.053129333333333195
-        y: 0.8810108857142858
-        derived: uno
+        shape: header
+        rotation: 180
+        x: 0.0531
+        y: 0.881
       - name: A5
         type: io
-        locked: true
         number: 14
         gpio: 19
         capabilities:
@@ -197,13 +183,12 @@ headers:
           i2c: 0
           adc: 5
         labelHidden: true
-        shape: round
-        x: 0.053129333333333195
-        y: 0.9172603142857142
-        derived: uno
+        shape: header
+        rotation: 180
+        x: 0.0531
+        y: 0.9173
       - name: SCL
         type: io
-        locked: true
         number: 15
         gpio: 19
         capabilities:
@@ -214,13 +199,12 @@ headers:
         buses:
           i2c: 0
         labelHidden: true
-        shape: round
-        x: 0.9468706666666669
-        y: 0.2786825428571429
-        derived: uno
+        shape: header
+        rotation: 0
+        x: 0.9469
+        y: 0.2787
       - name: SDA
         type: io
-        locked: true
         number: 16
         gpio: 18
         capabilities:
@@ -231,31 +215,28 @@ headers:
         buses:
           i2c: 0
         labelHidden: true
-        shape: round
-        x: 0.9468706666666669
-        y: 0.31493197142857143
-        derived: uno
+        shape: header
+        rotation: 0
+        x: 0.9469
+        y: 0.3149
       - name: AREF
         type: other
-        locked: true
         number: 17
         labelHidden: true
-        shape: round
-        x: 0.9468706666666669
-        y: 0.35118140000000003
-        derived: uno
+        shape: header
+        rotation: 0
+        x: 0.9469
+        y: 0.3512
       - name: GND
         type: gnd
-        locked: true
         number: 18
         labelHidden: true
-        shape: round
-        x: 0.9468706666666669
-        y: 0.3875288
-        derived: uno
+        shape: header
+        rotation: 0
+        x: 0.9469
+        y: 0.3875
       - name: D13
         type: io
-        locked: true
         number: 19
         gpio: 13
         capabilities:
@@ -266,13 +247,12 @@ headers:
         buses:
           spi: 0
         labelHidden: true
-        shape: round
-        x: 0.9468706666666669
-        y: 0.4237782285714286
-        derived: uno
+        shape: header
+        rotation: 0
+        x: 0.9469
+        y: 0.4238
       - name: D12
         type: io
-        locked: true
         number: 20
         gpio: 12
         capabilities:
@@ -283,13 +263,12 @@ headers:
         buses:
           spi: 0
         labelHidden: true
-        shape: round
-        x: 0.9468706666666669
-        y: 0.4601256285714286
-        derived: uno
+        shape: header
+        rotation: 0
+        x: 0.9469
+        y: 0.4601
       - name: D11
         type: io
-        locked: true
         number: 21
         gpio: 11
         capabilities:
@@ -301,13 +280,12 @@ headers:
         buses:
           spi: 0
         labelHidden: true
-        shape: round
-        x: 0.9468706666666669
-        y: 0.4963750571428572
-        derived: uno
+        shape: header
+        rotation: 0
+        x: 0.9469
+        y: 0.4964
       - name: D10
         type: io
-        locked: true
         number: 22
         gpio: 10
         capabilities:
@@ -319,113 +297,104 @@ headers:
         buses:
           spi: 0
         labelHidden: true
-        shape: round
-        x: 0.9468706666666669
-        y: 0.5326244857142857
-        derived: uno
+        shape: header
+        rotation: 0
+        x: 0.9469
+        y: 0.5326
       - name: D9
         type: io
-        locked: true
         number: 23
         gpio: 9
         capabilities:
           - digital
           - pwm
         labelHidden: true
-        shape: round
-        x: 0.9468706666666669
-        y: 0.5689718857142857
-        derived: uno
+        shape: header
+        rotation: 0
+        x: 0.9469
+        y: 0.569
       - name: D8
         type: io
-        locked: true
         number: 24
         gpio: 8
         capabilities:
           - digital
         labelHidden: true
-        shape: round
-        x: 0.9468706666666669
-        y: 0.6052213142857144
-        derived: uno
+        shape: header
+        rotation: 0
+        x: 0.9469
+        y: 0.6052
       - name: D7
         type: io
-        locked: true
         number: 25
         gpio: 7
         capabilities:
           - digital
         labelHidden: true
-        shape: round
-        x: 0.9468706666666669
-        y: 0.6633183714285714
-        derived: uno
+        shape: header
+        rotation: 0
+        x: 0.9469
+        y: 0.6633
       - name: D6
         type: io
-        locked: true
         number: 26
         gpio: 6
         capabilities:
           - digital
           - pwm
         labelHidden: true
-        shape: round
-        x: 0.9468706666666669
-        y: 0.6995678
-        derived: uno
+        shape: header
+        rotation: 0
+        x: 0.9469
+        y: 0.6996
       - name: D5
         type: io
-        locked: true
         number: 27
         gpio: 5
         capabilities:
           - digital
           - pwm
         labelHidden: true
-        shape: round
-        x: 0.9468706666666669
-        y: 0.7358172285714286
-        derived: uno
+        shape: header
+        rotation: 0
+        x: 0.9469
+        y: 0.7358
       - name: D4
         type: io
-        locked: true
         number: 28
         gpio: 4
         capabilities:
           - digital
         labelHidden: true
-        shape: round
-        x: 0.9468706666666669
-        y: 0.7721646285714285
-        derived: uno
+        shape: header
+        rotation: 0
+        x: 0.9469
+        y: 0.7722
       - name: D3
         type: io
-        locked: true
         number: 29
         gpio: 3
         capabilities:
           - digital
           - pwm
         labelHidden: true
-        shape: round
-        x: 0.9468706666666669
-        y: 0.8084140571428571
-        derived: uno
+        shape: header
+        rotation: 0
+        x: 0.9469
+        y: 0.8084
       - name: D2
         type: io
-        locked: true
         number: 30
         gpio: 2
         capabilities:
           - digital
         labelHidden: true
-        shape: round
-        x: 0.9468706666666669
-        y: 0.8447614571428571
-        derived: uno
+        shape: header
+        rotation: 0
+        x: 0.9469
+        y: 0.8448
       - name: D1
         type: io
-        locked: true
         number: 31
         gpio: 1
         capabilities:
@@ -436,13 +405,12 @@ headers:
         buses:
           uart: 0
         labelHidden: true
-        shape: round
-        x: 0.9468706666666669
-        y: 0.8810108857142858
-        derived: uno
+        shape: header
+        rotation: 0
+        x: 0.9469
+        y: 0.881
       - name: D0
         type: io
-        locked: true
         number: 32
         gpio: 0
         capabilities:
@@ -453,10 +421,10 @@ headers:
         buses:
           uart: 0
         labelHidden: true
-        shape: round
-        x: 0.9468706666666669
-        y: 0.9172603142857142
-        derived: uno
+        shape: header
+        rotation: 0
+        x: 0.9469
+        y: 0.9173
   - edge: left
     pins:
       - name: VMS
@@ -1001,16 +969,7 @@ rails:
     pins:
       - MOTOR_B2
       - MB_2
-mounts:
-  - id: uno
-    footprint: uno
-    ref:
-      lib: kevsrobots-catalog
-      part: arduino-uno-r3
-    label: Arduino UNO
-    x: 0.5
-    y: 0.5
-    under: true
+footprint: uno-shield
 image: image.png
 imageLayer:
   x: 0

@@ -799,22 +799,6 @@ describe('board stacking (footprint + mounts) round-trip', () => {
     expect(partFromYaml(partToYaml(part)).mounts?.[0].pinMap).toEqual({ D4: 'I2C_SDA' })
   })
 
-  it('keeps a shield mount that seats its board underneath', () => {
-    const part = normalisePart({
-      id: 'shield',
-      name: 'Shield',
-      headers: [{ edge: 'left', pins: [{ name: 'D2', type: 'io', gpio: 2 }] }],
-      mounts: [{ id: 'uno', footprint: 'uno', x: 0.5, y: 0.5, under: true }]
-    })
-    const yaml = partToYaml(part)
-    expect(yaml).toContain('under: true')
-    expect(partFromYaml(yaml).mounts?.[0].under).toBe(true)
-    // Absent stays absent — a XIAO base seats on top and writes nothing extra.
-    const base = normalisePart({ ...part, mounts: [{ id: 'x', footprint: 'xiao', x: 0.5, y: 0.5 }] })
-    expect(partToYaml(base)).not.toContain('under')
-    expect(partFromYaml(partToYaml(base)).mounts?.[0].under).toBeUndefined()
-  })
-
   it('drops a mount with no id, no footprint or no position', () => {
     const yaml =
       'id: p\nheaders:\n  - edge: left\n    pins:\n      - name: GP0\n        type: io\n        gpio: 0\n' +

@@ -1200,6 +1200,21 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
     const r = rotatePoint(nx * body.bw, ny * body.bh, body.bw / 2, body.bh / 2, body.rot)
     return { x: body.px + r.x, y: body.py + r.y }
   }
+  // The MCU board is a carrier too when its part declares mounts: a shield drops
+  // onto an Arduino UNO the way a XIAO drops into its expansion base, and its
+  // pins then join the board's by name. Only an unseated board (one level of
+  // nesting) drawn as its real part has a body to seat on.
+  const boardCarrierBody = subjects.find((s) => s.key === 'board')
+  if (boardCarrierBody?.box && boardPart?.mounts?.length && !robot.boardMountedOn) {
+    const { x, y, w, h } = boardCarrierBody
+    placedBody.set('board', { x, y, w, h, rot: 0, bw: w, bh: h, px: x, py: y })
+  }
+  /** Everything a part could seat on: the placed parts, then the board. */
+  const carriers: { id: string; def: PartDefinition | null }[] = [
+    ...robot.parts.map((p) => ({ id: p.id, def: resolvePart(p.lib, p.part) })),
+    ...(placedBody.has('board') && boardPart ? [{ id: 'board', def: boardPart }] : [])
+  ]
+  const carrierDef = (id: string): PartDefinition | null => carriers.find((c) => c.id === id)?.def ?? null
   const orderedParts = robot.parts
     .map((rp, i) => ({ rp, i }))
     .sort((a, b) => (a.rp.mountedOn ? 1 : 0) - (b.rp.mountedOn ? 1 : 0))
@@ -1208,10 +1223,9 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
    *  stale, in which case the board falls back to its own position. */
   const seatCentre = (rp: RobotPart): { x: number; y: number } | null => {
     if (!rp.mountedOn || !rp.mount) return null
-    const carrier = robot.parts.find((p) => p.id === rp.mountedOn)
     const body = placedBody.get(rp.mountedOn)
-    if (!carrier || !body) return null
-    const mount = resolvePart(carrier.lib, carrier.part)?.mounts?.find((m) => m.id === rp.mount)
+    if (!body) return null
+    const mount = carrierDef(rp.mountedOn)?.mounts?.find((m) => m.id === rp.mount)
     if (!mount) return null
     return carrierPoint(body, mount.x, mount.y)
   }
@@ -1371,24 +1385,8 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
       const bi = subjects.indexOf(bs)
       subjects.splice(bi, 1)
       const ci = subjects.findIndex((s) => s.key === robot.boardMountedOn)
-      // A shield's socket seats the board UNDERNEATH it: paint it first.
-      subjects.splice(mount.under ? ci : ci + 1, 0, bs)
+      subjects.splice(ci + 1, 0, bs)
     }
-  }
-
-  // Parts seated in an `under` mount (a UNO below its motor shield) are painted
-  // BEFORE their carrier, so the shield covers the board as it does on the bench.
-  // Layout already put the carrier first; only the paint order moves.
-  for (const rp of robot.parts) {
-    if (!rp.mountedOn || !rp.mount) continue
-    const carrier = robot.parts.find((p) => p.id === rp.mountedOn)
-    const mount = carrier && resolvePart(carrier.lib, carrier.part)?.mounts?.find((m) => m.id === rp.mount)
-    if (!mount?.under) continue
-    const si = subjects.findIndex((s) => s.key === rp.id)
-    const ci = subjects.findIndex((s) => s.key === rp.mountedOn)
-    if (si < 0 || ci < 0 || si < ci) continue
-    const [seated] = subjects.splice(si, 1)
-    subjects.splice(ci, 0, seated)
   }
 
   const subjByKey = new Map(subjects.map((s) => [s.key, s]))
@@ -1616,10 +1614,10 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
     const sig = dragged ? partSignature(dragged) : ''
     const footprint = dragged?.footprint
     if (!sig && !footprint) return null
-    for (const carrier of robot.parts) {
+    for (const carrier of carriers) {
       if (carrier.id === excludeKey) continue
       const body = placedBody.get(carrier.id)
-      const cpart = resolvePart(carrier.lib, carrier.part)
+      const cpart = carrier.def
       if (!body || !cpart?.mounts?.length) continue
       for (const m of cpart.mounts) {
         if (!mountAccepts(cpart, m, sig, footprint)) continue
@@ -2143,7 +2141,15 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
       return
     }
     // A subject under the pointer? → drag it (topmost first).
-    const hit = [...subjects].reverse().find((s) => w.x >= s.hit.x && w.x <= s.hit.x + s.hit.w && w.y >= s.hit.y && w.y <= s.hit.y + s.hit.h)
+    let hit = [...subjects].reverse().find((s) => w.x >= s.hit.x && w.x <= s.hit.x + s.hit.w && w.y >= s.hit.y && w.y <= s.hit.y + s.hit.h)
+    // Alt/Option-drag on a seated part grabs the stack by its carrier: a shield
+    // that covers its Arduino leaves nothing of the board itself to grab.
+    if (hit && e.altKey) {
+      const carrierKey =
+        hit.key === 'board' ? robot.boardMountedOn : robot.parts.find((p) => p.id === hit?.key)?.mountedOn
+      const carrierSubject = carrierKey ? subjects.find((s) => s.key === carrierKey) : undefined
+      if (carrierSubject) hit = carrierSubject
+    }
     if (hit) {
       // Tapping a part/board reveals its pin capability chips (#525) — the touch
       // analogue of hovering it.
@@ -3281,10 +3287,10 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
                 const target = mountUnderFor(draggedPart, drag.boxKey, cx, cy)
                 return (
                   <g style={{ pointerEvents: 'none' }} className="wc__mount-targets">
-                    {robot.parts.flatMap((carrier) => {
+                    {carriers.flatMap((carrier) => {
                       if (carrier.id === drag.boxKey) return []
                       const body = placedBody.get(carrier.id)
-                      const cpart = resolvePart(carrier.lib, carrier.part)
+                      const cpart = carrier.def
                       const mounts = cpart?.mounts ?? []
                       if (!body || !cpart) return []
                       return mounts

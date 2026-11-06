@@ -452,6 +452,8 @@ export function buildNetlist(
   //     it, and the whole carrier reads as unconnected.
   for (const seated of robot.parts ?? []) {
     if (!seated.mountedOn || !seated.mount) continue
+    // Seated on the MCU board itself (a shield on an Arduino): handled in 1d.
+    if (seated.mountedOn === BOARD_KEY) continue
     const seatedDef = partDefs.get(seated.id)
     const carrierDef = partDefs.get(seated.mountedOn)
     if (!seatedDef || !carrierDef) continue
@@ -504,6 +506,31 @@ export function buildNetlist(
         if (!register(from) || !register(to)) return
         uf.union(from, to)
         edges.push({ id: `mount:board:${pad.label}`, from, to, internal: true })
+      })
+    }
+  }
+
+  // 1d. A part seated ON the MCU board (a motor shield on an Arduino UNO): the
+  //     board's part declares the mount, the shield its own copy of the board's
+  //     headers, and each shield pin bonds to the board pad with the same label.
+  //     That is what makes the wiring implicit — the shield's D9 IS the UNO's D9.
+  if (board) {
+    const padEndpoint = new Map<string, string>()
+    flattenBoardPads(board).forEach((pad, index) => {
+      if (pad.label && !padEndpoint.has(pad.label)) padEndpoint.set(pad.label, `${BOARD_KEY}.${pad.label}#${index}`)
+    })
+    for (const seated of robot.parts ?? []) {
+      if (seated.mountedOn !== BOARD_KEY || !seated.mount) continue
+      const seatedDef = partDefs.get(seated.id)
+      if (!seatedDef?.footprint) continue
+      flattenPartPins(seatedDef).forEach((pin, i) => {
+        if (!pin.name) return
+        const to = padEndpoint.get(pin.name)
+        if (!to) return
+        const from = `${seated.id}.${pin.name}#${i}`
+        if (!register(from) || !register(to)) return
+        uf.union(from, to)
+        edges.push({ id: `mount:${seated.id}:${pin.name}`, from, to, internal: true })
       })
     }
   }

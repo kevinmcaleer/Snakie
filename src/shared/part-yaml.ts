@@ -524,7 +524,6 @@ export function partToYaml(part: PartDefinition): string {
       x: m.x,
       y: m.y,
       rotation: m.rotation,
-      under: m.under || undefined,
       pinMap: m.pinMap ? { ...m.pinMap } : undefined
     })),
     ledLabel: part.ledLabel,
@@ -875,7 +874,6 @@ export function partFromYaml(text: string): PartDefinition {
         if (label) mount.label = label
         const rot = num(r.rotation)
         if (rot !== undefined) mount.rotation = rot
-        if (r.under === true) mount.under = true
         if (r.pinMap && typeof r.pinMap === 'object') {
           const pm: Record<string, string> = {}
           for (const [k, v] of Object.entries(r.pinMap as Record<string, unknown>)) {

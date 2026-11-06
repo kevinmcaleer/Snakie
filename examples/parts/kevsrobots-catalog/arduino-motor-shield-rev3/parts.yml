@@ -1,0 +1,730 @@
+id: arduino-motor-shield-rev3
+name: Arduino Motor Shield Rev3
+description: "Arduino's official L298P motor shield: two DC motors (2 A each) or one stepper, with current sensing, brakes and TinkerKit connectors."
+manufacturer: Arduino
+family: Motor driver
+tags:
+  - arduino
+  - uno
+  - shield
+  - motor-driver
+  - l298p
+  - h-bridge
+  - stepper
+  - tinkerkit
+package: THT
+pinSpacing: 2.54
+voltage: 5V logic, 5-12V motors
+partNumber: A000079
+properties:
+  driver: ST L298P dual H-bridge, 2 A per channel (4 A in parallel), 5-12 V
+  motorA: direction D12, speed (PWM) D3, brake D9, current sense A0
+  motorB: direction D13, speed (PWM) D11, brake D8, current sense A1
+  currentSense: 1.65 V per amp on A0 / A1
+version: 0.1.0
+pcbColor: "#0e7c86"
+aspect: 0.7778
+dimensions:
+  width: 53.34
+  height: 68.58
+headers:
+  - edge: left
+    pins:
+      - name: NC
+        type: other
+        number: 1
+        labelHidden: true
+        shape: header
+        rotation: 180
+        x: 0.0476
+        y: 0.4074
+      - name: IOREF
+        type: pwr
+        number: 2
+        labelHidden: true
+        shape: header
+        rotation: 180
+        x: 0.0476
+        y: 0.4444
+      - name: RESET
+        type: other
+        number: 3
+        labelHidden: true
+        shape: header
+        rotation: 180
+        x: 0.0476
+        y: 0.4815
+      - name: 3V3
+        type: pwr
+        number: 4
+        labelHidden: true
+        shape: header
+        rotation: 180
+        x: 0.0476
+        y: 0.5185
+      - name: 5V
+        type: pwr
+        number: 5
+        labelHidden: true
+        shape: header
+        rotation: 180
+        x: 0.0476
+        y: 0.5556
+      - name: GND
+        type: gnd
+        number: 6
+        labelHidden: true
+        shape: header
+        rotation: 180
+        x: 0.0476
+        y: 0.5926
+      - name: GND
+        type: gnd
+        number: 7
+        labelHidden: true
+        shape: header
+        rotation: 180
+        x: 0.0476
+        y: 0.6296
+      - name: VIN
+        type: pwr
+        number: 8
+        labelHidden: true
+        shape: header
+        rotation: 180
+        x: 0.0476
+        y: 0.6667
+      - name: A0
+        type: io
+        number: 9
+        gpio: 14
+        capabilities:
+          - digital
+          - adc
+        buses:
+          adc: 0
+        labelHidden: true
+        shape: header
+        rotation: 180
+        x: 0.0476
+        y: 0.7407
+      - name: A1
+        type: io
+        number: 10
+        gpio: 15
+        capabilities:
+          - digital
+          - adc
+        buses:
+          adc: 1
+        labelHidden: true
+        shape: header
+        rotation: 180
+        x: 0.0476
+        y: 0.7778
+      - name: A2
+        type: io
+        number: 11
+        gpio: 16
+        capabilities:
+          - digital
+          - adc
+        buses:
+          adc: 2
+        labelHidden: true
+        shape: header
+        rotation: 180
+        x: 0.0476
+        y: 0.8148
+      - name: A3
+        type: io
+        number: 12
+        gpio: 17
+        capabilities:
+          - digital
+          - adc
+        buses:
+          adc: 3
+        labelHidden: true
+        shape: header
+        rotation: 180
+        x: 0.0476
+        y: 0.8519
+      - name: A4
+        type: io
+        number: 13
+        gpio: 18
+        capabilities:
+          - digital
+          - adc
+          - i2c
+        signals:
+          i2c: SDA
+        buses:
+          i2c: 0
+          adc: 4
+        labelHidden: true
+        shape: header
+        rotation: 180
+        x: 0.0476
+        y: 0.8889
+      - name: A5
+        type: io
+        number: 14
+        gpio: 19
+        capabilities:
+          - digital
+          - adc
+          - i2c
+        signals:
+          i2c: SCL
+        buses:
+          i2c: 0
+          adc: 5
+        labelHidden: true
+        shape: header
+        rotation: 180
+        x: 0.0476
+        y: 0.9259
+      - name: SCL
+        type: io
+        number: 15
+        gpio: 19
+        capabilities:
+          - digital
+          - i2c
+        signals:
+          i2c: SCL
+        buses:
+          i2c: 0
+        labelHidden: true
+        shape: header
+        rotation: 0
+        x: 0.9524
+        y: 0.2741
+      - name: SDA
+        type: io
+        number: 16
+        gpio: 18
+        capabilities:
+          - digital
+          - i2c
+        signals:
+          i2c: SDA
+        buses:
+          i2c: 0
+        labelHidden: true
+        shape: header
+        rotation: 0
+        x: 0.9524
+        y: 0.3111
+      - name: AREF
+        type: other
+        number: 17
+        labelHidden: true
+        shape: header
+        rotation: 0
+        x: 0.9524
+        y: 0.3481
+      - name: GND
+        type: gnd
+        number: 18
+        labelHidden: true
+        shape: header
+        rotation: 0
+        x: 0.9524
+        y: 0.3852
+      - name: D13
+        type: io
+        number: 19
+        gpio: 13
+        capabilities:
+          - digital
+          - spi
+        signals:
+          spi: SCK
+        buses:
+          spi: 0
+        labelHidden: true
+        shape: header
+        rotation: 0
+        x: 0.9524
+        y: 0.4222
+      - name: D12
+        type: io
+        number: 20
+        gpio: 12
+        capabilities:
+          - digital
+          - spi
+        signals:
+          spi: RX
+        buses:
+          spi: 0
+        labelHidden: true
+        shape: header
+        rotation: 0
+        x: 0.9524
+        y: 0.4593
+      - name: D11
+        type: io
+        number: 21
+        gpio: 11
+        capabilities:
+          - digital
+          - pwm
+          - spi
+        signals:
+          spi: TX
+        buses:
+          spi: 0
+        labelHidden: true
+        shape: header
+        rotation: 0
+        x: 0.9524
+        y: 0.4963
+      - name: D10
+        type: io
+        number: 22
+        gpio: 10
+        capabilities:
+          - digital
+          - pwm
+          - spi
+        signals:
+          spi: CSn
+        buses:
+          spi: 0
+        labelHidden: true
+        shape: header
+        rotation: 0
+        x: 0.9524
+        y: 0.5333
+      - name: D9
+        type: io
+        number: 23
+        gpio: 9
+        capabilities:
+          - digital
+          - pwm
+        labelHidden: true
+        shape: header
+        rotation: 0
+        x: 0.9524
+        y: 0.5704
+      - name: D8
+        type: io
+        number: 24
+        gpio: 8
+        capabilities:
+          - digital
+        labelHidden: true
+        shape: header
+        rotation: 0
+        x: 0.9524
+        y: 0.6074
+      - name: D7
+        type: io
+        number: 25
+        gpio: 7
+        capabilities:
+          - digital
+        labelHidden: true
+        shape: header
+        rotation: 0
+        x: 0.9524
+        y: 0.6667
+      - name: D6
+        type: io
+        number: 26
+        gpio: 6
+        capabilities:
+          - digital
+          - pwm
+        labelHidden: true
+        shape: header
+        rotation: 0
+        x: 0.9524
+        y: 0.7037
+      - name: D5
+        type: io
+        number: 27
+        gpio: 5
+        capabilities:
+          - digital
+          - pwm
+        labelHidden: true
+        shape: header
+        rotation: 0
+        x: 0.9524
+        y: 0.7407
+      - name: D4
+        type: io
+        number: 28
+        gpio: 4
+        capabilities:
+          - digital
+        labelHidden: true
+        shape: header
+        rotation: 0
+        x: 0.9524
+        y: 0.7778
+      - name: D3
+        type: io
+        number: 29
+        gpio: 3
+        capabilities:
+          - digital
+          - pwm
+        labelHidden: true
+        shape: header
+        rotation: 0
+        x: 0.9524
+        y: 0.8148
+      - name: D2
+        type: io
+        number: 30
+        gpio: 2
+        capabilities:
+          - digital
+        labelHidden: true
+        shape: header
+        rotation: 0
+        x: 0.9524
+        y: 0.8519
+      - name: D1
+        type: io
+        number: 31
+        gpio: 1
+        capabilities:
+          - digital
+          - uart
+        signals:
+          uart: TX
+        buses:
+          uart: 0
+        labelHidden: true
+        shape: header
+        rotation: 0
+        x: 0.9524
+        y: 0.8889
+      - name: D0
+        type: io
+        number: 32
+        gpio: 0
+        capabilities:
+          - digital
+          - uart
+        signals:
+          uart: RX
+        buses:
+          uart: 0
+        labelHidden: true
+        shape: header
+        rotation: 0
+        x: 0.9524
+        y: 0.9259
+  - edge: left
+    pins:
+      - name: MOTOR_GND
+        type: gnd
+        label: GND
+        labelHidden: true
+        shape: square
+        x: 0.0694
+        y: 0.0934
+      - name: MOTOR_VIN
+        type: pwr
+        label: Vin
+        labelHidden: true
+        shape: square
+        x: 0.1422
+        y: 0.0934
+      - name: MOTOR_A+
+        type: other
+        label: A+
+        labelHidden: true
+        shape: square
+        x: 0.2133
+        y: 0.0934
+      - name: MOTOR_A-
+        type: other
+        label: A−
+        labelHidden: true
+        shape: square
+        x: 0.286
+        y: 0.0934
+      - name: MOTOR_B+
+        type: other
+        label: B+
+        labelHidden: true
+        shape: square
+        x: 0.3588
+        y: 0.0934
+      - name: MOTOR_B-
+        type: other
+        label: B−
+        labelHidden: true
+        shape: square
+        x: 0.4315
+        y: 0.0934
+  - edge: left
+    pins:
+      - name: IN3_GND
+        type: gnd
+        label: GND
+        labelHidden: true
+        shape: header
+        x: 0.668
+        y: 0.8476
+      - name: IN3
+        type: io
+        gpio: 17
+        capabilities:
+          - digital
+          - adc
+        buses:
+          adc: 3
+        labelHidden: true
+        shape: header
+        x: 0.7151
+        y: 0.8476
+      - name: IN3_5V
+        type: pwr
+        label: 5V
+        labelHidden: true
+        shape: header
+        x: 0.7606
+        y: 0.8476
+  - edge: left
+    pins:
+      - name: IN2_GND
+        type: gnd
+        label: GND
+        labelHidden: true
+        shape: header
+        x: 0.668
+        y: 0.737
+      - name: IN2
+        type: io
+        gpio: 16
+        capabilities:
+          - digital
+          - adc
+        buses:
+          adc: 2
+        labelHidden: true
+        shape: header
+        x: 0.7151
+        y: 0.737
+      - name: IN2_5V
+        type: pwr
+        label: 5V
+        labelHidden: true
+        shape: header
+        x: 0.7606
+        y: 0.737
+  - edge: left
+    pins:
+      - name: OUT5_GND
+        type: gnd
+        label: GND
+        labelHidden: true
+        shape: header
+        x: 0.668
+        y: 0.6271
+      - name: OUT5
+        type: io
+        gpio: 5
+        capabilities:
+          - digital
+          - pwm
+        labelHidden: true
+        shape: header
+        x: 0.7151
+        y: 0.6271
+      - name: OUT5_5V
+        type: pwr
+        label: 5V
+        labelHidden: true
+        shape: header
+        x: 0.7606
+        y: 0.6271
+  - edge: left
+    pins:
+      - name: OUT6_GND
+        type: gnd
+        label: GND
+        labelHidden: true
+        shape: header
+        x: 0.668
+        y: 0.5177
+      - name: OUT6
+        type: io
+        gpio: 6
+        capabilities:
+          - digital
+          - pwm
+        labelHidden: true
+        shape: header
+        x: 0.7151
+        y: 0.5177
+      - name: OUT6_5V
+        type: pwr
+        label: 5V
+        labelHidden: true
+        shape: header
+        x: 0.7606
+        y: 0.5177
+  - edge: left
+    pins:
+      - name: TWI_A_GND
+        type: gnd
+        label: GND
+        labelHidden: true
+        shape: header
+        x: 0.6448
+        y: 0.4052
+      - name: TWI_A_SDA
+        type: io
+        gpio: 18
+        capabilities:
+          - digital
+          - i2c
+        signals:
+          i2c: SDA
+        buses:
+          i2c: 0
+        label: SDA
+        labelHidden: true
+        shape: header
+        x: 0.6911
+        y: 0.4052
+      - name: TWI_A_SCL
+        type: io
+        gpio: 19
+        capabilities:
+          - digital
+          - i2c
+        signals:
+          i2c: SCL
+        buses:
+          i2c: 0
+        label: SCL
+        labelHidden: true
+        shape: header
+        x: 0.7366
+        y: 0.4052
+      - name: TWI_A_5V
+        type: pwr
+        label: 5V
+        labelHidden: true
+        shape: header
+        x: 0.7829
+        y: 0.4052
+  - edge: left
+    pins:
+      - name: TWI_B_GND
+        type: gnd
+        label: GND
+        labelHidden: true
+        shape: header
+        x: 0.6448
+        y: 0.2959
+      - name: TWI_B_SDA
+        type: io
+        gpio: 18
+        capabilities:
+          - digital
+          - i2c
+        signals:
+          i2c: SDA
+        buses:
+          i2c: 0
+        label: SDA
+        labelHidden: true
+        shape: header
+        x: 0.6911
+        y: 0.2959
+      - name: TWI_B_SCL
+        type: io
+        gpio: 19
+        capabilities:
+          - digital
+          - i2c
+        signals:
+          i2c: SCL
+        buses:
+          i2c: 0
+        label: SCL
+        labelHidden: true
+        shape: header
+        x: 0.7366
+        y: 0.2959
+      - name: TWI_B_5V
+        type: pwr
+        label: 5V
+        labelHidden: true
+        shape: header
+        x: 0.7829
+        y: 0.2959
+rails:
+  - name: GND
+    pins:
+      - GND
+      - MOTOR_GND
+      - IN3_GND
+      - IN2_GND
+      - OUT5_GND
+      - OUT6_GND
+      - TWI_A_GND
+      - TWI_B_GND
+  - name: VIN
+    pins:
+      - VIN
+      - MOTOR_VIN
+  - name: A3
+    pins:
+      - A3
+      - IN3
+  - name: 5V
+    pins:
+      - 5V
+      - IN3_5V
+      - IN2_5V
+      - OUT5_5V
+      - OUT6_5V
+      - TWI_A_5V
+      - TWI_B_5V
+  - name: A2
+    pins:
+      - A2
+      - IN2
+  - name: D5
+    pins:
+      - D5
+      - OUT5
+  - name: D6
+    pins:
+      - D6
+      - OUT6
+  - name: SDA
+    pins:
+      - SDA
+      - TWI_A_SDA
+      - TWI_B_SDA
+  - name: SCL
+    pins:
+      - SCL
+      - TWI_A_SCL
+      - TWI_B_SCL
+footprint: uno-shield
+image: image.png
+imageLayer:
+  x: 0
+  y: 0
+  w: 1
+  h: 1
+help: help.md
+mesh: model.stl
+meshUnits: mm
