@@ -1,9 +1,8 @@
 # Arduino UNO R3
 
 The classic Arduino board: an **ATmega328P** at 16 MHz with **5 V** I/O, 14 digital
-pins (6 with PWM), 6 analog inputs, a USB-B socket and a 2.1 mm barrel jack. It
-runs Arduino sketches (C++); MicroPython does not fit on the ATmega328P, so in
-Snakie it is a board to wire and plan with rather than one to flash.
+pins (6 with PWM), 6 analog inputs, a USB-B socket and a 2.1 mm barrel jack.  It
+runs Arduino sketches (C++).
 
 ## Pins
 

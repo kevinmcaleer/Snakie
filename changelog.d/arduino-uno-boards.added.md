@@ -1,8 +1,10 @@
-- **Arduino UNO R3, UNO R4 Minima, UNO R4 WiFi and UNO Q in the Standard
-  library.** Each board ships Arduino's top-down product photo with every
-  header pad placed over it, pins checked against Arduino's official pinouts
-  (Arduino pin numbers, PWM, SPI, I²C, UART and ADC channels; Qwiic on the R4
-  WiFi and UNO Q; the R4 WiFi's OFF/VRTC header), a help page, and a 3-D model.
-  The R4 and UNO Q models are Arduino's own STEP files converted to STL; the R3,
-  which Arduino publishes no model for, is generated from its Eagle board by
-  the new `scripts/arduino-uno-meshes.mjs`. Library 1.20.0.
+- **Arduino UNO R3, UNO R4 Minima, UNO R4 WiFi and UNO Q for the kevsrobots.com
+  parts catalog.** They live in the new `examples/parts/kevsrobots-catalog/`,
+  which Snakie never loads: MicroPython doesn't run on these boards, so the app
+  doesn't offer them, but the site's catalog imports them beside the Standard
+  parts. Each has Arduino's top-down photo with every header pad placed over
+  it, pins checked against Arduino's official pinouts, a help page and a 3-D
+  model — Arduino's own STEP converted to STL for the R4s and UNO Q, and one
+  generated from the Eagle board for the R3 by the new
+  `scripts/arduino-uno-meshes.mjs`. (They were briefly in the Standard library
+  on master; Standard library 1.20.1 drops them again.)

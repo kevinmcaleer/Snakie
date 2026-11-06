@@ -10,8 +10,12 @@ import { partFromYaml } from '../src/shared/part-yaml'
  * them. Their models follow the library convention (mm, Z up, lowest point on
  * z = 0, centred on the PCB); the R3's is generated, the others are Arduino's
  * STEP files converted by `scripts/arduino-uno-meshes.mjs`.
+ *
+ * They sit in `kevsrobots-catalog/`, NOT the Standard library: MicroPython
+ * doesn't run on them, so Snakie (a MicroPython IDE) must not offer them, while
+ * the kevsrobots.com catalog imports them.
  */
-const LIB = join(__dirname, '..', 'examples', 'parts', 'snakie-standard')
+const LIB = join(__dirname, '..', 'examples', 'parts', 'kevsrobots-catalog')
 const IDS = ['arduino-uno-r3', 'arduino-uno-r4-minima', 'arduino-uno-r4-wifi', 'arduino-uno-q']
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -33,10 +37,21 @@ function stlBounds(file: string): THREE.Box3 {
 }
 
 describe('Arduino UNO parts', () => {
+  it('are kept out of the Standard library Snakie loads', () => {
+    for (const id of IDS)
+      expect(existsSync(join(LIB, '..', 'snakie-standard', id)), id).toBe(false)
+  })
+
   for (const id of IDS) {
     describe(id, () => {
       const part = partFromYaml(readFileSync(join(LIB, id, 'parts.yml'), 'utf8'))
       const pins = part.headers.flatMap((h) => h.pins)
+
+      it('quotes pin names a YAML 1.1 reader would turn into booleans', () => {
+        // kevsrobots' importer uses PyYAML, where a bare OFF/ON/YES/NO is a bool.
+        const raw = readFileSync(join(LIB, id, 'parts.yml'), 'utf8')
+        expect(raw).not.toMatch(/name: (OFF|ON|YES|NO|Off|On|off|on|yes|no|Y|N|y|n)\b/)
+      })
 
       it('is a UNO-sized microcontroller board with a photo, help and a model', () => {
         expect(part.family).toBe('Microcontroller')
