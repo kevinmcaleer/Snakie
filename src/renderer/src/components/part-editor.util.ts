@@ -65,7 +65,7 @@ import { connectablePinCount,
   findPart
 } from '../../../shared/part'
 import type { RobotPart } from '../../../shared/robot'
-import { coerceDisplay, coerceElectrical } from '../../../shared/part-yaml'
+import { coerceDisplay, coerceElectrical, coerceSockets3d } from '../../../shared/part-yaml'
 import { coerceMeshRotation } from '../../../shared/mesh-rotation'
 import { coerceMeshOffset } from '../../../shared/mesh-offset'
 import { flattenPartPins } from '../../../shared/netlist'
@@ -2253,6 +2253,9 @@ export function normalisePart(part: PartDefinition): PartDefinition {
     )
     if (pts.length) out.contacts = pts.map((p) => [p[0], p[1], p[2]])
   }
+  // 3-D pin points for kevsrobots scenes: kept as they are, via the shared coercer.
+  const sockets3d = coerceSockets3d(part.sockets3d)
+  if (sockets3d) out.sockets3d = sockets3d
   // Electrical behaviour (#597 / #600) — reuse the shared coercer so the save-time
   // whitelist keeps the SAME fields the YAML round-trip does (no silent drop).
   const electrical = coerceElectrical(part.electrical)

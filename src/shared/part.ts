@@ -1103,6 +1103,34 @@ export interface PartGroup {
  * spacing, user key/values, voltage, part #); below it is everything the Board
  * Viewer needs to draw an accurate footprint + life-like representation.
  */
+/**
+ * A part's pin points on its 3-D model, as a kevsrobots 3D scene places them
+ * (markdown-studio `CatalogSockets`). Points and normals are **mm in the
+ * model's own bounding-box-centred frame** (the STL as read, moved to the
+ * middle of its box), and `size` is that box, so the points only apply to a
+ * mesh of the same size (within 0.5 mm).
+ */
+export interface PartSockets3d {
+  size: [number, number, number]
+  sockets: PartSocket3d[]
+}
+
+/** One place on the model a wire ends: a plug socket, or a bare pin (`connector: "pin"`). */
+export interface PartSocket3d {
+  id: string
+  point: [number, number, number]
+  /** Out of the face: a wire leaves along it. */
+  normal: [number, number, number]
+  /** A plug's connector id ("molex-5264-3"), or `"pin"` for a bare pin, tab or terminal. */
+  connector: string
+  spin?: number
+  name?: string
+  /** The 2D pin group / header / connector this plug socket is ("header-1"). */
+  port?: string
+  /** A bare pin's 2D pin name ("VCC"). */
+  pin?: string
+}
+
 export interface PartDefinition {
   // --- Identity & catalogue metadata (the parts.yml header) ----------------
   /** Unique id within its library; the part's folder name. */
@@ -1401,6 +1429,13 @@ export interface PartDefinition {
    * where a link needs bespoke points). Absent ⇒ the part isn't a foot/wheel.
    */
   contacts?: [number, number, number][]
+  /**
+   * Where the part's pins are on its 3-D {@link mesh}, for wiring in
+   * kevsrobots 3D scenes (markdown-studio Layers): a wire tool snaps to these
+   * and "Add missing wires" ends wires on them. Snakie itself doesn't use it;
+   * it's kept so a part saved here doesn't lose it. See {@link PartSockets3d}.
+   */
+  sockets3d?: PartSockets3d
 
   /**
    * Electrical behaviour for the Circuit Sim (epic #597, #600). Absent ⇒ the part

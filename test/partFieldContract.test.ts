@@ -181,6 +181,7 @@ const EVERY_FIELD: Required<PartDefinition> = {
   mass_g: 9,
   com_xyz: [1, 2, 3],
   contacts: [[0, 0, -5]],
+  sockets3d: { size: [12, 39.1, 10], sockets: [{ id: 'pin-vcc', point: [4.38, -19.55, 0], normal: [0, -1, 0], connector: 'pin', name: 'VCC', port: 'header-1', pin: 'VCC' }] },
 
   // --- Circuit sim ---------------------------------------------------------
   electrical: { model: 'consumer', currentDrawA: 0.02, maxCurrentA: 0.05, supplyRange: [2.8, 5], operatingV: [3, 5.5] },

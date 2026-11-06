@@ -1,0 +1,1 @@
+- **N20 Motor: VCC and GND pin points on its two tabs for 3D wiring; parts keep their sockets3d.** 

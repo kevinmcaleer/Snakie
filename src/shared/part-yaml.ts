@@ -39,6 +39,8 @@ import type {
   PartButton,
   PartConnector,
   PartDefinition,
+  PartSocket3d,
+  PartSockets3d,
   PartDisplay,
   PartEdge,
   PartElectrical,
@@ -222,6 +224,43 @@ function posNum(v: unknown): number | undefined {
  * Exported so `normalisePart` (the save-time whitelist) reuses the SAME validator
  * — one source of truth, so the field can't be dropped or drift on save.
  */
+function vec3(v: unknown): [number, number, number] | undefined {
+  if (!Array.isArray(v) || v.length !== 3) return undefined
+  const n = v.map(num)
+  return n.every((x): x is number => x !== undefined) ? [n[0], n[1], n[2]] : undefined
+}
+
+/**
+ * A part's 3-D pin points (kevsrobots 3D scenes), or undefined when there are
+ * none or the block is malformed. A socket missing its id, point, normal or
+ * connector is dropped; unknown fields are not kept.
+ */
+export function coerceSockets3d(raw: unknown): PartSockets3d | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const r = raw as Record<string, unknown>
+  const size = vec3(r.size)
+  if (!size || !Array.isArray(r.sockets)) return undefined
+  const sockets: PartSocket3d[] = []
+  for (const s of r.sockets) {
+    if (!s || typeof s !== 'object') continue
+    const q = s as Record<string, unknown>
+    const id = str(q.id)
+    const point = vec3(q.point)
+    const normal = vec3(q.normal)
+    const connector = str(q.connector)
+    if (!id || !point || !normal || !connector) continue
+    const out: PartSocket3d = { id, point, normal, connector }
+    const spin = num(q.spin)
+    if (spin !== undefined && spin !== 0) out.spin = spin
+    for (const k of ['name', 'port', 'pin'] as const) {
+      const v = str(q[k])
+      if (v) out[k] = v
+    }
+    sockets.push(out)
+  }
+  return sockets.length ? { size, sockets } : undefined
+}
+
 export function coerceElectrical(raw: unknown): PartElectrical | null {
   if (!raw || typeof raw !== 'object') return null
   const r = raw as Record<string, unknown>
@@ -553,6 +592,8 @@ export function partToYaml(part: PartDefinition): string {
     com_xyz: part.com_xyz,
     // Ground-contact points in mm (#569).
     contacts: part.contacts,
+    // 3-D pin points for kevsrobots scenes, kept as they are (coerced).
+    sockets3d: coerceSockets3d(part.sockets3d),
     // Electrical behaviour for the Circuit Sim (#597 / #600). Coerced on write too
     // so a bare/garbage block is dropped even if the caller didn't normalise first.
     electrical: coerceElectrical(part.electrical) ?? undefined,
@@ -928,6 +969,7 @@ export function partFromYaml(text: string): PartDefinition {
       .map((v) => [v[0], v[1], v[2]] as [number, number, number])
     if (pts.length) assign('contacts', pts)
   }
+  assign('sockets3d', coerceSockets3d(raw.sockets3d))
   const frontLayer = coerceImageLayer(raw.imageLayer)
   if (frontLayer) part.imageLayer = frontLayer
   if (raw.schematic && typeof raw.schematic === 'object' && !Array.isArray(raw.schematic)) {

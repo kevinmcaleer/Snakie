@@ -5,7 +5,7 @@ family: Motor
 package: THT
 pinSpacing: 2.54
 voltage: 6V
-version: 0.2.0
+version: 0.2.1
 pcbColor: "#0f5a2e"
 aspect: 0.5
 dimensions:
@@ -112,3 +112,22 @@ layerVisibility:
   holes: true
   pins: true
   components: false
+# Where VCC and GND are on model.stl, for wiring in kevsrobots 3D scenes: the
+# end of each brass tab, in the model's box-centred frame (mm).
+sockets3d:
+  size: [12, 39.1, 10]
+  sockets:
+    - id: pin-vcc
+      point: [4.38, -19.55, 0]
+      normal: [0, -1, 0]
+      connector: pin
+      name: VCC
+      port: header-1
+      pin: VCC
+    - id: pin-gnd
+      point: [-4.38, -19.55, 0]
+      normal: [0, -1, 0]
+      connector: pin
+      name: GND
+      port: header-1
+      pin: GND
