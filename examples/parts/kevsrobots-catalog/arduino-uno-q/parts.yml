@@ -20,6 +20,7 @@ partNumber: ABX00162
 version: 0.1.0
 mcu: STM32U585
 pcbColor: "#182b47"
+footprint: uno
 aspect: 0.7778
 dimensions:
   width: 53.34

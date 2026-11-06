@@ -16,6 +16,7 @@ partNumber: A000066
 version: 0.1.0
 mcu: ATmega328P
 pcbColor: "#00878f"
+footprint: uno
 aspect: 0.7778
 dimensions:
   width: 53.34

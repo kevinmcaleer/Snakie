@@ -2182,6 +2182,7 @@ export function normalisePart(part: PartDefinition): PartDefinition {
           const r = (((Math.round(m.rotation / 90) * 90) % 360) + 360) % 360
           if (r) mount.rotation = r
         }
+        if (m.under === true) mount.under = true
         if (m.pinMap) {
           const pm: Record<string, string> = {}
           for (const [k, v] of Object.entries(m.pinMap)) {

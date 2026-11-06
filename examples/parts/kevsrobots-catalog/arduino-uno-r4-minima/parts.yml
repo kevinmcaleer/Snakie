@@ -16,6 +16,7 @@ partNumber: ABX00080
 version: 0.1.0
 mcu: RA4M1
 pcbColor: "#043b60"
+footprint: uno
 aspect: 0.7778
 dimensions:
   width: 53.34

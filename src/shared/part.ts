@@ -423,6 +423,14 @@ export interface PartMount {
   rotation?: number
   /** Optional silk label for the socket (e.g. `XIAO`). */
   label?: string
+  /**
+   * The seated board sits UNDER this part rather than on it — a shield stacked on
+   * an Arduino UNO, where the shield is the carrier (its imprinted pins are the
+   * UNO's header, passed through) but the UNO is below it. Only the paint order
+   * changes: the carrier is drawn over the board it holds. Absent ⇒ on top (a XIAO
+   * in its expansion base).
+   */
+  under?: boolean
   /** Bond overrides for a carrier whose own pin names differ from the seated
    *  board's: seated pin name → this board's pin name. Anything not listed still
    *  bonds by matching name. */

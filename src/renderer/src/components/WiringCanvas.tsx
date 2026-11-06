@@ -1371,8 +1371,24 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
       const bi = subjects.indexOf(bs)
       subjects.splice(bi, 1)
       const ci = subjects.findIndex((s) => s.key === robot.boardMountedOn)
-      subjects.splice(ci + 1, 0, bs)
+      // A shield's socket seats the board UNDERNEATH it: paint it first.
+      subjects.splice(mount.under ? ci : ci + 1, 0, bs)
     }
+  }
+
+  // Parts seated in an `under` mount (a UNO below its motor shield) are painted
+  // BEFORE their carrier, so the shield covers the board as it does on the bench.
+  // Layout already put the carrier first; only the paint order moves.
+  for (const rp of robot.parts) {
+    if (!rp.mountedOn || !rp.mount) continue
+    const carrier = robot.parts.find((p) => p.id === rp.mountedOn)
+    const mount = carrier && resolvePart(carrier.lib, carrier.part)?.mounts?.find((m) => m.id === rp.mount)
+    if (!mount?.under) continue
+    const si = subjects.findIndex((s) => s.key === rp.id)
+    const ci = subjects.findIndex((s) => s.key === rp.mountedOn)
+    if (si < 0 || ci < 0 || si < ci) continue
+    const [seated] = subjects.splice(si, 1)
+    subjects.splice(ci, 0, seated)
   }
 
   const subjByKey = new Map(subjects.map((s) => [s.key, s]))
@@ -1569,6 +1585,11 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
     sig: string,
     footprint: string | undefined
   ): boolean => {
+    // A board that declares the SAME footprint name always fits: the tag is the
+    // author saying "this is that socket", which covers a family member with a few
+    // extra pins (an UNO R4 WiFi's OFF/GND/VRTC header) that changes its
+    // structural signature without changing what it plugs into.
+    if (footprint && m.footprint === footprint) return true
     // Prefer the SOURCE board the footprint was imprinted from (#166): comparing the
     // dragged board against it is rotation-INDEPENDENT — a footprint imprinted at 90°
     // still accepts the same (un-rotated) board, because the imprint's rotation is
@@ -1580,7 +1601,7 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
     }
     // No installed source → the imprinted pins' signature, else a legacy name match.
     const msig = mountSignature(cpart, m.id)
-    return msig ? sig !== '' && signaturesMatch(msig, sig) : !!footprint && m.footprint === footprint
+    return !!msig && sig !== '' && signaturesMatch(msig, sig)
   }
   /**
    * A free carrier mount the dragged board could seat in: structurally compatible

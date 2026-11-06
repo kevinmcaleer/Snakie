@@ -29,6 +29,8 @@ export interface MountPlacement {
   /** Optional silk label + footprint tag overrides (else derived from the source). */
   label?: string
   footprint?: string
+  /** The seated board goes UNDER the carrier (a shield on an UNO). */
+  under?: boolean
 }
 
 /** The footprint block's size as a fraction of the carrier — from real mm
@@ -154,6 +156,8 @@ export function applyImprint(
   if (mount.rotation) entry.rotation = mount.rotation
   if (mount.label) entry.label = mount.label
   const idx = mounts.findIndex((m) => m.id === mount.id)
+  // A re-imprint (rotate, re-sync from source) keeps a shield's "board underneath".
+  if (mount.under ?? (idx >= 0 && mounts[idx].under)) entry.under = true
   if (idx >= 0) mounts[idx] = entry
   else mounts.push(entry)
   return { ...base, headers, mounts }
