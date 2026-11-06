@@ -131,6 +131,22 @@ const JOINT_ICONS: Record<JointType, JSX.Element> = {
   )
 }
 
+/** A warning triangle: a row's wiring warnings (the embed's pin checks). */
+export const WARN_ICON = (
+  <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M12 3.2 22.4 21H1.6Z" fill="currentColor" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+    <path d="M12 9.5v5.2" stroke="#1b1b1b" strokeWidth="2.2" strokeLinecap="round" />
+    <circle cx="12" cy="17.9" r="1.3" fill="#1b1b1b" />
+  </svg>
+)
+
+/** A row's warnings: what its icon's tooltip lists. */
+export interface RowWarning {
+  message: string
+  /** Shorts and joined supplies: drawn red rather than amber. */
+  danger: boolean
+}
+
 const BIN_ICON = (
   <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
     <path
@@ -199,6 +215,8 @@ export interface HierarchyPanelProps {
   coverage?: MassCoverage | null
   /** Shown in place of the tree when there is nothing yet. */
   emptyHint?: string
+  /** Warnings by row key: a warning icon on the row, its messages in the tooltip. */
+  warnings?: Record<string, RowWarning[]>
 }
 
 export function HierarchyPanel({
@@ -215,7 +233,8 @@ export function HierarchyPanel({
   onContextMenu,
   onRemove,
   coverage,
-  emptyHint
+  emptyHint,
+  warnings
 }: HierarchyPanelProps): JSX.Element {
   const label = coverage ? coverageLabel(coverage) : null
   return (
@@ -243,6 +262,7 @@ export function HierarchyPanel({
             onEditJoint={onEditJoint}
             onContextMenu={onContextMenu}
             onRemove={onRemove}
+            warnings={warnings}
           />
         )}
       </CollapsiblePanel>
@@ -272,6 +292,7 @@ interface RowContext {
   onEditJoint?: (node: HierarchyNode, joint: HierarchyJoint) => void
   onContextMenu?: (e: React.MouseEvent, node: HierarchyNode) => void
   onRemove?: (node: HierarchyNode) => void
+  warnings?: Record<string, RowWarning[]>
 }
 
 /** One level of the tree — recursive, so a docked part / a jointed child renders
@@ -333,8 +354,10 @@ function Row({
   onEdit,
   onEditJoint,
   onContextMenu,
-  onRemove
+  onRemove,
+  warnings
 }: RowContext & { node: HierarchyNode }): JSX.Element {
+  const warns = warnings?.[node.key] ?? []
   // The epic's decision: Build-only rows are DIMMED AND INERT in Electronics —
   // present (so the tree reads identically) but not clickable there, because
   // there is nothing in the board view to select or zoom to.
@@ -431,6 +454,16 @@ function Row({
       {node.loose && (
         <span className="uhier__loose" title="Not connected to the base — open it and pick a parent">
           ⚠
+        </span>
+      )}
+      {warns.length > 0 && (
+        <span
+          className={`uhier__warn${warns.some((w) => w.danger) ? ' is-danger' : ''}`}
+          title={warns.map((w) => w.message).join('\n')}
+          role="img"
+          aria-label={`${warns.length} warning${warns.length === 1 ? '' : 's'}: ${warns.map((w) => w.message).join(' ')}`}
+        >
+          {WARN_ICON}
         </span>
       )}
       {node.kind === 'board' && <span className="uhier__tag">MCU</span>}

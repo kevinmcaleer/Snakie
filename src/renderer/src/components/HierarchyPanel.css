@@ -322,6 +322,28 @@ button.uhier__joint.is-on {
   color: var(--uhier-warn);
 }
 
+/* A row's wiring warnings: an icon, its messages in the tooltip (no box). */
+.uhier__warn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--uhier-warn);
+  cursor: help;
+}
+
+.uhier__warn.is-danger {
+  color: var(--danger);
+}
+
+.uhier__warn svg {
+  display: block;
+  width: 13px;
+  height: 13px;
+}
+
 .uhier__tag {
   flex: 0 0 auto;
   font-family: var(--font-mono, monospace);
