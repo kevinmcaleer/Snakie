@@ -109,6 +109,31 @@ describe('Arduino UNO parts', () => {
     })
   }
 
+  it('opens a socket at every header pin, so a shield\'s pin has a place to go', () => {
+    // A top-face triangle of a header that covers a pin's centre would mean no socket there.
+    const covers = (pos: ArrayLike<number>, x: number, y: number, z: number) => {
+      for (let i = 0; i < pos.length; i += 9) {
+        if (![2, 5, 8].every((k) => Math.abs(pos[i + k] - z) < 1e-3)) continue
+        const [ax, ay, bx, by, cx, cy] = [pos[i], pos[i + 1], pos[i + 3], pos[i + 4], pos[i + 6], pos[i + 7]]
+        const d1 = (x - bx) * (ay - by) - (ax - bx) * (y - by)
+        const d2 = (x - cx) * (by - cy) - (bx - cx) * (y - cy)
+        const d3 = (x - ax) * (cy - ay) - (cx - ax) * (y - ay)
+        if (!((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0))) return true
+      }
+      return false
+    }
+    const top = gen.UNO_R3.thicknessMm + gen.UNO_R3.headerHeightMm
+    const headers = gen.unoR3Geometries().filter((g: { name: string }) => g.name.startsWith('header-'))
+    const pos = headers.flatMap((g: { geo: { getAttribute: (n: string) => { array: ArrayLike<number> } } }) => Array.from(g.geo.getAttribute('position').array))
+    const pins: [number, number][] = gen.headerPins().map(([x, y]: [number, number]) => gen.toPortrait(x, y))
+    expect(pins.length).toBe(32)
+    for (const [x, y] of pins) {
+      expect(covers(pos, x, y, top), `socket at ${x}, ${y}`).toBe(false)
+      // …but the header's top is there either side of it.
+      expect(covers(pos, x, y + 2.54 / 2 - 0.05, top) || covers(pos, x + 1.27 - 0.05, y, top)).toBe(true)
+    }
+  })
+
   it('generates the R3 model it ships', () => {
     const stl: Buffer = gen.toStl(gen.unoR3Group())
     expect(stl.equals(readFileSync(join(LIB, 'arduino-uno-r3', 'model.stl')))).toBe(true)
