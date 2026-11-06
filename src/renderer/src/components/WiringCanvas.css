@@ -490,6 +490,45 @@
   pointer-events: none;
 }
 
+/* A warned part's triangle (the host's pin checks); the tooltip lists them. */
+.wc__warn {
+  cursor: help;
+}
+
+.wc__warn-hit {
+  fill: transparent;
+}
+
+.wc__warn-tri {
+  fill: #f2b233;
+  stroke: #3a2a06;
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+
+.wc__warn.is-danger .wc__warn-tri {
+  fill: #e5484d;
+  stroke: #3d0b0c;
+}
+
+.wc__warn-mark {
+  stroke: #1b1b1b;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.wc__warn-dot {
+  fill: #1b1b1b;
+}
+
+.wc__warn.is-danger .wc__warn-mark {
+  stroke: #fff;
+}
+
+.wc__warn.is-danger .wc__warn-dot {
+  fill: #fff;
+}
+
 .wc__parttb {
   position: absolute;
   /* Floats just above the part; flips below (--below) when there's no room. */

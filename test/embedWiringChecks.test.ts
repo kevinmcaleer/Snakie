@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseEndpoint, wiringWarnings } from '../src/renderer/src/embed/wiring-checks'
+import { parseEndpoint, warningsByPart, wiringWarnings } from '../src/renderer/src/embed/wiring-checks'
 import type { PartDefinition } from '../src/shared/part'
 import type { RobotDefinition } from '../src/shared/robot'
 
@@ -92,5 +92,23 @@ describe('embedded wiring checks', () => {
       "SG90's GND isn't wired."
     ])
     expect(w.some((x) => x.kind === 'missing')).toBe(true)
+  })
+
+  it('groups warnings by the part they are about, for the canvas icons', () => {
+    const r = robot([
+      ['board.VBUS#4', 'sg90.V+#1'],
+      ['sg90.V+#1', 'board.GND#2']
+    ])
+    r.parts.push({ id: 'm1', lib: 'kevsrobots', part: 'sg90', label: 'Servo 2' })
+    const byPart = warningsByPart(wiringWarnings(r, libs, board))
+    // The short is about the board and the servo; both get it, flagged as danger.
+    expect(byPart.board.some((w) => w.danger && /shorts/.test(w.message))).toBe(true)
+    expect(byPart.sg90.some((w) => w.danger)).toBe(true)
+    // The unwired second servo: its own icon, its own messages, each once.
+    expect(byPart.m1.map((w) => w.message)).toEqual([
+      "Servo 2's V+ isn't wired.",
+      "Servo 2's GND isn't wired."
+    ])
+    expect(byPart.m1.every((w) => !w.danger)).toBe(true)
   })
 })

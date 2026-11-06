@@ -23,6 +23,31 @@ export interface WiringWarning {
   /** `short` and `rails` are the ones that can damage a board. */
   kind: 'short' | 'rails' | 'gpio' | 'unwired' | 'missing'
   message: string
+  /** The placed parts it is about: instance ids, or `board` for the board.
+   *  The canvas puts a warning icon on each (browser row + drawing). */
+  parts: string[]
+}
+
+/** One part's warnings, for its icon's tooltip. */
+export interface PartWarning {
+  message: string
+  /** A short or two supplies joined: the kinds that can damage a board. */
+  danger: boolean
+}
+
+/** Warnings grouped by the part they are about, each message once (a part
+ *  with two GND pins would otherwise say the same thing twice). */
+export function warningsByPart(warnings: WiringWarning[]): Record<string, PartWarning[]> {
+  const out: Record<string, PartWarning[]> = {}
+  for (const w of warnings) {
+    for (const id of new Set(w.parts)) {
+      const list = (out[id] ??= [])
+      if (!list.some((x) => x.message === w.message)) {
+        list.push({ message: w.message, danger: w.kind === 'short' || w.kind === 'rails' })
+      }
+    }
+  }
+  return out
 }
 
 interface Pad {
@@ -59,7 +84,7 @@ export function wiringWarnings(
     const def = findPart(libraries, p.lib, p.part)
     parts.set(p.id, def)
     names.set(p.id, p.label || def?.name || p.part)
-    if (!def) out.push({ kind: 'missing', message: `${p.label || p.part} isn't in this project's parts.` })
+    if (!def) out.push({ kind: 'missing', message: `${p.label || p.part} isn't in this project's parts.`, parts: [p.id] })
   }
 
   // Union-find over pad keys.
@@ -105,18 +130,20 @@ export function wiringWarnings(
     if (pwr.length && gnd.length) {
       out.push({
         kind: 'short',
-        message: `${pwr[0].label} and ${gnd[0].label} are joined: that shorts power to ground.`
+        message: `${pwr[0].label} and ${gnd[0].label} are joined: that shorts power to ground.`,
+        parts: [...pwr, ...gnd].map((p) => p.owner)
       })
     }
     const rails = [...new Set(pwr.filter((p) => p.owner === 'board').map((p) => p.label.toUpperCase()))]
     if (rails.length > 1) {
-      out.push({ kind: 'rails', message: `${rails.join(' and ')} are joined: two supplies on one wire.` })
+      out.push({ kind: 'rails', message: `${rails.join(' and ')} are joined: two supplies on one wire.`, parts: ['board'] })
     }
     const gpio = net.filter((p) => p.owner === 'board' && p.pin?.type === 'io')
     if (gpio.length > 1) {
       out.push({
         kind: 'gpio',
-        message: `${gpio.map((p) => p.label).join(' and ')} are joined: both pins drive the same wire.`
+        message: `${gpio.map((p) => p.label).join(' and ')} are joined: both pins drive the same wire.`,
+        parts: ['board']
       })
     }
   }
@@ -127,7 +154,7 @@ export function wiringWarnings(
     if (!def || p.mountedOn) continue
     for (const { pin } of resolvedPins(def)) {
       if ((pin.type === 'pwr' || pin.type === 'gnd') && !pads.has(`${p.id}.${pin.name}`)) {
-        out.push({ kind: 'unwired', message: `${names.get(p.id)}'s ${pinText(pin, pin.name)} isn't wired.` })
+        out.push({ kind: 'unwired', message: `${names.get(p.id)}'s ${pinText(pin, pin.name)} isn't wired.`, parts: [p.id] })
       }
     }
   }

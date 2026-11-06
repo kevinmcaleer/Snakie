@@ -30,7 +30,7 @@ import { cablePlugGeometry, cableRole, conductorColour, connectorFit, housingPlu
 import { partSupplyVoltage } from '../../../shared/power-led'
 import type { SmokeSite } from '../../../shared/erc'
 import { BOARD_KEY, type HierarchyNode, type MassCoverage } from './hierarchy-tree'
-import { HierarchyPanel } from './HierarchyPanel'
+import { HierarchyPanel, type RowWarning } from './HierarchyPanel'
 import { useHierarchy } from './use-hierarchy'
 import { useHierarchySelection } from './hierarchy-selection'
 import { linkBaseName } from './sync-plan'
@@ -833,6 +833,9 @@ export interface WiringCanvasProps {
   /** What the canvas says when there's no board and no parts. Default: pick a
    *  board above, then add parts from the library panel. */
   emptyHint?: string
+  /** Wiring warnings by part (`'board'` or a part instance id): a warning icon
+   *  on the browser row and on the drawing, the messages in its tooltip. */
+  partWarnings?: Record<string, RowWarning[]>
 }
 
 /** One net (netlist node) row for the Connections panel's "Nets" tab. */
@@ -882,7 +885,7 @@ interface Drag {
   pinchWY?: number
 }
 
-export function WiringCanvas({ robot, onChange, history, folder, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, mat, onMatChange, captureRef, usedByCode, smoking, onDropPart, onShowHelp, focusedChrome = false, voltage, live, highlight, nets, onHighlightNet, projectMeta = true, emptyHint }: WiringCanvasProps): JSX.Element {
+export function WiringCanvas({ robot, onChange, history, folder, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, mat, onMatChange, captureRef, usedByCode, smoking, onDropPart, onShowHelp, focusedChrome = false, voltage, live, highlight, nets, onHighlightNet, projectMeta = true, emptyHint, partWarnings }: WiringCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
   // The focusable canvas root — focused when a part is selected so the Delete /
   // Backspace shortcut is scoped to THIS canvas (a selected part can't be nuked by
@@ -2491,7 +2494,7 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
     const res = serializeLiveSvg(svg, '.wc__content', {
       background,
       margin: 24,
-      exclude: clear ? ['.wc__sel-ring', '.wc__grid-layer', '.wc__paper'] : ['.wc__sel-ring'],
+      exclude: clear ? ['.wc__sel-ring', '.wc__warn', '.wc__grid-layer', '.wc__paper'] : ['.wc__sel-ring', '.wc__warn'],
       // Frame to the parts, not the full-canvas grid/paper — they just fill it.
       bboxExclude: ['.wc__grid-layer', '.wc__paper'],
       fontCss
@@ -3499,6 +3502,30 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
                 return <MagicSmoke key={`smoke${site.key}#${site.index}`} x={x} y={y} />
               })}
 
+            {/* Wiring warnings (the host's pin checks): a triangle at each warned
+                part's top-right corner, the messages in its tooltip. Kept the
+                same size on screen whatever the zoom, and left out of exports. */}
+            {partWarnings &&
+              Object.entries(partWarnings).map(([key, warns]) => {
+                const s = subjByKey.get(key)
+                if (!s?.hit || !warns.length) return null
+                const k = 1 / view.scale
+                const danger = warns.some((w) => w.danger)
+                return (
+                  <g
+                    key={`warn${key}`}
+                    className={`wc__warn${danger ? ' is-danger' : ''}`}
+                    transform={`translate(${s.hit.x + s.hit.w} ${s.hit.y}) scale(${k}) translate(-3 1)`}
+                  >
+                    <title>{warns.map((w) => w.message).join('\n')}</title>
+                    <circle className="wc__warn-hit" cx={0} cy={0} r={11} />
+                    <path className="wc__warn-tri" d="M0 -8.5 9 7.5H-9Z" />
+                    <path className="wc__warn-mark" d="M0 -3v4.6" />
+                    <circle className="wc__warn-dot" cx={0} cy={4.4} r={1.15} />
+                  </g>
+                )
+              })}
+
             {/* Selection ring around the selected subject (#176) — the MCU as well
                 as a part (#648), so the canvas agrees with the browser highlight. */}
             {selSubject?.hit && (
@@ -3890,6 +3917,7 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
           onCompOpenChange={setCompOpen}
           selectedKey={selectedKey}
           onRemovePart={removePart}
+          warnings={partWarnings}
           open={browserOpen}
           onOpenChange={setBrowserOpen}
           onFocus={selectFromBrowser}
@@ -3955,6 +3983,7 @@ function BoardBrowser({
   onCompOpenChange,
   selectedKey,
   onRemovePart,
+  warnings,
   open,
   onOpenChange,
   onFocus,
@@ -3975,6 +4004,7 @@ function BoardBrowser({
   /** The shared selection key, mirrored as a highlighted row (#648/#718). */
   selectedKey?: string | null
   onRemovePart: (id: string) => void
+  warnings?: Record<string, RowWarning[]>
   /** Open state (lifted to WiringCanvas so the fit can inset for the browser). */
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -4065,6 +4095,7 @@ function BoardBrowser({
           open={compOpen}
           onToggleOpen={() => onCompOpenChange(!compOpen)}
           onRemove={(node) => onRemovePart(node.key)}
+          warnings={warnings}
           coverage={projectMeta ? coverage : null}
           emptyHint="No components yet — pick a board + add parts."
         />

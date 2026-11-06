@@ -42,7 +42,7 @@ import { partFromYaml, partToYaml } from '../../../shared/part-yaml'
 import { robotFromYaml, robotToYaml } from '../../../shared/robot-yaml'
 import { bomMarkdown as robotBomMarkdown, pinoutMarkdown as robotPinoutMarkdown } from '../../../shared/robot-docs'
 import { dataUrlToBlob, installPartsBackend, type EmbedWriteResult } from './parts-backend'
-import { wiringWarnings, type WiringWarning } from './wiring-checks'
+import { warningsByPart, wiringWarnings, type WiringWarning } from './wiring-checks'
 import { withBoard } from './wiring-board'
 
 export type { PartsBackend } from './parts-backend'
@@ -283,6 +283,12 @@ function WiringHost({
     [onChange]
   )
   const mat = matFor(state.robot.wiringBackground)
+  // The pin checks, as an icon on each part they are about: the host
+  // used to list them in a banner over the canvas.
+  const partWarnings = useMemo(
+    () => warningsByPart(wiringWarnings(state.robot, libraries, boardPart)),
+    [state.robot, libraries, boardPart]
+  )
   // The mat skins are CSS keyed off an ANCESTOR's `data-breadboard-bg`
   // (WiringCanvas.css), and the embed's CSS is scoped under the box, so the
   // attribute goes on a wrapper inside it.
@@ -303,6 +309,7 @@ function WiringHost({
         }
         projectMeta={state.projectMeta}
         emptyHint={state.emptyHint}
+        partWarnings={partWarnings}
         onDropPart={(libraryId, part, pos) => {
           const { next } = planPartAdditions(state.robot, [{ libraryId, part, pos }], false)
           change(next)
@@ -408,7 +415,7 @@ function copyForDocument(svg: SVGSVGElement, transparent: boolean): SVGSVGElemen
   })
   hidden.forEach((el) => el.remove())
   // The selection ring is the editor's, not the drawing's.
-  copy.querySelectorAll('.wc__sel-ring').forEach((el) => el.remove())
+  copy.querySelectorAll('.wc__sel-ring, .wc__warn').forEach((el) => el.remove())
   // A transparent background is just the drawing: no grid, no paper.
   if (transparent) copy.querySelectorAll('.wc__grid-layer, .wc__paper').forEach((el) => el.remove())
   copy.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
@@ -421,7 +428,7 @@ function copyForDocument(svg: SVGSVGElement, transparent: boolean): SVGSVGElemen
   let frame: { x: number; y: number; w: number; h: number } | null = null
   if (content) {
     try {
-      const b = bboxExcluding(content, ['.wc__grid-layer', '.wc__paper', '.wc__sel-ring'])
+      const b = bboxExcluding(content, ['.wc__grid-layer', '.wc__paper', '.wc__sel-ring', '.wc__warn'])
       if (b.width > 0 && b.height > 0) {
         frame = {
           x: b.x - FRAME_MARGIN,
