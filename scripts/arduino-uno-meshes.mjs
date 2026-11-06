@@ -1,6 +1,10 @@
 /**
  * ARDUINO UNO PART MESHES — the UNO R3, UNO R4 Minima, UNO R4 WiFi and UNO Q.
  *
+ * These boards live in `examples/parts/kevsrobots-catalog/`, not the Standard
+ * library: MicroPython doesn't run on them, so Snakie never loads them, but the
+ * kevsrobots.com parts catalog imports them alongside the Standard parts.
+ *
  * Arduino publishes an official STEP model for three of the four boards, so
  * those ship Arduino's own geometry, converted to STL here. The UNO R3 has no
  * published model (its CAD archive holds only the Eagle board), so it is
@@ -8,9 +12,9 @@
  * (`UNO-TH_Rev3e.brd`), the same way `robot-kit-meshes.mjs` builds the Pico.
  *
  *   node scripts/arduino-uno-meshes.mjs --r3
- *       → examples/parts/snakie-standard/arduino-uno-r3/model.stl
+ *       → examples/parts/kevsrobots-catalog/arduino-uno-r3/model.stl
  *   node scripts/arduino-uno-meshes.mjs --step arduino-uno-r4-wifi path/to/UNO_R4_WIFI.step
- *       → examples/parts/snakie-standard/arduino-uno-r4-wifi/model.stl
+ *       → examples/parts/kevsrobots-catalog/arduino-uno-r4-wifi/model.stl
  *
  * `--step` needs the OpenCascade reader, which is not a dependency of the app:
  * `npm i --no-save occt-import-js` first. The STEP files come from each board's
@@ -310,7 +314,7 @@ async function main(args) {
   const { dirname, resolve } = await import('node:path')
   const { fileURLToPath } = await import('node:url')
   const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-  const outFor = (id) => resolve(repo, `examples/parts/snakie-standard/${id}/${MESH_FILENAME}`)
+  const outFor = (id) => resolve(repo, `examples/parts/kevsrobots-catalog/${id}/${MESH_FILENAME}`)
   const report = (out, stl) =>
     console.log(
       `${out.replace(`${repo}/`, '')} — ${(stl.length - 84) / 50} triangles, ${(stl.length / 1024).toFixed(1)} KB`
