@@ -1,0 +1,75 @@
+id: arduino-uno-r3
+name: Arduino UNO R3
+description: "The classic Arduino UNO: ATmega328P at 5 V, 14 digital I/O (6 PWM), 6 analog inputs, USB-B and a barrel jack."
+manufacturer: Arduino
+family: Microcontroller
+tags:
+  - arduino
+  - uno
+  - atmega328p
+  - avr
+  - 5v
+package: THT
+pinSpacing: 2.54
+voltage: 5V
+partNumber: A000066
+version: 0.1.0
+mcu: ATmega328P
+pcbColor: "#00878f"
+aspect: 0.7778
+dimensions:
+  width: 53.34
+  height: 68.58
+ledLabel: "13"
+image: image.png
+imageLayer: { x: 0, y: 0, w: 1, h: 1 }
+help: help.md
+mesh: model.stl
+meshUnits: mm
+electrical:
+  # SPX1117 5 V linear regulator from the barrel jack / VIN (7-12 V recommended).
+  model: regulator
+  inputRail: VIN
+  outputRail: 5V
+  outputV: 5
+  dropoutV: 1.1
+  maxCurrentA: 0.8
+headers:
+  - edge: left
+    pins:
+      - { name: NC, type: other, number: 1, shape: header, rotation: 180, x: 0.0476, y: 0.4074 }
+      - { name: IOREF, type: pwr, number: 2, shape: header, rotation: 180, x: 0.0476, y: 0.4444 }
+      - { name: RESET, type: other, number: 3, shape: header, rotation: 180, x: 0.0476, y: 0.4815 }
+      - { name: '3V3', type: pwr, number: 4, shape: header, rotation: 180, x: 0.0476, y: 0.5185 }
+      - { name: '5V', type: pwr, number: 5, shape: header, rotation: 180, x: 0.0476, y: 0.5556 }
+      - { name: GND, type: gnd, number: 6, shape: header, rotation: 180, x: 0.0476, y: 0.5926 }
+      - { name: GND, type: gnd, number: 7, shape: header, rotation: 180, x: 0.0476, y: 0.6296 }
+      - { name: VIN, type: pwr, number: 8, shape: header, rotation: 180, x: 0.0476, y: 0.6667 }
+      - { name: A0, type: io, number: 9, gpio: 14, capabilities: [digital, adc], buses: { adc: 0 }, shape: header, rotation: 180, x: 0.0476, y: 0.7407 }
+      - { name: A1, type: io, number: 10, gpio: 15, capabilities: [digital, adc], buses: { adc: 1 }, shape: header, rotation: 180, x: 0.0476, y: 0.7778 }
+      - { name: A2, type: io, number: 11, gpio: 16, capabilities: [digital, adc], buses: { adc: 2 }, shape: header, rotation: 180, x: 0.0476, y: 0.8148 }
+      - { name: A3, type: io, number: 12, gpio: 17, capabilities: [digital, adc], buses: { adc: 3 }, shape: header, rotation: 180, x: 0.0476, y: 0.8519 }
+      - { name: A4, type: io, number: 13, gpio: 18, capabilities: [digital, adc, i2c], signals: { i2c: SDA }, buses: { adc: 4, i2c: 0 }, shape: header, rotation: 180, x: 0.0476, y: 0.8889 }
+      - { name: A5, type: io, number: 14, gpio: 19, capabilities: [digital, adc, i2c], signals: { i2c: SCL }, buses: { adc: 5, i2c: 0 }, shape: header, rotation: 180, x: 0.0476, y: 0.9259 }
+  - edge: right
+    pins:
+      - { name: SCL, type: io, number: 15, gpio: 19, capabilities: [digital, i2c], signals: { i2c: SCL }, buses: { i2c: 0 }, shape: header, rotation: 0, x: 0.9524, y: 0.2741 }
+      - { name: SDA, type: io, number: 16, gpio: 18, capabilities: [digital, i2c], signals: { i2c: SDA }, buses: { i2c: 0 }, shape: header, rotation: 0, x: 0.9524, y: 0.3111 }
+      - { name: AREF, type: other, number: 17, shape: header, rotation: 0, x: 0.9524, y: 0.3481 }
+      - { name: GND, type: gnd, number: 18, shape: header, rotation: 0, x: 0.9524, y: 0.3852 }
+      - { name: D13, type: io, number: 19, gpio: 13, capabilities: [digital, spi], signals: { spi: SCK }, buses: { spi: 0 }, shape: header, rotation: 0, x: 0.9524, y: 0.4222 }
+      - { name: D12, type: io, number: 20, gpio: 12, capabilities: [digital, spi], signals: { spi: RX }, buses: { spi: 0 }, shape: header, rotation: 0, x: 0.9524, y: 0.4593 }
+      - { name: D11, type: io, number: 21, gpio: 11, capabilities: [digital, pwm, spi], signals: { spi: TX }, buses: { spi: 0 }, shape: header, rotation: 0, x: 0.9524, y: 0.4963 }
+      - { name: D10, type: io, number: 22, gpio: 10, capabilities: [digital, pwm, spi], signals: { spi: CSn }, buses: { spi: 0 }, shape: header, rotation: 0, x: 0.9524, y: 0.5333 }
+      - { name: D9, type: io, number: 23, gpio: 9, capabilities: [digital, pwm], shape: header, rotation: 0, x: 0.9524, y: 0.5704 }
+      - { name: D8, type: io, number: 24, gpio: 8, capabilities: [digital], shape: header, rotation: 0, x: 0.9524, y: 0.6074 }
+      - { name: D7, type: io, number: 25, gpio: 7, capabilities: [digital], shape: header, rotation: 0, x: 0.9524, y: 0.6667 }
+      - { name: D6, type: io, number: 26, gpio: 6, capabilities: [digital, pwm], shape: header, rotation: 0, x: 0.9524, y: 0.7037 }
+      - { name: D5, type: io, number: 27, gpio: 5, capabilities: [digital, pwm], shape: header, rotation: 0, x: 0.9524, y: 0.7407 }
+      - { name: D4, type: io, number: 28, gpio: 4, capabilities: [digital], shape: header, rotation: 0, x: 0.9524, y: 0.7778 }
+      - { name: D3, type: io, number: 29, gpio: 3, capabilities: [digital, pwm], shape: header, rotation: 0, x: 0.9524, y: 0.8148 }
+      - { name: D2, type: io, number: 30, gpio: 2, capabilities: [digital], shape: header, rotation: 0, x: 0.9524, y: 0.8519 }
+      - { name: D1, type: io, number: 31, gpio: 1, capabilities: [digital, uart], signals: { uart: TX }, buses: { uart: 0 }, shape: header, rotation: 0, x: 0.9524, y: 0.8889 }
+      - { name: D0, type: io, number: 32, gpio: 0, capabilities: [digital, uart], signals: { uart: RX }, buses: { uart: 0 }, shape: header, rotation: 0, x: 0.9524, y: 0.9259 }
+onboardLeds:
+  - { kind: single, gpio: 13, x: 0.7905, y: 0.4074, color: '#ffb000' }
