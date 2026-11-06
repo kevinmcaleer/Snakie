@@ -47,6 +47,12 @@ describe('Arduino UNO parts', () => {
       const part = partFromYaml(readFileSync(join(LIB, id, 'parts.yml'), 'utf8'))
       const pins = part.headers.flatMap((h) => h.pins)
 
+      it('quotes pin names a YAML 1.1 reader would turn into booleans', () => {
+        // kevsrobots' importer uses PyYAML, where a bare OFF/ON/YES/NO is a bool.
+        const raw = readFileSync(join(LIB, id, 'parts.yml'), 'utf8')
+        expect(raw).not.toMatch(/name: (OFF|ON|YES|NO|Off|On|off|on|yes|no|Y|N|y|n)\b/)
+      })
+
       it('is a UNO-sized microcontroller board with a photo, help and a model', () => {
         expect(part.family).toBe('Microcontroller')
         expect(part.dimensions).toEqual({ width: 53.34, height: 68.58 })

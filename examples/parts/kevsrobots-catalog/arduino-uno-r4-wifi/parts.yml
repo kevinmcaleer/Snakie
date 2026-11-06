@@ -76,7 +76,7 @@ headers:
       - { name: D0, type: io, number: 32, gpio: 0, capabilities: [digital, uart], signals: { uart: RX }, buses: { uart: 2 }, shape: header, rotation: 0, x: 0.9524, y: 0.9259 }
   - edge: left
     pins:
-      - { name: OFF, type: other, number: 33, shape: header, rotation: 180, x: 0.0493, y: 0.2561 }
+      - { name: 'OFF', type: other, number: 33, shape: header, rotation: 180, x: 0.0493, y: 0.2561 }
       - { name: GND, type: gnd, number: 34, shape: header, rotation: 180, x: 0.0493, y: 0.2932 }
       - { name: VRTC, type: pwr, number: 35, shape: header, rotation: 180, x: 0.0493, y: 0.3302 }
 connectors:
