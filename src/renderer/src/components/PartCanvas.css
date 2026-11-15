@@ -92,6 +92,15 @@
   pointer-events: none;
 }
 
+.pcv__crop-shade {
+  fill: rgba(0, 0, 0, 0.45);
+}
+.pcv__crop-box {
+  fill: none;
+  stroke: #f5b301;
+  stroke-width: 1.5;
+  stroke-dasharray: 5 3;
+}
 .pcv__marquee {
   fill: rgba(78, 161, 255, 0.12);
   stroke: #4ea1ff;
@@ -492,7 +501,8 @@
 .pcv__svg--interactive.pcv__tool-servo-header,
 .pcv__svg--interactive.pcv__tool-hole,
 .pcv__svg--interactive.pcv__tool-text,
-.pcv__svg--interactive.pcv__tool-shape {
+.pcv__svg--interactive.pcv__tool-shape,
+.pcv__svg--interactive.pcv__tool-crop {
   cursor: crosshair;
 }
 .pcv__svg--interactive.pcv__tool-erasebg {

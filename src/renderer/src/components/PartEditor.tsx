@@ -61,7 +61,8 @@ import {
   parseI2cAddress,
   partsClaimingAddress
 } from './i2c-known-devices'
-import { floodFillTransparent, removeBackgroundFromEdges } from './image-bg-remove'
+import { floodFillTransparent, removeBackgroundFromEdges, type RGBAImage } from './image-bg-remove'
+import { cropFromSelection, cropPixels, fitBoxToBoard, opaqueBounds, type NormSelection } from './image-crop'
 import { rotateImage90 } from './image-rotate'
 import { opposite, rotateBreaksMesh, rotatePart, type RotateDir } from './part-rotate'
 import { bumpPatch } from '../../../shared/part-registry'
@@ -660,9 +661,16 @@ export function PartEditor({
   const [imageNativeAspect, setImageNativeAspect] = useState<number | null>(null)
   const [snap, setSnap] = useState(false)
   // Background-removal tolerance (Euclidean RGB distance) + the pristine image so
-  // "Reset image" can undo every erase back to what was loaded this session.
+  // "Reset image" can undo every erase back to what was loaded this session. The
+  // photo's placement is kept with it, since a crop or a zoom-to-fit moves it, and
+  // so is the face it belongs to: resetting must put back THAT face's photo.
   const [bgTol, setBgTol] = useState(32)
-  const [imageOriginal, setImageOriginal] = useState<string | undefined>(undefined)
+  const [imageOriginal, setImageOriginal] = useState<{ side: PartSide; data: string; layer: ImageLayer } | undefined>(
+    undefined
+  )
+  // Crop then knock out the background in one go (the usual reason to crop is a
+  // product shot on white), on by default.
+  const [cropRemovesBg, setCropRemovesBg] = useState(true)
   const [tool, setTool] = useState<CanvasTool>('select')
   // Which face of the board is shown (#636), and the coin-spin that plays while
   // it changes. `flipping` is transient: it drives the animation class only, and
@@ -771,7 +779,9 @@ export function PartEditor({
   // or a fresh upload), so background erasing has an original to reset to. Once
   // captured it isn't overwritten by erases (which also patch `imageData`).
   useEffect(() => {
-    if (part.imageData && imageOriginal === undefined) setImageOriginal(part.imageData)
+    if (part.imageData && imageOriginal === undefined)
+      setImageOriginal({ side: 'front', data: part.imageData, layer: faceImageLayer(part, 'front') })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [part.imageData, imageOriginal])
 
   /** The board outline aspect (w/h) — dimensions first, like the canvas. */
@@ -842,7 +852,7 @@ export function PartEditor({
         // Whichever face you're looking at is the one you're giving a photo to —
         // so the existing picker serves both and there's no second control to find.
         patch(side === 'rear' ? { rear: { ...part.rear, imageData: flat } } : { imageData: flat })
-        setImageOriginal(flat) // a fresh upload is the new pristine original
+        setImageOriginal({ side, data: flat, layer: faceImageLayer(part, side) }) // a fresh upload is the new pristine original
         setVisible((v) => ({ ...v, image: true }))
         setSelection({ type: 'image' })
         setTool('select')
@@ -856,7 +866,7 @@ export function PartEditor({
   const removeImage = (): void => {
     patchFaceImage(undefined)
     setImageOriginal(undefined)
-    if (tool === 'erasebg') setTool('select')
+    if (tool === 'erasebg' || tool === 'crop') setTool('select')
     if (selection?.type === 'image') setSelection(null)
   }
 
@@ -889,6 +899,38 @@ export function PartEditor({
       img.onerror = () => resolve(null)
       img.src = dataUrl
     })
+  /** Decode a data-URL image into its pixels (null on any failure). */
+  const loadPixels = (dataUrl: string): Promise<ImageData | null> =>
+    new Promise((resolve) => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = img.naturalWidth
+        canvas.height = img.naturalHeight
+        const ctx = canvas.getContext('2d')
+        if (!ctx || canvas.width === 0 || canvas.height === 0) return resolve(null)
+        ctx.drawImage(img, 0, 0)
+        try {
+          resolve(ctx.getImageData(0, 0, canvas.width, canvas.height))
+        } catch {
+          resolve(null) // e.g. a tainted canvas
+        }
+      }
+      img.onerror = () => resolve(null)
+      img.src = dataUrl
+    })
+  /** Encode pixels back into a PNG data URL (PNG keeps the transparency). */
+  const pixelsToDataUrl = (img: RGBAImage): string | null => {
+    const canvas = document.createElement('canvas')
+    canvas.width = img.width
+    canvas.height = img.height
+    const ctx = canvas.getContext('2d')
+    if (!ctx || img.width === 0 || img.height === 0) return null
+    const out = ctx.createImageData(img.width, img.height)
+    out.data.set(img.data)
+    ctx.putImageData(out, 0, 0)
+    return canvas.toDataURL('image/png')
+  }
   // --- the CURRENT face's photo -------------------------------------------
   // Every background control used to read `part.imageData` — the FRONT — whatever
   // face was showing. On the back that made the chip say "Replace" when there was
@@ -920,9 +962,79 @@ export function PartEditor({
     }
   }
 
+  /** Snapshot the face's photo before the first edit of it, so "Reset image" has
+   *  something to go back to (the effect above only ever sees the front's). */
+  const keepOriginal = (): void => {
+    if (faceImageData && imageOriginal?.side !== side)
+      setImageOriginal({ side, data: faceImageData, layer: faceImageLayer(part, side) })
+  }
+  /** Replace the face's photo AND its placement in one edit, so one undo puts
+   *  both back (a crop changes the pixels and the box they sit in together). */
+  const setFaceImageAndLayer = (data: string, box: Partial<ImageLayer>): void => {
+    setPart((d) => {
+      const layer = { ...faceImageLayer(d, side), ...box }
+      if (side === 'rear') return { ...d, rear: { ...(d.rear ?? {}), imageData: data, imageLayer: layer } }
+      return { ...d, imageData: data, imageLayer: layer }
+    })
+  }
+
+  /** Crop: keep only the part of the photo inside the box dragged on the canvas,
+   *  left where it was on the board, then (optionally) remove its background. */
+  const cropImageTo = async (sel: NormSelection): Promise<void> => {
+    const src = faceImageData
+    if (!src) return
+    const pixels = await loadPixels(src)
+    if (!pixels) return setStatus({ kind: 'error', text: 'Could not process that image.' })
+    const crop = cropFromSelection(faceImageLayer(part, side), sel, pixels.width, pixels.height)
+    if (!crop) return setStatus({ kind: 'info', text: 'Drag the box over the photo itself to crop it.' })
+    const kept = cropPixels(pixels, crop.px)
+    if (cropRemovesBg) removeBackgroundFromEdges(kept, bgTol)
+    const out = pixelsToDataUrl(kept)
+    if (!out) return setStatus({ kind: 'error', text: 'Could not process that image.' })
+    keepOriginal()
+    setFaceImageAndLayer(out, crop.box)
+    setTool('select')
+    setSelection({ type: 'image' })
+    setStatus({
+      kind: 'info',
+      text: cropRemovesBg
+        ? 'Cropped and removed the background. Click leftover patches with "Click to erase" if any remain.'
+        : 'Cropped the photo.',
+      action: {
+        label: 'Zoom to fit',
+        run: () => {
+          setStatus(null)
+          // Read the new photo straight off the result: state hasn't settled into
+          // this closure, and fitting the old one would undo the crop.
+          void zoomImageToFit(out)
+        }
+      }
+    })
+  }
+
+  /** Zoom to fit: trim the transparent margin background removal leaves, then
+   *  scale the photo (undistorted, centred) to fill as much of the board as it can. */
+  const zoomImageToFit = async (srcOverride?: string): Promise<void> => {
+    const src = srcOverride ?? faceImageData
+    if (!src) return
+    const pixels = await loadPixels(src)
+    if (!pixels) return setStatus({ kind: 'error', text: 'Could not process that image.' })
+    const bounds = opaqueBounds(pixels)
+    if (!bounds) return setStatus({ kind: 'info', text: 'The photo is fully transparent, so there is nothing to fit.' })
+    const trimmed = bounds.w < pixels.width || bounds.h < pixels.height
+    const out = trimmed ? pixelsToDataUrl(cropPixels(pixels, bounds)) : src
+    if (!out) return setStatus({ kind: 'error', text: 'Could not process that image.' })
+    keepOriginal()
+    setFaceImageAndLayer(out, fitBoxToBoard(bounds.w / bounds.h, boardAspectOf(part)))
+    setFitSignal((n) => n + 1) // and bring the whole board back into view
+    setSelection({ type: 'image' })
+    setStatus({ kind: 'info', text: 'Zoomed the photo to fit the board.' })
+  }
+
   /** Auto: knock out the connected border background from every edge. */
   const autoRemoveBg = async (): Promise<void> => {
     if (!faceImageData) return
+    keepOriginal()
     const out = await processImage(faceImageData, (img) => removeBackgroundFromEdges(img, bgTol))
     if (out) {
       patchFaceImage(out)
@@ -939,6 +1051,7 @@ export function PartEditor({
     const u = (nx - layer.x) / (layer.w || 1) // 0..1 across the image
     const v = (ny - layer.y) / (layer.h || 1)
     if (u < 0 || u > 1 || v < 0 || v > 1) return
+    keepOriginal()
     const out = await processImage(src, (img) => {
       const px = Math.min(img.width - 1, Math.max(0, Math.round(u * img.width)))
       const py = Math.min(img.height - 1, Math.max(0, Math.round(v * img.height)))
@@ -948,12 +1061,17 @@ export function PartEditor({
   }
   /** Restore the pristine image captured on load/upload. */
   const resetBg = (): void => {
-    if (imageOriginal) {
-      patch({ imageData: imageOriginal })
+    if (imageOriginal && imageOriginal.side === side) {
+      setFaceImageAndLayer(imageOriginal.data, imageOriginal.layer)
       setStatus({ kind: 'info', text: 'Restored the original image.' })
     }
   }
-  const canResetBg = imageOriginal !== undefined && part.imageData !== undefined && part.imageData !== imageOriginal
+  const canResetBg =
+    imageOriginal !== undefined &&
+    imageOriginal.side === side &&
+    faceImageData !== undefined &&
+    (faceImageData !== imageOriginal.data ||
+      JSON.stringify(faceImageLayer(part, side)) !== JSON.stringify(imageOriginal.layer))
   // Edit the layer of the face ON SCREEN (#687): the rear photo has its own
   // placement, and writing the front's while showing the rear moved the wrong one.
   const setImageLayer = (p: Partial<ImageLayer>): void => patch(withFaceImageLayer(part, side, p))
@@ -1559,6 +1677,7 @@ export function PartEditor({
                   }}
                   onNotify={(msg) => setStatus({ kind: 'info', text: msg })}
                   onEraseImageAt={eraseBgAt}
+                  onCropImage={(sel) => void cropImageTo(sel)}
                   onToggleGrid={() => setShowGrid((g) => !g)}
                   onToggleSnap={() => setSnap((s) => !s)}
                   resetSignal={fitSignal}
@@ -1620,6 +1739,9 @@ export function PartEditor({
                 onAutoRemoveBg={autoRemoveBg}
                 onResetBg={resetBg}
                 canResetBg={canResetBg}
+                onZoomToFit={() => void zoomImageToFit()}
+                cropRemovesBg={cropRemovesBg}
+                setCropRemovesBg={setCropRemovesBg}
                 bgTol={bgTol}
                 setBgTol={setBgTol}
               />
@@ -1669,6 +1791,9 @@ export function PartEditor({
                 onAutoRemoveBg={autoRemoveBg}
                 onResetBg={resetBg}
                 canResetBg={canResetBg}
+                onZoomToFit={() => void zoomImageToFit()}
+                cropRemovesBg={cropRemovesBg}
+                setCropRemovesBg={setCropRemovesBg}
                 bgTol={bgTol}
                 setBgTol={setBgTol}
               />
@@ -1729,6 +1854,11 @@ interface LayersPanelProps {
   onAutoRemoveBg: () => void
   onResetBg: () => void
   canResetBg: boolean
+  /** Trim the photo's transparent margin and scale it to fill the board. */
+  onZoomToFit: () => void
+  /** Whether a crop also removes the background of what it keeps. */
+  cropRemovesBg: boolean
+  setCropRemovesBg: (v: boolean) => void
   bgTol: number
   setBgTol: (v: number) => void
   /** Which sections to show: 'layers' = Components + Pins; 'board' = Mounting holes
@@ -1763,6 +1893,9 @@ function LayersPanel({
   onAutoRemoveBg,
   onResetBg,
   canResetBg,
+  onZoomToFit,
+  cropRemovesBg,
+  setCropRemovesBg,
   bgTol,
   setBgTol,
   variant = 'layers',
@@ -2657,11 +2790,11 @@ function LayersPanel({
             <div className="pe__addwrap">
               <button
                 type="button"
-                className={`pe__chip${bgMenuOpen || tool === 'erasebg' ? ' is-active' : ''}`}
+                className={`pe__chip${bgMenuOpen || tool === 'erasebg' || tool === 'crop' ? ' is-active' : ''}`}
                 onClick={() => setBgMenuOpen((o) => !o)}
                 aria-expanded={bgMenuOpen}
                 aria-haspopup="menu"
-                title="Remove the photo's background"
+                title="Crop the photo, remove its background, zoom it to fit"
               >
                 BG ▾
               </button>
@@ -2669,6 +2802,34 @@ function LayersPanel({
                 <>
                   <div className="pe__addback" onClick={() => setBgMenuOpen(false)} aria-hidden />
                   <div className="pe__bgmenu" role="menu">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={tool === 'crop' ? 'is-active' : ''}
+                      onClick={() => {
+                        setTool(tool === 'crop' ? 'select' : 'crop')
+                        setBgMenuOpen(false) // close so the canvas is free to drag on
+                      }}
+                      title="Then drag a box over the part of the photo you want to keep"
+                    >
+                      {tool === 'crop' ? '✓ Crop: drag a box (on)' : 'Crop to a box…'}
+                    </button>
+                    <label className="pe__bgcheck" title="Remove the white (or plain) background from what the crop keeps">
+                      <input type="checkbox" checked={cropRemovesBg} onChange={(e) => setCropRemovesBg(e.target.checked)} />
+                      <span>Remove background after crop</span>
+                    </label>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        onZoomToFit()
+                        setBgMenuOpen(false)
+                      }}
+                      title="Trim the transparent margin and scale the photo to fill the board"
+                    >
+                      Zoom to fit
+                    </button>
+                    <hr className="pe__bgmenu-sep" />
                     <button
                       type="button"
                       role="menuitem"
@@ -2738,6 +2899,12 @@ function LayersPanel({
           )}
         </div>
         {tool === 'erasebg' && <p className="pe__hint pe__hint--muted">Erase mode: click a background patch on the image. Adjust Tolerance if it takes too much / too little.</p>}
+        {tool === 'crop' && (
+          <p className="pe__hint pe__hint--muted">
+            Crop mode: drag a box over the part of the photo to keep.
+            {cropRemovesBg ? ' Its background is removed too (Tolerance sets how much).' : ''}
+          </p>
+        )}
         <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" style={{ display: 'none' }} onChange={onPickImage} />
       </div>
 
