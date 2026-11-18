@@ -271,6 +271,13 @@ if (!w.api) {
     feedback: {
       submitBugReport: P({ ok: false, error: 'window.api is unavailable (web build).' })
     },
+    kevsrobots: {
+      status: P({ signedIn: false }),
+      signIn: P({ ok: false, error: 'Sign in with kevsrobots is unavailable here.' }),
+      signOut: P(undefined),
+      listProjects: P({ ok: false, error: 'Sign in with kevsrobots is unavailable here.' }),
+      sendWiring: P({ ok: false, error: 'Sign in with kevsrobots is unavailable here.' })
+    },
     parts: {
       listLibraries: P([]),
       openPartsFolder: P(undefined),
@@ -320,6 +327,7 @@ if (!w.api) {
       diff: P({ path: '', diff: '', staged: false }),
       currentBranch: P(undefined),
       listBranches: P({ current: '', branches: [] }),
+      originUrl: P(null),
       checkout: P(undefined),
       push: P({ summary: '' }),
       pull: P({ summary: '' }),

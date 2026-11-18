@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Content-Security-Policy keeps the renderer locked down. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:"
+    />
+    <title>Signing in to Snakie</title>
+    <style>
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; font: 16px system-ui, sans-serif; color: #1c2230; background: #f7f7f4; }
+      @media (prefers-color-scheme: dark) { body { color: #e8eaee; background: #14161b; } }
+      main { text-align: center; padding: 24px; }
+      h1 { font-size: 22px; margin: 0 0 8px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1 id="title">Signing in…</h1>
+      <p id="line">Going back to Snakie.</p>
+    </main>
+    <script type="module" src="/src/auth-callback-main.ts"></script>
+  </body>
+</html>

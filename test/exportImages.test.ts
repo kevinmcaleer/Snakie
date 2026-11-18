@@ -90,8 +90,11 @@ describe('the export paths that carry them', () => {
       wiring.indexOf('const doExport'),
       wiring.indexOf('const doExportMarkdown')
     )
+    // renderExport (shared with Send to kevsrobots, #1310) inlines them, and
+    // both the file export and the send take its result.
     expect(handler).toContain('await inlineImageHrefs(res.svg)')
-    expect(handler).toContain('exportSvgString(svgStr')
+    expect(handler).toContain('return { svg: svgStr')
+    expect(handler).toContain('exportSvgString(out.svg')
   })
 
   it("the PDF's wiring page does too", () => {

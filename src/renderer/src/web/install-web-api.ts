@@ -20,6 +20,7 @@ import { createWebUpdatesApi } from './web-updates'
 import { createWebPartsApi } from './web-parts'
 import { INSTRUMENTS_PY, SNAKIE_PY, TURTLE_PY } from './web-lib-sources'
 import { createWebFeedbackApi, captureTabScreenshot } from './web-feedback'
+import { createWebKevsrobotsApi } from './web-kevsrobots'
 import { createWebModulesApi } from './web-modules'
 import { createWebPackagesApi } from './web-packages'
 import { installWebBoardMain, installWebBoardWindow } from './web-board'
@@ -63,6 +64,9 @@ export function installWebApi(kind: WebWindowKind = 'main'): boolean {
   const fb = createWebFeedbackApi(version)
   w.api.feedback = fb.feedback as unknown as Window['api']['feedback']
   w.api.diagnostics = fb.diagnostics as unknown as Window['api']['diagnostics']
+  // Optional Sign in with kevsrobots + Send to kevsrobots (#1310): popup sign-in,
+  // then the projects API straight from the page (CSP allowlists both hosts).
+  w.api.kevsrobots = createWebKevsrobotsApi() as unknown as Window['api']['kevsrobots']
   // The modules-changed broadcast is Electron IPC on desktop; on the web the
   // fallback stubs made it a silent no-op, so a driver/instruments install
   // never refreshed the Packages panel's ON BOARD list or the device tree.

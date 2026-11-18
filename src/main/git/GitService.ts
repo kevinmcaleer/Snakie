@@ -683,6 +683,23 @@ export class GitService {
     return branches.current || undefined
   }
 
+  /**
+   * The fetch URL of the `origin` remote (or the first remote), or null when
+   * there is none. Snakie's "Send to kevsrobots" turns it into the project's
+   * GitHub link (#1310); never throws.
+   */
+  async originUrl(): Promise<string | null> {
+    const git = this.git
+    if (!git) return null
+    try {
+      const list = await git.getRemotes(true)
+      const remote = list.find((r) => r.name === 'origin') ?? list[0]
+      return remote?.refs?.fetch || remote?.refs?.push || null
+    } catch {
+      return null
+    }
+  }
+
   /** List local branches plus the current one. */
   async listBranches(): Promise<GitBranchList> {
     const git = this.require()

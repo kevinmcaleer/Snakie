@@ -30,7 +30,11 @@
  * Each entry is a CSP host-source AND a browser-reachable origin, i.e. every
  * one of them answers with `Access-Control-Allow-Origin: *`:
  *
- *  - `projects.kevsrobots.com` — the feedback API bug reports POST to (#513).
+ *  - `projects.kevsrobots.com` — the feedback API bug reports POST to (#513),
+ *    and the projects API "Send to kevsrobots" calls (#1310).
+ *  - `accounts.kevsrobots.com` — Sign in with kevsrobots (#1310): the token,
+ *    userinfo and revoke endpoints. Chatter allows app.snakie.org by name
+ *    rather than `*`, which is all a page on that origin needs.
  *  - `raw.githubusercontent.com` — every `github:` spec in the module catalog.
  *  - `micropython.org` — the micropython-lib package index `mip` resolves bare
  *    names against (`/pi/v2/package/py/…`, `/pi/v2/file/…`).
@@ -42,6 +46,7 @@
  */
 export const WEB_CONNECT_ORIGINS: readonly string[] = [
   'https://projects.kevsrobots.com',
+  'https://accounts.kevsrobots.com',
   'https://raw.githubusercontent.com',
   'https://micropython.org',
   'https://pypi.org'

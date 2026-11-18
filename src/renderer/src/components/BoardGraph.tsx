@@ -71,6 +71,7 @@ import type { RobotDefinition } from '../../../shared/robot'
 import { findPart } from '../../../shared/part'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
 import './BoardGraph.css'
+import { SendToKevsrobotsDialog } from './SendToKevsrobotsDialog'
 
 /**
  * BOARD GRAPH (node-graph live Board View)
@@ -394,6 +395,8 @@ export function BoardGraph({
   // Default to the life-like Breadboard view so the full Board View matches the
   // main window's mini board preview (both draw the authored part body); the
   // node-graph + schematic are one tab away. The last-used tab is remembered.
+  // Send to kevsrobots (#1310): the picture the canvas drew, while the dialog is open.
+  const [krSend, setKrSend] = useState<{ svg: string | null } | null>(null)
   const [viewType, setViewType] = useState<'graph' | WiringRenderMode>(() => {
     try {
       const saved = window.localStorage.getItem(VIEW_KEY)
@@ -1357,7 +1360,11 @@ export function BoardGraph({
                 const rp = (robot?.parts ?? []).find((p) => p.id === id)
                 openPartHelp(rp ? `${rp.lib}:${rp.part}` : null)
               }}
+              onSendToKevsrobots={(svg) => setKrSend({ svg })}
             />
+            {krSend && (
+              <SendToKevsrobotsDialog robot={robot} svg={krSend.svg} onClose={() => setKrSend(null)} />
+            )}
           </div>
           {onAddToProject &&
             (dockOpen ? (

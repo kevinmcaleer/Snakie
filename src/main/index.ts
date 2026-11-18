@@ -21,6 +21,7 @@ import { registerConsoleWindowIpc, disposeConsoleWindow } from './consoleWindow'
 import { registerPartsIpc } from './parts/ipc'
 import { registerRobotIpc } from './robot/ipc'
 import { registerFeedbackIpc } from './feedback/ipc'
+import { registerKevsrobotsIpc } from './kevsrobots/ipc'
 import { setupAppMenu, disposeAppMenu } from './menu'
 
 // Disable GPU / hardware-accelerated rendering on the Raspberry Pi build (Linux
@@ -259,6 +260,8 @@ app.whenReady().then(() => {
   // Bug-report submission (issue #206): forwards the Report Bug form to the
   // kevsrobots.com feedback API from the main process (past the renderer CSP).
   registerFeedbackIpc()
+  // Optional Sign in with kevsrobots + Send to kevsrobots (#1310).
+  registerKevsrobotsIpc()
 
   // Register the per-module installer layer (issue #120). Generalises the #108
   // instrument-library install to ANY catalog driver: it enumerates the module
