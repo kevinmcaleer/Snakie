@@ -1,6 +1,7 @@
 // Install the preload-bridge fallback BEFORE anything renders, so the app
 // degrades gracefully if `window.api` is missing (e.g. outside Electron).
 import './lib/preloadFallback'
+import { applyIOSViewportFix } from './lib/ios-viewport'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
@@ -23,6 +24,10 @@ import '@fontsource/nunito-sans/800.css'
 import './index.css'
 // Snakie Flat (the design system after Soft Shell) — must load after index.css.
 import './flat.css'
+
+// iPhone / iPad: stop Safari's focus auto-zoom leaving the page wider than the
+// screen (see ios-viewport.ts).
+applyIOSViewportFix()
 
 const render = (): void =>
   ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
