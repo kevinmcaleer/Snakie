@@ -258,3 +258,23 @@
 .shell[data-size='phone'] .region--shell .panel-collapse-btn {
   display: none;
 }
+
+/* ── Phones and tablets (touch browsers) ──
+   The app is a fixed, full-window shell: the page itself must never pan or
+   rubber-band (iOS Safari otherwise lets the whole UI slide sideways), and
+   Safari must not inflate text in landscape. */
+html,
+body {
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+/* viewport-fit=cover (index.html) lets the app run edge to edge on notched
+   phones; keep the UI clear of the notch / home indicator in landscape. */
+.shell {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
