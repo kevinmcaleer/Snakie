@@ -30,7 +30,16 @@ function circuitpyTitle(cp: PortCircuitPy): string {
 
 interface ConnectionControlProps {
   status: DeviceStatus
+  /** Phones: the memory cog moves into the console header's ⋯ menu, which opens
+   *  the dialog with {@link OPEN_SIM_MEMORY_EVENT}. */
+  cogInMenu?: boolean
+  /** Told whether the simulated board is the selected port (its memory is the
+   *  only one Snakie can set), so the ⋯ menu can offer the item. */
+  onSimSelectedChange?: (simSelected: boolean) => void
 }
+
+/** Ask the connection control to open the simulated device memory dialog. */
+export const OPEN_SIM_MEMORY_EVENT = 'snakie:open-sim-memory'
 
 /**
  * Compact connect / disconnect control for the shell header.
@@ -40,7 +49,11 @@ interface ConnectionControlProps {
  * state itself is owned by the device layer and supplied via `status`, so this
  * component stays stateless about connectedness and simply reacts.
  */
-export function ConnectionControl({ status }: ConnectionControlProps): JSX.Element {
+export function ConnectionControl({
+  status,
+  cogInMenu = false,
+  onSimSelectedChange
+}: ConnectionControlProps): JSX.Element {
   const [ports, setPorts] = useState<PortInfo[]>([])
   const [selected, setSelected] = useState<string>('')
   const [busy, setBusy] = useState(false)
@@ -66,6 +79,9 @@ export function ConnectionControl({ status }: ConnectionControlProps): JSX.Eleme
   // The cog belongs to the SELECTED port, not the connected one — the setting is
   // about the simulator's next boot, so it has to be reachable before connecting.
   const simSelected = isVirtualPort(selected)
+  useEffect(() => {
+    onSimSelectedChange?.(simSelected)
+  }, [simSelected, onSimSelectedChange])
   // The callout belongs to the CONNECTED port: the dropdown is disabled only
   // while something is connected, which is the state it explains a way out of.
   const showSimNotice = shouldShowSimNotice({
@@ -212,6 +228,12 @@ export function ConnectionControl({ status }: ConnectionControlProps): JSX.Eleme
     [saveHeap]
   )
 
+  useEffect(() => {
+    const open = (): void => setMemOpen(true)
+    window.addEventListener(OPEN_SIM_MEMORY_EVENT, open)
+    return () => window.removeEventListener(OPEN_SIM_MEMORY_EVENT, open)
+  }, [])
+
   return (
     <div className="conn-control" ref={rootRef} title={error ?? undefined}>
       {showSimNotice && (
@@ -272,7 +294,7 @@ export function ConnectionControl({ status }: ConnectionControlProps): JSX.Eleme
       </select>
       {/* Memory cog — only for the simulated board, which is the only device
           whose RAM we get to choose (#901). */}
-      {simSelected && (
+      {simSelected && !cogInMenu && (
         <button
           type="button"
           className="btn btn--ghost btn--sm conn-control__cog"

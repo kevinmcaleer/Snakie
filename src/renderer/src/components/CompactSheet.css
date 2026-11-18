@@ -6,7 +6,7 @@
   top: 5px;
   left: 5px;
   right: 5px;
-  height: 44px;
+  height: 54px;
   z-index: 3;
   display: flex;
   align-items: center;
@@ -50,7 +50,7 @@
 .csheet__tabs {
   display: flex;
   gap: 2px;
-  margin-top: 6px;
+  margin-top: 14px;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
@@ -79,7 +79,7 @@
 /* Board / Instruments pane: covers the console card (which stays mounted). */
 .csheet__pane {
   position: absolute;
-  top: 49px;
+  top: 59px;
   left: 5px;
   right: 5px;
   bottom: 5px;
@@ -148,9 +148,36 @@
   cursor: pointer;
 }
 
-/* Keep the board a sensible size on a wide sheet rather than filling it. */
-.csheet__pane > .miniviewer {
-  width: 100%;
-  max-width: 480px;
-  margin: 0 auto;
+/* Board tab: the mini board fills the whole sheet. Its viewport normally has a
+   fixed, drag-resizable height (MiniBoardView); in the sheet the sheet's own
+   height decides, so the inline height and the resize handle step aside. */
+.csheet__pane > .miniviewer,
+.csheet__pane .miniviewer__body,
+.csheet__pane .mini-board,
+.csheet__pane .mini-board__stage {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.csheet__pane .mini-board__scroll {
+  flex: 1 1 auto;
+  height: auto !important;
+  min-height: 0;
+  display: flex;
+}
+/* Centred in the taller viewport; auto margins collapse to 0 once zoomed past
+   the edges, so scrolling still reaches every side. */
+.csheet__pane .mini-board__svg {
+  margin: auto;
+  flex: none;
+}
+.csheet__pane .mini-board__resize {
+  display: none;
+}
+
+/* Instruments tab: docked instruments stretch to the sheet's width instead of
+   stopping at their 404px design width and leaving a gap on the right. */
+.csheet__pane .instr-dock__item .instr {
+  max-width: none;
 }

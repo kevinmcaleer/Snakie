@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { PanelHeader } from './PanelHeader'
 import { Terminal, type TerminalHandle } from './Terminal'
 import { Problems } from './Problems'
-import { ConnectionControl } from './ConnectionControl'
+import { ConnectionControl, OPEN_SIM_MEMORY_EVENT } from './ConnectionControl'
+import { ContextMenu, type ContextMenuItem, type ContextMenuPosition } from './ContextMenu'
+import { useViewportSize } from '../hooks/useViewportSize'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useDiagnostics } from '../store/diagnostics'
 import { useConsole } from '../store/console'
@@ -85,6 +87,31 @@ export function ShellPanel({ chatOpen = false, onCollapse }: ShellPanelProps): J
 
   const problemsLabel = diagnostics.length > 0 ? `Problems (${diagnostics.length})` : 'Problems'
 
+  // Phones: the ⋯ menu that holds Clear / Lint / device memory.
+  const phone = useViewportSize() === 'phone'
+  const [simSelected, setSimSelected] = useState(false)
+  const [menuAt, setMenuAt] = useState<ContextMenuPosition | null>(null)
+  const menuItems: ContextMenuItem[] = [
+    ...(view === 'console'
+      ? [{ key: 'clear', label: 'Clear the console', onSelect: handleClear }]
+      : [
+          {
+            key: 'lint',
+            label: lintingEnabled ? 'Turn linting off' : 'Turn linting on',
+            onSelect: () => setLintingEnabled(!lintingEnabled)
+          }
+        ]),
+    ...(simSelected
+      ? [
+          {
+            key: 'memory',
+            label: 'Simulated device memory…',
+            onSelect: () => window.dispatchEvent(new CustomEvent(OPEN_SIM_MEMORY_EVENT))
+          }
+        ]
+      : [])
+  ]
+
   return (
     <section className="region region--shell" aria-label="Shell">
       <PanelHeader
@@ -111,7 +138,7 @@ export function ShellPanel({ chatOpen = false, onCollapse }: ShellPanelProps): J
                 {problemsLabel}
               </button>
             </div>
-            {view === 'problems' && (
+            {view === 'problems' && !phone && (
               <label className="shell-lint-toggle" title="Toggle Python linting">
                 <input
                   type="checkbox"
@@ -137,7 +164,7 @@ export function ShellPanel({ chatOpen = false, onCollapse }: ShellPanelProps): J
             )}
             {/* The Chat toggle moved to the editor header (left of Find) — the
                 console header was too busy and wrapped on small screens (#…). */}
-            {view === 'console' && (
+            {view === 'console' && !phone && (
               <button
                 type="button"
                 className="btn btn--ghost btn--sm shell-actions__clear"
@@ -167,7 +194,33 @@ export function ShellPanel({ chatOpen = false, onCollapse }: ShellPanelProps): J
                 </svg>
               </button>
             )}
-            <ConnectionControl status={status} />
+            <ConnectionControl
+              status={status}
+              cogInMenu={phone}
+              onSimSelectedChange={setSimSelected}
+            />
+            {/* Phones: the header's smaller actions fold into one ⋯ menu so the
+                Console / Problems toggle keeps its full labels. */}
+            {phone && (
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm shell-actions__more"
+                onClick={(e) => {
+                  const r = e.currentTarget.getBoundingClientRect()
+                  setMenuAt(menuAt ? null : { x: r.left, y: r.bottom + 4 })
+                }}
+                title="More console actions"
+                aria-label="More console actions"
+                aria-haspopup="menu"
+                aria-expanded={menuAt !== null}
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <circle cx="3" cy="8" r="1.5" fill="currentColor" />
+                  <circle cx="8" cy="8" r="1.5" fill="currentColor" />
+                  <circle cx="13" cy="8" r="1.5" fill="currentColor" />
+                </svg>
+              </button>
+            )}
             {onCollapse && (
               <button
                 type="button"
@@ -242,6 +295,9 @@ export function ShellPanel({ chatOpen = false, onCollapse }: ShellPanelProps): J
           <Problems />
         </div>
       </div>
+      {menuAt && (
+        <ContextMenu position={menuAt} items={menuItems} onClose={() => setMenuAt(null)} />
+      )}
     </section>
   )
 }
