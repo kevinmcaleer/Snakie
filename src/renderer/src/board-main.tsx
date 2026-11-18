@@ -50,6 +50,8 @@ import '@fontsource/ibm-plex-mono/400.css'
 import '@fontsource/ibm-plex-mono/500.css'
 import '@fontsource/ibm-plex-mono/600.css'
 import './index.css'
+// Snakie Flat (the design system after Soft Shell) — must load after index.css.
+import './flat.css'
 
 /** Theme key shared with the editor window's `useTheme`. */
 const THEME_KEY = 'snakie.theme.v2'

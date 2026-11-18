@@ -21,6 +21,8 @@ import '@fontsource/nunito-sans/600.css'
 import '@fontsource/nunito-sans/700.css'
 import '@fontsource/nunito-sans/800.css'
 import './index.css'
+// Snakie Flat (the design system after Soft Shell) — must load after index.css.
+import './flat.css'
 
 const render = (): void =>
   ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
