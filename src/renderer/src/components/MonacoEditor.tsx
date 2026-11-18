@@ -34,6 +34,7 @@ import {
 } from './plugin-code-actions'
 import { registerInlineCompletions } from './inline-completions'
 import { setActiveEditor, dispatchOpenFind } from './editorBridge'
+import { setFocusedIdentifier } from './code-focus'
 import { installEditorActions } from './editor-actions'
 import { setCompletionDialect } from './micropython-completions'
 import { useHelpDialect } from '../hooks/useHelpDialect'
@@ -318,9 +319,23 @@ export function MonacoEditor(): JSX.Element {
     // provider reads — it does not register a provider of its own.
     spriteCompletionsRef.current = attachSpriteCompletions(() => spriteScopeRef.current)
 
+    // The name under the cursor → the board views, which light up the pin a Pin
+    // variable is on (and its label) so the code and the board read as linked.
+    const publishFocus = (): void => {
+      const model = editor.getModel()
+      const pos = editor.getPosition()
+      if (!model || !pos || model.getLanguageId() !== 'python') return setFocusedIdentifier(null)
+      setFocusedIdentifier(model.getWordAtPosition(pos)?.word ?? null)
+    }
+    const cursorDisposable = editor.onDidChangeCursorPosition(publishFocus)
+    const modelFocusDisposable = editor.onDidChangeModel(publishFocus)
+
     const modelStore = models.current
     return () => {
       changeDisposable.dispose()
+      cursorDisposable.dispose()
+      modelFocusDisposable.dispose()
+      setFocusedIdentifier(null)
       for (const action of actions) action.dispose()
       setActiveEditor(null)
       spriteThumbsRef.current?.dispose()
