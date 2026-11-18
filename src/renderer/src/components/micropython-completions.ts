@@ -52,6 +52,30 @@ import {
   modulesFor
 } from './dialect-symbols'
 import type { SymbolMember } from './micropython-symbols'
+import {
+  canonicalModule,
+  loadMicropythonStubs,
+  micropythonStubs,
+  stubModule,
+  type StubCatalogue,
+  type StubMember
+} from './micropython-stubs'
+import {
+  activeSignature,
+  callContext,
+  dottedOwner,
+  fromImportContext,
+  memberDetail,
+  memberMarkdown,
+  membersOf,
+  memberContext,
+  memberSortText,
+  resolveExpr,
+  scanScope,
+  signaturesFor,
+  type FileScope,
+  type Resolved
+} from './micropython-intellisense'
 import { spriteCompletionContext, spriteCompletions } from './sprite-completions'
 import type { SpriteRefScope } from './sprite-refs'
 
@@ -111,6 +135,120 @@ let spriteSource: SpriteCompletionSource | null = null
 /** Install (or, with null, remove) the source the sprite branch reads. */
 export function setSpriteCompletionSource(source: SpriteCompletionSource | null): void {
   spriteSource = source
+}
+
+/**
+ * The stub catalogue, when this session may be offered it: never to a
+ * CircuitPython board (the stubs are MicroPython's API), and not until the
+ * lazily-loaded data has arrived.
+ */
+function stubsFor(dialect: Dialect): StubCatalogue | null {
+  return dialect === 'circuitpython' ? null : micropythonStubs()
+}
+
+/**
+ * What the file imports and assigns, cached per model version: completion,
+ * signature help and hover all ask on the same keystroke, and the scan is a
+ * pass over the whole buffer.
+ */
+let scopeCache: { uri: string; version: number; scope: FileScope } | null = null
+function fileScope(model: Monaco.editor.ITextModel): FileScope {
+  const uri = model.uri.toString()
+  const version = model.getVersionId()
+  if (scopeCache && scopeCache.uri === uri && scopeCache.version === version) return scopeCache.scope
+  const scope = scanScope(model.getValue())
+  scopeCache = { uri, version, scope }
+  return scope
+}
+
+/** Monaco kind for a stub member. */
+function stubKind(
+  monaco: typeof Monaco,
+  member: StubMember,
+  instance: boolean
+): Monaco.languages.CompletionItemKind {
+  const k = monaco.languages.CompletionItemKind
+  switch (member.kind) {
+    case 'class':
+      return k.Class
+    case 'method':
+      return k.Method
+    case 'function':
+      return k.Function
+    case 'constant':
+      return k.Constant
+    default:
+      return instance ? k.Property : k.Variable
+  }
+}
+
+/** The label a member is documented under: `machine.Pin`, `Pin.irq`. */
+function ownerLabel(target: Resolved): string {
+  return target.kind === 'module' ? target.module : target.path.join('.')
+}
+
+/**
+ * Completion items for `<owner>.` from the stubs, plus any curated member the
+ * stubs lack (on an unknown dialect that is how `time.monotonic` — a
+ * CircuitPython member — still shows, tagged).
+ */
+function stubMemberItems(
+  monaco: typeof Monaco,
+  catalogue: StubCatalogue,
+  target: Resolved,
+  dialect: Dialect,
+  range: Monaco.IRange
+): Monaco.languages.CompletionItem[] {
+  const instance = target.kind === 'member' && target.instance
+  const owner = ownerLabel(target)
+  const items: Monaco.languages.CompletionItem[] = membersOf(catalogue, target).map((entry) => ({
+    label: entry.name,
+    kind: stubKind(monaco, entry.member, instance),
+    insertText: entry.name,
+    detail: detailFor(memberDetail(entry.name, entry.member), 'micropython', dialect),
+    documentation: { value: memberMarkdown(`${owner}.${entry.name}`, entry.member) },
+    sortText: memberSortText(entry, memberContext(target)),
+    range
+  }))
+  if (target.kind === 'module') {
+    const seen = new Set(items.map((i) => i.label as string))
+    const curated = curatedModuleMembers(target.module, dialect, catalogue)
+    for (const m of curated) {
+      if (seen.has(m.name)) continue
+      items.push({
+        label: m.name,
+        kind: memberKind(monaco, m.kind),
+        insertText: m.name,
+        detail: detailFor(m.detail ?? `${owner}.${m.name}`, m.scope, dialect),
+        documentation: m.doc ? { value: m.doc } : undefined,
+        sortText: `5${m.name.toLowerCase()}`,
+        range
+      })
+    }
+  }
+  return items
+}
+
+/** The curated members of a module (by its own name or a u-alias). */
+function curatedModuleMembers(
+  module: string,
+  dialect: Dialect,
+  catalogue: StubCatalogue | null
+): SymbolMember[] {
+  const byName = modulesByNameFor(dialect)
+  const canonical = catalogue ? canonicalModule(catalogue, module) : module
+  return byName[module]?.members ?? byName[canonical]?.members ?? []
+}
+
+/** Hover / details markdown for a whole module, with a link to its docs page. */
+function moduleMarkdown(name: string, catalogue: StubCatalogue): string {
+  const mod = catalogue.modules[name]
+  if (!mod) return `\`${name}\``
+  const out = ['```python', `import ${name}`, '```']
+  if (mod.doc) out.push('', mod.doc)
+  if (mod.ports?.length) out.push('', `*${mod.ports.join(' / ')} only.*`)
+  if (mod.url) out.push('', `[MicroPython docs](${mod.url})`)
+  return out.join('\n')
 }
 
 /** Map our symbol kinds onto Monaco completion kinds. */
@@ -258,8 +396,10 @@ export function registerMicropythonCompletions(
         endColumn: word.endColumn
       }
 
-      const moduleItems = (): Monaco.languages.CompletionItem[] =>
-        modulesFor(dialect).map((mod) => ({
+      const catalogue = stubsFor(dialect)
+
+      const moduleItems = (includeStubs = false): Monaco.languages.CompletionItem[] => {
+        const items: Monaco.languages.CompletionItem[] = modulesFor(dialect).map((mod) => ({
           label: mod.name,
           kind: monaco.languages.CompletionItemKind.Module,
           insertText: mod.name,
@@ -267,8 +407,81 @@ export function registerMicropythonCompletions(
           documentation: mod.doc ? { value: mod.doc } : undefined,
           range
         }))
+        if (!includeStubs || !catalogue) return items
+        // After `import`, every module the stubs know — `ntptime`, `dht`,
+        // `onewire`, `espnow`, the `u`-names — not just the curated favourites.
+        const seen = new Set(items.map((i) => i.label as string))
+        for (const [name, mod] of Object.entries(catalogue.modules)) {
+          if (seen.has(name)) continue
+          seen.add(name)
+          const summary = (mod.doc ?? '').split('\n\n')[0].replace(/\s+/g, ' ').trim()
+          const ports = mod.ports?.length ? `${mod.ports.join(' / ')} only · ` : ''
+          items.push({
+            label: name,
+            kind: monaco.languages.CompletionItemKind.Module,
+            insertText: name,
+            detail: detailFor(`${ports}${summary}`, 'micropython', dialect),
+            documentation: { value: moduleMarkdown(name, catalogue) },
+            sortText: `1${name}`,
+            range
+          })
+        }
+        for (const [alias, target] of Object.entries(catalogue.aliases)) {
+          if (seen.has(alias)) continue
+          items.push({
+            label: alias,
+            kind: monaco.languages.CompletionItemKind.Module,
+            insertText: alias,
+            detail: detailFor(`Same as \`${target}\``, 'micropython', dialect),
+            documentation: { value: moduleMarkdown(target, catalogue) },
+            sortText: `2${alias}`,
+            range
+          })
+        }
+        return items
+      }
 
-      // 1) `<obj>.<partial>` — member completions for a known module or class.
+      // 1) `from machine import |` / `from machine import Pin, |` — what the
+      //    module has, not a list of modules.
+      const fromCtx = fromImportContext(lineToCursor)
+      if (fromCtx) {
+        const items: Monaco.languages.CompletionItem[] = []
+        const mod = catalogue ? stubModule(catalogue, fromCtx.module) : undefined
+        if (catalogue && mod) {
+          items.push(
+            ...stubMemberItems(
+              monaco,
+              catalogue,
+              { kind: 'module', module: canonicalModule(catalogue, fromCtx.module) },
+              dialect,
+              range
+            )
+          )
+        } else {
+          for (const m of curatedModuleMembers(fromCtx.module, dialect, catalogue)) {
+            items.push({
+              label: m.name,
+              kind: memberKind(monaco, m.kind),
+              insertText: m.name,
+              detail: detailFor(m.detail ?? `${fromCtx.module}.${m.name}`, m.scope, dialect),
+              documentation: m.doc ? { value: m.doc } : undefined,
+              range
+            })
+          }
+        }
+        return { suggestions: items }
+      }
+
+      // 2) `<obj>.<partial>` — member completions. With the stubs this follows
+      //    the file: `m.` after `import machine as m`, `led.` after
+      //    `led = Pin(25, Pin.OUT)`, `self.pwm.` after `self.pwm = PWM(…)`.
+      const dotted = dottedOwner(lineToCursor)
+      if (dotted && catalogue) {
+        const target = resolveExpr(dotted.owner, fileScope(model), catalogue)
+        if (target && (target.kind === 'module' || target.member.kind === 'class')) {
+          return { suggestions: stubMemberItems(monaco, catalogue, target, dialect, range) }
+        }
+      }
       const dotMatch = /([A-Za-z_][A-Za-z0-9_]*)\.\s*([A-Za-z0-9_]*)$/.exec(lineToCursor)
       if (dotMatch) {
         const owner = dotMatch[1]
@@ -290,7 +503,7 @@ export function registerMicropythonCompletions(
         return { suggestions: [] }
       }
 
-      // 2) After `import ` / `from ` — suggest module names. Handles
+      // 3) After `import ` / `from ` — suggest module names. Handles
       //    `import x`, `from x`, and `from x import y` (the trailing import).
       const importMatch = /(?:^|\b)(?:import|from)\s+([A-Za-z0-9_]*)$/.exec(lineToCursor)
       if (importMatch) {
@@ -306,12 +519,92 @@ export function registerMicropythonCompletions(
           sortText: `0${h.name}`,
           range
         }))
-        return { suggestions: [...hints, ...moduleItems()] }
+        return { suggestions: [...hints, ...moduleItems(true)] }
       }
 
-      // 3) General identifier context — offer module names as importable
+      // Inside a call with nothing typed yet (`PWM(Pin(15), |`) the signature
+      // help is the useful popup; a module list would sit on top of it.
+      if (!word.word && callContext(lineToCursor)) return { suggestions: [] }
+
+      // 4) General identifier context — offer module names as importable
       //    references (merged with Monaco's built-in word suggestions).
       return { suggestions: moduleItems() }
+    }
+  })
+
+  // The stub catalogue is its own chunk; start fetching it now so it is there
+  // by the time anyone types a dot.
+  void loadMicropythonStubs()
+
+  const signatures = monaco.languages.registerSignatureHelpProvider('python', {
+    signatureHelpTriggerCharacters: ['(', ','],
+    signatureHelpRetriggerCharacters: [')'],
+    provideSignatureHelp(model, position) {
+      const catalogue = stubsFor(currentDialect)
+      if (!catalogue) return null
+      const text = model.getValueInRange({
+        startLineNumber: Math.max(1, position.lineNumber - 60),
+        startColumn: 1,
+        endLineNumber: position.lineNumber,
+        endColumn: position.column
+      })
+      const ctx = callContext(text)
+      if (!ctx) return null
+      const target = resolveExpr(ctx.callee, fileScope(model), catalogue)
+      const sigs = signaturesFor(target)
+      if (!target || target.kind !== 'member' || !sigs.length) return null
+      const active = activeSignature(sigs, ctx)
+      const prefix = target.path.slice(0, -1).join('.')
+      return {
+        value: {
+          signatures: sigs.map((sig) => {
+            const label = prefix ? `${prefix}.${sig.label}` : sig.label
+            // Offsets rather than substrings: `x` is inside `max_x`.
+            let from = label.indexOf('(') + 1
+            const parameters = sig.params.map((p) => {
+              const at = label.indexOf(p, from)
+              const start = at < 0 ? from : at
+              from = start + p.length
+              return { label: [start, start + p.length] as [number, number] }
+            })
+            const doc = sig.doc ?? target.member.doc
+            return { label, parameters, documentation: doc ? { value: doc } : undefined }
+          }),
+          activeSignature: active.signature,
+          activeParameter: active.parameter
+        },
+        dispose: () => undefined
+      }
+    }
+  })
+
+  const hovers = monaco.languages.registerHoverProvider('python', {
+    provideHover(model, position) {
+      const catalogue = stubsFor(currentDialect)
+      if (!catalogue) return null
+      const word = model.getWordAtPosition(position)
+      if (!word) return null
+      const line = model.getLineContent(position.lineNumber)
+      const head = line.slice(0, word.endColumn - 1)
+      const m = /([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)$/.exec(head)
+      if (!m) return null
+      const scope = fileScope(model)
+      // On an import line the module name may not be bound yet (`from machine
+      // import …` binds only the names after `import`), so look it up directly.
+      const importLine = /^\s*(?:import|from)\b/.test(line)
+      const target = resolveExpr(m[1], scope, catalogue, importLine)
+      if (!target) return null
+      const range = {
+        startLineNumber: position.lineNumber,
+        startColumn: word.startColumn,
+        endLineNumber: position.lineNumber,
+        endColumn: word.endColumn
+      }
+      if (target.kind === 'module') {
+        return { range, contents: [{ value: moduleMarkdown(target.module, catalogue) }] }
+      }
+      const qualified = `${target.module}.${target.path.join('.')}`
+      return { range, contents: [{ value: memberMarkdown(qualified, target.member) }] }
     }
   })
 
@@ -320,9 +613,17 @@ export function registerMicropythonCompletions(
   if (import.meta.hot) {
     import.meta.hot.dispose(() => {
       disposable.dispose()
+      signatures.dispose()
+      hovers.dispose()
       g[REGISTERED_KEY] = false
     })
   }
 
-  return disposable
+  return {
+    dispose: () => {
+      disposable.dispose()
+      signatures.dispose()
+      hovers.dispose()
+    }
+  }
 }
