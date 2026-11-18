@@ -326,6 +326,8 @@ export interface CallContext {
   argIndex: number
   /** The keyword being typed, for `Pin(25, mode=|`. */
   keyword?: string
+  /** Keywords already passed before this argument: `I2C(0, sda=sda, |` → `['sda']`. */
+  used?: string[]
 }
 
 /**
@@ -335,7 +337,8 @@ export interface CallContext {
  */
 export function callContext(textBeforeCursor: string): CallContext | null {
   const text = textBeforeCursor.slice(-4000)
-  const stack: { ch: string; pos: number; commas: number; lastComma: number }[] = []
+  const stack: { ch: string; pos: number; commas: number; lastComma: number; used: string[] }[] = []
+  const kwRe = new RegExp(`^\\s*(${IDENT})\\s*=(?!=)`)
   for (let i = 0; i < text.length; i++) {
     const c = text[i]
     if (c === '#') {
@@ -360,10 +363,12 @@ export function callContext(textBeforeCursor: string): CallContext | null {
       i = j + q.length - 1
       continue
     }
-    if (c === '(' || c === '[' || c === '{') stack.push({ ch: c, pos: i, commas: 0, lastComma: i })
+    if (c === '(' || c === '[' || c === '{') stack.push({ ch: c, pos: i, commas: 0, lastComma: i, used: [] })
     else if (c === ')' || c === ']' || c === '}') stack.pop()
     else if (c === ',' && stack.length) {
       const top = stack[stack.length - 1]
+      const done = kwRe.exec(text.slice(top.lastComma + 1, i))
+      if (done) top.used.push(done[1])
       top.commas++
       top.lastComma = i
     }
@@ -376,8 +381,13 @@ export function callContext(textBeforeCursor: string): CallContext | null {
   // `def f(` and `class C(` are definitions, not calls.
   if (new RegExp(`\\b(?:def|class)\\s+${m[1]}\\s*$`).test(before)) return null
   const current = text.slice(top.lastComma + 1)
-  const kw = new RegExp(`^\\s*(${IDENT})\\s*=(?!=)`).exec(current)
-  return { callee: m[1], argIndex: top.commas, keyword: kw?.[1] }
+  const kw = kwRe.exec(current)
+  return {
+    callee: m[1],
+    argIndex: top.commas,
+    keyword: kw?.[1],
+    ...(top.used.length ? { used: top.used } : {})
+  }
 }
 
 /** A parameter's bare name: `mode: int = -1` → `mode`, `*args` → `args`. */
@@ -401,13 +411,31 @@ export function activeSignature(
   ctx: CallContext
 ): { signature: number; parameter: number } {
   if (!signatures.length) return { signature: 0, parameter: 0 }
+  // Overloads that accept every keyword already written are the candidates:
+  // after `I2C(id=0, sda=sda, ` the one without `sda` is not what is being called.
+  const used = ctx.used ?? []
+  const names = (i: number): string[] => signatures[i].params.map(paramName)
+  const all = signatures.map((_, i) => i)
+  const fitting = all.filter((i) => used.every((u) => names(i).includes(u)))
+  const order = fitting.length ? fitting : all
   if (ctx.keyword) {
-    for (let s = 0; s < signatures.length; s++) {
-      const p = signatures[s].params.findIndex((x) => paramName(x) === ctx.keyword)
+    for (const s of order) {
+      const p = names(s).indexOf(ctx.keyword)
       if (p >= 0) return { signature: s, parameter: p }
     }
   }
-  let s = signatures.findIndex((sig) => sig.params.length > ctx.argIndex)
+  if (used.length) {
+    // Keywords so far: point at the first parameter not yet given, past the
+    // ones filled positionally.
+    for (const s of order) {
+      const positional = Math.max(0, ctx.argIndex - used.length)
+      const p = signatures[s].params.findIndex(
+        (x, i) => i >= positional && !x.startsWith('*') && !used.includes(paramName(x))
+      )
+      if (p >= 0) return { signature: s, parameter: p }
+    }
+  }
+  let s = order.find((i) => signatures[i].params.length > ctx.argIndex) ?? -1
   if (s < 0) s = 0
   const params = signatures[s].params
   let p = ctx.argIndex

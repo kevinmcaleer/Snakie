@@ -143,7 +143,7 @@ describe('cursor contexts', () => {
   it('finds the call and argument under the cursor', () => {
     expect(callContext('led = Pin(25, ')).toEqual({ callee: 'Pin', argIndex: 1, keyword: undefined })
     expect(callContext('machine.Pin(')).toEqual({ callee: 'machine.Pin', argIndex: 0, keyword: undefined })
-    expect(callContext('i2c = I2C(0, scl=Pin(5), sda=')).toEqual({ callee: 'I2C', argIndex: 2, keyword: 'sda' })
+    expect(callContext('i2c = I2C(0, scl=Pin(5), sda=')).toEqual({ callee: 'I2C', argIndex: 2, keyword: 'sda', used: ['scl'] })
     expect(callContext('uart.write("a, (b", ')).toMatchObject({ callee: 'uart.write', argIndex: 1 })
     expect(callContext('print([1, 2], ')).toMatchObject({ callee: 'print', argIndex: 1 })
     expect(callContext('x = foo(1)')).toBeNull()
@@ -164,6 +164,16 @@ describe('signatures', () => {
     expect(activeSignature(sigs, { callee: 'Pin', argIndex: 1 }).parameter).toBe(1)
     const pull = activeSignature(sigs, { callee: 'Pin', argIndex: 0, keyword: 'pull' })
     expect(sigs[pull.signature].params[pull.parameter]).toMatch(/^pull/)
+  })
+
+  it('picks the overload that takes the keywords already written', () => {
+    // I2C(id, *, freq, timeout) / I2C(id, *, scl, sda, freq, timeout) / I2C(*, scl, sda, freq)
+    const sigs = signaturesFor(resolve('from machine import I2C', 'I2C'))
+    const ctx = callContext('i2c = I2C(id=0, sda=sda, ')!
+    expect(ctx.used).toEqual(['id', 'sda'])
+    const a = activeSignature(sigs, ctx)
+    expect(sigs[a.signature].params.map((p) => p.split(':')[0])).toContain('scl')
+    expect(sigs[a.signature].params[a.parameter]).toMatch(/^scl/)
   })
 
   it('picks the overload with enough parameters', () => {

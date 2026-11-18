@@ -143,6 +143,11 @@ export function PythonPane({
       // take; until someone wants the feature enough to do that, off is honest.
       stickyScroll: { enabled: false },
       scrollbar: { vertical: 'auto', horizontal: 'auto' },
+      // Suggestions, parameter hints and hovers are drawn as fixed-position
+      // overlays so they sit on top of the surrounding panes instead of being
+      // clipped at the editor's edges (user report: the I2C signature help was
+      // cut off by the top of the editor).
+      fixedOverflowWidgets: true,
       wordWrap: 'off',
       ...editorMetricsFor(skin, ruleSpacing())
     })
