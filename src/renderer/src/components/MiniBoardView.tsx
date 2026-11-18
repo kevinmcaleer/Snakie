@@ -28,6 +28,7 @@ import { useWorkspaceLayout } from '../store/layout'
 import { useConsole } from '../store/console'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useLocalStorage } from '../hooks/useLocalStorage'
+import { useAnimatedNumber } from '../hooks/useAnimatedNumber'
 import { isVirtualPort } from '../../../shared/virtual-device'
 import './MiniBoardView.css'
 
@@ -500,9 +501,23 @@ export function MiniBoardView({
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
+  // The zoom buttons set a TARGET; the board eases to it (grows / shrinks)
+  // rather than jumping, and keeps whatever was in the middle of the view in the
+  // middle while it does.
+  const shownZoom = useAnimatedNumber(zoom, 220)
+  const prevZoomRef = useRef(shownZoom)
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    const prev = prevZoomRef.current
+    prevZoomRef.current = shownZoom
+    if (!el || prev === shownZoom || prev <= 0) return
+    const ratio = shownZoom / prev
+    el.scrollLeft = (el.scrollLeft + el.clientWidth / 2) * ratio - el.clientWidth / 2
+    el.scrollTop = (el.scrollTop + el.clientHeight / 2) * ratio - el.clientHeight / 2
+  }, [shownZoom])
   const aspect = viewBox.h / viewBox.w
-  const svgW = Math.max(1, Math.round(wrapW * zoom))
-  const svgH = Math.max(1, Math.round(svgW * aspect))
+  const svgW = Math.max(1, wrapW * shownZoom)
+  const svgH = Math.max(1, svgW * aspect)
   const setZoomClamped = (z: number): void => setZoom(Math.min(5, Math.max(0.5, z)))
 
   // Resizable split between the mini board and the instrument deck below it. The

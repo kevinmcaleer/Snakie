@@ -1,0 +1,156 @@
+/* Small-screen pull-up sheet (layout C). Sits inside the console's RRP panel
+   slot, which is the positioning context; the console card (.region--shell) is
+   pushed down under this bar by the compact rules in index.css. */
+.csheet__bar {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  right: 5px;
+  height: 44px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.5rem;
+  background: var(--con, var(--bg-elevated));
+  border: 1px solid var(--conbd, var(--border));
+  border-bottom: none;
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.12);
+}
+
+/* The grip: a wide, thumb-sized target with a short bar in the middle. */
+.csheet__grip {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 72px;
+  height: 14px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.csheet__grip span {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--txt4, var(--text-muted));
+  opacity: 0.7;
+}
+.csheet__grip:hover span,
+.csheet__grip:focus-visible span {
+  opacity: 1;
+}
+
+.csheet__tabs {
+  display: flex;
+  gap: 2px;
+  margin-top: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.csheet__tab {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 0.85rem;
+  font-family: var(--font-ui, sans-serif);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #b9bdb2;
+  background: transparent;
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+}
+.csheet__tab:hover {
+  color: #eef0e8;
+}
+.csheet__tab.is-active {
+  background: var(--greenpill, var(--accent-2));
+  color: var(--greentext, #fff);
+}
+
+/* Board / Instruments pane: covers the console card (which stays mounted). */
+.csheet__pane {
+  position: absolute;
+  top: 49px;
+  left: 5px;
+  right: 5px;
+  bottom: 5px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+  background: var(--panel, var(--bg-elevated));
+  border: 1px solid var(--conbd, var(--border));
+  border-top: none;
+  border-radius: 0 0 14px 14px;
+}
+.csheet__pane > * {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Floating mini board over the editor. */
+.csheet-pip {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 5;
+  width: 168px;
+  height: 150px;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--panel, var(--bg-elevated));
+  border: 1px solid var(--shellbd, var(--border));
+  box-shadow: 0 10px 26px rgba(30, 25, 10, 0.28);
+}
+.csheet-pip__view {
+  width: 280px;
+  zoom: 0.6;
+  pointer-events: none;
+}
+/* The whole card is the "open board" target. */
+.csheet-pip__open {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.csheet-pip__open:focus-visible {
+  outline: 2px solid var(--gold, var(--accent));
+  outline-offset: -2px;
+  border-radius: 14px;
+}
+.csheet-pip__hide {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--txt2, var(--text));
+  background: var(--card, var(--bg));
+  border: 1px solid var(--shellbd, var(--border));
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+/* Keep the board a sensible size on a wide sheet rather than filling it. */
+.csheet__pane > .miniviewer {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+}
