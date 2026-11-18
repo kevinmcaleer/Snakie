@@ -1,0 +1,1 @@
+- **Long-press on the board and instruments no longer selects text on phones; tap the board to show pin labels.** 

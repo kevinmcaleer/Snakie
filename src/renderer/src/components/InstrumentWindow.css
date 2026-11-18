@@ -558,3 +558,20 @@
   overflow: auto;
   padding: 12px;
 }
+
+/* Touch screens: a long press on an instrument (to hold a control or read a
+   value) shouldn't start a text selection or pop the iOS callout. Mouse users
+   keep normal selection so values can still be copied; text fields stay editable. */
+@media (pointer: coarse) {
+  .instr-dock,
+  .instr {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  .instr-dock :is(input, textarea, select, [contenteditable='true']),
+  .instr :is(input, textarea, select, [contenteditable='true']) {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+}

@@ -295,3 +295,13 @@
   text-align: center;
   opacity: 0.8;
 }
+
+/* Touch: a long press on the board is "show me the pins" (see MiniBoardView.tsx),
+   not "select this text" — so no text selection, no iOS callout/magnifier, and no
+   grey tap flash over the SVG labels. */
+.mini-board {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
