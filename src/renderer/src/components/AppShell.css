@@ -147,7 +147,7 @@
 /* The console panel becomes the pull-up sheet: its card moves down under the
    sheet's tab bar (CompactSheet.css) and joins it as one rounded shape. */
 .shell:not([data-size='wide']) .shell__vgroup .region--shell {
-  top: 49px;
+  top: 59px;
   border-top-left-radius: 0;
   border-top-right-radius: 0;
 }
@@ -243,4 +243,18 @@
   overflow-x: auto;
   scrollbar-width: none;
   min-width: 0;
+}
+
+.shell[data-size='phone'] .region--shell .conn-control__select {
+  max-width: 7.5rem;
+}
+/* Keep the Console / Problems labels whole: the port picker is locked while a
+   board is connected anyway, so it steps aside then, and the sheet's own grip
+   and drag handle replace the collapse chevron. */
+.shell[data-size='phone'] .region--shell .shell-toggle {
+  flex-shrink: 0;
+}
+.shell[data-size='phone'] .region--shell .conn-control__select:disabled,
+.shell[data-size='phone'] .region--shell .panel-collapse-btn {
+  display: none;
 }
