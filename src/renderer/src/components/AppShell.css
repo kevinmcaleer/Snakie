@@ -175,8 +175,10 @@
   border-radius: 10px;
   cursor: pointer;
 }
+/* Off wide screens the end side gives up its balancing share and only holds
+ * the kevsrobots account button (kevsrobots.com#581). */
 .shell:not([data-size='wide']) .toolbar__side--end {
-  display: none;
+  flex: 0 0 auto;
 }
 .shell:not([data-size='wide']) .ws-switcher {
   margin-left: auto;

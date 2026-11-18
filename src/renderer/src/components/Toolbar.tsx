@@ -4,6 +4,7 @@ import { showStatus } from '../lib/status-bar'
 import { exportProjectPdf } from '../lib/pdf/export-project'
 import type { ExportPhase } from '../lib/pdf/project-pdf'
 import { ExportProgress, type ExportProgressState } from './ExportProgress'
+import { SuiteAccount, SuiteSwitcher } from './SuiteBar'
 import { onExportPdf } from './export-bus'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
@@ -289,6 +290,8 @@ export function Toolbar(): JSX.Element {
             <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
           </svg>
         </button>
+        {/* The kevsrobots suite: Learn, Projects, Snakie, BetterCAD (kevsrobots.com#581). */}
+        <SuiteSwitcher />
         <div className="toolbar__brand">
           {SNAKE_LOGO}
           <span className="toolbar__wordmark">Snakie</span>
@@ -371,7 +374,11 @@ export function Toolbar(): JSX.Element {
           so the old global Files/Shell/Chat/Instruments toggle knobs are gone.
           Centred between two equal-weight sides. */}
       <WorkspaceSwitcher />
-      <div className="toolbar__side toolbar__side--end" aria-hidden="true" />
+      {/* Balances the left side so the switcher stays centred, and holds the
+          kevsrobots account button at the far right. */}
+      <div className="toolbar__side toolbar__side--end">
+        <SuiteAccount />
+      </div>
 
       {/* Fixed-position, so it floats over the shell rather than sitting in the
           toolbar's flex row — see ExportProgress.css. */}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import './GitPublishDialog.css'
 import './SendToKevsrobotsDialog.css'
 import { useFocusTrap } from '../hooks/useFocusTrap'
+import { announceAccountChange } from './SuiteBar'
 import { githubWebUrl, type KrProject, type KrSent, type KrStatus } from '../../../shared/kevsrobots-account'
 
 /**
@@ -103,6 +104,7 @@ export function SendToKevsrobotsDialog({ robot, svg, onClose }: SendToKevsrobots
       return
     }
     setStatus(res.value)
+    announceAccountChange()
     setPhase('loading')
     await loadProjects()
   }
@@ -112,6 +114,7 @@ export function SendToKevsrobotsDialog({ robot, svg, onClose }: SendToKevsrobots
     await api.signOut()
     setBusy(false)
     setStatus({ signedIn: false })
+    announceAccountChange()
     setProjects([])
     setError(null)
     setPhase('signed-out')
