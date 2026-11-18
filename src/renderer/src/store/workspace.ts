@@ -60,8 +60,19 @@ import {
   readSession,
   restoreMode,
   markRestoreStart,
-  markRestoreDone
+  markRestoreDone,
+  type SessionStorage
 } from './session-restore'
+import {
+  buildSnapshot,
+  clearSnapshot,
+  findSnapshot,
+  maxUntitledNumber,
+  restorePlan,
+  writeSnapshot,
+  type ReloadSnapshot
+} from './reload-snapshot'
+import { setWorkSaver } from '../lib/unsaved-work'
 import { isMpyFile } from '../../../shared/mpy-info'
 import {
   hasBlocksFooter,
@@ -472,6 +483,29 @@ const WorkspaceContext = createContext<WorkspaceStore | null>(null)
 let untitledCounter = 0
 
 /**
+ * Where an update reload's snapshot can live (see `reload-snapshot.ts`): the
+ * per-tab `sessionStorage` first, then `localStorage` (the desktop app, whose
+ * restart clears `sessionStorage`). Either may be missing or throw on access.
+ */
+function snapshotStorages(): (SessionStorage | null)[] {
+  if (typeof window === 'undefined') return []
+  const get = (k: 'sessionStorage' | 'localStorage'): SessionStorage | null => {
+    try {
+      return window[k] ?? null
+    } catch {
+      return null
+    }
+  }
+  return [get('sessionStorage'), get('localStorage')]
+}
+
+/** The storage a snapshot is WRITTEN to: per-tab on the web, durable on the desktop. */
+function snapshotTarget(): SessionStorage | null {
+  const [session, local] = snapshotStorages()
+  return import.meta.env.VITE_SNAKIE_WEB ? (session ?? null) : (local ?? null)
+}
+
+/**
  * Provides the workspace store to the React tree. Wrap the app once near the
  * root (e.g. in App.tsx).
  */
@@ -660,9 +694,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
     // Guard `window` — this initializer runs during render, and some unit tests
     // render components in a DOM-less node env where `window` is undefined.
     const storage = typeof window !== 'undefined' ? window.localStorage : null
-    if (!storage) return { mode: 'safe' as const, session: null }
+    if (!storage) return { mode: 'safe' as const, session: null, snapshot: null }
     const mode = restoreMode(storage)
-    return { mode, session: mode === 'safe' ? readSession(storage) : null }
+    return {
+      mode,
+      session: mode === 'safe' ? readSession(storage) : null,
+      // Left by an update reload/restart: every tab, unsaved edits included.
+      snapshot:
+        mode === 'safe' ? findSnapshot(snapshotStorages(), Date.now()) : (null as ReloadSnapshot | null)
+    }
   })
   // Gate the persist effect until the initial restore has settled, so it never
   // overwrites the saved session before (or while) we reopen it.
@@ -674,6 +714,22 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
     if (!hydrated.current) return
     saveSession(window.localStorage, state.openFiles, state.activeId)
   }, [state.openFiles, state.activeId])
+
+  // Before an update reload/restart, snapshot every open tab — unsaved edits,
+  // untitled buffers and board files included — so the next boot can put them
+  // all back. Read through a ref so the saver always sees the current tabs.
+  const latest = useRef(state)
+  latest.current = state
+  useEffect(
+    () =>
+      setWorkSaver(() => {
+        const target = snapshotTarget()
+        if (!target) return false
+        const { openFiles, activeId } = latest.current
+        return writeSnapshot(target, buildSnapshot(openFiles, activeId, Date.now()))
+      }),
+    []
+  )
 
   // Reopen the previously-open files on launch — guarded against a crash loop
   // (#266). If a file broke startup last time, the guard is still set: we skip
@@ -691,6 +747,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
       // clean, not a crash loop), and tell the user why.
       markRestoreDone(storage)
       saveSession(storage, [], null)
+      clearSnapshot(snapshotStorages())
       hydrated.current = true
       try {
         window.dispatchEvent(
@@ -708,6 +765,64 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
       }
       return
     }
+
+    // Coming back from an update reload: rebuild EVERY tab from the snapshot,
+    // which is a superset of the session (it also has unsaved edits, untitled
+    // buffers and board files). Same crash-guard as a normal restore; the
+    // snapshot is only cleared once the restore has proven stable, so a crash
+    // part-way through doesn't lose it before the guard can act.
+    const snapshot = boot.snapshot
+    if (snapshot && snapshot.files.length > 0) {
+      markRestoreStart(storage)
+      void (async () => {
+        // A reopened file gets its path-derived id, which differs from the
+        // snapshot's after a Save As (that keeps the `untitled` id) — so track
+        // the id the active tab actually comes back under.
+        let activeId: string | null = null
+        for (const f of snapshot.files) {
+          let id = f.id
+          if (restorePlan(f) === 'reopen') {
+            try {
+              await openFile('local', f.path)
+              id = makeId('local', f.path)
+            } catch {
+              // Gone from disk since — nothing to bring back.
+              continue
+            }
+          } else {
+            dispatch({ type: 'open', file: { ...f } })
+          }
+          if (f.id === snapshot.activeId) activeId = id
+        }
+        untitledCounter = Math.max(untitledCounter, maxUntitledNumber(snapshot.files))
+        if (activeId) dispatch({ type: 'setActive', id: activeId })
+        hydrated.current = true
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            markRestoreDone(storage)
+            clearSnapshot(snapshotStorages())
+          })
+        )
+        if (snapshot.files.some((f) => f.dirty)) {
+          try {
+            window.dispatchEvent(
+              new CustomEvent('snakie:status', {
+                detail: {
+                  text: 'Updated — your unsaved changes are back',
+                  tooltip:
+                    'Snakie reloaded into the new version and reopened your files, including the changes you had not saved yet. Save them when you are ready.',
+                  priority: 6
+                }
+              })
+            )
+          } catch {
+            // status bar not listening yet — non-fatal
+          }
+        }
+      })()
+      return
+    }
+    if (snapshot) clearSnapshot(snapshotStorages())
 
     const session = boot.session
     if (!session || session.paths.length === 0) {

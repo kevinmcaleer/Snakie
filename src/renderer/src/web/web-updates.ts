@@ -24,15 +24,22 @@
  * bundle, which IS `'self'`, so the CSP reason for `injectRegister: 'script'`
  * still holds) and reacts when a new build lands.
  *
- * WHAT IT DOES WHEN A NEW BUILD LANDS. It reloads — but only when nothing is
- * unsaved. Snakie is an editor; silently reloading over someone's unsaved buffer
- * would be a worse bug than the one being fixed. With work in progress it says
- * so instead, through the same `UpdateNotifier` the desktop app uses, and the
- * reload waits for the user. On a fresh visit there is nothing unsaved, which is
- * the case the report was actually about: open the site, get the current build.
+ * WHAT IT DOES WHEN A NEW BUILD LANDS. It SUGGESTS a reload, through the same
+ * `UpdateNotifier` the desktop app uses, and waits for the user — the way
+ * BetterCad does. A reload in the middle of a session would drop the board
+ * connection and the shell, so it is never forced on someone who is working.
+ *
+ * Taking the reload loses nothing: immediately before it, every open tab —
+ * unsaved edits, untitled buffers and board files included — is written to a
+ * one-shot snapshot (`store/reload-snapshot.ts`) that the next boot restores.
+ *
+ * The one exception is the first few seconds after the page loads, with nothing
+ * unsaved: that is a fresh visit that was answered from the old precache, the
+ * case #971 was actually about, and there the reload just happens — open the
+ * site, get the current build, no prompt.
  */
 import type { UpdateStatus } from '../../../preload/index.d'
-import { hasUnsavedWork } from '../lib/unsaved-work'
+import { hasUnsavedWork, saveWorkForReload } from '../lib/unsaved-work'
 
 /** Where the build stamps its version. Emitted by `vite.web.config.ts`. */
 export const VERSION_URL = '/version.json'
@@ -43,6 +50,21 @@ export const SW_SCOPE = '/'
 
 /** How often to ask whether a new build has been deployed. */
 export const POLL_INTERVAL_MS = 30 * 60 * 1000
+
+/**
+ * How long after the page loads a new build may be applied without asking.
+ * Long enough for a fresh visit's service worker to install and notice it is
+ * stale; short enough that nobody has started real work yet.
+ */
+export const BOOT_GRACE_MS = 30 * 1000
+
+/**
+ * Whether a new build should be applied straight away rather than offered (pure).
+ * Only on a fresh page with nothing unsaved; everything else gets the prompt.
+ */
+export function shouldApplyQuietly(sinceLoadMs: number, unsaved: boolean): boolean {
+  return !unsaved && sinceLoadMs >= 0 && sinceLoadMs < BOOT_GRACE_MS
+}
 
 /** What `version.json` holds. */
 export interface VersionStamp {
@@ -112,16 +134,20 @@ export function createWebUpdatesApi(runningVersion: string): {
   const apply = (): void => {
     if (applied) return
     applied = true
+    // Keep the open tabs (and any unsaved edits) for the next boot. The explicit
+    // Reload button has already done this and asked if it failed (see
+    // `applyUpdateKeepingWork`); the quiet path only runs with nothing unsaved.
+    saveWorkForReload()
     // A normal reload revalidates the top-level document, and the newly
     // activated worker answers it from the NEW precache. No cache-busting query
     // is needed, and adding one would leave a junk URL in the address bar.
     window.location.reload()
   }
 
-  /** A newer build is ready to run. Take it now, or offer it. */
+  /** A newer build is ready to run. Take it now on a fresh page, else offer it. */
   const onNewBuild = (version?: string): void => {
     if (applied) return
-    if (!hasUnsavedWork()) {
+    if (shouldApplyQuietly(performance.now(), hasUnsavedWork())) {
       apply()
       return
     }
