@@ -88,7 +88,11 @@ export default defineConfig({
         console: resolve(__dirname, 'src/renderer/console.html'),
         // The code embed (#1286, epic #1285): editor + blocks + REPL only, for
         // other sites to iframe. Its own entry, so the app shell never loads.
-        embed: resolve(__dirname, 'src/renderer/embed.html')
+        embed: resolve(__dirname, 'src/renderer/embed.html'),
+        // Where the "Sign in with kevsrobots" popup comes back to (#1310). A
+        // folder index, so app.snakie.org/auth/callback (the redirect URI
+        // registered with kevsrobots) is served by a static host as-is.
+        'auth-callback': resolve(__dirname, 'src/renderer/auth/callback/index.html')
       },
       output: {
         manualChunks(id: string) {
@@ -164,7 +168,10 @@ export default defineConfig({
           /^\/board\.html/,
           /^\/instrument\.html/,
           /^\/console\.html/,
-          /^\/embed(\.html)?(\?|$)/
+          /^\/embed(\.html)?(\?|$)/,
+          // The sign-in popup's landing page (#1310): it must run its own tiny
+          // script, not open the editor in the popup.
+          /^\/auth\/callback/
         ]
       },
       manifest: {

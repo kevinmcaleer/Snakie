@@ -92,6 +92,7 @@ export function registerGitIpc(): void {
   ipcMain.handle('git:currentBranch', () =>
     wrap<string | undefined>(() => service.currentBranch())
   )
+  ipcMain.handle('git:originUrl', () => wrap<string | null>(() => service.originUrl()))
   ipcMain.handle('git:listBranches', () =>
     wrap<GitBranchList>(() => service.listBranches())
   )

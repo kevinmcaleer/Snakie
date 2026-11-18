@@ -776,6 +776,12 @@ export interface WiringCanvasProps {
    *  the selected part's mini-toolbar shows a help button if that part ships help. */
   onShowHelp?: (partInstanceId: string) => void
   /**
+   * Show "Send to kevsrobots…" in the export menu (#1310). Called with the
+   * wiring picture (the same SVG the SVG export saves) or null when it couldn't
+   * be drawn. Only the app passes it: the kevsrobots.com embed is already there.
+   */
+  onSendToKevsrobots?: (svg: string | null) => void
+  /**
    * Focused chrome (modes review): true in the EMBEDDED Board mode, where the
    * canvas is the star — the project browser starts collapsed and the
    * connections table starts collapsed + unpinned (Obsidian-style: it auto-
@@ -885,7 +891,7 @@ interface Drag {
   pinchWY?: number
 }
 
-export function WiringCanvas({ robot, onChange, history, folder, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, mat, onMatChange, captureRef, usedByCode, smoking, onDropPart, onShowHelp, focusedChrome = false, voltage, live, highlight, nets, onHighlightNet, projectMeta = true, emptyHint, partWarnings }: WiringCanvasProps): JSX.Element {
+export function WiringCanvas({ robot, onChange, history, folder, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, mat, onMatChange, captureRef, usedByCode, smoking, onDropPart, onShowHelp, onSendToKevsrobots, focusedChrome = false, voltage, live, highlight, nets, onHighlightNet, projectMeta = true, emptyHint, partWarnings }: WiringCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
   // The focusable canvas root — focused when a part is selected so the Delete /
   // Backspace shortcut is scoped to THIS canvas (a selected part can't be nuked by
@@ -2496,8 +2502,34 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
   // content (full drawing at 1:1, independent of pan/zoom) and save it.
   const doExport = async (fmt: ExportFmt): Promise<void> => {
     setExportOpen(false)
+    const out = await renderExport()
+    if (!out) return
+    // A PDF page can't be see-through: white behind a transparent drawing.
+    exportSvgString(out.svg, fmt, out.width, out.height, out.base, out.clear ? '#ffffff' : undefined).catch((err) => {
+      // Don't fail silently — a swallowed rejection here is exactly what made
+      // PNG/PDF "do nothing" before. Surface it so the cause is visible.
+      console.error(`Board export (${fmt}) failed:`, err)
+    })
+  }
+
+  // "Send to kevsrobots…" (#1310): the same picture the SVG export saves.
+  const doSendToKevsrobots = async (): Promise<void> => {
+    setExportOpen(false)
+    if (!onSendToKevsrobots) return
+    const out = await renderExport().catch(() => null)
+    onSendToKevsrobots(out?.svg ?? null)
+  }
+
+  // The drawing as a standalone SVG string, framed to its content.
+  const renderExport = async (): Promise<{
+    svg: string
+    width: number
+    height: number
+    base: string
+    clear: boolean
+  } | null> => {
     const svg = svgRef.current
-    if (!svg) return
+    if (!svg) return null
     // The webfont, inlined, BEFORE the fit/serialise/restore below — awaiting
     // between them would let the user see the fitted frame paint. Part labels
     // and pin names are laid out against Plus Jakarta Sans / IBM Plex Mono, and
@@ -2527,19 +2559,14 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
       fontCss
     })
     flushSync(() => setView(prev))
-    if (!res) return
+    if (!res) return null
     const base =
       (robot.name?.trim() || 'board').replace(/[^\w.-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '').toLowerCase() || 'board'
     // The part photos too: on the web build they are hashed build assets named
     // by URL, which the sandboxed `<img>` cannot fetch — the board would export
     // without its own picture. After the restore above, so this await is free.
     const svgStr = await inlineImageHrefs(res.svg)
-    // A PDF page can't be see-through: white behind a transparent drawing.
-    exportSvgString(svgStr, fmt, res.width, res.height, base, clear ? '#ffffff' : undefined).catch((err) => {
-      // Don't fail silently — a swallowed rejection here is exactly what made
-      // PNG/PDF "do nothing" before. Surface it so the cause is visible.
-      console.error(`Board export (${fmt}) failed:`, err)
-    })
+    return { svg: svgStr, width: res.width, height: res.height, base, clear }
   }
 
   // A safe, lower-cased file stem from the project name (shared with image export).
@@ -3865,6 +3892,14 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
                   <button type="button" role="menuitem" className="wc__export-item" onClick={() => doExportMarkdown('pinouts')}>
                     Pinouts (Markdown)
                   </button>
+                  {onSendToKevsrobots && (
+                    <>
+                      <span className="wc__export-sep" role="separator" />
+                      <button type="button" role="menuitem" className="wc__export-item" onClick={() => void doSendToKevsrobots()}>
+                        Send to kevsrobots…
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>

@@ -110,6 +110,7 @@ import type { BundledPartStatus } from '../shared/bundled-seed'
 import type { RobotDefinition, RobotPart } from '../shared/robot'
 import type { InstrumentWindowPayload } from '../shared/instrument-window'
 import type { BugReportPayload, BugReportResult } from '../main/feedback/ipc'
+import type { KevsrobotsApi, KrSendWiring } from '../shared/kevsrobots-account'
 
 /** The active-file snapshot the main renderer streams to the Board View window. */
 export interface BoardSourcePayload {
@@ -887,6 +888,8 @@ const git = {
   /** Current branch name (undefined when detached / no commits). */
   currentBranch: (): Promise<string | undefined> =>
     unwrap(ipcRenderer.invoke('git:currentBranch')),
+  /** The `origin` remote's URL, or null (#1310: the project's GitHub link). */
+  originUrl: (): Promise<string | null> => unwrap(ipcRenderer.invoke('git:originUrl')),
   /** List local branches plus the current one. */
   listBranches: (): Promise<GitBranchList> => unwrap(ipcRenderer.invoke('git:listBranches')),
   /** Check out an existing branch. */
@@ -1447,6 +1450,19 @@ const robot = {
 
 // Minimal, typed API exposed to the renderer. This establishes the IPC
 // pattern that later feature work will extend.
+/**
+ * Sign in with kevsrobots (#1310): optional, only for sending wiring to a
+ * kevsrobots project. Sign-in runs in main (loopback redirect, tokens in the
+ * OS keychain); the renderer never sees a token.
+ */
+const kevsrobots: KevsrobotsApi = {
+  status: () => ipcRenderer.invoke('kevsrobots:status'),
+  signIn: () => ipcRenderer.invoke('kevsrobots:signIn'),
+  signOut: () => ipcRenderer.invoke('kevsrobots:signOut'),
+  listProjects: () => ipcRenderer.invoke('kevsrobots:listProjects'),
+  sendWiring: (payload: KrSendWiring) => ipcRenderer.invoke('kevsrobots:sendWiring', payload)
+}
+
 /** In-app bug reporting (#206): submit the Report Bug form to the feedback API. */
 const feedback = {
   submitBugReport: (payload: BugReportPayload): Promise<BugReportResult> =>
@@ -1534,6 +1550,8 @@ const api = {
     ipcRenderer.invoke('app:captureScreenshot'),
   /** In-app bug reporting (#206). */
   feedback,
+  /** Optional Sign in with kevsrobots + Send to kevsrobots (#1310). */
+  kevsrobots,
   /** Open an http(s) URL externally in the default browser. */
   openExternal: (url: string): Promise<void> =>
     ipcRenderer.invoke('app:openExternal', url),
