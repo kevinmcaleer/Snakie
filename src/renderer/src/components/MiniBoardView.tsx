@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -30,6 +31,9 @@ import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { useAnimatedNumber } from '../hooks/useAnimatedNumber'
 import { isVirtualPort } from '../../../shared/virtual-device'
+import { useFocusedIdentifier } from './code-focus'
+import { getActiveEditor } from './editorBridge'
+import { definitionOf } from './python-definitions'
 import './MiniBoardView.css'
 
 /** Shared with BoardView/BoardGraph so the full viewer adopts the same board. */
@@ -79,7 +83,16 @@ function pinEdge(e: PadPoint['edge']): 'left' | 'right' | 'top' | 'bottom' {
  * from the pin: the grey GPIO box sits next to the pad, then the silk label, then
  * the code variable — mirrored for each facing (#…).
  */
-function PinAnnotation({ u }: { u: UsedPad }): JSX.Element {
+function PinAnnotation({
+  u,
+  focus,
+  onClick
+}: {
+  u: UsedPad
+  /** 'on' when the editor's cursor is on this pin's variable, 'off' when it is on another's. */
+  focus?: 'on' | 'off'
+  onClick?: () => void
+}): JSX.Element {
   const px = u.p.x
   const py = u.p.y
   // Prefer the physical board pin number; fall back to GPIO for built-in boards
@@ -161,10 +174,18 @@ function PinAnnotation({ u }: { u: UsedPad }): JSX.Element {
   }
 
   return (
-    <>
+    <g
+      className={focus === 'on' ? 'pcv__pin--focus' : focus === 'off' ? 'pcv__pin--dim' : undefined}
+      onClick={onClick}
+      style={onClick ? { cursor: 'pointer' } : undefined}
+    >
       {body}
       <circle cx={px} cy={py} r={PAD_R} fill={u.color} stroke="#fff" strokeWidth="1.8" />
-    </>
+      {focus === 'on' && (
+        <circle cx={px} cy={py} r={PAD_R * 2} className="pcv__focus-ring" stroke={u.color} />
+      )}
+      {onClick && <circle cx={px} cy={py} r={PAD_R * 1.8} fill="transparent" className="pcv__pin-hit" />}
+    </g>
   )
 }
 
@@ -448,6 +469,53 @@ export function MiniBoardView({
     return m
   }, [pads, usedByKey])
 
+  // Code ↔ board link: the pins whose variable the editor's cursor is on.
+  const focusedName = useFocusedIdentifier()
+  const focusedPins = useMemo(() => {
+    const set = new Set<number>()
+    if (!focusedName) return set
+    pinVars.forEach((v, i) => {
+      if (v.variable === focusedName) set.add(i)
+    })
+    return set
+  }, [pinVars, focusedName])
+  const anyFocused = !!focusedName && usedList.some((u) => u.variable === focusedName)
+
+  // Bring the spotlighted pin into the mini board's viewport: the board is
+  // usually zoomed past its own height, so the pin can be scrolled out of sight.
+  // Only this scroller moves — `scrollIntoView` would scroll the page too.
+  useEffect(() => {
+    if (!anyFocused) return
+    const scroller = scrollRef.current
+    const el = scroller?.querySelector('.pcv__pin--focus')
+    if (!scroller || !el) return
+    const s = scroller.getBoundingClientRect()
+    const r = el.getBoundingClientRect()
+    const margin = 12
+    let dy = 0
+    if (r.top < s.top + margin) dy = r.top - s.top - margin
+    else if (r.bottom > s.bottom - margin) dy = r.bottom - s.bottom + margin
+    let dx = 0
+    if (r.left < s.left + margin) dx = r.left - s.left - margin
+    else if (r.right > s.right - margin) dx = r.right - s.right + margin
+    if (dx || dy) scroller.scrollBy({ left: dx, top: dy, behavior: 'smooth' })
+  }, [anyFocused, focusedName, focusedPins])
+
+  // And back: clicking a used pin puts the editor's cursor on the line that
+  // defines its variable (which in turn spotlights the pin).
+  const revealVariable = useCallback(
+    (variable: string) => {
+      const editor = getActiveEditor()
+      if (!editor || !variable) return
+      const def = definitionOf(source, variable, Number.MAX_SAFE_INTEGER)
+      if (!def) return
+      editor.setPosition({ lineNumber: def.line, column: def.column })
+      editor.revealLineInCenterIfOutsideViewport(def.line)
+      editor.focus()
+    },
+    [source]
+  )
+
   // Full pinout (#…): the mini board is normally a USED-pin summary, which isn't
   // enough to answer "am I on the right I²C pins?" without opening the Board
   // Viewer. Hovering the board reveals every pin's number, name, GP<n> and
@@ -679,6 +747,8 @@ export function MiniBoardView({
               box={box}
               boxedPins={showPinout ? true : new Set(pinVars.keys())}
               pinVariables={pinVars}
+              focusedPins={focusedPins}
+              onPinClick={isPython ? (i) => revealVariable(pinVars.get(i)?.variable ?? '') : undefined}
               capsPins={showPinout ? 'all' : undefined}
             />
           ) : (
@@ -706,7 +776,14 @@ export function MiniBoardView({
                 if (!u) {
                   return <circle key={`p${i}`} cx={p.x} cy={p.y} r={2.6} className="mini-board__hole" />
                 }
-                return <PinAnnotation key={`p${i}`} u={u} />
+                return (
+                  <PinAnnotation
+                    key={`p${i}`}
+                    u={u}
+                    focus={anyFocused ? (u.variable === focusedName ? 'on' : 'off') : undefined}
+                    onClick={u.variable ? () => revealVariable(u.variable) : undefined}
+                  />
+                )
               })}
             </>
           )}

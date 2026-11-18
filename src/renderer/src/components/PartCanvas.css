@@ -651,3 +651,47 @@
     opacity: 0.45;
   }
 }
+
+/* Code ↔ board link: the pin whose variable the editor's cursor is on. A ring
+   on the pad, its annotation lifted with a glow, and the other used pins dimmed
+   so the eye lands on the one that matters. */
+.pcv__focus-ring {
+  fill: none;
+  stroke-width: 2.4;
+  pointer-events: none;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pcv-focus-pulse 1.4s ease-in-out infinite;
+}
+.pcv__pin--focus text {
+  font-weight: 700;
+}
+.pcv__pin--focus {
+  filter: drop-shadow(0 0 3px rgba(255, 210, 120, 0.85));
+}
+.pcv__pin--dim {
+  opacity: 0.4;
+  transition: opacity 120ms ease-out;
+}
+@keyframes pcv-focus-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.55;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pcv__focus-ring {
+    animation: none;
+  }
+}
+/* The one hit target on a board render whose container is pointer-events:none
+   (the mini board): a used pad, which jumps the editor to its variable. */
+.pcv__pin-hit {
+  pointer-events: all;
+  cursor: pointer;
+}
