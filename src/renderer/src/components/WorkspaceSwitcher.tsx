@@ -71,6 +71,19 @@ export function WorkspaceSwitcher(): JSX.Element {
           </Fragment>
         ))}
       </div>
+      {/* Small screens: the segments become one dropdown (CSS picks which shows). */}
+      <select
+        className="ws-switcher__select"
+        aria-label="Workspace"
+        value={layout.active}
+        onChange={(e) => layout.switchWorkspace(e.target.value as (typeof WORKSPACE_IDS)[number])}
+      >
+        {VISIBLE_WORKSPACES.map((id) => (
+          <option key={id} value={id}>
+            {WORKSPACE_INFO[id].label}
+          </option>
+        ))}
+      </select>
     </div>
   )
 }

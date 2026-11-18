@@ -106,3 +106,141 @@
   border-color: var(--shellbd, var(--border));
   background: var(--card, var(--bg-elevated));
 }
+
+/* ── Small screens (layout C: editor first + pull-up sheet) ─────────────────
+   `.shell[data-size]` is set from useViewportSize(): wide | compact | phone.
+   Compact (≤1100px) and phone (≤640px) share everything here except the
+   phone-only rules further down. */
+
+/* Mobile browsers: size to the visible viewport, not the one behind the URL bar. */
+@supports (height: 100dvh) {
+  .shell {
+    height: 100dvh;
+  }
+}
+
+/* The Files panel becomes a drawer over the editor instead of a column. RRP
+   still owns its size; out of flow, the remaining panels share the full width. */
+.shell:not([data-size='wide']) .shell__panels > .resize-handle--files {
+  display: none;
+}
+.shell[data-files-open] .shell__panels > [data-panel-id]:first-child {
+  position: absolute !important;
+  top: 6px;
+  bottom: 6px;
+  left: 6px;
+  width: min(320px, 86vw);
+  flex: none !important;
+  z-index: 20;
+  filter: drop-shadow(8px 0 18px rgba(40, 30, 10, 0.22));
+}
+.shell__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 19;
+  padding: 0;
+  border: none;
+  background: rgba(30, 25, 10, 0.32);
+  cursor: pointer;
+}
+
+/* The console panel becomes the pull-up sheet: its card moves down under the
+   sheet's tab bar (CompactSheet.css) and joins it as one rounded shape. */
+.shell:not([data-size='wide']) .shell__vgroup .region--shell {
+  top: 49px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+.shell:not([data-size='wide']) .shell__editor-region {
+  bottom: 0;
+}
+
+/* Workspace switcher: one dropdown instead of four segments. */
+.ws-switcher__select {
+  display: none;
+}
+.shell:not([data-size='wide']) .ws-switcher__seg {
+  display: none;
+}
+.shell:not([data-size='wide']) .ws-switcher__select {
+  display: block;
+  min-height: 36px;
+  padding: 0 0.75rem;
+  font-family: var(--font-ui, sans-serif);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ongold, var(--text));
+  background: var(--grad-gold, var(--bg-elevated));
+  border: 1px solid var(--gold, var(--border));
+  border-radius: 10px;
+  cursor: pointer;
+}
+.shell:not([data-size='wide']) .toolbar__side--end {
+  display: none;
+}
+.shell:not([data-size='wide']) .ws-switcher {
+  margin-left: auto;
+}
+
+/* ── Phones ── */
+.shell:not([data-size='phone']) .toolbar__menu {
+  display: none;
+}
+.shell[data-size='phone'] .toolbar__menu {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 40px;
+}
+.shell[data-size='phone'] .toolbar {
+  gap: 0.35rem;
+  padding-left: 0.4rem;
+  padding-right: 0.4rem;
+}
+.shell[data-size='phone'] .toolbar__side {
+  gap: 0.35rem;
+  min-width: 0;
+}
+.shell[data-size='phone'] .toolbar__wordmark,
+.shell[data-size='phone'] .toolbar__divider,
+.shell[data-size='phone'] .toolbar__btn-label,
+.shell[data-size='phone'] .toolbar__side > .toolbar__group:has(.toolbar__seg) {
+  display: none;
+}
+.shell[data-size='phone'] .toolbar .btn--primary,
+.shell[data-size='phone'] .toolbar .btn--danger {
+  min-width: 44px;
+  min-height: 40px;
+  justify-content: center;
+}
+
+/* The activity bar folds into the ☰ drawer. */
+.shell__main {
+  position: relative;
+}
+.shell[data-size='phone'] .activitybar {
+  display: none;
+}
+.shell[data-size='phone'][data-menu-open] .activitybar {
+  display: flex;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 21;
+}
+.shell[data-size='phone'][data-menu-open][data-files-open]
+  .shell__panels
+  > [data-panel-id]:first-child {
+  left: 56px;
+  width: min(300px, calc(100vw - 64px));
+}
+
+/* The console's own header: one row that scrolls sideways, not three. */
+.shell[data-size='phone'] .region--shell .shell-actions {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  min-width: 0;
+}

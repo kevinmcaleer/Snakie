@@ -25,6 +25,7 @@ const RobotDockPanel = lazy(() => import('./RobotDockPanel'))
 // key) — lazy so the canvas editor + codecs load only when opened.
 const SpriteEditor = lazy(() => import('./SpriteEditor').then((m) => ({ default: m.SpriteEditor })))
 import { MiniViewer } from './MiniViewer'
+import { MiniBoardView } from './MiniBoardView'
 import { useTheme } from '../hooks/useTheme'
 import { Toolbar } from './Toolbar'
 import { ActivityBar, ActivityView, DESKTOP_ONLY_VIEWS } from './ActivityBar'
@@ -118,6 +119,8 @@ import { reporter } from '../lib/report-error'
 import { readRobotModel } from '../../../shared/krf'
 import { isUrdfPath } from './urdf-target'
 import { useEditorSettings } from '../store/settings'
+import { useViewportSize } from '../hooks/useViewportSize'
+import { BoardPip, CompactSheet, type SheetTab } from './CompactSheet'
 import './AppShell.css'
 
 /**
@@ -370,6 +373,8 @@ export function AppShell(): JSX.Element {
   // Blocks is Code's shape with a different emphasis, not a solo surface —
   // that's the point of the fourth segment (#1009).
   const soloWorkspace = robotMain || layout.active === 'board'
+  const soloRef = useRef(soloWorkspace)
+  soloRef.current = soloWorkspace
   // A solo workspace hides the sidebar by default. ONLY a lesson (the Learn
   // tutorials or the Help library) shows there — opened from the activity bar, by
   // a help deep-link, or carried in by a tutorial that asked for this workspace
@@ -413,6 +418,52 @@ export function AppShell(): JSX.Element {
     const panel = ref.current
     if (panel && panel.isCollapsed()) panel.expand()
   }, [])
+
+  // --- Small screens (layout C: editor first + pull-up sheet) ----------------
+  // Below COMPACT_MAX_WIDTH the editor fills the width: Files slides over it as a
+  // drawer, and the console, board and instruments share one pull-up sheet (the
+  // console panel, with tabs) instead of the fixed-width dock on the right.
+  const viewport = useViewportSize()
+  const compact = viewport !== 'wide'
+  const compactRef = useRef(compact)
+  compactRef.current = compact
+  const [sheetTab, setSheetTab] = useState<SheetTab>('console')
+  const [pipHidden, setPipHidden] = useLocalStorage<boolean>('snakie.compact.pipHidden', false)
+  // Opening an instrument reveals the dock on a wide screen; on a small one the
+  // dock lives in the sheet, so show the sheet's Instruments tab instead.
+  const revealSheetInstruments = useCallback((): void => {
+    if (!compactRef.current) return
+    setSheetTab('instruments')
+    openPanel(shellRef)
+  }, [openPanel])
+  // Show a sheet tab, opening the sheet if it was collapsed.
+  const showSheetTab = useCallback(
+    (tab: SheetTab): void => {
+      setSheetTab(tab)
+      openPanel(shellRef)
+    },
+    [openPanel]
+  )
+  // The grip snaps the sheet between half height and tall (the editor keeps a
+  // strip at the top so you can still see where you are).
+  const snapSheet = useCallback((): void => {
+    const group = vGroupRef.current
+    if (!group) return
+    const [, sheet = 0] = group.getLayout()
+    group.setLayout(sheet < 60 ? [22, 78] : [55, 45])
+  }, [])
+  // Phones: the activity bar is folded into a drawer the toolbar's ☰ opens,
+  // together with the side panel.
+  const phone = viewport === 'phone'
+  const [menuOpen, setMenuOpen] = useState(false)
+  useEffect(() => {
+    if (!phone) setMenuOpen(false)
+  }, [phone])
+  // Entering a small layout closes the Files drawer, so the editor is what you
+  // see first rather than a drawer covering it.
+  useEffect(() => {
+    if (compact) filesRef.current?.collapse()
+  }, [compact])
 
   // A panel toggle (or activity click) while in focus mode simply LEAVES focus,
   // restoring the full Robot layout, rather than fighting the focus overrides.
@@ -1208,8 +1259,9 @@ export function AppShell(): JSX.Element {
       setKindVisible(kind, true)
       redockKind(kind)
       setDockOpen(true) // reveal the dock region
+      revealSheetInstruments()
     },
-    [setKindVisible, redockKind, setDockOpen]
+    [setKindVisible, redockKind, setDockOpen, revealSheetInstruments]
   )
   const revealForOpenRef = useRef(revealForOpen)
   revealForOpenRef.current = revealForOpen
@@ -1244,6 +1296,7 @@ export function AppShell(): JSX.Element {
     for (const id of ids) next[id] = true
     setVisibility(next)
     setDockOpen(true)
+    revealSheetInstruments()
     // And SCROLL IT INTO VIEW. The dock is a column with the mini board and the
     // always-on Plotter above, so a newly shown instrument lands below the fold
     // on a laptop screen — "opened" in the sense that it exists somewhere, which
@@ -1318,6 +1371,23 @@ export function AppShell(): JSX.Element {
     window.addEventListener('snakie:toggle-files', handler)
     return () => window.removeEventListener('snakie:toggle-files', handler)
   }, [toggle])
+
+  // The phone toolbar's ☰: open the activity bar and the side panel together
+  // (Electronics/Build have no side panel, so just the activity bar there).
+  useEffect(() => {
+    const handler = (): void => {
+      setMenuOpen((open) => {
+        const next = !open
+        if (!soloRef.current) {
+          if (next) filesRef.current?.expand()
+          else filesRef.current?.collapse()
+        }
+        return next
+      })
+    }
+    window.addEventListener('snakie:toggle-menu', handler)
+    return () => window.removeEventListener('snakie:toggle-menu', handler)
+  }, [])
 
   // Which view the left sidebar shows, driven by the ActivityBar — remembered
   // per workspace (part of the layout store).
@@ -1561,7 +1631,12 @@ export function AppShell(): JSX.Element {
   }, [])
 
   return (
-    <div className="shell">
+    <div
+      className="shell"
+      data-size={viewport}
+      data-files-open={compact && !filesCollapsed && !soloWorkspace ? '' : undefined}
+      data-menu-open={phone && menuOpen ? '' : undefined}
+    >
       {/* Top-of-screen manila notification offering a one-click install of the
           instrument library onto the connected board (#108). Topmost element of
           `.shell` (a column flex) so it reads as a full-width banner above the
@@ -1713,6 +1788,11 @@ export function AppShell(): JSX.Element {
                         onToggleChat={IS_WEB ? undefined : () => toggle(rightRef)}
                       />
                     </div>
+                    {compact && dockWorkspace && !focus && !pipHidden && sheetTab !== 'board' && (
+                      <BoardPip onOpen={() => showSheetTab('board')} onHide={() => setPipHidden(true)}>
+                        <MiniBoardView source={boardSource} isPython={boardIsPython} />
+                      </BoardPip>
+                    )}
                   </Panel>
 
                   <PanelResizeHandle className="resize-handle resize-handle--horizontal" />
@@ -1733,6 +1813,32 @@ export function AppShell(): JSX.Element {
                         if (!exitFocus()) toggle(shellRef)
                       }}
                     />
+                    {compact && (
+                      <CompactSheet
+                        tab={dockWorkspace ? sheetTab : 'console'}
+                        onTab={(tab) => {
+                          setSheetTab(tab)
+                          if (tab === 'board') setPipHidden(false)
+                        }}
+                        onGrip={snapSheet}
+                        board={
+                          dockWorkspace ? (
+                            <MiniViewer source={boardSource} isPython={boardIsPython} />
+                          ) : null
+                        }
+                        instruments={
+                          dockWorkspace ? (
+                            <InstrumentDockRegion
+                              host={instruments}
+                              vis={visibility}
+                              inUse={inUse}
+                              onToggleVisible={toggleVisible}
+                              hideMiniBoard
+                            />
+                          ) : null
+                        }
+                      />
+                    )}
                   </Panel>
                 </PanelGroup>
                 {/* Reopen rail (#592): when the console is collapsed to nothing, a
@@ -1794,6 +1900,19 @@ export function AppShell(): JSX.Element {
           {/* Electronics + Build overlay the Code panel group (which stays mounted
             underneath). A lesson — opened here, deep-linked, or carried in by a
             tutorial that asked for this workspace — shows in a left panel. */}
+          {/* Small screens: the Files drawer floats over the editor; tapping the
+              dimmed editor closes it. */}
+          {compact && ((!filesCollapsed && !soloWorkspace) || (phone && menuOpen)) && (
+            <button
+              type="button"
+              className="shell__scrim"
+              onClick={() => {
+                filesRef.current?.collapse()
+                setMenuOpen(false)
+              }}
+              aria-label="Close the side panel"
+            />
+          )}
           {soloWorkspace && (
             <div className="shell__solo shell__solo--overlay">
               {soloLessonOpen && (
@@ -1829,7 +1948,7 @@ export function AppShell(): JSX.Element {
             chat) never resizes the other (two collapsible panels in one group
             redistribute each other's freed space). Shown by the toolbar
             Instruments button or an incoming `instruments:open`. */}
-        {instrumentsVisible && dockWorkspace && (
+        {instrumentsVisible && dockWorkspace && !compact && (
           <aside className="shell__dock shell__dock--mini" aria-label="Instrument dock">
             {/* Per-panel collapse (#592) — the dock hides itself; the toolbar
                 Instruments toggle is gone, so the reopen rail below takes over. */}
@@ -1870,7 +1989,7 @@ export function AppShell(): JSX.Element {
         {/* Reopen rail (#592): when the dock is hidden, a slim clickable rail at
             the far right is its own reopen affordance. Code only — Electronics and
             Build have no instrument dock (the Board View / URDF editor fill the area). */}
-        {!dockOpen && !focus && dockWorkspace && (
+        {!dockOpen && !focus && dockWorkspace && !compact && (
           <button
             type="button"
             className="shell__dock-rail"

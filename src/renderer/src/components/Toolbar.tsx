@@ -276,6 +276,19 @@ export function Toolbar(): JSX.Element {
           that's balanced by an empty side on the right, so the workspace
           switcher sits CENTRED at the top of the toolbar (not shoved right). */}
       <div className="toolbar__side">
+        {/* Phones: the activity bar folds away; this opens it with the side
+            panel as one drawer (CSS shows it only at phone width). */}
+        <button
+          type="button"
+          className="btn btn--ghost btn--icon toolbar__menu"
+          onClick={() => window.dispatchEvent(new CustomEvent('snakie:toggle-menu'))}
+          title="Menu"
+          aria-label="Open the menu"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+          </svg>
+        </button>
         <div className="toolbar__brand">
           {SNAKE_LOGO}
           <span className="toolbar__wordmark">Snakie</span>
@@ -335,7 +348,7 @@ export function Toolbar(): JSX.Element {
             <span className="btn__glyph" aria-hidden="true">
               ▶
             </span>
-            <span>Run</span>
+            <span className="toolbar__btn-label">Run</span>
           </button>
           <button
             type="button"
@@ -348,7 +361,7 @@ export function Toolbar(): JSX.Element {
             <span className="btn__glyph" aria-hidden="true">
               {running ? '■' : '⟳'}
             </span>
-            <span>{running ? 'Stop' : 'Reset'}</span>
+            <span className="toolbar__btn-label">{running ? 'Stop' : 'Reset'}</span>
           </button>
         </div>
       </div>
