@@ -136,6 +136,7 @@ export type CanvasTool =
   | 'circle'
   | 'cpoly'
   | 'erasebg'
+  | 'crop'
 
 /** Which layers are currently shown (driven by the Layers panel). */
 export interface LayerVisibility {
@@ -245,6 +246,9 @@ export interface PartCanvasProps {
    *  coords (nx, ny) while the `erasebg` tool is active. The editor maps it to an
    *  image pixel and flood-fills the background there. */
   onEraseImageAt?: (nx: number, ny: number) => void
+  /** Crop: a box was dragged over the image (normalised board coords, any corner
+   *  order) while the `crop` tool is active. The editor keeps only that part. */
+  onCropImage?: (sel: { x0: number; y0: number; x1: number; y1: number }) => void
   /** Toggle the pin-spacing grid (the zoom-overlay grid button). */
   onToggleGrid?: () => void
   /** Toggle snap-to-grid (the zoom-overlay snap button). */
@@ -390,6 +394,7 @@ interface Drag {
     | 'create-array'
     | 'servo-strip'
     | 'marquee'
+    | 'crop'
   sel: CanvasSelection
   corner?: number
   startNX: number
@@ -442,6 +447,7 @@ export function PartCanvas({
   onSelect,
   onNotify,
   onEraseImageAt,
+  onCropImage,
   onToggleGrid,
   onToggleSnap,
   resetSignal
@@ -466,6 +472,8 @@ export function PartCanvas({
   // gesture, same alignment toolbar.
   const [selComponents, setSelComponents] = useState<{ type: GroupComponentKind; index: number }[]>([])
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
+  // The box being dragged with the crop tool (normalised board coords).
+  const [cropBox, setCropBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
   // Smart alignment guides (#169): green center-lines shown while dragging a pin /
   // hole that lines up with another's centre. Normalised x (vertical line) / y.
   const [guides, setGuides] = useState<{ x?: number; y?: number } | null>(null)
@@ -2333,6 +2341,13 @@ export function PartCanvas({
       else onNotify?.('Click on the image to erase its background there.')
       return
     }
+    // Crop: drag a box over the photo; the part outside it is cut away on release.
+    if (tool === 'crop') {
+      if (locked.image || !faceImageData) return
+      dragRef.current = { kind: 'crop', sel: null, startNX: nx, startNY: ny, ox: nx, oy: ny }
+      setCropBox({ x0: nx, y0: ny, x1: nx, y1: ny })
+      return
+    }
     // Creation tools no-op on a locked layer.
     if (tool === 'pin') return locked.pins ? undefined : addPin(nx, ny)
     if (tool === 'servo-header') {
@@ -2668,6 +2683,10 @@ export function PartCanvas({
       setMarquee({ x0: d.startNX, y0: d.startNY, x1: nx, y1: ny })
       return
     }
+    if (d.kind === 'crop') {
+      setCropBox({ x0: d.startNX, y0: d.startNY, x1: nx, y1: ny })
+      return
+    }
     if (d.kind === 'create-array' && d.anchor) {
       // Lay pins along the dominant drag axis at array positions (preview only;
       // committed on pointer-up).
@@ -2891,6 +2910,18 @@ export function PartCanvas({
     // Servo-header strip → place N headers in a row (N=1 for a plain click).
     if (d.kind === 'servo-strip') {
       addServoHeaders(d.startNX, d.startNY, strip?.n ?? 1)
+      return
+    }
+
+    // Crop → hand the dragged box to the editor (it clips it to the photo).
+    if (d.kind === 'crop') {
+      const c = cropBox
+      setCropBox(null)
+      if (!c) return
+      // A click, or a sliver, isn't a crop: say how it works rather than wiping the photo.
+      const tooSmall = Math.abs(c.x1 - c.x0) * box.w < 6 || Math.abs(c.y1 - c.y0) * box.h < 6
+      if (tooSmall) onNotify?.('Drag a box over the part of the photo you want to keep.')
+      else onCropImage?.(c)
       return
     }
 
@@ -3675,6 +3706,33 @@ export function PartCanvas({
               />
             )
           })}
+        {interactive && cropBox && (
+          <g className="pcv__crop" style={{ pointerEvents: 'none' }}>
+            {/* Shade what will be cut away, so the kept part reads at a glance. */}
+            <path
+              className="pcv__crop-shade"
+              fillRule="evenodd"
+              d={(() => {
+                const ox = px(layer.x)
+                const oy = py(layer.y)
+                const ow = layer.w * box.w
+                const oh = layer.h * box.h
+                const kx = px(Math.min(cropBox.x0, cropBox.x1))
+                const ky = py(Math.min(cropBox.y0, cropBox.y1))
+                const kw = Math.abs(cropBox.x1 - cropBox.x0) * box.w
+                const kh = Math.abs(cropBox.y1 - cropBox.y0) * box.h
+                return `M${ox} ${oy}h${ow}v${oh}h${-ow}z M${kx} ${ky}h${kw}v${kh}h${-kw}z`
+              })()}
+            />
+            <rect
+              x={px(Math.min(cropBox.x0, cropBox.x1))}
+              y={py(Math.min(cropBox.y0, cropBox.y1))}
+              width={Math.abs(cropBox.x1 - cropBox.x0) * box.w}
+              height={Math.abs(cropBox.y1 - cropBox.y0) * box.h}
+              className="pcv__crop-box"
+            />
+          </g>
+        )}
         {interactive && marquee && (
           <rect
             x={px(Math.min(marquee.x0, marquee.x1))}

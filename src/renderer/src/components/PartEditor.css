@@ -1486,6 +1486,33 @@
   cursor: default;
 }
 
+/* "Remove background after crop" checkbox row inside the BG popup. */
+.pe__bgcheck {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.1rem 0.5rem 0.25rem 1.1rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.pe__bgcheck input {
+  margin: 0;
+  accent-color: var(--accent, #2f6b2a);
+}
+
+:root[data-theme='skeuomorph'] .pe__bgcheck input {
+  accent-color: #9a6b1e;
+}
+
+.pe__bgmenu-sep {
+  margin: 0.2rem 0.3rem;
+  border: none;
+  border-top: var(--border-w) solid var(--border);
+}
+
 /* Tolerance slider row inside the BG popup. */
 .pe__bgtol {
   display: flex;
