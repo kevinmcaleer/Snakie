@@ -174,6 +174,15 @@ function PinAnnotation({ u }: { u: UsedPad }): JSX.Element {
  * the instrument deck for the session only, and is intentionally NOT persisted.
  */
 const DEFAULT_MINI_SCROLL_H = 190
+
+/** Touch: how long a press must last to count as press-and-hold (ms). */
+export const PINOUT_HOLD_MS = 350
+/** Touch: how far (px) a finger may drift and still count as a tap/hold, not a pan. */
+export const TOUCH_TAP_SLOP = 10
+/** True when a touch moved little enough to be a tap or hold rather than a pan. */
+export function isTouchTap(dx: number, dy: number): boolean {
+  return Math.hypot(dx, dy) <= TOUCH_TAP_SLOP
+}
 const MIN_MINI_SCROLL_H = 90
 const MAX_MINI_SCROLL_H = 640
 
@@ -448,6 +457,40 @@ export function MiniBoardView({
   const [pinoutHover, setPinoutHover] = useState(false)
   const showPinout = pinoutPinned || pinoutHover
 
+  // Touch has no hover: a finger fires pointerenter on press and pointerleave on
+  // lift, so the labels would only flash. On touch, a TAP toggles them and a
+  // press-and-hold shows them as soon as the hold registers (they stay until the
+  // next tap). A drag that turns into a scroll/pan cancels, so panning a zoomed
+  // board never toggles anything.
+  const touchRef = useRef<{ x: number; y: number; held: boolean; timer: number } | null>(null)
+  const endTouch = (): void => {
+    if (touchRef.current) window.clearTimeout(touchRef.current.timer)
+    touchRef.current = null
+  }
+  useEffect(() => endTouch, [])
+  const onBoardPointerDown = (e: ReactPointerEvent): void => {
+    if (e.pointerType !== 'touch') return
+    endTouch()
+    const t = { x: e.clientX, y: e.clientY, held: false, timer: 0 }
+    t.timer = window.setTimeout(() => {
+      t.held = true
+      setPinoutHover(true)
+    }, PINOUT_HOLD_MS)
+    touchRef.current = t
+  }
+  const onBoardPointerMove = (e: ReactPointerEvent): void => {
+    const t = touchRef.current
+    if (e.pointerType !== 'touch' || !t) return
+    if (!isTouchTap(e.clientX - t.x, e.clientY - t.y)) endTouch()
+  }
+  const onBoardPointerUp = (e: ReactPointerEvent): void => {
+    const t = touchRef.current
+    if (e.pointerType !== 'touch' || !t) return
+    const tap = !t.held && isTouchTap(e.clientX - t.x, e.clientY - t.y)
+    endTouch()
+    if (tap) setPinoutHover((v) => !v)
+  }
+
   // Frame whatever is actually drawn — measured from the live content's bounding
   // box (so the authored body's image/shapes + every boxed pin label is included
   // and nothing clips), then scaled to fill the dock (CSS). Falls back to the
@@ -602,8 +645,13 @@ export function MiniBoardView({
         className="mini-board__scroll"
         ref={scrollRef}
         style={{ height: scrollH }}
-        onPointerEnter={() => setPinoutHover(true)}
-        onPointerLeave={() => setPinoutHover(false)}
+        onPointerEnter={(e) => e.pointerType !== 'touch' && setPinoutHover(true)}
+        onPointerLeave={(e) => e.pointerType !== 'touch' && setPinoutHover(false)}
+        onPointerDown={onBoardPointerDown}
+        onPointerMove={onBoardPointerMove}
+        onPointerUp={onBoardPointerUp}
+        onPointerCancel={endTouch}
+        onContextMenu={(e) => e.preventDefault()}
       >
       <svg
         className="mini-board__svg"

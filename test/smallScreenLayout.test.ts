@@ -5,6 +5,7 @@ import {
   viewportSizeFor
 } from '../src/renderer/src/hooks/useViewportSize'
 import { easeOutCubic, tweenValue } from '../src/renderer/src/hooks/useAnimatedNumber'
+import { isTouchTap, TOUCH_TAP_SLOP } from '../src/renderer/src/components/MiniBoardView'
 
 describe('viewportSizeFor (small-screen layout)', () => {
   it('keeps the desktop layout above the compact breakpoint', () => {
@@ -53,5 +54,15 @@ describe('tweenValue (mini board smooth zoom)', () => {
     expect(easeOutCubic(-1)).toBe(0)
     expect(easeOutCubic(2)).toBe(1)
     expect(easeOutCubic(0.5)).toBeCloseTo(0.875)
+  })
+})
+
+describe('mini board touch pinout', () => {
+  it('treats a small drift as a tap/hold and a longer drag as a pan', () => {
+    expect(isTouchTap(0, 0)).toBe(true)
+    expect(isTouchTap(6, 6)).toBe(true)
+    expect(isTouchTap(TOUCH_TAP_SLOP, 0)).toBe(true)
+    expect(isTouchTap(TOUCH_TAP_SLOP + 1, 0)).toBe(false)
+    expect(isTouchTap(0, -40)).toBe(false)
   })
 })
