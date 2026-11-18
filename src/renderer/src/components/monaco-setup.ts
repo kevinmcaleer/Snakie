@@ -18,6 +18,7 @@
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api'
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import { registerMicropythonCompletions } from './micropython-completions'
+import { registerPythonNavigation } from './python-navigation'
 
 self.MonacoEnvironment = {
   getWorker(): Worker {
@@ -30,3 +31,7 @@ self.MonacoEnvironment = {
 // idempotent (guarded against HMR double-registration inside the function), so
 // it is safe even though this module may be re-evaluated by Vite.
 registerMicropythonCompletions(monaco)
+
+// Go to Definition (right-click, F12, Cmd/Ctrl+click) and the "defined on
+// line N" hover for the user's own names. Idempotent like the above.
+registerPythonNavigation(monaco)
