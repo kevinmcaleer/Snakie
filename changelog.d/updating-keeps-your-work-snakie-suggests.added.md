@@ -1,0 +1,1 @@
+- **Updating keeps your work.** When a new version is out, Snakie now suggests a reload (web) or restart (desktop) instead of reloading mid-session, and every open tab, including unsaved changes, untitled files and files open from the board, comes back afterwards.

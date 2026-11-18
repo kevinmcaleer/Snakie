@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { UpdateStatus } from '../../../preload/index.d'
 import { friendlyUpdateError, RELEASES_URL } from './updateButton'
-import { setUnsavedWorkProbe } from '../lib/unsaved-work'
+import { applyUpdateKeepingWork, setUnsavedWorkProbe } from '../lib/unsaved-work'
 import { useWorkspaceOptional } from '../store/workspace'
 import './UpdateNotifier.css'
 
@@ -85,19 +85,24 @@ export function UpdateNotifier(): JSX.Element | null {
       // code is already served and precached, and applying it is a reload. Saying
       // "restart" in a browser tab would send the reader looking for a menu item
       // that isn't there (#971).
+      //
+      // Either way the open tabs — unsaved changes too — are snapshotted first
+      // and come back afterwards (`applyUpdateKeepingWork`), so say so: the
+      // reason people put off an update is the fear of losing what they're in
+      // the middle of.
       message = isWeb
         ? status.version
-          ? `New version available (v${status.version}) — reload to update`
-          : 'New version available — reload to update'
+          ? `New version available (v${status.version}) — reload to update. Your open files and unsaved changes are kept.`
+          : 'New version available — reload to update. Your open files and unsaved changes are kept.'
         : status.version
-          ? `Update ready (v${status.version}) — restart to update`
-          : 'Update ready — restart to update'
+          ? `Update ready (v${status.version}) — restart to update. Your open files and unsaved changes are kept.`
+          : 'Update ready — restart to update. Your open files and unsaved changes are kept.'
       action = (
         <button
           type="button"
           className="update-notifier__action"
           onClick={() => {
-            void window.api.updates.quitAndInstall()
+            void applyUpdateKeepingWork(() => window.api.updates.quitAndInstall())
           }}
         >
           {isWeb ? 'Reload' : 'Restart'}

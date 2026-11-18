@@ -35,6 +35,7 @@ import {
 import type { FirmwareCatalog, UpdateStatus } from '../../../preload/index.d'
 import { BulbIcon } from './ui-icons'
 import { SyncIndicator } from './SyncIndicator'
+import { applyUpdateKeepingWork } from '../lib/unsaved-work'
 import './StatusBar.css'
 
 /**
@@ -382,7 +383,8 @@ export function StatusBar({
   const updateView = updateButtonView(update, version)
   const onUpdateClick = (): void => {
     if (updateView.action === 'download') void window.api.updates.download()
-    else if (updateView.action === 'quitAndInstall') void window.api.updates.quitAndInstall()
+    else if (updateView.action === 'quitAndInstall')
+      void applyUpdateKeepingWork(() => window.api.updates.quitAndInstall())
   }
 
   // The plain version text is itself clickable: it runs the same user-initiated
