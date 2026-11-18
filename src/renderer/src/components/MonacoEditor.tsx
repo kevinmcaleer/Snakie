@@ -262,7 +262,12 @@ export function MonacoEditor(): JSX.Element {
       // AI ghost text (issue #82). The registered provider gates itself on the
       // enable toggle + a stored key, so leaving this on costs nothing when the
       // feature is off.
-      inlineSuggest: { enabled: true }
+      inlineSuggest: { enabled: true },
+      // Suggestions, parameter hints and hovers are drawn as fixed-position
+      // overlays so they sit on top of the surrounding panes instead of being
+      // clipped at the editor's edges (user report: the I2C signature help was
+      // cut off by the top of the editor).
+      fixedOverflowWidgets: true
     })
     editorRef.current = editor
     // Publish this instance to the editor-access seam (issue #92) so the Find &
