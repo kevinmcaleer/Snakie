@@ -547,7 +547,6 @@
   border: none;
   background: linear-gradient(180deg, #5a5e68, #3a3d45);
   color: #ffd36b;
-  text-shadow: 0 0 6px rgba(255, 200, 80, 0.6);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.18),
     0 1px 2px rgba(0, 0, 0, 0.5);
@@ -1246,7 +1245,6 @@
   border: none;
   background: linear-gradient(180deg, #3d4047, #25272c);
   color: #ffd36b;
-  text-shadow: 0 0 6px rgba(255, 200, 80, 0.6);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.12),
     0 1px 2px rgba(0, 0, 0, 0.6);

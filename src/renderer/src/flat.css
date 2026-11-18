@@ -1,0 +1,700 @@
+/* ===========================================================================
+ * SNAKIE FLAT — the design system that follows Soft Shell (epic #573).
+ *
+ * Soft Shell gave every surface depth: gradients, glossy pills, bevels, stitched
+ * cards and drop shadows. Flat keeps Snakie's warm palette, fonts and green +
+ * amber identity and takes the depth out:
+ *
+ *   - Solid fills. No gradients, gloss, insets or bevels on anything that sits
+ *     in the layout. A shadow is only for things that float (menus, popovers).
+ *   - 1px hairlines (`--shellbd`) separate surfaces.
+ *   - 32px controls, 16px icons (20 on the rail), 6px control radius, 8px for
+ *     the one card. Toolbar 48px, status bar 24px.
+ *   - Colour carries meaning only: green runs / connects, red stops, amber marks
+ *     the current mode.
+ *   - Layout "C · one card for the work": the sidebars (files, dock) are flat
+ *     chrome and only the editor + console sit together in one rounded card.
+ *
+ * Spec and mockups: the "Snakie Flat design system" design canvas.
+ *
+ * HOW THIS FILE WINS. index.css and the component sheets style the chrome at up
+ * to five classes of specificity, skin by skin. Rather than editing ~270 skin
+ * rules in place, every chrome rule here is prefixed `:root:not(#flat)`: the
+ * `:not(#id)` adds one id's worth of specificity, so these out-rank any
+ * class-only rule regardless of load order, in both skins. `main.tsx` imports
+ * this file last. Theme-specific chrome uses
+ * `:root[data-theme='dark']:not(#flat)`.
+ * ========================================================================= */
+
+/* --- Tokens ------------------------------------------------------------- */
+
+/* Dark (the default skin when no data-theme is set). */
+:root,
+:root[data-theme='dark'] {
+  --bg: #141611;
+  --bg-elevated: #1b1e18;
+  --bg-sunken: #23271f;
+  --border: #2c3027;
+  --text: #e4e7df;
+  --text-muted: #a6ab9e;
+  --accent-2: #3fb97a;
+  --success: #3fb97a;
+  --danger: #c2412d;
+  --radius: 6px;
+  --pixel-shadow: none;
+  --pixel-shadow-active: none;
+  --toolbar-h: 48px;
+
+  --desk: #141611;
+  --shell: #141611;
+  --panel: #1b1e18;
+  --panel2: #23271f;
+  --shellbd: #2c3027;
+  --stitch: #2c3027;
+  --card: #23271f;
+  --editor: #171a14;
+  --line: #2c3027;
+  --head: #e4e7df;
+  --txt2: #a6ab9e;
+  --txt3: #9aa093;
+
+  --green: #3fb97a;
+  --greentext: #8fe6b6;
+  --greenpill: #1e3a2a;
+  --grad-run: #3fb97a;
+  --grad-danger: #c2412d;
+  --goldbg: #3a3018;
+  --goldink: #f0dca6;
+
+  /* Flat-only tokens */
+  --fl-border-strong: #3a3f35;
+  --fl-on-primary: #0f2a1b;
+  --fl-rail: #10120e;
+  --fl-rail-ink: #a6ab9e;
+  --fl-rail-on: #23271f;
+  --fl-rail-hover: rgba(255, 255, 255, 0.06);
+  --fl-float-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* Light. */
+:root[data-theme='skeuomorph'] {
+  --bg: #efeadf;
+  --bg-elevated: #f7f3ea;
+  --bg-sunken: #ebe5d8;
+  --border: #e2dccd;
+  --text: #24261f;
+  --text-muted: #5b5a4f;
+  --accent-2: #1d8150;
+  --success: #1d8150;
+  --danger: #c2412d;
+  --radius: 6px;
+  --pixel-shadow: none;
+  --pixel-shadow-active: none;
+  --toolbar-h: 48px;
+
+  --desk: #efeadf;
+  --shell: #efeadf;
+  --panel: #f7f3ea;
+  --panel2: #ebe5d8;
+  --shellbd: #e2dccd;
+  --stitch: #e2dccd;
+  --card: #fbf8f1;
+  --editor: #fbf8f1;
+  --line: #e2dccd;
+  --head: #24261f;
+  --txt2: #5b5a4f;
+  --txt3: #6b6858;
+
+  /* #1d8150 carries white text at 4.87:1 (the old #26a269 was 3.3:1). */
+  --green: #1d8150;
+  --greentext: #1c7a4d;
+  --greenpill: #e6f4ec;
+  --grad-run: #1d8150;
+  --grad-danger: #c2412d;
+  --goldbg: #f2e2b3;
+  --goldink: #6b4e17;
+
+  --fl-border-strong: #cfc7b3;
+  --fl-on-primary: #ffffff;
+  --fl-rail: #2b2e29;
+  --fl-rail-ink: #c9ccc4;
+  --fl-rail-on: #3a3e36;
+  --fl-rail-hover: rgba(255, 255, 255, 0.07);
+  --fl-float-shadow: 0 8px 24px rgba(36, 38, 31, 0.16);
+}
+
+/* --- Shell + toolbar ----------------------------------------------------- */
+
+:root:not(#flat) .shell,
+:root:not(#flat) .shell__main {
+  background: var(--shell);
+}
+
+:root:not(#flat) .toolbar {
+  height: 48px;
+  gap: 8px;
+  padding: 0 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--shellbd);
+  box-shadow: none;
+}
+:root:not(#flat) .toolbar__side {
+  gap: 8px;
+}
+:root:not(#flat) .toolbar__divider {
+  align-self: center;
+  width: 1px;
+  height: 20px;
+  margin: 0 2px;
+  background: var(--shellbd);
+  box-shadow: none;
+}
+:root:not(#flat) .toolbar__wordmark {
+  font-family: var(--font-ui);
+  font-size: 16px;
+  color: var(--greentext);
+}
+
+/* New / Open / Save: loose ghost icon buttons, no fused metal strip. */
+:root:not(#flat) .toolbar__seg {
+  gap: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+:root:not(#flat) .toolbar__seg .btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--txt2);
+}
+:root:not(#flat) .toolbar__seg .btn:hover {
+  border-color: transparent;
+  background: var(--panel2);
+  color: var(--head);
+}
+:root:not(#flat) .toolbar__seg .btn:active:not(:disabled) {
+  box-shadow: none;
+}
+
+/* --- Buttons -------------------------------------------------------------- */
+
+:root:not(#flat) .btn {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--fl-border-strong);
+  background: var(--card);
+  color: var(--head);
+  box-shadow: none;
+}
+:root:not(#flat) .btn:hover {
+  border-color: var(--txt3);
+}
+:root:not(#flat) .btn:active:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+  background: var(--panel2);
+}
+:root:not(#flat) .btn--sm {
+  font-size: 12px;
+  padding: 3px 8px;
+}
+:root:not(#flat) .btn--icon {
+  padding: 6px;
+  line-height: 0;
+}
+
+:root:not(#flat) .btn--primary,
+:root:not(#flat) .toolbar .btn--primary {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border-color: var(--green);
+  background: var(--green);
+  color: var(--fl-on-primary);
+}
+:root:not(#flat) .btn--danger,
+:root:not(#flat) .toolbar .btn--danger {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
+}
+:root:not(#flat) .btn--primary:hover:not(:disabled),
+:root:not(#flat) .btn--danger:hover:not(:disabled) {
+  filter: brightness(1.07);
+}
+:root:not(#flat) .btn--primary:active:not(:disabled),
+:root:not(#flat) .btn--danger:active:not(:disabled) {
+  filter: brightness(0.94);
+}
+
+:root:not(#flat) .btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--txt2);
+}
+:root:not(#flat) .btn--ghost:hover:not(:disabled) {
+  background: var(--panel2);
+  border-color: transparent;
+  color: var(--head);
+}
+:root:not(#flat) .btn--ghost.btn--danger {
+  color: var(--danger);
+}
+:root:not(#flat) .btn--ghost.is-active {
+  background: var(--panel2);
+  border-color: transparent;
+  color: var(--head);
+  box-shadow: none;
+}
+
+/* The theme toggle / panel knobs: a 32px ghost icon button. */
+:root:not(#flat) .btn--knob {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--txt2);
+  box-shadow: none;
+}
+:root:not(#flat) .btn--knob:hover {
+  border-color: transparent;
+  background: var(--panel2);
+  color: var(--head);
+}
+:root:not(#flat) .btn--knob:active:not(:disabled) {
+  box-shadow: none;
+}
+:root:not(#flat) .btn--knob.is-active {
+  background: var(--goldbg);
+  color: var(--goldink);
+  box-shadow: none;
+}
+
+/* Segmented icon groups in panel headers: loose ghost icons. */
+:root:not(#flat) .btn-seg {
+  border: 0;
+  background: transparent;
+  gap: 2px;
+}
+:root:not(#flat) .btn-seg .btn {
+  padding: 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--txt2);
+}
+:root:not(#flat) .btn-seg .btn + .btn {
+  border-left: 0;
+}
+:root:not(#flat) .btn-seg .btn:hover:not(:disabled) {
+  background: var(--panel2);
+  color: var(--head);
+}
+:root:not(#flat) .btn-seg .btn:active:not(:disabled) {
+  box-shadow: none;
+}
+:root:not(#flat) .btn-seg .btn.is-active {
+  background: var(--panel2);
+}
+
+/* --- Workspace switcher (and THE DOT, #1053) ----------------------------- */
+
+:root:not(#flat) .ws-switcher__seg {
+  border: 0;
+  border-radius: 8px;
+  background: var(--panel2);
+  padding: 2px;
+  gap: 2px;
+  box-shadow: none;
+}
+:root:not(#flat) .ws-switcher__btn {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--txt2);
+}
+:root:not(#flat) .ws-switcher__btn:hover {
+  background: var(--card);
+  color: var(--head);
+}
+:root:not(#flat) .ws-switcher__btn.is-active,
+:root:not(#flat) .ws-switcher__btn.is-active:hover {
+  background: var(--goldbg);
+  color: var(--goldink);
+  font-weight: 600;
+  box-shadow: none;
+}
+:root:not(#flat) .ws-switcher__dot {
+  width: 14px;
+  margin: 0 -2px;
+}
+:root:not(#flat) .ws-switcher__dot-mark {
+  width: 5px;
+  height: 5px;
+  background: var(--txt3);
+}
+:root:not(#flat) .is-both .ws-switcher__dot,
+:root:not(#flat) .ws-switcher__dot.is-active {
+  background: var(--goldbg);
+  box-shadow: none;
+}
+:root:not(#flat) .is-both .ws-switcher__dot-mark,
+:root:not(#flat) .ws-switcher__dot.is-active .ws-switcher__dot-mark {
+  background: var(--goldink);
+}
+
+:root:not(#flat) .is-both .ws-switcher__btn[data-ws='blocks'] {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+:root:not(#flat) .is-both .ws-switcher__btn[data-ws='code'] {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+/* Compact sizes swap the segments for a dropdown (AppShell.css). */
+:root:not(#flat) .shell:not([data-size='wide']) .ws-switcher__select {
+  min-height: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 6px;
+  background-color: var(--goldbg);
+  background-image: none;
+  color: var(--goldink);
+  font-family: var(--font-ui);
+  font-weight: 600;
+  box-shadow: none;
+}
+
+/* --- Activity bar: an icon rail, labels in the tooltip ------------------- */
+
+:root:not(#flat) .activitybar {
+  width: 48px;
+  padding: 8px 0;
+  gap: 4px;
+  background: var(--fl-rail);
+  border-right: 0;
+  box-shadow: none;
+}
+:root:not(#flat) .activitybar__group {
+  gap: 4px;
+}
+:root:not(#flat) .activitybar__item {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  gap: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fl-rail-ink);
+  box-shadow: none;
+}
+:root:not(#flat) .activitybar__item:hover {
+  background: var(--fl-rail-hover);
+  color: #fff;
+}
+:root:not(#flat) .activitybar__item:active {
+  transform: none;
+  box-shadow: none;
+}
+:root:not(#flat) .activitybar__item.is-active {
+  background: var(--fl-rail-on);
+  color: #e7bf62;
+  box-shadow: none;
+}
+/* Visually hidden — the button's `title` shows the label on hover, and the
+   text stays in the accessible name. */
+:root:not(#flat) .activitybar__item-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+:root:not(#flat) .activitybar__item-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* --- Panel headers --------------------------------------------------------- */
+
+:root:not(#flat) .panel-header {
+  min-height: 36px;
+  padding: 0 6px 0 12px;
+  background: transparent;
+  border-bottom: 1px solid var(--shellbd);
+  box-shadow: none;
+  color: var(--txt2);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+/* --- Layout C: flat sidebars, one card for the editor + console ---------- */
+
+:root:not(#flat) .shell__main .shell__panels {
+  padding: 0;
+}
+
+/* Side panels (Files, and any right-hand panel) fill their slot as flat chrome. */
+:root:not(#flat) .shell__panels > [data-panel-id] > .region {
+  inset: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--panel);
+}
+:root:not(#flat) .shell__panels > [data-panel-id] > .region:not(.region--right) {
+  border-right: 1px solid var(--shellbd);
+}
+:root:not(#flat) .shell__panels > [data-panel-id] > .region--right {
+  border-left: 1px solid var(--shellbd);
+}
+
+/* The centre column: an 8px margin of ground around the card. */
+:root:not(#flat) .shell__center-col {
+  padding: 8px;
+}
+:root:not(#flat) .shell__editor-region {
+  inset: 0;
+  border: 1px solid var(--shellbd);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  box-shadow: none;
+  background: var(--editor);
+}
+:root:not(#flat) .region.region--shell {
+  inset: 0;
+  border: 1px solid var(--shellbd);
+  border-radius: 0 0 8px 8px;
+  box-shadow: none;
+  background: var(--panel);
+}
+/* The divider between the two halves of the card is the console's top border;
+   the handle itself stays an invisible, generous grab strip. */
+:root:not(#flat) .shell__vgroup > .resize-handle {
+  height: 0;
+}
+/* Console collapsed: the reopen bar closes the bottom of the card. */
+:root:not(#flat) .shell__reopen--bottom {
+  border: 1px solid var(--shellbd);
+  border-radius: 0 0 8px 8px;
+  background: var(--panel);
+}
+
+/* The instrument dock: flat chrome on the right. */
+:root:not(#flat) .shell__main .shell__dock {
+  margin: 0;
+  border: 0;
+  border-left: 1px solid var(--shellbd);
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--panel);
+}
+:root:not(#flat) .shell__dock-rail {
+  background: var(--panel);
+  border-left: 1px solid var(--shellbd);
+}
+
+:root:not(#flat) .resize-handle {
+  background: transparent;
+}
+:root:not(#flat) .resize-handle:hover,
+:root:not(#flat) .resize-handle[data-resize-handle-active] {
+  background: color-mix(in srgb, var(--green) 40%, transparent);
+}
+
+/* --- Editor tabs ------------------------------------------------------------ */
+
+:root:not(#flat) .editor-header {
+  background: var(--panel);
+  border-bottom: 1px solid var(--shellbd);
+}
+:root:not(#flat) .editor-tabs {
+  background: transparent;
+  border-bottom: 0;
+}
+:root:not(#flat) .editor-tab {
+  background: transparent;
+  color: var(--txt3);
+  border-right: 0;
+  border-radius: 0;
+  box-shadow: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+:root:not(#flat) .editor-tab:hover {
+  background: var(--panel2);
+}
+:root:not(#flat) .editor-tab--active,
+:root:not(#flat) .editor-tab--active:hover {
+  background: transparent;
+  color: var(--head);
+  border-radius: 0;
+  box-shadow: inset 0 -2px 0 var(--green);
+}
+:root:not(#flat) .editor-tab__dirty {
+  background: var(--gold);
+}
+:root:not(#flat) .editor-header__actions .btn {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--txt2);
+}
+:root:not(#flat) .editor-header__actions .btn:hover {
+  background: var(--panel2);
+  border-color: transparent;
+  color: var(--head);
+}
+:root:not(#flat) .editor-header__actions .btn[aria-pressed='true'] {
+  background: var(--panel2);
+  border-color: transparent;
+  color: var(--head);
+}
+
+/* --- Console ---------------------------------------------------------------- */
+
+:root:not(#flat) .region--shell > .panel-header {
+  background: var(--panel);
+  border-bottom: 1px solid var(--shellbd);
+  color: var(--txt2);
+}
+:root:not(#flat) .region--shell > .panel-header .panel-collapse-btn,
+:root:not(#flat) .region--shell > .panel-header .shell-actions {
+  color: var(--txt2);
+}
+:root:not(#flat) .region--shell > .panel-header .panel-collapse-btn:hover {
+  color: var(--head);
+  background: var(--panel2);
+  border-color: transparent;
+}
+:root:not(#flat) .shell-toggle,
+:root:not(#flat) .region--shell .shell-actions .shell-toggle {
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 0;
+  gap: 2px;
+  box-shadow: none;
+}
+:root:not(#flat) .shell-toggle__btn,
+:root:not(#flat) .region--shell .shell-actions .shell-toggle__btn {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--txt2);
+  font-family: var(--font-ui);
+  font-weight: 600;
+}
+:root:not(#flat) .shell-toggle__btn + .shell-toggle__btn {
+  border-left: 0;
+}
+:root:not(#flat) .shell-toggle__btn:hover,
+:root:not(#flat) .region--shell .shell-actions .shell-toggle__btn:hover {
+  background: var(--panel2);
+  color: var(--head);
+}
+:root:not(#flat) .shell-toggle__btn--active,
+:root:not(#flat) .region--shell .shell-actions .shell-toggle__btn--active {
+  background: var(--panel2);
+  color: var(--head);
+  box-shadow: none;
+}
+
+:root:not(#flat) .region--shell .shell-actions__clear,
+:root:not(#flat) .region--shell .conn-control > .btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--txt2);
+}
+:root:not(#flat) .region--shell .shell-actions__clear:hover,
+:root:not(#flat) .region--shell .conn-control > .btn--ghost:hover {
+  background: var(--panel2);
+  color: var(--head);
+}
+:root:not(#flat) .conn-control__select,
+:root:not(#flat) .region--shell .conn-control__select {
+  border-radius: 6px;
+  border: 1px solid var(--fl-border-strong);
+  background: var(--card);
+  color: var(--head);
+  box-shadow: none;
+}
+:root:not(#flat) .region--shell .conn-control > .btn--primary {
+  background: var(--green);
+  border-color: var(--green);
+  color: var(--fl-on-primary);
+}
+/* Disconnect is not an emergency: a plain secondary button. */
+:root:not(#flat) .region--shell .conn-control > .btn--danger {
+  background: var(--card);
+  border-color: var(--fl-border-strong);
+  color: var(--head);
+}
+
+:root:not(#flat) .region--shell .region__body--terminal {
+  padding: 0;
+  background: var(--con);
+}
+:root:not(#flat) .terminal {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+:root:not(#flat) .terminal::after {
+  content: none;
+}
+
+/* --- Status bar --------------------------------------------------------------- */
+
+:root:not(#flat) .statusbar {
+  height: 24px;
+  background: var(--panel);
+  border-top: 1px solid var(--shellbd);
+  box-shadow: none;
+  color: var(--txt2);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 500;
+}
+:root:not(#flat) .statusbar__conn--connected .statusbar__dot {
+  background: var(--green);
+  box-shadow: none;
+}
+:root:not(#flat) .statusbar__flash {
+  border: 0;
+  border-radius: 6px;
+  background: var(--greenpill);
+  color: var(--greentext);
+  box-shadow: none;
+  font-weight: 600;
+  line-height: 18px;
+}
+:root:not(#flat) .statusbar__update-btn {
+  border-radius: 6px;
+  box-shadow: none;
+}

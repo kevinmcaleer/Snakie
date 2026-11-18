@@ -57,8 +57,9 @@ function rulesReachingAButton(): { descendant: Rule[]; child: Rule[] } {
         const btnAt = selector.search(GENERIC_BTN)
         const prefix = selector.slice(0, btnAt).trim()
         if (!prefix) continue
-        // The skins legitimately theme every button: `:root[data-theme='x'] .btn`.
-        if (/^:root\[data-theme=/.test(prefix)) continue
+        // The skins legitimately theme every button: `:root[data-theme='x'] .btn`,
+        // and so does Snakie Flat, scoped `:root:not(#flat)` (flat.css).
+        if (/^:root(\[data-theme=|:not\(#flat\))/.test(prefix)) continue
         const combinator = selector.slice(btnAt, btnAt + 1)
         ;(combinator === '>' || / > $/.test(selector.slice(0, btnAt + 1))
           ? child
