@@ -1555,6 +1555,23 @@ const api = {
   /** Open an http(s) URL externally in the default browser. */
   openExternal: (url: string): Promise<void> =>
     ipcRenderer.invoke('app:openExternal', url),
+  /**
+   * `snakie://open…` links from "Open in Snakie" (kevsrobots.com#581): each is
+   * the `?…` and `#…` the web app would read from its address bar.
+   */
+  openLinks: {
+    /** Links that arrived before the editor was listening (start-up). */
+    take: (): Promise<{ search: string; hash: string }[]> => ipcRenderer.invoke('app:takeOpenLinks'),
+    /** Later links, while Snakie is running. Returns an unsubscribe function. */
+    onOpen: (cb: (link: { search: string; hash: string }) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, link: { search: string; hash: string }): void => cb(link)
+      ipcRenderer.on('app:openLink', listener)
+      return () => ipcRenderer.removeListener('app:openLink', listener)
+    },
+    /** Read a gist or repo file from GitHub (the renderer's CSP can't). */
+    fetchGithubText: (url: string): Promise<{ ok: boolean; status: number; body: string }> =>
+      ipcRenderer.invoke('app:fetchGithubText', url)
+  },
   /** Snapshot of the runtime versions for display in the UI. */
   versions: process.versions,
   /** Serial device connection + MicroPython REPL/filesystem layer. */

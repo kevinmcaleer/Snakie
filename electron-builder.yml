@@ -85,6 +85,15 @@ extraResources:
 # (run via the postinstall script / electron-builder) handles serialport.
 npmRebuild: true
 
+# `snakie://open?…` links: "Open in Snakie" on kevsrobots lessons hands code
+# to the desktop app (kevsrobots.com#581, src/main/deepLink.ts). This writes the
+# scheme into Info.plist (macOS) and the .desktop file (Linux); Windows is
+# registered at runtime by app.setAsDefaultProtocolClient.
+protocols:
+  - name: Snakie
+    schemes:
+      - snakie
+
 # Linux. The ARCH is chosen by the CLI flag per release job (NOT pinned here):
 # pinning `arch` in the target list makes electron-builder build EVERY listed
 # arch regardless of the `--x64`/`--arm64` flag, which cross-compiles and fails.
