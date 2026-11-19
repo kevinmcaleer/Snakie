@@ -21,6 +21,7 @@ import { ContextMenu, type ContextMenuItem, type ContextMenuPosition } from './C
 import { usePrompt } from './PromptModal'
 import { FolderOpenIcon } from './ui-icons'
 import { CollapsiblePanel } from './CollapsiblePanel'
+import type { MenuAnchorEvent } from '../hooks/useLongPress'
 import './RobotBuildPanel.css'
 
 /**
@@ -516,7 +517,7 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
   // this row's JOINT, since #720 stopped giving joints rows of their own. The
   // menu is keyed on the NODE, not just the link, so it can offer both.
   const [menu, setMenu] = useState<{ pos: ContextMenuPosition; node: HierarchyNode } | null>(null)
-  const openMenu = (e: React.MouseEvent, node: HierarchyNode): void => {
+  const openMenu = (e: MenuAnchorEvent, node: HierarchyNode): void => {
     if (!canEdit) return
     e.preventDefault()
     e.stopPropagation()
@@ -680,7 +681,7 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
         />
         {rootLink === null && assembly.length > 1 && (
           <p className="robotbuild__hint">
-            Several parts, no base yet — right-click a part ▸ <b>Make base</b> to start the chain.
+            Several parts, no base yet — right-click (or press and hold) a part ▸ <b>Make base</b> to start the chain.
           </p>
         )}
 

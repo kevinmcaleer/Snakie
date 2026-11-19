@@ -180,7 +180,9 @@ import { findHierarchyNode, flattenHierarchy } from './hierarchy-tree'
 import type { MassEditorProps, ContactsEditorProps } from './RobotPropertiesDialog'
 import type { MeshTriangles } from './robot-mass-geometry'
 import { addContact, removeContact, setContact } from './robot-contacts'
+import { viewportSizeFor } from '../hooks/useViewportSize'
 import './RobotView.css'
+import './RobotView.small.css'
 
 /** An empty motion clip (2 s, ease-in-out, looping). */
 const EMPTY_TIMELINE: MotionTimeline = { duration: 2, easing: 'easeInOut', loop: true, fps: 20, tracks: [] }
@@ -333,6 +335,11 @@ const ANAGLYPH_RG_RIGHT = [0, 0.299, 0, 0, 0.587, 0, 0, 0.114, 0]
 const STEREO_DEPTH_MIN = 0.01
 const STEREO_DEPTH_MAX = 0.12
 const STEREO_DEPTH_DEFAULT = 0.064
+
+/** Is the window phone-sized right now? Read once, for first-open defaults —
+ *  the layout itself follows `.shell[data-size]` in CSS. */
+const startsOnPhone = (): boolean =>
+  typeof window !== 'undefined' && viewportSizeFor(window.innerWidth, window.innerHeight) === 'phone'
 
 export function RobotView({
   urdfContent,
@@ -740,8 +747,10 @@ export function RobotView({
   const [buildPinned, setBuildPinned] = useState(() =>
     loadPin(window.localStorage, PIN_KEYS.builder, true)
   )
-  const [buildOpen, setBuildOpen] = useState(() =>
-    loadPin(window.localStorage, PIN_KEYS.builder, true)
+  // …except on a phone, where the panel is a sheet over the 3-D view: it starts
+  // closed so the robot is what you see first.
+  const [buildOpen, setBuildOpen] = useState(
+    () => !startsOnPhone() && loadPin(window.localStorage, PIN_KEYS.builder, true)
   )
   const [selectedLink, setSelectedLink] = useState<string | null>(null)
   // The link the user designated as the base (root) of the chain, from robot.yml.
@@ -771,7 +780,7 @@ export function RobotView({
     child: JointPickPt | null
   } | null>(null)
   // Refs the three.js pointer callbacks read (avoids re-subscribing on each edit).
-  const buildOpenRef = useRef(false)
+  const buildToolsRef = useRef(false)
   const selectedLinkRef = useRef<string | null>(null)
   const editLinkRef = useRef<string | null>(null)
   // Join-tool bridges: pick mode state for the effect, the pick callback, + a
@@ -806,7 +815,10 @@ export function RobotView({
     clear: () => void
     dim: (link: string | null) => void
   } | null>(null)
-  buildOpenRef.current = buildOpen && poseUI
+  // The build TOOLS act on the viewport and their toolbar stays up while the
+  // hierarchy panel is hidden, so they must keep working then too — on a phone
+  // the panel is a sheet that is closed most of the time.
+  buildToolsRef.current = poseUI
   selectedLinkRef.current = selectedLink
   editLinkRef.current = editLink
   // Editing needs somewhere legitimate to write the model — a `.urdf` of its own
@@ -814,8 +826,11 @@ export function RobotView({
   const canEdit = poseUI && writeTarget.kind !== 'refuse'
   const canEditRef = useRef(false)
   canEditRef.current = canEdit
-  const [buildTool, setBuildTool] = useState<BuildTool>('select')
-  const buildToolRef = useRef<BuildTool>('select')
+  // A phone starts on Grab: a finger on a part poses it, a finger on empty space
+  // orbits. (Grab on a robot with nothing to pose is a no-op, so orbit and
+  // tap-to-select still work there.)
+  const [buildTool, setBuildTool] = useState<BuildTool>(() => (startsOnPhone() ? 'ik' : 'select'))
+  const buildToolRef = useRef<BuildTool>(buildTool)
   buildToolRef.current = buildTool
   const onSetTool = (t: BuildTool): void => {
     setBuildTool(t)
@@ -3891,7 +3906,7 @@ export function RobotView({
           highlightApiRef.current = { apply: applyHighlight }
           applyHighlight(selectedLinkRef.current) // survive re-parse
 
-          const buildActive = (): boolean => buildOpenRef.current && !measureActiveRef.current
+          const buildActive = (): boolean => buildToolsRef.current && !measureActiveRef.current
           const buildNdcFrom = (e: PointerEvent): void => {
             const rect = renderer.domElement.getBoundingClientRect()
             buildNdc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
