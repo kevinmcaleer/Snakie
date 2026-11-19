@@ -2615,6 +2615,16 @@ body {
   z-index: 5;
   background: var(--shell, var(--bg));
 }
+/* The Code panel group stays mounted UNDER the solo overlay (so the editor and
+   console keep their state across a workspace switch). The overlay covers it at
+   z-index 5 — but anything in the editor with a higher z-index paints straight
+   through, and takes the taps too. A .urdf open in the editor is a second Robot
+   View whose ViewCube, Home button and zoom bar (z-index 30) appeared on top of
+   Build's own: two cubes, two zoom bars. Hidden, it keeps its layout and state
+   and can neither be seen nor hit. */
+.shell[data-solo] .shell__panels {
+  visibility: hidden;
+}
 .shell__solo-lesson {
   flex: 0 0 auto;
   width: 320px;

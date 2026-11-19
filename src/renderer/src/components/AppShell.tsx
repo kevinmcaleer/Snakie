@@ -1636,6 +1636,7 @@ export function AppShell(): JSX.Element {
       data-size={viewport}
       data-files-open={compact && !filesCollapsed && !soloWorkspace ? '' : undefined}
       data-menu-open={phone && menuOpen ? '' : undefined}
+      data-solo={soloWorkspace ? '' : undefined}
     >
       {/* Top-of-screen manila notification offering a one-click install of the
           instrument library onto the connected board (#108). Topmost element of

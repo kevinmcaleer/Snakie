@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { loadPin, savePin, shouldAutoHide, PIN_KEYS } from './pin-overlay'
+import { isPhoneViewport } from '../hooks/useViewportSize'
 import { dispatchOpenHelp } from './editorBridge'
 import {
   parsePins,
@@ -71,6 +72,7 @@ import type { RobotDefinition } from '../../../shared/robot'
 import { findPart } from '../../../shared/part'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
 import './BoardGraph.css'
+import './BoardGraph.small.css'
 import { SendToKevsrobotsDialog } from './SendToKevsrobotsDialog'
 
 /**
@@ -427,7 +429,11 @@ export function BoardGraph({
   const [dockPinned, setDockPinnedState] = useState<boolean>(() =>
     asWindow ? true : loadPin(window.localStorage, PIN_KEYS.library, true)
   )
-  const [dockOpen, setDockOpen] = useState<boolean>(() => asWindow || dockPinned)
+  // On a phone the library is a sheet over the board: it starts closed, so the
+  // board is what you see first.
+  const [dockOpen, setDockOpen] = useState<boolean>(
+    () => asWindow || (dockPinned && !isPhoneViewport())
+  )
   const dockRef = useRef<HTMLElement | null>(null)
   const setDockPinned = useCallback((v: boolean): void => {
     setDockPinnedState(v)
@@ -700,8 +706,11 @@ export function BoardGraph({
     (libraryId: string, part: PartDefinition, pos?: { x: number; y: number }): void => {
       onAddToProject?.(libraryId, part, pos)
       if ((part.helpText ?? '').trim()) setHelpToast({ name: part.name, partId: part.id })
+      // On a phone the library sheet covers the board — get out of the way so
+      // the part that was just added can be seen (and wired).
+      if (!asWindow && isPhoneViewport()) setDockOpen(false)
     },
-    [onAddToProject]
+    [onAddToProject, asWindow]
   )
 
   // Custom dropdown open state — a native <select> popup is unreliable inside a

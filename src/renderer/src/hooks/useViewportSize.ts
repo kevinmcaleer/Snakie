@@ -29,6 +29,13 @@ export function viewportSizeFor(width: number, height = Infinity): ViewportSize 
   return 'wide'
 }
 
+/** Is the window phone-sized right now? A one-off read for first-open defaults
+ *  (a panel that starts closed, a tool that starts selected) — layout itself
+ *  follows `.shell[data-size]` in CSS. */
+export function isPhoneViewport(): boolean {
+  return currentSize() === 'phone'
+}
+
 function currentSize(): ViewportSize {
   if (typeof window === 'undefined') return 'wide'
   return viewportSizeFor(window.innerWidth, window.innerHeight)
