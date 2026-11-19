@@ -53,6 +53,10 @@ export interface EmbedParams {
   engine: EmbedEngineId
   /** Extra Pyodide packages to load before running (imports are also detected). */
   packages: string[]
+  /** The board the pin strip draws (#1318): a board id such as `pico2w`. Null = the default board. */
+  board: string | null
+  /** Show the pins the code uses beside it (#1318). `pins=0` turns it off. */
+  pins: boolean
   /** The host's id for this embed, echoed in every `postMessage`. */
   id: string | null
 }
@@ -172,6 +176,7 @@ export function parseEmbedParams(search: string): EmbedParams {
     .map((p) => p.trim())
     .filter((p) => p && PACKAGE_RE.test(p))
   const id = clean(q.get('id'))
+  const boardRaw = clean(q.get('board'))?.toLowerCase().replace(/[\s_-]+/g, '') ?? null
   return {
     source: parseSource(q),
     lines: parseLines(q.get('lines')),
@@ -185,6 +190,9 @@ export function parseEmbedParams(search: string): EmbedParams {
     height,
     engine,
     packages,
+    board: boardRaw && /^[a-z0-9]{1,40}$/.test(boardRaw) ? boardRaw : null,
+    // Pins are MicroPython's: CPython in the browser has no `machine`.
+    pins: engine === 'micropython' && flag(q.get('pins'), true),
     id: id && id.length <= 100 ? id : null
   }
 }

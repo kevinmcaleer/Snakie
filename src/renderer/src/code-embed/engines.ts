@@ -19,12 +19,18 @@
  */
 import { WorkerMicroPythonRuntime } from '../web/worker-runtime'
 import type { EmbedEngineId } from './params'
+import { PIN_WATCH_PY, PinEventStream, type PinEvent } from './embed-pins'
 
 export interface EngineHandlers {
   /** Text for the terminal (may contain ANSI / `\r\n`). */
   output: (text: string) => void
   /** A matplotlib figure, as base64 PNG. */
   image?: (pngBase64: string) => void
+  /**
+   * A simulated pin changed (#1318). Giving this asks the MicroPython engine to
+   * report pin states; they are taken out of the output before `output` sees it.
+   */
+  pin?: (event: PinEvent) => void
 }
 
 export interface EmbedEngine {
@@ -52,18 +58,30 @@ export class MicroPythonEngine implements EmbedEngine {
   readonly lineMode = false
   private runtime: WorkerMicroPythonRuntime | null = null
   private booting: Promise<void> | null = null
+  private watching = false
 
   start(handlers: EngineHandlers): Promise<void> {
     if (this.booting) return this.booting
     const runtime = new WorkerMicroPythonRuntime()
     this.runtime = runtime
-    this.booting = runtime.init((bytes) => handlers.output(decoder.decode(bytes, { stream: true })))
+    const pins = handlers.pin ? new PinEventStream() : null
+    this.watching = pins !== null
+    this.booting = runtime.init((bytes) => {
+      const decoded = decoder.decode(bytes, { stream: true })
+      if (!pins) return handlers.output(decoded)
+      const { text, events } = pins.push(decoded)
+      for (const event of events) handlers.pin?.(event)
+      if (text) handlers.output(text)
+    })
     return this.booting
   }
 
   async run(code: string): Promise<void> {
     if (!this.runtime) throw new Error('MicroPython is not started')
     await this.booting
+    // Before every run, not once at boot: Stop restarts the interpreter, and
+    // the fresh one has not been asked to report its pins.
+    if (this.watching) await this.runtime.runCaptured(PIN_WATCH_PY).catch(() => undefined)
     await this.runtime.runStream(code)
   }
 
