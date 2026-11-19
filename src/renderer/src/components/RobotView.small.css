@@ -503,3 +503,33 @@
 .shell[data-size='phone'] .robotdock--full .robotjoints__slider {
   height: 28px;
 }
+
+/* Pose shelf on a phone: smaller cards, finger-sized buttons, no key hint. */
+.shell[data-size='phone'] .robotdock--full .poseshelf {
+  gap: 8px;
+  padding: 6px 8px;
+}
+.shell[data-size='phone'] .robotdock--full .poseshelf__title,
+.shell[data-size='phone'] .robotdock--full .poseshelf__save kbd {
+  display: none;
+}
+.shell[data-size='phone'] .robotdock--full .poseshelf__card {
+  width: 84px;
+}
+.shell[data-size='phone'] .robotdock--full .poseshelf__thumb {
+  width: 76px;
+  height: 48px;
+}
+.shell[data-size='phone'] .robotdock--full .poseshelf__more,
+.shell[data-size='phone'] .robotdock--full .poseshelf__name,
+.shell[data-size='phone'] .robotdock--full .poseshelf__foot {
+  min-height: 32px;
+  height: 32px;
+}
+.shell[data-size='phone'] .robotdock--full .poseshelf__more {
+  width: 32px;
+}
+.shell[data-size='phone'] .robotdock--full .poseshelf__save,
+.shell[data-size='phone'] .robotdock--full .poseshelf__menu button {
+  height: var(--bm-tap);
+}

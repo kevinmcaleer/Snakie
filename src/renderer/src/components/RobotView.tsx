@@ -33,14 +33,19 @@ import {
   loadBuildMode,
   loadLiveMirror,
   mirrorPatch,
+  mirrorPoseValues,
+  mirroredPoseName,
   nextPoseName,
+  poseKey,
   posturesDiffer,
+  thumbnailCrop,
   saveBuildMode,
   saveLiveMirror,
   type BuildMode,
   type Travel
 } from './robot-animate'
 import { RobotJointsPanel } from './RobotJointsPanel'
+import { RobotPoseShelf } from './RobotPoseShelf'
 import {
   addMeshLink,
   addPrimitive,
@@ -406,6 +411,8 @@ export function RobotView({
   const [values, setValues] = useState<Record<string, number>>({}) // native (rad/m)
   const [overrides, setOverrides] = useState<Record<string, { min?: number; max?: number }>>({})
   const [poses, setPoses] = useState<NamedPoseLike[]>([])
+  // The pose the robot is in right now (last applied or saved on the shelf).
+  const [activePose, setActivePose] = useState<string | null>(null)
   const posesRef = useRef<NamedPoseLike[]>([])
   // Per-link ground-contact points (#557), link-local metres — mirrors robot.yml
   // `contacts`, kept reactive so the inspector reflects edits immediately.
@@ -473,6 +480,9 @@ export function RobotView({
     animateExplode: (f: number, orbit: boolean, onDone?: () => void) => void
     /** Record the explode animation off the canvas → downloads an mp4/webm. */
     recordExplode: (f: number, orbit: boolean) => Promise<boolean>
+    /** A small picture of the robot in a posture (native joint values) — the
+     *  pose shelf's thumbnail. Null when there is nothing to draw. */
+    snapshotPose: (native: Record<string, number>) => string | null
   } | null>(null)
   const [zoomPct, setZoomPct] = useState(100)
   // Exploded view UI (#499): popover open, separation slider, orbit toggle, busy.
@@ -674,6 +684,7 @@ export function RobotView({
   const handleDeletePose = (name: string): void => {
     const next = poses.filter((p) => p.name !== name)
     setPoses(next)
+    setActivePose((a) => (a === name ? null : a))
     // Degrade any puppet control that referenced this pose: drop the ref (#416). A
     // control left with <2 poses can't blend and (unlike the sanitiser's silent
     // drop on reload) has no UI to recover, so remove it outright — in-memory and
@@ -701,8 +712,10 @@ export function RobotView({
       setSavingLabel(`A pose named “${target}” already exists`)
       return
     }
-    const next = [...poses.filter((p) => p.name !== oldName), { name: target, values: pose.values }]
+    // In place: the pose keeps its spot in the list (and on the shelf).
+    const next = poses.map((p) => (p.name === oldName ? { name: target, values: pose.values } : p))
     setPoses(next)
+    setActivePose((a) => (a === oldName ? target : a))
     // Cascade the rename into any puppet control that references the pose (#416).
     const cur = controlsRef.current
     const renamed = cur.map((c) =>
@@ -2139,7 +2152,10 @@ export function RobotView({
     setValues(now)
     const h = poseHistRef.current
     if (Object.keys(h.present).length === 0) poseHistRef.current = historyInit(now)
-    else if (posturesDiffer(h.present, now)) poseHistRef.current = historyPush(h, now, 100)
+    else if (posturesDiffer(h.present, now)) {
+      poseHistRef.current = historyPush(h, now, 100)
+      setActivePose(null) // moved off the saved pose
+    }
     bumpPoseHist()
   }
   poseGestureRef.current = { begin: poseBegin, commit: poseCommit }
@@ -2176,15 +2192,124 @@ export function RobotView({
     poseCommit()
   }
   // SAVE POSE in one press: no dialog, no name to type first. It is named
-  // "Pose N" and can be renamed from the Poses list.
-  const handleQuickSavePose = (): void => {
-    const name = nextPoseName(posesRef.current.map((p) => p.name))
-    const next = [...posesRef.current, { name, values: capturePoseValues(metaRef.current, liveAngles()) }]
+  // "Pose N" and renamed in place on the shelf.
+  const savePoses = (next: NamedPoseLike[], label?: string): void => {
     setPoses(next)
     void persist((m) => {
       m.poses = next
-    }).then(() => setSavingLabel((l) => (l === 'saved ✓' ? `saved “${name}”` : l)))
+    }).then(() => {
+      if (label) setSavingLabel((l) => (l === 'saved ✓' ? label : l))
+    })
   }
+  const handleQuickSavePose = (): void => {
+    const name = nextPoseName(posesRef.current.map((p) => p.name))
+    savePoses(
+      [...posesRef.current, { name, values: capturePoseValues(metaRef.current, liveAngles()) }],
+      `saved “${name}”`
+    )
+    setActivePose(name)
+  }
+  const quickSaveRef = useRef(handleQuickSavePose)
+  quickSaveRef.current = handleQuickSavePose
+  // ── Pose shelf ───────────────────────────────────────────────────────────
+  const shelfPose = (name: string): NamedPoseLike | undefined => posesRef.current.find((p) => p.name === name)
+  const handleShelfApply = (name: string): void => {
+    const p = shelfPose(name)
+    if (!p) return
+    poseBegin() // so ⌘Z returns to the posture before the pose was applied
+    handleRecallPose(p)
+    setActivePose(name)
+    setMirroredNow(new Set())
+  }
+  // Insert `added` right after `after`, so a copy sits beside its original.
+  const insertAfter = (after: string, added: NamedPoseLike): NamedPoseLike[] => {
+    const list = posesRef.current
+    const i = list.findIndex((p) => p.name === after)
+    return i < 0 ? [...list, added] : [...list.slice(0, i + 1), added, ...list.slice(i + 1)]
+  }
+  const handleShelfMirror = (name: string): void => {
+    const p = shelfPose(name)
+    if (!p) return
+    // Travel in the pose's own units (degrees / millimetres).
+    const travel: Record<string, Travel> = {}
+    for (const m of metaRef.current) {
+      const lim = effectiveLimit(m, overridesRef.current[m.name])
+      travel[m.name] = { lower: toDisplay(m.type, lim.lower), upper: toDisplay(m.type, lim.upper) }
+    }
+    const names = posesRef.current.map((x) => x.name)
+    const added = {
+      name: mirroredPoseName(name, names),
+      values: mirrorPoseValues(p.values, mirrorPairsRef.current, travel)
+    }
+    savePoses(insertAfter(name, added), `saved “${added.name}”`)
+  }
+  const handleShelfDuplicate = (name: string): void => {
+    const p = shelfPose(name)
+    if (!p) return
+    const added = { name: uniquePoseName(name, posesRef.current.map((x) => x.name)), values: { ...p.values } }
+    savePoses(insertAfter(name, added), `saved “${added.name}”`)
+  }
+  const handleShelfUpdate = (name: string): void => {
+    if (!shelfPose(name)) return
+    const values = capturePoseValues(metaRef.current, liveAngles())
+    savePoses(
+      posesRef.current.map((p) => (p.name === name ? { name, values } : p)),
+      `updated “${name}”`
+    )
+    setActivePose(name)
+  }
+  // THUMBNAILS: one small render per pose, redrawn only when the pose's content
+  // changes. Kept in memory (not in robot.yml) — they are a view of the pose.
+  const [thumbs, setThumbs] = useState<Record<string, string>>({})
+  const thumbKeysRef = useRef<Record<string, string>>({})
+  useEffect(() => {
+    if (!animating) return
+    const stale = poses.filter((p) => thumbKeysRef.current[p.name] !== poseKey(p))
+    const gone = Object.keys(thumbKeysRef.current).filter((n) => !poses.some((p) => p.name === n))
+    if (!stale.length && !gone.length) return
+    // After the frame that follows a load / mode switch, so the camera has framed.
+    const id = window.setTimeout(() => {
+      const api = zoomApiRef.current
+      if (!api) return
+      const drawn: Record<string, string> = {}
+      for (const p of stale) {
+        const native = poseTargetNative(metaRef.current, liveAngles(), p.values, overridesRef.current)
+        const url = api.snapshotPose(native)
+        if (!url) continue
+        drawn[p.name] = url
+        thumbKeysRef.current[p.name] = poseKey(p)
+      }
+      for (const n of gone) delete thumbKeysRef.current[n]
+      setThumbs((t) => {
+        const next = { ...t, ...drawn }
+        for (const n of gone) delete next[n]
+        return next
+      })
+    }, 250)
+    return () => window.clearTimeout(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [poses, animating, jointMeta])
+  // S = Save pose, while animating and not typing somewhere.
+  useEffect(() => {
+    if (!animating) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key.toLowerCase() !== 's' || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return
+      const el = document.activeElement as HTMLElement | null
+      if (
+        el &&
+        ((el.tagName === 'INPUT' && (el as HTMLInputElement).type !== 'range') ||
+          el.tagName === 'TEXTAREA' ||
+          el.tagName === 'SELECT' ||
+          el.isContentEditable ||
+          el.closest('.monaco-editor'))
+      )
+        return
+      e.preventDefault()
+      quickSaveRef.current()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [animating])
   // The joint that turns a part: the nearest turnable joint at or above its link.
   const turnJointForLink = (link: string): string | null => {
     const byChild = new Map(readAllJoints(contentRef.current).map((j) => [j.child, j]))
@@ -3263,6 +3388,74 @@ export function RobotView({
       flyTo(centre.clone().addScaledVector(dir, dist), centre, 1, radius * 1.35, radius)
     }
     // Zoom-to-fit a SINGLE link's bounds (clicking a block in the hierarchy).
+    // POSE THUMBNAIL: put the robot in `native`, draw one plain frame, crop it
+    // to the robot, and put the robot back. Synchronous, so nothing is ever seen
+    // on screen in the borrowed posture. (A WebGL canvas can only be read in the
+    // same task it was drawn in — hence render-then-copy here, not later.)
+    const THUMB_W = 192
+    const THUMB_H = 120
+    const thumbCanvas = document.createElement('canvas')
+    thumbCanvas.width = THUMB_W
+    thumbCanvas.height = THUMB_H
+    const thumbBox = new THREE.Box3()
+    const thumbPt = new THREE.Vector3()
+    const snapshotPose = (native: Record<string, number>): string | null => {
+      const r = robotRef.current
+      const ctx = thumbCanvas.getContext('2d')
+      const src = renderer.domElement
+      if (!r || !ctx || src.width < 2 || src.height < 2) return null
+      const before: Record<string, number> = {}
+      for (const m of metaRef.current) {
+        if (m.isMimic) continue
+        const a = (r.joints?.[m.name] as { angle?: number } | undefined)?.angle
+        if (typeof a === 'number') before[m.name] = a
+      }
+      const put = (vals: Record<string, number>): void => {
+        for (const m of metaRef.current) {
+          if (!m.isMimic && typeof vals[m.name] === 'number') r.setJointValue(m.name, vals[m.name])
+        }
+        r.updateMatrixWorld(true)
+      }
+      try {
+        put(native)
+        jointRingApi.setSuppressed(true)
+        jointRingApi.update()
+        renderer.setScissorTest(false)
+        renderer.getSize(_fullSize)
+        renderer.setViewport(0, 0, _fullSize.x, _fullSize.y)
+        renderer.render(scene, camera)
+        // The robot's on-screen box, in canvas pixels.
+        thumbBox.setFromObject(r)
+        const box = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }
+        for (let i = 0; i < 8; i++) {
+          thumbPt
+            .set(
+              i & 1 ? thumbBox.max.x : thumbBox.min.x,
+              i & 2 ? thumbBox.max.y : thumbBox.min.y,
+              i & 4 ? thumbBox.max.z : thumbBox.min.z
+            )
+            .project(camera)
+          const x = ((thumbPt.x + 1) / 2) * src.width
+          const y = ((1 - thumbPt.y) / 2) * src.height
+          box.minX = Math.min(box.minX, x)
+          box.maxX = Math.max(box.maxX, x)
+          box.minY = Math.min(box.minY, y)
+          box.maxY = Math.max(box.maxY, y)
+        }
+        if (!Number.isFinite(box.minX + box.maxX + box.minY + box.maxY)) return null
+        const c = thumbnailCrop(box, THUMB_W / THUMB_H)
+        ctx.clearRect(0, 0, THUMB_W, THUMB_H)
+        ctx.drawImage(src, c.x, c.y, c.w, c.h, 0, 0, THUMB_W, THUMB_H)
+        return thumbCanvas.toDataURL('image/png')
+      } catch {
+        return null
+      } finally {
+        put(before)
+        jointRingApi.setSuppressed(false)
+        renderFrame()
+      }
+    }
+
     const focusLink = (name: string): void => {
       const robot = robotRef.current
       const link = robot?.links[name]
@@ -3615,6 +3808,7 @@ export function RobotView({
         if (robotRef.current) frameModel(robotRef.current, true)
       },
       focusLink,
+      snapshotPose,
       setExplode: applyExplode,
       animateExplode: (f, orbit, onDone) => animateExplode(f, orbit, undefined, onDone),
       recordExplode
@@ -5692,8 +5886,7 @@ export function RobotView({
               },
               onReset: handleAnimateReset,
               jointsOpen,
-              onToggleJoints: () => setJointsOpen((o) => !o),
-              onSavePose: handleQuickSavePose
+              onToggleJoints: () => setJointsOpen((o) => !o)
             }}
           />
         )}
@@ -5870,6 +6063,25 @@ export function RobotView({
         />
       )}
       </div>
+      {showTimeline && (
+        <RobotPoseShelf
+          poses={poses}
+          thumbs={thumbs}
+          active={activePose}
+          canMirror={mirrorPairs.length > 0}
+          onSave={handleQuickSavePose}
+          onApply={handleShelfApply}
+          onRename={handleRenamePose}
+          onMirror={handleShelfMirror}
+          onDuplicate={handleShelfDuplicate}
+          onUpdate={handleShelfUpdate}
+          onAddToTimeline={(name) => {
+            const p = shelfPose(name)
+            if (p) handleImportPose(p)
+          }}
+          onDelete={handleDeletePose}
+        />
+      )}
       {showTimeline && (
         <RobotMotionDock
           tabs={[

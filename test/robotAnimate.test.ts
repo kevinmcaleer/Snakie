@@ -6,6 +6,10 @@ import {
   loadBuildMode,
   loadLiveMirror,
   mirrorPatch,
+  mirrorPoseValues,
+  mirroredPoseName,
+  poseKey,
+  thumbnailCrop,
   nextPoseName,
   posturesDiffer,
   saveBuildMode,
@@ -149,5 +153,95 @@ describe('posturesDiffer', () => {
     expect(posturesDiffer({ a: 0 }, {})).toBe(false)
     expect(posturesDiffer({ a: 1 }, { a: 1.01 })).toBe(true)
     expect(posturesDiffer({}, { b: 0.5 })).toBe(true)
+  })
+})
+
+describe('mirrorPoseValues — the same pose, left and right swapped', () => {
+  const pairs = [
+    { a: 'hip_left', b: 'hip_right' },
+    { a: 'knee_left', b: 'knee_right' }
+  ]
+  const travel = {
+    hip_left: { lower: -90, upper: 90 },
+    hip_right: { lower: -90, upper: 90 },
+    knee_left: { lower: 0, upper: 120 },
+    knee_right: { lower: 0, upper: 120 }
+  }
+
+  it('trades each pair and leaves unpaired joints alone', () => {
+    expect(
+      mirrorPoseValues({ hip_left: 30, hip_right: -20, knee_left: 45, knee_right: 5, neck: 12 }, pairs, travel)
+    ).toEqual({ hip_left: -20, hip_right: 30, knee_left: 5, knee_right: 45, neck: 12 })
+  })
+
+  it('mirroring twice gets the pose back', () => {
+    const pose = { hip_left: 30, hip_right: -20, knee_left: 45, knee_right: 5 }
+    expect(mirrorPoseValues(mirrorPoseValues(pose, pairs, travel), pairs, travel)).toEqual(pose)
+  })
+
+  it('reflects inverted pairs about the middle of the receiving joint’s travel', () => {
+    const inv = [{ a: 'knee_left', b: 'knee_right', invert: true }]
+    expect(mirrorPoseValues({ knee_left: 100, knee_right: 10 }, inv, travel)).toEqual({
+      knee_left: 110,
+      knee_right: 20
+    })
+  })
+
+  it('keeps a partial pose partial: a side it never stored is not invented', () => {
+    expect(mirrorPoseValues({ hip_left: 30 }, pairs, travel)).toEqual({ hip_right: 30 })
+  })
+
+  it('clamps into the receiving joint’s travel', () => {
+    const tight = { ...travel, hip_right: { lower: -10, upper: 10 } }
+    expect(mirrorPoseValues({ hip_left: 30, hip_right: 0 }, pairs, tight)).toEqual({ hip_left: 0, hip_right: 10 })
+  })
+})
+
+describe('mirroredPoseName', () => {
+  it('swaps the side in the name, keeping its case', () => {
+    expect(mirroredPoseName('Step left', [])).toBe('Step right')
+    expect(mirroredPoseName('Right foot up', [])).toBe('Left foot up')
+    expect(mirroredPoseName('LEFT', [])).toBe('RIGHT')
+  })
+
+  it('adds "mirrored" when the name has no side, and only swaps whole words', () => {
+    expect(mirroredPoseName('Wave', [])).toBe('Wave mirrored')
+    expect(mirroredPoseName('Upright', [])).toBe('Upright mirrored')
+  })
+
+  it('never collides with an existing pose', () => {
+    expect(mirroredPoseName('Step left', ['Step right'])).toBe('Step right 2')
+    expect(mirroredPoseName('Wave', ['Wave mirrored', 'Wave mirrored 2'])).toBe('Wave mirrored 3')
+  })
+})
+
+describe('poseKey', () => {
+  it('changes with the name or any value, but not with key order', () => {
+    const a = poseKey({ name: 'A', values: { x: 1, y: 2 } })
+    expect(poseKey({ name: 'A', values: { y: 2, x: 1 } })).toBe(a)
+    expect(poseKey({ name: 'B', values: { x: 1, y: 2 } })).not.toBe(a)
+    expect(poseKey({ name: 'A', values: { x: 1, y: 3 } })).not.toBe(a)
+  })
+})
+
+describe('thumbnailCrop', () => {
+  it('keeps the aspect, centres on the robot and leaves air around it', () => {
+    const c = thumbnailCrop({ minX: 100, minY: 100, maxX: 200, maxY: 300 }, 1.6, 0.1)
+    expect(c.w / c.h).toBeCloseTo(1.6)
+    expect(c.h).toBeCloseTo(240) // 200 tall + 10% each side
+    expect(c.x + c.w / 2).toBeCloseTo(150)
+    expect(c.y + c.h / 2).toBeCloseTo(200)
+  })
+
+  it('widens to fit a robot wider than the thumbnail', () => {
+    const c = thumbnailCrop({ minX: 0, minY: 0, maxX: 400, maxY: 50 }, 1.6, 0)
+    expect(c.w).toBeCloseTo(400)
+    expect(c.h).toBeCloseTo(250)
+  })
+
+  it('survives a degenerate box', () => {
+    const c = thumbnailCrop({ minX: 5, minY: 5, maxX: 5, maxY: 5 }, 1.6)
+    expect(c.w).toBeGreaterThan(0)
+    expect(c.h).toBeGreaterThan(0)
   })
 })
