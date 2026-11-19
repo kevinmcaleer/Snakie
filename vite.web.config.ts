@@ -153,6 +153,21 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,svg,png,woff,woff2,wasm}'],
+        // Part 3-D models (STL/DAE, ~7 MB in all) are NOT precached — most
+        // projects use a few. Each is cached the first time a part that uses it
+        // lands in Build, so it is there offline afterwards. Their names carry a
+        // content hash, so cache-first can never serve a stale model.
+        runtimeCaching: [
+          {
+            urlPattern: /\.(?:stl|dae)$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'snakie-part-models',
+              expiration: { maxEntries: 80 },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          }
+        ],
         // The MicroPython WASM + Monaco chunks are large; precache them so the
         // classroom app truly works offline after the first visit.
         maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,

@@ -128,6 +128,36 @@ describe('partBodyPlan — box vs mesh, and when to say so (#787)', () => {
     const plan = partBodyPlan({ id: '', name: '', mesh: 'm.stl' }, null)
     expect((plan as { problem?: string }).problem).toBeTruthy()
   })
+
+  it('does not double the full stop when the reason already ends a sentence', () => {
+    const plan = partBodyPlan(part({ mesh: 'm.stl' }), { error: 'Not here.' })
+    expect((plan as { problem?: string }).problem).not.toContain('..')
+  })
+
+  it('says "check your connection" when a web download failed, and how to retry', () => {
+    const plan = partBodyPlan(part({ mesh: 'model.stl', name: 'SG90 Micro Servo' }), {
+      error: 'Failed to fetch',
+      reason: 'download-failed'
+    })
+    const problem = (plan as { problem?: string }).problem ?? ''
+    expect(plan.body).toBe('box')
+    expect(problem).toContain('SG90 Micro Servo')
+    expect(problem).toContain('connection')
+    expect(problem).toContain('Upgrade to mesh')
+    // Not the desktop wording: there is no part folder to re-link on the web.
+    expect(problem).not.toContain("part's folder")
+  })
+
+  it('says the model is desktop-only when this host does not carry it', () => {
+    const plan = partBodyPlan(part({ mesh: 'model.stl', name: 'Uno R4' }), {
+      error: 'not bundled',
+      reason: 'unavailable'
+    })
+    const problem = (plan as { problem?: string }).problem ?? ''
+    expect(problem).toContain('Uno R4')
+    expect(problem).toContain('desktop app')
+    expect(problem).not.toContain('re-link')
+  })
 })
 
 describe('mirroredOrigin — board layout carried into Build (#716)', () => {

@@ -13,7 +13,7 @@
  * (listLibraries + a no-op update check); authoring/registry writes stay stubbed
  * (no per-user library storage on the web yet).
  */
-import standardLibraries, { driverSources } from 'virtual:snakie-standard-parts'
+import standardLibraries, { driverSources, meshUrls } from 'virtual:snakie-standard-parts'
 import type { PartLibraryWithParts } from '../../../shared/part'
 
 interface DriverSourceResult {
@@ -28,6 +28,15 @@ function base64Bytes(b64: string): Uint8Array {
   const out = new Uint8Array(bin.length)
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
   return out
+}
+
+/**
+ * The bundled parts' 3-D models, for the web robot layer's `importPartMesh`:
+ * which library they belong to, and each model's static asset URL.
+ */
+export function webPartMeshes(): { libraryId: string; urls: Record<string, string> } {
+  const lib = (standardLibraries as PartLibraryWithParts[])[0]
+  return { libraryId: lib?.id ?? 'snakie-standard', urls: meshUrls as Record<string, string> }
 }
 
 /** Build the read-only `parts` Api object (merged onto `window.api.parts`). */

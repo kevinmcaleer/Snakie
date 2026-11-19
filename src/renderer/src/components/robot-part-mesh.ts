@@ -108,6 +108,16 @@ export interface MeshCopyOutcome {
   maxDim?: number
   /** Why there is no `rel`. */
   error?: string
+  /**
+   * What KIND of failure, when the host knows one the person can act on. The
+   * generic wording ("could not be read from the part's folder … re-link it")
+   * is right for a broken part on the desktop, and wrong for these:
+   *  - `unavailable`: this host doesn't carry the part's model at all (the web
+   *    build only ships the Standard Parts library);
+   *  - `download-failed`: the web build carries it but couldn't fetch it,
+   *    almost always because the browser is offline.
+   */
+  reason?: 'unavailable' | 'download-failed'
 }
 
 /** What body a placed part should get, and whether anything went wrong getting it. */
@@ -151,7 +161,25 @@ export function partBodyPlan(
   // No model declared: the footprint box IS the right answer. Say nothing.
   if (!mesh) return { body: 'box' }
   const who = (part.name || part.id || 'This part').trim() || 'This part'
-  const why = copy?.error?.trim()
+  // Friendly, actionable wording when the host says what kind of failure it was.
+  if (copy?.reason === 'download-failed') {
+    return {
+      body: 'box',
+      problem:
+        `Couldn't download ${who}'s 3-D model — check your connection. ` +
+        `It's a plain block for now; open ⇄ Sync and choose “Upgrade to mesh” to try again.`
+    }
+  }
+  if (copy?.reason === 'unavailable') {
+    return {
+      body: 'box',
+      problem:
+        `${who}'s 3-D model isn't available in the browser yet, so it's a plain block here. ` +
+        `Open the project in the Snakie desktop app to see the real model.`
+    }
+  }
+  // Trailing full stop dropped: the sentence below adds its own.
+  const why = copy?.error?.trim().replace(/[.。]+$/, '')
   return {
     body: 'box',
     problem:
