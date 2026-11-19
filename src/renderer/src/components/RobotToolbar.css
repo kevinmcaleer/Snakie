@@ -53,3 +53,78 @@
   margin: 0.15rem 0.15rem;
   background: var(--border, #3a3d44);
 }
+
+/* ── Assemble / Animate (Snakie Flat) ─────────────────────────────────────
+   The mode switch leads the tool bar; Animate swaps the modelling tools for the
+   few posing controls a drag can't express. Flat tokens: 32px-class controls,
+   6px radius, hairlines, green primary, amber for the mode you are in. */
+.robottool__modes {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--panel2, rgba(128, 128, 128, 0.16));
+}
+.robottool__mode,
+.robottool__text {
+  flex: 0 0 auto;
+  height: 1.85rem;
+  padding: 0 0.7rem;
+  font-family: var(--font-ui, 'Plus Jakarta Sans', system-ui, sans-serif);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--txt2, var(--text-muted, #a6ab9e));
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.robottool__mode {
+  height: calc(1.85rem - 4px);
+  border-radius: 4px;
+}
+.robottool__mode:hover:not(:disabled):not(.is-on),
+.robottool__text:hover:not(:disabled):not(.is-on) {
+  color: var(--head, var(--text, #e4e7df));
+  background: rgba(128, 128, 128, 0.16);
+}
+.robottool__mode.is-on {
+  font-weight: 600;
+  color: var(--goldink, #6b4e17);
+  background: var(--goldbg, #f2e2b3);
+}
+.robottool__text {
+  color: var(--head, var(--text, #e4e7df));
+  border-color: var(--fl-border-strong, var(--border, #3a3f35));
+  background: var(--card, transparent);
+}
+.robottool__text.is-on {
+  font-weight: 600;
+  color: var(--greentext, #1c7a4d);
+  border-color: var(--green, #1d8150);
+  background: var(--greenpill, #e6f4ec);
+}
+.robottool__text--primary {
+  font-weight: 600;
+  color: var(--fl-on-primary, #fff);
+  border-color: var(--green, #1d8150);
+  background: var(--green, #1d8150);
+}
+.robottool__text--primary:hover:not(:disabled):not(.is-on) {
+  color: var(--fl-on-primary, #fff);
+  background: var(--green, #1d8150);
+  filter: brightness(1.08);
+}
+.robottool__mode:disabled,
+.robottool__text:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.robottool__mode:focus-visible,
+.robottool__text:focus-visible {
+  outline: 2px solid var(--green, #1d8150);
+  outline-offset: 1px;
+}

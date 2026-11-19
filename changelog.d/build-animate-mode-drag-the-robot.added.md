@@ -1,0 +1,1 @@
+- **Build: Animate mode — drag the robot to pose it, turn one joint with a ring, live Mirror, a grouped Joints panel, one-press Save pose and undo for poses.** 

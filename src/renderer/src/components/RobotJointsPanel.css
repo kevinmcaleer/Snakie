@@ -1,0 +1,138 @@
+/* Joints panel (Animate mode) — Snakie Flat: solid fills, hairlines, 6px radius,
+   Plus Jakarta Sans for labels and IBM Plex Mono for numbers. Own `robotjoints__`
+   BEM prefix. */
+.robotjoints {
+  flex: 0 0 248px;
+  width: 248px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--shellbd, var(--border, #2c3027));
+  background: var(--panel, var(--bg-elevated, #1b1e18));
+  color: var(--head, var(--text, #e4e7df));
+  font-family: var(--font-ui, 'Plus Jakarta Sans', system-ui, sans-serif);
+  font-size: 0.8rem;
+}
+.robotjoints__head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 40px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--shellbd, var(--border, #2c3027));
+}
+.robotjoints__title {
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+.robotjoints__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: var(--txt2, var(--text-muted, #a6ab9e));
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.robotjoints__close:hover {
+  color: var(--head, var(--text, #e4e7df));
+  background: var(--panel2, rgba(128, 128, 128, 0.16));
+}
+.robotjoints__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+}
+.robotjoints__group + .robotjoints__group {
+  margin-top: 12px;
+}
+.robotjoints__group-title {
+  margin: 0 0 4px;
+  padding: 0 4px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--txt2, var(--text-muted, #a6ab9e));
+}
+.robotjoints__row {
+  padding: 6px 4px 8px;
+  border-radius: 6px;
+}
+.robotjoints__row.is-active {
+  background: var(--goldbg, #3a3018);
+  color: var(--goldink, #f0dca6);
+}
+.robotjoints__row-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+}
+.robotjoints__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.robotjoints__tag {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--greentext, #8fe6b6);
+  background: var(--greenpill, #1e3a2a);
+  border-radius: 8px;
+}
+.robotjoints__num {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-family: var(--font-mono, 'IBM Plex Mono', ui-monospace, monospace);
+  font-size: 0.76rem;
+}
+.robotjoints__num input {
+  width: 3.6rem;
+  height: 24px;
+  padding: 0 4px;
+  font: inherit;
+  text-align: right;
+  color: inherit;
+  background: var(--card, transparent);
+  border: 1px solid var(--shellbd, var(--border, #2c3027));
+  border-radius: 6px;
+}
+.robotjoints__num input:focus-visible,
+.robotjoints__slider:focus-visible,
+.robotjoints__close:focus-visible {
+  outline: 2px solid var(--green, #3fb97a);
+  outline-offset: 1px;
+}
+.robotjoints__slider {
+  display: block;
+  width: 100%;
+  margin: 4px 0 0;
+  accent-color: var(--green, #3fb97a);
+}
+.robotjoints__row.is-active .robotjoints__slider {
+  accent-color: #d99a1c;
+}
+.robotjoints__empty {
+  margin: 8px 4px;
+  color: var(--txt2, var(--text-muted, #a6ab9e));
+}
+
+/* The Sync button floats at the top-right of the whole Build mount, left of the
+   ViewCube. With the Joints panel docked on the right the stage is narrower, so
+   move Sync in by the panel's width (not on a phone, where the panel is a sheet). */
+.shell:not([data-size='phone']) .robotdock--full:has(.robotjoints) .esync__float--right {
+  right: calc(164px + 248px);
+}

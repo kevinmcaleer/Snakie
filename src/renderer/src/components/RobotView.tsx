@@ -27,6 +27,20 @@ import {
 } from './robot-pose'
 import { solveCCD, type IkJoint } from './robot-ik'
 import { createIkGizmo, type IkChainRef, type IkGizmoHandle } from './robot-ik-gizmo'
+import { createJointRing, type JointRingHandle } from './robot-joint-ring'
+import {
+  friendlyJointName,
+  loadBuildMode,
+  loadLiveMirror,
+  mirrorPatch,
+  nextPoseName,
+  posturesDiffer,
+  saveBuildMode,
+  saveLiveMirror,
+  type BuildMode,
+  type Travel
+} from './robot-animate'
+import { RobotJointsPanel } from './RobotJointsPanel'
 import {
   addMeshLink,
   addPrimitive,
@@ -496,6 +510,10 @@ export function RobotView({
   metaRef.current = jointMeta
   valuesRef.current = values
   overridesRef.current = overrides
+  // Animate-mode bridges, filled in further down (the handlers they point at need
+  // state declared later). Safe no-ops until then.
+  const mirrorLiveRef = useRef<(changed: string[]) => Record<string, number>>(() => ({}))
+  const poseGestureRef = useRef({ begin: (): void => {}, commit: (): void => {} })
 
   // Set a joint on the live robot (mimic followers update automatically).
   const applyToRobot = (native: Record<string, number>): void => {
@@ -533,7 +551,9 @@ export function RobotView({
 
   const handleJointChange = (name: string, native: number): void => {
     robotRef.current?.setJointValue(name, native)
-    setValues((v) => ({ ...v, [name]: native }))
+    // Animate + Mirror: the partner joint follows (a no-op everywhere else).
+    const mirrored = mirrorLiveRef.current([name])
+    setValues((v) => ({ ...v, [name]: native, ...mirrored }))
   }
 
 
@@ -825,11 +845,26 @@ export function RobotView({
   // orbits. (Grab on a robot with nothing to pose is a no-op, so orbit and
   // tap-to-select still work there.)
   const [buildTool, setBuildTool] = useState<BuildTool>(() => (isPhoneViewport() ? 'ik' : 'select'))
+  // ASSEMBLE shapes the model; ANIMATE poses it. Animate needs a joint that can
+  // turn, so a remembered "animate" on a robot with none falls back to Assemble.
+  const [buildMode, setBuildMode] = useState<BuildMode>(() =>
+    loadBuildMode(typeof window === 'undefined' ? undefined : window.localStorage, 'assemble')
+  )
+  const canPose = jointMeta.some((m) => !m.isMimic && (m.type === 'revolute' || m.type === 'continuous'))
+  const animating = poseUI && buildMode === 'animate' && canPose
+  const animatingRef = useRef(false)
+  animatingRef.current = animating
   const buildToolRef = useRef<BuildTool>(buildTool)
-  buildToolRef.current = buildTool
+  // In Animate a drag on the robot always poses it — no tool to pick first.
+  buildToolRef.current = animating ? 'ik' : buildTool
   const onSetTool = (t: BuildTool): void => {
     setBuildTool(t)
     setMeasureActive(false) // the two canvas interaction modes are exclusive
+  }
+  const onSetMode = (m: BuildMode): void => {
+    setBuildMode(m)
+    saveBuildMode(window.localStorage, m)
+    if (m === 'animate') setMeasureActive(false)
   }
   // Camera state preserved across the content re-parse (so an edit never jumps
   // the view); keyed by the open file so a NEW robot still auto-frames.
@@ -1022,7 +1057,7 @@ export function RobotView({
       const el = document.activeElement as HTMLElement | null
       if (
         el &&
-        (el.tagName === 'INPUT' ||
+        ((el.tagName === 'INPUT' && (el as HTMLInputElement).type !== 'range') ||
           el.tagName === 'TEXTAREA' ||
           el.isContentEditable ||
           el.closest('.monaco-editor'))
@@ -2037,6 +2072,137 @@ export function RobotView({
   const timelineLoadedFolder = useRef<string | null>(null)
   timelineRef.current = timeline
 
+  // ── Animate mode: live mirror, the joint ring, and undo for poses ──────────
+  const mirrorPairsRef = useRef<MirrorPair[]>([])
+  mirrorPairsRef.current = mirrorPairs
+  const [liveMirror, setLiveMirror] = useState(() =>
+    loadLiveMirror(typeof window === 'undefined' ? undefined : window.localStorage)
+  )
+  const [jointsOpen, setJointsOpen] = useState(() => !isPhoneViewport())
+  const [ringJoint, setRingJoint] = useState<string | null>(null)
+  const ringApiRef = useRef<JointRingHandle | null>(null)
+  const mirrorOn = animating && liveMirror && mirrorPairs.length > 0
+  const mirrorOnRef = useRef(false)
+  mirrorOnRef.current = mirrorOn
+  // Joints currently being driven by their mirror partner (shown in the panel).
+  const [mirroredNow, setMirroredNow] = useState<Set<string>>(() => new Set())
+
+  // The posture as the 3-D model has it RIGHT NOW (a drag poses the model first
+  // and only syncs React state on release).
+  const liveAngles = (): Record<string, number> => {
+    const r = robotRef.current
+    const out: Record<string, number> = { ...valuesRef.current }
+    if (!r) return out
+    for (const m of metaRef.current) {
+      if (m.isMimic) continue
+      const a = (r.joints?.[m.name] as { angle?: number } | undefined)?.angle
+      if (typeof a === 'number') out[m.name] = a
+    }
+    return out
+  }
+  // LIVE MIRROR: after `changed` joints moved on the model, move their partners
+  // to match. Returns what it set (native units) so callers can sync state.
+  mirrorLiveRef.current = (changed) => {
+    const r = robotRef.current
+    if (!mirrorOnRef.current || !r) return {}
+    const travel: Record<string, Travel> = {}
+    for (const m of metaRef.current) travel[m.name] = effectiveLimit(m, overridesRef.current[m.name])
+    const vals: Record<string, number> = {}
+    for (const n of changed) {
+      const a = (r.joints?.[n] as { angle?: number } | undefined)?.angle
+      if (typeof a === 'number') vals[n] = a
+    }
+    const patch = mirrorPatch(vals, changed, mirrorPairsRef.current, travel)
+    for (const [n, v] of Object.entries(patch)) r.setJointValue(n, v)
+    const names = Object.keys(patch)
+    setMirroredNow((prev) =>
+      prev.size === names.length && names.every((n) => prev.has(n)) ? prev : new Set(names)
+    )
+    return patch
+  }
+
+  // UNDO FOR POSES. Model edits already undo (the URDF history above); a pose is
+  // live joint values, not a file edit, so it gets its own stack. A gesture
+  // (drag a part, turn a ring, drag a slider, Rest) calls `begin` before and
+  // `commit` after. `begin` also folds in anything that moved the robot in
+  // between — recalling a pose, scrubbing the timeline — as its own step.
+  const poseHistRef = useRef<History<Record<string, number>>>(historyInit({}))
+  const [, bumpPoseHist] = useReducer((n: number) => n + 1, 0)
+  const poseBegin = (): void => {
+    const now = liveAngles()
+    const h = poseHistRef.current
+    if (Object.keys(h.present).length === 0) poseHistRef.current = historyInit(now)
+    else if (posturesDiffer(h.present, now)) poseHistRef.current = historyPush(h, now, 100)
+  }
+  const poseCommit = (): void => {
+    const now = liveAngles()
+    setValues(now)
+    const h = poseHistRef.current
+    if (Object.keys(h.present).length === 0) poseHistRef.current = historyInit(now)
+    else if (posturesDiffer(h.present, now)) poseHistRef.current = historyPush(h, now, 100)
+    bumpPoseHist()
+  }
+  poseGestureRef.current = { begin: poseBegin, commit: poseCommit }
+  const applyPosture = (p: Record<string, number>): void => {
+    applyToRobot(p)
+    setValues((v) => ({ ...v, ...p }))
+    setMirroredNow(new Set())
+  }
+  const undoPose = (): void => {
+    poseBegin()
+    if (!histCanUndo(poseHistRef.current)) return
+    poseHistRef.current = historyUndo(poseHistRef.current)
+    applyPosture(poseHistRef.current.present)
+    bumpPoseHist()
+  }
+  const redoPose = (): void => {
+    if (!histCanRedo(poseHistRef.current)) return
+    poseHistRef.current = historyRedo(poseHistRef.current)
+    applyPosture(poseHistRef.current.present)
+    bumpPoseHist()
+  }
+  // While animating, ⌘Z walks back the POSE (the model can't be edited there).
+  if (animating) undoRedoRef.current = { undo: undoPose, redo: redoPose }
+  // A different file is a different robot: its poses don't undo into this one.
+  useEffect(() => {
+    poseHistRef.current = historyInit({})
+    setMirroredNow(new Set())
+    bumpPoseHist()
+  }, [activeFile?.id])
+
+  const handleAnimateReset = (): void => {
+    poseBegin()
+    handleResetPose()
+    poseCommit()
+  }
+  // SAVE POSE in one press: no dialog, no name to type first. It is named
+  // "Pose N" and can be renamed from the Poses list.
+  const handleQuickSavePose = (): void => {
+    const name = nextPoseName(posesRef.current.map((p) => p.name))
+    const next = [...posesRef.current, { name, values: capturePoseValues(metaRef.current, liveAngles()) }]
+    setPoses(next)
+    void persist((m) => {
+      m.poses = next
+    }).then(() => setSavingLabel((l) => (l === 'saved ✓' ? `saved “${name}”` : l)))
+  }
+  // The joint that turns a part: the nearest turnable joint at or above its link.
+  const turnJointForLink = (link: string): string | null => {
+    const byChild = new Map(readAllJoints(contentRef.current).map((j) => [j.child, j]))
+    const seen = new Set<string>()
+    let cur: string | undefined = link
+    while (cur && !seen.has(cur)) {
+      seen.add(cur)
+      const j = byChild.get(cur)
+      if (!j) return null
+      const m = metaRef.current.find((x) => x.name === j.name)
+      if (m && !m.isMimic && (m.type === 'revolute' || m.type === 'continuous')) return j.name
+      cur = j.parent
+    }
+    return null
+  }
+  const turnJointForLinkRef = useRef(turnJointForLink)
+  turnJointForLinkRef.current = turnJointForLink
+
   const movableNames = jointMeta.filter((m) => !m.isMimic).map((m) => m.name)
   // Poses that actually apply to the DISPLAYED robot — at least one of their joints
   // exists here. Guards the compact dropdown against a robot.yml whose poses belong to
@@ -2881,6 +3047,41 @@ export function RobotView({
     })
     ikApiRef.current = ikGizmoApi
     ikGizmoApi.setArmed(ikGoalRef.current)
+
+    // Joint ring (Animate): point at a part, drag the ring to turn just its joint.
+    const jointRingApi = createJointRing(scene, {
+      getRobot: () => robotRef.current,
+      camera,
+      controls,
+      dom: renderer.domElement,
+      isActive: () =>
+        animatingRef.current && !ikGoalRef.current && !measureActiveRef.current && !jointPickRef.current.active,
+      jointForLink: (link) => turnJointForLinkRef.current(link),
+      getLimit: (name) => {
+        const m = metaRef.current.find((x) => x.name === name)
+        return m ? effectiveLimit(m, overridesRef.current[name]) : { lower: -Math.PI, upper: Math.PI }
+      },
+      onBegin: () => poseGestureRef.current.begin(),
+      onLive: (name) => {
+        mirrorLiveRef.current([name])
+      },
+      onCommit: () => poseGestureRef.current.commit(),
+      onReadout: (r) => {
+        if (!r) {
+          setBuildDim(null)
+          return
+        }
+        const m = metaRef.current.find((x) => x.name === r.joint)
+        const rect = renderer.domElement.getBoundingClientRect()
+        setBuildDim({
+          x: r.clientX - rect.left + 14,
+          y: r.clientY - rect.top + 14,
+          text: `${friendlyJointName(r.joint)} ${Math.round(toDisplay(m?.type ?? 'revolute', r.native))}°`
+        })
+      },
+      onFocus: (name) => setRingJoint(name)
+    })
+    ringApiRef.current = jointRingApi
 
     // Navigation cube (top-right): mirrors the camera; a face-click snaps the
     // view to that orthographic direction. Its own canvas → no OrbitControls clash.
@@ -4236,6 +4437,7 @@ export function RobotView({
             if (!link || !robot.links[link]) return
             const joints = ikChainJoints(link)
             if (!joints.length) return // the base, or no movable ancestor joint → no-op
+            poseGestureRef.current.begin() // undo checkpoint (Animate)
             setSelectedLink(link)
             robot.updateMatrixWorld(true)
             camera.getWorldDirection(camDir)
@@ -4280,6 +4482,7 @@ export function RobotView({
               iterations: 6
             })
             grab.joints.forEach((name, i) => robot.setJointValue(name, solved[i]))
+            mirrorLiveRef.current(grab.joints) // Animate + Mirror: the other side follows
             robot.updateMatrixWorld(true)
           }
           // Push the grabbed chain's final joint angles into React `values` so the pose
@@ -4299,6 +4502,8 @@ export function RobotView({
               }
               return next
             })
+            // Sync every joint the drag moved (mirror partners too) + undo step.
+            poseGestureRef.current.commit()
           }
 
           // ── Join tool (#354): click a point on two blocks to connect them ──
@@ -5001,6 +5206,7 @@ export function RobotView({
       controls.update()
       boneModeApi.update() // live skeleton overlay (#536) — follows every joint drive
       ikGizmoApi.update() // interactive IK goal gizmo (#540) — composes with Bone Mode
+      jointRingApi.update() // Animate's joint ring — follows the hovered part's joint
       const cs = comOverlayApi.update() // CoM + support polygon (#558)
       if (comModeRef.current) {
         // Push to the HUD only when the readout actually changes — no per-frame renders.
@@ -5042,6 +5248,8 @@ export function RobotView({
       boneModeApi.dispose()
       comOverlayApi.dispose()
       ikApiRef.current = null
+      ringApiRef.current = null
+      jointRingApi.dispose()
       ikGizmoApi.dispose()
       if (viewCube) {
         viewCube.dom.remove()
@@ -5064,7 +5272,8 @@ export function RobotView({
   }, [content, effectiveBase, isEmpty, poseUI, compact, currentFolder, activeFile?.id, projection])
 
   const showPanel = poseUI && !error && !isEmpty
-  const showTimeline = poseUI && !error && !isEmpty && movableNames.length > 0
+  // Motion tools belong to Animate: Assemble gets the whole stage for the model.
+  const showTimeline = poseUI && !error && !isEmpty && movableNames.length > 0 && animating
 
   return (
     <div className={`robotview${compact ? ' robotview--compact' : ''}${poseUI ? ' robotview--pose' : ''}`}>
@@ -5461,17 +5670,31 @@ export function RobotView({
             tool={buildTool}
             onSetTool={onSetTool}
             canEdit={canEdit}
-            canPose={jointMeta.some(
-              (m) => !m.isMimic && (m.type === 'revolute' || m.type === 'continuous')
-            )}
+            canPose={canPose}
             onAdd={handleAddPrimitive}
             measureActive={measureActive}
             onToggleMeasure={() => setMeasureActive((a) => !a)}
-            canUndo={histCanUndo(histRef.current)}
-            canRedo={histCanRedo(histRef.current)}
-            onUndo={undoUrdf}
-            onRedo={redoUrdf}
+            canUndo={animating ? histCanUndo(poseHistRef.current) : histCanUndo(histRef.current)}
+            canRedo={animating ? histCanRedo(poseHistRef.current) : histCanRedo(histRef.current)}
+            onUndo={animating ? undoPose : undoUrdf}
+            onRedo={animating ? redoPose : redoUrdf}
             onAddJoint={handleAddJoint}
+            mode={animating ? 'animate' : 'assemble'}
+            onSetMode={onSetMode}
+            animate={{
+              mirror: mirrorOn,
+              canMirror: mirrorPairs.length > 0,
+              onToggleMirror: () => {
+                const next = !liveMirror
+                setLiveMirror(next)
+                saveLiveMirror(window.localStorage, next)
+                if (!next) setMirroredNow(new Set())
+              },
+              onReset: handleAnimateReset,
+              jointsOpen,
+              onToggleJoints: () => setJointsOpen((o) => !o),
+              onSavePose: handleQuickSavePose
+            }}
           />
         )}
         {showPanel && (
@@ -5632,6 +5855,20 @@ export function RobotView({
             </div>
           )}
       </div>
+      {showPanel && animating && jointsOpen && (
+        <RobotJointsPanel
+          jointMeta={jointMeta}
+          values={values}
+          overrides={overrides}
+          activeJoint={ringJoint}
+          mirrored={mirroredNow}
+          onChange={handleJointChange}
+          onBegin={poseBegin}
+          onCommit={poseCommit}
+          onHoverJoint={(name) => ringApiRef.current?.setJoint(name)}
+          onClose={() => setJointsOpen(false)}
+        />
+      )}
       </div>
       {showTimeline && (
         <RobotMotionDock
