@@ -10,6 +10,10 @@ import '@fontsource/plus-jakarta-sans/600.css'
 import '@fontsource/plus-jakarta-sans/700.css'
 import './index.css'
 import { EmbedApp } from './code-embed/EmbedApp'
+import { EMBED_PARAMS } from './code-embed/embed-boot'
+
+// The robot frame (#1321) brings three.js; a code frame never loads it.
+const RobotFrame = React.lazy(() => import('./code-embed/RobotFrame'))
 
 /**
  * THE CODE EMBED'S ENTRY (#1286, epic #1285) — `embed.html` in the web build.
@@ -20,6 +24,12 @@ import { EmbedApp } from './code-embed/EmbedApp'
  */
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <EmbedApp />
+    {EMBED_PARAMS.robot ? (
+      <React.Suspense fallback={null}>
+        <RobotFrame params={EMBED_PARAMS} />
+      </React.Suspense>
+    ) : (
+      <EmbedApp />
+    )}
   </React.StrictMode>
 )

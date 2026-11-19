@@ -16,6 +16,7 @@
  *   &autorun=1  &theme=skeuomorph|dark  &height=auto|<px>
  *   &engine=micropython|pyodide  &packages=numpy,pandas  &id=<host's id>
  *   &board=pico2w  &pins=0|1  &project=<kevsrobots project id>  &paths=main.py,servo.py
+ * /embed.html?robot=1&project=<id>   (the project's robot, moved by a code frame's Run)
  * ```
  */
 
@@ -63,6 +64,10 @@ export interface EmbedParams {
    * wiring, so the pin strip can say what is on each pin.
    */
   project: string | null
+  /** Draw the project's robot instead of code (#1321): `robot=1` with `project=` or `urdf=`. */
+  robot: boolean
+  /** A URDF to draw, by https URL; its meshes are read from beside it. */
+  urdf: string | null
   /** The host's id for this embed, echoed in every `postMessage`. */
   id: string | null
 }
@@ -89,6 +94,18 @@ function flag(value: string | null, fallback: boolean): boolean {
   if (v === '' || v === '1' || v === 'true' || v === 'yes' || v === 'on') return true
   if (v === '0' || v === 'false' || v === 'no' || v === 'off') return false
   return fallback
+}
+
+/** An https address, or null: the robot frame fetches nothing else. */
+function httpsUrl(value: string | null): string | null {
+  const v = clean(value)
+  if (!v || v.length > 2000) return null
+  try {
+    const url = new URL(v)
+    return url.protocol === 'https:' ? url.href : null
+  } catch {
+    return null
+  }
 }
 
 /** `10-40`, `10:40`, `10` (one line), `10-` (to the end). */
@@ -210,6 +227,8 @@ export function parseEmbedParams(search: string): EmbedParams {
     // Pins are MicroPython's: CPython in the browser has no `machine`.
     pins: engine === 'micropython' && flag(q.get('pins'), true),
     project: /^\d{1,12}$/.test(clean(q.get('project')) ?? '') ? (clean(q.get('project')) as string) : null,
+    robot: flag(q.get('robot'), false),
+    urdf: httpsUrl(q.get('urdf')),
     id: id && id.length <= 100 ? id : null
   }
 }

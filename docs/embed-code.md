@@ -147,6 +147,33 @@ wire it draws, and they survive into the exported SVG. `boardWiring()` in
 the ids of the wires on the way, so a page showing that SVG can light a wire by
 pin. Pictures saved before this carry no ids; saving the wiring again adds them.
 
+## The robot frame (#1321)
+
+```html
+<div data-snakie-robot="42"></div>
+```
+
+or `/embed.html?robot=1&project=42`. The frame draws the robot a kevsrobots
+project carries among its files: the `.urdf` the wiring names (else the first
+one), with each mesh found by file name among the same files, so
+`package://arm/meshes/base.stl` is the project file `base.stl`. STL meshes are
+drawn; anything else shows as a small block. Drag to look around; **Joints**
+opens a slider for each moving joint.
+
+When a code frame on the same page runs, `snakie-embed.js` passes each
+`pin-state` on to the robot frame, and the joints the project binds to servo
+pins (`robot.servoJointMap` in its wiring, set in Robot View's servo panel)
+turn. A PWM duty is read as a hobby servo pulse at 50 Hz: 0.5 ms is 0 degrees
+and 2.5 ms is 180, then the binding's calibration maps that onto the joint. A
+duty of 0 is a servo switched off and moves nothing.
+
+`data-snakie-robot="https://…/arm.urdf"` (or `urdf=`) draws a URDF from any
+https address that allows cross-origin reads, with meshes resolved beside it.
+There are no bindings then, so only the sliders move it.
+
+three.js loads only in a robot frame; a code frame never fetches it. The
+arithmetic lives in `code-embed/robot-drive.ts`.
+
 ## Engines
 
 - **MicroPython** (default): the web app's own WASM interpreter (about 0.23 MB),
@@ -189,3 +216,6 @@ headers the host page would have to send (which would break its YouTube embeds).
   program runs, but only its printed output and its pin states show.
 - Pressing a simulated button: input pins are listed, but cannot be driven yet.
 - `input()` in either engine.
+- The robot frame follows servos only: motors, wheels and a robot driving
+  around the floor are not drawn, and a servo library that sets a PWM frequency
+  other than 50 Hz is read as if it were 50.
