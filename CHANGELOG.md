@@ -10,6 +10,269 @@ when a release is cut. See `changelog.d/README.md`.
 
 ## [Unreleased]
 
+## [0.92.0] - 2026-11-19
+
+### Added
+
+- **An embeddable bundle of the parts catalog, Part Editor and wiring canvas
+  (#1277).** `npm run build:embed` writes `dist-embed/snakie-parts.js` and
+  `snakie-parts.css`: one script exposing `window.SnakieParts`, so another site
+  (kevsrobots.com first) can mount `mountCatalog`, `mountPartEditor`,
+  `mountWiring` and a read-only `mountPartView` in its own pages. The host passes its own part libraries and
+  save callbacks instead of Snakie's file system. The wiring handle can also
+  export the canvas as an SVG with its images inlined, and write the BOM and
+  pinout tables as Markdown. The bundle carries the `parts.yml` / `robot.yml`
+  helpers too. Its CSS is scoped under `.snakie-embed`, so neither page's styles
+  touch the other's. The desktop and web builds are unchanged. See
+  `docs/embed.md`.
+
+- **Code embeds: views=0 hides the Code / Split / Blocks switch (#1285).**
+
+- **Embeddable code editor for tutorials (#1285, #1286, #1287, #1288, #1289).**
+  `app.snakie.org/embed.html?gist=<id>&file=main.py` (or `?repo=owner/name&path=…`)
+  shows a gist or repo file in Snakie's editor, with Code / Split / Blocks views
+  and a REPL that runs it in the reader's browser, for other sites to iframe. It
+  replaces trinket.io. URL options choose the view, the blocks toolbox, a
+  read-only viewer, autorun, the theme, a line range and the height. The footer
+  links to the code on GitHub and to **Open in Snakie**, which opens the same
+  file (with the reader's edits) in a new tab of the full app. `engine=pyodide`
+  runs full CPython (numpy, pandas, matplotlib plots) in the same box, loaded
+  from jsDelivr on the first Run. `snakie-embed.js` turns a
+  `<div data-snakie-gist="…">` into the iframe and sizes it to fit. See
+  `docs/embed-code.md`.
+
+- **Send to kevsrobots: optional Sign in with kevsrobots and sending wiring to a kevsrobots project (#1310).**
+
+- **Shields dock onto their Arduino.** A part can now seat on the MCU board
+  itself, not just on a placed part, when the board's part declares a mount:
+  drop a shield on an Arduino UNO and its pins join the UNO's by name, so the
+  wiring is implicit. Drag the shield away to take it off; Alt/Option-drag a
+  seated part to move the whole stack (a shield covers its board, so there is
+  nothing else to grab). A board also docks when it declares the mount's
+  `footprint` name, whatever its pin layout.
+- **FunduMoto L298P motor shield for the kevsrobots.com catalog**
+  (`examples/parts/kevsrobots-catalog/`), with its servo, ultrasonic,
+  Bluetooth, RGB, pin 2 and sensor headers railed to the right UNO pins, and a
+  top view and 3-D model drawn by the new `scripts/fundumoto-shield.mjs`. The
+  four UNO boards gain a `shield` socket (footprint `uno-shield`).
+- **Arduino Motor Shield Rev3 for the kevsrobots.com catalog**, with Arduino's
+  own top view, its TinkerKit connectors and motor terminal railed to the UNO
+  (Vin included, as the shield ships with Vin Connect closed), and a 3-D model
+  built from Arduino's drawing by the new `scripts/arduino-motor-shield.mjs`.
+
+- **Arduino UNO R3, UNO R4 Minima, UNO R4 WiFi and UNO Q for the kevsrobots.com
+  parts catalog.** They live in the new `examples/parts/kevsrobots-catalog/`,
+  which Snakie never loads: MicroPython doesn't run on these boards, so the app
+  doesn't offer them, but the site's catalog imports them beside the Standard
+  parts. Each has Arduino's top-down photo with every header pad placed over
+  it, pins checked against Arduino's official pinouts, a help page and a 3-D
+  model — Arduino's own STEP converted to STL for the R4s and UNO Q, and one
+  generated from the Eagle board for the R3 by the new
+  `scripts/arduino-uno-meshes.mjs`. (They were briefly in the Standard library
+  on master; Standard library 1.20.1 drops them again.)
+
+- **Background picker in the embedded wiring canvas: transparent, black or blue blueprint, saved with the wiring.**
+
+- **Build workspace suggests BetterCAD when a project has no robot.** While the demo arm stands in, a small card over the stage offers New robot, Open URDF… and "Design it in BetterCAD by kevsrobots"; × tucks it into a "Start your robot" pill.
+
+- **Connector plugs in Standard Parts.** Eight crimp housings, the plugs on the
+  ends of leads, each with a 3D model: the Molex Mini-SPOX 5264 3-way on every
+  Feetech STS3215 servo lead (D V G), JST XH 2/3/4-way, JST PH 2-way, JST SH
+  4-way (Qwiic / STEMMA QT) and Dupont 1 and 3-way. They're under a new
+  Connector category. The models are the same ones kevsrobots.com's 3D
+  assembly scenes put on the ends of wires (markdown-studio#276), and the part
+  ids match the plugs' connector ids there.
+
+- **Go to Definition for your own code.** Hover over a variable, function,
+  class, import or `self.x` attribute to see the line it was defined on, with
+  a **Go to line N** link. Right-click → **Go to Definition** / **Peek**, F12,
+  or Cmd/Ctrl+click also jump there. It follows Python scope: a function's own
+  parameters and locals come first, and at module level it picks the latest
+  assignment above the cursor.
+
+- **Autocomplete that knows MicroPython's API.** The editor now reads the
+  official MicroPython stubs (rp2 + esp32 ports and MicroPython's standard
+  library, generated by `scripts/gen-micropython-stubs.py`) and follows your
+  file: `led.` after `led = Pin(25, Pin.OUT)` lists `on`/`off`/`toggle`/`value`,
+  `self.i2c.` after `self.i2c = I2C(0, …)` lists `scan`/`writeto`,
+  `m.` after `import machine as m` and `utime.` work, and
+  `from machine import ` lists what `machine` has. Typing `Pin(` or
+  `pwm.duty_u16(` shows the parameters with the current one highlighted, and
+  hovering a name shows its signature and docs. Port-only API is labelled
+  (`RP2 (Pico) only`, `ESP32 only`); none of it is offered to a CircuitPython
+  board.
+
+- **Multilingual blocks.** The Blocks canvas can be shown in any of Scratch's 80 languages: pick one in *Settings ▸ Appearance ▸ Language*, set `language:` in a project's `robot.yml` so the project opens in it everywhere, or add `?lang=xx` to the web app's address. Blockly's stock blocks and menus use Blockly's own translations. Snakie's own blocks and categories are translated into Deutsch, Français and Español so far, and show English elsewhere. Arabic, Hebrew, Persian and Sorani mirror the canvas right to left. Only the presentation changes: the generated Python and everything sent to the board stay English. See `docs/multilingual-blocks.md`.
+
+- **The N20 Motor has a 3D model.** The Standard library's N20 micro gear
+  motor now carries a real model (shaft, gearbox, can and terminal tabs) in
+  Snakie's part frame, millimetres with Z up and the shaft pointing to the top
+  of the picture, so its gearbox, can and terminals sit over the 2-D artwork and
+  it lands the right way up in Build and in the kevsrobots catalog.
+
+- **Open Duck Mini parts in the Standard library.** Eleven new parts for the
+  Open Duck Mini v2 robot, built from product photos and pinouts with the
+  build-part-from-image skill: Raspberry Pi Zero 2 W, BNO055 IMU, Feetech
+  STS3215 bus servo, Waveshare Bus Servo Adapter (A), 18650 cell, 2× 18650
+  holder, 2S BMS, HENGE 8A UBEC 5 V regulator, DPDT slide power switch, USB-C 2S
+  charger and the SS-10 foot micro switch. The servo keeps the
+  `sts3215-bus-servo` id the kevsrobots.com catalog already uses, so the
+  catalog import updates that part instead of adding a duplicate.
+
+- **Open in Snakie from kevsrobots lessons, on the web or the desktop app (kevsrobots.com#581).**
+  The desktop app now answers `snakie://open?…` links, so "Open in Snakie" on a
+  lesson's code can hand it straight to the installed app as a new unsaved tab
+  (the same `?gist=` / `?repo=` / `?name=` and `#src=` the web app takes). A
+  second launch of Snakie now brings the running window forward instead of
+  opening another copy. On the web, code opened with `?name=` keeps its file
+  name instead of becoming `main.py`.
+
+- **Part Editor: crop the board photo and zoom it to fit.** The Background
+  layer's BG menu gains *Crop to a box…*: drag a box over the part of an
+  imported photo to keep, and the rest is cut away (with *Remove background
+  after crop*, on by default, the kept part's white backdrop goes too).
+  *Zoom to fit* then trims the transparent margin and scales the photo,
+  undistorted, to fill the board outline. Both are one undo step, and *Reset
+  image* now restores the photo's placement as well as its pixels.
+
+- **`npm run parts:promote` brings kevsrobots.com catalog parts into the
+  Standard library.** The Standard library is the master copy of the parts
+  catalog, and the site imports it. Parts made on the site never came back;
+  this script lists the ones the library is missing (and site duplicates of
+  library parts) and with `--write` copies them in, photo and mesh included,
+  for review.
+
+- **Snakie fits small laptops, tablets and phones.** Below 1100px wide the
+  editor now fills the width instead of sharing it with four columns. Files
+  slides over the editor as a drawer, and the console, board and instruments
+  share one pull-up sheet under the editor (Console / Board / Instruments tabs;
+  tap the grip to make it taller). A small floating board peeks over the editor
+  and opens the Board tab when tapped. The workspace tabs become a dropdown. On
+  phones (640px and below) the activity bar folds into a ☰ menu and Run / Reset
+  shrink to icons. The desktop layout is unchanged.
+
+- **Updating keeps your work.** When a new version is out, Snakie now suggests a reload (web) or restart (desktop) instead of reloading mid-session, and every open tab, including unsaved changes, untitled files and files open from the board, comes back afterwards.
+
+### Changed
+
+- **Snakie code embeds: clean rounded corners on any page, and width/height sizes (narrow…full, short…tall) (#1285).**
+
+- **Arduino UNO R3 and UNO Q 3D models have a socket at each header pin, so a shield's pins line up on them in 3D scenes.**
+
+- **A quieter status bar in Build.** The Build workspace has no code and no
+  board on screen, so the status bar no longer shows the device connection, the
+  runtime, the line count, the saved state, **Flash firmware** or the rotating
+  tips there. Sync,
+  messages and the version stay, and everything comes back when you switch to
+  Code, Blocks or Electronics.
+
+- **The Build workspace fits a phone.** Build had no small-screen layout: on a
+  phone the tool bar ran off both edges with Sync sitting on top of Move and
+  Grab, the hierarchy panel covered half the robot, and most controls were
+  13–30px. Now the tool bar is one scrolling row of finger-sized buttons, the
+  hierarchy panel and the properties dialog are sheets that rise from the bottom
+  (side panels in landscape), the ViewCube is smaller with Home and projection
+  always visible beside it instead of appearing on hover, and the "no robot yet"
+  card sits clear of the cube and zoom bar. A phone opens on **Grab**, so a
+  finger on a part poses it and a finger on empty space orbits; the build tools
+  keep working when the hierarchy panel is hidden (they silently did nothing
+  before, on desktop too). **Press and hold** a part in the tree for its menu —
+  iOS never sends a right-click. A phone held sideways now gets the phone shell
+  (☰ menu, icon tool bar) rather than the tablet one, which left the 3-D view
+  about 130px tall.
+
+- **The console sheet minimises, and you can drag it.** On small screens the
+  Console / Board / Instruments sheet could only flip between half height and
+  tall, and only by tapping its grip. Now you can pull or push the bar itself and
+  it settles at one of three heights: the top, the middle, or minimised to just
+  the grip and the three tab names along the bottom, leaving the rest of the
+  screen for your code. Tapping the grip steps through the same three stops, and
+  tapping a tab on a minimised sheet opens it.
+
+- **The Electronics workspace fits a phone.** Like Build before it, Electronics
+  had no small-screen layout: at phone width the parts Library took two-thirds
+  of the screen and the project Browser the rest, the header ran off the right
+  edge (Live and Help were unreachable), and the "drag from a pin…" hint became a
+  seven-line column that pushed the zoom controls off screen. Now the board gets
+  the screen. The Library and the Browser are sheets that rise from the bottom
+  (side panels in landscape), opened from a **Library** button and the ☰ button
+  and closed by default; adding a part closes the Library so you can see what you
+  added. The header wraps to two rows, the controls are finger-sized, Sync no
+  longer sits on the Connections strip, and the selected part's tool bar stays
+  on screen instead of hanging off the edge with Delete out of reach.
+
+- **The mini board zooms smoothly.** Zoom in, zoom out and fit-width now ease
+  the board to its new size instead of jumping, and keep what was in the middle
+  of the view in the middle.
+
+- **Snakie Flat: a cleaner, flatter look.** The successor to Soft Shell keeps
+  Snakie's warm colours, fonts and green + amber identity but takes the depth
+  out: solid buttons instead of glossy gradient pills, 1px lines instead of
+  shadows and bevels, 32px controls and 16px icons, a 48px toolbar and a 24px
+  status bar. The activity bar is an icon rail (labels show on hover), and the
+  side panels are flat so only the editor and console sit together in one
+  rounded card. Run is a deeper green so its white label is readable (4.9:1).
+  The Blocks + Code dot in the workspace switcher is unchanged. Tokens live in
+  `src/renderer/src/flat.css`.
+
+- **Wiring warnings show as an icon on each affected part (browser row and drawing) with the messages in its tooltip, instead of a banner.**
+
+### Fixed
+
+- **A big part's schematic symbol is no longer cropped in the part preview
+  (#1277).** The preview widened its view only up to a fixed size, so a 40-pin
+  board's top and bottom pins fell off the edge. It now grows to fit the
+  symbol.
+
+- **Open in Snakie from a code embed carries the code itself, so GitHub's rate limit can't stop it opening; gist files load from their raw address; narrower embeds sit at the left (#1285).**
+
+- **Build no longer shows two view cubes.** With a `.urdf` open in the Code
+  editor (which **New robot** does for you), switching to Build showed a second
+  ViewCube, Home button and zoom bar on top of Build's own — and they took the
+  taps. The Code editor stays loaded underneath Build and Electronics so it
+  keeps its state, and its floating controls were painting through the cover.
+  It is now hidden while either workspace is showing.
+
+- **Editor popups sit on top of the surrounding panels.** The autocomplete
+  list, parameter hints and hover docs used to be cut off at the editor's
+  edges. Parameter hints also now pick the overload that matches the keywords
+  you have already typed: after `I2C(id=id, sda=sda, ` they show the
+  `scl`/`sda` constructor with `scl` highlighted.
+
+- **The embedded wiring canvas no longer adds a Raspberry Pi Pico 2 W by
+  itself.** With no board set, the embed fell back to the app's default board,
+  so every kevsrobots.com wiring started with a Pico whether the project used
+  one or not. A wiring without a board now has none, and the new
+  `setBoard(id | null)` handle method lets the host pick one or take it away.
+  The browser panel also hides the project name, description and mass readout
+  unless the host asks for them (`projectMeta`), and the host can set the empty
+  canvas's hint (`emptyHint`).
+
+- **Embedded wiring: saved picture keeps the blueprint background after a host cleans the SVG.**
+
+- **Embedded wiring: saved pictures frame the whole drawing, not the current zoom and pan.**
+
+- **HC-SR04: its four pins on its 3D model.** kevsrobots 3D scenes put the HC-SR04's wires on its pin ends (out of the board's bottom edge) instead of on the board's front face.
+
+- **Snakie fits the screen on iPhone and iPad.** Typing in the editor or
+  console made iOS Safari zoom the page in (it does that for any text field
+  under 16px) and never zoom back, leaving the app wider than the screen and
+  panning sideways, in portrait and landscape. Snakie now stops that focus zoom
+  on iOS (pinch-zoom still works), the page itself can no longer pan or
+  rubber-band, and in landscape the app runs edge to edge while keeping its
+  controls clear of the notch and home indicator.
+
+- **Long-press on the board and instruments no longer selects text on phones; tap the board to show pin labels.**
+
+- **N20 Motor: VCC and GND pin points on its two tabs for 3D wiring; parts keep their sockets3d.**
+
+- **Small-screen sheet polish.** The Board tab now fills the whole pull-up
+  sheet, and docked instruments stretch to the sheet's full width instead of
+  leaving a gap on the right. The sheet's tabs no longer sit on top of its grab
+  handle. On phones the console header keeps Console / Problems readable:
+  Clear, Lint and the simulated device's memory moved into a ⋯ menu, and the
+  port picker (locked while connected) and collapse chevron step aside.
+
 ## [0.91.0] - 2026-09-20
 
 ### Added
@@ -10341,7 +10604,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.91.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.92.0...HEAD
+[0.92.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.91.0...v0.92.0
 [0.91.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.85.4...v0.91.0
 [0.85.4]: https://github.com/kevinmcaleer/Snakie/compare/v0.84.1...v0.85.4
 [0.84.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.68.8...v0.84.1

@@ -483,6 +483,7 @@ export function StatusBar({
             empty (tipSlotFree); real messages above always take its place.
             Tips with an href open the docs article in the external browser. */}
         {tipSlotFree &&
+          !build &&
           tip &&
           (tip.href ? (
             <button

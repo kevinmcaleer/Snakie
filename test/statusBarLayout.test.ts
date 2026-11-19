@@ -66,6 +66,7 @@ describe('status bar in the Build workspace', () => {
     }
     expect(tsx).toMatch(/\{runtime && !build && \(/)
     expect(tsx).toMatch(/\{lines != null && !build && \(/)
+    expect(tsx).toMatch(/tipSlotFree &&\s+!build &&/)
     // …while sync and the coffee link are unconditional.
     expect(tsx).toMatch(/\n\s*<SyncIndicator \/>/)
     expect(tsx).toMatch(/\n\s*<CoffeeLink \/>/)

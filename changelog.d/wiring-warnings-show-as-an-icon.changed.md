@@ -1,1 +1,0 @@
-- **Wiring warnings show as an icon on each affected part (browser row and drawing) with the messages in its tooltip, instead of a banner.** 
