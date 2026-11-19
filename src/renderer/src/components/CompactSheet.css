@@ -181,3 +181,28 @@
 .csheet__pane .instr-dock__item .instr {
   max-width: none;
 }
+
+/* Dragging the bar resizes the sheet (it settles at the top, the middle, or
+   minimised to just this bar), so the browser must not scroll or pull-to-refresh
+   on the same gesture. The tabs scroll sideways only. */
+.csheet__bar {
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.csheet__bar:active {
+  cursor: grabbing;
+}
+.csheet__tabs {
+  touch-action: pan-x;
+}
+/* Ease into a stop once the finger lifts (AppShell sets data-settling). */
+.shell__vgroup[data-settling] > [data-panel] {
+  transition: flex-grow 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .shell__vgroup[data-settling] > [data-panel] {
+    transition: none;
+  }
+}

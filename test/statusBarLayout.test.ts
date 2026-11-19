@@ -47,3 +47,27 @@ describe('status bar shrink order (#843)', () => {
     expect(after.indexOf('</footer>')).toBeGreaterThan(-1)
   })
 })
+
+describe('status bar in the Build workspace', () => {
+  const tsx = readFileSync('src/renderer/src/components/StatusBar.tsx', 'utf8')
+  const shell = readFileSync('src/renderer/src/components/AppShell.tsx', 'utf8')
+
+  it('is told when Build is showing', () => {
+    expect(shell).toMatch(/<StatusBar[^>]*build=\{robotMain\}/s)
+  })
+
+  it('drops the code and board items there, and keeps the rest', () => {
+    // Each of these sits behind the `build` flag…
+    for (const cls of ['statusbar__conn', 'statusbar__save', 'statusbar__flash-wrap']) {
+      const at = tsx.indexOf(`className={\`statusbar__item ${cls}`)
+      const i = at > -1 ? at : tsx.indexOf(`className="${cls}"`)
+      expect(i, cls).toBeGreaterThan(-1)
+      expect(tsx.slice(i - 160, i), cls).toMatch(/\{!build && \(/)
+    }
+    expect(tsx).toMatch(/\{runtime && !build && \(/)
+    expect(tsx).toMatch(/\{lines != null && !build && \(/)
+    // …while sync and the coffee link are unconditional.
+    expect(tsx).toMatch(/\n\s*<SyncIndicator \/>/)
+    expect(tsx).toMatch(/\n\s*<CoffeeLink \/>/)
+  })
+})

@@ -1,0 +1,400 @@
+/*
+ * ELECTRONICS WORKSPACE ON A PHONE — the sibling of RobotView.small.css.
+ *
+ * The desktop layout is a header bar, then the board with a floating project
+ * Browser on its left, the parts Library docked on its right (300px), a controls
+ * pill bottom-left and a Connections strip underneath. At 440px the Library
+ * alone took two-thirds of the screen, the Browser took the rest, the header
+ * ran off the right edge (ERC half-covered, Live and Help unreachable) and
+ * every control was 20–30px.
+ *
+ * Same answer as Build: the board gets the screen, and the two panels become
+ * SHEETS that rise from the bottom (side panels in landscape), opened from a
+ * button and closed again. Scoped to `.shell[data-size='phone']` and the
+ * embedded Electronics mount (`.shell__solo-board`), so the desktop layout and
+ * the pop-out Board window are untouched.
+ */
+
+.shell[data-size='phone'] .shell__solo-board {
+  --em-tap: 40px;
+  --em-edge: 8px;
+}
+
+/* ── Header: wrap instead of running off the edge ────────────────────────── */
+/* (Not a sideways scroller: the board picker's dropdown hangs off this bar and
+   an overflow container would clip it.) */
+.shell[data-size='phone'] .shell__solo-board .boardgraph__bar {
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 52px;
+  gap: 6px 8px;
+  padding: 6px var(--em-edge);
+}
+.shell[data-size='phone'] .shell__solo-board .boardgraph__viewtab {
+  min-height: 36px;
+  font-size: 13px;
+}
+.shell[data-size='phone'] .shell__solo-board .boardgraph__picker {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+.shell[data-size='phone'] .shell__solo-board .boardgraph__picker-btn {
+  height: var(--em-tap);
+  width: 100%;
+  max-width: none;
+  justify-content: space-between;
+}
+.shell[data-size='phone'] .shell__solo-board .boardgraph__picker-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The chip family ("RP2350") is the bar's lowest-priority text. */
+.shell[data-size='phone'] .shell__solo-board .boardgraph__chip {
+  display: none;
+}
+.shell[data-size='phone'] .shell__solo-board .boardgraph__actions {
+  gap: 8px;
+}
+.shell[data-size='phone'] .shell__solo-board .boardgraph__actions > button,
+.shell[data-size='phone'] .shell__solo-board .boardgraph__actions > label {
+  min-height: var(--em-tap);
+}
+.shell[data-size='phone'] .shell__solo-board .boardgraph__live {
+  padding-inline: 6px;
+}
+
+/* ── Top of the board: [☰ browser] … [Library] ───────────────────────────── */
+.shell[data-size='phone'] .shell__solo-board .wc__browser-tab {
+  top: var(--em-edge);
+  left: var(--em-edge);
+  width: var(--em-tap);
+  height: var(--em-tap);
+  font-size: 1.1rem;
+}
+/* The closed library was a vertical tab taking a column of the layout. Here it
+   is a button floating on the board's top-right corner. */
+.shell[data-size='phone'] .shell__solo-board .boardgraph__dock-tab {
+  position: absolute;
+  top: var(--em-edge);
+  right: var(--em-edge);
+  z-index: 8;
+  align-self: auto;
+  writing-mode: horizontal-tb;
+  height: var(--em-tap);
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--head, var(--text));
+  background: var(--panel, var(--bg-elevated));
+  border: 1px solid var(--shellbd, var(--border));
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+/* ── The parts Library: a pull-up sheet ──────────────────────────────────── */
+.shell[data-size='phone'] .shell__solo-board .boardgraph__dock {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: auto;
+  z-index: 30;
+  flex: none;
+  width: auto;
+  height: min(72%, 36rem);
+  border-left: 0;
+  border-top: 1px solid var(--shellbd, var(--border));
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.3);
+  padding-bottom: env(safe-area-inset-bottom);
+  overflow: hidden;
+  outline: none;
+}
+.shell[data-size='phone'] .shell__solo-board .boardgraph__dock-head {
+  min-height: 44px;
+  box-sizing: border-box;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+/* Pinning keeps a floating desktop panel from auto-hiding. A sheet is opened
+   and closed on purpose. */
+.shell[data-size='phone'] .shell__solo-board .boardgraph__pin,
+.shell[data-size='phone'] .shell__solo-board .wc__pin {
+  display: none;
+}
+.shell[data-size='phone'] .shell__solo-board .boardgraph__dock-toggle {
+  width: var(--em-tap);
+  height: var(--em-tap);
+  margin-left: auto;
+  font-size: 1.5rem;
+  /* › means "slide away to the right"; a sheet goes DOWN. */
+  transform: rotate(90deg);
+}
+
+/* Library contents at finger size. */
+.shell[data-size='phone'] .shell__solo-board .pl__toolbar {
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.shell[data-size='phone'] .shell__solo-board .pl__btn {
+  min-height: var(--em-tap);
+  min-width: var(--em-tap);
+  font-size: 13px;
+}
+.shell[data-size='phone'] .shell__solo-board .pl__search-input {
+  min-height: var(--em-tap);
+  font-size: 16px; /* under 16px, iOS zooms the page when the field takes focus */
+}
+.shell[data-size='phone'] .shell__solo-board .pl .cpanel__head,
+.shell[data-size='phone'] .shell__solo-board .pl .cpanel__toggle {
+  min-height: 36px;
+}
+.shell[data-size='phone'] .shell__solo-board .pl .cpanel__actions button {
+  min-width: 36px;
+  min-height: 36px;
+}
+.shell[data-size='phone'] .shell__solo-board .pl__cat-head {
+  min-height: 32px;
+}
+.shell[data-size='phone'] .shell__solo-board .pl__part-btn {
+  min-height: var(--em-tap);
+  font-size: 15px;
+}
+/* A row says "drag onto the breadboard" with a grab cursor; a finger scrolls
+   the list instead, so do not let a touch start a text selection / callout. */
+.shell[data-size='phone'] .shell__solo-board .pl__part {
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+.shell[data-size='phone'] .shell__solo-board .pl__detail-actions button,
+.shell[data-size='phone'] .shell__solo-board .pl__detail-seg button {
+  min-height: var(--em-tap);
+  padding-inline: 14px;
+  font-size: 14px;
+}
+.shell[data-size='phone'] .shell__solo-board .pl__resize {
+  min-height: 14px;
+}
+.shell[data-size='phone'] .shell__solo-board .pl__icon {
+  width: 36px;
+  height: 36px;
+  font-size: 0.9rem;
+}
+.shell[data-size='phone'] .shell__solo-board .pl__detail-actions .pl__icon {
+  width: var(--em-tap);
+  height: var(--em-tap);
+}
+
+/* ── The project Browser: a sheet too ────────────────────────────────────── */
+.shell[data-size='phone'] .shell__solo-board .wc__browser {
+  top: auto;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  width: auto;
+  max-height: min(62%, 30rem);
+  border-width: 1px 0 0;
+  border-radius: 14px 14px 0 0;
+  /* A real surface: it sits over the board, which must not show through. */
+  background: rgb(14, 22, 30);
+  backdrop-filter: none;
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.35);
+  padding-bottom: env(safe-area-inset-bottom);
+  overscroll-behavior: contain;
+}
+.shell[data-size='phone'] .shell__solo-board .wc__browser-head {
+  min-height: 44px;
+  box-sizing: border-box;
+}
+.shell[data-size='phone'] .shell__solo-board .wc__browser-title {
+  font-size: 13px;
+}
+.shell[data-size='phone'] .shell__solo-board .wc__browser-collapse {
+  width: var(--em-tap);
+  height: var(--em-tap);
+  font-size: 1.5rem;
+  transform: rotate(-90deg); /* ‹ → ⌄ */
+}
+.shell[data-size='phone'] .shell__solo-board .wc__project-name,
+.shell[data-size='phone'] .shell__solo-board .wc__project-desc {
+  font-size: 16px;
+  min-height: 36px;
+}
+.shell[data-size='phone'] .shell__solo-board .wc__browser .cpanel__head,
+.shell[data-size='phone'] .shell__solo-board .wc__browser .cpanel__toggle {
+  min-height: 36px;
+}
+.shell[data-size='phone'] .shell__solo-board .uhier__row {
+  min-height: var(--em-tap);
+  font-size: 0.9rem;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+.shell[data-size='phone'] .shell__solo-board .uhier__name {
+  align-self: stretch;
+}
+.shell[data-size='phone'] .shell__solo-board .uhier__edit,
+.shell[data-size='phone'] .shell__solo-board .uhier__joint,
+.shell[data-size='phone'] .shell__solo-board .uhier__del {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+}
+
+/* ── The controls pill (undo · zoom · tools) ─────────────────────────────── */
+.shell[data-size='phone'] .shell__solo-board .wc__controls {
+  left: var(--em-edge);
+  bottom: var(--em-edge);
+  padding: 4px;
+  max-width: calc(100% - 2 * var(--em-edge));
+  box-sizing: border-box;
+}
+/* "Drag from a pin to another pin to wire them." is worth one line on a desktop.
+   Here it was a seven-line column squeezing the buttons off the screen. */
+.shell[data-size='phone'] .shell__solo-board .wc__hint {
+  display: none;
+}
+.shell[data-size='phone'] .shell__solo-board .wc__zoom {
+  gap: 4px;
+}
+.shell[data-size='phone'] .shell__solo-board .wc__zoom-btn {
+  width: var(--em-tap);
+  height: var(--em-tap);
+  flex: 0 0 auto;
+}
+.shell[data-size='phone'] .shell__solo-board .wc__zoom-btn svg {
+  width: 18px;
+  height: 18px;
+}
+/* − / % / +: pinch does this, and the row has to fit a 375px screen. */
+.shell[data-size='phone'] .shell__solo-board .wc__zoom > button[aria-label='Zoom out'],
+.shell[data-size='phone'] .shell__solo-board .wc__zoom > button[aria-label='Zoom in'],
+.shell[data-size='phone'] .shell__solo-board .wc__zoom > .wc__zoom-pct {
+  display: none;
+}
+.shell[data-size='phone'] .shell__solo-board .wc__zoom-sep {
+  display: none;
+}
+.shell[data-size='phone'] .shell__solo-board .wc__export-menu button {
+  min-height: var(--em-tap);
+  font-size: 14px;
+}
+
+/* The selected part's floating tool bar (rotate · rename · duplicate · delete). */
+.shell[data-size='phone'] .shell__solo-board .wc__parttb {
+  gap: 4px;
+  padding: 4px;
+}
+.shell[data-size='phone'] .shell__solo-board .wc__parttb-btn {
+  width: var(--em-tap);
+  height: var(--em-tap);
+}
+.shell[data-size='phone'] .shell__solo-board .wc__parttb-btn svg {
+  width: 18px;
+  height: 18px;
+}
+.shell[data-size='phone'] .shell__solo-board .wc__parttb select,
+.shell[data-size='phone'] .shell__solo-board .wc__parttb input {
+  min-height: 36px;
+  font-size: 16px;
+}
+
+/* ── Connections strip, and Sync, which sat on top of it ─────────────────── */
+.shell[data-size='phone'] .shell__solo-board .wc__bottom {
+  max-height: 50%;
+}
+.shell[data-size='phone'] .shell__solo-board .wc__table-headrow {
+  min-height: var(--em-tap);
+}
+.shell[data-size='phone'] .shell__solo-board .wc__table-headrow .wc__table-head {
+  margin-bottom: 0;
+}
+.shell[data-size='phone'] .shell__solo-board .wc__table {
+  padding: 2px var(--em-edge);
+}
+.shell[data-size='phone'] .shell__solo-board .wc__table table {
+  font-size: 0.85rem;
+}
+.shell[data-size='phone'] .shell__solo-board .wc__table td button {
+  min-width: 36px;
+  min-height: 36px;
+}
+.shell[data-size='phone'] .shell__solo-board .wc__table-headrow button {
+  min-height: var(--em-tap);
+  font-size: 13px;
+}
+.shell[data-size='phone'] .shell__solo-board .wc__table-headrow > button:not(.wc__table-head--toggle) {
+  min-width: var(--em-tap);
+}
+.shell[data-size='phone'] .shell__solo-board .esync__float {
+  left: auto;
+  right: var(--em-edge);
+  /* Above the Connections strip (40) and clear of the controls pill (48). */
+  bottom: calc(var(--em-tap) + var(--em-edge) + 56px);
+  /* Under the sheets (30): it was floating over the open Library. */
+  z-index: 7;
+}
+.shell[data-size='phone'] .shell__solo-board .esync__button {
+  min-height: var(--em-tap);
+  padding-inline: 12px;
+}
+
+/* ── Landscape: side panels, one-row header ──────────────────────────────── */
+@media (orientation: landscape) {
+  .shell[data-size='phone'] .shell__solo-board .boardgraph__dock {
+    top: 0;
+    left: auto;
+    width: min(20rem, 48%);
+    height: auto;
+    border-top: 0;
+    border-left: 1px solid var(--shellbd, var(--border));
+    border-radius: 0;
+    box-shadow: -10px 0 30px rgba(0, 0, 0, 0.3);
+    padding-bottom: 0;
+    padding-right: env(safe-area-inset-right);
+  }
+  .shell[data-size='phone'] .shell__solo-board .boardgraph__dock-toggle {
+    transform: none;
+  }
+  .shell[data-size='phone'] .shell__solo-board .wc__browser {
+    top: 0;
+    right: auto;
+    width: min(18rem, 44%);
+    max-height: none;
+    border-width: 0 1px 0 0;
+    border-radius: 0;
+    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.35);
+    padding-left: env(safe-area-inset-left);
+  }
+  .shell[data-size='phone'] .shell__solo-board .wc__browser-collapse {
+    transform: none;
+  }
+  .shell[data-size='phone'] .shell__solo-board .esync__float {
+    bottom: calc(var(--em-tap) + var(--em-edge) + 8px);
+  }
+  /* ~270px of panel: keep the library tool bar to one (scrolling) row, and let a
+     selected part's detail take the whole panel — beside the list, its "Add to
+     project" button was below the fold. ✕ on the detail brings the list back. */
+  .shell[data-size='phone'] .shell__solo-board .pl__toolbar {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .shell[data-size='phone'] .shell__solo-board .pl__toolbar > * {
+    flex-shrink: 0;
+  }
+  .shell[data-size='phone'] .shell__solo-board .pl__split:has(.pl__detail) > [data-panel]:first-child,
+  .shell[data-size='phone'] .shell__solo-board .pl__split:has(.pl__detail) > .pl__resize {
+    display: none;
+  }
+  .shell[data-size='phone'] .shell__solo-board .pl__split:has(.pl__detail) > [data-panel] {
+    flex: 1 1 100% !important;
+  }
+}

@@ -1,5 +1,5 @@
 import { useCallback, useState, type JSX, type ReactNode } from 'react'
-import { viewportSizeFor } from '../hooks/useViewportSize'
+import { isPhoneViewport } from '../hooks/useViewportSize'
 import './RobotMotionDock.css'
 
 /**
@@ -43,9 +43,7 @@ function loadState(fallback: string): DockState {
   }
   // No stored preference: open on a desktop, folded to its tab strip on a phone,
   // where it would otherwise take a third of the 3-D view.
-  const phone =
-    typeof window !== 'undefined' && viewportSizeFor(window.innerWidth, window.innerHeight) === 'phone'
-  return { active: fallback, collapsed: phone }
+  return { active: fallback, collapsed: isPhoneViewport() }
 }
 
 export function RobotMotionDock({ tabs }: RobotMotionDockProps): JSX.Element {
