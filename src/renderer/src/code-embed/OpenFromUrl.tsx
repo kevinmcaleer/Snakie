@@ -1,9 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useWorkspace } from '../store/workspace'
+import { useWorkspaceLayout } from '../store/layout'
 import { RESTORE_GUARD_KEY } from '../store/session-restore'
 import { IS_WEB } from '../lib/env'
 import type { Fetcher } from './source'
-import { resolveSharedLink, type SharedProgram } from './shared-link'
+import { resolveSharedLink, workspaceForSharedCode, type SharedProgram } from './shared-link'
 
 /**
  * "OPEN IN SNAKIE" — the full app's half (#1287, epic #1285; kevsrobots.com#581).
@@ -32,6 +33,10 @@ const desktopFetcher: Fetcher = async (url) => {
 
 export function OpenFromUrl(): null {
   const { openBuffer } = useWorkspace()
+  const { active, switchWorkspace } = useWorkspaceLayout()
+  // The effect runs once; read the workspace that is showing NOW, not at mount.
+  const activeRef = useRef(active)
+  activeRef.current = active
 
   useEffect(() => {
     let cancelled = false
@@ -65,6 +70,10 @@ export function OpenFromUrl(): null {
       await afterRestore()
       if (cancelled) return true
       openBuffer(program.name, program.code)
+      // Snakie reopens on the workspace you last used — Electronics or Build
+      // don't put the editor in front, so a lesson's code would open unseen.
+      const target = workspaceForSharedCode(program.code, activeRef.current)
+      if (target) switchWorkspace(target)
       status(program.note, 'Not saved yet. Save it to keep a copy.')
       return true
     }
