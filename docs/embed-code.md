@@ -35,6 +35,25 @@ handle.unmount()
 SnakieEmbed.scan(root) // mount any new data-snakie-* elements under root
 ```
 
+### Run here: a plain block becomes the box (#1319)
+
+A page with many code blocks should not load an editor for each. Leave them as
+plain `<pre><code>` and upgrade one when the reader asks:
+
+```js
+button.addEventListener('click', () => {
+  const live = SnakieEmbed.upgrade(pre, { name: 'blink.py', board: 'pico2w' })
+  if (!live) return // too long for a URL: offer Open in Snakie instead
+  // live.unmount() takes the box away and shows the block again
+})
+```
+
+The block's text is the program, and it runs straight away (`autorun: false`
+to wait for Run). The block is hidden, not removed. `upgrade` returns `null`
+for an empty block or one whose URL would pass 12,000 characters. Check
+`SnakieEmbed.upgrade` exists before showing the button: a cached older helper
+does not have it.
+
 ## The URL (#1286)
 
 ```

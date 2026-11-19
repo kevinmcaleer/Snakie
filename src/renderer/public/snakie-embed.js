@@ -20,7 +20,9 @@
  *
  * For content added later: SnakieEmbed.mount(el, { gist, file, … }) returns
  * { iframe, unmount() }. SnakieEmbed.scan(root) mounts any new data-snakie-*
- * elements under root. No dependencies; MIT.
+ * elements under root. SnakieEmbed.upgrade(preEl, { name, board }) turns a
+ * plain code block into a live box in place and runs it ("Run here"); its
+ * unmount() puts the block back. No dependencies; MIT.
  */
 ;(function () {
   'use strict'
@@ -140,6 +142,50 @@
     return handle
   }
 
+  // A URL this long is refused by some servers and proxies; a host should
+  // offer "Open in Snakie" for a block that big instead.
+  var MAX_UPGRADE_URL = 12000
+
+  /**
+   * Turn a plain code block into a live box in place ("Run here", #1319).
+   * `el` is the block: a <pre>, its <code>, or a wrapper round them. Its text
+   * becomes the program; opts are mount()'s (name, board, view, theme, …), and
+   * the program runs straight away unless opts.autorun is false. The block is
+   * hidden, not removed: unmount() takes the box away and shows it again.
+   * Returns { iframe, box, unmount() }, or null if the block can't be upgraded.
+   */
+  function upgrade(el, opts) {
+    if (!el || !el.parentNode) return null
+    if (el.__snakieUpgrade) return el.__snakieUpgrade
+    var codeEl = (el.querySelector && el.querySelector('code')) || el
+    var code = String(codeEl.textContent || '').replace(/\s+$/, '')
+    if (!code) return null
+    var o = {}
+    for (var k in opts || {}) if (Object.prototype.hasOwnProperty.call(opts, k)) o[k] = opts[k]
+    o.code = code
+    if (!o.name) o.name = 'main.py'
+    if (o.autorun === undefined) o.autorun = true
+    if (embedUrl(o, 'x').length > MAX_UPGRADE_URL) return null
+    var box = document.createElement('div')
+    box.className = 'snakie-box snakie-box--upgraded'
+    el.parentNode.insertBefore(box, el)
+    var shown = el.style.display
+    el.style.display = 'none'
+    var inner = mount(box, o)
+    var handle = {
+      iframe: inner.iframe,
+      box: box,
+      unmount: function () {
+        inner.unmount()
+        if (box.parentNode) box.parentNode.removeChild(box)
+        el.style.display = shown
+        el.__snakieUpgrade = null
+      }
+    }
+    el.__snakieUpgrade = handle
+    return handle
+  }
+
   window.addEventListener('message', function (e) {
     if (e.origin !== ORIGIN) return
     var data = e.data
@@ -181,6 +227,7 @@
     version: '1',
     origin: ORIGIN,
     mount: mount,
+    upgrade: upgrade,
     scan: scan,
     url: embedUrl,
     widths: WIDTHS,
