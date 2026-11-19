@@ -480,3 +480,26 @@
   min-height: 40px;
   font-size: 0.9rem;
 }
+
+/* ── Animate mode ────────────────────────────────────────────────────────── */
+.shell[data-size='phone'] .robotdock--full .robottool__text {
+  height: var(--bm-tap);
+}
+.shell[data-size='phone'] .robotdock--full .robottool__mode {
+  height: calc(var(--bm-tap) - 4px);
+}
+/* No room beside the robot for a panel: Joints rises over the lower half. */
+.shell[data-size='phone'] .robotdock--full .robotjoints {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  width: auto;
+  max-height: 55%;
+  border-left: 0;
+  border-top: 1px solid var(--shellbd, var(--border, #2c3027));
+}
+.shell[data-size='phone'] .robotdock--full .robotjoints__slider {
+  height: 28px;
+}
