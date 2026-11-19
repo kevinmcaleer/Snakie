@@ -10,6 +10,9 @@ import { EmbedLoadError, githubUrlFor, loadProgram, openInSnakieUrl, type Loaded
 import { createEngine, type EmbedEngine } from './engines'
 import { EmbedTerminal, type EmbedTerminalHandle } from './EmbedTerminal'
 import { preferredHeight } from './layout'
+import { BUILTIN_BOARDS, DEFAULT_BOARD_ID } from '../components/board-defs'
+import { EmbedBoard, type PinLive } from './EmbedBoard'
+import { pinsInCode, resolvePin, type PinEvent } from './embed-pins'
 import { GitHubIcon, PlayIcon, ResetIcon, SnakieLogo, StopIcon } from './icons'
 import './EmbedApp.css'
 
@@ -25,6 +28,30 @@ function languageLabel(name: string): string {
 
 const PythonPane = lazy(() => import('../components/PythonPane'))
 const BlocksSplit = lazy(() => import('../components/BlocksSplit'))
+
+/** Narrower than this and the board would squeeze the code: the pins become a row of chips. */
+const BOARD_SIDE_MIN_W = 600
+
+/** The box's own width, so the layout follows the host page's column, not the screen. */
+function useWindowWidth(): number {
+  const [width, setWidth] = useState(() => window.innerWidth)
+  useEffect(() => {
+    const onResize = (): void => setWidth(window.innerWidth)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  return width
+}
+
+/** A board by id, forgiving `pico-2-w` and `Pico2W`. */
+function boardFor(id: string | null): string {
+  if (!id) return DEFAULT_BOARD_ID
+  const want = id.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const hit = BUILTIN_BOARDS.find(
+    (b) => b.id.toLowerCase().replace(/[^a-z0-9]/g, '') === want || b.name.toLowerCase().replace(/[^a-z0-9]/g, '') === want
+  )
+  return hit?.id ?? DEFAULT_BOARD_ID
+}
 
 /** Where "Open in Snakie" goes: this deployment's own app. */
 const APP_ORIGIN = window.location.origin
@@ -64,6 +91,32 @@ function EmbedShell({ params }: { params: EmbedParams }): JSX.Element {
   const engine = useMemo<EmbedEngine>(() => createEngine(params.engine, params.packages), [params])
   const termRef = useRef<EmbedTerminalHandle>(null)
   const bootRef = useRef<Promise<void> | null>(null)
+  const [boardId, setBoardId] = useState(() => boardFor(params.board))
+  const [live, setLive] = useState<ReadonlyMap<string, PinLive>>(() => new Map())
+  const [hoverPin, setHoverPin] = useState<string | null>(null)
+  const [focusLine, setFocusLine] = useState<number | null>(null)
+  const [revealLine, setRevealLine] = useState<number | null>(null)
+  const width = useWindowWidth()
+  const boardDef = BUILTIN_BOARDS.find((b) => b.id === boardId) ?? BUILTIN_BOARDS[0]
+  const boardRef = useRef(boardDef)
+  boardRef.current = boardDef
+  // Pin changes arrive far faster than a screen draws: keep the latest of each
+  // and paint once a frame.
+  const liveQueue = useRef(new Map<string, PinLive>())
+  const liveFrame = useRef(0)
+  const onPinEvent = useCallback((event: PinEvent): void => {
+    const id = resolvePin(event.pin, boardRef.current)?.id
+    if (!id) return
+    liveQueue.current.set(id, { kind: event.kind, value: event.value })
+    if (liveFrame.current) return
+    liveFrame.current = requestAnimationFrame(() => {
+      liveFrame.current = 0
+      const batch = liveQueue.current
+      liveQueue.current = new Map()
+      setLive((prev) => new Map([...prev, ...batch]))
+    })
+  }, [])
+  useEffect(() => () => cancelAnimationFrame(liveFrame.current), [])
 
   const file = openFiles.find((f) => f.id === activeId) ?? null
   const content = file?.content ?? ''
@@ -107,7 +160,8 @@ function EmbedShell({ params }: { params: EmbedParams }): JSX.Element {
       bootRef.current = engine
         .start({
           output: (text) => termRef.current?.write(text),
-          image: (png) => setPlots((p) => [...p, png])
+          image: (png) => setPlots((p) => [...p, png]),
+          ...(params.pins ? { pin: onPinEvent } : {})
         })
         .catch((err: unknown) => {
           bootRef.current = null
@@ -116,12 +170,14 @@ function EmbedShell({ params }: { params: EmbedParams }): JSX.Element {
         })
     }
     return bootRef.current
-  }, [engine])
+  }, [engine, params.pins, onPinEvent])
 
   const run = useCallback(async (): Promise<void> => {
     if (running || phase.kind !== 'ready') return
     setRunning(true)
     setPlots([])
+    liveQueue.current.clear()
+    setLive(new Map())
     try {
       await boot()
       const name = phase.program.name
@@ -176,6 +232,33 @@ function EmbedShell({ params }: { params: EmbedParams }): JSX.Element {
 
   const edited = phase.kind === 'ready' && file !== null && content !== phase.original
 
+  // The pins this code uses (#1318). No pins, no strip: a lesson about lists
+  // looks exactly as it did.
+  const program = useMemo(() => stripBlocksFooter(content), [content])
+  const codePins = useMemo(
+    () => (params.pins && isPython && phase.kind === 'ready' ? pinsInCode(program, boardDef) : null),
+    [params.pins, isPython, phase.kind, program, boardDef]
+  )
+  const boardMode: 'side' | 'chips' | null =
+    !codePins || codePins.pins.length === 0 ? null : view === 'code' && width >= BOARD_SIDE_MIN_W ? 'side' : 'chips'
+  const activePins = useMemo(() => {
+    if (hoverPin) return new Set([hoverPin])
+    return new Set(focusLine !== null ? codePins?.byLine.get(focusLine) ?? [] : [])
+  }, [hoverPin, focusLine, codePins])
+  const hoverLines = useMemo(
+    () => (hoverPin ? codePins?.pins.find((p) => p.id === hoverPin)?.lines ?? [] : []),
+    [hoverPin, codePins]
+  )
+  const pickPin = useCallback(
+    (id: string): void => {
+      const line = codePins?.pins.find((p) => p.id === id)?.setupLines[0]
+      if (line === undefined) return
+      setHoverPin(id)
+      setRevealLine(line)
+    },
+    [codePins]
+  )
+
   // Tell the host how tall we'd like to be.
   useEffect(() => {
     if (params.height !== null) return
@@ -186,10 +269,11 @@ function EmbedShell({ params }: { params: EmbedParams }): JSX.Element {
         view,
         repl: runnable,
         plots: plots.length > 0,
-        error: phase.kind === 'error'
+        error: phase.kind === 'error',
+        board: boardMode
       })
     })
-  }, [params, phase.kind, content, view, plots.length, runnable])
+  }, [params, phase.kind, content, view, plots.length, runnable, boardMode])
 
   const githubUrl =
     phase.kind === 'ready' ? githubUrlFor(phase.program.source, params.lines) : phase.kind === 'error' ? phase.githubUrl : null
@@ -274,6 +358,7 @@ function EmbedShell({ params }: { params: EmbedParams }): JSX.Element {
       </header>
 
       <main className="snk-embed__body">
+        <div className={`snk-embed__work${boardMode === 'chips' ? ' snk-embed__work--chips' : ''}`}>
         <div className="snk-embed__editor">
           {phase.kind === 'loading' && <div className="snk-embed__message">Loading code…</div>}
           {phase.kind === 'error' && (
@@ -294,6 +379,10 @@ function EmbedShell({ params }: { params: EmbedParams }): JSX.Element {
                   onCodeChange={(code) => updateContent(file.id, code)}
                   title={codeTitle}
                   readOnly={!runnable}
+                  highlightLines={hoverLines}
+                  revealLine={revealLine}
+                  onLineFocus={codePins ? setFocusLine : undefined}
+                  problems={codePins?.problems}
                 />
               ) : (
                 <BlocksSplit
@@ -303,6 +392,20 @@ function EmbedShell({ params }: { params: EmbedParams }): JSX.Element {
               )}
             </Suspense>
           )}
+        </div>
+        {boardMode && codePins && (
+          <EmbedBoard
+            def={boardDef}
+            boards={BUILTIN_BOARDS}
+            onBoardChange={setBoardId}
+            pins={codePins.pins}
+            live={live}
+            active={activePins}
+            onHover={setHoverPin}
+            onPick={pickPin}
+            mode={boardMode}
+          />
+        )}
         </div>
         {runnable && phase.kind !== 'error' && (
           <section className={`snk-embed__repl${plots.length > 0 ? ' snk-embed__repl--plots' : ''}`} aria-label="Output">

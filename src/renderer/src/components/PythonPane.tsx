@@ -84,7 +84,26 @@ export interface PythonPaneProps {
   title?: string
   /** A viewer, not an editor (the embed with `run=0`, #1286). */
   readOnly?: boolean
+  /**
+   * The 1-based line the pointer is over, or the line the caret moved to; null
+   * when the pointer leaves (#1318). The embed lights that line's pins on its
+   * board.
+   */
+  onLineFocus?: (line: number | null) => void
+  /** Squiggles under parts of the code, such as a pin the board doesn't have (#1318). */
+  problems?: readonly PaneProblem[]
 }
+
+export interface PaneProblem {
+  line: number
+  /** 1-based, end exclusive. */
+  startColumn: number
+  endColumn: number
+  message: string
+}
+
+/** Marker owner, so these never replace another checker's squiggles. */
+const PROBLEM_OWNER = 'snakie-pane-problems'
 
 export function PythonPane({
   code,
@@ -94,7 +113,9 @@ export function PythonPane({
   revealLine,
   linked = false,
   title = 'MicroPython',
-  readOnly = false
+  readOnly = false,
+  onLineFocus,
+  problems
 }: PythonPaneProps): JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
@@ -105,6 +126,8 @@ export function PythonPane({
   const pushingRef = useRef(false)
   const onLineClickRef = useRef(onLineClick)
   onLineClickRef.current = onLineClick
+  const onLineFocusRef = useRef(onLineFocus)
+  onLineFocusRef.current = onLineFocus
   // Read through a ref by the context-help action: the dialect changes when a
   // board is plugged in, and the editor is created once.
   const { dialect: helpDialect } = useHelpDialect()
@@ -174,8 +197,27 @@ export function PythonPane({
       if (typeof line === 'number') onLineClickRef.current?.(line)
     })
 
+    // Which line is being pointed at (#1318). The caret counts too, so a touch
+    // or the arrow keys light a line's pins as the mouse does.
+    let focused: number | null = null
+    const focus = (line: number | null): void => {
+      if (line === focused) return
+      focused = line
+      onLineFocusRef.current?.(line)
+    }
+    const moves = editor.onMouseMove((e) => focus(e.target.position?.lineNumber ?? null))
+    const leaves = editor.onMouseLeave(() => focus(null))
+    const carets = editor.onDidChangeCursorPosition((e) => {
+      // Only where the reader put the caret, not where pushed-in code left it.
+      if (e.source === 'api' || e.source === 'modelChange') return
+      focus(e.position.lineNumber)
+    })
+
     return () => {
       for (const action of actions) action.dispose()
+      moves.dispose()
+      leaves.dispose()
+      carets.dispose()
       clicks.dispose()
       keys.dispose()
       editor.getModel()?.dispose()
@@ -243,6 +285,26 @@ export function PythonPane({
       }))
     )
   }, [highlightLines])
+
+  // After the code is pushed in, so the columns name the text now on screen.
+  useEffect(() => {
+    const model = editorRef.current?.getModel()
+    if (!model) return
+    monaco.editor.setModelMarkers(
+      model,
+      PROBLEM_OWNER,
+      (problems ?? [])
+        .filter((p) => p.line >= 1 && p.line <= model.getLineCount())
+        .map((p) => ({
+          severity: monaco.MarkerSeverity.Warning,
+          message: p.message,
+          startLineNumber: p.line,
+          endLineNumber: p.line,
+          startColumn: p.startColumn,
+          endColumn: p.endColumn
+        }))
+    )
+  }, [problems, code])
 
   return (
     <div className="python-pane">

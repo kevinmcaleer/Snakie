@@ -7,7 +7,8 @@ on 31 August 2026.
 
 The embed is a page of the web build, `https://app.snakie.org/embed.html`, so it
 deploys with app.snakie.org and costs nothing to run. It shows only the editor,
-the blocks and the REPL: no activity bar, files, device, wiring or build views.
+the blocks, the REPL and the pins the code uses: no activity bar, files, device,
+wiring or build views.
 
 ## The one-line helper (#1288)
 
@@ -57,6 +58,8 @@ https://app.snakie.org/embed.html?code=<text or base64url deflate>&name=main.py
 | `height` | `auto` (default: sized to the code), `short` (320px), `medium` (460px), `tall` (640px), or a height in px. The height is the whole box, Run bar and REPL included; longer code scrolls inside it. |
 | `width` | `full` (default), `wide` (860px), `medium` (680px), `narrow` (520px), a width in px, or a percentage like `60%`. A narrower box sits at the left, and is never wider than the page. Handled by `snakie-embed.js` (not an `/embed` URL parameter). |
 | `engine` | `micropython` (default) or `pyodide` (see below). |
+| `board` | The board the pin strip draws: `pico2w` (default), `pico-plus-2`, `tiny2040`, `tiny2350` or `esp32-devkit` (a built-in board's id or name, any case, with or without dashes). The reader can change it in the strip. |
+| `pins` | `1` (default) shows the pins the code uses beside it (see below). `0` hides them. |
 | `packages` | Pyodide packages to load before running, comma-separated. Imports are detected anyway. |
 | `id` | Echoed in the embed's `postMessage`s. The helper sets it. |
 
@@ -65,6 +68,32 @@ lines) and **Open in Snakie** (#1287), which opens the same file in the full app
 as a new unsaved tab. If the reader edited the code, their version goes along,
 compressed into the link's `#code=` hash, and the app says it was "edited from
 the original". **Reset** in the embed puts the original back.
+
+## The board strip (#1318)
+
+When MicroPython code uses pins, the box draws the board beside the code with
+each pin lit and named, and lists them: `GP15 PWM`, `GP0 I2C SDA`. Code with no
+pins looks as it did before.
+
+- Point at a line (or put the caret on it) and its pins glow on the board. That
+  includes lines that only use a pin's variable, such as `led.toggle()`.
+- Point at a pin and its lines are marked in the code. Click it to scroll to the
+  line that sets it up.
+- While the program runs, each pin shows what the simulator says it is doing:
+  `on`, `off` or `PWM 8%`.
+- A pin the board does not have, or a pin set up by number on two lines, gets a
+  squiggle in the code and a warning in the list.
+- Under 600px wide, and in the Split and Blocks views, the board gives way to a
+  row of pin chips under the code.
+
+`code-embed/embed-pins.ts` has the logic (pure, tested in
+`test/codeEmbedPins.test.ts`); `EmbedBoard.tsx` draws it from the built-in
+board definitions. Live states come from the simulated `machine` module
+(`shared/sim-machine.ts`): the embed sets `machine._watch`, the module then
+writes each pin change to stdout as an OSC escape (`ESC ] 7373 ; kind ; pin ;
+value BEL`), and `PinEventStream` takes those out before the terminal sees
+them. Nothing is written unless a host asks, so the app's own console is
+unchanged.
 
 ## Engines
 
@@ -105,5 +134,6 @@ headers the host page would have to send (which would break its YouTube embeds).
 ## Not yet
 
 - Turtle drawings and the instruments have nowhere to draw in the embed; the
-  program runs, but only its printed output shows.
+  program runs, but only its printed output and its pin states show.
+- Pressing a simulated button: input pins are listed, but cannot be driven yet.
 - `input()` in either engine.

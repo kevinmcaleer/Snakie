@@ -9,7 +9,7 @@
  *
  * Each element becomes an iframe of /embed.html. Every other data-* attribute
  * (file, path, ref, lines, view, views, toolbox, run, autorun, theme, height, engine,
- * packages, code, name) is passed through as a URL parameter.
+ * packages, board, pins, code, name) is passed through as a URL parameter.
  *
  * Size: data-width="full|wide|medium|narrow|<px>|<n>%" (default full; a
  * narrower box sits at the left) and data-height="auto|short|medium|tall|<px>"
@@ -36,7 +36,8 @@
   })()
   var PARAMS = [
     'gist', 'user', 'file', 'revision', 'repo', 'path', 'ref', 'lines', 'code', 'name',
-    'view', 'views', 'toolbox', 'run', 'autorun', 'theme', 'height', 'engine', 'packages'
+    'view', 'views', 'toolbox', 'run', 'autorun', 'theme', 'height', 'engine', 'packages',
+    'board', 'pins'
   ]
   var DEFAULT_HEIGHT = 360
   var RADIUS = 12
