@@ -171,6 +171,9 @@ duty of 0 is a servo switched off and moves nothing.
 https address that allows cross-origin reads, with meshes resolved beside it.
 There are no bindings then, so only the sliders move it.
 
+`SnakieEmbed.robot` is `true` on a copy of the script that knows robot frames,
+so a page can check before it makes room for one.
+
 three.js loads only in a robot frame; a code frame never fetches it. The
 arithmetic lives in `code-embed/robot-drive.ts`.
 

@@ -339,6 +339,8 @@
     upgrade: upgrade,
     scan: scan,
     hover: hover,
+    // This copy draws robot frames (#1321); a page checks before asking for one.
+    robot: true,
     url: embedUrl,
     widths: WIDTHS,
     heights: HEIGHTS
