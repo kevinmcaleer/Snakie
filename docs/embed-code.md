@@ -114,6 +114,39 @@ value BEL`), and `PinEventStream` takes those out before the terminal sees
 them. Nothing is written unless a host asks, so the app's own console is
 unchanged.
 
+## On a project page: wiring, tabs and frames that talk (#1320)
+
+A code frame on a kevsrobots project page can know the project it sits in.
+
+- **`project=<id>`** (`data-project`) reads that project's public wiring from
+  the projects API and puts the part names on the pin strip: "GP15, Servo 1".
+  With no `board=`, the strip draws the project's own board. A draft project's
+  wiring is not public, so the strip is then what it is without `project=`.
+- **`paths=main.py,lib/servo.py`** (`data-paths`) shows several files of one
+  repo as tabs. The first (or `path=`) opens. A path that will not load is left
+  out. Up to 8; past 5 the tabs become a menu.
+- **Frames share what they point at.** Hover a pin, or put the caret on a line
+  that uses one, and every other Snakie frame on the page lights the same pin
+  and its lines. `snakie-embed.js` relays it; only pin names cross.
+
+The page can join in. `snakie-embed.js` raises these on `document`:
+
+| Event | `detail` |
+| --- | --- |
+| `snakie:pin-hover` | `{ pins: ['GP15'], id }`. Empty `pins` when the reader moves off. |
+| `snakie:pin-state` | `{ states: { GP15: { kind: 'w', value: 4915 } }, id }` while a program runs. `kind` is `p` (0 or 1) or `w` (PWM duty, 0 to 65535). |
+| `snakie:pins` | `{ id, file, pins: [{ id, kind, onBoard, part }], unwired, unused }`. With `project=`, `unwired` lists pins the code uses that nothing is wired to, and `unused` the wired pins the code never uses. Both are `null` without a project. |
+
+and `SnakieEmbed.hover(['GP15'])` lights a pin in every frame (`hover([])`
+clears it), which is how a wiring picture lights the code when the reader
+points at a wire.
+
+The wiring canvas now writes `data-wire`, `data-from` and `data-to` on each
+wire it draws, and they survive into the exported SVG. `boardWiring()` in
+`src/shared/wiring-pins.ts` gives, for each board pin, the parts it reaches and
+the ids of the wires on the way, so a page showing that SVG can light a wire by
+pin. Pictures saved before this carry no ids; saving the wiring again adds them.
+
 ## Engines
 
 - **MicroPython** (default): the web app's own WASM interpreter (about 0.23 MB),

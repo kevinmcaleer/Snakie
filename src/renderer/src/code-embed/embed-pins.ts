@@ -11,6 +11,8 @@
 import { parsePins, type PinType, type UsedPins } from '../components/parse-pins'
 import { enumerateBoardPads } from '../components/board-layout'
 import type { BoardDefinition } from '../../../shared/board'
+import type { RobotDefinition } from '../../../shared/robot'
+import { boardWiring, type WiredTo } from '../../../shared/wiring-pins'
 
 /** A pin token resolved against a board. */
 export interface ResolvedPin {
@@ -323,4 +325,46 @@ del __snakie_watch_pins
 export function pinStateLabel(event: Pick<PinEvent, 'kind' | 'value'>): string {
   if (event.kind === 'p') return event.value ? 'on' : 'off'
   return `PWM ${Math.round((Math.max(0, Math.min(65535, event.value)) / 65535) * 100)}%`
+}
+
+// ------------------------------------------------------------ project wiring
+
+/** A project's wiring, keyed the way the strip keys pins (`GP15`). */
+export interface ProjectWiring {
+  /** Pin id → what is wired to it. */
+  byPin: Map<string, WiredTo[]>
+  /** The GPIO pins something is wired to (power and ground left out). */
+  signalPins: string[]
+}
+
+/** Read a robot definition's wires against a board (#1320). */
+export function projectWiring(robot: RobotDefinition | null | undefined, def: BoardDefinition): ProjectWiring {
+  const byPin = new Map<string, WiredTo[]>()
+  const signalPins: string[] = []
+  const pads = enumerateBoardPads(def)
+  for (const [name, wired] of boardWiring(robot)) {
+    const resolved = resolvePin(name, def)
+    if (!resolved) continue
+    byPin.set(resolved.id, [...(byPin.get(resolved.id) ?? []), ...wired])
+    const pad = resolved.padIndex !== null ? pads[resolved.padIndex]?.pad : null
+    if (pad && typeof pad.gpio === 'number' && !signalPins.includes(resolved.id)) signalPins.push(resolved.id)
+  }
+  return { byPin, signalPins }
+}
+
+/** Where the code and the wiring disagree. */
+export interface WiringMismatch {
+  /** Pins the code uses that nothing is wired to. */
+  unwired: string[]
+  /** Pins something is wired to that the code never uses. */
+  unused: string[]
+}
+
+export function wiringMismatch(pins: readonly EmbedPin[], wiring: ProjectWiring): WiringMismatch {
+  const used = new Set(pins.map((p) => p.id))
+  return {
+    // The onboard LED needs no wire.
+    unwired: pins.filter((p) => p.onBoard && !p.led && !wiring.byPin.has(p.id)).map((p) => p.id),
+    unused: wiring.signalPins.filter((id) => !used.has(id))
+  }
 }

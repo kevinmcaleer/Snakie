@@ -22,6 +22,8 @@ export interface EmbedBoardProps {
   pins: readonly EmbedPin[]
   /** Pin id → what the simulator last said it is doing. */
   live: ReadonlyMap<string, PinLive>
+  /** Pin id → what a project's wiring puts on it (`Servo 1`). */
+  wired?: ReadonlyMap<string, string>
   /** Pins to spotlight: the hovered one, or those of the line being pointed at. */
   active: ReadonlySet<string>
   onHover: (id: string | null) => void
@@ -80,6 +82,7 @@ export function EmbedBoard({
   pins,
   live,
   active,
+  wired,
   onHover,
   onPick,
   mode
@@ -121,6 +124,7 @@ export function EmbedBoard({
       {pins.map((pin) => {
         const state = stateOf(pin, live)
         const problem = !pin.onBoard ? `Not on this board` : pin.shared ? 'Set up twice' : null
+        const part = wired?.get(pin.id)
         return (
           <li key={pin.id}>
             <button
@@ -136,6 +140,7 @@ export function EmbedBoard({
                   ? `${pin.id}: line ${pin.setupLines.join(', ')}${pin.variable ? ` (${pin.variable})` : ''}`
                   : pin.id
               }
+              aria-label={part ? `${pin.id}, ${part}, ${problem ?? pin.kind}` : undefined}
             >
               {pin.onBoard ? (
                 <span className="snk-board__dot" style={{ background: PIN_TYPE_COLOR[pin.type] }} aria-hidden="true" />
@@ -143,6 +148,7 @@ export function EmbedBoard({
                 <WarningIcon />
               )}
               <span className="snk-board__id">{pin.id}</span>
+              {part && !problem && <span className="snk-board__part">{part}</span>}
               <span className="snk-board__kind">{problem ?? pin.kind}</span>
               {state && !problem && (
                 <span className={`snk-board__state${state.level > 0 ? ' is-on' : ''}`}>{state.text}</span>

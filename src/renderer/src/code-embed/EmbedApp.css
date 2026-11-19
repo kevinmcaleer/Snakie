@@ -507,3 +507,55 @@
 .snk-board--chips .snk-board__kind {
   overflow: visible;
 }
+
+/* File tabs for a repo frame with several files (#1320). */
+.snk-embed__tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.snk-embed__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--txt3, var(--text-muted));
+  cursor: pointer;
+}
+
+.snk-embed__tab:hover {
+  color: var(--text);
+}
+
+.snk-embed__tab.is-active {
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+  color: var(--head, var(--text));
+}
+
+.snk-embed__tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* What a project's wiring puts on the pin: "Servo 1". */
+.snk-board__part {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--head, var(--text));
+}
