@@ -2061,6 +2061,7 @@ export function AppShell(): JSX.Element {
         instrumentsLive={instrumentsLive}
         instrumentCount={openInstruments.length}
         onStopLive={stopInstrumentsLive}
+        build={robotMain}
       />
 
       {/* App-root float layer: undocked scope/meter windows float over the WHOLE
