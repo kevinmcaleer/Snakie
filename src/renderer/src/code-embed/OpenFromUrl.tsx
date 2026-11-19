@@ -1,48 +1,40 @@
 import { useEffect } from 'react'
 import { useWorkspace } from '../store/workspace'
 import { RESTORE_GUARD_KEY } from '../store/session-restore'
-import { parseEmbedParams } from './params'
-import { loadProgram } from './source'
-import { decodeCode } from './share'
+import { IS_WEB } from '../lib/env'
+import type { Fetcher } from './source'
+import { resolveSharedLink, type SharedProgram } from './shared-link'
 
 /**
- * "OPEN IN SNAKIE" — the full web app's half (#1287, epic #1285).
+ * "OPEN IN SNAKIE" — the full app's half (#1287, epic #1285; kevsrobots.com#581).
  * =============================================================================
  *
- * The code embed's footer links to `app.snakie.org/?gist=<id>&file=main.py`
- * (or `?repo=owner/name&path=…&ref=…`), with the reader's edits — if they made
- * any — compressed into `#code=…`. On start-up this opens that file as a NEW
- * unsaved tab named after it, using the embed's own loader. It never replaces
- * anything: the learner's restored files stay open beside it, and Save asks
- * where to put it, as for any new buffer. A blocks file (one with the blocks
- * footer) opens on the canvas, as it would from disk.
+ * The code embed's footer, and the button on kevsrobots lesson code, link to
+ * `app.snakie.org/?gist=<id>&file=main.py` (or `?repo=owner/name&path=…&ref=…`,
+ * or `?name=main.py` for code with no GitHub home), with the code itself
+ * compressed into the hash: `#src=…` for the original, `#code=…` when the
+ * reader edited it. On start-up this opens that file as a NEW unsaved tab
+ * named after it, using the embed's own loader. It never replaces anything:
+ * the learner's restored files stay open beside it, and Save asks where to put
+ * it, as for any new buffer. A blocks file (one with the blocks footer) opens
+ * on the canvas, as it would from disk.
  *
- * The parameters are then taken off the address bar, so a reload doesn't open
- * a second copy.
+ * On the web the parameters are then taken off the address bar, so a reload
+ * doesn't open a second copy. The desktop app gets the same `?…#…` from a
+ * `snakie://open…` link (src/main/deepLink.ts), at start-up or while running.
  */
+
+/** The desktop renderer's CSP blocks GitHub, so main reads it for us. */
+const desktopFetcher: Fetcher = async (url) => {
+  const res = await window.api.openLinks.fetchGithubText(url)
+  return { ok: res.ok, status: res.status, text: async () => res.body }
+}
+
 export function OpenFromUrl(): null {
   const { openBuffer } = useWorkspace()
 
   useEffect(() => {
-    const params = parseEmbedParams(window.location.search)
-    // `#code=` is the reader's edit; `#src=` is the original, sent along so we
-    // needn't ask GitHub again (its API rate-limits readers to 60 an hour).
-    const hashOf = (key: string): string | null => {
-      const raw = new RegExp(`(?:^#|&)${key}=([A-Za-z0-9_-]+)`).exec(window.location.hash)?.[1]
-      return raw ? decodeCode(raw) : null
-    }
-    const edited = hashOf('code')
-    const carried = edited ?? hashOf('src')
-    if (params.source.kind === 'none' && carried === null) return
     let cancelled = false
-
-    const clearUrl = (): void => {
-      try {
-        window.history.replaceState(null, '', window.location.pathname)
-      } catch {
-        /* not fatal */
-      }
-    }
     const status = (text: string, tooltip?: string): void => {
       window.dispatchEvent(new CustomEvent('snakie:status', { detail: { text, tooltip, priority: 6 } }))
     }
@@ -61,44 +53,53 @@ export function OpenFromUrl(): null {
         await new Promise((r) => setTimeout(r, 100))
       }
     }
-
-    void (async () => {
-      let name = params.source.kind === 'inline' ? params.source.name : 'main.py'
-      let code = carried
-      let from = 'the link'
-      if (carried !== null && (params.source.kind === 'gist' || params.source.kind === 'repo')) {
-        // The embed sent the code: no need to load it again.
-        name =
-          params.source.kind === 'gist'
-            ? params.source.file ?? 'main.py'
-            : params.source.path.split('/').pop() ?? 'main.py'
-        from = params.source.kind === 'gist' ? 'a GitHub gist' : `${params.source.owner}/${params.source.name}`
-      } else if (params.source.kind === 'gist' || params.source.kind === 'repo') {
-        try {
-          const program = await loadProgram(params.source, (url) => fetch(url))
-          name = program.name
-          code = program.code
-          from = params.source.kind === 'gist' ? 'a GitHub gist' : `${params.source.owner}/${params.source.name}`
-        } catch (err) {
-          if (!cancelled) status(`Couldn't open the shared code: ${err instanceof Error ? err.message : String(err)}`)
-          clearUrl()
-          return
-        }
-      } else if (params.source.kind === 'inline' && code === null) {
-        code = decodeCode(params.source.code) ?? params.source.code
+    const open = async (search: string, hash: string, fetcher: Fetcher): Promise<boolean> => {
+      let program: SharedProgram | null
+      try {
+        program = await resolveSharedLink(search, hash, fetcher)
+      } catch (err) {
+        if (!cancelled) status(`Couldn't open the shared code: ${err instanceof Error ? err.message : String(err)}`)
+        return true
       }
-      if (code === null || cancelled) return
+      if (!program || cancelled) return program !== null
       await afterRestore()
-      if (cancelled) return
-      openBuffer(name, code)
-      clearUrl()
-      status(
-        edited !== null ? `Opened ${name} (edited from the original)` : `Opened ${name} from ${from}`,
-        'Not saved yet. Save it to keep a copy.'
-      )
-    })()
+      if (cancelled) return true
+      openBuffer(program.name, program.code)
+      status(program.note, 'Not saved yet. Save it to keep a copy.')
+      return true
+    }
+
+    if (IS_WEB) {
+      const clearUrl = (): void => {
+        try {
+          window.history.replaceState(null, '', window.location.pathname)
+        } catch {
+          /* not fatal */
+        }
+      }
+      void open(window.location.search, window.location.hash, (url) => fetch(url)).then((handled) => {
+        if (handled && !cancelled) clearUrl()
+      })
+      return () => {
+        cancelled = true
+      }
+    }
+
+    // Desktop: `snakie://open…` links (kevsrobots.com#581).
+    const links = window.api.openLinks
+    if (!links) return
+    // One at a time, in the order they came, so tabs open in that order.
+    let queue = Promise.resolve()
+    const enqueue = (link: { search: string; hash: string }): void => {
+      queue = queue.then(() => open(link.search, link.hash, desktopFetcher).then(() => undefined))
+    }
+    const off = links.onOpen(enqueue)
+    void links.take().then((pending) => {
+      if (!cancelled) pending.forEach(enqueue)
+    })
     return () => {
       cancelled = true
+      if (typeof off === 'function') off()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, at start-up
   }, [])

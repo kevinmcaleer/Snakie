@@ -45,9 +45,11 @@ function App(): JSX.Element {
                         the providers — a BoardPane mounted in a React root of
                         its own has no workspace and throws. */}
                       <BoardCaptureHost />
-                      {/* "Open in Snakie" from a code embed (#1287): opens
-                        `?gist=` / `?repo=` as a new tab. Web only. */}
-                      {IS_WEB && <OpenFromUrl />}
+                      {/* "Open in Snakie" from a code embed or a kevsrobots
+                        lesson (#1287, kevsrobots.com#581): opens the shared
+                        code as a new tab — from the address bar on the web,
+                        from a `snakie://open…` link on the desktop. */}
+                      <OpenFromUrl />
                     </TutorialsProvider>
                   </ConsoleProvider>
                 </DiagnosticsProvider>
