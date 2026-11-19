@@ -147,4 +147,82 @@ describe('createWebRobotApi', () => {
     const res = await api.importMesh('bot/robot.urdf', '/abs/path/mesh.stl')
     expect(res.error).toBeTruthy()
   })
+
+  describe('importPartMesh — a library part\'s model, in the browser', () => {
+    type PartMeshApi = {
+      importPartMesh(
+        urdfPath: string,
+        libraryId: string,
+        partId: string,
+        mesh: string
+      ): Promise<{ rel?: string; name?: string; maxDim?: number; error?: string; reason?: string }>
+    }
+    /** A one-triangle binary STL spanning 0..20 on X (its own units: mm). */
+    const triStl = (): ArrayBuffer => {
+      const buf = new ArrayBuffer(84 + 50)
+      const v = new DataView(buf)
+      v.setUint32(80, 1, true)
+      const verts = [0, 0, 0, 20, 0, 0, 0, 10, 0]
+      verts.forEach((n, i) => v.setFloat32(84 + 12 + i * 4, n, true))
+      return buf
+    }
+    const meshes = (fetchImpl: (url: string) => Promise<{ ok: boolean; status: number; arrayBuffer(): Promise<ArrayBuffer> }>) => ({
+      libraryId: 'snakie-standard',
+      urls: { 'sg90/model.stl': '/assets/parts/sg90-model-abc.stl' },
+      fetch: fetchImpl
+    })
+
+    it('fetches the bundled model and copies it into <urdf-dir>/meshes, measured', async () => {
+      const fs = memFs()
+      fs.files.set('bot/meshes/model.stl', new Uint8Array([1])) // another part's model
+      const seen: string[] = []
+      const api = createWebRobotApi(
+        fs,
+        meshes(async (url) => {
+          seen.push(url)
+          return { ok: true, status: 200, arrayBuffer: async () => triStl() }
+        })
+      ) as unknown as PartMeshApi
+      const res = await api.importPartMesh('bot/robot.urdf', 'snakie-standard', 'sg90', 'model.stl')
+      expect(seen).toEqual(['/assets/parts/sg90-model-abc.stl'])
+      expect(res).toMatchObject({ rel: 'meshes/model-1.stl', name: 'model-1.stl' })
+      expect(res.maxDim).toBeCloseTo(20) // feeds the mm→m import scale, like the desktop
+      expect(fs.files.get('bot/meshes/model-1.stl')).toBeInstanceOf(Uint8Array)
+    })
+
+    it('says "download-failed" when the model cannot be fetched (offline)', async () => {
+      const api = createWebRobotApi(
+        memFs(),
+        meshes(async () => {
+          throw new TypeError('Failed to fetch')
+        })
+      ) as unknown as PartMeshApi
+      const res = await api.importPartMesh('bot/robot.urdf', 'snakie-standard', 'sg90', 'model.stl')
+      expect(res.rel).toBeUndefined()
+      expect(res.reason).toBe('download-failed')
+    })
+
+    it('treats an HTTP error as a failed download too', async () => {
+      const api = createWebRobotApi(
+        memFs(),
+        meshes(async () => ({ ok: false, status: 404, arrayBuffer: async () => new ArrayBuffer(0) }))
+      ) as unknown as PartMeshApi
+      const res = await api.importPartMesh('bot/robot.urdf', 'snakie-standard', 'sg90', 'model.stl')
+      expect(res).toMatchObject({ reason: 'download-failed', error: 'HTTP 404' })
+    })
+
+    it('says "unavailable" for a part from a library the web build does not carry', async () => {
+      const api = createWebRobotApi(
+        memFs(),
+        meshes(async () => {
+          throw new Error('must not fetch')
+        })
+      ) as unknown as PartMeshApi
+      const other = await api.importPartMesh('bot/robot.urdf', 'kevsrobots-catalog', 'sg90', 'model.stl')
+      expect(other.reason).toBe('unavailable')
+      const noMeshes = createWebRobotApi(memFs()) as unknown as PartMeshApi
+      const res = await noMeshes.importPartMesh('bot/robot.urdf', 'snakie-standard', 'sg90', 'model.stl')
+      expect(res.reason).toBe('unavailable')
+    })
+  })
 })

@@ -17,7 +17,7 @@ import { createWebFsApi, opfsFallbackAvailable } from './web-fs'
 import { createWebMpyApi, type WebMpyFs } from './web-mpy'
 import { createWebRobotApi, type WebRobotFs } from './web-robot'
 import { createWebUpdatesApi } from './web-updates'
-import { createWebPartsApi } from './web-parts'
+import { createWebPartsApi, webPartMeshes } from './web-parts'
 import { INSTRUMENTS_PY, SNAKIE_PY, TURTLE_PY } from './web-lib-sources'
 import { createWebFeedbackApi, captureTabScreenshot } from './web-feedback'
 import { createWebKevsrobotsApi } from './web-kevsrobots'
@@ -144,7 +144,7 @@ export function installWebApi(kind: WebWindowKind = 'main'): boolean {
   if ('showDirectoryPicker' in window || opfsFallbackAvailable()) {
     const fs = createWebFsApi()
     w.api.fs = fs as unknown as Window['api']['fs']
-    w.api.robot = createWebRobotApi(fs as unknown as WebRobotFs) as unknown as Window['api']['robot']
+    w.api.robot = createWebRobotApi(fs as unknown as WebRobotFs, webPartMeshes()) as unknown as Window['api']['robot']
     // "Compile to .mpy" (#970). mpy-cross is WebAssembly, so the browser can run
     // it as well as the main process can — it was only ever wired to one of
     // them. Gated with the fs backend on purpose: a compile reads a `.py` from
