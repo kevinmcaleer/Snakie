@@ -1,0 +1,1 @@
+- **Build workspace suggests BetterCAD when a project has no robot.** While the demo arm stands in, a small card over the stage offers New robot, Open URDF… and "Design it in BetterCAD by kevsrobots"; × tucks it into a "Start your robot" pill.

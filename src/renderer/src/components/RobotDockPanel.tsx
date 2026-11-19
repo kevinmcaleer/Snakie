@@ -10,6 +10,7 @@ import { useWorkspaceLayout } from '../store/layout'
 import { readRobotModel } from '../../../shared/krf'
 import demoArm from '../assets/demo-arm.urdf?raw'
 import { FolderOpenIcon } from './ui-icons'
+import { BuildEmptyState } from './BuildEmptyState'
 import './RobotDockPanel.css'
 
 /**
@@ -271,6 +272,12 @@ export function RobotDockPanel({
           compact={!full}
           homeOnMount={full}
         />
+      )}
+      {/* No project robot yet in the Build workspace: the demo arm is a stand-in,
+          and full mode has no New/Open row, so say how to start one, including
+          designing it in BetterCAD. */}
+      {full && urdf !== null && !hasProjectRobot && (
+        <BuildEmptyState onNewRobot={() => void newRobot()} onOpenRobot={() => void openRobot()} />
       )}
       {/* Electronics ⇄ Build reconcile (#717) — Build-workspace mount. Bottom
           right: the hierarchy panel docks left, the pop-out button sits top. */}
