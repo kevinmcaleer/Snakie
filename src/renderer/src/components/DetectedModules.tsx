@@ -481,7 +481,7 @@ export function DetectedModules(): JSX.Element {
   return (
     <div className="dmods">
       <div className="dmods__header">
-        <span className="dmods__title">DETECTED</span>
+        <span className="dmods__title">What your code can import</span>
         <span className="dmods__actions">
           {scanning && <span className="dmods__scanning">scanning…</span>}
           <button

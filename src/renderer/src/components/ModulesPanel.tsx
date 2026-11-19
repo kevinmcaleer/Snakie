@@ -70,7 +70,14 @@ function sourceLabel(def: ModuleDef): string {
   return 'mip'
 }
 
-export function ModulesPanel(): JSX.Element {
+export function ModulesPanel({
+  view
+}: {
+  /** `catalog`: the drivers that can be installed. `detected`: what is already
+   *  importable. Split across the Packages surface's two tabs; the panel itself
+   *  stays mounted, so an install keeps running when the tab changes. */
+  view: 'catalog' | 'detected'
+}): JSX.Element {
   const status = useDeviceStatus()
   const connected = status.state === 'connected'
   // Which runtime the board is running (#752). It decides which HALF of the
@@ -249,13 +256,18 @@ export function ModulesPanel(): JSX.Element {
     )
   }
 
+  if (view === 'detected') {
+    return (
+      <div className="mods">
+        {/* What is ALREADY there — every `.py` in the folder and on the board,
+            opened up to its classes, functions, constants and variables. */}
+        <DetectedModules />
+      </div>
+    )
+  }
+
   return (
     <div className="mods">
-      {/* What is ALREADY there — every `.py` in the folder and on the board,
-          opened up to its classes, functions, constants and variables — sits
-          above the catalog of what could be installed. */}
-      <DetectedModules />
-
       <div className="mods__header">
         <span className="mods__title">Snakie drivers</span>
         <span className="mods__count">
