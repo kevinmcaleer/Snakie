@@ -100,6 +100,22 @@ export function PackagesPanel(): JSX.Element {
           Modules
         </button>
       </div>
+      {/* What this tab is for, in the user's terms: the two names alone do not
+          say which one you want. */}
+      <p className="pkgs-about">
+        {tab === 'packages' ? (
+          <>
+            <strong>Packages</strong> are libraries published for MicroPython. Search for one by
+            name and install it on your board.
+          </>
+        ) : (
+          <>
+            <strong>Modules</strong> are what your code can <code>import</code>. This lists the ones
+            on your computer, on the board and built into its firmware, then Snakie&rsquo;s own
+            drivers you can add.
+          </>
+        )}
+      </p>
       {tab === 'packages' ? <PackagesTab /> : <ModulesPanel />}
     </div>
   )
@@ -154,7 +170,8 @@ function PackagesTab(): JSX.Element {
           } else if (e.name.endsWith('.py')) {
             projectModules.add(e.name.replace(/\.py$/, ''))
             try {
-              for (const imp of parsePyImports(await window.api.fs.readFile(e.path))) imports.add(imp)
+              for (const imp of parsePyImports(await window.api.fs.readFile(e.path)))
+                imports.add(imp)
             } catch {
               /* unreadable file — skip */
             }
@@ -374,9 +391,7 @@ function PackagesTab(): JSX.Element {
   }, [listToShow, installs])
 
   const flashPct = flash ? Math.min(100, Math.round((flash.usedKb / flash.totalKb) * 100)) : 0
-  const flashReadout = flash
-    ? `FLASH ${flash.usedKb} / ${flash.totalKb} KB`
-    : 'FLASH — / — KB'
+  const flashReadout = flash ? `${flash.usedKb} / ${flash.totalKb} KB` : '— / — KB'
 
   // Latest registry version for an on-board package (search results or the
   // curated list), for the Upgrade affordance.
@@ -473,7 +488,7 @@ function PackagesTab(): JSX.Element {
   return (
     <div className="pkgs">
       <div className="pkgs__header">
-        <span className="pkgs__title">PACKAGES</span>
+        <span className="pkgs__title">Board storage</span>
         <span className="pkgs__flash-readout">{flashReadout}</span>
       </div>
 
@@ -523,8 +538,8 @@ function PackagesTab(): JSX.Element {
 
       {!connected && (
         <p className="pkgs__hint" role="status">
-          Connect a board to install packages. You can still search and browse
-          popular libraries below.
+          Connect a board to install packages. You can still search and browse popular libraries
+          below.
         </p>
       )}
 
@@ -576,9 +591,8 @@ function PackagesTab(): JSX.Element {
         </label>
         {convertMpy && (
           <p className="pkgs__note">
-            Note: this build has no bundled <code>mpy-cross</code>, so packages
-            install as source <code>.py</code>. Many ports still compile to
-            bytecode on import.
+            Note: this build has no bundled <code>mpy-cross</code>, so packages install as source{' '}
+            <code>.py</code>. Many ports still compile to bytecode on import.
           </p>
         )}
       </details>
@@ -647,9 +661,7 @@ function PackagesTab(): JSX.Element {
         {registry.map(renderTag)}
       </ul>
 
-      {listToShow.length === 0 && !searching && (
-        <p className="pkgs__hint">No packages to show.</p>
-      )}
+      {listToShow.length === 0 && !searching && <p className="pkgs__hint">No packages to show.</p>}
     </div>
   )
 }

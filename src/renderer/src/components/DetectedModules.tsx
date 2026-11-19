@@ -270,10 +270,7 @@ function BoardModuleRow({
         </button>
         <span className="dmods__meta">
           {submodules.length > 0 && (
-            <span
-              className="dmods__count"
-              title={`Sub-modules: ${submodules.join(', ')}`}
-            >
+            <span className="dmods__count" title={`Sub-modules: ${submodules.join(', ')}`}>
               {submodules.length} sub
             </span>
           )}
@@ -294,8 +291,7 @@ function BoardModuleRow({
                 ))}
               </ul>
               <p className="dmods__frozen-note">
-                Names only — a frozen module keeps no source, so signatures and
-                docstrings are gone.
+                Names only — a frozen module keeps no source, so signatures and docstrings are gone.
               </p>
             </>
           ) : (
@@ -500,10 +496,8 @@ export function DetectedModules(): JSX.Element {
         </span>
       </div>
       <p className="dmods__blurb">
-        Every module beside your program and on the board, and what each one defines —
-        read from the text, never run. Packages and <code>.mpy</code> files are listed by
-        name, and so are the modules compiled into the board&rsquo;s own firmware, which
-        are not files at all.
+        Open a module to see what it defines. Snakie reads the files without running them. Compiled{' '}
+        <code>.mpy</code> files and firmware modules are listed by name only.
       </p>
       {renderGroup(
         'project',

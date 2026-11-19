@@ -175,10 +175,7 @@ export function ModulesPanel(): JSX.Element {
   // firmware provides AND the filesystem does not count: a `/lib` copy shadows
   // the frozen one and is what actually imports, so it stays an ordinary row.
   const discovery = useDiscoveredModules(connected)
-  const frozenNames = useMemo(
-    () => new Set(firmwareOnlyNames(discovery.found)),
-    [discovery.found]
-  )
+  const frozenNames = useMemo(() => new Set(firmwareOnlyNames(discovery.found)), [discovery.found])
 
   const groups = useMemo(() => groupByInstrument(catalog), [catalog])
   const statuses = useMemo(
@@ -260,21 +257,21 @@ export function ModulesPanel(): JSX.Element {
       <DetectedModules />
 
       <div className="mods__header">
-        <span className="mods__title">MODULES</span>
+        <span className="mods__title">Snakie drivers</span>
         <span className="mods__count">
           {connected ? `${counts.installed} / ${counts.total} ON BOARD` : '— / — ON BOARD'}
         </span>
       </div>
 
       <p className="mods__blurb">
-        Install only the drivers your robot needs — pick the module behind each
-        instrument. {probing && <span className="mods__probing">checking board…</span>}
+        Install only the drivers your project needs. They are grouped by the instrument each one
+        powers. {probing && <span className="mods__probing">checking board…</span>}
       </p>
 
       {!connected && (
         <p className="mods__hint" role="status">
-          Connect a board to install modules and detect what&rsquo;s already on it.
-          You can still browse the catalog below — for both MicroPython and CircuitPython.
+          Connect a board to install modules and detect what&rsquo;s already on it. You can still
+          browse the catalog below — for both MicroPython and CircuitPython.
         </p>
       )}
 
@@ -283,8 +280,8 @@ export function ModulesPanel(): JSX.Element {
           libraries come from turns it into an explanation (#758). */}
       {connected && dialect && dialect !== 'unknown' && (
         <p className="mods__hint mods__hint--dialect" role="status">
-          Showing <strong>{DIALECT_LABEL[dialect]}</strong> drivers, because that is what this
-          board runs.{' '}
+          Showing <strong>{DIALECT_LABEL[dialect]}</strong> drivers, because that is what this board
+          runs.{' '}
           {dialect === 'circuitpython'
             ? 'They come from the Adafruit CircuitPython Library Bundle, matched to the board’s CircuitPython version.'
             : 'CircuitPython’s Adafruit-bundle libraries won’t import here, so they are hidden.'}

@@ -301,3 +301,16 @@
 .dmods__init {
   color: var(--text-muted);
 }
+
+/* In a narrow panel the name is what must stay readable: it keeps its width and
+   the "import x" chip beside it (which repeats the name) gives way instead. */
+.dmods__name {
+  flex: 0 0 auto;
+  max-width: 55%;
+}
+.dmods__import {
+  flex: 0 100 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
