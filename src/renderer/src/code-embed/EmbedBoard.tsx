@@ -9,7 +9,7 @@
  */
 import { useMemo, type JSX } from 'react'
 import { PIN_TYPE_COLOR } from '../components/parse-pins'
-import { boardBox, layoutPads, ledPoint, type PadPoint } from '../components/board-layout'
+import { boardBox, layoutPads, ledPoint, type BoardBox, type PadPoint } from '../components/board-layout'
 import type { BoardDefinition, BoardFeature } from '../../../shared/board'
 import { pinStateLabel, type EmbedPin, type PinEvent } from './embed-pins'
 
@@ -43,16 +43,17 @@ const FEATURE_FILL: Record<BoardFeature['kind'], string> = {
   led: '#e9edf0'
 }
 
-function labelProps(p: PadPoint): { x: number; y: number; anchor: 'start' | 'middle' | 'end' } {
+/** A used pad's label sits just outside the board, level with its pad. */
+function labelProps(p: PadPoint, box: BoardBox): { x: number; y: number; anchor: 'start' | 'middle' | 'end' } {
   switch (p.edge) {
     case 'left':
-      return { x: p.x - 9, y: p.y + 3.2, anchor: 'end' }
+      return { x: box.x - 5, y: p.y + 3.2, anchor: 'end' }
     case 'right':
-      return { x: p.x + 9, y: p.y + 3.2, anchor: 'start' }
+      return { x: box.x + box.w + 5, y: p.y + 3.2, anchor: 'start' }
     case 'top':
-      return { x: p.x, y: p.y - 9, anchor: 'middle' }
+      return { x: p.x, y: box.y - 5, anchor: 'middle' }
     default:
-      return { x: p.x, y: p.y + 15, anchor: 'middle' }
+      return { x: p.x, y: box.y + box.h + 12, anchor: 'middle' }
   }
 }
 
@@ -215,7 +216,7 @@ export function EmbedBoard({
           {pads.map((p, i) => {
             const pin = byPad.get(i)
             if (!pin) return null
-            const l = labelProps(p)
+            const l = labelProps(p, box)
             return (
               <text
                 key={`t${i}`}

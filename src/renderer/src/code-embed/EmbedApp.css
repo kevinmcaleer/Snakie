@@ -322,7 +322,7 @@
 .snk-board__select {
   flex: 0 1 auto;
   min-width: 0;
-  max-width: 150px;
+  max-width: 190px;
   padding: 3px 6px;
   border: 1px solid var(--shellbd, var(--border));
   border-radius: 8px;
