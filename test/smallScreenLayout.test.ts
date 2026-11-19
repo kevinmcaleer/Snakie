@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
 import {
   COMPACT_MAX_WIDTH,
   PHONE_MAX_HEIGHT,
@@ -79,5 +80,32 @@ describe('mini board touch pinout', () => {
     expect(isTouchTap(TOUCH_TAP_SLOP, 0)).toBe(true)
     expect(isTouchTap(TOUCH_TAP_SLOP + 1, 0)).toBe(false)
     expect(isTouchTap(0, -40)).toBe(false)
+  })
+})
+
+describe('side panels beside Electronics and Build', () => {
+  const shell = readFileSync('src/renderer/src/components/AppShell.tsx', 'utf8')
+  const shellCss = readFileSync('src/renderer/src/components/AppShell.css', 'utf8')
+
+  it('opens Files, Packages and Search there instead of ignoring the tap', () => {
+    // The non-lesson branch used to only remember the view and keep the panel shut.
+    expect(shell).toMatch(/setSoloSide\(\(open\) => \(open === view/)
+    expect(shell).toMatch(
+      /const soloPanelOpen = soloLessonOpen \|\| \(soloWorkspace && soloSide === activityView\)/
+    )
+    expect(shell).toMatch(/\{soloPanelOpen && \(\s*<aside className="shell__solo-lesson"/)
+  })
+
+  it('forgets the panel when the workspace changes', () => {
+    expect(shell).toMatch(/useEffect\(\(\) => setSoloSide\(null\), \[layout\.active\]\)/)
+  })
+
+  it('shows it as a drawer above the workspace controls on small screens', () => {
+    const i = shellCss.indexOf(".shell:not([data-size='wide']) .shell__solo-lesson {")
+    expect(i).toBeGreaterThan(-1)
+    const rule = shellCss.slice(i, shellCss.indexOf('}', i))
+    expect(rule).toMatch(/position:\s*absolute/)
+    expect(rule).toMatch(/z-index:\s*90/)
+    expect(shellCss).toMatch(/\.shell__solo--overlay > \.shell__scrim \{\s*z-index:\s*89/)
   })
 })
