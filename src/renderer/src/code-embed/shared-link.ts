@@ -10,6 +10,7 @@
 import { parseEmbedParams } from './params'
 import { loadProgram, type Fetcher } from './source'
 import { decodeCode } from './share'
+import { hasBlocksFooter } from '../../../shared/blocks-doc'
 
 export interface SharedProgram {
   name: string
@@ -66,4 +67,17 @@ export async function resolveSharedLink(
     code,
     note: edited !== null ? `Opened ${name} (edited from the original)` : `Opened ${name} from ${from}`
   }
+}
+
+/**
+ * Where a shared program should be shown: a blocks file on the Blocks canvas,
+ * anything else in Code. Null when the current workspace already shows it, so
+ * a learner already in the right place keeps their layout (and the dot).
+ */
+export function workspaceForSharedCode(
+  code: string,
+  active: string
+): 'blocks' | 'code' | null {
+  const want = hasBlocksFooter(code) ? 'blocks' : 'code'
+  return active === want ? null : want
 }
