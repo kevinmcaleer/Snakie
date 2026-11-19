@@ -22,7 +22,20 @@
  * { iframe, unmount() }. SnakieEmbed.scan(root) mounts any new data-snakie-*
  * elements under root. SnakieEmbed.upgrade(preEl, { name, board }) turns a
  * plain code block into a live box in place and runs it ("Run here"); its
- * unmount() puts the block back. No dependencies; MIT.
+ * unmount() puts the block back.
+ *
+ * Frames on one page share what they point at (#1320): hover a pin in one and
+ * the others light it. The page can join in: document gets `snakie:pin-hover`
+ * ({ pins, id }), `snakie:pin-state` ({ states: { GP15: { kind, value } } })
+ * and `snakie:pins` (what a frame's code uses, and where a project's wiring
+ * disagrees) events, and SnakieEmbed.hover(['GP15']) lights a pin in every
+ * frame. data-project="<kevsrobots project id>" names the parts on each pin;
+ * data-paths="main.py,servo.py" shows several files of a repo as tabs.
+ *
+ * A robot frame (#1321): <div data-snakie-robot="<kevsrobots project id>">
+ * draws the project's URDF, and Run in a code frame on the same page turns
+ * the joints the project's wiring binds to servo pins.
+ * No dependencies; MIT.
  */
 ;(function () {
   'use strict'
@@ -39,7 +52,7 @@
   var PARAMS = [
     'gist', 'user', 'file', 'revision', 'repo', 'path', 'ref', 'lines', 'code', 'name',
     'view', 'views', 'toolbox', 'run', 'autorun', 'theme', 'height', 'engine', 'packages',
-    'board', 'pins'
+    'board', 'pins', 'project', 'paths', 'robot', 'urdf'
   ]
   var DEFAULT_HEIGHT = 360
   var RADIUS = 12
@@ -76,6 +89,13 @@
     if (d.snakieGist) opts.gist = d.snakieGist
     if (d.snakieRepo) opts.repo = d.snakieRepo
     if (d.snakieCode) opts.code = d.snakieCode
+    // A robot frame (#1321): data-snakie-robot="<kevsrobots project id>", or
+    // an https address of a URDF.
+    if (d.snakieRobot) {
+      opts.robot = '1'
+      if (/^\d+$/.test(d.snakieRobot)) opts.project = d.snakieRobot
+      else opts.urdf = d.snakieRobot
+    }
     for (var i = 0; i < PARAMS.length; i++) {
       var key = PARAMS[i]
       if (d[key] !== undefined && opts[key] === undefined) opts[key] = d[key]
@@ -105,7 +125,7 @@
     var id = 'snakie-' + ++counter
     var iframe = document.createElement('iframe')
     iframe.src = embedUrl(opts, id)
-    iframe.title = opts.title || (opts.file || opts.path || opts.name || 'Code') + ' in Snakie'
+    iframe.title = opts.title || (opts.robot ? 'Robot' : opts.file || opts.path || opts.name || 'Code') + ' in Snakie'
     iframe.loading = 'lazy'
     iframe.setAttribute('allow', 'clipboard-write')
     iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin')
@@ -194,10 +214,99 @@
     if (!entry || entry.iframe.contentWindow !== e.source) return
     if (data.type === 'height' && !entry.fixed && typeof data.height === 'number') {
       entry.iframe.style.height = Math.max(120, Math.min(2000, Math.round(data.height))) + 'px'
+    } else if (data.type === 'pin-hover') {
+      // One frame points at a pin: the others on the page light it too, and
+      // the page hears about it (a wiring picture can light the wire).
+      var pins = pinNames(data.pins)
+      hoverFrames(pins, data.id)
+      announce('pin-hover', { pins: pins, id: data.id })
+    } else if (data.type === 'pin-state') {
+      // What the running code's pins are doing: a robot frame turns its joints.
+      var states = pinStates(data.states)
+      for (var other in frames) {
+        if (other === data.id || !frames[other].iframe.contentWindow) continue
+        frames[other].iframe.contentWindow.postMessage({ source: 'snakie-embed-host', type: 'pin-state', states: states }, ORIGIN)
+      }
+      announce('pin-state', { states: states, id: data.id })
+    } else if (data.type === 'pins') {
+      announce('pins', {
+        id: data.id,
+        file: typeof data.file === 'string' ? data.file.slice(0, 200) : '',
+        pins: pinList(data.pins),
+        unwired: data.unwired ? pinNames(data.unwired) : null,
+        unused: data.unused ? pinNames(data.unused) : null
+      })
     }
   })
 
-  var SELECTOR = '[data-snakie-gist],[data-snakie-repo],[data-snakie-code]'
+  // --- Pins between frames (#1320) ---
+  // Only pin names and numbers cross: nothing a frame says is used as markup.
+  var PIN_RE = /^[A-Za-z0-9_]{1,16}$/
+
+  function pinNames(list) {
+    var out = []
+    if (!list || typeof list.length !== 'number') return out
+    for (var i = 0; i < list.length && out.length < 40; i++) {
+      if (typeof list[i] === 'string' && PIN_RE.test(list[i])) out.push(list[i])
+    }
+    return out
+  }
+
+  function pinStates(states) {
+    var out = {}
+    if (!states || typeof states !== 'object') return out
+    var n = 0
+    for (var pin in states) {
+      if (!Object.prototype.hasOwnProperty.call(states, pin) || !PIN_RE.test(pin) || n++ >= 40) continue
+      var st = states[pin]
+      if (!st || (st.kind !== 'p' && st.kind !== 'w') || typeof st.value !== 'number' || !isFinite(st.value)) continue
+      out[pin] = { kind: st.kind, value: st.value }
+    }
+    return out
+  }
+
+  function pinList(list) {
+    var out = []
+    if (!list || typeof list.length !== 'number') return out
+    for (var i = 0; i < list.length && out.length < 40; i++) {
+      var p = list[i]
+      if (!p || typeof p.id !== 'string' || !PIN_RE.test(p.id)) continue
+      out.push({
+        id: p.id,
+        kind: typeof p.kind === 'string' ? p.kind.slice(0, 40) : '',
+        onBoard: p.onBoard !== false,
+        part: typeof p.part === 'string' ? p.part.slice(0, 120) : null
+      })
+    }
+    return out
+  }
+
+  /** Light these pins in every frame but the one that said so. */
+  function hoverFrames(pins, exceptId) {
+    for (var id in frames) {
+      if (id === exceptId || !frames[id].iframe.contentWindow) continue
+      frames[id].iframe.contentWindow.postMessage({ source: 'snakie-embed-host', type: 'pin-hover', pins: pins }, ORIGIN)
+    }
+  }
+
+  /** Tell the page: document gets a `snakie:<name>` event with the detail. */
+  function announce(name, detail) {
+    try {
+      document.dispatchEvent(new CustomEvent('snakie:' + name, { detail: detail }))
+    } catch (e) {
+      /* a page too old for CustomEvent just doesn't hear it */
+    }
+  }
+
+  /**
+   * The page's own way in: SnakieEmbed.hover(['GP15']) lights that pin in
+   * every code frame (a wire the reader is pointing at, say); hover([]) clears.
+   */
+  function hover(pins) {
+    hoverFrames(pinNames(pins || []), null)
+  }
+
+  var SELECTOR = '[data-snakie-gist],[data-snakie-repo],[data-snakie-code],[data-snakie-robot]'
   var observer =
     'IntersectionObserver' in window
       ? new IntersectionObserver(
@@ -229,6 +338,9 @@
     mount: mount,
     upgrade: upgrade,
     scan: scan,
+    hover: hover,
+    // This copy draws robot frames (#1321); a page checks before asking for one.
+    robot: true,
     url: embedUrl,
     widths: WIDTHS,
     heights: HEIGHTS

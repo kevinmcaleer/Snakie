@@ -114,6 +114,69 @@ value BEL`), and `PinEventStream` takes those out before the terminal sees
 them. Nothing is written unless a host asks, so the app's own console is
 unchanged.
 
+## On a project page: wiring, tabs and frames that talk (#1320)
+
+A code frame on a kevsrobots project page can know the project it sits in.
+
+- **`project=<id>`** (`data-project`) reads that project's public wiring from
+  the projects API and puts the part names on the pin strip: "GP15, Servo 1".
+  With no `board=`, the strip draws the project's own board. A draft project's
+  wiring is not public, so the strip is then what it is without `project=`.
+- **`paths=main.py,lib/servo.py`** (`data-paths`) shows several files of one
+  repo as tabs. The first (or `path=`) opens. A path that will not load is left
+  out. Up to 8; past 5 the tabs become a menu.
+- **Frames share what they point at.** Hover a pin, or put the caret on a line
+  that uses one, and every other Snakie frame on the page lights the same pin
+  and its lines. `snakie-embed.js` relays it; only pin names cross.
+
+The page can join in. `snakie-embed.js` raises these on `document`:
+
+| Event | `detail` |
+| --- | --- |
+| `snakie:pin-hover` | `{ pins: ['GP15'], id }`. Empty `pins` when the reader moves off. |
+| `snakie:pin-state` | `{ states: { GP15: { kind: 'w', value: 4915 } }, id }` while a program runs. `kind` is `p` (0 or 1) or `w` (PWM duty, 0 to 65535). |
+| `snakie:pins` | `{ id, file, pins: [{ id, kind, onBoard, part }], unwired, unused }`. With `project=`, `unwired` lists pins the code uses that nothing is wired to, and `unused` the wired pins the code never uses. Both are `null` without a project. |
+
+and `SnakieEmbed.hover(['GP15'])` lights a pin in every frame (`hover([])`
+clears it), which is how a wiring picture lights the code when the reader
+points at a wire.
+
+The wiring canvas now writes `data-wire`, `data-from` and `data-to` on each
+wire it draws, and they survive into the exported SVG. `boardWiring()` in
+`src/shared/wiring-pins.ts` gives, for each board pin, the parts it reaches and
+the ids of the wires on the way, so a page showing that SVG can light a wire by
+pin. Pictures saved before this carry no ids; saving the wiring again adds them.
+
+## The robot frame (#1321)
+
+```html
+<div data-snakie-robot="42"></div>
+```
+
+or `/embed.html?robot=1&project=42`. The frame draws the robot a kevsrobots
+project carries among its files: the `.urdf` the wiring names (else the first
+one), with each mesh found by file name among the same files, so
+`package://arm/meshes/base.stl` is the project file `base.stl`. STL meshes are
+drawn; anything else shows as a small block. Drag to look around; **Joints**
+opens a slider for each moving joint.
+
+When a code frame on the same page runs, `snakie-embed.js` passes each
+`pin-state` on to the robot frame, and the joints the project binds to servo
+pins (`robot.servoJointMap` in its wiring, set in Robot View's servo panel)
+turn. A PWM duty is read as a hobby servo pulse at 50 Hz: 0.5 ms is 0 degrees
+and 2.5 ms is 180, then the binding's calibration maps that onto the joint. A
+duty of 0 is a servo switched off and moves nothing.
+
+`data-snakie-robot="https://…/arm.urdf"` (or `urdf=`) draws a URDF from any
+https address that allows cross-origin reads, with meshes resolved beside it.
+There are no bindings then, so only the sliders move it.
+
+`SnakieEmbed.robot` is `true` on a copy of the script that knows robot frames,
+so a page can check before it makes room for one.
+
+three.js loads only in a robot frame; a code frame never fetches it. The
+arithmetic lives in `code-embed/robot-drive.ts`.
+
 ## Engines
 
 - **MicroPython** (default): the web app's own WASM interpreter (about 0.23 MB),
@@ -156,3 +219,6 @@ headers the host page would have to send (which would break its YouTube embeds).
   program runs, but only its printed output and its pin states show.
 - Pressing a simulated button: input pins are listed, but cannot be driven yet.
 - `input()` in either engine.
+- The robot frame follows servos only: motors, wheels and a robot driving
+  around the floor are not drawn, and a servo library that sets a PWM frequency
+  other than 50 Hz is read as if it were 50.

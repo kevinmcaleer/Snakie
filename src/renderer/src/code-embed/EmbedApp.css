@@ -507,3 +507,168 @@
 .snk-board--chips .snk-board__kind {
   overflow: visible;
 }
+
+/* File tabs for a repo frame with several files (#1320). */
+.snk-embed__tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.snk-embed__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--txt3, var(--text-muted));
+  cursor: pointer;
+}
+
+.snk-embed__tab:hover {
+  color: var(--text);
+}
+
+.snk-embed__tab.is-active {
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+  color: var(--head, var(--text));
+}
+
+.snk-embed__tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* What a project's wiring puts on the pin: "Servo 1". */
+.snk-board__part {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--head, var(--text));
+}
+
+/* The robot frame (#1321): a project's URDF, moved by a code frame's Run. */
+.snk-robot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-height: 240px;
+  background: var(--editor, var(--bg));
+  color: var(--text);
+  font-family: var(--font-ui);
+  overflow: hidden;
+}
+
+.snk-robot__view {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.snk-robot__view canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.snk-robot__message {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  color: var(--txt3, var(--text-muted));
+}
+
+.snk-robot__message--error {
+  color: var(--text);
+}
+
+.snk-robot__bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--panel, var(--bg));
+  font-size: 13px;
+}
+
+.snk-robot__name {
+  font-weight: 600;
+  color: var(--head, var(--text));
+}
+
+.snk-robot__hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--txt3, var(--text-muted));
+}
+
+.snk-robot__joints {
+  position: absolute;
+  right: 10px;
+  bottom: 48px;
+  max-height: calc(100% - 68px);
+  width: min(300px, calc(100% - 20px));
+  overflow-y: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card, var(--panel, var(--bg)));
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+
+.snk-robot__joint {
+  display: grid;
+  grid-template-columns: 1fr 52px;
+  align-items: center;
+  gap: 2px 8px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.snk-robot__joint-name {
+  grid-column: 1 / -1;
+  font-family: var(--font-mono);
+}
+
+.snk-robot__joint input {
+  width: 100%;
+}
+
+.snk-robot__joint-value {
+  text-align: right;
+  font-family: var(--font-mono);
+  color: var(--txt3, var(--text-muted));
+}
+
+.snk-robot__bound {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--font-ui);
+  font-size: 10px;
+}

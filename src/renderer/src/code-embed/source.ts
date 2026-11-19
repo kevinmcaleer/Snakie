@@ -180,7 +180,27 @@ async function loadRepo(
     }
     if (res.ok) {
       const resolved = { ...source, ref }
-      return { name, code: await res.text(), githubUrl: githubUrlFor(resolved), source: resolved }
+      const code = await res.text()
+      // The other tabs (`paths=`), from the same ref. One that won't load is left out.
+      const others = (source.paths ?? []).filter((p) => p !== source.path)
+      const rest = await Promise.all(
+        others.map(async (p) => {
+          const text = await fetchText(
+            fetcher,
+            `https://raw.githubusercontent.com/${source.owner}/${source.name}/${encodeURIComponent(ref)}/${p.split('/').map(encodeURIComponent).join('/')}`
+          )
+          return text === null ? null : { name: p, code: text }
+        })
+      )
+      const files = [{ name: source.path, code }, ...rest.filter((f): f is { name: string; code: string } => f !== null)]
+      return {
+        // With tabs, a file is known by its path: two folders can each hold a main.py.
+        name: files.length > 1 ? source.path : name,
+        code,
+        githubUrl: githubUrlFor(resolved),
+        source: resolved,
+        ...(files.length > 1 ? { files } : {})
+      }
     }
   }
   throw new EmbedLoadError(

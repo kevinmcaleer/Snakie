@@ -3164,7 +3164,9 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
               const isHi = isHiWire(c)
               const dimmed = !!highlight && !isHi
               return (
-                <g key={c.id}>
+                // The ids ride along into the exported SVG, so a page showing the
+                // picture can tell which wire is which (#1320).
+                <g key={c.id} data-wire={c.id} data-from={c.from} data-to={c.to}>
                   {/* Wide, invisible hit path so the thin wire is easy to click to
                       SELECT it (#…). Selecting clears any part selection + focuses the
                       canvas so Delete/Backspace targets the wire. */}
