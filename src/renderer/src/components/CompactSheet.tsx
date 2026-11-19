@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import { useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { SHEET_DRAG_SLOP, sheetSizeAt, sheetSnaps, sheetSnapTarget } from './sheet-snap'
 import './CompactSheet.css'
 
 /** The pull-up sheet's three tabs on small screens. */
@@ -12,33 +13,101 @@ const TABS: { id: SheetTab; label: string }[] = [
 
 /**
  * COMPACT SHEET (small-screen layout C) — the chrome that turns the console
- * panel into a pull-up sheet on small laptops, tablets and phones: a grip that
- * snaps the sheet between half and nearly-full height, and Console / Board /
- * Instruments tabs. The console itself (ShellPanel) stays mounted underneath so
+ * panel into a pull-up sheet on small laptops, tablets and phones: a bar you can
+ * drag up and down — it settles at the top, the middle, or minimised to just
+ * the bar — and Console / Board / Instruments tabs. Tapping the grip steps
+ * through the same three stops. The console itself (ShellPanel) stays mounted underneath so
  * its terminal keeps its scrollback; Board and Instruments render on top of it.
  */
 export function CompactSheet({
   tab,
   onTab,
   onGrip,
+  onSize,
   board,
   instruments
 }: {
   tab: SheetTab
   onTab: (tab: SheetTab) => void
-  /** Snap the sheet to its next height (half ↔ tall). */
+  /** Step the sheet to its next stop (min → middle → top → min). */
   onGrip: () => void
+  /** Set the sheet's size (percent of the editor + sheet column). `settle` is
+   *  true for the final, snapped size when the finger lifts. */
+  onSize: (size: number, settle: boolean) => void
   board: ReactNode
   instruments: ReactNode
 }): JSX.Element {
+  // Dragging the bar. The press may land on a tab: it only becomes a drag once
+  // the finger has moved, and then the click that follows is swallowed, so a
+  // tab is never switched by the end of a drag.
+  const drag = useRef<{
+    id: number
+    y0: number
+    grab: number
+    column: { top: number; height: number }
+    moved: boolean
+    size: number
+    from: number
+  } | null>(null)
+  const draggedAt = useRef(0)
+  const onDown = (e: ReactPointerEvent<HTMLDivElement>): void => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    const bar = e.currentTarget
+    const col = bar.closest('.shell__vgroup')?.getBoundingClientRect()
+    if (!col) return
+    drag.current = {
+      id: e.pointerId,
+      y0: e.clientY,
+      // Hold the sheet where it was taken: the bar sits 5px below the sheet's top.
+      grab: e.clientY - bar.getBoundingClientRect().top + 5,
+      column: { top: col.top, height: col.height },
+      moved: false,
+      size: 0,
+      from: 0
+    }
+  }
+  const onMove = (e: ReactPointerEvent<HTMLDivElement>): void => {
+    const d = drag.current
+    if (!d || d.id !== e.pointerId) return
+    if (!d.moved) {
+      if (Math.abs(e.clientY - d.y0) < SHEET_DRAG_SLOP) return
+      d.moved = true
+      // Where the sheet stood when the drag began (the finger has barely moved).
+      d.from = ((d.column.top + d.column.height - (d.y0 - d.grab)) / d.column.height) * 100
+      e.currentTarget.setPointerCapture?.(e.pointerId)
+    }
+    d.size = sheetSizeAt(e.clientY, d.grab, d.column, sheetSnaps(d.column.height))
+    onSize(d.size, false)
+  }
+  const onUp = (e: ReactPointerEvent<HTMLDivElement>): void => {
+    const d = drag.current
+    if (!d || d.id !== e.pointerId) return
+    drag.current = null
+    if (!d.moved) return
+    draggedAt.current = Date.now()
+    e.currentTarget.releasePointerCapture?.(e.pointerId)
+    onSize(sheetSnapTarget(d.size, e.clientY - d.y0, sheetSnaps(d.column.height), d.from), true)
+  }
   return (
     <>
-      <div className="csheet__bar">
+      <div
+        className="csheet__bar"
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onUp}
+        onClickCapture={(e) => {
+          if (Date.now() - draggedAt.current < 400) {
+            e.preventDefault()
+            e.stopPropagation()
+          }
+        }}
+      >
         <button
           type="button"
           className="csheet__grip"
           onClick={onGrip}
-          title="Resize the sheet"
+          title="Drag to resize — or tap to step between minimised, half and full"
           aria-label="Resize the sheet"
         >
           <span aria-hidden="true" />
@@ -100,7 +169,12 @@ export function BoardPip({
         aria-label="Hide the floating board"
       >
         <svg width="10" height="10" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-          <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path
+            d="M3 3l10 10M13 3L3 13"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
         </svg>
       </button>
     </div>

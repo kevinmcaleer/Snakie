@@ -121,6 +121,7 @@ import { isUrdfPath } from './urdf-target'
 import { useEditorSettings } from '../store/settings'
 import { useViewportSize } from '../hooks/useViewportSize'
 import { BoardPip, CompactSheet, type SheetTab } from './CompactSheet'
+import { isSheetMin, nextSheetSnap, sheetSnaps } from './sheet-snap'
 import './AppShell.css'
 
 /**
@@ -444,14 +445,40 @@ export function AppShell(): JSX.Element {
     },
     [openPanel]
   )
-  // The grip snaps the sheet between half height and tall (the editor keeps a
-  // strip at the top so you can still see where you are).
+  // The sheet rests at three stops — minimised to its bar, the middle, and the
+  // top (the editor keeps a strip so you can still see where you are). Dragging
+  // the bar moves it freely and settles on the nearest stop; tapping the grip
+  // steps through them. See sheet-snap.ts.
+  const columnHeight = (): number =>
+    document.querySelector('.shell__vgroup')?.getBoundingClientRect().height ?? 0
+  const setSheetSize = useCallback((size: number, settle: boolean): void => {
+    const group = vGroupRef.current
+    if (!group) return
+    // Ease into a stop; follow the finger exactly while it is still down.
+    const el = document.querySelector<HTMLElement>('.shell__vgroup')
+    if (el) {
+      if (settle) {
+        el.dataset.settling = ''
+        window.setTimeout(() => delete el.dataset.settling, 260)
+      } else delete el.dataset.settling
+    }
+    group.setLayout([100 - size, size])
+  }, [])
   const snapSheet = useCallback((): void => {
     const group = vGroupRef.current
     if (!group) return
     const [, sheet = 0] = group.getLayout()
-    group.setLayout(sheet < 60 ? [22, 78] : [55, 45])
-  }, [])
+    setSheetSize(nextSheetSnap(sheet, sheetSnaps(columnHeight())), true)
+  }, [setSheetSize])
+  // Choosing a tab on a minimised sheet opens it — the tab names are all you
+  // can see there, so tapping one must show that tab.
+  const raiseSheetIfMin = useCallback((): void => {
+    const group = vGroupRef.current
+    if (!group) return
+    const snaps = sheetSnaps(columnHeight())
+    const [, sheet = 0] = group.getLayout()
+    if (isSheetMin(sheet, snaps)) setSheetSize(snaps[1], true)
+  }, [setSheetSize])
   // Phones: the activity bar is folded into a drawer the toolbar's ☰ opens,
   // together with the side panel.
   const phone = viewport === 'phone'
@@ -1790,7 +1817,10 @@ export function AppShell(): JSX.Element {
                       />
                     </div>
                     {compact && dockWorkspace && !focus && !pipHidden && sheetTab !== 'board' && (
-                      <BoardPip onOpen={() => showSheetTab('board')} onHide={() => setPipHidden(true)}>
+                      <BoardPip
+                        onOpen={() => showSheetTab('board')}
+                        onHide={() => setPipHidden(true)}
+                      >
                         <MiniBoardView source={boardSource} isPython={boardIsPython} />
                       </BoardPip>
                     )}
@@ -1804,7 +1834,10 @@ export function AppShell(): JSX.Element {
                     collapsible
                     collapsedSize={0}
                     defaultSize={initialSizes.current.v[1]}
-                    minSize={22}
+                    // Small screens: the sheet minimises to just its bar (a pixel
+                    // height — a few percent of a tall phone), so the floor is low
+                    // and sheet-snap.ts sets the real stops.
+                    minSize={compact ? 4 : 22}
                     onCollapse={() => layout.setCollapsed('shell', true)}
                     onExpand={() => layout.setCollapsed('shell', false)}
                   >
@@ -1820,8 +1853,10 @@ export function AppShell(): JSX.Element {
                         onTab={(tab) => {
                           setSheetTab(tab)
                           if (tab === 'board') setPipHidden(false)
+                          raiseSheetIfMin()
                         }}
                         onGrip={snapSheet}
+                        onSize={setSheetSize}
                         board={
                           dockWorkspace ? (
                             <MiniViewer source={boardSource} isPython={boardIsPython} />
