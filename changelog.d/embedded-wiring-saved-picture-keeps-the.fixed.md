@@ -1,1 +1,0 @@
-- **Embedded wiring: saved picture keeps the blueprint background after a host cleans the SVG.** 
