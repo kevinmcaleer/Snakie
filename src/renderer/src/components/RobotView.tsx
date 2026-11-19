@@ -194,7 +194,7 @@ import { findHierarchyNode, flattenHierarchy } from './hierarchy-tree'
 import type { MassEditorProps, ContactsEditorProps } from './RobotPropertiesDialog'
 import type { MeshTriangles } from './robot-mass-geometry'
 import { addContact, removeContact, setContact } from './robot-contacts'
-import { viewportSizeFor } from '../hooks/useViewportSize'
+import { isPhoneViewport } from '../hooks/useViewportSize'
 import './RobotView.css'
 import './RobotView.small.css'
 
@@ -349,11 +349,6 @@ const ANAGLYPH_RG_RIGHT = [0, 0.299, 0, 0, 0.587, 0, 0, 0.114, 0]
 const STEREO_DEPTH_MIN = 0.01
 const STEREO_DEPTH_MAX = 0.12
 const STEREO_DEPTH_DEFAULT = 0.064
-
-/** Is the window phone-sized right now? Read once, for first-open defaults —
- *  the layout itself follows `.shell[data-size]` in CSS. */
-const startsOnPhone = (): boolean =>
-  typeof window !== 'undefined' && viewportSizeFor(window.innerWidth, window.innerHeight) === 'phone'
 
 export function RobotView({
   urdfContent,
@@ -770,7 +765,7 @@ export function RobotView({
   // …except on a phone, where the panel is a sheet over the 3-D view: it starts
   // closed so the robot is what you see first.
   const [buildOpen, setBuildOpen] = useState(
-    () => !startsOnPhone() && loadPin(window.localStorage, PIN_KEYS.builder, true)
+    () => !isPhoneViewport() && loadPin(window.localStorage, PIN_KEYS.builder, true)
   )
   const [selectedLink, setSelectedLink] = useState<string | null>(null)
   // The link the user designated as the base (root) of the chain, from robot.yml.
@@ -849,7 +844,7 @@ export function RobotView({
   // A phone starts on Grab: a finger on a part poses it, a finger on empty space
   // orbits. (Grab on a robot with nothing to pose is a no-op, so orbit and
   // tap-to-select still work there.)
-  const [buildTool, setBuildTool] = useState<BuildTool>(() => (startsOnPhone() ? 'ik' : 'select'))
+  const [buildTool, setBuildTool] = useState<BuildTool>(() => (isPhoneViewport() ? 'ik' : 'select'))
   // ASSEMBLE shapes the model; ANIMATE poses it. Animate needs a joint that can
   // turn, so a remembered "animate" on a robot with none falls back to Assemble.
   const [buildMode, setBuildMode] = useState<BuildMode>(() =>
@@ -2083,7 +2078,7 @@ export function RobotView({
   const [liveMirror, setLiveMirror] = useState(() =>
     loadLiveMirror(typeof window === 'undefined' ? undefined : window.localStorage)
   )
-  const [jointsOpen, setJointsOpen] = useState(() => !startsOnPhone())
+  const [jointsOpen, setJointsOpen] = useState(() => !isPhoneViewport())
   const [ringJoint, setRingJoint] = useState<string | null>(null)
   const ringApiRef = useRef<JointRingHandle | null>(null)
   const mirrorOn = animating && liveMirror && mirrorPairs.length > 0
