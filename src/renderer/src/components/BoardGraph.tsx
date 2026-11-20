@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { loadPin, savePin, shouldAutoHide, PIN_KEYS } from './pin-overlay'
 import { isPhoneViewport } from '../hooks/useViewportSize'
 import { dispatchOpenHelp } from './editorBridge'
@@ -164,6 +164,9 @@ export interface BoardGraphProps {
    *  `onSwapConsumed`. */
   pendingSwapBoard?: string | null
   onSwapConsumed?: () => void
+  /** An extra control for the header's action row, before ERC. The phone layout
+   *  puts Sync here, where it floated over the board on a desktop. */
+  headerExtra?: ReactNode
 }
 
 /** localStorage key shared with {@link BoardView} so board choice persists across both. */
@@ -379,7 +382,8 @@ export function BoardGraph({
   onAddToProject,
   onAddManyToProject,
   pendingSwapBoard,
-  onSwapConsumed
+  onSwapConsumed,
+  headerExtra
 }: BoardGraphProps): JSX.Element {
   // Boards are sourced from the installed parts libraries (microcontroller parts)
   // plus any Board-Creator boards; the built-ins are only a fresh-install fallback.
@@ -1231,6 +1235,7 @@ export function BoardGraph({
         <span className="boardgraph__chip">{def.mcu}</span>
 
         <div className="boardgraph__actions">
+          {headerExtra && <div className="boardgraph__sync">{headerExtra}</div>}
           {/* ERC badge (#601): worst-severity + counts over the wiring, or a quiet
               ✓ when clean. Shown wherever the full circuit is visible — the
               Breadboard + node graph (not the abstract Schematic). */}

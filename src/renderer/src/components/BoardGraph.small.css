@@ -52,15 +52,38 @@
 .shell[data-size='phone'] .shell__solo-board .boardgraph__chip {
   display: none;
 }
+/* Second row: Sync · ERC · Live · Help as ONE row of equal cells across the
+   screen. They were three odd-sized things ragged against the right edge, with
+   Sync floating on the board below. */
 .shell[data-size='phone'] .shell__solo-board .boardgraph__actions {
-  gap: 8px;
+  flex: 1 1 100%;
+  margin-left: 0;
+  gap: 6px;
 }
-.shell[data-size='phone'] .shell__solo-board .boardgraph__actions > button,
-.shell[data-size='phone'] .shell__solo-board .boardgraph__actions > label {
+.shell[data-size='phone'] .shell__solo-board .boardgraph__actions > * {
+  flex: 1 1 0;
+  min-width: 0;
   min-height: var(--em-tap);
+  height: var(--em-tap);
+  box-sizing: border-box;
+  justify-content: center;
 }
 .shell[data-size='phone'] .shell__solo-board .boardgraph__live {
   padding-inline: 6px;
+  border: 1px solid var(--shellbd, var(--border));
+  border-radius: 8px;
+}
+.shell[data-size='phone'] .shell__solo-board .boardgraph__sync {
+  display: flex;
+}
+.shell[data-size='phone'] .shell__solo-board .boardgraph__sync .esync__button {
+  flex: 1 1 auto;
+  justify-content: center;
+  min-height: var(--em-tap);
+  font-size: 13px;
+  border-radius: 8px;
+  padding-inline: 4px;
+  white-space: nowrap;
 }
 
 /* ── Top of the board: [☰ browser] … [Library] ───────────────────────────── */
@@ -86,11 +109,14 @@
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
-  color: var(--head, var(--text));
-  background: var(--panel, var(--bg-elevated));
-  border: 1px solid var(--shellbd, var(--border));
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  /* Board chrome, the same as ☰ opposite and the tool bar below: everything
+     that floats ON the board is dark glass, everything in the header is paper. */
+  color: var(--bptext, #d6dade);
+  background: rgba(12, 20, 28, 0.82);
+  border: 1px solid rgba(220, 235, 245, 0.16);
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
 }
 
 /* ── The parts Library: a pull-up sheet ──────────────────────────────────── */
@@ -248,12 +274,28 @@
 }
 
 /* ── The controls pill (undo · zoom · tools) ─────────────────────────────── */
+/* A dock across the bottom of the board: undo and redo on the left, the board
+   tools on the right. As a pill hugging the left corner it left a gap that
+   Sync and the part-help note then floated into. */
 .shell[data-size='phone'] .shell__solo-board .wc__controls {
   left: var(--em-edge);
+  right: var(--em-edge);
   bottom: var(--em-edge);
   padding: 4px;
-  max-width: calc(100% - 2 * var(--em-edge));
   box-sizing: border-box;
+  border-radius: 10px;
+}
+.shell[data-size='phone'] .shell__solo-board .wc__zoom {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.shell[data-size='phone'] .shell__solo-board .wc__zoom > button[aria-label='Zoom to fit'] {
+  margin-left: auto;
+}
+/* Nothing to undo: leave the slot empty rather than show a button that does
+   nothing (it keeps its place, so the others never move under a finger). */
+.shell[data-size='phone'] .shell__solo-board .wc__zoom-btn:disabled {
+  visibility: hidden;
 }
 /* "Drag from a pin to another pin to wire them." is worth one line on a desktop.
    Here it was a seven-line column squeezing the buttons off the screen. */
@@ -287,9 +329,33 @@
 }
 
 /* The selected part's floating tool bar (rotate · rename · duplicate · delete). */
-.shell[data-size='phone'] .shell__solo-board .wc__parttb {
+/* On a desktop it floats beside the part. Here that put it anywhere — usually
+   across ☰ and Library — so it docks as a second row on the tool bar: the same
+   place every time. (!important: its position is set inline, from the part.) */
+.shell[data-size='phone'] .shell__solo-board .wc__parttb,
+.shell[data-size='phone'] .shell__solo-board .wc__parttb--below {
+  left: var(--em-edge) !important;
+  right: var(--em-edge);
+  top: auto !important;
+  bottom: calc(var(--em-tap) + 10px + 2 * var(--em-edge));
+  transform: none;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 4px;
   padding: 4px;
+  box-sizing: border-box;
+}
+/* "Help for HC-SR04 is available": under ☰ / Library, not over the tool bar. */
+.shell[data-size='phone'] .shell__solo-board .boardgraph__help-toast {
+  top: calc(var(--em-tap) + 2 * var(--em-edge));
+  bottom: auto;
+  left: var(--em-edge);
+  right: var(--em-edge);
+  transform: none;
+  justify-content: space-between;
+}
+.shell[data-size='phone'] .shell__solo-board .boardgraph__help-toast-btn {
+  min-height: 36px;
 }
 .shell[data-size='phone'] .shell__solo-board .wc__parttb-btn {
   width: var(--em-tap);
@@ -305,7 +371,7 @@
   font-size: 16px;
 }
 
-/* ── Connections strip, and Sync, which sat on top of it ─────────────────── */
+/* ── Connections strip ───────────────────────────────────────────────────── */
 .shell[data-size='phone'] .shell__solo-board .wc__bottom {
   max-height: 50%;
 }
@@ -332,19 +398,6 @@
 .shell[data-size='phone'] .shell__solo-board .wc__table-headrow > button:not(.wc__table-head--toggle) {
   min-width: var(--em-tap);
 }
-.shell[data-size='phone'] .shell__solo-board .esync__float {
-  left: auto;
-  right: var(--em-edge);
-  /* Above the Connections strip (40) and clear of the controls pill (48). */
-  bottom: calc(var(--em-tap) + var(--em-edge) + 56px);
-  /* Under the sheets (30): it was floating over the open Library. */
-  z-index: 7;
-}
-.shell[data-size='phone'] .shell__solo-board .esync__button {
-  min-height: var(--em-tap);
-  padding-inline: 12px;
-}
-
 /* ── Landscape: side panels, one-row header ──────────────────────────────── */
 @media (orientation: landscape) {
   .shell[data-size='phone'] .shell__solo-board .boardgraph__dock {
@@ -375,8 +428,41 @@
   .shell[data-size='phone'] .shell__solo-board .wc__browser-collapse {
     transform: none;
   }
-  .shell[data-size='phone'] .shell__solo-board .esync__float {
-    bottom: calc(var(--em-tap) + var(--em-edge) + 8px);
+  /* One-row header again: the actions keep their own widths at the right. */
+  .shell[data-size='phone'] .shell__solo-board .boardgraph__actions {
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+  .shell[data-size='phone'] .shell__solo-board .boardgraph__actions > * {
+    flex: 0 0 auto;
+  }
+  /* The board is only ~190px tall here, so nothing spans it: the tool bar is a
+     pill in the bottom-left corner, a selected part's tools sit bottom-right,
+     and the part-help note takes the gap between ☰ and Library. */
+  .shell[data-size='phone'] .shell__solo-board .wc__controls {
+    right: auto;
+    max-width: calc(100% - 2 * var(--em-edge));
+  }
+  .shell[data-size='phone'] .shell__solo-board .wc__zoom > button[aria-label='Zoom to fit'] {
+    margin-left: 0;
+  }
+  .shell[data-size='phone'] .shell__solo-board .wc__zoom-btn:disabled {
+    display: none;
+  }
+  .shell[data-size='phone'] .shell__solo-board .wc__parttb,
+  .shell[data-size='phone'] .shell__solo-board .wc__parttb--below {
+    left: auto !important;
+    bottom: var(--em-edge);
+    flex-wrap: nowrap;
+    max-width: calc(100% - 2 * var(--em-edge));
+  }
+  .shell[data-size='phone'] .shell__solo-board .boardgraph__help-toast {
+    top: var(--em-edge);
+    left: calc(var(--em-tap) + 2 * var(--em-edge));
+    right: calc(5.5rem + 2 * var(--em-edge));
+    min-height: var(--em-tap);
+    box-sizing: border-box;
+    padding-block: 2px;
   }
   /* ~270px of panel: keep the library tool bar to one (scrolling) row, and let a
      selected part's detail take the whole panel — beside the list, its "Add to

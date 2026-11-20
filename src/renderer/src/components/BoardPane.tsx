@@ -10,6 +10,7 @@ import { movableJointNames, jointDisplayLimits } from './robot-assembly'
 import { canRedo as histCanRedo, canUndo as histCanUndo, historyInit, type History } from './use-history'
 import { commitRobot, redoRobot, undoRobot } from './robot-history'
 import { useWorkspace } from '../store/workspace'
+import { useViewportSize } from '../hooks/useViewportSize'
 import { useWorkspaceLayout } from '../store/layout'
 import { useEditorSettings } from '../store/settings'
 import type {
@@ -60,6 +61,7 @@ export interface BoardPaneProps {
 
 export function BoardPane({ mat }: BoardPaneProps = {}): JSX.Element {
   const { openFiles, activeId, currentFolder } = useWorkspace()
+  const phone = useViewportSize() === 'phone'
   const { pendingBoardSwap, clearBoardSwap } = useWorkspaceLayout()
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
   const source = activeFile?.content ?? ''
@@ -394,12 +396,16 @@ export function BoardPane({ mat }: BoardPaneProps = {}): JSX.Element {
         onAddManyToProject={addManyToProject}
         pendingSwapBoard={robotLoaded ? pendingBoardSwap : null}
         onSwapConsumed={clearBoardSwap}
+        headerExtra={phone ? <SyncControl folder={folder} /> : undefined}
       />
       {/* Electronics ⇄ Build reconcile (#717) — same control as the Build
-          workspace and the pop-out window, self-contained on the folder. */}
-      <div className="esync__float">
-        <SyncControl folder={folder} />
-      </div>
+          workspace and the pop-out window, self-contained on the folder. On a
+          phone it sits in the header's action row instead (`headerExtra`). */}
+      {!phone && (
+        <div className="esync__float">
+          <SyncControl folder={folder} />
+        </div>
+      )}
       {editing && (
         <PartEditor
           libraryId={editing.libraryId}

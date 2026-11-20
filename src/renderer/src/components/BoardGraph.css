@@ -1092,3 +1092,9 @@
   font-family: var(--font-mono, monospace);
   color: var(--text-muted, #999);
 }
+
+/* A host's extra header control (`headerExtra`): Sync, on a phone. */
+.boardgraph__sync {
+  display: flex;
+  align-items: center;
+}

@@ -109,3 +109,45 @@ describe('side panels beside Electronics and Build', () => {
     expect(shellCss).toMatch(/\.shell__solo--overlay > \.shell__scrim \{\s*z-index:\s*89/)
   })
 })
+
+describe('Electronics on a phone: one arrangement, nothing adrift', () => {
+  const css = readFileSync('src/renderer/src/components/BoardGraph.small.css', 'utf8')
+  const pane = readFileSync('src/renderer/src/components/BoardPane.tsx', 'utf8')
+  const graph = readFileSync('src/renderer/src/components/BoardGraph.tsx', 'utf8')
+  const P = ".shell[data-size='phone'] .shell__solo-board"
+  const rule = (sel: string): string => {
+    const i = css.indexOf(`${P} ${sel} {`)
+    expect(i, sel).toBeGreaterThan(-1)
+    return css.slice(i, css.indexOf('}', i))
+  }
+
+  it('puts Sync in the header row instead of floating it over the board', () => {
+    expect(pane).toMatch(/headerExtra=\{phone \? <SyncControl folder=\{folder\} \/> : undefined\}/)
+    expect(pane).toMatch(/\{!phone && \(\s*<div className="esync__float">/)
+    expect(graph).toMatch(/\{headerExtra && <div className="boardgraph__sync">\{headerExtra\}<\/div>\}/)
+    expect(css).not.toMatch(/esync__float/)
+  })
+
+  it('lays the header actions out as one full-width row', () => {
+    expect(rule('.boardgraph__actions')).toMatch(/flex:\s*1 1 100%/)
+    expect(rule('.boardgraph__actions > *')).toMatch(/flex:\s*1 1 0/)
+  })
+
+  it('docks the tool bar across the bottom and the part tools on top of it', () => {
+    const dock = rule('.wc__controls')
+    expect(dock).toMatch(/left:\s*var\(--em-edge\)/)
+    expect(dock).toMatch(/right:\s*var\(--em-edge\)/)
+    const i = css.indexOf(`${P} .wc__parttb,`)
+    const tb = css.slice(i, css.indexOf('}', i))
+    expect(tb).toMatch(/top:\s*auto !important/)
+    expect(tb).toMatch(/transform:\s*none/)
+  })
+
+  it('gives Library the same board chrome as the menu button', () => {
+    expect(rule('.boardgraph__dock-tab')).toMatch(/background:\s*rgba\(12, 20, 28, 0\.82\)/)
+  })
+
+  it('never shows a greyed-out undo or redo', () => {
+    expect(rule('.wc__zoom-btn:disabled')).toMatch(/visibility:\s*hidden/)
+  })
+})
