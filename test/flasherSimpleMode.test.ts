@@ -38,10 +38,17 @@ describe('the simple path', () => {
     expect(fn![0]).toContain('setAdvancedOpen(true)')
   })
 
-  it('defaults the firmware source to the catalog, not a local file', () => {
+  it('defaults the firmware source to the catalog on the desktop, not a local file', () => {
     // Downloading the official build needs no prior knowledge; picking a file
     // off disk assumes you have already been somewhere else to get it.
-    expect(SRC).toMatch(/useState<Source>\('catalog'\)/)
+    expect(SRC).toMatch(/useState<Source>\(isElectron\(\) \? 'catalog' : 'local'\)/)
+  })
+
+  it('opens on a local file in the browser, where the catalog cannot download', () => {
+    // `fetchCatalog` is inert outside Electron (Web W3, #284): opening on the
+    // catalog there showed an empty Family list and a Flash that never enabled.
+    expect(SRC).toMatch(/useState<Source>\(isElectron\(\) \? 'catalog' : 'local'\)/)
+    expect(SRC).toContain("if (isElectron()) setSource('catalog')")
   })
 
   it('starts with the advanced fields closed', () => {
