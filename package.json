@@ -63,6 +63,7 @@
     "tar": "^6.2.1",
     "three": "^0.185.1",
     "urdf-loader": "^0.13.1",
+    "webm-muxer": "^5.1.4",
     "yaml": "^2.9.0"
   },
   "devDependencies": {

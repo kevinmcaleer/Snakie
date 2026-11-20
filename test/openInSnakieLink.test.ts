@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { deepLinkFromArgv, parseDeepLink } from '../src/shared/deep-link'
-import { resolveSharedLink } from '../src/renderer/src/code-embed/shared-link'
+import { resolveSharedLink, workspaceForSharedCode } from '../src/renderer/src/code-embed/shared-link'
+import { writeBlocksFooter } from '../src/shared/blocks-doc'
 import { encodeCode } from '../src/renderer/src/code-embed/share'
 import type { Fetcher } from '../src/renderer/src/code-embed/source'
 
@@ -83,5 +84,20 @@ describe('resolveSharedLink', () => {
     expect(await resolveSharedLink('', '', noFetch)).toBeNull()
     expect(await resolveSharedLink('?name=x.py', '', noFetch)).toBeNull()
     expect(await resolveSharedLink('', '#src=!!!', noFetch)).toBeNull()
+  })
+})
+
+describe('workspaceForSharedCode', () => {
+  it('brings plain Python to Code from any other workspace', () => {
+    expect(workspaceForSharedCode('print(1)', 'robot')).toBe('code')
+    expect(workspaceForSharedCode('print(1)', 'board')).toBe('code')
+    expect(workspaceForSharedCode('print(1)', 'blocks')).toBe('code')
+    expect(workspaceForSharedCode('print(1)', 'code')).toBeNull()
+  })
+
+  it('shows a blocks file on the Blocks canvas', () => {
+    const blocks = writeBlocksFooter('print(1)\n', { blocks: { languageVersion: 0, blocks: [] } } as never)
+    expect(workspaceForSharedCode(blocks, 'robot')).toBe('blocks')
+    expect(workspaceForSharedCode(blocks, 'blocks')).toBeNull()
   })
 })

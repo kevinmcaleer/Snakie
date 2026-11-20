@@ -481,3 +481,74 @@
   min-height: 40px;
   font-size: 0.9rem;
 }
+
+/* ── Animate mode ────────────────────────────────────────────────────────── */
+.shell[data-size='phone'] .robotdock--full .robottool__text {
+  height: var(--bm-tap);
+}
+.shell[data-size='phone'] .robotdock--full .robottool__mode {
+  height: calc(var(--bm-tap) - 4px);
+}
+/* No room beside the robot for a panel: Joints rises over the lower half. */
+.shell[data-size='phone'] .robotdock--full .robotjoints {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  width: auto;
+  max-height: 55%;
+  border-left: 0;
+  border-top: 1px solid var(--shellbd, var(--border, #2c3027));
+}
+.shell[data-size='phone'] .robotdock--full .robotjoints__slider {
+  height: 28px;
+}
+
+/* Pose shelf on a phone: smaller cards, finger-sized buttons, no key hint. */
+.shell[data-size='phone'] .robotdock--full .poseshelf {
+  gap: 8px;
+  padding: 6px 8px;
+}
+.shell[data-size='phone'] .robotdock--full .poseshelf__title,
+.shell[data-size='phone'] .robotdock--full .poseshelf__save kbd {
+  display: none;
+}
+.shell[data-size='phone'] .robotdock--full .poseshelf__card {
+  width: 84px;
+}
+.shell[data-size='phone'] .robotdock--full .poseshelf__thumb {
+  width: 76px;
+  height: 48px;
+}
+.shell[data-size='phone'] .robotdock--full .poseshelf__more,
+.shell[data-size='phone'] .robotdock--full .poseshelf__name,
+.shell[data-size='phone'] .robotdock--full .poseshelf__foot {
+  min-height: 32px;
+  height: 32px;
+}
+.shell[data-size='phone'] .robotdock--full .poseshelf__more {
+  width: 32px;
+}
+.shell[data-size='phone'] .robotdock--full .poseshelf__save,
+.shell[data-size='phone'] .robotdock--full .poseshelf__menu button {
+  height: var(--bm-tap);
+}
+
+/* Animate's tool bar fits a 360px phone without scrolling, so undo and redo are
+   always in reach: tighter text buttons, and no trailing fade to hide them. */
+.shell[data-size='phone'] .robotdock--full .robottool--animate {
+  gap: 1px;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+.shell[data-size='phone'] .robotdock--full .robottool--animate .robottool__mode,
+.shell[data-size='phone'] .robotdock--full .robottool--animate .robottool__text {
+  padding: 0 0.2rem;
+}
+.shell[data-size='phone'] .robotdock--full .robottool--animate .robottool__sep {
+  margin: 0.15rem 1px;
+}
+.shell[data-size='phone'] .robotdock--full .robottool--animate .robottool__btn {
+  width: 32px;
+}

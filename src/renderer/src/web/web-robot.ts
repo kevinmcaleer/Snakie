@@ -26,6 +26,7 @@ import { robotFromYaml, robotToYaml } from '../../../shared/robot-yaml'
 import type { RobotDefinition } from '../../../shared/robot'
 import { readRobotModel } from '../../../shared/krf'
 import { generateSkeleton, skeletonJson } from '../../../shared/skeleton'
+import { stlMaxDim } from '../../../shared/stl-measure'
 
 /** The subset of the web fs backend this layer needs (see {@link ./web-fs}). */
 export interface WebRobotFs {
@@ -57,12 +58,32 @@ interface ImportMeshResult {
   error?: string
   rel?: string
   name?: string
+  /** The copied STL's largest span in its own units (the mm→m import scale). */
+  maxDim?: number
+  /** See `MeshCopyOutcome.reason` in robot-part-mesh.ts. */
+  reason?: 'unavailable' | 'download-failed'
+}
+
+/**
+ * The 3-D models the web build carries for library parts: the bundled Standard
+ * Parts library's meshes, emitted as static assets by
+ * vite-plugin-standard-parts and keyed `<partId>/<mesh>`.
+ */
+export interface WebPartMeshes {
+  /** The one library the URLs belong to (the bundled Standard Parts). */
+  libraryId: string
+  urls: Record<string, string>
+  /** Injected for tests; the page's `fetch` otherwise. */
+  fetch?: (url: string) => Promise<{ ok: boolean; status: number; arrayBuffer(): Promise<ArrayBuffer> }>
 }
 
 type PickedFile = { name: string; getFile(): Promise<File> }
 
 /** Build the `robot` Api object (assigned to `window.api.robot` on the web). */
-export function createWebRobotApi(fs: WebRobotFs): Record<string, unknown> {
+export function createWebRobotApi(
+  fs: WebRobotFs,
+  partMeshes?: WebPartMeshes
+): Record<string, unknown> {
   // Per-path write queue — two overlapping saves must not interleave (a
   // createWritable truncates before writing), mirroring main's queuedWrite.
   const writeQueues = new Map<string, Promise<void>>()
@@ -75,6 +96,32 @@ export function createWebRobotApi(fs: WebRobotFs): Record<string, unknown> {
 
   const subs = new Set<() => void>()
   const urdfSubs = new Set<() => void>()
+
+  /** Write `bytes` into `<urdf-dir>/meshes/` under a free name — foo.stl,
+   *  foo-1.stl, foo-2.stl … — never overwriting (like the desktop's
+   *  copyIntoMeshes). */
+  const writeIntoMeshes = async (
+    urdfPath: string,
+    fileName: string,
+    bytes: Uint8Array
+  ): Promise<{ rel: string; name: string }> => {
+    const meshesDir = `${dirname(urdfPath) ? dirname(urdfPath) + '/' : ''}meshes`
+    await fs.mkdir(meshesDir)
+    const dot = fileName.lastIndexOf('.')
+    const stem = dot > 0 ? fileName.slice(0, dot) : fileName
+    const ext = dot > 0 ? fileName.slice(dot) : ''
+    let name = fileName
+    for (let n = 1; n < 1000; n++) {
+      try {
+        await fs.stat(`${meshesDir}/${name}`)
+        name = `${stem}-${n}${ext}` // taken — try the next
+      } catch {
+        break // free
+      }
+    }
+    await fs.writeFileBytes(`${meshesDir}/${name}`, bytes)
+    return { rel: `meshes/${name}`, name }
+  }
 
   return {
     load: async (folder?: string): Promise<RobotDefinition> => {
@@ -274,35 +321,55 @@ export function createWebRobotApi(fs: WebRobotFs): Record<string, unknown> {
       try {
         const file = await picked.getFile()
         const bytes = new Uint8Array(await file.arrayBuffer())
-        const meshesDir = `${dirname(urdfPath) ? dirname(urdfPath) + '/' : ''}meshes`
-        await fs.mkdir(meshesDir)
-        // Collision-safe name: foo.stl, foo-1.stl, foo-2.stl … (like the desktop).
-        const dot = picked.name.lastIndexOf('.')
-        const stem = dot > 0 ? picked.name.slice(0, dot) : picked.name
-        const ext = dot > 0 ? picked.name.slice(dot) : ''
-        let name = picked.name
-        for (let n = 1; n < 1000; n++) {
-          try {
-            await fs.stat(`${meshesDir}/${name}`)
-            name = `${stem}-${n}${ext}` // taken — try the next
-          } catch {
-            break // free
-          }
-        }
-        await fs.writeFileBytes(`${meshesDir}/${name}`, bytes)
-        return { rel: `meshes/${name}`, name }
+        return await writeIntoMeshes(urdfPath, picked.name, bytes)
       } catch (err) {
         return { error: err instanceof Error ? err.message : String(err) }
       }
     },
 
-    // Parts libraries aren't on the web yet, so a mesh-linked part still gets a
-    // footprint box and a valid URDF. It says WHY now (#787): a bare `{}` was
-    // indistinguishable from a part that simply has no model, so the stand-in
-    // looked like a rendering bug rather than a missing capability.
-    importPartMesh: async (): Promise<ImportMeshResult> => ({
-      error: 'Parts libraries are desktop-only, so this part’s 3-D model isn’t available here.'
-    }),
+    // Copy a library part's model into the project (#406 on the desktop), so
+    // "Add to Build" and "Upgrade to mesh" give it its real body here too. The
+    // bundled Standard Parts' meshes ship as static assets of the web build:
+    // fetched on first use, kept by the service worker's runtime cache, and
+    // from then on part of the project's own files like any imported mesh.
+    // Anything the web build doesn't carry still says WHY it is a box (#787).
+    importPartMesh: async (
+      urdfPath: string,
+      libraryId: string,
+      partId: string,
+      mesh: string
+    ): Promise<ImportMeshResult> => {
+      if (!urdfPath || !mesh) return { error: 'No robot file or mesh to import.' }
+      const key = `${partId}/${mesh.trim()}`
+      const url =
+        partMeshes && libraryId === partMeshes.libraryId ? partMeshes.urls[key] : undefined
+      if (!url) {
+        return {
+          error: `The web app doesn't carry ${libraryId ? `${libraryId}'s ` : ''}model "${mesh}".`,
+          reason: 'unavailable'
+        }
+      }
+      let bytes: Uint8Array
+      try {
+        const get = partMeshes?.fetch ?? ((u: string) => fetch(u))
+        const res = await get(url)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        bytes = new Uint8Array(await res.arrayBuffer())
+      } catch (err) {
+        return {
+          error: err instanceof Error ? err.message : String(err),
+          reason: 'download-failed'
+        }
+      }
+      try {
+        const base = mesh.trim().split(/[/\\]/).pop() || 'model.stl'
+        const { rel, name } = await writeIntoMeshes(urdfPath, base, bytes)
+        const maxDim = /\.stl$/i.test(name) ? stlMaxDim(bytes) : undefined
+        return { rel, name, maxDim }
+      } catch (err) {
+        return { error: err instanceof Error ? err.message : String(err) }
+      }
+    },
 
     onChanged: (cb: () => void): (() => void) => {
       subs.add(cb)

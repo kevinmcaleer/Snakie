@@ -3,10 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <!-- Content-Security-Policy keeps the renderer locked down. -->
+    <!-- Content-Security-Policy keeps the renderer locked down. `blob:` for
+         images and media lets Render movie play back the file it just made on
+         this computer (a blob: URL is same-origin data the page created). -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:"
     />
     <title>Snakie</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />

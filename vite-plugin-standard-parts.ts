@@ -19,7 +19,9 @@ import type { Plugin } from 'vite'
  * total a few MB), which an SVG `<image href>` renders under `img-src 'self'`.
  * `help.md` is inlined as `helpText` (small, powers the help panel), and a
  * part's `blocks.yml` as `blocksYaml` (#1017) so the web palette gets the same
- * part-contributed blocks the desktop does.
+ * part-contributed blocks the desktop does. A part's `mesh:` (STL/DAE) is
+ * emitted the same way as the images and exported as `meshUrls`, so the web
+ * build can copy a part's real 3-D model into a project.
  *
  * Parsing intentionally lives in the plugin (Node/build side) using the `yaml`
  * package, mirroring the desktop's `partFromYaml`/`libraryFromYaml`, so the
@@ -29,9 +31,17 @@ import type { Plugin } from 'vite'
 const VIRTUAL_ID = 'virtual:snakie-standard-parts'
 const RESOLVED_ID = '\0' + VIRTUAL_ID
 const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'webp', 'svg']
+/** The model formats a part's `mesh:` may name (matches the desktop's MESH_EXTENSIONS). */
+const MESH_EXTS = ['stl', 'dae']
 
 interface EmittedImage {
   partId: string
+  refId: string
+}
+
+/** A part's 3-D model, emitted as its own asset and keyed `<partId>/<mesh>`. */
+interface EmittedMesh {
+  key: string
   refId: string
 }
 
@@ -70,6 +80,7 @@ export function standardPartsPlugin(): Plugin {
 
       const parts: Record<string, unknown>[] = []
       const emitted: EmittedImage[] = []
+      const emittedMeshes: EmittedMesh[] = []
       // Driver file contents keyed `<partId>/<source>`, served by the web
       // readDriverSource so the "install driver" banner works (e.g. sg90 → servo.py).
       //
@@ -141,6 +152,26 @@ export function standardPartsPlugin(): Plugin {
             /* unreadable image — part still renders from shapes */
           }
         }
+        // Emit the part's 3-D model as a hashed asset too, so "Add to Build" and
+        // "Upgrade to mesh" can copy it into a web project. Like the images it
+        // stays OUT of the JS payload (the library's models total ~7 MB): the
+        // browser fetches one only when a part that uses it lands in Build, and
+        // the service worker's runtime cache keeps it for offline use after.
+        const mesh = typeof part.mesh === 'string' ? (part.mesh as string).trim() : ''
+        const meshExt = mesh.slice(mesh.lastIndexOf('.') + 1).toLowerCase()
+        if (mesh && MESH_EXTS.includes(meshExt) && !mesh.includes('..') && !/^[/\\]/.test(mesh)) {
+          try {
+            const base = mesh.split(/[/\\]/).pop() as string
+            const refId = this.emitFile({
+              type: 'asset',
+              name: `parts/${partId}-${base}`,
+              source: readFileSync(join(partDir, mesh))
+            })
+            emittedMeshes.push({ key: `${partId}/${mesh}`, refId })
+          } catch {
+            /* unreadable model — the part falls back to its footprint box */
+          }
+        }
         delete part.help // helpText carries it now
         parts.push(part)
       }
@@ -161,9 +192,16 @@ export function standardPartsPlugin(): Plugin {
         source: 'registry'
       }
 
+      const meshMap = emittedMeshes
+        .map((e) => `  ${JSON.stringify(e.key)}: import.meta.ROLLUP_FILE_URL_${e.refId}`)
+        .join(',\n')
+
       return `
 const IMAGE_URLS = {
 ${urlMap}
+}
+export const meshUrls = {
+${meshMap}
 }
 const PARTS = ${JSON.stringify(parts)}
 for (const p of PARTS) {
