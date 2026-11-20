@@ -38,3 +38,24 @@ export function preferredHeight({ lines, view, repl, plots, error, board = null 
   const editor = board === 'side' ? Math.max(MIN_BOARD_H, pane) : board === 'chips' ? pane + PIN_CHIPS_H : pane
   return BAR_H + editor + (repl ? REPL_H : 0) + (plots ? PLOTS_H : 0) + FOOTER_H
 }
+
+/** The lesson runner's output panel (`?output=1`): its run bar. */
+export const OUTPUT_BAR_H = 40
+export const OUTPUT_TERM_H = 190
+export const OUTPUT_MESSAGE_H = 44
+
+/** How tall the output panel would like to be: the REPL, and the board beside it or its pins under it. */
+export function outputHeight({
+  board = null,
+  plots = false,
+  message = false
+}: {
+  board?: 'side' | 'chips' | null
+  plots?: boolean
+  message?: boolean
+}): number {
+  const main = OUTPUT_TERM_H + (plots ? PLOTS_H : 0) + (board === 'chips' ? PIN_CHIPS_H : 0)
+  const body = board === 'side' ? Math.max(MIN_BOARD_H, main) : main
+  // +2 for the panel's own 1px border, top and bottom.
+  return OUTPUT_BAR_H + (message ? OUTPUT_MESSAGE_H : 0) + body + 2
+}
