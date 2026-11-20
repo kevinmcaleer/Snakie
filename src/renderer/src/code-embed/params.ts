@@ -17,6 +17,7 @@
  *   &engine=micropython|pyodide  &packages=numpy,pandas  &id=<host's id>
  *   &board=pico2w  &pins=0|1  &project=<kevsrobots project id>  &paths=main.py,servo.py
  * /embed.html?robot=1&project=<id>   (the project's robot, moved by a code frame's Run)
+ * /embed.html?output=1&code=…&autorun=1   (just the output panel, under a page's own code block)
  * ```
  */
 
@@ -68,6 +69,12 @@ export interface EmbedParams {
   robot: boolean
   /** A URDF to draw, by https URL; its meshes are read from beside it. */
   urdf: string | null
+  /**
+   * Just the output (the lesson runner): no editor, only a run bar, the REPL and the pins.
+   * For a page that keeps its own code block and pops this up under it when
+   * the reader presses play (`SnakieEmbed.runner`).
+   */
+  output: boolean
   /** The host's id for this embed, echoed in every `postMessage`. */
   id: string | null
 }
@@ -229,6 +236,7 @@ export function parseEmbedParams(search: string): EmbedParams {
     project: /^\d{1,12}$/.test(clean(q.get('project')) ?? '') ? (clean(q.get('project')) as string) : null,
     robot: flag(q.get('robot'), false),
     urdf: httpsUrl(q.get('urdf')),
+    output: flag(q.get('output'), false),
     id: id && id.length <= 100 ? id : null
   }
 }

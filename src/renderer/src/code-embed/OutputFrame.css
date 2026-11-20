@@ -1,0 +1,247 @@
+/* THE LESSON RUNNER'S OUTPUT PANEL (embed.html?output=1).
+ * Snakie Flat: solid fills, 1px hairlines, 6px controls, 12px for the floating
+ * panel itself, green primary. The embed doesn't load flat.css, so the few
+ * tokens it needs are here, for both skins. */
+
+.snk-out {
+  --out-primary: #1d8150;
+  --out-primary-ink: #fff;
+  --out-primary-hover: #176a41;
+  --out-stop: #b42318;
+  --out-bar: var(--shell, #f4f1ea);
+  --out-line: var(--shellbd, rgba(0, 0, 0, 0.12));
+  --out-ink: var(--head, var(--text, #1f2328));
+  --out-muted: var(--txt3, var(--text-muted, #5f6670));
+
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  font-family: var(--font-ui);
+  color: var(--out-ink);
+  background: var(--panel, var(--bg));
+  border: 1px solid var(--out-line);
+  border-radius: 12px;
+}
+
+:root[data-theme='dark'] .snk-out {
+  --out-primary: #3fb97a;
+  --out-primary-ink: #0d1f15;
+  --out-primary-hover: #5bcb90;
+  --out-stop: #f97066;
+}
+
+.snk-out__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 40px;
+  min-width: 0;
+  padding: 0 6px 0 12px;
+  background: var(--out-bar);
+  border-bottom: 1px solid var(--out-line);
+  font-size: 13px;
+}
+
+.snk-out__dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--out-muted);
+}
+
+.snk-out__dot--running,
+.snk-out__dot--starting {
+  background: var(--out-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--out-primary) 25%, transparent);
+  animation: snk-out-pulse 1.2s ease-in-out infinite;
+}
+
+.snk-out__dot--done {
+  background: var(--out-primary);
+}
+
+.snk-out__dot--error,
+.snk-out__dot--stopped {
+  background: var(--out-stop);
+}
+
+@keyframes snk-out-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .snk-out__dot--running,
+  .snk-out__dot--starting {
+    animation: none;
+  }
+}
+
+.snk-out__title {
+  flex: 0 0 auto;
+  font-weight: 700;
+}
+
+.snk-out__status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--out-muted);
+}
+
+.snk-out__spacer {
+  flex: 1 1 auto;
+}
+
+.snk-out__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font: 600 12px/1 var(--font-ui);
+  cursor: pointer;
+}
+
+.snk-out__btn--run {
+  color: var(--out-primary-ink);
+  background: var(--out-primary);
+}
+
+.snk-out__btn--run:hover,
+.snk-out__btn--run:focus-visible {
+  background: var(--out-primary-hover);
+}
+
+.snk-out__btn--stop {
+  color: var(--out-stop);
+  background: transparent;
+  border-color: color-mix(in srgb, var(--out-stop) 45%, transparent);
+}
+
+.snk-out__btn--stop:hover,
+.snk-out__btn--stop:focus-visible {
+  background: color-mix(in srgb, var(--out-stop) 10%, transparent);
+}
+
+.snk-out__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--out-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.snk-out__close:hover,
+.snk-out__close:focus-visible {
+  color: var(--out-ink);
+  background: color-mix(in srgb, var(--out-ink) 8%, transparent);
+}
+
+.snk-out__message {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 44px;
+  padding: 0 12px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--out-line);
+}
+
+.snk-out__message > span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.snk-out__message a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  font-weight: 600;
+  color: var(--out-primary);
+}
+
+.snk-out__body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.snk-out__main {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.snk-out__term {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 80px;
+}
+
+.snk-out__term .snk-embed__terminal {
+  height: 100%;
+}
+
+.snk-out__plots {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 230px;
+  padding: 8px;
+  overflow-x: auto;
+  background: var(--card, #fff);
+  border-bottom: 1px solid var(--out-line);
+}
+
+.snk-out__plots img {
+  height: 100%;
+  width: auto;
+  border-radius: 6px;
+  background: #fff;
+}
+
+/* Phone width: the status words go first; the buttons keep theirs. */
+@media (max-width: 420px) {
+  .snk-out__status {
+    display: none;
+  }
+}
+
+/* A flat screen here, not the app's recessed glass bezel. xterm also names
+ * its own element `terminal`, so the skin's .terminal rule reaches both. */
+:root .snk-out .snk-embed__terminal {
+  padding: 8px 10px;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+:root .snk-out .snk-embed__terminal .xterm {
+  padding: 0;
+  box-shadow: none;
+}
+
+:root .snk-out .terminal::after {
+  display: none;
+}
