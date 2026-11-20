@@ -262,3 +262,32 @@ export function thumbnailCrop(
   const cy = (box.minY + box.maxY) / 2
   return { x: cx - w / 2, y: cy - h / 2, w, h }
 }
+
+// ── Getting into Animate ─────────────────────────────────────────────────────
+
+/** A joint as the URDF has it (only what the check below needs). */
+export interface JointLike {
+  name: string
+  parent: string
+  child: string
+  type: string
+}
+
+/**
+ * Why Animate has nothing to move yet, so the app can say what to do next
+ * instead of greying the button out:
+ *  - `ready`     — at least one joint moves;
+ *  - `no-joints` — the parts are not joined at all;
+ *  - `fixed`     — there are joints, but every one is fixed (rigid). `joints`
+ *                  lists them, so the user can pick the one that should turn.
+ */
+export type AnimateBlocker =
+  | { kind: 'ready' }
+  | { kind: 'no-joints' }
+  | { kind: 'fixed'; joints: JointLike[] }
+
+export function animateBlocker(joints: JointLike[]): AnimateBlocker {
+  if (joints.length === 0) return { kind: 'no-joints' }
+  if (joints.some((j) => j.type.toLowerCase() !== 'fixed')) return { kind: 'ready' }
+  return { kind: 'fixed', joints }
+}

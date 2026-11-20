@@ -156,11 +156,10 @@ export function RobotToolbar({
           type="button"
           className={`robottool__mode${mode === 'animate' ? ' is-on' : ''}`}
           aria-pressed={mode === 'animate'}
-          disabled={!canPose}
           title={
             canPose
               ? 'Animate — drag the robot to pose it, then build motion from the poses'
-              : 'Add a joint that can turn first — then the robot can be posed'
+              : 'Animate — press to see what this robot needs before it can be posed'
           }
           onClick={() => onSetMode('animate')}
         >

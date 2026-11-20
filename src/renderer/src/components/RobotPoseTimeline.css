@@ -1,0 +1,326 @@
+/* Pose timeline (Animate) — Snakie Flat: solid fills, hairlines, 6px radii, green
+   primary, amber for "where the robot is now". Own `posetl__` prefix. */
+.posetl {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  color: var(--head, var(--text, #e4e7df));
+  font-family: var(--font-ui, 'Plus Jakarta Sans', system-ui, sans-serif);
+  font-size: 0.78rem;
+}
+.posetl__bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.posetl__bar::-webkit-scrollbar {
+  display: none;
+}
+.posetl__icon,
+.posetl__btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  font: inherit;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--head, var(--text, #e4e7df));
+  border: 1px solid var(--fl-border-strong, var(--border, #3a3f35));
+  border-radius: 6px;
+  background: var(--card, transparent);
+  cursor: pointer;
+}
+.posetl__icon {
+  width: 32px;
+  padding: 0;
+  font-size: 0.72rem;
+}
+.posetl__icon:hover:not(:disabled),
+.posetl__btn:hover:not(:disabled):not(.posetl__btn--primary) {
+  background: var(--panel2, rgba(128, 128, 128, 0.16));
+}
+.posetl__icon:disabled,
+.posetl__btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.posetl__icon:focus-visible,
+.posetl__btn:focus-visible,
+.posetl__block:focus-visible,
+.posetl__gaptime:focus-visible,
+.posetl__ease:focus-visible,
+.posetl__handle:focus-visible {
+  outline: 2px solid var(--green, #1d8150);
+  outline-offset: 1px;
+}
+.posetl__icon.is-on,
+.posetl__btn.is-on {
+  font-weight: 600;
+  color: var(--greentext, #1c7a4d);
+  border-color: var(--green, #1d8150);
+  background: var(--greenpill, #e6f4ec);
+}
+.posetl__btn--primary {
+  font-weight: 600;
+  color: var(--fl-on-primary, #fff);
+  border-color: var(--green, #1d8150);
+  background: var(--green, #1d8150);
+}
+.posetl__btn--primary:hover {
+  filter: brightness(1.08);
+}
+.posetl__btn kbd {
+  font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  font-size: 0.68rem;
+  font-weight: 500;
+  opacity: 0.8;
+}
+.posetl__icon--danger:hover:not(:disabled) {
+  color: #c0392b;
+  border-color: #c0392b;
+}
+.posetl__group {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 2px;
+}
+.posetl__time {
+  flex: 0 0 auto;
+  min-width: 96px;
+  font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  font-size: 0.72rem;
+  color: var(--txt2, var(--text-muted, #a6ab9e));
+  text-align: center;
+}
+.posetl__sep {
+  flex: 0 0 auto;
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 2px;
+  background: var(--shellbd, var(--border, #2c3027));
+}
+.posetl__spacer {
+  flex: 1 1 8px;
+}
+.posetl__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.55;
+}
+.posetl__btn.is-on .posetl__dot {
+  opacity: 1;
+}
+
+.posetl__empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px 14px;
+  color: var(--txt2, var(--text-muted, #a6ab9e));
+}
+.posetl__empty p {
+  margin: 0;
+  max-width: 60ch;
+}
+.posetl__empty strong {
+  color: var(--head, var(--text, #e4e7df));
+  font-weight: 600;
+}
+
+/* The strip: block, gap, block, gap … read left to right as time. */
+.posetl__strip {
+  display: flex;
+  align-items: stretch;
+  margin: 0;
+  padding: 4px 12px 12px;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.posetl__cell {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+}
+.posetl__block {
+  flex: 0 0 auto;
+  width: 88px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 3px 3px 4px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  border: 1px solid var(--shellbd, var(--border, #2c3027));
+  border-radius: 8px;
+  background: var(--card, #23271f);
+  cursor: pointer;
+}
+.posetl__block:hover {
+  border-color: var(--fl-border-strong, var(--border, #3a3f35));
+}
+.posetl__block.is-current {
+  border-color: #d99a1c;
+}
+.posetl__block.is-selected {
+  border-color: #d99a1c;
+  box-shadow: 0 0 0 1px #d99a1c;
+}
+.posetl__block.is-drop {
+  border-color: var(--green, #1d8150);
+  box-shadow: 0 0 0 1px var(--green, #1d8150);
+}
+.posetl__block.is-missing {
+  border-style: dashed;
+  color: var(--txt2, var(--text-muted, #a6ab9e));
+}
+.posetl__thumb {
+  display: block;
+  width: 80px;
+  height: 50px;
+  border-radius: 5px;
+  object-fit: cover;
+  background: var(--panel2, #23271f);
+}
+.posetl__thumb--blank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+.posetl__name {
+  padding: 0 2px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.posetl__at {
+  padding: 0 2px;
+  font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  font-size: 0.66rem;
+  color: var(--txt2, var(--text-muted, #a6ab9e));
+}
+
+.posetl__gap {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 56px;
+  padding: 0 10px 0 4px;
+  cursor: pointer;
+}
+.posetl__rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 28px;
+  height: 4px;
+  background: var(--shellbd, var(--border, #2c3027));
+}
+.posetl__fill {
+  display: block;
+  height: 100%;
+  background: #d99a1c;
+}
+.posetl__gapctl {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.posetl__gaptime,
+.posetl__ease {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  padding: 0 5px;
+  font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  font-size: 0.68rem;
+  color: var(--head, var(--text, #e4e7df));
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: var(--panel, #1b1e18);
+  cursor: pointer;
+}
+.posetl__ease {
+  color: var(--txt2, var(--text-muted, #a6ab9e));
+}
+.posetl__gaptime:hover,
+.posetl__ease:hover {
+  border-color: var(--fl-border-strong, var(--border, #3a3f35));
+  color: var(--head, var(--text, #e4e7df));
+}
+.posetl__gapinput {
+  width: 52px;
+  height: 20px;
+  padding: 0 3px;
+  font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  font-size: 0.68rem;
+  color: var(--head, var(--text, #e4e7df));
+  border: 1px solid var(--green, #1d8150);
+  border-radius: 4px;
+  background: var(--card, #23271f);
+}
+.posetl__loopmark {
+  position: absolute;
+  bottom: 2px;
+  left: 0;
+  right: 8px;
+  font-size: 0.62rem;
+  text-align: center;
+  white-space: nowrap;
+  color: var(--txt2, var(--text-muted, #a6ab9e));
+  pointer-events: none;
+}
+.posetl__gap--loop .posetl__rail {
+  background: repeating-linear-gradient(
+    to right,
+    var(--shellbd, #2c3027) 0 6px,
+    transparent 6px 10px
+  );
+}
+/* The stretch handle: a grip at the gap's end, wide enough for a thumb. */
+.posetl__handle {
+  position: absolute;
+  top: 16px;
+  right: -2px;
+  width: 14px;
+  height: 28px;
+  border-radius: 4px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.posetl__handle::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 5px;
+  width: 4px;
+  border-radius: 2px;
+  background: var(--fl-border-strong, var(--border, #3a3f35));
+}
+.posetl__handle:hover::after,
+.posetl__handle:active::after {
+  background: var(--green, #1d8150);
+}
