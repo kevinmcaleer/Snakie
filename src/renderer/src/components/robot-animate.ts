@@ -172,3 +172,93 @@ export function posturesDiffer(a: Record<string, number>, b: Record<string, numb
   }
   return false
 }
+
+// ── Pose shelf ───────────────────────────────────────────────────────────────
+
+/** A saved pose as the shelf sees it (display units: degrees / millimetres). */
+export interface ShelfPose {
+  name: string
+  values: Record<string, number>
+}
+
+/**
+ * MIRROR A POSE — the same pose with left and right swapped, so "Step left"
+ * gives "Step right". Each mirror pair trades values (an `invert` pair reflects
+ * about the middle of the receiving joint's travel, as live Mirror does); joints
+ * with no partner keep their value. A partial pose stays partial: a side the
+ * pose never stored is not invented.
+ */
+export function mirrorPoseValues(
+  values: Record<string, number>,
+  pairs: MirrorPair[],
+  travel: Record<string, Travel>
+): Record<string, number> {
+  const out: Record<string, number> = { ...values }
+  const carry = (from: string, to: string, invert?: boolean): void => {
+    const v = values[from]
+    if (typeof v !== 'number' || !Number.isFinite(v)) {
+      delete out[to]
+      return
+    }
+    const t = travel[to]
+    let next = invert ? (t ? t.lower + t.upper : 0) - v : v
+    if (t) next = Math.min(t.upper, Math.max(t.lower, next))
+    out[to] = Number(next.toFixed(2))
+  }
+  for (const p of pairs) {
+    carry(p.a, p.b, p.invert)
+    carry(p.b, p.a, p.invert)
+  }
+  return out
+}
+
+const swapSideWord = (name: string): string =>
+  name.replace(/\b(left|right)\b/gi, (w) => {
+    const other = w.toLowerCase() === 'left' ? 'right' : 'left'
+    if (w === w.toUpperCase()) return other.toUpperCase()
+    return w[0] === w[0].toUpperCase() ? other[0].toUpperCase() + other.slice(1) : other
+  })
+
+/**
+ * A name for a mirrored pose: "Step left" → "Step right"; a name with no side
+ * in it gets " mirrored". Never collides with an existing pose.
+ */
+export function mirroredPoseName(name: string, existing: Iterable<string>): string {
+  const taken = new Set(existing)
+  const swapped = swapSideWord(name)
+  const base = swapped !== name ? swapped : `${name} mirrored`
+  if (!taken.has(base)) return base
+  let n = 2
+  while (taken.has(`${base} ${n}`)) n++
+  return `${base} ${n}`
+}
+
+/** Identifies a pose's CONTENT, so a thumbnail is redrawn only when it changes. */
+export function poseKey(pose: ShelfPose): string {
+  const parts = Object.keys(pose.values)
+    .sort()
+    .map((k) => `${k}:${pose.values[k]}`)
+  return `${pose.name}|${parts.join(',')}`
+}
+
+/**
+ * The source rectangle to crop out of a `canvasW`×`canvasH` render so the robot
+ * (its on-screen bounding box, in canvas pixels) fills a thumbnail of the given
+ * aspect with a little air around it. The rectangle keeps the aspect exactly and
+ * may run past the canvas edge — the caller paints the background first.
+ */
+export function thumbnailCrop(
+  box: { minX: number; minY: number; maxX: number; maxY: number },
+  aspect: number,
+  pad = 0.14
+): { x: number; y: number; w: number; h: number } {
+  const bw = Math.max(1, box.maxX - box.minX)
+  const bh = Math.max(1, box.maxY - box.minY)
+  let w = bw * (1 + pad * 2)
+  let h = bh * (1 + pad * 2)
+  if (w / h < aspect) w = h * aspect
+  else h = w / aspect
+  const cx = (box.minX + box.maxX) / 2
+  const cy = (box.minY + box.maxY) / 2
+  return { x: cx - w / 2, y: cy - h / 2, w, h }
+}

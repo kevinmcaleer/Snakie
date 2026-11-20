@@ -56,6 +56,8 @@ export interface JointRingDeps {
 export interface JointRingHandle {
   /** Put the ring on a joint from outside (the Joints panel), or clear it. */
   setJoint(joint: string | null): void
+  /** Hide the ring for a render that must show only the robot (a thumbnail). */
+  setSuppressed(on: boolean): void
   update(): void
   dispose(): void
 }
@@ -104,6 +106,7 @@ export function createJointRing(scene: THREE.Scene, deps: JointRingDeps): JointR
   root.add(ring, arc, dotEdge, dot, hit)
 
   let joint: string | null = null
+  let suppressed = false
   let arcKey = ''
   let phi0 = 0 // ring-frame direction of the child part at angle 0
   let radius = 0.03
@@ -144,7 +147,7 @@ export function createJointRing(scene: THREE.Scene, deps: JointRingDeps): JointR
   }
 
   const update = (): void => {
-    const j = deps.isActive() ? jointObj(joint) : null
+    const j = deps.isActive() && !suppressed ? jointObj(joint) : null
     if (!j) {
       root.visible = false
       return
@@ -302,6 +305,9 @@ export function createJointRing(scene: THREE.Scene, deps: JointRingDeps): JointR
 
   return {
     setJoint,
+    setSuppressed(on: boolean): void {
+      suppressed = on
+    },
     update,
     dispose(): void {
       deps.dom.removeEventListener('pointerdown', onDown)

@@ -48,8 +48,6 @@ export interface AnimateTools {
   /** The Joints panel (exact values) is showing. */
   jointsOpen: boolean
   onToggleJoints: () => void
-  /** Save what is on screen as a new pose, in one press. */
-  onSavePose: () => void
 }
 
 const MEASURE_ICON = (
@@ -227,15 +225,6 @@ export function RobotToolbar({
           onClick={onRedo}
         >
           {REDO_ICON}
-        </button>
-        <span className="robottool__sep" aria-hidden="true" />
-        <button
-          type="button"
-          className="robottool__text robottool__text--primary"
-          title="Save pose — keep what is on screen as a new pose"
-          onClick={animate.onSavePose}
-        >
-          Save pose
         </button>
       </div>
     )
