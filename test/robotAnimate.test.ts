@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  animateBlocker,
   friendlyJointName,
   groupJoints,
   jointSide,
@@ -243,5 +244,25 @@ describe('thumbnailCrop', () => {
     const c = thumbnailCrop({ minX: 5, minY: 5, maxX: 5, maxY: 5 }, 1.6)
     expect(c.w).toBeGreaterThan(0)
     expect(c.h).toBeGreaterThan(0)
+  })
+})
+
+describe('animateBlocker', () => {
+  const j = (type: string, child = 'arm'): { name: string; parent: string; child: string; type: string } => ({
+    name: `${child}_joint`,
+    parent: 'base',
+    child,
+    type
+  })
+  it('is ready as soon as one joint moves', () => {
+    expect(animateBlocker([j('fixed'), j('revolute', 'hand')])).toEqual({ kind: 'ready' })
+    expect(animateBlocker([j('prismatic')])).toEqual({ kind: 'ready' })
+  })
+  it('says when there are no joints at all', () => {
+    expect(animateBlocker([])).toEqual({ kind: 'no-joints' })
+  })
+  it('lists the fixed joints so one can be chosen to turn', () => {
+    const joints = [j('fixed'), j('Fixed', 'hand')]
+    expect(animateBlocker(joints)).toEqual({ kind: 'fixed', joints })
   })
 })
