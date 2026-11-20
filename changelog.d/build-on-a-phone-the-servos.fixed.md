@@ -1,0 +1,1 @@
+- **Build on a phone: the Servos and Poses sections no longer overlap in the Build sheet.** 

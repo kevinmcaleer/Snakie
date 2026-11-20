@@ -479,3 +479,9 @@
 .robotbuild__servo-dupmesh:hover {
   background: color-mix(in srgb, var(--warn, #e6ab30) 22%, transparent);
 }
+/* The tree SCROLLS when it is short of room (a phone's sheet, a small window).
+   Its sections must keep their full height for that: left to shrink, a section
+   squashes instead and its rows spill underneath the next section's header. */
+.robotbuild__tree > * {
+  flex-shrink: 0;
+}
