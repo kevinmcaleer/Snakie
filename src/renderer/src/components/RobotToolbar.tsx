@@ -43,6 +43,13 @@ export interface AnimateTools {
   /** The robot has left↔right joint pairs to mirror. */
   canMirror: boolean
   onToggleMirror: () => void
+  /** Mirror was pressed on a robot with no left/right pairs: say what it needs. */
+  onExplainMirror: () => void
+  /** PIN: the part held still while the rest is posed (its friendly name), or null. */
+  pinned: string | null
+  /** Pin is waiting for a part to be clicked. */
+  pinPicking: boolean
+  onTogglePin: () => void
   /** Return every joint to its rest position. */
   onReset: () => void
   /** The Joints panel (exact values) is showing. */
@@ -177,15 +184,27 @@ export function RobotToolbar({
           type="button"
           className={`robottool__text${animate.mirror ? ' is-on' : ''}`}
           aria-pressed={animate.mirror}
-          disabled={!animate.canMirror}
           title={
             animate.canMirror
               ? 'Mirror — move one side and the other side matches'
               : 'Mirror needs left and right joints (for example hip_left and hip_right)'
           }
-          onClick={animate.onToggleMirror}
+          onClick={animate.canMirror ? animate.onToggleMirror : animate.onExplainMirror}
         >
           Mirror
+        </button>
+        <button
+          type="button"
+          className={`robottool__text${animate.pinned || animate.pinPicking ? ' is-on' : ''}`}
+          aria-pressed={!!animate.pinned}
+          title={
+            animate.pinned
+              ? `Pinned: ${animate.pinned} stays still while you pose. Press to let go`
+              : 'Pin — keep one part (a foot) still, so the body moves when you bend that leg'
+          }
+          onClick={animate.onTogglePin}
+        >
+          Pin
         </button>
         <button
           type="button"

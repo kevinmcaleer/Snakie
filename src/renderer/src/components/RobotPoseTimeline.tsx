@@ -31,6 +31,12 @@ export interface RobotPoseTimelineProps {
   canMirror: boolean
   /** Ghosts of the neighbouring poses are shown in the 3-D view. */
   onion: boolean
+  /**
+   * Walk on the spot: the looping walk plays without travelling forward.
+   * `null` when the timeline's poses do not move the body (nothing to switch).
+   */
+  onSpot: boolean | null
+  onToggleSpot: () => void
   /** A joint-track clip exists that could be turned into blocks. */
   hasKeyframes: boolean
   onPlayPause: () => void
@@ -73,6 +79,8 @@ export function RobotPoseTimeline({
   canExport,
   canMirror,
   onion,
+  onSpot,
+  onToggleSpot,
   hasKeyframes,
   onPlayPause,
   onStop,
@@ -223,6 +231,17 @@ export function RobotPoseTimeline({
         >
           Onion skin
         </button>
+        {onSpot !== null && (
+          <button
+            type="button"
+            className={`posetl__btn${onSpot ? ' is-on' : ''}`}
+            aria-pressed={onSpot}
+            onClick={onToggleSpot}
+            title="On the spot — the walk loops in place, like on a treadmill. Turn it off to see the robot travel"
+          >
+            On the spot
+          </button>
+        )}
         <button
           type="button"
           className={`posetl__btn${live ? ' is-on' : ''}`}
