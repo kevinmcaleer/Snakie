@@ -28,9 +28,22 @@
  * and copy it across, bumping KR_SUITE_VERSION.
  */
 
-export const KR_SUITE_VERSION = '1.0.0'
+export const KR_SUITE_VERSION = '1.1.0'
 
 export const KR_ACCOUNT_URL = 'https://accounts.kevsrobots.com/account'
+
+/**
+ * Each app's icon, as a data URI so a bundled copy works offline. Generated
+ * from icons/<id>.svg (served at https://www.kevsrobots.com/assets/suite/icons/):
+ * edit the SVG, then regenerate these lines with
+ * `node scripts/build-suite-icons.mjs`.
+ */
+export const KR_ICONS = Object.freeze({
+  learn: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23FFFFFF'/%3E%3Crect x='.5' y='.5' width='63' height='63' rx='13.5' fill='none' stroke='%23C22032' stroke-opacity='.25'/%3E%3Cpath transform='translate(6 6.2) scale(0.10833)' fill='%23C22032' fill-rule='evenodd' d='M217.5 465.9C192.9 463.6 162.4 455.1 139.8 444.3C21.9 387.8 -26.8 248.3 30.4 131.5C69.8 51.1 150.3 1.0 240.0 1.0C392.8 1.0 503.9 144.5 465.9 292.7C437.8 402.4 331.3 476.6 217.5 465.9zM265.5 451.9C327.9 445.5 387.4 409.0 423.4 355.2C456.0 306.4 467.4 246.5 455.3 188.5C440.0 115.0 386.9 53.8 315.6 27.5C268.3 10.1 211.7 10.1 164.4 27.5C89.6 55.1 35.7 120.2 22.5 199.0C20.2 212.2 19.4 242.0 20.9 256.1C28.8 331.8 75.0 397.7 143.5 431.0C182.1 449.8 221.2 456.5 265.5 451.9zM218.0 440.3C211.9 439.6 197.7 437.1 197.2 436.6C196.8 436.1 185.1 304.8 185.5 304.2C185.7 303.9 314.4 426.0 314.8 426.9C315.6 429.0 281.4 437.8 264.0 440.0C256.1 440.9 225.8 441.2 218.0 440.3zM385.9 367.8C353.6 325.8 306.0 283.7 257.8 254.7C199.0 219.2 141.9 199.8 68.2 190.4L64.0 189.9 64.0 157.6L64.0 125.4 69.1 117.9C90.0 87.5 117.8 63.6 150.5 47.8C161.0 42.8 163.0 42.2 163.0 44.2C163.1 47.4 172.9 159.3 173.2 159.5C173.4 159.7 188.1 148.2 206.0 134.0L238.5 108.3 239.0 100.9L239.5 93.5 243.0 93.3C244.9 93.1 249.3 92.7 252.7 92.4L259.0 91.8 289.1 67.9C305.7 54.8 319.8 44.0 320.5 44.0C322.5 44.0 339.2 52.5 348.7 58.4C369.3 71.1 392.5 92.0 403.5 107.7C404.8 109.6 403.8 110.7 386.5 125.9L368.0 142.0 368.0 156.3C368.0 193.8 360.0 242.6 347.0 285.0L342.8 298.5 350.2 304.9C360.2 313.7 388.1 341.7 396.8 351.8C405.0 361.2 405.0 360.4 396.8 369.3L391.5 375.1 385.9 367.8zM340.4 273.9C356.0 226.8 363.1 182.9 363.4 133.5L363.5 107.5 353.5 105.2C323.5 98.5 296.1 95.1 264.0 94.3L240.5 93.7 240.3 115.4C240.0 149.1 235.8 185.7 228.7 215.9L226.3 225.9 235.4 230.0C263.1 242.8 297.8 263.7 323.0 282.9C328.8 287.3 333.8 291.0 334.2 291.0C334.5 291.0 337.3 283.3 340.4 273.9zM320.8 187.0C312.9 180.8 312.9 160.2 320.8 154.0C331.3 145.7 341.6 165.3 334.9 181.0C331.6 188.7 326.0 191.1 320.8 187.0zM269.7 170.9C267.1 169.4 264.0 162.5 263.3 157.0C262.1 146.6 267.9 135.0 274.5 135.0C278.5 135.0 283.5 140.7 285.0 147.0C288.6 162.2 279.4 176.6 269.7 170.9z'/%3E%3C/svg%3E",
+  projects: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23D9A441'/%3E%3Crect x='17' y='14' width='30' height='39' rx='4' fill='%23FFF8E6' stroke='%231C2230' stroke-width='3'/%3E%3Crect x='24' y='10' width='16' height='8' rx='3' fill='%231C2230'/%3E%3Cg fill='none' stroke='%231C2230' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22.5 28l3 3 5-6M34.5 28.5h7M22.5 41l3 3 5-6M34.5 41.5h7'/%3E%3C/g%3E%3C/svg%3E",
+  snakie: "data:image/svg+xml,%3Csvg width='1024' height='1024' viewBox='0 0 1024 1024' fill='none' xmlns='http://www.w3.org/2000/svg'%3E %3Cdefs%3E %3ClinearGradient id='bg' x1='0' y1='0' x2='1024' y2='1024' gradientUnits='userSpaceOnUse'%3E %3Cstop offset='0' stop-color='%2334d399'/%3E %3Cstop offset='0.55' stop-color='%2310b981'/%3E %3Cstop offset='1' stop-color='%230d9488'/%3E %3C/linearGradient%3E %3ClinearGradient id='body' x1='320' y1='240' x2='700' y2='780' gradientUnits='userSpaceOnUse'%3E %3Cstop offset='0' stop-color='%23ffffff'/%3E %3Cstop offset='1' stop-color='%23fde68a'/%3E %3C/linearGradient%3E %3C/defs%3E %3C!-- App-icon squircle background --%3E %3Crect x='0' y='0' width='1024' height='1024' rx='232' fill='url(%23bg)'/%3E %3C!-- soft inner highlight --%3E %3Crect x='0' y='0' width='1024' height='1024' rx='232' fill='%23ffffff' opacity='0.06'/%3E %3C!-- snake shadow --%3E %3Cpath d='M 668 372 C 668 286 408 268 380 392 C 352 516 700 532 668 654 C 640 762 414 778 360 694' stroke='%23064e3b' stroke-opacity='0.25' stroke-width='138' fill='none' stroke-linecap='round' stroke-linejoin='round' transform='translate(0,16)'/%3E %3C!-- snake body (S) --%3E %3Cpath d='M 668 372 C 668 286 408 268 380 392 C 352 516 700 532 668 654 C 640 762 414 778 360 694' stroke='url(%23body)' stroke-width='130' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E %3C!-- head --%3E %3Ccircle cx='668' cy='372' r='86' fill='url(%23body)'/%3E %3C!-- eye --%3E %3Ccircle cx='700' cy='348' r='17' fill='%230f3d2e'/%3E %3C!-- tongue --%3E %3Cpath d='M 724 408 L 762 452 M 762 452 L 792 440 M 762 452 L 788 470' stroke='%23ef4444' stroke-width='13' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E %3C/svg%3E",
+  bettercad: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23F3EEFF'/%3E%3Cpath transform='translate(8 10) scale(2)' d='m12 2 8 4.5v9L12 20l-8-4.5v-9zM12 11l8-4.5M12 11 4 6.5M12 11v9' fill='none' stroke='%237C3AED' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"
+})
 
 /** The apps in the suite, in switcher order. */
 export const KR_APPS = Object.freeze([
@@ -39,28 +52,32 @@ export const KR_APPS = Object.freeze([
     name: 'Learn',
     blurb: 'Courses, lessons and part guides',
     url: 'https://www.kevsrobots.com/learn/',
-    mark: 'KR'
+    mark: 'KR',
+    icon: KR_ICONS.learn
   },
   {
     id: 'projects',
     name: 'Projects',
     blurb: 'Your builds, steps and parts lists',
     url: 'https://www.kevsrobots.com/projects/hub',
-    mark: 'P'
+    mark: 'P',
+    icon: KR_ICONS.projects
   },
   {
     id: 'snakie',
     name: 'Snakie',
     blurb: 'Write and run MicroPython',
     url: 'https://app.snakie.org/',
-    mark: 'S'
+    mark: 'S',
+    icon: KR_ICONS.snakie
   },
   {
     id: 'bettercad',
     name: 'BetterCAD',
     blurb: 'Design parts to 3D print',
     url: 'https://bettercad.kevsrobots.com/',
-    mark: 'B'
+    mark: 'B',
+    icon: KR_ICONS.bettercad
   }
 ])
 
@@ -126,12 +143,6 @@ const ACCENTS = {
   projects: '#C22032',
   snakie: '#1E7F52',
   bettercad: '#7C3AED'
-}
-const MARK_COLOURS = {
-  learn: ['#C22032', '#FFFFFF'],
-  projects: ['#D9A441', '#1C2230'],
-  snakie: ['#26A269', '#FFFFFF'],
-  bettercad: ['#7C3AED', '#FFFFFF']
 }
 
 const BASE_CSS = `
@@ -353,13 +364,10 @@ export class KrAppSwitcher extends KrPopup {
         a:hover, a:focus-visible { background: var(--_sunk); }
         a[aria-current] { background: var(--_sunk); }
         .ic {
+          display: block;
           width: 36px;
           height: 36px;
           border-radius: 9px;
-          display: grid;
-          place-items: center;
-          font-weight: 700;
-          font-size: 13px;
         }
         b { display: block; font-size: 14px; font-weight: 700; }
         .blurb { display: block; font-size: 12.5px; color: var(--_soft); }
@@ -380,11 +388,10 @@ export class KrAppSwitcher extends KrPopup {
     const target = this.getAttribute('target')
     const list = this.shadowRoot.querySelector('ul')
     list.innerHTML = KR_APPS.map((a) => {
-      const [bg, fg] = MARK_COLOURS[a.id]
       const current = a.id === here
       const t = target && !current ? ` target="${esc(target)}" rel="noopener"` : ''
       return `<li><a href="${esc(a.url)}"${t}${current ? ' aria-current="page"' : ''} data-app="${a.id}">
-        <span class="ic" style="background:${bg};color:${fg}" aria-hidden="true">${esc(a.mark)}</span>
+        <img class="ic" src="${a.icon}" alt="" width="36" height="36" draggable="false">
         <span><b>${esc(a.name)}${current ? ' <span class="here">· you are here</span>' : ''}</b>
         <span class="blurb">${esc(a.blurb)}</span></span></a></li>`
     }).join('')

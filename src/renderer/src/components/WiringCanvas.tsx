@@ -12,6 +12,7 @@ import {
 } from 'react'
 import { flushSync } from 'react-dom'
 import { loadPin, savePin, shouldAutoHide, PIN_KEYS } from './pin-overlay'
+import { isPhoneViewport } from '../hooks/useViewportSize'
 import {
   connectionColor,
   connectionId,
@@ -973,7 +974,9 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
   // The floating project BROWSER's open state — lifted here so the fit math can
   // inset content to the right of it (so the leftmost item isn't hidden under it).
   // Defaults OPEN + PINNED, consistent with the Build panel's hierarchy (#…).
-  const [browserOpen, setBrowserOpen] = useState(true)
+  // A phone has no room for a floating browser beside the board: there it is a
+  // sheet, and starts closed.
+  const [browserOpen, setBrowserOpen] = useState(() => !(focusedChrome && isPhoneViewport()))
   const [browserPinned, setBrowserPinnedState] = useState<boolean>(() =>
     focusedChrome ? loadPin(window.localStorage, PIN_KEYS.browser, true) : true
   )
@@ -3161,7 +3164,9 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
               const isHi = isHiWire(c)
               const dimmed = !!highlight && !isHi
               return (
-                <g key={c.id}>
+                // The ids ride along into the exported SVG, so a page showing the
+                // picture can tell which wire is which (#1320).
+                <g key={c.id} data-wire={c.id} data-from={c.from} data-to={c.to}>
                   {/* Wide, invisible hit path so the thin wire is easy to click to
                       SELECT it (#…). Selecting clears any part selection + focuses the
                       canvas so Delete/Backspace targets the wire. */}
@@ -3603,7 +3608,14 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
         {selPart && selToolbar && (
           <div
             className={`wc__parttb${selToolbar.below ? ' wc__parttb--below' : ''}`}
-            style={{ left: `${selToolbar.left}px`, top: `${selToolbar.top}px` }}
+            // Centred on the part, but never hanging off the stage: a part near
+            // an edge (most parts, on a phone) used to push Delete out of reach.
+            // The toolbar's own half-width is measured once it has laid out.
+            ref={(el) => el?.style.setProperty('--wc-tb-half', `${el.offsetWidth / 2}px`)}
+            style={{
+              left: `clamp(calc(var(--wc-tb-half, 0px) + 6px), ${selToolbar.left}px, calc(100% - var(--wc-tb-half, 0px) - 6px))`,
+              top: `${selToolbar.top}px`
+            }}
             role="toolbar"
             aria-label={`Edit ${selPart.title}`}
           >

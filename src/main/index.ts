@@ -23,6 +23,7 @@ import { registerRobotIpc } from './robot/ipc'
 import { registerFeedbackIpc } from './feedback/ipc'
 import { registerKevsrobotsIpc } from './kevsrobots/ipc'
 import { setupAppMenu, disposeAppMenu } from './menu'
+import { initDeepLinks, watchDeepLinkWindow } from './deepLink'
 
 // Disable GPU / hardware-accelerated rendering on the Raspberry Pi build (Linux
 // arm64). The Pi's GL stack can't report VSync timing to Chromium, which floods
@@ -37,6 +38,12 @@ if (process.platform === 'linux' && process.arch === 'arm64' && !process.env.SNA
 
 /** The single application window, used to route device push-events. */
 let mainWindow: BrowserWindow | null = null
+
+// `snakie://open…` links from "Open in Snakie" (kevsrobots.com#581). This also
+// takes the single-instance lock: a second launch (which is how Windows and
+// Linux deliver a link to a running Snakie) hands its link over and quits.
+const isPrimaryInstance = initDeepLinks(() => mainWindow)
+if (!isPrimaryInstance) app.quit()
 
 /**
  * Resolve the bundled MicroPython instrument library (`micropython/instruments.py`,
@@ -123,6 +130,7 @@ function createWindow(): void {
     }
   })
   mainWindow = window
+  watchDeepLinkWindow(window)
 
   window.on('ready-to-show', () => {
     window.show()
@@ -148,6 +156,9 @@ function createWindow(): void {
 
 // This method will be called when Electron has finished initialization.
 app.whenReady().then(() => {
+  // Another Snakie is running and has been handed our link; we are quitting.
+  if (!isPrimaryInstance) return
+
   // Set app user model id for windows.
   electronApp.setAppUserModelId('com.kevinmcaleer.snakie')
 

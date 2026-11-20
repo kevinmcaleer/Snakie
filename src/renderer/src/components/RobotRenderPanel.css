@@ -1,0 +1,371 @@
+/* Render movie — Snakie Flat: a floating dialog (the one shadow), solid fills,
+   hairlines, 6px controls, green for the chosen option and the main action,
+   amber for progress. Own `rrender__` prefix. */
+.rrender__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(36, 38, 31, 0.4);
+}
+.rrender {
+  display: flex;
+  flex-direction: column;
+  width: min(1120px, 100%);
+  height: min(720px, 100%);
+  overflow: hidden;
+  color: var(--head, var(--text, #e4e7df));
+  font-family: var(--font-ui, 'Plus Jakarta Sans', system-ui, sans-serif);
+  font-size: 0.82rem;
+  border: 1px solid var(--fl-border-strong, var(--border, #3a3f35));
+  border-radius: 12px;
+  background: var(--panel, var(--bg-elevated, #1b1e18));
+  box-shadow: var(--fl-float-shadow, 0 8px 24px rgba(0, 0, 0, 0.18));
+}
+.rrender__head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 0 12px 0 20px;
+  border-bottom: 1px solid var(--shellbd, var(--border, #2c3027));
+}
+.rrender__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.rrender__sub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--txt2, var(--text-muted, #a6ab9e));
+}
+.rrender__spacer,
+.rrender__grow {
+  flex: 1 1 0;
+}
+.rrender__pill {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--greentext, #1c7a4d);
+  border-radius: 12px;
+  background: var(--greenpill, #e6f4ec);
+}
+.rrender__close {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  font: inherit;
+  color: var(--txt2, var(--text-muted, #a6ab9e));
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+.rrender__close:hover {
+  color: var(--head, var(--text, #e4e7df));
+  background: var(--panel2, rgba(128, 128, 128, 0.16));
+}
+.rrender__body {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+}
+.rrender__stage {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 20px;
+}
+.rrender__screen {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--shellbd, var(--border, #2c3027));
+  border-radius: 8px;
+  background: var(--panel2, #23271f);
+}
+.rrender__media {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+.rrender__badge {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  padding: 2px 6px;
+  font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  font-size: 0.68rem;
+  color: var(--txt2, var(--text-muted, #a6ab9e));
+  border: 1px solid var(--shellbd, var(--border, #2c3027));
+  border-radius: 4px;
+  background: var(--panel, #1b1e18);
+}
+.rrender__status {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 34px;
+  justify-content: center;
+}
+.rrender__statusrow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.rrender__statusrow strong {
+  font-weight: 600;
+}
+.rrender__mono {
+  font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  font-size: 0.75rem;
+  color: var(--txt2, var(--text-muted, #a6ab9e));
+  white-space: nowrap;
+}
+.rrender__bar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--shellbd, var(--border, #2c3027));
+}
+.rrender__barfill {
+  height: 100%;
+  background: #d99a1c;
+}
+.rrender__settings {
+  flex: 0 0 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  padding: 20px;
+  overflow-y: auto;
+  border-left: 1px solid var(--shellbd, var(--border, #2c3027));
+}
+.rrender__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.rrender__pair {
+  display: flex;
+  gap: 16px;
+}
+.rrender__pair > * {
+  flex: 1 1 0;
+}
+.rrender__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--txt2, var(--text-muted, #a6ab9e));
+}
+.rrender__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rrender__chip,
+.rrender__btn {
+  min-height: 32px;
+  padding: 0 10px;
+  font: inherit;
+  font-weight: 500;
+  color: var(--head, var(--text, #e4e7df));
+  border: 1px solid var(--fl-border-strong, var(--border, #3a3f35));
+  border-radius: 6px;
+  background: var(--card, transparent);
+  cursor: pointer;
+}
+.rrender__chip:hover:not(.is-on),
+.rrender__btn:hover:not(.rrender__btn--primary) {
+  background: var(--panel2, rgba(128, 128, 128, 0.16));
+}
+.rrender__chip.is-on {
+  font-weight: 600;
+  color: var(--greentext, #1c7a4d);
+  border-color: var(--green, #1d8150);
+  background: var(--greenpill, #e6f4ec);
+}
+.rrender__number {
+  height: 32px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0 10px;
+  font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  font-size: 0.8rem;
+  color: var(--head, var(--text, #e4e7df));
+  border: 1px solid var(--fl-border-strong, var(--border, #3a3f35));
+  border-radius: 6px;
+  background: var(--card, transparent);
+}
+.rrender__note {
+  margin: -6px 0 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--txt2, var(--text-muted, #a6ab9e));
+}
+.rrender__note--warn {
+  margin: 0;
+  padding: 8px 10px;
+  color: var(--goldink, #6b4e17);
+  border-radius: 6px;
+  background: var(--goldbg, #f2e2b3);
+}
+.rrender__link {
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  text-decoration: underline;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.rrender__switchrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 32px;
+  cursor: pointer;
+}
+.rrender__switch {
+  appearance: none;
+  position: relative;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 20px;
+  margin: 0;
+  border-radius: 10px;
+  background: var(--fl-border-strong, #8a8f96);
+  cursor: pointer;
+}
+.rrender__switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  background: #fff;
+  transition: transform 0.12s ease;
+}
+.rrender__switch:checked {
+  background: var(--green, #1d8150);
+}
+.rrender__switch:checked::after {
+  transform: translateX(16px);
+}
+.rrender__actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 8px;
+}
+.rrender__btn {
+  min-height: 36px;
+  padding: 0 14px;
+}
+.rrender__btn--primary {
+  padding: 0 18px;
+  font-weight: 600;
+  color: var(--fl-on-primary, #fff);
+  border-color: var(--green, #1d8150);
+  background: var(--green, #1d8150);
+}
+.rrender__btn--primary:hover {
+  filter: brightness(1.08);
+}
+.rrender__chip:focus-visible,
+.rrender__btn:focus-visible,
+.rrender__close:focus-visible,
+.rrender__number:focus-visible,
+.rrender__switch:focus-visible,
+.rrender__link:focus-visible {
+  outline: 2px solid var(--green, #1d8150);
+  outline-offset: 1px;
+}
+
+/* Narrow windows and phones: a full-screen sheet. The picture stays on top, the
+   settings scroll under it, and the actions stay in reach at the bottom. */
+@media (max-width: 760px) {
+  .rrender__scrim {
+    padding: 0;
+  }
+  .rrender {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+  }
+  .rrender__head {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    padding: 8px 8px 8px 16px;
+  }
+  .rrender__sub {
+    order: 3;
+    flex: 1 1 100%;
+    font-size: 0.75rem;
+  }
+  .rrender__pill {
+    display: none;
+  }
+  .rrender__body {
+    flex-direction: column;
+  }
+  .rrender__stage {
+    flex: 0 0 auto;
+    gap: 8px;
+    padding: 12px 16px 8px;
+  }
+  .rrender__screen {
+    flex: 0 0 auto;
+    height: 32vh;
+  }
+  .rrender__settings {
+    flex: 1 1 auto;
+    padding: 12px 16px 0;
+    border-left: 0;
+    border-top: 1px solid var(--shellbd, var(--border, #2c3027));
+  }
+  .rrender__chip,
+  .rrender__number {
+    min-height: 40px;
+  }
+  .rrender__number {
+    height: 40px;
+  }
+  .rrender__actions {
+    position: sticky;
+    bottom: 0;
+    margin: 0 -16px;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--shellbd, var(--border, #2c3027));
+    background: var(--panel, var(--bg-elevated, #1b1e18));
+  }
+  .rrender__btn {
+    min-height: 44px;
+  }
+}

@@ -8,6 +8,7 @@ import {
   type MassCoverage
 } from './hierarchy-tree'
 import type { JointType } from './robot-assembly'
+import { useLongPress, type MenuAnchorEvent } from '../hooks/useLongPress'
 import './HierarchyPanel.css'
 
 /**
@@ -207,8 +208,9 @@ export interface HierarchyPanelProps {
   onEditJoint?: (node: HierarchyNode, joint: HierarchyJoint) => void
   /** The joint whose editor is open — lights up that row's joint icon. */
   activeJoint?: string | null
-  /** Right-click a row (rename / make base / delete). */
-  onContextMenu?: (e: React.MouseEvent, node: HierarchyNode) => void
+  /** Right-click — or, on touch, press and hold — a row (rename / make base /
+   *  delete). */
+  onContextMenu?: (e: MenuAnchorEvent, node: HierarchyNode) => void
   /** Remove a placed component (the board browser's bin). */
   onRemove?: (node: HierarchyNode) => void
   /** Mass coverage readout under the tree (#719). Omit to hide it. */
@@ -290,7 +292,7 @@ interface RowContext {
   onSelect: (node: HierarchyNode) => void
   onEdit?: (node: HierarchyNode) => void
   onEditJoint?: (node: HierarchyNode, joint: HierarchyJoint) => void
-  onContextMenu?: (e: React.MouseEvent, node: HierarchyNode) => void
+  onContextMenu?: (e: MenuAnchorEvent, node: HierarchyNode) => void
   onRemove?: (node: HierarchyNode) => void
   warnings?: Record<string, RowWarning[]>
 }
@@ -381,6 +383,11 @@ function Row({
   const joint = node.joint
   const jointEditable = !!joint && !!onEditJoint && !inert
   const jointOn = !!joint && activeJoint != null && activeJoint === joint.name
+  // The row's menu: right-click with a mouse, press and hold on touch (iOS sends
+  // no `contextmenu` for a held finger).
+  const menuPress = useLongPress(
+    inert || noBody || !onContextMenu ? undefined : (e) => onContextMenu(e, node)
+  )
 
   return (
     <div
@@ -393,7 +400,7 @@ function Row({
         (node.loose ? ' is-loose' : '')
       }
       aria-current={isSelected ? 'true' : undefined}
-      onContextMenu={inert || noBody || !onContextMenu ? undefined : (e) => onContextMenu(e, node)}
+      {...menuPress}
     >
       <span
         className={`uhier__base${node.isBase ? ' is-base' : ''}`}
@@ -446,7 +453,6 @@ function Row({
         disabled={inert}
         aria-disabled={inert || undefined}
         onClick={() => onSelect(node)}
-        onContextMenu={inert || noBody || !onContextMenu ? undefined : (e) => onContextMenu(e, node)}
         title={rowTitle(node, inert)}
       >
         <span className="uhier__label">{node.label}</span>

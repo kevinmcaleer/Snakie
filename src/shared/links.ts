@@ -14,3 +14,22 @@ export const SNAKIE_WEB_HOST = 'app.snakie.org'
 
 /** How to support Snakie's development (#126). */
 export const COFFEE_URL = 'https://buymeacoffee.com/kevinmcaleer'
+
+/**
+ * BetterCAD by kevsrobots — the suite's CAD app, where a robot model can be
+ * designed and exported as a URDF. The Build workspace suggests it when a
+ * project has no robot of its own yet.
+ */
+export const BETTERCAD_URL = 'https://bettercad.kevsrobots.com'
+
+/**
+ * Where the Build workspace's "Design it in BetterCAD" button goes. `from=snakie`
+ * tells BetterCAD who sent the visitor; once BetterCAD can hand a URDF straight
+ * back (BetterCad#505) this is the one place to add whatever return address it
+ * needs, so every caller picks it up.
+ */
+export function bettercadNewRobotUrl(): string {
+  const url = new URL(BETTERCAD_URL)
+  url.searchParams.set('from', 'snakie')
+  return url.toString()
+}

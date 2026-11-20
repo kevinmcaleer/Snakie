@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   COMPACT_MAX_WIDTH,
+  PHONE_MAX_HEIGHT,
   PHONE_MAX_WIDTH,
   viewportSizeFor
 } from '../src/renderer/src/hooks/useViewportSize'
@@ -23,6 +24,20 @@ describe('viewportSizeFor (small-screen layout)', () => {
   it('uses the phone layout at phone widths', () => {
     expect(viewportSizeFor(PHONE_MAX_WIDTH)).toBe('phone')
     expect(viewportSizeFor(390)).toBe('phone')
+  })
+
+  it('treats a phone on its side as a phone, not a small tablet', () => {
+    // iPhone 17 Pro Max landscape: 956 wide, ~370–440 tall.
+    expect(viewportSizeFor(956, 440)).toBe('phone')
+    expect(viewportSizeFor(956, 367)).toBe('phone')
+    expect(viewportSizeFor(667, PHONE_MAX_HEIGHT)).toBe('phone')
+  })
+
+  it('leaves tablets and short DESKTOP windows alone', () => {
+    expect(viewportSizeFor(1024, 768)).toBe('compact')
+    expect(viewportSizeFor(768, PHONE_MAX_HEIGHT + 1)).toBe('compact')
+    // A wide window squashed short is still a desktop with a mouse.
+    expect(viewportSizeFor(1440, 400)).toBe('wide')
   })
 })
 

@@ -1,1 +1,0 @@
-- **kevsrobots app switcher and account button in the toolbar (#1310).** The 3 by 3 button beside the logo opens Learn, Projects and BetterCAD in a new tab; the account button on the right shows whether you are signed in with kevsrobots and lets you sign in or out. Signing in is still only needed to send wiring.

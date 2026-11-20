@@ -265,3 +265,410 @@
   font: inherit;
   cursor: pointer;
 }
+
+/* ---------------------------------------------------------------------------
+ * THE BOARD STRIP (#1318): the pins the code uses, on the board, beside it. */
+
+.snk-embed__work {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+.snk-embed__work--chips {
+  flex-direction: column;
+}
+
+.snk-embed__work > .snk-embed__editor {
+  min-width: 0;
+}
+
+.snk-board {
+  display: flex;
+  min-width: 0;
+  background: var(--panel, var(--bg));
+  font-size: 12px;
+}
+
+.snk-board--side {
+  flex: 0 0 clamp(290px, 40%, 380px);
+  flex-direction: column;
+  border-left: 1px solid var(--shellbd, var(--border));
+}
+
+.snk-board__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 6px 8px 6px 10px;
+  border-bottom: 1px solid var(--shellbd, var(--border));
+}
+
+.snk-board__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--txt3, var(--text-muted));
+}
+
+.snk-board__select {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 190px;
+  padding: 3px 6px;
+  border: 1px solid var(--shellbd, var(--border));
+  border-radius: 8px;
+  background: var(--card, var(--bg-sunken));
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.snk-board__work {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.snk-board__svg {
+  flex: 0 0 50%;
+  min-width: 0;
+  height: 100%;
+  max-height: 100%;
+}
+
+.snk-board__hole {
+  fill: rgba(255, 255, 255, 0.5);
+  stroke: rgba(0, 0, 0, 0.3);
+  stroke-width: 0.6;
+}
+
+.snk-board__label,
+.snk-board__silk {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  fill: var(--text);
+}
+
+.snk-board__silk {
+  font-size: 7.5px;
+  fill: rgba(255, 255, 255, 0.9);
+}
+
+.snk-board__label.is-active {
+  fill: var(--goldink, var(--accent-ink));
+}
+
+.snk-board__pad {
+  cursor: pointer;
+}
+
+.snk-board__halo {
+  fill: color-mix(in srgb, var(--gold) 45%, transparent);
+  stroke: var(--gold);
+  stroke-width: 1.2;
+}
+
+.snk-board__lit {
+  fill: none;
+  stroke: #46e06a;
+  stroke-width: 2.4;
+}
+
+.snk-board__pins {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 6px;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.snk-board__pin {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 7px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.snk-board__pin:hover,
+.snk-board__pin.is-active {
+  background: color-mix(in srgb, var(--gold) 20%, transparent);
+  border-color: color-mix(in srgb, var(--gold) 60%, transparent);
+}
+
+.snk-board__pin:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
+.snk-board__dot {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.snk-board__warn {
+  flex: 0 0 auto;
+  color: var(--danger, #c22032);
+}
+
+.snk-board__id {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.snk-board__kind {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--txt3, var(--text-muted));
+}
+
+.snk-board__pin.has-problem .snk-board__kind {
+  color: var(--text);
+}
+
+.snk-board__state {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--txt3, var(--text-muted));
+  background: var(--card, var(--bg-sunken));
+}
+
+.snk-board__state.is-on {
+  color: #0d3b1c;
+  background: #8fe6b6;
+}
+
+/* Too narrow for the board (a phone, or the blocks beside the code): one row of
+ * pins under the code, scrolling sideways if there are many. */
+.snk-board--chips {
+  flex: 0 0 44px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border-top: 1px solid var(--shellbd, var(--border));
+}
+
+.snk-board--chips .snk-board__title {
+  flex: 0 0 auto;
+}
+
+.snk-board--chips .snk-board__pins {
+  flex-direction: row;
+  gap: 6px;
+  padding: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.snk-board--chips .snk-board__pin {
+  flex-wrap: nowrap;
+  width: auto;
+  white-space: nowrap;
+  border-color: var(--shellbd, var(--border));
+  border-radius: 999px;
+  background: var(--card, var(--bg-sunken));
+}
+
+.snk-board--chips .snk-board__kind {
+  overflow: visible;
+}
+
+/* File tabs for a repo frame with several files (#1320). */
+.snk-embed__tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.snk-embed__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--txt3, var(--text-muted));
+  cursor: pointer;
+}
+
+.snk-embed__tab:hover {
+  color: var(--text);
+}
+
+.snk-embed__tab.is-active {
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+  color: var(--head, var(--text));
+}
+
+.snk-embed__tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* What a project's wiring puts on the pin: "Servo 1". */
+.snk-board__part {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--head, var(--text));
+}
+
+/* The robot frame (#1321): a project's URDF, moved by a code frame's Run. */
+.snk-robot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-height: 240px;
+  background: var(--editor, var(--bg));
+  color: var(--text);
+  font-family: var(--font-ui);
+  overflow: hidden;
+}
+
+.snk-robot__view {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.snk-robot__view canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.snk-robot__message {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  color: var(--txt3, var(--text-muted));
+}
+
+.snk-robot__message--error {
+  color: var(--text);
+}
+
+.snk-robot__bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--panel, var(--bg));
+  font-size: 13px;
+}
+
+.snk-robot__name {
+  font-weight: 600;
+  color: var(--head, var(--text));
+}
+
+.snk-robot__hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--txt3, var(--text-muted));
+}
+
+.snk-robot__joints {
+  position: absolute;
+  right: 10px;
+  bottom: 48px;
+  max-height: calc(100% - 68px);
+  width: min(300px, calc(100% - 20px));
+  overflow-y: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card, var(--panel, var(--bg)));
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+
+.snk-robot__joint {
+  display: grid;
+  grid-template-columns: 1fr 52px;
+  align-items: center;
+  gap: 2px 8px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.snk-robot__joint-name {
+  grid-column: 1 / -1;
+  font-family: var(--font-mono);
+}
+
+.snk-robot__joint input {
+  width: 100%;
+}
+
+.snk-robot__joint-value {
+  text-align: right;
+  font-family: var(--font-mono);
+  color: var(--txt3, var(--text-muted));
+}
+
+.snk-robot__bound {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--font-ui);
+  font-size: 10px;
+}

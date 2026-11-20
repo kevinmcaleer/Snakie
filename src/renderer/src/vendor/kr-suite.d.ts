@@ -11,7 +11,9 @@ export interface KrSuiteApp {
   blurb: string
   url: string
   mark: string
+  icon: string
 }
+export const KR_ICONS: Readonly<Record<KrSuiteApp['id'], string>>
 export const KR_APPS: readonly KrSuiteApp[]
 export interface KrSuiteUser {
   name?: string

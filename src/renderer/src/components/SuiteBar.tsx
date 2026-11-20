@@ -5,11 +5,11 @@ import type { KrStatus } from '../../../shared/kevsrobots-account'
 import './SuiteBar.css'
 
 /**
- * THE KEVSROBOTS SUITE PIECES OF THE TOOLBAR (kevsrobots.com#581, #1310)
- * =======================================================================
- * The app switcher (Learn, Projects, Snakie, BetterCAD) and the kevsrobots
- * account button, the same two components kevsrobots.com and BetterCAD use
- * (`vendor/kr-suite.js`, a bundled copy so they work offline and on the desktop).
+ * THE KEVSROBOTS ACCOUNT BUTTON (kevsrobots.com#581, #1310)
+ * =========================================================
+ * The suite's `<kr-account>` (`vendor/kr-suite.js`, a bundled copy so it works
+ * offline and on the desktop), at the far right of the toolbar. The app
+ * switcher beside the logo is `KrAppSwitcher`.
  *
  * Snakie never asks you to sign in from here unprompted: the account button
  * shows you're signed out until you choose to sign in, from it or from Send to
@@ -27,11 +27,6 @@ declare module 'react' {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace JSX {
     interface IntrinsicElements {
-      'kr-app-switcher': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
-        app?: string
-        target?: string
-        theme?: string
-      }
       'kr-account': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
         app?: string
         theme?: string
@@ -64,13 +59,6 @@ export function suiteUser(status: KrStatus): KrSuiteUser | null {
     username: status.user.username,
     avatarUrl: status.user.picture
   }
-}
-
-export function SuiteSwitcher(): JSX.Element {
-  const theme = useSuiteTheme()
-  // Other apps open in a new tab (a new browser window on the desktop), so
-  // nothing unsaved here is lost.
-  return <kr-app-switcher className="suite-switcher" app="snakie" target="_blank" theme={theme} />
 }
 
 export function SuiteAccount(): JSX.Element | null {

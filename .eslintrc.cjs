@@ -35,6 +35,8 @@ module.exports = {
     '*.d.ts',
     // Emscripten's own output (#950) — generated, minified, and not ours to
     // restyle. What we ship from it is checked by mpyCompile.test.ts instead.
-    'resources/mpy-cross/**'
+    'resources/mpy-cross/**',
+    // The kevsrobots suite components, copied from kevsrobots.com unchanged.
+    'src/renderer/src/vendor/**'
   ]
 }

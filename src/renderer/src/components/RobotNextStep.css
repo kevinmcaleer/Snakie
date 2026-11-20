@@ -1,0 +1,90 @@
+/* Next-step card — Snakie Flat. A floating card (so it carries the one shadow),
+   under the tool bar on a desktop and above the bottom controls on a phone. */
+.nextstep {
+  position: absolute;
+  top: 3.4rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  width: min(360px, calc(100% - 24px));
+  padding: 12px;
+  color: var(--head, var(--text, #e4e7df));
+  font-family: var(--font-ui, 'Plus Jakarta Sans', system-ui, sans-serif);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  border: 1px solid var(--fl-border-strong, var(--border, #3a3f35));
+  border-radius: 8px;
+  background: var(--card, #23271f);
+  box-shadow: var(--fl-float-shadow, 0 8px 24px rgba(0, 0, 0, 0.18));
+}
+.nextstep__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.nextstep__title {
+  flex: 1 1 auto;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.nextstep__close {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  margin: -6px -6px -6px 0;
+  font: inherit;
+  color: var(--txt2, var(--text-muted, #a6ab9e));
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+.nextstep__close:hover {
+  color: var(--head, var(--text, #e4e7df));
+  background: var(--panel2, rgba(128, 128, 128, 0.16));
+}
+.nextstep__body {
+  margin: 6px 0 0;
+  color: var(--txt2, var(--text-muted, #a6ab9e));
+}
+.nextstep__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.nextstep__btn {
+  min-height: 32px;
+  padding: 0 12px;
+  font: inherit;
+  font-weight: 500;
+  color: var(--head, var(--text, #e4e7df));
+  border: 1px solid var(--fl-border-strong, var(--border, #3a3f35));
+  border-radius: 6px;
+  background: var(--card, transparent);
+  cursor: pointer;
+}
+.nextstep__btn:hover {
+  background: var(--panel2, rgba(128, 128, 128, 0.16));
+}
+.nextstep__btn--primary {
+  font-weight: 600;
+  color: var(--fl-on-primary, #fff);
+  border-color: var(--green, #1d8150);
+  background: var(--green, #1d8150);
+}
+.nextstep__btn--primary:hover {
+  background: var(--green, #1d8150);
+  filter: brightness(1.08);
+}
+.nextstep__close:focus-visible,
+.nextstep__btn:focus-visible {
+  outline: 2px solid var(--green, #1d8150);
+  outline-offset: 1px;
+}
+.shell[data-size='phone'] .robotdock--full .nextstep {
+  top: 116px;
+}
+.shell[data-size='phone'] .robotdock--full .nextstep__btn {
+  min-height: 40px;
+}

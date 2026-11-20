@@ -5,12 +5,8 @@ import { createRoot, type Root } from 'react-dom/client'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { KrAccount, KrAppSwitcher } from '../src/renderer/src/vendor/kr-suite.js'
-import {
-  KR_ACCOUNT_CHANGED,
-  SuiteAccount,
-  SuiteSwitcher,
-  suiteUser
-} from '../src/renderer/src/components/SuiteBar'
+import { KR_ACCOUNT_CHANGED, SuiteAccount, suiteUser } from '../src/renderer/src/components/SuiteBar'
+import { KrAppSwitcher as SuiteSwitcher } from '../src/renderer/src/components/KrAppSwitcher'
 import type { KevsrobotsApi, KrStatus } from '../src/shared/kevsrobots-account'
 
 /**
@@ -164,10 +160,11 @@ describe('the account button', () => {
   })
 })
 
-describe('the bundled copy', () => {
-  it('sits in the toolbar: the switcher by the brand, the account at the far right', () => {
+describe('the toolbar', () => {
+  it('has the switcher by the brand and the account at the far right', () => {
     const toolbar = readFileSync(join(__dirname, '../src/renderer/src/components/Toolbar.tsx'), 'utf8')
-    expect(toolbar.indexOf('<SuiteSwitcher />')).toBeLessThan(toolbar.indexOf('toolbar__brand"'))
+    const brand = toolbar.slice(toolbar.indexOf('toolbar__brand"'))
+    expect(brand.slice(0, brand.indexOf('</div>'))).toContain('<KrAppSwitcher />')
     expect(toolbar).toMatch(/toolbar__side--end">\s*<SuiteAccount \/>/)
   })
 })

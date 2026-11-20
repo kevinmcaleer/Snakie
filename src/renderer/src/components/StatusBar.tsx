@@ -28,10 +28,7 @@ import {
 } from './status-tips'
 import { isVirtualPort, VIRTUAL_PORT_SHORT } from '../../../shared/virtual-device'
 import { runtimeLabel } from '../../../shared/dialect'
-import {
-  FIRMWARE_RUNTIME_LABEL,
-  firmwareRuntimeForDialect
-} from '../../../shared/firmware-runtime'
+import { FIRMWARE_RUNTIME_LABEL, firmwareRuntimeForDialect } from '../../../shared/firmware-runtime'
 import type { FirmwareCatalog, UpdateStatus } from '../../../preload/index.d'
 import { BulbIcon } from './ui-icons'
 import { SyncIndicator } from './SyncIndicator'
@@ -85,12 +82,17 @@ export interface StatusBarProps {
   instrumentCount?: number
   /** Stop the global live-poll (the quick-action behind the warning's link). */
   onStopLive?: () => void
+  /** The Build workspace is showing: there is no code and no board on screen,
+   *  so the connection, runtime, line count, saved state and Flash firmware
+   *  items step aside. Messages, sync, version and the rest stay. */
+  build?: boolean
 }
 
 export function StatusBar({
   instrumentsLive = false,
   instrumentCount = 0,
-  onStopLive
+  onStopLive,
+  build = false
 }: StatusBarProps = {}): JSX.Element {
   const status = useDeviceStatus()
   const { openFiles, activeId, currentFolder } = useWorkspace()
@@ -398,27 +400,29 @@ export function StatusBar({
   return (
     <footer className="statusbar" role="contentinfo" aria-label="Status bar">
       <div className="statusbar__group statusbar__group--left">
-        <span
-          className={`statusbar__item statusbar__conn ${
-            simulated
-              ? 'statusbar__conn--sim'
-              : connected
-                ? 'statusbar__conn--connected'
-                : 'statusbar__conn--disconnected'
-          }`}
-          title={
-            status.error
-              ? `Connection error: ${status.error}`
-              : simulated
-                ? 'Simulated device — no hardware connected (offline mode)'
-                : 'Device connection status'
-          }
-        >
-          <span className="statusbar__dot" aria-hidden="true" />
-          <span>{connLabel}</span>
-        </span>
+        {!build && (
+          <span
+            className={`statusbar__item statusbar__conn ${
+              simulated
+                ? 'statusbar__conn--sim'
+                : connected
+                  ? 'statusbar__conn--connected'
+                  : 'statusbar__conn--disconnected'
+            }`}
+            title={
+              status.error
+                ? `Connection error: ${status.error}`
+                : simulated
+                  ? 'Simulated device — no hardware connected (offline mode)'
+                  : 'Device connection status'
+            }
+          >
+            <span className="statusbar__dot" aria-hidden="true" />
+            <span>{connLabel}</span>
+          </span>
+        )}
 
-        {runtime && (
+        {runtime && !build && (
           <span
             className="statusbar__item statusbar__runtime"
             title={
@@ -431,7 +435,7 @@ export function StatusBar({
           </span>
         )}
 
-        {showLiveWarning && (
+        {showLiveWarning && !build && (
           <span
             className="statusbar__item statusbar__live-warn"
             title="The instrument live poll enters the REPL and interrupts a running program every ~0.8s"
@@ -479,6 +483,7 @@ export function StatusBar({
             empty (tipSlotFree); real messages above always take its place.
             Tips with an href open the docs article in the external browser. */}
         {tipSlotFree &&
+          !build &&
           tip &&
           (tip.href ? (
             <button
@@ -523,17 +528,25 @@ export function StatusBar({
             <span aria-hidden="true">⎇</span> {changedCount}
           </span>
         )}
-        {lines != null && (
+        {lines != null && !build && (
           <span className="statusbar__item" title="Lines in the active file">
             {lines} {lines === 1 ? 'line' : 'lines'}
           </span>
         )}
-        <span
-          className={`statusbar__item statusbar__save ${activeFile?.dirty ? 'statusbar__save--dirty' : ''}`}
-          title={activeFile ? (activeFile.dirty ? 'Unsaved changes' : 'All changes saved') : 'No active file'}
-        >
-          {activeFile ? (activeFile.dirty ? 'Unsaved' : 'Saved') : '—'}
-        </span>
+        {!build && (
+          <span
+            className={`statusbar__item statusbar__save ${activeFile?.dirty ? 'statusbar__save--dirty' : ''}`}
+            title={
+              activeFile
+                ? activeFile.dirty
+                  ? 'Unsaved changes'
+                  : 'All changes saved'
+                : 'No active file'
+            }
+          >
+            {activeFile ? (activeFile.dirty ? 'Unsaved' : 'Saved') : '—'}
+          </span>
+        )}
         {updateView.label &&
           (updateView.clickable ? (
             <button
@@ -547,10 +560,7 @@ export function StatusBar({
           ) : updateView.isUpdate ? (
             // A non-clickable update state (downloading, or error fallback):
             // passive label, no check-for-updates affordance.
-            <span
-              className="statusbar__item statusbar__update"
-              title={updateView.title}
-            >
+            <span className="statusbar__item statusbar__update" title={updateView.title}>
               {updateView.label}
             </span>
           ) : (
@@ -566,58 +576,61 @@ export function StatusBar({
             </button>
           ))}
         <CoffeeLink />
-        <div className="statusbar__flash-wrap">
-          {/* Newer-firmware prompt, anchored above the flash button (#173, #757).
+        {!build && (
+          <div className="statusbar__flash-wrap">
+            {/* Newer-firmware prompt, anchored above the flash button (#173, #757).
               It names the runtime it is offering — a CircuitPython board must
               never be told a MicroPython release is available. */}
-          {fwUpdate && !fwDismissed && (
-            <div className="statusbar__fw-popup" role="status">
-              <span className="statusbar__fw-text">
-                {FIRMWARE_RUNTIME_LABEL[fwUpdate.runtime]}{' '}
-                <strong>{displayVersion(fwUpdate.runtime, fwUpdate.latest)}</strong> is available
-                (device runs {displayVersion(fwUpdate.runtime, fwUpdate.current)}).
-              </span>
-              <button
-                type="button"
-                className="statusbar__fw-flash"
-                onClick={() => {
-                  setFlasherOpen(true)
-                  setFwDismissed(true)
-                }}
-              >
-                Flash
-              </button>
-              <button
-                type="button"
-                className="statusbar__fw-dismiss"
-                onClick={() => setFwDismissed(true)}
-                title="Dismiss"
-                aria-label="Dismiss firmware update notice"
-              >
-                ✕
-              </button>
-            </div>
-          )}
-          {/* Pop the board catalogue out full-screen — the same corner-bracket
+            {fwUpdate && !fwDismissed && (
+              <div className="statusbar__fw-popup" role="status">
+                <span className="statusbar__fw-text">
+                  {FIRMWARE_RUNTIME_LABEL[fwUpdate.runtime]}{' '}
+                  <strong>{displayVersion(fwUpdate.runtime, fwUpdate.latest)}</strong> is available
+                  (device runs {displayVersion(fwUpdate.runtime, fwUpdate.current)}).
+                </span>
+                <button
+                  type="button"
+                  className="statusbar__fw-flash"
+                  onClick={() => {
+                    setFlasherOpen(true)
+                    setFwDismissed(true)
+                  }}
+                >
+                  Flash
+                </button>
+                <button
+                  type="button"
+                  className="statusbar__fw-dismiss"
+                  onClick={() => setFwDismissed(true)}
+                  title="Dismiss"
+                  aria-label="Dismiss firmware update notice"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+            {/* Pop the board catalogue out full-screen — the same corner-bracket
               icon the Parts Library uses to expand into its catalog (#893). */}
-          <button
-            type="button"
-            className="statusbar__item statusbar__flash"
-            onClick={() => setFlasherOpen(true)}
-            title={
-              fwUpdate
-                ? `${FIRMWARE_RUNTIME_LABEL[fwUpdate.runtime]} ${displayVersion(fwUpdate.runtime, fwUpdate.latest)} available (device runs ${displayVersion(fwUpdate.runtime, fwUpdate.current)}). Flash firmware.`
-                : `Flash ${flashRuntimeLabel} firmware to the device (ESP via esptool, UF2 boards by drive copy)`
-            }
-            aria-label={`Flash ${flashRuntimeLabel} firmware`}
-          >
-            <span aria-hidden="true">⚡</span>
-            <span>Flash firmware</span>
-            {fwUpdate && !fwDismissed && <span className="statusbar__fw-badge" aria-hidden="true" />}
-          </button>
-        </div>
+            <button
+              type="button"
+              className="statusbar__item statusbar__flash"
+              onClick={() => setFlasherOpen(true)}
+              title={
+                fwUpdate
+                  ? `${FIRMWARE_RUNTIME_LABEL[fwUpdate.runtime]} ${displayVersion(fwUpdate.runtime, fwUpdate.latest)} available (device runs ${displayVersion(fwUpdate.runtime, fwUpdate.current)}). Flash firmware.`
+                  : `Flash ${flashRuntimeLabel} firmware to the device (ESP via esptool, UF2 boards by drive copy)`
+              }
+              aria-label={`Flash ${flashRuntimeLabel} firmware`}
+            >
+              <span aria-hidden="true">⚡</span>
+              <span>Flash firmware</span>
+              {fwUpdate && !fwDismissed && (
+                <span className="statusbar__fw-badge" aria-hidden="true" />
+              )}
+            </button>
+          </div>
+        )}
       </div>
-
 
       {historyOpen && !historyFull && (
         <StatusHistoryPopup

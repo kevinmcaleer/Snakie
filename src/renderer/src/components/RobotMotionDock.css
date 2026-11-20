@@ -85,3 +85,32 @@
 .motiondock__body > * {
   border-top: none;
 }
+
+/* Snakie Flat: the dock's tabs read as part of the Animate workspace — UI type
+   at a readable size, an amber underline for the tab you are on. */
+.motiondock {
+  background: var(--panel, var(--bg-elevated, #202227));
+  border-top-color: var(--shellbd, var(--border, #2c2e33));
+  font-family: var(--font-ui, 'Plus Jakarta Sans', system-ui, sans-serif);
+}
+.motiondock__tabs {
+  padding: 0 8px;
+  border-bottom-color: var(--shellbd, var(--border, #2c2e33));
+}
+.motiondock__tab {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--txt2, var(--text-muted, #8a8f96));
+}
+.motiondock__tab:hover,
+.motiondock__tab.is-active {
+  color: var(--head, var(--text, #cdd2d9));
+}
+.motiondock__tab.is-active {
+  border-bottom-color: #d99a1c;
+}
+.motiondock__badge {
+  background: #d99a1c;
+}

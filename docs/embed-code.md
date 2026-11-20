@@ -7,7 +7,8 @@ on 31 August 2026.
 
 The embed is a page of the web build, `https://app.snakie.org/embed.html`, so it
 deploys with app.snakie.org and costs nothing to run. It shows only the editor,
-the blocks and the REPL: no activity bar, files, device, wiring or build views.
+the blocks, the REPL and the pins the code uses: no activity bar, files, device,
+wiring or build views.
 
 ## The one-line helper (#1288)
 
@@ -34,6 +35,52 @@ handle.unmount()
 SnakieEmbed.scan(root) // mount any new data-snakie-* elements under root
 ```
 
+### Run here: a plain block becomes the box (#1319)
+
+A page with many code blocks should not load an editor for each. Leave them as
+plain `<pre><code>` and upgrade one when the reader asks:
+
+```js
+button.addEventListener('click', () => {
+  const live = SnakieEmbed.upgrade(pre, { name: 'blink.py', board: 'pico2w' })
+  if (!live) return // too long for a URL: offer Open in Snakie instead
+  // live.unmount() takes the box away and shows the block again
+})
+```
+
+The block's text is the program, and it runs straight away (`autorun: false`
+to wait for Run). The block is hidden, not removed. `upgrade` returns `null`
+for an empty block or one whose URL would pass 12,000 characters. Check
+`SnakieEmbed.upgrade` exists before showing the button: a cached older helper
+does not have it.
+
+### The lesson runner: play, and the output pops up
+
+Trinket-style: the block stays a plain code block, and pressing the page's own
+play button pops an output panel up under it that runs the code. The panel is
+`embed.html?output=1`: a run bar (status, Run again / Stop, close), the output
+in a live REPL, and the board with its pins lit when the code drives them
+(chips under the output below 600px wide). No editor and no blocks, so Monaco
+and Blockly never load.
+
+```js
+const panel = SnakieEmbed.runner(pre, {
+  name: 'blink.py',
+  board: 'pico2w',
+  onState: (running) => play.classList.toggle('is-running', running),
+  onClose: () => play.focus()
+})
+if (!panel) return // empty, or too long for a URL: offer Open in Snakie instead
+panel.stop()  // or panel.run() to run it again, panel.close() to take it away
+```
+
+Calling `runner` again for the same block returns the open panel, so one
+button can be play, stop and run again (`panel.running` says which). The
+panel and the page stay in step by `postMessage`: the frame sends
+`run-state` and `close`, the helper sends it `run` and `stop`. Check
+`SnakieEmbed.runner` exists before relying on it: a cached older helper has
+only `upgrade`.
+
 ## The URL (#1286)
 
 ```
@@ -57,7 +104,10 @@ https://app.snakie.org/embed.html?code=<text or base64url deflate>&name=main.py
 | `height` | `auto` (default: sized to the code), `short` (320px), `medium` (460px), `tall` (640px), or a height in px. The height is the whole box, Run bar and REPL included; longer code scrolls inside it. |
 | `width` | `full` (default), `wide` (860px), `medium` (680px), `narrow` (520px), a width in px, or a percentage like `60%`. A narrower box sits at the left, and is never wider than the page. Handled by `snakie-embed.js` (not an `/embed` URL parameter). |
 | `engine` | `micropython` (default) or `pyodide` (see below). |
+| `board` | The board the pin strip draws: `pico2w` (default), `pico-plus-2`, `tiny2040`, `tiny2350` or `esp32-devkit` (a built-in board's id or name, any case, with or without dashes). The reader can change it in the strip. |
+| `pins` | `1` (default) shows the pins the code uses beside it (see below). `0` hides them. |
 | `packages` | Pyodide packages to load before running, comma-separated. Imports are detected anyway. |
+| `output` | `1` shows only the output panel (the lesson runner, above): no editor. Use with `autorun=1`. |
 | `id` | Echoed in the embed's `postMessage`s. The helper sets it. |
 
 The footer always has **View on GitHub** (the gist, or the repo file at its
@@ -65,6 +115,95 @@ lines) and **Open in Snakie** (#1287), which opens the same file in the full app
 as a new unsaved tab. If the reader edited the code, their version goes along,
 compressed into the link's `#code=` hash, and the app says it was "edited from
 the original". **Reset** in the embed puts the original back.
+
+## The board strip (#1318)
+
+When MicroPython code uses pins, the box draws the board beside the code with
+each pin lit and named, and lists them: `GP15 PWM`, `GP0 I2C SDA`. Code with no
+pins looks as it did before.
+
+- Point at a line (or put the caret on it) and its pins glow on the board. That
+  includes lines that only use a pin's variable, such as `led.toggle()`.
+- Point at a pin and its lines are marked in the code. Click it to scroll to the
+  line that sets it up.
+- While the program runs, each pin shows what the simulator says it is doing:
+  `on`, `off` or `PWM 8%`.
+- A pin the board does not have, or a pin set up by number on two lines, gets a
+  squiggle in the code and a warning in the list.
+- Under 600px wide, and in the Split and Blocks views, the board gives way to a
+  row of pin chips under the code.
+
+`code-embed/embed-pins.ts` has the logic (pure, tested in
+`test/codeEmbedPins.test.ts`); `EmbedBoard.tsx` draws it from the built-in
+board definitions. Live states come from the simulated `machine` module
+(`shared/sim-machine.ts`): the embed sets `machine._watch`, the module then
+writes each pin change to stdout as an OSC escape (`ESC ] 7373 ; kind ; pin ;
+value BEL`), and `PinEventStream` takes those out before the terminal sees
+them. Nothing is written unless a host asks, so the app's own console is
+unchanged.
+
+## On a project page: wiring, tabs and frames that talk (#1320)
+
+A code frame on a kevsrobots project page can know the project it sits in.
+
+- **`project=<id>`** (`data-project`) reads that project's public wiring from
+  the projects API and puts the part names on the pin strip: "GP15, Servo 1".
+  With no `board=`, the strip draws the project's own board. A draft project's
+  wiring is not public, so the strip is then what it is without `project=`.
+- **`paths=main.py,lib/servo.py`** (`data-paths`) shows several files of one
+  repo as tabs. The first (or `path=`) opens. A path that will not load is left
+  out. Up to 8; past 5 the tabs become a menu.
+- **Frames share what they point at.** Hover a pin, or put the caret on a line
+  that uses one, and every other Snakie frame on the page lights the same pin
+  and its lines. `snakie-embed.js` relays it; only pin names cross.
+
+The page can join in. `snakie-embed.js` raises these on `document`:
+
+| Event | `detail` |
+| --- | --- |
+| `snakie:pin-hover` | `{ pins: ['GP15'], id }`. Empty `pins` when the reader moves off. |
+| `snakie:pin-state` | `{ states: { GP15: { kind: 'w', value: 4915 } }, id }` while a program runs. `kind` is `p` (0 or 1) or `w` (PWM duty, 0 to 65535). |
+| `snakie:pins` | `{ id, file, pins: [{ id, kind, onBoard, part }], unwired, unused }`. With `project=`, `unwired` lists pins the code uses that nothing is wired to, and `unused` the wired pins the code never uses. Both are `null` without a project. |
+
+and `SnakieEmbed.hover(['GP15'])` lights a pin in every frame (`hover([])`
+clears it), which is how a wiring picture lights the code when the reader
+points at a wire.
+
+The wiring canvas now writes `data-wire`, `data-from` and `data-to` on each
+wire it draws, and they survive into the exported SVG. `boardWiring()` in
+`src/shared/wiring-pins.ts` gives, for each board pin, the parts it reaches and
+the ids of the wires on the way, so a page showing that SVG can light a wire by
+pin. Pictures saved before this carry no ids; saving the wiring again adds them.
+
+## The robot frame (#1321)
+
+```html
+<div data-snakie-robot="42"></div>
+```
+
+or `/embed.html?robot=1&project=42`. The frame draws the robot a kevsrobots
+project carries among its files: the `.urdf` the wiring names (else the first
+one), with each mesh found by file name among the same files, so
+`package://arm/meshes/base.stl` is the project file `base.stl`. STL meshes are
+drawn; anything else shows as a small block. Drag to look around; **Joints**
+opens a slider for each moving joint.
+
+When a code frame on the same page runs, `snakie-embed.js` passes each
+`pin-state` on to the robot frame, and the joints the project binds to servo
+pins (`robot.servoJointMap` in its wiring, set in Robot View's servo panel)
+turn. A PWM duty is read as a hobby servo pulse at 50 Hz: 0.5 ms is 0 degrees
+and 2.5 ms is 180, then the binding's calibration maps that onto the joint. A
+duty of 0 is a servo switched off and moves nothing.
+
+`data-snakie-robot="https://…/arm.urdf"` (or `urdf=`) draws a URDF from any
+https address that allows cross-origin reads, with meshes resolved beside it.
+There are no bindings then, so only the sliders move it.
+
+`SnakieEmbed.robot` is `true` on a copy of the script that knows robot frames,
+so a page can check before it makes room for one.
+
+three.js loads only in a robot frame; a code frame never fetches it. The
+arithmetic lives in `code-embed/robot-drive.ts`.
 
 ## Engines
 
@@ -105,5 +244,9 @@ headers the host page would have to send (which would break its YouTube embeds).
 ## Not yet
 
 - Turtle drawings and the instruments have nowhere to draw in the embed; the
-  program runs, but only its printed output shows.
+  program runs, but only its printed output and its pin states show.
+- Pressing a simulated button: input pins are listed, but cannot be driven yet.
 - `input()` in either engine.
+- The robot frame follows servos only: motors, wheels and a robot driving
+  around the floor are not drawn, and a servo library that sets a PWM frequency
+  other than 50 Hz is read as if it were 50.

@@ -1,10 +1,8 @@
 /*
- * The kevsrobots suite switcher and account button in the toolbar
- * (kevsrobots.com#581). They draw themselves (vendor/kr-suite.js); this maps
- * Snakie's Soft Shell tokens onto the suite's `--kr-*` properties so they
- * follow both skins.
+ * The kevsrobots account button in the toolbar (kevsrobots.com#581). It draws
+ * itself (vendor/kr-suite.js); this maps Snakie's Soft Shell tokens onto the
+ * suite's `--kr-*` properties so it follows both skins.
  */
-.suite-switcher,
 .suite-account {
   --kr-ink: var(--head, var(--text));
   --kr-ink-soft: var(--txt2, var(--text-muted));
@@ -16,7 +14,6 @@
 }
 
 /* Before the module upgrades them, keep their space so the toolbar doesn't jump. */
-.suite-switcher:not(:defined),
 .suite-account:not(:defined) {
   display: inline-block;
   width: 32px;

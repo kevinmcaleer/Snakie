@@ -15,6 +15,9 @@
  *   &view=code|blocks|split   &views=0|1   &toolbox=basic|advanced   &run=0|1
  *   &autorun=1  &theme=skeuomorph|dark  &height=auto|<px>
  *   &engine=micropython|pyodide  &packages=numpy,pandas  &id=<host's id>
+ *   &board=pico2w  &pins=0|1  &project=<kevsrobots project id>  &paths=main.py,servo.py
+ * /embed.html?robot=1&project=<id>   (the project's robot, moved by a code frame's Run)
+ * /embed.html?output=1&code=…&autorun=1   (just the output panel, under a page's own code block)
  * ```
  */
 
@@ -26,7 +29,7 @@ export type EmbedToolbox = 'simple' | 'advanced'
 /** Where the program comes from. */
 export type EmbedSource =
   | { kind: 'gist'; id: string; user: string | null; file: string | null; revision: string | null }
-  | { kind: 'repo'; owner: string; name: string; path: string; ref: string | null }
+  | { kind: 'repo'; owner: string; name: string; path: string; ref: string | null; paths?: string[] }
   | { kind: 'inline'; code: string; name: string }
   | { kind: 'none' }
 
@@ -53,6 +56,25 @@ export interface EmbedParams {
   engine: EmbedEngineId
   /** Extra Pyodide packages to load before running (imports are also detected). */
   packages: string[]
+  /** The board the pin strip draws (#1318): a board id such as `pico2w`. Null = the default board. */
+  board: string | null
+  /** Show the pins the code uses beside it (#1318). `pins=0` turns it off. */
+  pins: boolean
+  /**
+   * A kevsrobots project id (#1320): the frame reads that project's public
+   * wiring, so the pin strip can say what is on each pin.
+   */
+  project: string | null
+  /** Draw the project's robot instead of code (#1321): `robot=1` with `project=` or `urdf=`. */
+  robot: boolean
+  /** A URDF to draw, by https URL; its meshes are read from beside it. */
+  urdf: string | null
+  /**
+   * Just the output (the lesson runner): no editor, only a run bar, the REPL and the pins.
+   * For a page that keeps its own code block and pops this up under it when
+   * the reader presses play (`SnakieEmbed.runner`).
+   */
+  output: boolean
   /** The host's id for this embed, echoed in every `postMessage`. */
   id: string | null
 }
@@ -63,6 +85,8 @@ const NAME_RE = /^[A-Za-z0-9_.-]+$/
 const GIST_RE = /^[A-Za-z0-9]+$/
 const PACKAGE_RE = /^[A-Za-z0-9_.-]+$/
 
+/** The most files one repo frame shows as tabs. */
+export const MAX_PATHS = 8
 export const MIN_HEIGHT = 160
 export const MAX_HEIGHT = 2000
 
@@ -77,6 +101,18 @@ function flag(value: string | null, fallback: boolean): boolean {
   if (v === '' || v === '1' || v === 'true' || v === 'yes' || v === 'on') return true
   if (v === '0' || v === 'false' || v === 'no' || v === 'off') return false
   return fallback
+}
+
+/** An https address, or null: the robot frame fetches nothing else. */
+function httpsUrl(value: string | null): string | null {
+  const v = clean(value)
+  if (!v || v.length > 2000) return null
+  try {
+    const url = new URL(v)
+    return url.protocol === 'https:' ? url.href : null
+  } catch {
+    return null
+  }
 }
 
 /** `10-40`, `10:40`, `10` (one line), `10-` (to the end). */
@@ -129,13 +165,21 @@ function parseSource(q: URLSearchParams): EmbedSource {
     }
   }
   const repo = clean(q.get('repo'))
-  const path = cleanPath(q.get('path') ?? q.get('file'))
+  // `paths=main.py,servo.py` shows several files of the repo as tabs (#1320);
+  // the first is the one that opens.
+  const paths = (clean(q.get('paths')) ?? '')
+    .split(',')
+    .map((p) => cleanPath(p))
+    .filter((p): p is string => p !== null)
+    .slice(0, MAX_PATHS)
+  const path = cleanPath(q.get('path') ?? q.get('file')) ?? paths[0] ?? null
   if (repo && path) {
     const [owner, name, ...rest] = repo.replace(/^https:\/\/github\.com\//, '').split('/')
     if (owner && name && rest.length === 0 && NAME_RE.test(owner) && NAME_RE.test(name)) {
       // No ref → the loader tries `main`, then `master`.
       const ref = clean(q.get('ref'))
-      return { kind: 'repo', owner, name: name.replace(/\.git$/, ''), path, ref }
+      const all = [path, ...paths.filter((p) => p !== path)]
+      return { kind: 'repo', owner, name: name.replace(/\.git$/, ''), path, ref, ...(all.length > 1 ? { paths: all } : {}) }
     }
   }
   const code = q.get('code')
@@ -172,6 +216,7 @@ export function parseEmbedParams(search: string): EmbedParams {
     .map((p) => p.trim())
     .filter((p) => p && PACKAGE_RE.test(p))
   const id = clean(q.get('id'))
+  const boardRaw = clean(q.get('board'))?.toLowerCase().replace(/[\s_-]+/g, '') ?? null
   return {
     source: parseSource(q),
     lines: parseLines(q.get('lines')),
@@ -185,6 +230,13 @@ export function parseEmbedParams(search: string): EmbedParams {
     height,
     engine,
     packages,
+    board: boardRaw && /^[a-z0-9]{1,40}$/.test(boardRaw) ? boardRaw : null,
+    // Pins are MicroPython's: CPython in the browser has no `machine`.
+    pins: engine === 'micropython' && flag(q.get('pins'), true),
+    project: /^\d{1,12}$/.test(clean(q.get('project')) ?? '') ? (clean(q.get('project')) as string) : null,
+    robot: flag(q.get('robot'), false),
+    urdf: httpsUrl(q.get('urdf')),
+    output: flag(q.get('output'), false),
     id: id && id.length <= 100 ? id : null
   }
 }

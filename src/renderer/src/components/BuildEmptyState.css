@@ -1,0 +1,174 @@
+/*
+ * Build empty state — the "no robot yet" card over the Build stage, in the
+ * Snakie Flat language (flat.css): solid fills, 1px hairlines, 32px controls
+ * with a 6px radius, an 8px card radius, and a shadow only because it floats.
+ * Green is the primary action (New robot). BetterCAD's own violet appears only
+ * as a thin marker on its row, so the suite link reads as BetterCAD's.
+ *
+ * It sits top-centre, under the build toolbar (`.robottool`, top: 0.5rem), clear
+ * of the hierarchy dock on the left and the ViewCube + Sync button on the right.
+ */
+.buildempty,
+.buildempty__pill {
+  --buildempty-bettercad: #7c3aed;
+  position: absolute;
+  top: 3.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 25;
+  font-family: var(--font-ui);
+}
+
+.buildempty {
+  box-sizing: border-box;
+  width: min(23rem, calc(100% - 2rem));
+  padding: 16px 16px 14px;
+  color: var(--head, var(--text));
+  background: var(--panel, var(--bg-elevated));
+  border: 1px solid var(--shellbd, var(--border));
+  border-radius: 8px;
+  box-shadow: var(--fl-float-shadow, 0 8px 24px rgba(0, 0, 0, 0.3));
+}
+
+.buildempty .buildempty__close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--txt3, var(--text-muted));
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.buildempty .buildempty__close:hover {
+  color: var(--head, var(--text));
+  background: var(--panel2, var(--bg-sunken));
+}
+
+.buildempty__eyebrow {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--txt3, var(--text-muted));
+}
+.buildempty__title {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--head, var(--text));
+}
+.buildempty__body {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--txt2, var(--text-muted));
+}
+
+.buildempty__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.buildempty .buildempty__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--head, var(--text));
+  background: var(--card, var(--bg-sunken));
+  border: 1px solid var(--shellbd, var(--border));
+  border-radius: 6px;
+  cursor: pointer;
+}
+.buildempty .buildempty__btn:hover {
+  border-color: var(--txt3, var(--text-muted));
+}
+.buildempty .buildempty__btn--primary {
+  color: var(--fl-on-primary, #fff);
+  background: var(--green, var(--accent-2));
+  border-color: var(--green, var(--accent-2));
+}
+.buildempty .buildempty__btn--primary:hover {
+  border-color: var(--green, var(--accent-2));
+  filter: brightness(1.07);
+}
+
+/* The BetterCAD row: a full-width link-button with the suite byline. */
+.buildempty .buildempty__bettercad {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 10px 6px 12px;
+  font: inherit;
+  text-align: left;
+  color: var(--head, var(--text));
+  background: var(--card, var(--bg-sunken));
+  border: 1px solid var(--shellbd, var(--border));
+  border-left: 3px solid var(--buildempty-bettercad);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.buildempty .buildempty__bettercad:hover {
+  border-color: var(--txt3, var(--text-muted));
+  border-left-color: var(--buildempty-bettercad);
+}
+.buildempty__bettercad-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.buildempty__bettercad-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.buildempty__bettercad-by {
+  font-size: 11px;
+  color: var(--txt3, var(--text-muted));
+}
+
+.buildempty__note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--txt3, var(--text-muted));
+}
+
+/* Tucked away: a small pill that brings the card back. */
+.buildempty__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--head, var(--text));
+  background: var(--panel, var(--bg-elevated));
+  border: 1px solid var(--shellbd, var(--border));
+  border-radius: 6px;
+  box-shadow: var(--fl-float-shadow, 0 8px 24px rgba(0, 0, 0, 0.3));
+  cursor: pointer;
+}
+.buildempty__pill:hover {
+  border-color: var(--green, var(--accent-2));
+}
+
+.buildempty button:focus-visible,
+.buildempty__pill:focus-visible {
+  outline: 2px solid var(--green, var(--accent-2));
+  outline-offset: 2px;
+}

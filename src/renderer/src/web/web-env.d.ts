@@ -21,4 +21,6 @@ declare module 'virtual:snakie-standard-parts' {
   export default libraries
   /** Bundled part driver file contents, keyed `<partId>/<source>`. */
   export const driverSources: Record<string, string>
+  /** URLs of the bundled parts' 3-D models (STL/DAE), keyed `<partId>/<mesh>`. */
+  export const meshUrls: Record<string, string>
 }

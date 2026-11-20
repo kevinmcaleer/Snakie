@@ -16,6 +16,10 @@ export const MIN_EDITOR_H = 120
 export const MAX_EDITOR_H = 560
 /** Blocks need room to breathe: a canvas shorter than this is all toolbox. */
 export const MIN_BLOCKS_H = 400
+/** The board drawn beside the code needs this much height to be readable (#1318). */
+export const MIN_BOARD_H = 300
+/** The row of pin chips under the code, where the box is too narrow for the board. */
+export const PIN_CHIPS_H = 44
 
 export interface HeightInput {
   lines: number
@@ -23,11 +27,35 @@ export interface HeightInput {
   repl: boolean
   plots: boolean
   error: boolean
+  /** The pin strip (#1318): beside the code, as a row of chips under it, or absent. */
+  board?: 'side' | 'chips' | null
 }
 
-export function preferredHeight({ lines, view, repl, plots, error }: HeightInput): number {
+export function preferredHeight({ lines, view, repl, plots, error, board = null }: HeightInput): number {
   if (error) return BAR_H + 140 + FOOTER_H
   const code = Math.min(MAX_EDITOR_H, Math.max(MIN_EDITOR_H, lines * LINE_H + PANE_CHROME_H))
-  const editor = view === 'code' ? code : Math.max(MIN_BLOCKS_H, code)
+  const pane = view === 'code' ? code : Math.max(MIN_BLOCKS_H, code)
+  const editor = board === 'side' ? Math.max(MIN_BOARD_H, pane) : board === 'chips' ? pane + PIN_CHIPS_H : pane
   return BAR_H + editor + (repl ? REPL_H : 0) + (plots ? PLOTS_H : 0) + FOOTER_H
+}
+
+/** The lesson runner's output panel (`?output=1`): its run bar. */
+export const OUTPUT_BAR_H = 40
+export const OUTPUT_TERM_H = 190
+export const OUTPUT_MESSAGE_H = 44
+
+/** How tall the output panel would like to be: the REPL, and the board beside it or its pins under it. */
+export function outputHeight({
+  board = null,
+  plots = false,
+  message = false
+}: {
+  board?: 'side' | 'chips' | null
+  plots?: boolean
+  message?: boolean
+}): number {
+  const main = OUTPUT_TERM_H + (plots ? PLOTS_H : 0) + (board === 'chips' ? PIN_CHIPS_H : 0)
+  const body = board === 'side' ? Math.max(MIN_BOARD_H, main) : main
+  // +2 for the panel's own 1px border, top and bottom.
+  return OUTPUT_BAR_H + (message ? OUTPUT_MESSAGE_H : 0) + body + 2
 }

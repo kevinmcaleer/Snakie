@@ -1,0 +1,1 @@
+- **Build: Render movie. Turn the Animate timeline into an MP4, WebM, GIF or PNG frames on this computer, with size, frame rate, loops, camera, look and quality settings.** 
