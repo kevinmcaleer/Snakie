@@ -181,6 +181,7 @@ import type { MassEditorProps, ContactsEditorProps } from './RobotPropertiesDial
 import type { MeshTriangles } from './robot-mass-geometry'
 import { addContact, removeContact, setContact } from './robot-contacts'
 import { isPhoneViewport } from '../hooks/useViewportSize'
+import { LONG_PRESS_MS, LONG_PRESS_SLOP } from '../hooks/useLongPress'
 import './RobotView.css'
 import './RobotView.small.css'
 
@@ -748,6 +749,9 @@ export function RobotView({
     () => !isPhoneViewport() && loadPin(window.localStorage, PIN_KEYS.builder, true)
   )
   const [selectedLink, setSelectedLink] = useState<string | null>(null)
+  // A part's menu asked for FROM THE 3-D VIEW: right-click, or press and hold on
+  // touch. The Build panel owns the menu (and its items); this just points at it.
+  const [partMenuReq, setPartMenuReq] = useState<{ x: number; y: number; link: string } | null>(null)
   // The link the user designated as the base (root) of the chain, from robot.yml.
   // Distinguishes the intended base from other still-unconnected imported parts (#354).
   const [chosenBase, setChosenBase] = useState<string | null>(null)
@@ -1365,7 +1369,10 @@ export function RobotView({
     // Deleting the base would cascade-remove the whole tree → an empty, unusable
     // URDF. The UI disables it; guard here too. (A loose, unconnected part is fine
     // to delete — it just removes that one link.)
-    if (link === effectiveBaseLink) return
+    if (link === effectiveBaseLink) {
+      setSavingLabel('this is the base: make another part the base first, then delete this one')
+      return
+    }
     commitUrdf(removeLink(content, link))
     setSelectedLink(null)
     setDialogCtx(null)
@@ -4913,6 +4920,60 @@ export function RobotView({
               move = null
             }
           }
+          // A PART'S MENU, from the view itself: right-click with a mouse, press
+          // and hold with a finger (iOS sends no `contextmenu` for a hold — it
+          // started a text selection instead). Same menu as the part's row in the
+          // Build panel, which is where Delete lives.
+          const openPartMenu = (x: number, y: number): boolean => {
+            if (!canEditRef.current || !robotRef.current) return false
+            if (measureActiveRef.current || jointPickRef.current.active) return false
+            buildNdcFrom({ clientX: x, clientY: y } as PointerEvent)
+            buildRay.setFromCamera(buildNdc, camera)
+            const name = ownerLinkName(buildRay.intersectObject(robotRef.current, true)[0]?.object ?? null)
+            if (!name) return false
+            onBuildCancel() // the hold began as a grab / move / resize: drop it
+            setSelectedLink(name)
+            setPartMenuReq({ x, y, link: name })
+            return true
+          }
+          let holdTimer: ReturnType<typeof setTimeout> | null = null
+          let holdAt: { x: number; y: number } | null = null
+          let fingers = 0
+          const cancelHold = (): void => {
+            if (holdTimer) clearTimeout(holdTimer)
+            holdTimer = null
+            holdAt = null
+          }
+          const onHoldDown = (e: PointerEvent): void => {
+            if (e.pointerType === 'mouse') return
+            fingers += 1
+            cancelHold()
+            if (fingers !== 1) return // a second finger is a pinch or a pan
+            const at = { x: e.clientX, y: e.clientY }
+            holdAt = at
+            holdTimer = setTimeout(() => {
+              cancelHold()
+              openPartMenu(at.x, at.y)
+            }, LONG_PRESS_MS)
+          }
+          const onHoldMove = (e: PointerEvent): void => {
+            if (holdAt && Math.hypot(e.clientX - holdAt.x, e.clientY - holdAt.y) > LONG_PRESS_SLOP) cancelHold()
+          }
+          const onHoldEnd = (e: PointerEvent): void => {
+            if (e.pointerType !== 'mouse') fingers = Math.max(0, fingers - 1)
+            cancelHold()
+          }
+          const onPartContextMenu = (e: MouseEvent): void => {
+            e.preventDefault()
+            // A right-DRAG pans the view; only a click that stayed put is a menu.
+            if (Math.hypot(e.clientX - bDownX, e.clientY - bDownY) > 4) return
+            openPartMenu(e.clientX, e.clientY)
+          }
+          renderer.domElement.addEventListener('pointerdown', onHoldDown)
+          renderer.domElement.addEventListener('pointermove', onHoldMove)
+          renderer.domElement.addEventListener('pointerup', onHoldEnd)
+          renderer.domElement.addEventListener('pointercancel', onHoldEnd)
+          renderer.domElement.addEventListener('contextmenu', onPartContextMenu)
           renderer.domElement.addEventListener('pointerdown', onDown)
           renderer.domElement.addEventListener('pointerup', onUp)
           renderer.domElement.addEventListener('pointerdown', onBuildDown)
@@ -4939,6 +5000,12 @@ export function RobotView({
           }
           window.addEventListener('keyup', onPickKeyUp)
           teardownPose = () => {
+            cancelHold()
+            renderer.domElement.removeEventListener('pointerdown', onHoldDown)
+            renderer.domElement.removeEventListener('pointermove', onHoldMove)
+            renderer.domElement.removeEventListener('pointerup', onHoldEnd)
+            renderer.domElement.removeEventListener('pointercancel', onHoldEnd)
+            renderer.domElement.removeEventListener('contextmenu', onPartContextMenu)
             renderer.domElement.removeEventListener('pointerdown', onDown)
             renderer.domElement.removeEventListener('pointerup', onUp)
             renderer.domElement.removeEventListener('pointerdown', onBuildDown)
@@ -5476,6 +5543,7 @@ export function RobotView({
         )}
         {showPanel && (
           <RobotBuildPanel
+            menuRequest={partMenuReq}
             open={buildOpen}
             pinned={buildPinned}
             onSetOpen={setBuildOpen}

@@ -241,6 +241,7 @@
   font-size: 0.9rem;
   /* A held finger opens the row's menu — not the OS's text callout. */
   -webkit-touch-callout: none;
+  -webkit-user-select: none;
   user-select: none;
 }
 .shell[data-size='phone'] .robotdock--full .uhier__name {

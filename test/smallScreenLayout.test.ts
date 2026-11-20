@@ -151,3 +151,36 @@ describe('Electronics on a phone: one arrangement, nothing adrift', () => {
     expect(rule('.wc__zoom-btn:disabled')).toMatch(/visibility:\s*hidden/)
   })
 })
+
+describe('a held finger on a part in Build opens its menu', () => {
+  const view = readFileSync('src/renderer/src/components/RobotView.tsx', 'utf8')
+  const panel = readFileSync('src/renderer/src/components/RobotBuildPanel.tsx', 'utf8')
+  const css = readFileSync('src/renderer/src/components/RobotView.css', 'utf8')
+
+  it('listens for a hold and a right-click on the 3-D view', () => {
+    expect(view).toMatch(/addEventListener\('pointerdown', onHoldDown\)/)
+    expect(view).toMatch(/addEventListener\('contextmenu', onPartContextMenu\)/)
+    expect(view).toMatch(/if \(fingers !== 1\) return/)
+    expect(view).toMatch(/<RobotBuildPanel\s+menuRequest=\{partMenuReq\}/)
+  })
+
+  it('shows the menu even with the Build panel shut', () => {
+    const closed = panel.slice(panel.indexOf('if (!open) {'), panel.indexOf('<aside'))
+    expect(closed).toMatch(/\{partMenu\}/)
+  })
+
+  it('offers no greyed-out item, and says what to do about the base', () => {
+    const items = panel.slice(panel.indexOf('const menuItems'), panel.indexOf('const activeKey'))
+    expect(items).not.toMatch(/disabled/)
+    expect(view).toMatch(/make another part the base first, then delete this one/)
+  })
+
+  it('turns off text selection and the iOS callout on touch screens', () => {
+    const i = css.indexOf('@media (pointer: coarse)')
+    expect(i).toBeGreaterThan(-1)
+    const block = css.slice(i)
+    expect(block).toMatch(/-webkit-touch-callout:\s*none/)
+    // Safari ignores the unprefixed property on its own.
+    expect(block).toMatch(/-webkit-user-select:\s*none/)
+  })
+})

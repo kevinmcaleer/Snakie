@@ -107,6 +107,9 @@ export interface RobotBuildPanelProps {
   canEdit: boolean
   /** Open a different robot `.urdf` via the native picker (works popped out). */
   onOpenRobot: () => void
+  /** Open a part's menu at a point: a right-click or a held finger on the part
+   *  in the 3-D view. A new object each time is a new request. */
+  menuRequest?: { x: number; y: number; link: string } | null
 }
 
 /** metres → integer mm (display) and back. */
@@ -506,7 +509,8 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
     canExport,
     importing,
     canEdit,
-    onOpenRobot
+    onOpenRobot,
+    menuRequest
   } = props
   const dockRef = useRef<HTMLElement | null>(null)
   const prompt = usePrompt()
@@ -523,6 +527,13 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
     e.stopPropagation()
     setMenu({ pos: { x: e.clientX, y: e.clientY }, node })
   }
+  useEffect(() => {
+    if (!menuRequest || !canEdit) return
+    const node = flattenHierarchy(hierarchy).find((n) => n.link === menuRequest.link)
+    if (node) setMenu({ pos: { x: menuRequest.x, y: menuRequest.y }, node })
+    // Only a new request opens it; the tree changing under an open menu must not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [menuRequest])
   const menuItems = (node: HierarchyNode): ContextMenuItem[] => {
     const link = node.link
     const isBase = link === rootLink
@@ -539,17 +550,13 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
             })()
           }
         },
-        {
-          key: 'base',
-          label: isBase ? 'Base (already)' : 'Make base',
-          disabled: isBase,
-          onSelect: () => onMakeBase(link)
-        },
+        // Nothing here is greyed out. The base has no "Make base" to offer, and
+        // its Delete stays live: the view says what to do first (pick a new base).
+        ...(isBase ? [] : [{ key: 'base', label: 'Make base', onSelect: () => onMakeBase(link) }]),
         {
           key: 'delete',
           label: 'Delete',
           danger: true,
-          disabled: isBase,
           onSelect: () => onDelete(link)
         }
       )
@@ -598,19 +605,26 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
   const bindablePins = new Set(bindableServos.filter((s) => s.pin).map((s) => normPin(s.pin as string)))
   const orphanBindings = servos.filter((b) => !bindablePins.has(normPin(b.pin)))
 
+  const partMenu = menu && (
+    <ContextMenu position={menu.pos} items={menuItems(menu.node)} onClose={() => setMenu(null)} />
+  )
   if (!open) {
     return (
-      <button
-        type="button"
-        className="robotbuild__tab"
-        title="Build — add + edit blocks"
-        onClick={() => {
-          onSetOpen(true)
-          requestAnimationFrame(() => dockRef.current?.focus())
-        }}
-      >
-        Build
-      </button>
+      <>
+        <button
+          type="button"
+          className="robotbuild__tab"
+          title="Build — add + edit blocks"
+          onClick={() => {
+            onSetOpen(true)
+            requestAnimationFrame(() => dockRef.current?.focus())
+          }}
+        >
+          Build
+        </button>
+        {/* A part's menu can be asked for from the 3-D view with the panel shut. */}
+        {partMenu}
+      </>
     )
   }
 
@@ -871,9 +885,7 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
           ⬇ Export URDF
         </button>
       </div>
-      {menu && (
-        <ContextMenu position={menu.pos} items={menuItems(menu.node)} onClose={() => setMenu(null)} />
-      )}
+      {partMenu}
     </aside>
   )
 }

@@ -195,6 +195,7 @@
    the list instead, so do not let a touch start a text selection / callout. */
 .shell[data-size='phone'] .shell__solo-board .pl__part {
   -webkit-touch-callout: none;
+  -webkit-user-select: none;
   user-select: none;
 }
 .shell[data-size='phone'] .shell__solo-board .pl__detail-actions button,
@@ -260,6 +261,7 @@
   min-height: var(--em-tap);
   font-size: 0.9rem;
   -webkit-touch-callout: none;
+  -webkit-user-select: none;
   user-select: none;
 }
 .shell[data-size='phone'] .shell__solo-board .uhier__name {
