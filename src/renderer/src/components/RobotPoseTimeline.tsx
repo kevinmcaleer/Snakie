@@ -49,6 +49,8 @@ export interface RobotPoseTimelineProps {
   onWalkCycle: () => void
   onConvertKeyframes: () => void
   onExport: () => void
+  /** Open Render movie (make a video file of this timeline). */
+  onRenderMovie: () => void
 }
 
 /** Screen pixels per second of motion. */
@@ -86,7 +88,8 @@ export function RobotPoseTimeline({
   onSetGapEasing,
   onWalkCycle,
   onConvertKeyframes,
-  onExport
+  onExport,
+  onRenderMovie
 }: RobotPoseTimelineProps): JSX.Element {
   const steps = sequence.steps
   const n = steps.length
@@ -241,6 +244,14 @@ export function RobotPoseTimeline({
           title={canExport ? 'Export this motion as MicroPython (motion.py)' : 'Bind a servo to a joint first'}
         >
           Export
+        </button>
+        <button
+          type="button"
+          className="posetl__btn posetl__btn--movie"
+          onClick={onRenderMovie}
+          title="Render movie — make a video file of this motion, on this computer"
+        >
+          Render movie
         </button>
       </div>
 

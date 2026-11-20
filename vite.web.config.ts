@@ -239,7 +239,9 @@ export default defineConfig({
         return html.replace(
           /content="default-src 'self';[^"]*"/,
           `content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'${embed ? ' https://cdn.jsdelivr.net' : ''}; ` +
-            `style-src 'self' 'unsafe-inline'; img-src 'self' data:; ` +
+            // `blob:` images / media: Render movie plays back the file it just
+            // made (same-origin data the page created). Not needed by the embed.
+            `style-src 'self' 'unsafe-inline'; ${embed ? "img-src 'self' data:" : "img-src 'self' data: blob:; media-src 'self' blob:"}; ` +
             `font-src 'self' data:; ${embed ? embedConnectSrc() : webConnectSrc()}"`
         )
       }
