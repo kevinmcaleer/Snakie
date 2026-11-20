@@ -537,13 +537,13 @@
 /* Animate's tool bar fits a 360px phone without scrolling, so undo and redo are
    always in reach: tighter text buttons, and no trailing fade to hide them. */
 .shell[data-size='phone'] .robotdock--full .robottool--animate {
-  gap: 2px;
+  gap: 1px;
   -webkit-mask-image: none;
   mask-image: none;
 }
 .shell[data-size='phone'] .robotdock--full .robottool--animate .robottool__mode,
 .shell[data-size='phone'] .robotdock--full .robottool--animate .robottool__text {
-  padding: 0 0.34rem;
+  padding: 0 0.2rem;
 }
 .shell[data-size='phone'] .robotdock--full .robottool--animate .robottool__sep {
   margin: 0.15rem 1px;

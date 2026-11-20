@@ -5,6 +5,7 @@
  * units (degrees / millimetres, matching KRF `robot.yml`), and computing mimic
  * (`<mimic>`) follower values. Kept free of three.js / React so it's unit-tested.
  */
+import { carryBody } from './robot-body'
 
 /** Joint types the pose tool exposes as a slider. */
 export type MovableType = 'revolute' | 'continuous' | 'prismatic'
@@ -185,7 +186,9 @@ export function poseTargetNative(
   poseValues: Record<string, number>,
   overrides: Record<string, { min?: number; max?: number }> = {}
 ): Record<string, number> {
-  const target = { ...current }
+  // The body (where the whole robot sits — robot-body.ts) rides along untouched:
+  // it is not a joint, so it has no limits and no unit conversion.
+  const target = carryBody({ ...current }, poseValues)
   for (const m of meta) {
     if (m.isMimic) continue
     if (typeof poseValues[m.name] !== 'number') continue // partial: leave this joint alone

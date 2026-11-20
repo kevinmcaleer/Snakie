@@ -222,6 +222,19 @@ import type { MassEditorProps, ContactsEditorProps } from './RobotPropertiesDial
 import type { MeshTriangles } from './robot-mass-geometry'
 import { addContact, removeContact, setContact } from './robot-contacts'
 import { isPhoneViewport } from '../hooks/useViewportSize'
+import {
+  BODY_KEYS,
+  HOME_BODY,
+  bodyOf,
+  hasBody,
+  isHomeBody,
+  mirrorBodyValues,
+  pinChain,
+  posesOnTheSpot,
+  timelineMovesBody,
+  withBody,
+  type BodyPose
+} from './robot-body'
 import './RobotView.css'
 import './RobotView.small.css'
 
@@ -377,6 +390,40 @@ const STEREO_DEPTH_MIN = 0.01
 const STEREO_DEPTH_MAX = 0.12
 const STEREO_DEPTH_DEFAULT = 0.064
 
+// ── The body (robot-body.ts) on the three.js model ─────────────────────────────
+// A URDF is Z-up and the scene is Y-up, so the robot's root is stood up by this
+// base turn. A pose's body is an extra offset + tilt INSIDE that frame.
+const BODY_BASE_Q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0))
+const BODY_BASE_QI = BODY_BASE_Q.clone().invert()
+const _bodyE = new THREE.Euler()
+const _bodyQ = new THREE.Quaternion()
+const _bodyV = new THREE.Vector3()
+/** Where the robot's root sits right now, as a pose's body (mm / degrees). */
+function readBodyOf(r: THREE.Object3D): BodyPose {
+  _bodyQ.copy(BODY_BASE_QI).multiply(r.quaternion)
+  _bodyE.setFromQuaternion(_bodyQ, 'XYZ')
+  _bodyV.copy(r.position).applyQuaternion(BODY_BASE_QI)
+  const deg = THREE.MathUtils.radToDeg
+  return {
+    x: _bodyV.x * 1000,
+    y: _bodyV.y * 1000,
+    z: _bodyV.z * 1000,
+    rx: deg(_bodyE.x),
+    ry: deg(_bodyE.y),
+    rz: deg(_bodyE.z)
+  }
+}
+/** Put the robot's root where `vals` says (a no-op when it stores no body). */
+function applyBodyTo(r: THREE.Object3D, vals: Record<string, number>): void {
+  const b = bodyOf(vals)
+  if (!b) return
+  const rad = THREE.MathUtils.degToRad
+  _bodyE.set(rad(b.rx), rad(b.ry), rad(b.rz), 'XYZ')
+  r.quaternion.copy(BODY_BASE_Q).multiply(_bodyQ.setFromEuler(_bodyE))
+  r.position.set(b.x / 1000, b.y / 1000, b.z / 1000).applyQuaternion(BODY_BASE_Q)
+  r.updateMatrixWorld(true)
+}
+
 export function RobotView({
   urdfContent,
   urdfPath,
@@ -511,6 +558,7 @@ export function RobotView({
     /** Render movie: draw every frame offline at the output size and encode it.
      *  With `still`, draw only the first frame into `preview` and return. */
     renderMovie: (job: RenderJob) => Promise<RenderResult>
+    setPinMarker: (link: string | null) => void
   } | null>(null)
   const [zoomPct, setZoomPct] = useState(100)
   // Exploded view UI (#499): popover open, separation slider, orbit toggle, busy.
@@ -552,6 +600,16 @@ export function RobotView({
   // state declared later). Safe no-ops until then.
   const mirrorLiveRef = useRef<(changed: string[]) => Record<string, number>>(() => ({}))
   const poseGestureRef = useRef({ begin: (): void => {}, commit: (): void => {} })
+  // PIN (Animate ▸ Pin): one part held still in the world while the rest of the
+  // robot is posed, so the body moves over a planted foot. `hold` puts the body
+  // back wherever the pinned part needs it; `reanchor` accepts the part's new
+  // place after something else (a recalled pose, playback) moved the robot.
+  const pinRef = useRef({
+    link: null as string | null,
+    paused: false,
+    hold: (): void => {},
+    reanchor: (): void => {}
+  })
 
   // Set a joint on the live robot (mimic followers update automatically).
   const applyToRobot = (native: Record<string, number>): void => {
@@ -560,6 +618,8 @@ export function RobotView({
     for (const m of metaRef.current) {
       if (!m.isMimic && typeof native[m.name] === 'number') r.setJointValue(m.name, native[m.name])
     }
+    if (animatingRef.current) applyBodyTo(r, native)
+    pinRef.current.reanchor()
   }
 
   // Merge a patch into robot.yml's `robot:` section and persist (preserving the
@@ -680,6 +740,9 @@ export function RobotView({
       const a = (r.joints?.[m.name] as { angle?: number } | undefined)?.angle
       start[m.name] = typeof a === 'number' ? a : valuesRef.current[m.name] ?? 0
     }
+    // The body eases with the joints when the pose says where it should be.
+    const bodyTo = bodyOf(target)
+    const bodyFrom = readBodyOf(r)
     if (poseTweenRef.current !== null) cancelAnimationFrame(poseTweenRef.current)
     const DURATION = 380
     const t0 = performance.now()
@@ -699,6 +762,11 @@ export function RobotView({
         const b = target[m.name] ?? a
         r.setJointValue(m.name, a + (b - a) * e)
       }
+      if (bodyTo && animatingRef.current) {
+        const mix = (f: keyof BodyPose): number => bodyFrom[f] + (bodyTo[f] - bodyFrom[f]) * e
+        applyBodyTo(r, withBody({}, { x: mix('x'), y: mix('y'), z: mix('z'), rx: mix('rx'), ry: mix('ry'), rz: mix('rz') }, true))
+      }
+      pinRef.current.reanchor()
       if (k < 1) {
         poseTweenRef.current = requestAnimationFrame(step)
       } else {
@@ -768,6 +836,9 @@ export function RobotView({
       const lim = effectiveLimit(m, overridesRef.current[m.name])
       nv[m.name] = clamp(dp[m.name] ?? 0, lim.lower, lim.upper)
     }
+    // Rest puts the body back too (when anything has ever moved it).
+    const r = robotRef.current
+    if (hasBody(nv) || (r && !isHomeBody(readBodyOf(r)))) Object.assign(nv, withBody({}, HOME_BODY))
     applyToRobot(nv)
     setValues(nv)
   }
@@ -2193,8 +2264,116 @@ export function RobotView({
       const a = (r.joints?.[m.name] as { angle?: number } | undefined)?.angle
       if (typeof a === 'number') out[m.name] = a
     }
+    // The body is part of the posture once anything uses it (a pin moved it, or
+    // a saved pose stores it) — never for a robot that has always stood still.
+    const body = readBodyOf(r)
+    if (!isHomeBody(body) || hasBody(valuesRef.current) || posesRef.current.some((p) => hasBody(p.values))) {
+      Object.assign(out, withBody({}, body, true))
+    }
     return out
   }
+  // ── PIN: keep one part still and let the body move ────────────────────────
+  const [pinLink, setPinLink] = useState<string | null>(null)
+  const [pinPicking, setPinPicking] = useState(false)
+  const pinPickRef = useRef<(link: string) => boolean>(() => false)
+  const pinAnchor = useRef(new THREE.Matrix4())
+  const pinScratch = useRef({ m: new THREE.Matrix4(), inv: new THREE.Matrix4(), s: new THREE.Vector3() })
+  pinRef.current.link = animating ? pinLink : null
+  pinRef.current.reanchor = () => {
+    const r = robotRef.current
+    const lo = pinRef.current.link ? r?.links[pinRef.current.link] : null
+    if (!r || !lo) return
+    r.updateMatrixWorld(true)
+    if (pinAnchor.current.equals(lo.matrixWorld)) return
+    pinAnchor.current.copy(lo.matrixWorld)
+    zoomApiRef.current?.setPinMarker(pinRef.current.link) // the ring follows the part
+  }
+  pinRef.current.hold = () => {
+    const pin = pinRef.current
+    const r = robotRef.current
+    const lo = pin.link ? r?.links[pin.link] : null
+    if (pin.paused || !r || !lo) return
+    r.updateMatrixWorld(true)
+    const a = pinAnchor.current.elements
+    const w = lo.matrixWorld.elements
+    let off = 0
+    for (let i = 0; i < 16; i++) off = Math.max(off, Math.abs(a[i] - w[i]))
+    if (off < 1e-9) return // the part is where it was pinned
+    // New root = anchor × (part's place within the robot)⁻¹
+    const { m, inv, s } = pinScratch.current
+    m.copy(pinAnchor.current).multiply(inv.copy(lo.matrixWorld).invert()).multiply(r.matrix)
+    m.decompose(r.position, r.quaternion, s)
+    r.quaternion.normalize()
+    r.updateMatrixWorld(true)
+  }
+  const setPin = (link: string | null): void => {
+    setPinLink(link)
+    setPinPicking(false)
+    pinRef.current.link = animatingRef.current ? link : null
+    pinRef.current.reanchor()
+    zoomApiRef.current?.setPinMarker(link)
+    setNextStep(null)
+    if (link) setSavingLabel(`pinned ${friendlyJointName(link)}`)
+  }
+  pinPickRef.current = (link) => {
+    if (!pinPicking) return false
+    setPin(link)
+    return true
+  }
+  const handleTogglePin = (): void => {
+    if (pinLink || pinPicking) {
+      setPin(null)
+      return
+    }
+    setPinPicking(true)
+    setNextStep({
+      title: 'Pick the part to keep still',
+      body: 'A foot, for example. It stays planted while you pose the rest, so the body moves over it.',
+      actions: [{ label: 'Cancel', onPress: () => setPin(null) }]
+    })
+  }
+  // A pin only makes sense while posing. Leaving Animate also stands the robot
+  // back at its origin, so the model is never edited from a shifted body; coming
+  // back restores the posture's body.
+  useEffect(() => {
+    const r = robotRef.current
+    if (!r) return
+    if (animating) {
+      applyBodyTo(r, valuesRef.current)
+      pinRef.current.reanchor()
+      zoomApiRef.current?.setPinMarker(pinLink)
+    } else {
+      applyBodyTo(r, withBody({}, HOME_BODY))
+      zoomApiRef.current?.setPinMarker(null)
+      if (pinPicking) setPinPicking(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [animating])
+  // A pin on a part that no longer exists (the model was edited) lets go.
+  useEffect(() => {
+    if (pinLink && !assembly.some((a) => a.link === pinLink)) setPin(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assembly])
+  // Left ↔ right in the robot's own frame, measured from a mirrored joint pair
+  // (so a robot modelled facing any way still mirrors its body correctly).
+  const lateralAxis = (): [number, number, number] | undefined => {
+    const r = robotRef.current
+    if (!r) return undefined
+    r.updateMatrixWorld(true)
+    const pa = new THREE.Vector3()
+    const pb = new THREE.Vector3()
+    for (const pair of mirrorPairsRef.current) {
+      const ja = r.joints?.[pair.a]
+      const jb = r.joints?.[pair.b]
+      if (!ja || !jb) continue
+      r.worldToLocal(ja.getWorldPosition(pa))
+      r.worldToLocal(jb.getWorldPosition(pb))
+      pa.sub(pb)
+      if (pa.length() > 1e-4) return [pa.x, pa.y, pa.z]
+    }
+    return undefined
+  }
+
   // LIVE MIRROR: after `changed` joints moved on the model, move their partners
   // to match. Returns what it set (native units) so callers can sync state.
   mirrorLiveRef.current = (changed) => {
@@ -2283,9 +2462,16 @@ export function RobotView({
       if (label) setSavingLabel((l) => (l === 'saved ✓' ? label : l))
     })
   }
+  // A whole-robot pose: every joint, plus where the body is once that matters.
+  const captureLivePose = (): Record<string, number> => {
+    const live = liveAngles()
+    const body = bodyOf(live)
+    const joints = capturePoseValues(metaRef.current, live)
+    return body ? withBody(joints, body) : joints
+  }
   const handleQuickSavePose = (): string => {
     const name = nextPoseName(posesRef.current.map((p) => p.name))
-    const next = [...posesRef.current, { name, values: capturePoseValues(metaRef.current, liveAngles()) }]
+    const next = [...posesRef.current, { name, values: captureLivePose() }]
     posesRef.current = next // so a block added in the same press can find it
     savePoses(next, `saved “${name}”`)
     setActivePose(name)
@@ -2321,7 +2507,7 @@ export function RobotView({
     const names = posesRef.current.map((x) => x.name)
     const added = {
       name: mirroredPoseName(name, names),
-      values: mirrorPoseValues(p.values, mirrorPairsRef.current, travel)
+      values: mirrorBodyValues(mirrorPoseValues(p.values, mirrorPairsRef.current, travel), lateralAxis())
     }
     savePoses(insertAfter(name, added), `saved “${added.name}”`)
   }
@@ -2333,7 +2519,7 @@ export function RobotView({
   }
   const handleShelfUpdate = (name: string): void => {
     if (!shelfPose(name)) return
-    const values = capturePoseValues(metaRef.current, liveAngles())
+    const values = captureLivePose()
     savePoses(
       posesRef.current.map((p) => (p.name === name ? { name, values } : p)),
       `updated “${name}”`
@@ -2437,6 +2623,11 @@ export function RobotView({
       r.setJointValue(m.name, native)
       patch[m.name] = native
     }
+    if (animatingRef.current && hasBody(display)) {
+      applyBodyTo(r, display)
+      for (const k of BODY_KEYS) if (typeof display[k] === 'number') patch[k] = display[k]
+    }
+    pinRef.current.reanchor()
     if (commitState) setValues((v) => ({ ...v, ...patch }))
   }
 
@@ -2608,6 +2799,31 @@ export function RobotView({
   // Pose name → its saved DISPLAY values, for the sampler (kept fresh for rAF).
   const posesByNameRef = useRef<Record<string, Record<string, number>>>({})
   posesByNameRef.current = Object.fromEntries(poses.map((p) => [p.name, p.values]))
+  // WALK ON THE SPOT: a looping timeline whose poses carry the body forward
+  // (posed with a foot pinned) plays with that travel taken out, so it loops
+  // cleanly instead of drifting off and snapping back (robot-body.ts).
+  const [onSpot, setOnSpot] = useState(() => {
+    try {
+      return window.localStorage.getItem('snakie:walkOnSpot') !== '0'
+    } catch {
+      return true
+    }
+  })
+  const seqMovesBody = useMemo(
+    () =>
+      sequence.loop &&
+      timelineMovesBody(
+        sequence.steps.map((st) => st.pose),
+        Object.fromEntries(poses.map((p) => [p.name, p.values]))
+      ),
+    [sequence, poses]
+  )
+  // What the timeline plays: the saved poses, on the spot when that applies.
+  const seqPosesRef = useRef<Record<string, Record<string, number>>>({})
+  seqPosesRef.current = useMemo(() => {
+    const byName = Object.fromEntries(poses.map((p) => [p.name, p.values]))
+    return onSpot && seqMovesBody ? posesOnTheSpot(sequence.steps.map((st) => st.pose), byName) : byName
+  }, [sequence, poses, onSpot, seqMovesBody])
 
   // ── Puppet controls (#416) ────────────────────────────────────────────────
   const [controls, setControls] = useState<PuppetControl[]>([])
@@ -2683,7 +2899,7 @@ export function RobotView({
   // Apply a sampled sequence frame (mirrors auto-follow); `commitState` syncs the
   // sliders (scrub/pause only). Streams to the board when Live.
   const applySequenceAt = (t: number, commitState = false): void => {
-    const sampled = samplePoseSequence(sequenceRef.current, posesByNameRef.current, t)
+    const sampled = samplePoseSequence(sequenceRef.current, seqPosesRef.current, t)
     applyDisplayPose(sampled, commitState)
     if (seqLiveRef.current && robotRef.current) streamServos(sampled)
   }
@@ -2820,10 +3036,22 @@ export function RobotView({
     }
     let list = posesRef.current
     const mirrorOf: Record<string, string> = {}
+    // How far the body travels over these blocks (posed with a foot pinned).
+    const bodies = seq.steps
+      .map((st) => list.find((x) => x.name === st.pose))
+      .map((p) => (p ? bodyOf(p.values) : null))
+      .filter((b): b is BodyPose => !!b)
+    const stride: [number, number] | null =
+      bodies.length > 1
+        ? [bodies[bodies.length - 1].x - bodies[0].x, bodies[bodies.length - 1].y - bodies[0].y]
+        : null
     for (const name of new Set(seq.steps.map((st) => st.pose))) {
       const p = list.find((x) => x.name === name)
       if (!p) continue
-      const values = mirrorPoseValues(p.values, mirrorPairsRef.current, travel)
+      let values = mirrorBodyValues(mirrorPoseValues(p.values, mirrorPairsRef.current, travel), lateralAxis())
+      // The second half carries on from where the first half's body got to.
+      const mb = bodyOf(values)
+      if (mb && stride) values = withBody(values, { ...mb, x: mb.x + stride[0], y: mb.y + stride[1] })
       const twin = list.find((x) => !posturesDiffer(x.values, values, 0.011))
       if (twin) {
         mirrorOf[name] = twin.name
@@ -2888,7 +3116,7 @@ export function RobotView({
     const live = liveAngles()
     const seq = sequenceRef.current
     const tl = timelineRef.current
-    const byName = posesByNameRef.current
+    const byName = seqPosesRef.current
     const poseAt = (frame: number): Record<string, number> => {
       const t = frameClipTime(frame, job.plan.fps, clip.seconds, clip.loop)
       const display = clip.source === 'timeline' ? samplePoseSequence(seq, byName, t) : sampleTimeline(tl, t)
@@ -2907,7 +3135,7 @@ export function RobotView({
       api.setGhosts([])
       return
     }
-    const byName = Object.fromEntries(poses.map((p) => [p.name, p.values]))
+    const byName = seqPosesRef.current
     const ghost = (i: number, tone: 'before' | 'after'): { native: Record<string, number>; tone: 'before' | 'after' }[] => {
       const v = i >= 0 && i < steps.length && i !== sel ? byName[steps[i].pose] : undefined
       if (!v || steps[i].pose === steps[sel].pose) return []
@@ -2918,7 +3146,7 @@ export function RobotView({
     const after = sequence.loop ? (sel + 1) % n : sel + 1
     api.setGhosts([...ghost(before, 'before'), ...(after !== before ? ghost(after, 'after') : [])])
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [animating, onion, seqPlaying, tlSelected, sequence, poses, jointMeta])
+  }, [animating, onion, seqPlaying, tlSelected, sequence, poses, jointMeta, onSpot])
   // Timeline keys, while animating and not typing: Space plays, ← → step
   // between blocks, K adds the current pose, Delete removes the selected block.
   const tlKeysRef = useRef<(e: KeyboardEvent) => void>(() => undefined)
@@ -3673,7 +3901,8 @@ export function RobotView({
       const ctx = thumbCanvas.getContext('2d')
       const src = renderer.domElement
       if (!r || !ctx || src.width < 2 || src.height < 2) return null
-      const before: Record<string, number> = {}
+      const pinWasShown = pinMarker.visible
+      const before: Record<string, number> = withBody({}, readBodyOf(r), true)
       for (const m of metaRef.current) {
         if (m.isMimic) continue
         const a = (r.joints?.[m.name] as { angle?: number } | undefined)?.angle
@@ -3683,11 +3912,13 @@ export function RobotView({
         for (const m of metaRef.current) {
           if (!m.isMimic && typeof vals[m.name] === 'number') r.setJointValue(m.name, vals[m.name])
         }
+        applyBodyTo(r, vals)
         r.updateMatrixWorld(true)
       }
       try {
         put(native)
         ghostGroup.visible = false
+        pinMarker.visible = false
         jointRingApi.setSuppressed(true)
         jointRingApi.update()
         renderer.setScissorTest(false)
@@ -3722,9 +3953,52 @@ export function RobotView({
       } finally {
         put(before)
         ghostGroup.visible = true
+        pinMarker.visible = pinWasShown
         jointRingApi.setSuppressed(false)
         renderFrame()
       }
+    }
+
+    // PIN MARKER: an amber ring on the floor under the pinned part. The part
+    // does not move while it is pinned, so the ring is placed once.
+    const pinMarker = new THREE.Group()
+    pinMarker.name = 'pin-marker'
+    pinMarker.visible = false
+    {
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0xd99a1c,
+        transparent: true,
+        opacity: 0.9,
+        depthTest: false,
+        side: THREE.DoubleSide
+      })
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.86, 1, 48), mat)
+      const dot = new THREE.Mesh(new THREE.CircleGeometry(0.16, 24), mat)
+      for (const m of [ring, dot]) {
+        m.rotation.x = -Math.PI / 2
+        m.renderOrder = 6
+        m.raycast = () => undefined
+        pinMarker.add(m)
+      }
+    }
+    scene.add(pinMarker)
+    const setPinMarker = (link: string | null): void => {
+      const lo = link ? robotRef.current?.links[link] : null
+      if (!lo) {
+        pinMarker.visible = false
+        return
+      }
+      robotRef.current!.updateMatrixWorld(true)
+      const box = new THREE.Box3().setFromObject(lo)
+      if (box.isEmpty()) {
+        pinMarker.visible = false
+        return
+      }
+      const size = box.getSize(new THREE.Vector3())
+      const c = box.getCenter(new THREE.Vector3())
+      pinMarker.position.set(c.x, box.min.y, c.z)
+      pinMarker.scale.setScalar(Math.max(size.x, size.z, 0.012) * 0.75)
+      pinMarker.visible = true
     }
 
     // ONION SKIN: each ghost is the robot's meshes frozen in another posture —
@@ -3752,7 +4026,7 @@ export function RobotView({
         if (had) renderFrame()
         return
       }
-      const before: Record<string, number> = {}
+      const before: Record<string, number> = withBody({}, readBodyOf(r), true)
       for (const m of metaRef.current) {
         if (m.isMimic) continue
         const a = (r.joints?.[m.name] as { angle?: number } | undefined)?.angle
@@ -3762,6 +4036,7 @@ export function RobotView({
         for (const m of metaRef.current) {
           if (!m.isMimic && typeof vals[m.name] === 'number') r.setJointValue(m.name, vals[m.name])
         }
+        applyBodyTo(r, vals)
         r.updateMatrixWorld(true)
       }
       try {
@@ -3810,7 +4085,7 @@ export function RobotView({
       rr.setSize(drawW, drawH, false)
       rr.outputColorSpace = THREE.SRGBColorSpace
 
-      const before: Record<string, number> = {}
+      const before: Record<string, number> = withBody({}, readBodyOf(r), true)
       for (const m of metaRef.current) {
         if (m.isMimic) continue
         const a = (r.joints?.[m.name] as { angle?: number } | undefined)?.angle
@@ -3820,6 +4095,7 @@ export function RobotView({
         for (const m of metaRef.current) {
           if (!m.isMimic && typeof vals[m.name] === 'number') r.setJointValue(m.name, vals[m.name])
         }
+        applyBodyTo(r, vals)
         r.updateMatrixWorld(true)
       }
 
@@ -3938,9 +4214,11 @@ export function RobotView({
           stage.visible = true
           scene.background = bg
         } else {
-          if (ghostGroup.visible) {
-            ghostGroup.visible = false
-            hidden.push(ghostGroup)
+          for (const g of [ghostGroup, pinMarker]) {
+            if (g.visible) {
+              g.visible = false
+              hidden.push(g)
+            }
           }
         }
         jointRingApi.setSuppressed(true)
@@ -3969,6 +4247,7 @@ export function RobotView({
         }
       }
 
+      pinRef.current.paused = true // frames are posed from the timeline, not held by the pin
       try {
         if (still) {
           draw(0)
@@ -3992,6 +4271,7 @@ export function RobotView({
         return { blob: null, error: 'encode-failed', detail: String(e) }
       } finally {
         put(before)
+        pinRef.current.paused = false
         scene.remove(stage)
         floorGeo.dispose()
         floorMat.dispose()
@@ -4359,6 +4639,7 @@ export function RobotView({
       snapshotPose,
       setGhosts,
       renderMovie,
+      setPinMarker,
       setExplode: applyExplode,
       animateExplode: (f, orbit, onDone) => animateExplode(f, orbit, undefined, onDone),
       recordExplode
@@ -5151,24 +5432,22 @@ export function RobotView({
             localOffset: THREE.Vector3 // grabbed point in that link's LOCAL frame
             plane: THREE.Plane // camera-facing drag plane
             joints: string[] // participating movable joints, NEAREST-to-effector first
+            reversed: Set<string> // joints on the PINNED side: turning them moves the body
           }
           let grab: Grab | null = null
           // The non-mimic revolute/continuous joints on the chain from `endLink` up to
           // the root, nearest-to-effector first — the joints IK is allowed to turn.
-          const ikChainJoints = (endLink: string): string[] => {
+          const ikChainJoints = (endLink: string): { joint: string; reversed: boolean }[] => {
             const byChild = new Map(readAllJoints(contentRef.current).map((j) => [j.child, j]))
-            const out: string[] = []
-            const seen = new Set<string>()
-            let cur: string | undefined = endLink
-            while (cur && !seen.has(cur)) {
-              seen.add(cur)
-              const j = byChild.get(cur) // the joint whose child is `cur` (its parent joint)
-              if (!j) break // reached a root (no parent joint)
-              const m = metaRef.current.find((x) => x.name === j.name)
-              if (m && !m.isMimic && (m.type === 'revolute' || m.type === 'continuous')) out.push(j.name)
-              cur = j.parent
-            }
-            return out
+            // With a part pinned the chain runs to THAT part instead of the root
+            // (robot-body.ts ▸ pinChain), so dragging the body bends the planted leg.
+            return pinChain(endLink, pinRef.current.link, (l) => {
+              const j = byChild.get(l) // the joint whose child is `l` (its parent joint)
+              return j ? { joint: j.name, parent: j.parent } : undefined
+            }).filter((c) => {
+              const m = metaRef.current.find((x) => x.name === c.joint)
+              return !!m && !m.isMimic && (m.type === 'revolute' || m.type === 'continuous')
+            })
           }
           const startGrab = (e: PointerEvent): void => {
             const robot = robotRef.current
@@ -5179,7 +5458,9 @@ export function RobotView({
             if (!hit || !hit.face) return
             const link = ownerLinkName(hit.object)
             if (!link || !robot.links[link]) return
-            const joints = ikChainJoints(link)
+            if (pinPickRef.current(link)) return // Pin was waiting for a part: this is it
+            const chain = ikChainJoints(link)
+            const joints = chain.map((c) => c.joint)
             if (!joints.length) return // the base, or no movable ancestor joint → no-op
             poseGestureRef.current.begin() // undo checkpoint (Animate)
             setSelectedLink(link)
@@ -5189,7 +5470,8 @@ export function RobotView({
               link,
               localOffset: robot.links[link].worldToLocal(hit.point.clone()),
               plane: new THREE.Plane().setFromNormalAndCoplanarPoint(camDir, hit.point),
-              joints
+              joints,
+              reversed: new Set(chain.filter((c) => c.reversed).map((c) => c.joint))
             }
             controls.enabled = false
             ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
@@ -5210,6 +5492,8 @@ export function RobotView({
               const j = robot.joints[name]
               j.getWorldPosition(p)
               ax.copy(j.axis).transformDirection(j.matrixWorld).normalize()
+              // With the far end pinned, this joint swings the dragged side the other way.
+              if (grab!.reversed.has(name)) ax.negate()
               const m = metaRef.current.find((x) => x.name === name)
               const lim = m
                 ? effectiveLimit(m, overridesRef.current[name])
@@ -5227,6 +5511,7 @@ export function RobotView({
             })
             grab.joints.forEach((name, i) => robot.setJointValue(name, solved[i]))
             mirrorLiveRef.current(grab.joints) // Animate + Mirror: the other side follows
+            pinRef.current.hold() // the pinned part stays; the body moves now, not a frame late
             robot.updateMatrixWorld(true)
           }
           // Push the grabbed chain's final joint angles into React `values` so the pose
@@ -5947,6 +6232,7 @@ export function RobotView({
     let raf = 0
     const tick = (): void => {
       stepAnim()
+      pinRef.current.hold() // a pinned part stays put; the body moves instead
       controls.update()
       boneModeApi.update() // live skeleton overlay (#536) — follows every joint drive
       ikGizmoApi.update() // interactive IK goal gizmo (#540) — composes with Bone Mode
@@ -6409,7 +6695,15 @@ export function RobotView({
         {/* The build toolbar stays available even when the hierarchy panel is
             hidden (#…) — its tools (add primitive/joint, measure, undo/redo) act on
             the viewport, not the tree. */}
-        {showPanel && nextStep && <RobotNextStep step={nextStep} onClose={() => setNextStep(null)} />}
+        {showPanel && nextStep && (
+          <RobotNextStep
+            step={nextStep}
+            onClose={() => {
+              setNextStep(null)
+              setPinPicking(false) // closing "click the part to keep still" stops the pick
+            }}
+          />
+        )}
         {renderClip && (
           <RobotRenderPanel
             clip={renderClip}
@@ -6443,6 +6737,15 @@ export function RobotView({
                 saveLiveMirror(window.localStorage, next)
                 if (!next) setMirroredNow(new Set())
               },
+              pinned: pinLink ? friendlyJointName(pinLink) : null,
+              pinPicking,
+              onTogglePin: handleTogglePin,
+              onExplainMirror: () =>
+                setNextStep({
+                  title: 'Mirror needs a left and a right',
+                  body: 'Mirror copies what you do on one side to the other. It finds the two sides by name, so call matching joints things like hip_left and hip_right, then press Mirror again.',
+                  actions: []
+                }),
               onReset: handleAnimateReset,
               jointsOpen,
               onToggleJoints: () => setJointsOpen((o) => !o)
@@ -6658,6 +6961,18 @@ export function RobotView({
                   canExport={bindings.length > 0}
                   canMirror={mirrorPairs.length > 0}
                   onion={onion}
+                  onSpot={seqMovesBody ? onSpot : null}
+                  onToggleSpot={() => {
+                    const next = !onSpot
+                    setOnSpot(next)
+                    try {
+                      window.localStorage.setItem('snakie:walkOnSpot', next ? '1' : '0')
+                    } catch {
+                      /* private mode: the choice lasts for this visit */
+                    }
+                    // Show the change straight away on the block being looked at.
+                    window.setTimeout(() => seqSeek(seqPlayheadRef.current), 0)
+                  }}
                   hasKeyframes={timeline.tracks.some((t) => t.keys.length > 0)}
                   onPlayPause={() => {
                     if (sequence.steps.length < 2 && !seqPlaying) {
