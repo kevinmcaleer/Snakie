@@ -136,6 +136,15 @@ import { loadPin, savePin, PIN_KEYS } from './pin-overlay'
 import { RobotTimeline } from './RobotTimeline'
 import { RobotPoseTimeline } from './RobotPoseTimeline'
 import { RobotNextStep, type NextStep } from './RobotNextStep'
+import {
+  createFrameSink,
+  drawRenderWatermark,
+  frameClipTime,
+  RENDER_WATERMARK,
+  type RenderJob,
+  type RenderResult
+} from './robot-render'
+import { RobotRenderPanel } from './RobotRenderPanel'
 import { RobotControls } from './RobotControls'
 import { RobotMotionDock } from './RobotMotionDock'
 import {
@@ -499,6 +508,9 @@ export function RobotView({
     /** Onion skin: faint copies of the robot in other postures (native joint
      *  values). An empty list clears them. */
     setGhosts: (list: { native: Record<string, number>; tone: 'before' | 'after' }[]) => void
+    /** Render movie: draw every frame offline at the output size and encode it.
+     *  With `still`, draw only the first frame into `preview` and return. */
+    renderMovie: (job: RenderJob) => Promise<RenderResult>
   } | null>(null)
   const [zoomPct, setZoomPct] = useState(100)
   // Exploded view UI (#499): popover open, separation slider, orbit toggle, busy.
@@ -2364,6 +2376,7 @@ export function RobotView({
     if (!animating) return
     const onKey = (e: KeyboardEvent): void => {
       if (e.key.toLowerCase() !== 's' || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return
+      if (document.querySelector('.rrender__scrim')) return // Render movie is open
       const el = document.activeElement as HTMLElement | null
       if (
         el &&
@@ -2842,6 +2855,48 @@ export function RobotView({
     commitSequence({ ...sequenceRef.current, loop: seq.loop, steps: seq.steps })
     setTlSelected(0)
   }
+  // ── Render movie ─────────────────────────────────────────────────────────
+  // What gets rendered: the timeline when it has a movement on it, else a
+  // joint-track clip. `null` = the panel is closed.
+  const [renderClip, setRenderClip] = useState<{ source: 'timeline' | 'tracks'; label: string; seconds: number; loop: boolean } | null>(null)
+  const openRenderMovie = (): void => {
+    const seq = sequenceRef.current
+    const tl = timelineRef.current
+    const known = seq.steps.filter((st) => posesByNameRef.current[st.pose])
+    if (known.length >= 2 && sequenceDuration(seq) > 0) {
+      setSeqPlaying(false)
+      setPlaying(false)
+      setNextStep(null)
+      setRenderClip({ source: 'timeline', label: seq.name && seq.name !== 'sequence' ? seq.name : 'Timeline', seconds: sequenceDuration(seq), loop: seq.loop })
+    } else if (tl.tracks.some((t) => t.keys.length > 1) && tl.duration > 0) {
+      setSeqPlaying(false)
+      setPlaying(false)
+      setNextStep(null)
+      setRenderClip({ source: 'tracks', label: 'Joint tracks', seconds: tl.duration, loop: tl.loop })
+    } else {
+      setNextStep({
+        title: 'Make a movement to render',
+        body: 'A movie needs the robot to move. Pose the robot and press Add pose, then pose it differently and press Add pose again. Then Render movie turns that into a video.',
+        actions: [{ label: 'Add this pose', primary: true, onPress: () => (setNextStep(null), handleAddCurrentBlock()) }]
+      })
+    }
+  }
+  const runRender = async (job: Omit<RenderJob, 'poseAt'>): Promise<RenderResult> => {
+    const api = zoomApiRef.current
+    const clip = renderClip
+    if (!api || !clip) return { blob: null, error: 'no-robot' }
+    const live = liveAngles()
+    const seq = sequenceRef.current
+    const tl = timelineRef.current
+    const byName = posesByNameRef.current
+    const poseAt = (frame: number): Record<string, number> => {
+      const t = frameClipTime(frame, job.plan.fps, clip.seconds, clip.loop)
+      const display = clip.source === 'timeline' ? samplePoseSequence(seq, byName, t) : sampleTimeline(tl, t)
+      return poseTargetNative(metaRef.current, live, display, overridesRef.current)
+    }
+    return api.renderMovie({ ...job, poseAt })
+  }
+
   // ONION SKIN: faint copies of the poses before and after the selected block.
   useEffect(() => {
     const api = zoomApiRef.current
@@ -2869,6 +2924,7 @@ export function RobotView({
   const tlKeysRef = useRef<(e: KeyboardEvent) => void>(() => undefined)
   tlKeysRef.current = (e: KeyboardEvent): void => {
     if (e.metaKey || e.ctrlKey || e.altKey) return
+    if (document.querySelector('.rrender__scrim')) return // Render movie is open
     const el = document.activeElement as HTMLElement | null
     if (
       el &&
@@ -3728,6 +3784,226 @@ export function RobotView({
       }
     }
 
+    // RENDER MOVIE: every frame is drawn OFFLINE by a second renderer at the
+    // output size (the on-screen view is left alone), with the robot put into
+    // the posture for exactly that frame's time, then handed to the encoder.
+    const renderMovie = async (job: RenderJob): Promise<RenderResult> => {
+      const r = robotRef.current
+      if (!r) return { blob: null, error: 'no-robot' }
+      const { plan, settings, still } = job
+      const sink = still ? null : await createFrameSink(settings.format, plan)
+      if (!still && !sink) return { blob: null, error: 'unsupported' }
+      // A still is a quick look: a small frame is plenty.
+      const k = still ? Math.min(1, 720 / Math.max(plan.width, plan.height)) : 1
+      const outW = Math.max(2, Math.round((plan.width * k) / 2) * 2)
+      const outH = Math.max(2, Math.round((plan.height * k) / 2) * 2)
+      const drawW = still ? outW : plan.drawWidth
+      const drawH = still ? outH : plan.drawHeight
+      let rr: THREE.WebGLRenderer
+      try {
+        rr = new THREE.WebGLRenderer({ antialias: settings.quality !== 'draft', preserveDrawingBuffer: true })
+      } catch {
+        sink?.abort()
+        return { blob: null, error: 'no-webgl' }
+      }
+      rr.setPixelRatio(1)
+      rr.setSize(drawW, drawH, false)
+      rr.outputColorSpace = THREE.SRGBColorSpace
+
+      const before: Record<string, number> = {}
+      for (const m of metaRef.current) {
+        if (m.isMimic) continue
+        const a = (r.joints?.[m.name] as { angle?: number } | undefined)?.angle
+        if (typeof a === 'number') before[m.name] = a
+      }
+      const put = (vals: Record<string, number>): void => {
+        for (const m of metaRef.current) {
+          if (!m.isMimic && typeof vals[m.name] === 'number') r.setJointValue(m.name, vals[m.name])
+        }
+        r.updateMatrixWorld(true)
+      }
+
+      // The look. Studio = the robot alone on a plain floor with a soft shadow;
+      // Editor = the view as it is (grid and all), minus the posing handles.
+      const studio = settings.look !== 'editor'
+      const dark = settings.look === 'studio-dark' || (settings.look === 'editor' && !themeIsLight())
+      const bg = new THREE.Color(settings.look === 'studio-dark' ? 0x1d1f1a : 0xfbf8f1)
+      const stage = new THREE.Group()
+      const floorMat = new THREE.MeshBasicMaterial({ color: settings.look === 'studio-dark' ? 0x262922 : 0xf1ecdf })
+      const floorGeo = new THREE.CircleGeometry(1, 96)
+      const floor = new THREE.Mesh(floorGeo, floorMat)
+      floor.rotation.x = -Math.PI / 2
+      const blobCanvas = document.createElement('canvas')
+      blobCanvas.width = blobCanvas.height = 128
+      const bctx = blobCanvas.getContext('2d')
+      if (bctx) {
+        const g = bctx.createRadialGradient(64, 64, 0, 64, 64, 64)
+        g.addColorStop(0, 'rgba(0,0,0,0.34)')
+        g.addColorStop(0.55, 'rgba(0,0,0,0.14)')
+        g.addColorStop(1, 'rgba(0,0,0,0)')
+        bctx.fillStyle = g
+        bctx.fillRect(0, 0, 128, 128)
+      }
+      const blobTex = new THREE.CanvasTexture(blobCanvas)
+      const blobMat = new THREE.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false })
+      const blobGeo = new THREE.PlaneGeometry(1, 1)
+      const blob = new THREE.Mesh(blobGeo, blobMat)
+      blob.rotation.x = -Math.PI / 2
+      stage.add(floor, blob)
+      stage.visible = false
+      scene.add(stage)
+
+      const box = new THREE.Box3()
+      const union = new THREE.Box3()
+      const size = new THREE.Vector3()
+      const centre = new THREE.Vector3()
+      const pt = new THREE.Vector3()
+      const cam = camera.clone() as THREE.OrthographicCamera | THREE.PerspectiveCamera
+      const aspect = outW / outH
+      if (cam instanceof THREE.OrthographicCamera) {
+        cam.left = cam.bottom * aspect
+        cam.right = cam.top * aspect
+      } else {
+        cam.aspect = aspect
+      }
+      const startTarget = controls.target.clone()
+      const startPos = camera.position.clone()
+      const camAt = (frame: number): void => {
+        if (settings.camera === 'turntable') {
+          const p = orbitPosition(frame / Math.max(1, plan.frames), startPos, startTarget)
+          cam.position.set(p.x, p.y, p.z)
+        }
+        cam.lookAt(startTarget)
+        cam.updateProjectionMatrix()
+        cam.updateMatrixWorld(true)
+      }
+      // FRAME THE WHOLE MOTION: centre on everything the robot sweeps through,
+      // then zoom so it fits the output shape (a tall phone frame included).
+      const samples = still ? 1 : Math.min(plan.frames, 16)
+      const sampleFrame = (i: number): number => (samples <= 1 ? 0 : Math.round((i / (samples - 1)) * (plan.frames - 1)))
+      for (let i = 0; i < samples; i++) {
+        put(job.poseAt(sampleFrame(i)))
+        union.union(box.setFromObject(r))
+      }
+      if (!union.isEmpty()) {
+        union.getCenter(centre)
+        const delta = centre.clone().sub(startTarget)
+        startTarget.add(delta)
+        startPos.add(delta)
+        cam.position.copy(startPos)
+      }
+      let extent = 0
+      for (let i = 0; i < samples; i++) {
+        const f = sampleFrame(i)
+        put(job.poseAt(f))
+        camAt(f)
+        box.setFromObject(r)
+        for (let c = 0; c < 8; c++) {
+          pt.set(c & 1 ? box.max.x : box.min.x, c & 2 ? box.max.y : box.min.y, c & 4 ? box.max.z : box.min.z).project(cam)
+          if (Number.isFinite(pt.x + pt.y)) extent = Math.max(extent, Math.abs(pt.x), Math.abs(pt.y))
+        }
+      }
+      if (extent > 1e-6) cam.zoom = Math.max(0.01, (cam.zoom * 0.88) / extent)
+      // Near/far wide enough for the turntable's whole sweep.
+      union.getSize(size)
+      const radius = Math.max(size.x, size.y, size.z, 0.05)
+      const dist = startPos.distanceTo(startTarget)
+      cam.near = Math.max(0.001, dist - radius * 8)
+      cam.far = dist + radius * 8 + 0.5
+      const floorY = Number.isFinite(union.min.y) ? Math.min(groundYRef.current, union.min.y) : groundYRef.current
+      floor.position.set(centre.x, floorY - 0.0005, centre.z)
+      floor.scale.setScalar(radius * 40)
+
+      const comp = new OffscreenCanvas(outW, outH)
+      const cctx = comp.getContext('2d')
+      const pctx = job.preview?.getContext('2d') ?? null
+      // Draw one frame with the look applied, and put the scene straight back —
+      // all in one go, so the on-screen view never shows the studio.
+      const draw = (frame: number): void => {
+        put(job.poseAt(frame))
+        camAt(frame)
+        const savedBg = scene.background
+        const hidden: THREE.Object3D[] = []
+        if (studio) {
+          for (const c of scene.children) {
+            if (c === r || c === stage || (c as THREE.Light).isLight || !c.visible) continue
+            c.visible = false
+            hidden.push(c)
+          }
+          box.setFromObject(r)
+          box.getSize(size)
+          box.getCenter(pt)
+          blob.position.set(pt.x, floorY, pt.z)
+          blob.scale.set(Math.max(size.x, 0.02) * 1.9, Math.max(size.z, 0.02) * 1.9, 1)
+          stage.visible = true
+          scene.background = bg
+        } else {
+          if (ghostGroup.visible) {
+            ghostGroup.visible = false
+            hidden.push(ghostGroup)
+          }
+        }
+        jointRingApi.setSuppressed(true)
+        jointRingApi.update()
+        try {
+          rr.render(scene, cam)
+        } finally {
+          for (const c of hidden) c.visible = true
+          stage.visible = false
+          scene.background = savedBg
+          jointRingApi.setSuppressed(false)
+        }
+        if (!cctx) return
+        cctx.imageSmoothingEnabled = true
+        cctx.imageSmoothingQuality = 'high'
+        cctx.drawImage(rr.domElement, 0, 0, outW, outH)
+        if (settings.watermark) drawRenderWatermark(cctx, outW, outH, RENDER_WATERMARK, dark)
+        if (pctx && job.preview) {
+          if (job.preview.width !== outW || job.preview.height !== outH) {
+            // The preview canvas takes the frame's shape; CSS scales it to fit.
+            const pk = Math.min(1, 960 / Math.max(outW, outH))
+            job.preview.width = Math.round(outW * pk)
+            job.preview.height = Math.round(outH * pk)
+          }
+          pctx.drawImage(comp, 0, 0, job.preview.width, job.preview.height)
+        }
+      }
+
+      try {
+        if (still) {
+          draw(0)
+          return { blob: null }
+        }
+        for (let i = 0; i < plan.frames; i++) {
+          if (job.signal?.aborted) {
+            sink!.abort()
+            return { blob: null, error: 'cancelled' }
+          }
+          draw(i)
+          await sink!.add(comp, i)
+          job.onProgress?.(i + 1)
+          // Let the page breathe (progress bar, Cancel) between frames.
+          await new Promise((res) => window.setTimeout(res, 0))
+        }
+        const out = await sink!.finish()
+        return out && out.size > 0 ? { blob: out } : { blob: null, error: 'encode-failed' }
+      } catch (e) {
+        sink?.abort()
+        return { blob: null, error: 'encode-failed', detail: String(e) }
+      } finally {
+        put(before)
+        scene.remove(stage)
+        floorGeo.dispose()
+        floorMat.dispose()
+        blobGeo.dispose()
+        blobMat.dispose()
+        blobTex.dispose()
+        rr.dispose()
+        rr.forceContextLoss()
+        renderFrame()
+      }
+    }
+
     const focusLink = (name: string): void => {
       const robot = robotRef.current
       const link = robot?.links[name]
@@ -4082,6 +4358,7 @@ export function RobotView({
       focusLink,
       snapshotPose,
       setGhosts,
+      renderMovie,
       setExplode: applyExplode,
       animateExplode: (f, orbit, onDone) => animateExplode(f, orbit, undefined, onDone),
       recordExplode
@@ -6133,6 +6410,14 @@ export function RobotView({
             hidden (#…) — its tools (add primitive/joint, measure, undo/redo) act on
             the viewport, not the tree. */}
         {showPanel && nextStep && <RobotNextStep step={nextStep} onClose={() => setNextStep(null)} />}
+        {renderClip && (
+          <RobotRenderPanel
+            clip={renderClip}
+            fileBase={robotNameOf(content) || 'robot'}
+            onRender={runRender}
+            onClose={() => setRenderClip(null)}
+          />
+        )}
         {showPanel && (
           <RobotToolbar
             tool={buildTool}
@@ -6428,6 +6713,7 @@ export function RobotView({
                     }
                   }}
                   onConvertKeyframes={handleKeyframesToBlocks}
+                  onRenderMovie={openRenderMovie}
                   onExport={() => {
                     if (bindings.length === 0) {
                       setNextStep({
