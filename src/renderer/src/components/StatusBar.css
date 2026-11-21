@@ -156,6 +156,40 @@
   white-space: nowrap;
 }
 
+/* …and the switcher for which Python the help and completions teach: a button
+ * that looks like the rest of the bar until you point at it. */
+button.statusbar__runtime {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+button.statusbar__runtime:hover,
+button.statusbar__runtime[aria-expanded='true'] {
+  color: var(--text);
+  background: var(--bg-sunken);
+}
+
+button.statusbar__runtime:focus-visible {
+  outline: var(--border-w) solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Hints pinned to a different Python than the board runs: say so in the accent. */
+button.statusbar__runtime.is-mismatch {
+  color: var(--accent-ink);
+}
+
+.statusbar__runtime-caret {
+  font-size: 0.8em;
+  opacity: 0.7;
+}
+
 /* Instrument live-poll warning — the poll interrupts a running program, so this
  * segment is deliberately loud (warning accent) and carries an inline Stop link.
  * Only rendered while live polling is actually interrupting the board. */
