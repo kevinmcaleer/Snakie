@@ -77,6 +77,7 @@ import {
   type Resolved
 } from './micropython-intellisense'
 import { spriteCompletionContext, spriteCompletions } from './sprite-completions'
+import { keywordsAt } from './python-keywords'
 import type { SpriteRefScope } from './sprite-refs'
 
 /** Marker key used to make double-registration idempotent across HMR. */
@@ -526,9 +527,31 @@ export function registerMicropythonCompletions(
       // help is the useful popup; a module list would sit on top of it.
       if (!word.word && callContext(lineToCursor)) return { suggestions: [] }
 
-      // 4) General identifier context — offer module names as importable
-      //    references (merged with Monaco's built-in word suggestions).
-      return { suggestions: moduleItems() }
+      // 4) General identifier context — the Python keywords valid here (Monaco
+      //    has none of its own, so `fro` offered nothing), then module names as
+      //    importable references (merged with Monaco's built-in word suggestions).
+      const before = model.getValueInRange({
+        startLineNumber: Math.max(1, position.lineNumber - 200),
+        startColumn: 1,
+        endLineNumber: position.lineNumber,
+        endColumn: 1
+      })
+      const keywords = keywordsAt(before.split('\n').slice(0, -1), lineToCursor).map(
+        (k): Monaco.languages.CompletionItem => ({
+          label: k.keyword,
+          kind: monaco.languages.CompletionItemKind.Keyword,
+          insertText: k.insert,
+          detail: k.detail,
+          // Ahead of the module list for the same letters.
+          sortText: `0${k.keyword}`,
+          range
+        })
+      )
+      // A single keyword means a spot only it can fill (`from machine |` →
+      // import, `for x |` → in, `import machine |` → as): a module list there
+      // is noise.
+      if (keywords.length === 1) return { suggestions: keywords }
+      return { suggestions: [...keywords, ...moduleItems()] }
     }
   })
 
