@@ -21,6 +21,7 @@ import { useDiscoveredModules } from '../hooks/useDiscoveredModules'
 import { firmwareOnlyNames } from '../../../shared/module-discovery'
 import { enqueueDeviceTask } from '../lib/device-queue'
 import { installStepReporter } from '../lib/install-steps'
+import { useInstallWhenConnected, WAITING_FOR_BOARD_HINT } from '../hooks/useInstallWhenConnected'
 import type { ModuleInstallProgress } from '../../../preload/index.d'
 
 /**
@@ -174,6 +175,15 @@ export function ModulesPanel({
       }))
     }
   }, [])
+  // Never a dead Install: with no board it asks to connect, then installs.
+  const installById = useCallback(
+    (id: string): Promise<void> | void => {
+      const def = catalog.find((d) => d.id === id)
+      if (def) return install(def)
+    },
+    [catalog, install]
+  )
+  const pending = useInstallWhenConnected(connected, installById)
 
   // What the FIRMWARE provides (#1246). A vendor image can bake a catalog
   // module in — an Arduino Alvik ships a frozen `modulino` — and such a module
@@ -210,17 +220,21 @@ export function ModulesPanel({
         <button
           type="button"
           className="mods__key"
-          disabled={!connected || st === 'installing'}
+          disabled={st === 'installing'}
           title={
             connected
               ? st === 'outdated'
                 ? `An older copy of ${def.name} is on the board — update it`
                 : `Install ${def.name}`
-              : 'Connect a board first'
+              : `Connect your board and install ${def.name} as soon as it's ready`
           }
-          onClick={() => void install(def)}
+          onClick={() => pending.request(def.id)}
         >
-          {actionable && !connected ? 'INSTALL' : label}
+          {pending.isWaiting(def.id)
+            ? 'WAITING FOR BOARD…'
+            : actionable && !connected
+              ? 'INSTALL'
+              : label}
         </button>
       )
     return (
@@ -282,8 +296,9 @@ export function ModulesPanel({
 
       {!connected && (
         <p className="mods__hint" role="status">
-          Connect a board to install modules and detect what&rsquo;s already on it. You can still
-          browse the catalog below — for both MicroPython and CircuitPython.
+          {pending.waiting
+            ? WAITING_FOR_BOARD_HINT
+            : 'Browse the catalog below, for both MicroPython and CircuitPython. Press Install and Snakie connects your board, then installs it.'}
         </p>
       )}
 
