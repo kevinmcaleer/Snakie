@@ -1,1 +1,0 @@
-- **Build: one Animate timeline of pose blocks. Add pose (K), drag a gap to retime it, smooth or steady moves, Make walk cycle, onion skin, and Space and arrow keys; keyframes become Joint tracks and Controls becomes Perform.** 

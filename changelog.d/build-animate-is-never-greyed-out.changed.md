@@ -1,1 +1,0 @@
-- **Build: Animate is never greyed out. If nothing can move yet it says why and offers a one-press fix, and the timeline's buttons do the same.** 

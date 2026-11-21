@@ -1,1 +1,0 @@
-- **Pimoroni Tiny 2040, Pico LiPo and Pico 2 W in the flash dialog's Board list.** Naming an rp2 board now pre-selects that board's own micropython.org build (`PIMORONI_TINY2040`, `RPI_PICO_W`, …) instead of only the chip family, and a board found in bootloader mode says to pick it from the list, since an RP2040 bootloader looks the same on every board.

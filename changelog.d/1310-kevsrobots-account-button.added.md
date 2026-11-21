@@ -1,1 +1,0 @@
-- **kevsrobots account button in the toolbar (#1310).** The button at the right of the toolbar shows whether you are signed in with kevsrobots and lets you sign in or out. Signing in is still only needed to send wiring.
