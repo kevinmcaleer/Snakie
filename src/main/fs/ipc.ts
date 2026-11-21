@@ -1,4 +1,4 @@
-import { dialog, ipcMain, BrowserWindow } from 'electron'
+import { dialog, ipcMain, BrowserWindow, shell } from 'electron'
 import { promises as fs } from 'fs'
 import { join } from 'path'
 import type { IpcResult } from '../device/types'
@@ -156,4 +156,13 @@ export function registerFsIpc(getWindow: () => BrowserWindow | undefined): void 
   )
 
   ipcMain.handle('fs:stat', (_e, path: string) => wrap(() => stat(path)))
+
+  // The project switcher's "Show in folder". openPath returns an error string
+  // rather than throwing; surface it so the renderer can say what went wrong.
+  ipcMain.handle('fs:showInFolder', (_e, path: string) =>
+    wrap(async () => {
+      const err = await shell.openPath(path)
+      if (err) throw new Error(err)
+    })
+  )
 }

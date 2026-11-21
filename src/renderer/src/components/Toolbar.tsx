@@ -8,6 +8,7 @@ import { SuiteAccount } from './SuiteBar'
 import { onExportPdf } from './export-bus'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import { KrAppSwitcher } from './KrAppSwitcher'
+import { ProjectSwitcher } from './ProjectSwitcher'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
 import { SNAKIE_MARK_BODY, SNAKIE_MARK_VIEWBOX } from './snakie-mark'
@@ -296,6 +297,10 @@ export function Toolbar(): JSX.Element {
           <span className="toolbar__wordmark">Snakie</span>
           <KrAppSwitcher />
         </div>
+
+        {/* Which project this is, whether it's saved, and New / Open / Recent /
+            Close — on every workspace. */}
+        <ProjectSwitcher />
 
         <div className="toolbar__group">
           <div className="toolbar__seg" role="group" aria-label="File actions">

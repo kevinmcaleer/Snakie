@@ -77,6 +77,7 @@ describe.each([
     expect(sections.find((s) => s.title === 'File')?.shortcuts.map((s) => s.label)).toEqual([
       'New File',
       'Open File…',
+      'New Project…',
       'Open Folder…',
       'Save',
       'Save As…',
