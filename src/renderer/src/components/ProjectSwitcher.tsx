@@ -16,11 +16,14 @@ import {
   type ProjectSummary
 } from '../lib/project-model'
 import { NewProjectDialog, type NewProjectMode } from './NewProjectDialog'
+import { ShareProjectDialog } from './ShareProjectDialog'
 import './ProjectSwitcher.css'
 
 /** Window events the app menu (File ▸ New Project… / Close Project) raises. */
 export const NEW_PROJECT_EVENT = 'snakie:new-project'
 export const CLOSE_PROJECT_EVENT = 'snakie:close-project'
+/** Opens the Share sheet (also raised by Electronics' Export menu). */
+export const SHARE_PROJECT_EVENT = 'snakie:share-project'
 
 type FsExtras = {
   openRecent?: (path: string) => Promise<string | null>
@@ -62,6 +65,7 @@ export function ProjectSwitcher(): JSX.Element {
   const { switchWorkspace } = useWorkspaceLayout()
   const [open, setOpen] = useState(false)
   const [dialog, setDialog] = useState<NewProjectMode | null>(null)
+  const [sharing, setSharing] = useState(false)
   const [summary, setSummary] = useState<ProjectSummary | null>(null)
   const [scratch, setScratch] = useState<RobotDefinition | null>(null)
   const [recent, setRecent] = useState<string[]>([])
@@ -223,11 +227,14 @@ export function ProjectSwitcher(): JSX.Element {
   useEffect(() => {
     const onNew = (): void => setDialog(currentFolder || !unsaved ? 'new' : 'save')
     const onClose = (): void => closeProject()
+    const onShare = (): void => setSharing(true)
     window.addEventListener(NEW_PROJECT_EVENT, onNew)
     window.addEventListener(CLOSE_PROJECT_EVENT, onClose)
+    window.addEventListener(SHARE_PROJECT_EVENT, onShare)
     return () => {
       window.removeEventListener(NEW_PROJECT_EVENT, onNew)
       window.removeEventListener(CLOSE_PROJECT_EVENT, onClose)
+      window.removeEventListener(SHARE_PROJECT_EVENT, onShare)
     }
   }, [currentFolder, unsaved, closeProject])
 
@@ -243,6 +250,20 @@ export function ProjectSwitcher(): JSX.Element {
     : unsaved
       ? 'This work is not saved to a folder yet. Click to save it as a project.'
       : 'Click to start a new project or open one.'
+
+  // Share sits first in a project's menu; with no project, after New and Open.
+  const shareAction = (
+    <Action
+      glyph="⇪"
+      label="Share project…"
+      hint={currentFolder ? 'kevsrobots, BetterCAD, GitHub' : undefined}
+      primary={!!currentFolder}
+      onClick={() => {
+        setOpen(false)
+        setSharing(true)
+      }}
+    />
+  )
 
   return (
     <div className="projsw" ref={rootRef}>
@@ -327,6 +348,7 @@ export function ProjectSwitcher(): JSX.Element {
             </div>
           )}
           {currentFolder && <div className="projsw__sep" />}
+          {currentFolder && shareAction}
           {unsaved && (
             <Action
               glyph="↓"
@@ -348,6 +370,7 @@ export function ProjectSwitcher(): JSX.Element {
             }}
           />
           <Action glyph="↗" label="Open project…" onClick={() => void openProject()} />
+          {!currentFolder && shareAction}
           {unsaved && (
             <Action
               glyph="⟲"
@@ -381,6 +404,15 @@ export function ProjectSwitcher(): JSX.Element {
             </>
           )}
         </div>
+      )}
+
+      {sharing && (
+        <ShareProjectDialog
+          folder={currentFolder}
+          summary={summary}
+          onClose={() => setSharing(false)}
+          onSaveAsProject={() => setDialog(unsaved ? 'save' : 'new')}
+        />
       )}
 
       {dialog && (

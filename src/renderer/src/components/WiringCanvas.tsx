@@ -81,6 +81,7 @@ import { partSignature, mountSignature, signaturesMatch } from '../../../shared/
 import { voltageColour, formatVoltage } from '../../../shared/circuit-probe'
 import { BoardMeter, type BoardMeterReading } from './BoardMeter'
 import { useFloatPlacement } from './InstrumentWindow'
+import { registerShareCapture } from '../lib/share-captures'
 import './WiringCanvas.css'
 
 /** The pin NAME in an endpoint id (`board.3V3#54` → `3V3`, `sensor.VCC#0` → `VCC`). */
@@ -2603,6 +2604,16 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
     const svgStr = await inlineImageHrefs(res.svg)
     return { svg: svgStr, width: res.width, height: res.height, base, clear }
   }
+
+  // The Share sheet's wiring picture (share-captures.ts), from the main canvas
+  // only: the one that offers Send to kevsrobots.
+  const renderExportRef = useRef(renderExport)
+  renderExportRef.current = renderExport
+  const offersSend = !!onSendToKevsrobots
+  useEffect(() => {
+    if (!offersSend) return
+    return registerShareCapture('wiring', async () => (await renderExportRef.current().catch(() => null))?.svg ?? null)
+  }, [offersSend])
 
   // A safe, lower-cased file stem from the project name (shared with image export).
   const fileBase = (): string =>

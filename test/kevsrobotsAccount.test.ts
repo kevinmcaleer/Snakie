@@ -257,6 +257,60 @@ describe('KevsrobotsClient', () => {
     })
   })
 
+  it('makes a draft project for the Share sheet', async () => {
+    const f = fakeFetch(() => ({
+      status: 201,
+      body: { id: 9, title: 'openduck', slug: 'openduck', status: 'draft', editor_url: 'https://www.kevsrobots.com/projects/editor.html?id=9' }
+    }))
+    const client = new KevsrobotsClient(memoryStore(tokens()), f.fn, () => NOW)
+    const res = await client.createProject({ title: 'openduck', repoUrl: 'https://github.com/kev/openduck' })
+    expect(res).toEqual({
+      ok: true,
+      value: {
+        id: 9,
+        title: 'openduck',
+        slug: 'openduck',
+        status: 'draft',
+        hasUnpublishedChanges: false,
+        editorUrl: 'https://www.kevsrobots.com/projects/editor.html?id=9'
+      }
+    })
+    expect(f.calls[0].url).toBe(`${KR_PROJECTS_API}/api/projects/app/new`)
+    expect(JSON.parse(String(f.calls[0].init?.body))).toEqual({ title: 'openduck', code_repo_url: 'https://github.com/kev/openduck' })
+  })
+
+  it('sends the robot model as a form, without a JSON content type', async () => {
+    const f = fakeFetch(() => ({
+      body: {
+        project_id: 9,
+        title: 'openduck',
+        url: null,
+        editor_url: 'https://www.kevsrobots.com/projects/editor.html?id=9',
+        files: [{ filename: 'openduck.urdf' }, { filename: 'body.stl' }],
+        cover: true
+      }
+    }))
+    const client = new KevsrobotsClient(memoryStore(tokens()), f.fn, () => NOW)
+    const res = await client.sendRobot({
+      projectId: 9,
+      files: [
+        { name: 'openduck.urdf', bytes: new TextEncoder().encode('<robot/>') },
+        { name: 'body.stl', bytes: new Uint8Array([1, 2, 3]) }
+      ],
+      cover: { name: 'cover.png', bytes: new Uint8Array([137, 80, 78, 71]) }
+    })
+    expect(res).toMatchObject({ ok: true, value: { projectId: 9, files: ['openduck.urdf', 'body.stl'], cover: true } })
+    expect(f.calls[0].url).toBe(`${KR_PROJECTS_API}/api/projects/9/robot/send`)
+    expect(f.calls[0].init?.method).toBe('PUT')
+    const body = f.calls[0].init?.body as FormData
+    expect(body).toBeInstanceOf(FormData)
+    expect(body.getAll('files').map((x) => (x as File).name)).toEqual(['openduck.urdf', 'body.stl'])
+    expect((body.get('cover') as File).name).toBe('cover.png')
+    const headers = f.calls[0].init?.headers as Record<string, string>
+    expect(headers['Content-Type']).toBeUndefined()
+    expect(headers.Authorization).toMatch(/^Bearer /)
+  })
+
   it('explains the terms gate and other refusals', async () => {
     const terms = fakeFetch(() => ({ status: 403, body: { detail: { detail: 'terms_not_accepted', current_version: '1.0' } } }))
     const c1 = new KevsrobotsClient(memoryStore(tokens()), terms.fn, () => NOW)
