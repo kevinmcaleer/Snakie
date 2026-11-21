@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { EditorTabs } from './EditorTabs'
 import { BLOCKS_VIEW_EVENT, FIND_EVENT, type BlocksViewDetail } from './editorBridge'
 import { ChatIcon } from './ui-icons'
@@ -6,7 +6,8 @@ import { useWorkspace } from '../store/workspace'
 import { defaultBlocksViewMode, useWorkspaceLayout, type BlocksViewMode } from '../store/layout'
 import { isMpyFile } from '../../../shared/mpy-info'
 import { showsBlocksCanvas } from './editor-routing'
-import { DriverInstallBanner } from './DriverInstallBanner'
+import { DriverInstallBanner, type PartsNotice } from './DriverInstallBanner'
+import type { PartDriverNeed } from './part-editor.util'
 import { useProjectDriverNeeds } from './use-project-driver-needs'
 
 export interface EditorAreaProps {
@@ -15,6 +16,9 @@ export interface EditorAreaProps {
   /** Toggle the AI chat pane. Absent (e.g. on the web) ⇒ no Chat button. The
    *  Chat toggle lives here, left of Find, rather than the console header (#…). */
   onToggleChat?: () => void
+  /** The open file's parts check (#166), shown in the Drivers chip rather than as
+   *  a banner above the app. Absent ⇒ nothing to say. */
+  partsNotice?: PartsNotice
 }
 
 // Code-split Monaco: the editor (multi-MB chunk) is only loaded once a file is
@@ -64,7 +68,11 @@ function isRobotFile(name: string | undefined): boolean {
  * placeholder and never fetch the editor chunk; opening a file triggers the
  * dynamic import, with a matching fallback shown while it streams in.
  */
-export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps = {}): JSX.Element {
+export function EditorArea({
+  chatOpen = false,
+  onToggleChat,
+  partsNotice
+}: EditorAreaProps = {}): JSX.Element {
   const { openFiles, activeId, currentFolder } = useWorkspace()
   const layout = useWorkspaceLayout()
   const { setBlocksBoth } = layout
@@ -80,14 +88,24 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
   // Build and seeing the block shelf over the robot (#1066).
   const showBlocks = showsBlocksCanvas(layout.active, activeFile)
   const showCode = hasFiles && !showData && !showRobot && !showMpy && !showBlocks
-  // Part drivers (#184): the Code workspace is where a missing driver bites (the
-  // import fails), so its prompt lives here as a chip beside Find rather than a
-  // banner in Electronics. A chip, not a row: nothing in the editor moves.
-  const driverNeeds = useProjectDriverNeeds(
-    currentFolder ?? undefined,
-    layout.active === 'code' && showCode
-  )
-  const showDriverChip = layout.active === 'code' && showCode && driverNeeds.length > 0
+  // Part drivers (#184) and the parts check (#166): the code is where a missing
+  // driver bites (the import fails), so both live here as ONE chip in the tab
+  // strip, the same for a plain `.py` and a blocks file. A chip, not a banner:
+  // nothing in the editor moves.
+  const codeWorkspace = layout.active === 'code' || layout.active === 'blocks'
+  const chipView = codeWorkspace && (showCode || showBlocks)
+  const projectNeeds = useProjectDriverNeeds(currentFolder ?? undefined, chipView)
+  // Parts a blocks program USES (#1017) — reported by the split, which used to
+  // show its own banner for them. Merged with the project's placed parts.
+  const [blocksNeeds, setBlocksNeeds] = useState<PartDriverNeed[]>([])
+  const driverNeeds = useMemo(() => {
+    if (!showBlocks || blocksNeeds.length === 0) return projectNeeds
+    const keys = new Set(projectNeeds.map((n) => n.key))
+    return [...projectNeeds, ...blocksNeeds.filter((n) => !keys.has(n.key))]
+  }, [projectNeeds, blocksNeeds, showBlocks])
+  const hasPartsNotice =
+    !!partsNotice && (partsNotice.missingImports.length > 0 || partsNotice.missingOnBoard.length > 0)
+  const showDriverChip = chipView && (driverNeeds.length > 0 || hasPartsNotice)
 
   // The blocks emphasis is PER FILE, seeded from the workspace default (epic
   // #1007 §8 Q5): Blocks opens blocks-primary, Code opens Python-primary, and a
@@ -193,12 +211,13 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
     >
       <div className="editor-header">
         <EditorTabs />
-        {(onToggleChat || showCode) && (
+        {(onToggleChat || showCode || showDriverChip) && (
           <div className="editor-header__actions">
             {showDriverChip && (
               <DriverInstallBanner
                 needs={driverNeeds}
                 layout="chip"
+                parts={partsNotice}
                 onShowParts={() => layout.switchWorkspace('board')}
               />
             )}
@@ -256,7 +275,7 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
           </Suspense>
         ) : showBlocks ? (
           <Suspense fallback={<EditorPlaceholder text="Loading blocks…" />}>
-            <BlocksSplit mode={blocksMode} onModeChange={setBlocksMode} />
+            <BlocksSplit mode={blocksMode} onModeChange={setBlocksMode} onDriverNeeds={setBlocksNeeds} />
           </Suspense>
         ) : showMpy ? (
           <Suspense fallback={<EditorPlaceholder text="Loading bytecode view…" />}>
