@@ -556,6 +556,38 @@ function bodyPoint(s: Subject, nx: number, ny: number): { x: number; y: number }
   return { x: s.x + r.x, y: s.y + r.y }
 }
 
+/**
+ * The rectangle the selection ring is drawn round, in canvas coords.
+ *
+ * A life-like body's `hit` region is deliberately generous (it adds a 20-unit
+ * title band above the body so the title is grabbable too), and the body box
+ * itself is the part's full PCB outline. When the part's artwork only covers
+ * part of that outline (`imageLayer`), the PCB behind it is hidden by the
+ * picture, so a ring round the box reads as floating in empty space. Ring the
+ * picture instead: map the image layer's corners through {@link bodyPoint} so
+ * scale and rotation are honoured. Schematic symbols keep their hit box.
+ */
+function selectionRect(s: Subject): { x: number; y: number; w: number; h: number } {
+  if (s.mode !== 'lifelike' || !s.box) return s.hit
+  const clamp = (v: number): number => Math.max(0, Math.min(1, v))
+  const lay = s.partDef?.imageData ? s.partDef.imageLayer : undefined
+  const x0 = clamp(lay?.x ?? 0)
+  const y0 = clamp(lay?.y ?? 0)
+  const x1 = clamp(lay ? lay.x + lay.w : 1)
+  const y1 = clamp(lay ? lay.y + lay.h : 1)
+  const a = bodyPoint(s, x0, y0)
+  const b = bodyPoint(s, x1, y1)
+  if (!a || !b || x1 <= x0 || y1 <= y0) return s.hit
+  // A hair of breathing room so the dashes sit just outside the picture's edge.
+  const PAD = 3
+  return {
+    x: Math.min(a.x, b.x) - PAD,
+    y: Math.min(a.y, b.y) - PAD,
+    w: Math.abs(b.x - a.x) + PAD * 2,
+    h: Math.abs(b.y - a.y) + PAD * 2
+  }
+}
+
 function boardPinNet(type: string | undefined): RobotNet {
   if (type === 'vcc') return 'vcc'
   if (type === 'gnd') return 'gnd'
@@ -2952,6 +2984,9 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
   // whole QWIIC cable — every wire sharing that id highlights + goes together.
   const selectedCable = selectedWire ? (robot.connections.find((c) => c.id === selectedWire)?.cable ?? null) : null
   const selPart = selSubject?.kind === 'part' ? selSubject : undefined
+  // The ring hugs what the learner can SEE (the board's picture), not the drag
+  // hit region — that carries a title band above the body.
+  const selRing = selSubject?.hit ? selectionRect(selSubject) : null
   // Servo → joint binding (#): if the selected part is a servo, which board GPIO its
   // signal is wired to and the URDF joint it currently drives (via robot.yml's map).
   const selIsServo = !!selPart && isServoPart(selPart.partDef)
@@ -3587,13 +3622,13 @@ export function WiringCanvas({ robot, onChange, history, folder, joints = [], jo
 
             {/* Selection ring around the selected subject (#176) — the MCU as well
                 as a part (#648), so the canvas agrees with the browser highlight. */}
-            {selSubject?.hit && (
+            {selRing && (
               <rect
                 className="wc__sel-ring"
-                x={selSubject.hit.x}
-                y={selSubject.hit.y}
-                width={selSubject.hit.w}
-                height={selSubject.hit.h}
+                x={selRing.x}
+                y={selRing.y}
+                width={selRing.w}
+                height={selRing.h}
                 rx={6}
               />
             )}
