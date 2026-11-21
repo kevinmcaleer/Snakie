@@ -1785,6 +1785,15 @@ body {
   overflow-y: auto;
 }
 
+/* Monaco also caps the CONTENTS at max(a quarter of the editor, 250px), inline.
+ * The function card (signature, docstring, parameters, usages, hints) is taller
+ * than that, and 250px hid the usages and hints behind a scroll. Let it grow to
+ * the same 60vh; Monaco still flips it above/below the line to fit and still
+ * scrolls past that. */
+.editor-host .monaco-editor .monaco-hover .monaco-hover-content {
+  max-height: 60vh !important;
+}
+
 /* The hover help used the editor's own widget colour, so on the paper themes it
  * read as more code rather than a popup over the code. Invert it: a dark card
  * over the light editors and a light card over the dark ones. A literal colour
