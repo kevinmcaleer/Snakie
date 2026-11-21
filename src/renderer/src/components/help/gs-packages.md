@@ -30,6 +30,7 @@ Expand **Advanced options** to install from a **custom index URL** or a
 
 ## Parts install their own drivers
 
-When a part on the Board View needs a driver (e.g. the VL53L0X), Snakie offers
-to install it for you — see the banner that appears above the editor. Bundled
+When a part in your project needs a driver (e.g. the VL53L0X), Snakie offers
+to install it for you: tap the amber **Drivers** chip beside Find in the Code
+workspace, then **Install drivers**. Bundled
 drivers copy to `/lib`; registry ones install via mip, exactly as above.
