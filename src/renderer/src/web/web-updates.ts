@@ -37,6 +37,21 @@
  * unsaved: that is a fresh visit that was answered from the old precache, the
  * case #971 was actually about, and there the reload just happens — open the
  * site, get the current build, no prompt.
+ *
+ * RELOAD ONLY ONCE THE NEW WORKER HAS TAKEN OVER. A new worker reaches
+ * `installed` and then, with `skipWaiting`, replaces the old one a moment
+ * later. Reloading in between (which is what this module used to do, the instant
+ * it saw `installed`) sends the navigation to the OLD worker just as it is being
+ * shut down: the request is cut off ("Failed to fetch" from workbox in sw.js),
+ * the new page never arrives, and the tab sits there frozen. Every deploy could
+ * do that to a tab opened in the 30 seconds before it, and on 2026-11-21, with
+ * four deploys in an hour, it did. So the reload waits for `controllerchange`:
+ * the new worker active and in charge of this page.
+ *
+ * And if no new worker ever takes over (its ~47 MB precache is all or nothing,
+ * so one dropped request fails the install), a plain reload would be answered
+ * by the old worker with the old build. Then the reload first unregisters it,
+ * which is what a hard reload does by hand.
  */
 import type { UpdateStatus } from '../../../preload/index.d'
 import { hasUnsavedWork, saveWorkForReload } from '../lib/unsaved-work'
@@ -73,6 +88,35 @@ export interface VersionStamp {
 }
 
 type Listener = (status: UpdateStatus) => void
+
+/** How long a reload waits for a new worker that is still installing or activating. */
+export const TAKEOVER_WAIT_MS = 15 * 1000
+
+/**
+ * How to reload into a new build (pure).
+ *  - `reload`: no worker, or a new one took over this page and none is behind
+ *    it, so the reload is answered by the right build.
+ *  - `wait`: a new worker is on its way (installing, waiting or activating).
+ *    Reloading now hands the navigation to the old worker as it shuts down, and
+ *    the tab freezes; wait for it to take over. Checked first, because a later
+ *    deploy can be on its way even after an earlier one took over.
+ *  - `bypass`: no new worker is coming (its install failed). The old worker
+ *    would serve the old build again, so unregister it first.
+ */
+export function reloadPlan(state: {
+  registered: boolean
+  tookOver: boolean
+  newWorkerPending: boolean
+}): 'reload' | 'wait' | 'bypass' {
+  if (!state.registered) return 'reload'
+  if (state.newWorkerPending) return 'wait'
+  return state.tookOver ? 'reload' : 'bypass'
+}
+
+/** Whether a registration has a newer worker on its way in. */
+function hasPendingWorker(reg: ServiceWorkerRegistration): boolean {
+  return !!(reg.installing || reg.waiting || reg.active?.state === 'activating')
+}
 
 /**
  * Compare the running build against a deployed one. A pure string compare, not a
@@ -126,12 +170,35 @@ export function createWebUpdatesApi(runningVersion: string): {
   let applied = false
   /** Don't nag: once announced, later signals about the same build are quiet. */
   let announced = false
+  /** A new worker activated and claimed this page, so a reload lands on its precache. */
+  let tookOver = false
 
   const emit = (status: UpdateStatus): void => {
     for (const l of listeners) l(status)
   }
 
-  const apply = (): void => {
+  /**
+   * Resolves when the worker on its way is done (in charge, or failed), or
+   * after `ms`. Its own `statechange` covers the case where it already claimed
+   * this page and is only finishing activation.
+   */
+  const waitForTakeover = (reg: ServiceWorkerRegistration, ms: number): Promise<void> =>
+    new Promise((resolve) => {
+      const worker =
+        reg.installing ?? reg.waiting ?? (reg.active?.state === 'activating' ? reg.active : null)
+      const done = (): void => {
+        window.clearTimeout(timer)
+        worker?.removeEventListener('statechange', onState)
+        resolve()
+      }
+      const onState = (): void => {
+        if (worker && (worker.state === 'activated' || worker.state === 'redundant')) done()
+      }
+      const timer = window.setTimeout(done, ms)
+      worker?.addEventListener('statechange', onState)
+    })
+
+  const apply = async (): Promise<void> => {
     if (applied) return
     applied = true
     // Keep the open tabs (and any unsaved edits) for the next boot. The explicit
@@ -140,7 +207,24 @@ export function createWebUpdatesApi(runningVersion: string): {
     saveWorkForReload()
     // A normal reload revalidates the top-level document, and the newly
     // activated worker answers it from the NEW precache. No cache-busting query
-    // is needed, and adding one would leave a junk URL in the address bar.
+    // is needed, and adding one would leave a junk URL in the address bar. But
+    // only once that worker is in charge (see the note at the top).
+    const reg = registration
+    const plan = (): ReturnType<typeof reloadPlan> =>
+      reloadPlan({
+        registered: !!reg,
+        tookOver,
+        newWorkerPending: !!reg && hasPendingWorker(reg)
+      })
+    if (reg && plan() === 'wait') await waitForTakeover(reg, TAKEOVER_WAIT_MS)
+    if (reg && plan() !== 'reload') {
+      // Never took over (failed install, or stuck): go around the old worker.
+      try {
+        await reg.unregister()
+      } catch {
+        /* the reload still happens; at worst it lands on the old build */
+      }
+    }
     window.location.reload()
   }
 
@@ -148,7 +232,7 @@ export function createWebUpdatesApi(runningVersion: string): {
   const onNewBuild = (version?: string): void => {
     if (applied) return
     if (shouldApplyQuietly(performance.now(), hasUnsavedWork())) {
-      apply()
+      void apply()
       return
     }
     if (announced) return
@@ -165,8 +249,18 @@ export function createWebUpdatesApi(runningVersion: string): {
       // `controller` is null on the very FIRST install, when there is no older
       // build to replace — that is a new visitor, not an update, and reloading
       // them would be a gratuitous flash.
-      if (worker.state === 'installed' && navigator.serviceWorker.controller) {
-        void fetchDeployedVersion().then(onNewBuild)
+      //
+      // NOT at `installed`: the worker still has to replace the old one, and a
+      // reload in that gap freezes the tab. `controllerchange` (in `start`) is
+      // the signal that it has.
+      //
+      // `redundant` without taking over means the install FAILED (one precache
+      // request dropped). The old worker stays in charge; if the server has
+      // moved on, offer the reload anyway, and `apply` goes around the old one.
+      if (worker.state === 'redundant' && navigator.serviceWorker.controller && !tookOver) {
+        void fetchDeployedVersion().then((deployed) => {
+          if (isDifferentBuild(runningVersion, deployed)) onNewBuild(deployed)
+        })
       }
     })
   }
@@ -179,6 +273,9 @@ export function createWebUpdatesApi(runningVersion: string): {
     } catch {
       // A failed update check is a network problem, not ours to report.
     }
+    // A new worker on its way reports back itself (controllerchange, or
+    // redundant if it failed); reloading now would only cut it short.
+    if (registration && hasPendingWorker(registration)) return
     const deployed = await fetchDeployedVersion()
     if (isDifferentBuild(runningVersion, deployed)) onNewBuild(deployed)
   }
@@ -190,6 +287,14 @@ export function createWebUpdatesApi(runningVersion: string): {
       window.setInterval(() => void poll(), POLL_INTERVAL_MS)
       return
     }
+    // A page that started under a worker and now has a new one: the update has
+    // landed and a reload will be answered by it. (A first visit also sees a
+    // controllerchange, when its first worker claims it; that is not an update.)
+    const startedControlled = !!navigator.serviceWorker.controller
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      tookOver = true
+      if (startedControlled) void fetchDeployedVersion().then(onNewBuild)
+    })
     void navigator.serviceWorker
       .register(SW_URL, { scope: SW_SCOPE })
       .then((reg) => {
@@ -225,7 +330,7 @@ export function createWebUpdatesApi(runningVersion: string): {
     },
     quitAndInstall: async (): Promise<void> => {
       applied = false // an explicit request always applies
-      apply()
+      await apply()
     },
     onStatus: (cb: Listener): (() => void) => {
       listeners.add(cb)
