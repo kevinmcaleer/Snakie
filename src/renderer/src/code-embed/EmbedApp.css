@@ -672,3 +672,10 @@
   font-family: var(--font-ui);
   font-size: 10px;
 }
+
+/* Snakie Flat: one flat screen for the REPL. xterm names its own element
+ * `terminal` too, so the skin's .terminal padding would frame it twice. */
+:root .snk-embed .snk-embed__terminal .xterm {
+  padding: 0;
+  box-shadow: none;
+}
