@@ -33,6 +33,9 @@ import type { FirmwareCatalog, UpdateStatus } from '../../../preload/index.d'
 import { BulbIcon } from './ui-icons'
 import { SyncIndicator } from './SyncIndicator'
 import { applyUpdateKeepingWork } from '../lib/unsaved-work'
+import { useHelpDialect } from '../hooks/useHelpDialect'
+import { ContextMenu, type ContextMenuPosition } from './ContextMenu'
+import { RUNTIME_CHOICES, runtimeSwitcherView } from './runtime-switcher'
 import './StatusBar.css'
 
 /**
@@ -201,6 +204,11 @@ export function StatusBar({
   // renders nothing rather than guessing MicroPython, which is exactly the
   // assumption the CircuitPython epic (#209) exists to remove.
   const runtime = connected ? runtimeLabel(status.runtime ?? null) : ''
+  // The runtime item doubles as the help/completions switcher — the same
+  // setting as the Help panel's pills (see runtime-switcher.ts).
+  const helpDialect = useHelpDialect()
+  const runtimeView = runtimeSwitcherView(helpDialect.preference, helpDialect.boardDialect, runtime)
+  const [runtimeMenu, setRuntimeMenu] = useState<ContextMenuPosition | null>(null)
   /**
    * Which Python the flash dialog should OPEN on (#756). The connected board's
    * own dialect when it said, MicroPython otherwise — the dialog's own selector
@@ -422,17 +430,39 @@ export function StatusBar({
           </span>
         )}
 
-        {runtime && !build && (
-          <span
-            className="statusbar__item statusbar__runtime"
+        {!build && (
+          <button
+            type="button"
+            className={`statusbar__item statusbar__runtime${runtimeView.mismatch ? ' is-mismatch' : ''}`}
             title={
-              status.runtime?.machine
-                ? `${runtime} — ${status.runtime.machine}`
-                : `The board is running ${runtime}`
+              status.runtime?.machine && helpDialect.preference === 'auto'
+                ? `${runtime} — ${status.runtime.machine}. ${runtimeView.title}`
+                : runtimeView.title
             }
+            aria-haspopup="menu"
+            aria-expanded={runtimeMenu !== null}
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect()
+              // Open upwards from the bar; ContextMenu clamps it into the window.
+              setRuntimeMenu(runtimeMenu ? null : { x: r.left, y: r.top - 12 - 3 * 36 })
+            }}
           >
-            {runtime}
-          </span>
+            {runtimeView.label}
+            <span className="statusbar__runtime-caret" aria-hidden="true">
+              ▾
+            </span>
+          </button>
+        )}
+        {runtimeMenu && (
+          <ContextMenu
+            position={runtimeMenu}
+            onClose={() => setRuntimeMenu(null)}
+            items={RUNTIME_CHOICES.map((c) => ({
+              key: c.pref,
+              label: `${helpDialect.preference === c.pref ? '✓ ' : '\u2003'}${c.label}`,
+              onSelect: () => helpDialect.setPreference(c.pref)
+            }))}
+          />
         )}
 
         {showLiveWarning && !build && (
