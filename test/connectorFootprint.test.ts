@@ -221,6 +221,15 @@ describe('board socket colours', () => {
     expect(connectorStyle('jst', 'sh')).toEqual(connectorStyle('qwiic'))
   })
 
+  it('a JST XH header is natural white, like the bus-servo ports it draws', () => {
+    // JST's XH datasheet: "PA66, natural". The STS3215 and its adapter use the
+    // same-pitch Molex 5264, also white, so a dark block read as the wrong part.
+    const x = connectorStyle('jst', 'xh')
+    expect(lum(x.shell)).toBeGreaterThan(180)
+    expect(lum(x.edge)).toBeLessThan(lum(x.shell))
+    expect(x.male).toBe(false)
+  })
+
   it('other JST families keep the dark shell — their colours are unverified', () => {
     expect(lum(connectorStyle('jst', 'ph').shell)).toBeLessThan(80)
     expect(lum(connectorStyle('jst').shell)).toBeLessThan(80) // default family
