@@ -4,6 +4,7 @@ import { DeviceQueueDialog } from './components/DeviceQueueDialog'
 import { PromptProvider } from './components/PromptModal'
 import { RefactorPreview } from './components/RefactorPreview'
 import { UpdateNotifier } from './components/UpdateNotifier'
+import { WhatsNewHost } from './whatsnew/WhatsNewHost'
 import { WorkspaceProvider } from './store/workspace'
 import { DiagnosticsProvider } from './store/diagnostics'
 import { SettingsProvider } from './store/settings'
@@ -34,6 +35,9 @@ function App(): JSX.Element {
                     <TutorialsProvider>
                       <AppShell />
                       <UpdateNotifier />
+                      {/* What's new: a card naming the new features once after
+                        an update, and the full list from Help. */}
+                      <WhatsNewHost />
                       {/* The board-is-busy modal (#837): renders nothing until
                         a device file operation is queued. */}
                       <DeviceQueueDialog />

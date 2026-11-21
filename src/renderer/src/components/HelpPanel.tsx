@@ -21,6 +21,7 @@ import { subscribeActiveEditor } from './editorBridge'
 import { PARTS_CHANGED_EVENT } from './PartsPanel'
 import { useWorkspace } from '../store/workspace'
 import type { PartLibraryWithParts } from '../../../preload/index.d'
+import { openWhatsNew } from '../whatsnew/useWhatsNew'
 import './HelpPanel.css'
 
 /** The full online documentation, opened in the browser from the Help panel. */
@@ -380,6 +381,9 @@ export function HelpPanel({ target }: { target?: { id: string; nonce: number } }
       </div>
       <button type="button" className="help__docs" onClick={openDocs} title={DOCS_URL}>
         <TomeIcon size={13} /> Full documentation at docs.snakie.org ↗
+      </button>
+      <button type="button" className="help__docs help__whatsnew" onClick={openWhatsNew}>
+        ★ What&rsquo;s new in Snakie
       </button>
       {appVersion && (
         <div className="help__version" title="App version">

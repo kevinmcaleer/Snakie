@@ -341,6 +341,9 @@ export function appMenuTemplate(o: MenuTemplateOptions): MenuItemConstructorOpti
         // panels that use it. On macOS the Help menu held nothing of Snakie's at
         // all (#918).
         commandItem('help.snakieHelp', 'Snakie Help', o),
+        // The release notes, newest first (modelled on BetterCAD's). After an
+        // update a card names the new features once; this opens the list again.
+        commandItem('help.whatsNew', "What's New", o),
         shortcutsItem
       ]
     }

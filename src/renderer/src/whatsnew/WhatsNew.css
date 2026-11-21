@@ -1,0 +1,218 @@
+/*
+ * What's new (modelled on BetterCAD's): the card after an update and the full
+ * list. Snakie Flat: solid fills, 1px --shellbd hairlines, 8px card radius, and
+ * a shadow only because both float. Amber marks what is New.
+ */
+
+/* ---- The card: bottom right, above the status bar. ---- */
+.whatsnew-card {
+  position: fixed;
+  right: 16px;
+  bottom: 40px; /* clear of the 24px status bar */
+  z-index: 990; /* under the update toast (1000), which matters more */
+  width: min(300px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 10px 14px 14px;
+  color: var(--head);
+  background: var(--panel);
+  border: 1px solid var(--shellbd);
+  border-radius: 8px;
+  box-shadow: var(--fl-float-shadow);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.whatsnew-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.whatsnew-card__head strong {
+  font-size: 14px;
+}
+
+.whatsnew-card__dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-right: -8px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--txt2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.whatsnew-card__dismiss:hover {
+  background: var(--panel2);
+  color: var(--head);
+}
+
+.whatsnew-card ul {
+  margin: 6px 0 12px;
+  padding-left: 1.2em;
+  list-style: disc outside;
+  color: var(--txt2);
+}
+
+.whatsnew-card li + li {
+  margin-top: 2px;
+}
+
+.whatsnew-card__open {
+  width: 100%;
+  min-height: 32px;
+}
+
+/* ---- The full list. ---- */
+.whatsnew-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.whatsnew-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(520px, 100%);
+  max-height: min(80vh, 680px);
+  box-sizing: border-box;
+  color: var(--head);
+  background: var(--panel);
+  border: 1px solid var(--shellbd);
+  border-radius: 8px;
+  box-shadow: var(--fl-float-shadow);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.whatsnew-dialog__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px 10px 18px;
+  border-bottom: 1px solid var(--shellbd);
+}
+
+.whatsnew-dialog__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.whatsnew-dialog__star {
+  color: var(--goldink);
+  font-size: 15px;
+}
+
+.whatsnew-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 18px 18px;
+}
+
+.whatsnew-dialog__body section + section {
+  margin-top: 20px;
+}
+
+.whatsnew-day {
+  position: sticky;
+  top: 0;
+  margin: 0;
+  padding: 12px 0 4px;
+  background: var(--panel);
+  color: var(--txt2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--shellbd);
+}
+
+.whatsnew-note h4 {
+  margin: 14px 0 4px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.whatsnew-note p,
+.whatsnew-note ul {
+  margin: 0 0 6px;
+  color: var(--txt2);
+}
+
+.whatsnew-note ul {
+  padding-left: 1.25em;
+  list-style: disc outside;
+}
+
+.whatsnew-note code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  padding: 0 4px;
+  background: var(--panel2);
+  border-radius: 4px;
+}
+
+.whatsnew-note strong {
+  color: var(--head);
+}
+
+.whatsnew-new {
+  margin-left: 8px;
+  padding: 1px 6px;
+  color: var(--goldink);
+  background: var(--goldbg);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+/* ---- Phones: the card spans the screen, the list is a sheet from the bottom. ---- */
+@media (max-width: 600px) {
+  .whatsnew-card {
+    left: 16px;
+    right: 16px;
+    width: auto;
+    bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .whatsnew-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .whatsnew-dialog {
+    width: 100%;
+    max-height: calc(100dvh - 48px);
+    border-radius: 12px 12px 0 0;
+    border-bottom: none;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .whatsnew-dialog__close {
+    min-height: 40px;
+  }
+}

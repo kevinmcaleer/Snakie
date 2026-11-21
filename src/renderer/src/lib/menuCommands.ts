@@ -100,6 +100,8 @@ export interface MenuCommandDeps {
 
   /** Open the Help panel (#918). */
   showHelp: () => void
+  /** Open the What's new list (the release notes). */
+  showWhatsNew: () => void
   /** Export the whole project as a PDF (#1114). Reaches the TOOLBAR's print
    *  button, which owns the busy state and the error surface — a second
    *  implementation here would drift from the one the button runs. */
@@ -147,6 +149,7 @@ export function menuCommandHandlers(
     'tools.find': () => deps.openFind(),
     'tools.settings': () => deps.openSettings(),
     'help.snakieHelp': () => deps.showHelp(),
+    'help.whatsNew': () => deps.showWhatsNew(),
     'help.shortcuts': () => deps.showShortcuts()
   } as Record<RendererMenuCommand, () => void>
   // Derived from the slot list, like the workspaces below: the submenu's ids are
