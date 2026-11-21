@@ -65,6 +65,7 @@ function deps(): {
     softReset: () => rec.fired.push('softReset'),
     syncNow: () => rec.fired.push('syncNow'),
     showHelp: () => rec.fired.push('showHelp'),
+    showWhatsNew: () => rec.fired.push('showWhatsNew'),
     openFlasher: () => rec.fired.push('openFlasher'),
     openBoardFinder: () => rec.fired.push('openBoardFinder'),
     openPartsCatalog: () => rec.fired.push('openPartsCatalog'),
@@ -121,6 +122,12 @@ describe('menu command union ↔ renderer dispatcher (#914)', () => {
     const rec = deps()
     menuCommandHandlers(rec.d)['help.shortcuts']()
     expect(rec.sheets).toBe(1)
+  })
+
+  it("help.whatsNew opens the What's new list", () => {
+    const rec = deps()
+    menuCommandHandlers(rec.d)['help.whatsNew']()
+    expect(rec.fired).toEqual(['showWhatsNew'])
   })
 
   it('runMenuCommand dispatches a known id and drops anything else', () => {

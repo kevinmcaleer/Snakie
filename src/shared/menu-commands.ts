@@ -88,6 +88,7 @@ export type RendererMenuCommand =
   | 'tools.settings'
   | 'help.shortcuts'
   | 'help.snakieHelp'
+  | 'help.whatsNew'
   | WorkspaceMenuCommand
   | RecentFolderMenuCommand
 
@@ -118,6 +119,7 @@ export const RENDERER_MENU_COMMANDS: readonly RendererMenuCommand[] = [
   'tools.settings',
   ...WORKSPACE_IDS.map(workspaceMenuCommand),
   'help.snakieHelp',
+  'help.whatsNew',
   'help.shortcuts'
 ]
 

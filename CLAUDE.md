@@ -62,6 +62,15 @@ One file per change, so branches never touch the same lines. CI asks any PR
 touching shipping code for a fragment unless it is labelled `no changelog`.
 Details in `changelog.d/README.md`.
 
+**What's new notes:** every PR people would notice also adds a plain-language
+note for the in-app What's new card and list (modelled on BetterCAD's):
+`src/renderer/src/whatsnew/notes/YYYY-MM-DD-short-name.md` (the merge day), a
+`# Feature name` line in sentence case, then a sentence or two (or a short `- `
+list, after a blank line) saying what someone can now do and where. No issue
+numbers or code-level detail: that goes in the changelog fragment. The web app
+ships on every merge, so notes are keyed by file name, not version, and stay in
+the bundle. `test/whatsNew.test.ts*` checks the format.
+
 **Cutting a release:**
 1. `npm run changelog -- release X.Y.Z` — folds the `changelog.d/` fragments
    and anything still in `[Unreleased]` into a new dated `[X.Y.Z]` section,

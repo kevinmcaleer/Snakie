@@ -65,6 +65,7 @@ import { BoardFinder } from './BoardFinder'
 import { readRecentFolders } from '../store/workspace'
 import { menuStateFrom } from '../../../shared/menu-commands'
 import { ShortcutSheet } from './ShortcutSheet'
+import { openWhatsNew } from '../whatsnew/useWhatsNew'
 import { IS_WEB } from '../lib/env'
 import { StatusBar } from './StatusBar'
 import { SettingsDialog, type SettingsTab } from './SettingsDialog'
@@ -1624,6 +1625,7 @@ export function AppShell(): JSX.Element {
             .current()
             .catch(reporter('sync now', { notify: "Couldn't sync to the board." })),
         showHelp: () => dispatchOpenHelp(''),
+        showWhatsNew: openWhatsNew,
         // --- Tools (#917) ---------------------------------------------------
         // The first two are the status bar's; the rest already answer to an
         // event, which is the one-line case this dispatcher was built for.
