@@ -17,7 +17,12 @@
 import { WorkerMicroPythonRuntime } from './worker-runtime'
 import { scratchBlock } from '../../../shared/device-scratch'
 import { VIRTUAL_PORT_PATH, VIRTUAL_PORT_LABEL } from '../../../shared/virtual-device'
-import { isProbeCode, simulateProbeResponse, simulatedTelemetryFrame } from '../../../shared/simulation'
+import {
+  DemoTelemetryGate,
+  isProbeCode,
+  simulateProbeResponse,
+  simulatedTelemetryFrame
+} from '../../../shared/simulation'
 import { clampSimHeapBytes, SIM_HEAP_DEFAULT_BYTES } from '../../../shared/sim-memory'
 import type { RuntimeInfo } from '../../../shared/dialect'
 
@@ -89,10 +94,17 @@ export function createWebDeviceApi(): Record<string, unknown> {
   let bootedHeapBytes: number | null = null
 
   const emitData = (chunk: Uint8Array): void => dataSubs.forEach((cb) => cb(chunk))
+  // The running program's own telemetry replaces the demo's (see the gate).
+  const demoGate = new DemoTelemetryGate()
+  const outDecoder = new TextDecoder()
+  const emitProgramData = (chunk: Uint8Array): void => {
+    demoGate.note(outDecoder.decode(chunk, { stream: true }))
+    emitData(chunk)
+  }
 
   const emitTelemetryFrame = (): void => {
     if (state !== 'connected') return
-    const frame = simulatedTelemetryFrame(tick++)
+    const frame = demoGate.filter(simulatedTelemetryFrame(tick++))
     if (frame.length > 0) emitData(enc.encode(frame.join('\r\n') + '\r\n'))
   }
   const startTelemetry = (): void => {
@@ -127,7 +139,7 @@ export function createWebDeviceApi(): Record<string, unknown> {
       setState('connecting')
       runtime = new WorkerMicroPythonRuntime()
       try {
-        await runtime.init(emitData, heapBytes)
+        await runtime.init(emitProgramData, heapBytes)
         bootedHeapBytes = heapBytes
       } catch (err) {
         // No interpreter came up, so no heap was chosen — don't claim one.
@@ -151,6 +163,7 @@ export function createWebDeviceApi(): Record<string, unknown> {
 
     disconnect: async () => {
       stopTelemetry()
+      demoGate.end()
       bootedHeapBytes = null
       runtime?.dispose()
       runtime = null
@@ -175,13 +188,20 @@ export function createWebDeviceApi(): Record<string, unknown> {
     runProgram: async (code: string) => {
       // Run the whole program with output streaming, no REPL echo / paste framing
       // (#612) — the sim executes it directly on the interpreter.
-      if (runtime) await runtime.runStream(code)
+      if (!runtime) return
+      demoGate.begin(code)
+      try {
+        await runtime.runStream(code)
+      } finally {
+        demoGate.end()
+      }
     },
 
     sendControl: async () => undefined, // no telemetry consumer on the sim yet (#464)
 
     interrupt: async () => {
       // Ctrl-C when idle; reboot the worker to stop a running (maybe no-yield) loop.
+      demoGate.end()
       if (runtime) await runtime.interrupt()
     },
 

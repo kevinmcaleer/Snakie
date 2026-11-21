@@ -32,6 +32,7 @@
  */
 
 import { parsePins, type PinType } from './parse-pins'
+import { instrumentsHelperCalls } from '../../../shared/simulation'
 
 /** The in/out classification an instrument belongs to (drives the header group). */
 export type InstrumentGroup = 'input' | 'output' | 'both'
@@ -780,4 +781,32 @@ export function normaliseVisibility(
     out[id] = typeof p[id] === 'boolean' ? (p[id] as boolean) : (defaults[id] ?? false)
   }
   return out
+}
+
+/** Helpers that feed an instrument but have no block of their own. */
+const HELPER_INSTRUMENT: Record<string, string> = {
+  read_adc: 'meter',
+  read_pwm: 'scope',
+  imu_quat: 'imu',
+  i2c_scan: 'i2c-detect',
+  screen_fb: 'i2c-display'
+}
+
+/**
+ * The instruments a program DRAWS ON, from its `instruments` calls: `plot` →
+ * Plotter, `meter`/`read_adc` → Multimeter, and so on. Narrower than
+ * {@link deriveInUse} (whose substring hints light an instrument for a file
+ * that merely mentions `scan`), because this one is used to OPEN instruments
+ * unasked — when a lesson's "Open in Snakie" link arrives, the learner should
+ * find the Plotter already showing. `inst.start(…)` is left out: it serves
+ * several instruments and says nothing about which to show. Registry order.
+ */
+export function instrumentsForProgram(code: string): string[] {
+  const calls = instrumentsHelperCalls(code)
+  if (calls.size === 0) return []
+  return INSTRUMENTS.filter(
+    (d) =>
+      d.blocks?.some((b) => b.fn !== 'start' && calls.has(b.fn)) ||
+      Object.entries(HELPER_INSTRUMENT).some(([fn, id]) => id === d.id && calls.has(fn))
+  ).map((d) => d.id)
 }

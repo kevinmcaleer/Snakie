@@ -4,6 +4,7 @@ import { parseLine } from './Plotter.parse'
 import { isTelemetry, parseTelemetry } from './instrument-telemetry'
 import { estimateHz, sampleReadout } from './Plotter.readout'
 import { PhosphorScreen } from './InstrumentWindow'
+import { PROGRAM_RUN_EVENT, type ProgramRunDetail } from './editorBridge'
 
 /**
  * Serial Plotter (issue #21; reskinned for #103) — a skeuomorphic **strip-chart
@@ -336,6 +337,18 @@ export function Plotter(): JSX.Element {
     setReadout('0 samples')
     dirty.current = true
   }, [])
+
+  // Each Run starts a fresh chart. Without this a program's series joined
+  // whatever the last run (or the simulator's demo) left behind, and the old
+  // series' range set the scale: `sine` and `cosine` drew as flat lines under a
+  // 0–90 `light` trace (Snakie Instruments course, lesson 0).
+  useEffect(() => {
+    const onRun = (e: Event): void => {
+      if ((e as CustomEvent<ProgramRunDetail>).detail?.running) handleClear()
+    }
+    window.addEventListener(PROGRAM_RUN_EVENT, onRun)
+    return () => window.removeEventListener(PROGRAM_RUN_EVENT, onRun)
+  }, [handleClear])
 
   return (
     <div className="plotter">

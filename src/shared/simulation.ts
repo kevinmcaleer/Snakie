@@ -113,3 +113,130 @@ export function simulateProbeResponse(code: string, tick: number): string {
 export function isProbeCode(code: string): boolean {
   return code.includes(PROBE_MARK)
 }
+
+/**
+ * THE PROGRAM'S OWN TELEMETRY WINS OVER THE DEMO (kevsrobots Snakie Instruments
+ * course). The simulated board streams demo telemetry all the time so an
+ * instrument animates with nothing running — but a learner's program that plots
+ * `sine` and `cosine` then shared the Plotter with the demo's `temp` and `light`,
+ * whose 0–90 range squashed the program's ±1 waves flat. So once a program
+ * streams a kind itself (or its source calls the helper that would), the demo
+ * stops sending that kind until the program ends.
+ *
+ * Kinds are grouped so a program's line hides the demo line the same instrument
+ * draws: `PWM` (from `read_pwm`) is drawn on the scope, `IMUQ` on the IMU view.
+ */
+const KIND_GROUP: Record<string, string> = { PWM: 'SCOPE', IMUQ: 'IMU' }
+const groupOf = (kind: string): string => KIND_GROUP[kind] ?? kind
+
+/** `instruments` helpers → the telemetry kind each one prints. */
+const HELPER_KINDS: Record<string, string> = {
+  scope: 'SCOPE',
+  read_pwm: 'SCOPE',
+  meter: 'METER',
+  read_adc: 'METER',
+  plot: 'PLOT',
+  imu: 'IMU',
+  imu_quat: 'IMU',
+  env: 'ENV',
+  distance: 'DIST',
+  encoder: 'ENC',
+  button: 'BTN'
+}
+
+/** The telemetry kind of one `SNK <KIND> …` line, or null. */
+export function telemetryKind(line: string): string | null {
+  const m = /^\s*SNK ([A-Z]+)\b/.exec(line)
+  return m ? m[1] : null
+}
+
+/**
+ * The `instruments` helpers a program's source calls — `inst.plot(…)`,
+ * `instruments.meter(…)`, or a name pulled in with `from instruments import
+ * plot`. Best-effort and cheap (no parser): it reads imports and call sites.
+ */
+export function instrumentsHelperCalls(code: string): Set<string> {
+  const calls = new Set<string>()
+  const prefixes: string[] = []
+  // A name brought in with `from instruments import …` → the helper it is.
+  const bare = new Map<string, string>()
+  for (const m of code.matchAll(/^\s*import\s+([^\n#]+)/gm)) {
+    for (const part of m[1].split(',')) {
+      const [name, alias] = part.trim().split(/\s+as\s+/)
+      if (name === 'instruments') prefixes.push(alias ?? name)
+    }
+  }
+  for (const m of code.matchAll(/^\s*from\s+instruments\s+import\s+([^\n#]+)/gm)) {
+    for (const part of m[1].replace(/[()]/g, '').split(',')) {
+      const [name, alias] = part.trim().split(/\s+as\s+/)
+      if (name) bare.set(alias ?? name, name)
+    }
+  }
+  const star = [...bare.keys()].includes('*')
+  for (const m of code.matchAll(/(?:\b(\w+)\.)?\b(\w+)\s*\(/g)) {
+    const [, owner, fn] = m
+    if (owner) {
+      if (prefixes.includes(owner)) calls.add(fn)
+    } else {
+      const helper = bare.get(fn) ?? (star && HELPER_KINDS[fn] ? fn : undefined)
+      if (helper) calls.add(helper)
+    }
+  }
+  return calls
+}
+
+/**
+ * The kinds a program's SOURCE will stream, from its `instruments` calls. Read
+ * before the run starts, so the demo is quiet from the first frame rather than
+ * after the program's first line.
+ */
+export function programTelemetryKinds(code: string): Set<string> {
+  const kinds = new Set<string>()
+  for (const helper of instrumentsHelperCalls(code)) {
+    const kind = HELPER_KINDS[helper]
+    if (kind) kinds.add(kind)
+  }
+  return kinds
+}
+
+/**
+ * Tracks which kinds the running program owns and filters the demo frame. One
+ * per simulated device; `begin` at a run's start, `note` on the program's
+ * output, `end` when it stops (or the interpreter restarts).
+ */
+export class DemoTelemetryGate {
+  private owned = new Set<string>()
+  /** Carry for a line split across output chunks. */
+  private partial = ''
+
+  /** A program is starting: claim the kinds its source will stream. */
+  begin(code: string): void {
+    this.owned = new Set([...programTelemetryKinds(code)].map(groupOf))
+    this.partial = ''
+  }
+
+  /** Program output: claim any kind it actually streams. */
+  note(text: string): void {
+    const lines = (this.partial + text).split(/\r?\n/)
+    this.partial = (lines.pop() ?? '').slice(-200)
+    for (const line of lines) {
+      const kind = telemetryKind(line)
+      if (kind) this.owned.add(groupOf(kind))
+    }
+  }
+
+  /** The program stopped: the demo may send everything again. */
+  end(): void {
+    this.owned.clear()
+    this.partial = ''
+  }
+
+  /** The demo frame with the program's kinds taken out. */
+  filter(frame: string[]): string[] {
+    if (this.owned.size === 0) return frame
+    return frame.filter((line) => {
+      const kind = telemetryKind(line)
+      return !kind || kind === 'READY' || !this.owned.has(groupOf(kind))
+    })
+  }
+}
