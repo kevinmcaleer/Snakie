@@ -1,0 +1,123 @@
+name: Bump version
+
+# Every pull request merged into master bumps the PATCH number in package.json
+# (and package-lock.json): 0.92.0 -> 0.92.1 -> 0.92.2 ...
+#
+# Why after the merge, and not inside each PR: if every branch edited the
+# `version` line, every pair of open PRs would conflict on it, and whichever merged
+# second would carry a stale number. Bumping on master, from master's current
+# value, means branches never touch the line and each merge gets its own number.
+#
+# What does NOT get an automatic bump:
+#   - A push that already changed the version itself (a release commit, or a PR
+#     that deliberately sets a MINOR bump like 0.93.0). The version it set stands.
+#   - A direct push to master that did not come from a pull request.
+#   - This workflow's own commit: pushes made with GITHUB_TOKEN never start
+#     workflows, and the commit changes the version anyway.
+#
+# Several merges landing close together each run this job in parallel. Each one
+# re-reads master, bumps from whatever is there, and retries if another run's push
+# beat it, so every merged PR lands exactly one bump and none is lost. (A
+# `concurrency` group would be simpler but GitHub drops all but one queued run.)
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write # push the bump commit
+  actions: write # start the web deploy for the bumped commit
+  pull-requests: read # find the PR a merge commit came from
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Decide whether to bump
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          version_at() {
+            gh api "repos/$REPO/contents/package.json?ref=$1" --jq '.content' \
+              | base64 --decode | jq -r '.version'
+          }
+
+          # A brand-new branch has no "before"; nothing to compare, nothing to bump.
+          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            echo "bump=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+
+          before_v="$(version_at "$BEFORE")"
+          after_v="$(version_at "$AFTER")"
+          if [ "$before_v" != "$after_v" ]; then
+            echo "This push set the version itself ($before_v -> $after_v); leaving it."
+            echo "bump=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+
+          pr="$(gh api "repos/$REPO/commits/$AFTER/pulls" \
+            --jq '[.[] | select(.merged_at != null and .base.ref == "master")][0].number // empty')"
+          if [ -z "$pr" ]; then
+            echo "Not a pull request merge; leaving the version at $after_v."
+            echo "bump=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+
+          echo "PR #$pr merged; bumping from $after_v."
+          echo "bump=true" >> "$GITHUB_OUTPUT"
+          echo "pr=$pr" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        if: steps.check.outputs.bump == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 1
+
+      - name: Setup Node
+        if: steps.check.outputs.bump == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Bump patch version and push
+        if: steps.check.outputs.bump == 'true'
+        env:
+          PR: ${{ steps.check.outputs.pr }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          for attempt in 1 2 3 4 5 6; do
+            git fetch --depth=1 origin master
+            git reset --hard origin/master
+            # Updates package.json and both version fields in package-lock.json.
+            # No git tag: releases are still tagged by hand (see CLAUDE.md).
+            new="$(npm version patch --no-git-tag-version)"
+            new="${new#v}"
+            git commit -am "chore: bump version to $new (#$PR)"
+            if git push origin HEAD:master; then
+              echo "Bumped to $new"
+              echo "### Version bumped to $new for #$PR" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "Push lost a race (attempt $attempt); retrying from the new master."
+            sleep $((RANDOM % 10 + attempt * 3))
+          done
+          echo "::error::Could not push the version bump after 6 attempts"
+          exit 1
+
+      # Pushes made with GITHUB_TOKEN don't start other workflows, so without this
+      # app.snakie.org would keep serving (and announcing, in its update notice)
+      # the build from before the bump. A dispatch is the one trigger GITHUB_TOKEN
+      # is allowed to fire, and web-deploy's concurrency group cancels the
+      # now-stale deploy the merge started.
+      - name: Redeploy the web app with the new version
+        if: steps.check.outputs.bump == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run web-deploy.yml --ref master
