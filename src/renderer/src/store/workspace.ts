@@ -36,6 +36,8 @@
  *   openFolder(): Promise<void>              // native folder picker -> currentFolder
  *   openFolderPath(path): void               // re-root the local tree to `path`
  *                                           // (e.g. a breadcrumb ancestor)
+ *   closeFolder(): void                      // close the project (no folder open)
+ *   saveBufferTo(id, path): Promise<void>    // Save As to a known path
  *
  * Implemented as a React context + reducer (no external state dep). Consume via
  * the `useWorkspace()` hook below; wrap the app in <WorkspaceProvider>.
@@ -305,6 +307,18 @@ export interface WorkspaceStore {
    * dialog). Used by the breadcrumb to open an ancestor of the current folder.
    */
   openFolderPath: (path: string) => void
+  /**
+   * Close the project: no folder open, the local tree empties and Electronics /
+   * Build fall back to the scratch (not-saved) robot. Tabs of files INSIDE the
+   * folder close too; the caller has already asked about unsaved ones.
+   */
+  closeFolder: () => void
+  /**
+   * Write an open buffer to `path` and keep editing it THERE — Save As with the
+   * destination already decided (Save as project puts untitled buffers in the
+   * new project's `code/`).
+   */
+  saveBufferTo: (id: string, path: string) => Promise<void>
   /** Ask the editor to scroll to and place the cursor on a 1-based `line`. */
   revealLine: (line: number) => void
 }
@@ -659,6 +673,31 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
     }
   }, [])
 
+  const closeFolder = useCallback((): void => {
+    const folder = state.currentFolder
+    if (folder) {
+      const root = folder.replace(/[/\\]+$/, '')
+      for (const f of state.openFiles) {
+        if (f.source === 'local' && f.path && (f.path === root || f.path.startsWith(root + '/') || f.path.startsWith(root + '\\'))) {
+          dispatch({ type: 'close', id: f.id })
+        }
+      }
+    }
+    dispatch({ type: 'setFolder', folder: null })
+    rememberFolder(null)
+  }, [state.currentFolder, state.openFiles])
+
+  const saveBufferTo = useCallback(
+    async (id: string, path: string): Promise<void> => {
+      const file = state.openFiles.find((f) => f.id === id)
+      if (!file) return
+      await window.api.fs.writeFile(path, file.content)
+      dispatch({ type: 'savedAs', id, path, name: baseName(path), content: file.content })
+      announceSaved('local', path, file.content)
+    },
+    [state.openFiles]
+  )
+
   // Restore the last opened folder on launch (#177) — but only if it still exists,
   // so a moved/deleted folder doesn't leave the file tree pointing at nothing.
   useEffect(() => {
@@ -910,6 +949,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
       openBuffer,
       openFolder,
       openFolderPath,
+      closeFolder,
+      saveBufferTo,
       revealLine
     }),
     [
@@ -931,6 +972,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
       openBuffer,
       openFolder,
       openFolderPath,
+      closeFolder,
+      saveBufferTo,
       revealLine
     ]
   )

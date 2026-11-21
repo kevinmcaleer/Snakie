@@ -362,7 +362,24 @@ const fs = {
   /** Remove a file or directory (recursive). */
   remove: (path: string): Promise<void> => unwrap(ipcRenderer.invoke('fs:remove', path)),
   /** Stat a path. */
-  stat: (path: string): Promise<FsStat> => unwrap(ipcRenderer.invoke('fs:stat', path))
+  stat: (path: string): Promise<FsStat> => unwrap(ipcRenderer.invoke('fs:stat', path)),
+  /**
+   * Re-open a folder from the recent-projects list. Resolves to the path when
+   * it is still a folder, null when it has gone. The web backend's version also
+   * re-grants access to the folder it came from, which is why this is its own
+   * call rather than a `stat` at every call site.
+   */
+  openRecent: async (path: string): Promise<string | null> => {
+    try {
+      const s = await unwrap<FsStat>(ipcRenderer.invoke('fs:stat', path))
+      return s.isDir ? path : null
+    } catch {
+      return null
+    }
+  },
+  /** Show a folder in the system file manager (Finder / Explorer). Desktop
+   *  only: the web backend has no such call, and callers check for it. */
+  showInFolder: (path: string): Promise<void> => unwrap(ipcRenderer.invoke('fs:showInFolder', path))
 }
 
 /**

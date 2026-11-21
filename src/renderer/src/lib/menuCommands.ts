@@ -132,6 +132,9 @@ export function menuCommandHandlers(
     'file.new': () => deps.newFile(),
     'file.openFile': () => deps.openFile(),
     'file.openFolder': () => deps.openFolder(),
+    // The top bar's project switcher owns both, and listens for these.
+    'file.newProject': () => void window.dispatchEvent(new CustomEvent('snakie:new-project')),
+    'file.closeProject': () => void window.dispatchEvent(new CustomEvent('snakie:close-project')),
     'file.save': () => deps.save(),
     'file.saveAs': () => deps.saveAs(),
     'file.exportPdf': () => deps.exportPdf(),

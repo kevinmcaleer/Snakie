@@ -209,8 +209,14 @@ export function appMenuTemplate(o: MenuTemplateOptions): MenuItemConstructorOpti
         commandItem('file.new', 'New File', o, { accelerator: 'CmdOrCtrl+N' }),
         { type: 'separator' },
         commandItem('file.openFile', 'Open File…', o, { accelerator: 'CmdOrCtrl+O' }),
+        { type: 'separator' },
+        // A PROJECT is the folder that holds the code, robot.yml (wiring + model
+        // link) and the print files. The top bar's project switcher does the
+        // same four things; these are its keyboard and menu-bar way in.
+        commandItem('file.newProject', 'New Project…', o, { accelerator: 'CmdOrCtrl+Shift+N' }),
         openFolderItem,
         openRecentItem,
+        commandItem('file.closeProject', 'Close Project', o),
         { type: 'separator' },
         commandItem('file.save', 'Save', o, { accelerator: 'CmdOrCtrl+S' }),
         commandItem('file.saveAs', 'Save As…', o, { accelerator: 'CmdOrCtrl+Shift+S' }),

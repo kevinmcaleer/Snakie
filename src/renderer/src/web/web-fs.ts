@@ -25,7 +25,13 @@
  * (`openFileDialog`/`saveFileDialog`) still return null there.
  */
 import { splitRelSegments, childPath } from './web-fs-paths'
-import { saveFolderHandle, loadFolderHandle, clearFolderHandle } from './web-idb'
+import {
+  saveFolderHandle,
+  loadFolderHandle,
+  clearFolderHandle,
+  saveRecentHandle,
+  loadRecentHandle
+} from './web-idb'
 
 interface FsEntry {
   name: string
@@ -80,6 +86,11 @@ export function opfsFallbackAvailable(): boolean {
   )
 }
 
+/** The root folder's name: the first segment of a web path. */
+export function splitRootName(path: string): string {
+  return String(path ?? '').split('/').filter(Boolean)[0] ?? ''
+}
+
 export function createWebFsApi(): Record<string, unknown> {
   const w = window as unknown as {
     showDirectoryPicker?: (o?: unknown) => Promise<DirHandle>
@@ -122,6 +133,7 @@ export function createWebFsApi(): Record<string, unknown> {
     // Loose handles survive Open Folder — clearing them silently re-pointed
     // open tabs' saves at `<newRoot>/<name>` instead of the picked file (#511).
     void saveFolderHandle(handle) // persist for next visit
+    void saveRecentHandle(handle.name, handle) // and for the Recent list
     return rootPath
   }
 
@@ -231,6 +243,34 @@ export function createWebFsApi(): Record<string, unknown> {
         return adopt(await w.showDirectoryPicker({ mode: 'readwrite' }))
       } catch {
         return null // user cancelled / denied
+      }
+    },
+    // Recent projects: `path` is `<rootName>/…`. When that root is the open one,
+    // just check the folder is still there; otherwise bring back the handle it
+    // came from and ask for access again (this runs from a click, which the
+    // permission prompt needs). Null when the folder has gone or access is
+    // refused, so the caller can say so and offer Open instead.
+    openRecent: async (path: string): Promise<string | null> => {
+      await ready
+      const name = splitRootName(path)
+      try {
+        if (root && root.name === name) {
+          await dirAt(path)
+          return path
+        }
+        if (opfsFallbackAvailable()) return null // one OPFS root; a miss is a miss
+        const handle = (await loadRecentHandle(name)) as DirHandle | null
+        if (!handle) return null
+        const perm =
+          (await handle.queryPermission?.({ mode: 'readwrite' })) === 'granted'
+            ? 'granted'
+            : ((await handle.requestPermission?.({ mode: 'readwrite' })) ?? 'granted')
+        if (perm !== 'granted') return null
+        adopt(handle)
+        await dirAt(path)
+        return path
+      } catch {
+        return null
       }
     },
     // #476: the name of a folder rehydrated from IndexedDB that needs a click to

@@ -70,6 +70,8 @@ export type RendererMenuCommand =
   | 'file.new'
   | 'file.openFile'
   | 'file.openFolder'
+  | 'file.newProject'
+  | 'file.closeProject'
   | 'file.save'
   | 'file.saveAs'
   | 'file.exportPdf'
@@ -99,8 +101,10 @@ export type RendererMenuCommand =
 export const RENDERER_MENU_COMMANDS: readonly RendererMenuCommand[] = [
   'file.new',
   'file.openFile',
+  'file.newProject',
   'file.openFolder',
   ...RECENT_FOLDER_SLOTS.map(recentFolderMenuCommand),
+  'file.closeProject',
   'file.save',
   'file.saveAs',
   'file.exportPdf',

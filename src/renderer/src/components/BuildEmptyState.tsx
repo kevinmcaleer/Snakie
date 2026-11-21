@@ -38,9 +38,9 @@ export function BuildEmptyState({
         type="button"
         className="buildempty__pill"
         onClick={() => setCollapsed(false)}
-        title="This project has no robot yet. Show the ways to start one"
+        title="This is the demo arm, not your robot. Show the ways to start one"
       >
-        <RobotIcon size={14} /> Start your robot
+        <RobotIcon size={14} /> Demo arm · Start your robot
       </button>
     )
   }
