@@ -17,6 +17,8 @@ import { wiredLabel } from '../../../shared/wiring-pins'
 import { KR_PROJECTS_API } from '../../../shared/kevsrobots-account'
 import type { RobotDefinition } from '../../../shared/robot'
 import { GitHubIcon, PlayIcon, ResetIcon, SnakieLogo, StopIcon } from './icons'
+// The code pane's header, for CodeFallback before PythonPane (and its CSS) arrives.
+import '../components/PythonPane.css'
 import './EmbedApp.css'
 
 /** The code pane's header for a file Snakie doesn't run. */
@@ -29,7 +31,35 @@ function languageLabel(name: string): string {
   return known[ext] ?? (ext ? ext.toUpperCase() : 'Code')
 }
 
-const PythonPane = lazy(() => import('../components/PythonPane'))
+// Start fetching the editor now, alongside the program, not once the program has arrived.
+const pythonPaneChunk = import('../components/PythonPane')
+const PythonPane = lazy(() => pythonPaneChunk)
+
+/**
+ * The code, drawn plainly while Monaco (several MB) downloads: same header,
+ * same line numbers and line height, so the box is readable at once and the
+ * editor arriving changes nothing but the colours.
+ */
+function CodeFallback({ code, title }: { code: string; title: string }): JSX.Element {
+  const lines = code.split('\n')
+  return (
+    <div className="python-pane snk-embed__plain" aria-busy="true">
+      <div className="python-pane__header">
+        <span className="python-pane__title">{title}</span>
+      </div>
+      <pre className="snk-embed__plain-code">
+        {lines.map((line, i) => (
+          <div key={i} className="snk-embed__plain-line">
+            <span className="snk-embed__plain-num" aria-hidden="true">
+              {i + 1}
+            </span>
+            <span>{line || ' '}</span>
+          </div>
+        ))}
+      </pre>
+    </div>
+  )
+}
 const BlocksSplit = lazy(() => import('../components/BlocksSplit'))
 
 /** Narrower than this and the board would squeeze the code: the pins become a row of chips. */
@@ -348,6 +378,15 @@ function EmbedShell({ params }: { params: EmbedParams }): JSX.Element {
     [codePins]
   )
 
+  // Tell the host the box has something to show (the code, or why not), so it
+  // can swap its plain block for this frame without a blank moment.
+  const toldReady = useRef(false)
+  useEffect(() => {
+    if (toldReady.current || phase.kind === 'loading') return
+    toldReady.current = true
+    tellHost(params, { type: 'ready' })
+  }, [params, phase.kind])
+
   // Tell the host how tall we'd like to be.
   useEffect(() => {
     if (params.height !== null) return
@@ -478,7 +517,15 @@ function EmbedShell({ params }: { params: EmbedParams }): JSX.Element {
             </div>
           )}
           {phase.kind === 'ready' && file && (
-            <Suspense fallback={<div className="snk-embed__message">Loading editor…</div>}>
+            <Suspense
+              fallback={
+                showCodePane ? (
+                  <CodeFallback code={content} title={codeTitle} />
+                ) : (
+                  <div className="snk-embed__message">Loading blocks…</div>
+                )
+              }
+            >
               {showCodePane ? (
                 <PythonPane
                   code={content}

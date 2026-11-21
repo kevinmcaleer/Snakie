@@ -672,3 +672,44 @@
   font-family: var(--font-ui);
   font-size: 10px;
 }
+
+/* Snakie Flat: one flat screen for the REPL. xterm names its own element
+ * `terminal` too, so the skin's .terminal padding would frame it twice. */
+:root .snk-embed .snk-embed__terminal .xterm {
+  padding: 0;
+  box-shadow: none;
+}
+
+/* The code while the editor loads (CodeFallback): Monaco's metrics, so the
+ * swap doesn't move a line. */
+.snk-embed__plain {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.snk-embed__plain-code {
+  flex: 1 1 auto;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 24px;
+  color: var(--text);
+  background: transparent;
+}
+
+.snk-embed__plain-line {
+  display: flex;
+  white-space: pre;
+}
+
+.snk-embed__plain-num {
+  flex: 0 0 auto;
+  width: 40px;
+  padding-right: 12px;
+  text-align: right;
+  color: var(--txt3, var(--text-muted));
+  user-select: none;
+}

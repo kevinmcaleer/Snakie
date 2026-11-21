@@ -9,6 +9,8 @@ import '@fontsource/plus-jakarta-sans/400.css'
 import '@fontsource/plus-jakarta-sans/600.css'
 import '@fontsource/plus-jakarta-sans/700.css'
 import './index.css'
+// Snakie Flat (#1308): the embed wears the app's current look. Imported last, so it wins.
+import './flat.css'
 import { EMBED_PARAMS } from './code-embed/embed-boot'
 
 // The robot frame (#1321) brings three.js; a code frame never loads it.
