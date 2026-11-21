@@ -26,16 +26,27 @@ import {
   shouldShowTip,
   type StatusTip
 } from './status-tips'
-import { isVirtualPort, VIRTUAL_PORT_SHORT } from '../../../shared/virtual-device'
+import { isVirtualPort, VIRTUAL_PORT_PATH, VIRTUAL_PORT_SHORT } from '../../../shared/virtual-device'
 import { runtimeLabel } from '../../../shared/dialect'
-import { FIRMWARE_RUNTIME_LABEL, firmwareRuntimeForDialect } from '../../../shared/firmware-runtime'
+import {
+  FIRMWARE_RUNTIME_LABEL,
+  firmwareRuntimeForDialect,
+  type FirmwareRuntime
+} from '../../../shared/firmware-runtime'
 import type { FirmwareCatalog, UpdateStatus } from '../../../preload/index.d'
 import { BulbIcon } from './ui-icons'
 import { SyncIndicator } from './SyncIndicator'
 import { applyUpdateKeepingWork } from '../lib/unsaved-work'
 import { useHelpDialect } from '../hooks/useHelpDialect'
 import { ContextMenu, type ContextMenuPosition } from './ContextMenu'
-import { RUNTIME_CHOICES, runtimeSwitcherView } from './runtime-switcher'
+import {
+  runtimeSwitcherView,
+  simSwitcherView,
+  switcherRows,
+  type SwitcherAction,
+  type SwitcherTarget
+} from './runtime-switcher'
+import { pushSimDialect, setSimDialect, useSimDialect } from '../store/sim-dialect'
 import './StatusBar.css'
 
 /**
@@ -204,11 +215,59 @@ export function StatusBar({
   // renders nothing rather than guessing MicroPython, which is exactly the
   // assumption the CircuitPython epic (#209) exists to remove.
   const runtime = connected ? runtimeLabel(status.runtime ?? null) : ''
-  // The runtime item doubles as the help/completions switcher — the same
-  // setting as the Help panel's pills (see runtime-switcher.ts).
+  // Offline mode (#135): connected to the built-in simulated device, not real
+  // hardware — surfaced with a distinct label + badge so it's never mistaken
+  // for a physical board.
+  const simulated = connected && isVirtualPort(status.path)
+  // The runtime item is the language switcher (see runtime-switcher.ts): on the
+  // simulator it switches the simulator itself (#764); on a real board it
+  // switches the help/completions, the same setting as the Help panel's pills.
   const helpDialect = useHelpDialect()
-  const runtimeView = runtimeSwitcherView(helpDialect.preference, helpDialect.boardDialect, runtime)
+  const simDialect = useSimDialect()
+  const switcherTarget: SwitcherTarget = simulated ? 'simulator' : connected ? 'board' : 'none'
+  const runtimeView = simulated
+    ? simSwitcherView(helpDialect.preference, simDialect)
+    : runtimeSwitcherView(helpDialect.preference, helpDialect.boardDialect, runtime)
+  const runtimeRows = switcherRows(
+    switcherTarget,
+    helpDialect.preference,
+    simDialect,
+    helpDialect.boardDialect
+  )
   const [runtimeMenu, setRuntimeMenu] = useState<ContextMenuPosition | null>(null)
+  // The flasher can be opened ON a Python from the switcher ("Put CircuitPython
+  // on this board…"); otherwise it opens on the board's own.
+  const [flashFor, setFlashFor] = useState<FirmwareRuntime | null>(null)
+  // A preference saved in an earlier session must reach the simulator before
+  // anything auto-connects it — whichever of the bar or the console mounts.
+  useEffect(() => void pushSimDialect(), [])
+  const runSwitcherAction = (a: SwitcherAction): void => {
+    switch (a.kind) {
+      case 'sim':
+        // The simulator now reports this Python, so the hints follow it.
+        helpDialect.setPreference('auto')
+        void setSimDialect(a.dialect)
+        return
+      case 'prefer':
+        helpDialect.setPreference(a.dialect)
+        void setSimDialect(a.dialect)
+        return
+      case 'hints':
+        helpDialect.setPreference(a.pref)
+        return
+      case 'flash':
+        setFlashFor(a.dialect)
+        setFlasherOpen(true)
+        return
+      case 'try-sim':
+        helpDialect.setPreference('auto')
+        void (async () => {
+          await setSimDialect(a.dialect)
+          await window.api.device.connect(VIRTUAL_PORT_PATH)
+        })().catch(() => undefined)
+        return
+    }
+  }
   /**
    * Which Python the flash dialog should OPEN on (#756). The connected board's
    * own dialect when it said, MicroPython otherwise — the dialog's own selector
@@ -225,10 +284,6 @@ export function StatusBar({
    * beat after connecting) must not count as a change and re-run it.
    */
   const circuitPython = status.runtime?.dialect === 'circuitpython'
-  // Offline mode (#135): connected to the built-in simulated device, not real
-  // hardware — surfaced with a distinct label + badge so it's never mistaken
-  // for a physical board.
-  const simulated = connected && isVirtualPort(status.path)
   const connLabel =
     status.state === 'connecting'
       ? 'Connecting…'
@@ -444,7 +499,9 @@ export function StatusBar({
             onClick={(e) => {
               const r = e.currentTarget.getBoundingClientRect()
               // Open upwards from the bar; ContextMenu clamps it into the window.
-              setRuntimeMenu(runtimeMenu ? null : { x: r.left, y: r.top - 12 - 3 * 36 })
+              setRuntimeMenu(
+                runtimeMenu ? null : { x: r.left, y: r.top - 12 - runtimeRows.length * 36 }
+              )
             }}
           >
             {runtimeView.label}
@@ -457,10 +514,10 @@ export function StatusBar({
           <ContextMenu
             position={runtimeMenu}
             onClose={() => setRuntimeMenu(null)}
-            items={RUNTIME_CHOICES.map((c) => ({
-              key: c.pref,
-              label: `${helpDialect.preference === c.pref ? '✓ ' : '\u2003'}${c.label}`,
-              onSelect: () => helpDialect.setPreference(c.pref)
+            items={runtimeRows.map((row) => ({
+              key: row.key,
+              label: `${row.checked ? '✓ ' : '\u2003'}${row.label}`,
+              onSelect: () => runSwitcherAction(row.action)
             }))}
           />
         )}
@@ -559,7 +616,7 @@ export function StatusBar({
           </span>
         )}
         {lines != null && !build && (
-          <span className="statusbar__item" title="Lines in the active file">
+          <span className="statusbar__item statusbar__lines" title="Lines in the active file">
             {lines} {lines === 1 ? 'line' : 'lines'}
           </span>
         )}
@@ -675,8 +732,11 @@ export function StatusBar({
 
       {flasherOpen && (
         <FirmwareFlasher
-          onClose={() => setFlasherOpen(false)}
-          runtime={flashRuntime}
+          onClose={() => {
+            setFlasherOpen(false)
+            setFlashFor(null)
+          }}
+          runtime={flashFor ?? flashRuntime}
           boardId={status.runtime?.boardId}
         />
       )}

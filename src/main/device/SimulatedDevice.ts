@@ -9,7 +9,13 @@ import {
   simulatedTelemetryFrame
 } from '../../shared/simulation'
 import { clampSimHeapBytes, SIM_HEAP_DEFAULT_BYTES } from '../../shared/sim-memory'
-import type { RuntimeInfo } from '../../shared/dialect'
+import {
+  normalizeSimDialect,
+  simDialectNotice,
+  simRuntimeInfo,
+  SIM_DIALECT_DEFAULT,
+  type SimDialect
+} from '../../shared/sim-dialect'
 import type {
   ConnectionState,
   DeviceStatus,
@@ -22,16 +28,6 @@ import type {
 
 /** How often the simulated board "prints" a telemetry frame (ms). */
 const TELEMETRY_INTERVAL_MS = 120
-
-/**
- * What the simulator reports as its runtime (#752). Stated rather than probed:
- * the interpreter behind it IS MicroPython (the official WASM port), so this is
- * a fact about the simulator, not a guess about a board. No version — the WASM
- * build's is the port's, not a board firmware anyone could flash, and offering
- * it would invite the update check to compare against a firmware catalog.
- * Whether the simulator should ever offer CircuitPython is #764.
- */
-const SIM_RUNTIME: RuntimeInfo = { dialect: 'micropython' }
 
 /**
  * SIMULATED MicroPython device (issue #135).
@@ -68,6 +64,12 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
   private heapBytes = SIM_HEAP_DEFAULT_BYTES
   /** GC heap the LIVE interpreter actually started with; null when not running. */
   private bootedHeapBytes: number | null = null
+  /**
+   * Which Python the simulator presents as (#764). Stated, not probed: the
+   * interpreter is MicroPython with CircuitPython's modules on top, so either
+   * kind of program runs, and this is what the rest of the app follows.
+   */
+  private dialect: SimDialect = SIM_DIALECT_DEFAULT
 
   constructor(runtime: ReplRuntime = new MicroPythonRuntime()) {
     super()
@@ -92,7 +94,7 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
    *  event can never disagree about what the simulator is. */
   private statusFor(state: ConnectionState): DeviceStatus {
     const status: DeviceStatus = { state, path: VIRTUAL_PORT_PATH, baudRate: 115200 }
-    if (state === 'connected') status.runtime = SIM_RUNTIME
+    if (state === 'connected') status.runtime = simRuntimeInfo(this.dialect)
     return status
   }
 
@@ -111,6 +113,26 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
 
   getMemory(): SimMemoryState {
     return { configured: this.heapBytes, booted: this.bootedHeapBytes }
+  }
+
+  /**
+   * Switch the Python the simulator presents as (#764). Live: no reboot, since
+   * the CircuitPython modules are always installed — only the reported runtime
+   * (and so everything that follows the board) changes.
+   */
+  setDialect(next: unknown): SimDialect {
+    const d = normalizeSimDialect(next)
+    if (d === this.dialect) return d
+    this.dialect = d
+    if (this.state === 'connected') {
+      this.setState('connected')
+      if (this.bootedHeapBytes !== null) this.emit('data', Buffer.from(simDialectNotice(d), 'utf8'))
+    }
+    return d
+  }
+
+  getDialect(): SimDialect {
+    return this.dialect
   }
 
   async connect(): Promise<void> {
@@ -140,6 +162,9 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
       )
     }
     this.setState('connected')
+    if (this.dialect !== 'micropython' && this.bootedHeapBytes !== null) {
+      this.emit('data', Buffer.from(simDialectNotice(this.dialect), 'utf8'))
+    }
     this.startTelemetry()
   }
 

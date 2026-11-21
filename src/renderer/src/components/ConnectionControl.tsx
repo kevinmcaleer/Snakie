@@ -10,6 +10,7 @@ import { SimulatedDeviceNotice } from './SimulatedDeviceNotice'
 import { SIM_NOTICE_KEY, shouldShowSimNotice } from './sim-notice'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { pushSimHeapBytes, readSimHeapBytes, writeSimHeapBytes } from '../store/sim-memory'
+import { pushSimDialect } from '../store/sim-dialect'
 import type { DeviceStatus, PortCircuitPy, PortInfo } from '../../../preload/index.d'
 
 /**
@@ -112,6 +113,8 @@ export function ConnectionControl({
   // (the web build does so ~400ms after first render) (#901).
   useEffect(() => {
     void pushSimHeapBytes(readSimHeapBytes())
+    // …and the simulator's language (#764), for the same reason.
+    void pushSimDialect()
   }, [])
 
   // What the LIVE simulator booted with — the device layer owns that truth, so

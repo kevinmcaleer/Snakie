@@ -24,6 +24,7 @@ import type {
   SimMemoryState,
   StatResult
 } from '../main/device/types'
+import type { SimDialect } from '../shared/sim-dialect'
 import type { FsEntry, FsStat } from '../main/fs/types'
 import type {
   BoardCandidate,
@@ -221,6 +222,10 @@ const device = {
     unwrap(ipcRenderer.invoke('device:setSimMemory', bytes)),
   /** The simulated board's configured vs actually-booted heap (#901). */
   getSimMemory: (): Promise<SimMemoryState> => unwrap(ipcRenderer.invoke('device:getSimMemory')),
+  /** Which Python the SIMULATED board presents as (#764). Live, no reboot. */
+  setSimDialect: (dialect: SimDialect): Promise<SimDialect> =>
+    unwrap(ipcRenderer.invoke('device:setSimDialect', dialect)),
+  getSimDialect: (): Promise<SimDialect> => unwrap(ipcRenderer.invoke('device:getSimDialect')),
   /** Current connection status snapshot. */
   getStatus: (): Promise<DeviceStatus> => unwrap(ipcRenderer.invoke('device:getStatus')),
   /** Run code in the raw REPL, returning captured stdout/stderr. */

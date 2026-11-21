@@ -88,6 +88,40 @@ describe('SimulatedDevice lifecycle', () => {
     await dev.dispose()
   })
 
+  it('switches to CircuitPython live, without a reboot (#764)', async () => {
+    const dev = new SimulatedDevice(new FakeRuntime())
+    await dev.connect()
+    const pushed: (string | undefined)[] = []
+    const data: string[] = []
+    dev.on('status', (st) => pushed.push(st.runtime?.dialect))
+    dev.on('data', (c: Buffer) => data.push(c.toString('utf8')))
+
+    expect(dev.setDialect('circuitpython')).toBe('circuitpython')
+    expect(dev.getStatus()).toMatchObject({ state: 'connected', runtime: { dialect: 'circuitpython' } })
+    expect(pushed).toEqual(['circuitpython'])
+    expect(data.join('')).toContain('CircuitPython mode')
+
+    // Same language again: no event, no console noise.
+    dev.setDialect('circuitpython')
+    expect(pushed).toHaveLength(1)
+    // Anything unknown is MicroPython.
+    expect(dev.setDialect('nonsense')).toBe('micropython')
+
+    await dev.dispose()
+  })
+
+  it('remembers its language across a reconnect (#764)', async () => {
+    const dev = new SimulatedDevice(new FakeRuntime())
+    dev.setDialect('circuitpython') // set while disconnected: no event
+    expect(dev.getStatus().runtime).toBeUndefined()
+    const data: string[] = []
+    dev.on('data', (c: Buffer) => data.push(c.toString('utf8')))
+    await dev.connect()
+    expect(dev.getStatus().runtime).toEqual({ dialect: 'circuitpython' })
+    expect(data.join('')).toContain('CircuitPython mode')
+    await dev.dispose()
+  })
+
   it('emits connecting → connected status and boots the REPL on connect', async () => {
     const dev = new SimulatedDevice(new FakeRuntime())
     const states: string[] = []

@@ -1,6 +1,8 @@
-- **Choose MicroPython or CircuitPython from the status bar.** The runtime item
-  in the status bar is now a menu: Auto (follow the board), MicroPython or
-  CircuitPython. It sets which Python the help and editor completions teach,
-  the same setting as the Help panel's pills, and shows even with no board
-  connected. When the hints are set to a different Python than the board runs,
-  it says so ("CircuitPython hints").
+- **Switch between MicroPython and CircuitPython from the status bar.** The
+  runtime item in the status bar is now a menu. On the simulator it switches the
+  simulator itself between MicroPython and CircuitPython, live, and the help,
+  completions, Run/Reset wording and file badges follow (#764). With nothing
+  connected it picks the Python to write for. On a real board it sets which
+  Python the help and completions teach (the same setting as the Help panel's
+  pills), and offers to put the other Python on the board or try it on the
+  simulator instead. On phones the switcher now comes first in the status bar.
