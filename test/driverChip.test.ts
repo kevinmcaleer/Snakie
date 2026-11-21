@@ -14,7 +14,7 @@ describe('driver chip in the Code workspace', () => {
     const editor = read('src/renderer/src/components/EditorArea.tsx')
     expect(editor).toContain('<DriverInstallBanner')
     expect(editor).toContain('layout="chip"')
-    expect(editor).toContain("layout.active === 'code' && showCode")
+    expect(editor).toContain('const showDriverChip = chipView')
     expect(read('src/renderer/src/components/BoardGraph.tsx')).not.toContain('<DriverInstallBanner')
   })
 
@@ -28,5 +28,21 @@ describe('driver chip in the Code workspace', () => {
   it('floats its card over the editor rather than taking a row', () => {
     const css = read('src/renderer/src/components/DriverInstallBanner.css')
     expect(css).toMatch(/\.drvchip__pop\s*{[^}]*position:\s*fixed/)
+  })
+})
+
+describe('one notice, no push-down banners (#166 + #184)', () => {
+  it('passes the parts check to the editor chip instead of a banner above the app', () => {
+    const shell = read('src/renderer/src/components/AppShell.tsx')
+    expect(shell).not.toContain('<PartsImportBanner')
+    expect(shell).toContain('partsNotice={')
+  })
+  it('shows the chip for blocks files too, and the split drops its own banner', () => {
+    const editor = read('src/renderer/src/components/EditorArea.tsx')
+    expect(editor).toContain('chipView = codeWorkspace && (showCode || showBlocks)')
+    expect(editor).toContain('onDriverNeeds={setBlocksNeeds}')
+    expect(read('src/renderer/src/components/BlocksSplit.tsx')).toContain(
+      '{!onDriverNeeds && driverNeeds.length > 0 && <DriverInstallBanner'
+    )
   })
 })

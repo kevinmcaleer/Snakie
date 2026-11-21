@@ -84,7 +84,6 @@ import {
 } from './editorBridge'
 import { InstrumentLibBanner } from './InstrumentLibBanner'
 import { NoticeStack } from './Notice'
-import { PartsImportBanner } from './PartsImportBanner'
 import { PARTS_CHANGED_EVENT } from './PartsPanel'
 import { isElectron } from '../lib/platform'
 import { TutorialPanel } from './TutorialPanel'
@@ -1135,7 +1134,6 @@ export function AppShell(): JSX.Element {
     }
   }, [])
   const [installedModules, setInstalledModules] = useState<Set<string> | null>(null)
-  const [partsDismissed, setPartsDismissed] = useState(false)
   const [partsInstalling, setPartsInstalling] = useState(false)
   const [partsInstallError, setPartsInstallError] = useState<string | null>(null)
 
@@ -1189,9 +1187,8 @@ export function AppShell(): JSX.Element {
     }
   }, [connected, requiredModules, installedModules])
 
-  // Re-surface the banner when the file or connection changes (per-trigger dismiss).
+  // A stale install error belongs to the file / connection it happened on.
   useEffect(() => {
-    setPartsDismissed(false)
     setPartsInstallError(null)
   }, [boardFileName, deviceStatus.state, deviceStatus.path])
 
@@ -1226,11 +1223,11 @@ export function AppShell(): JSX.Element {
   // (an unsaved buffer with no path) is not that robot's program. It used to be
   // told it was "missing 2 imports" for a robot it has nothing to do with.
   const activeInProject = !!activeFile && activeFile.path !== ''
-  const showPartsBanner =
-    layout.active === 'code' &&
+  // Shown in the editor's Drivers chip (no dismiss: a chip is out of the way).
+  const showPartsNotice =
+    (layout.active === 'code' || layout.active === 'blocks') &&
     activeInProject &&
     requiredModules.length > 0 &&
-    !partsDismissed &&
     (missImports.length > 0 || missBoard.length > 0)
 
   const installMissingLibs = useCallback((): void => {
@@ -1716,18 +1713,8 @@ export function AppShell(): JSX.Element {
             updateDetail="Update your board to get the latest turtle graphics fixes."
           />
         )}
-        {/* #166: the project's parts need libraries this file doesn't import / the
-            board doesn't have — offer to install the missing ones. */}
-        {showPartsBanner && (
-          <PartsImportBanner
-            missingImports={missImports}
-            missingOnBoard={missBoard}
-            installing={partsInstalling}
-            error={partsInstallError}
-            onInstall={installMissingLibs}
-            onDismiss={() => setPartsDismissed(true)}
-          />
-        )}
+        {/* #166's parts check rides in the editor's Drivers chip now (see
+            EditorArea): as a row here it pushed the whole app down. */}
       </NoticeStack>
       <Toolbar />
 
@@ -1832,6 +1819,17 @@ export function AppShell(): JSX.Element {
                       <EditorArea
                         chatOpen={!rightCollapsed}
                         onToggleChat={IS_WEB ? undefined : () => toggle(rightRef)}
+                        partsNotice={
+                          showPartsNotice
+                            ? {
+                                missingImports: missImports,
+                                missingOnBoard: missBoard,
+                                installing: partsInstalling,
+                                error: partsInstallError,
+                                onInstall: installMissingLibs
+                              }
+                            : undefined
+                        }
                       />
                     </div>
                     {compact && dockWorkspace && !focus && !pipHidden && sheetTab !== 'board' && (

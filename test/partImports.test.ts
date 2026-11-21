@@ -104,26 +104,35 @@ describe('missingImports / missingOnBoard', () => {
   })
 })
 
-describe('PartsImportBanner install gating (#166 follow-up)', () => {
-  it('offers Install for a driver-only module (no mip url) and for url modules', async () => {
+describe('the parts check rides in the Drivers chip (#166, no banner)', () => {
+  const render = async (parts: object): Promise<string> => {
     const { createElement } = await import('react')
     const { renderToStaticMarkup } = await import('react-dom/server')
-    const { PartsImportBanner } = await import('../src/renderer/src/components/PartsImportBanner')
-    const base = { missingImports: [], installing: false, onInstall: () => {}, onDismiss: () => {} }
-    // Driver-only (the SG90/BME280/ICM20948 model) → the Install button shows.
-    const withDrivers = renderToStaticMarkup(
-      createElement(PartsImportBanner, {
-        ...base,
-        missingOnBoard: [
-          { module: 'bme280', parts: ['BME280'], libraryId: 'snakie-standard', partId: 'bme280', drivers: [{ source: 'bme280.py', target: 'lib/bme280.py' }] }
-        ]
+    const { DriverInstallBanner } = await import('../src/renderer/src/components/DriverInstallBanner')
+    return renderToStaticMarkup(
+      createElement(DriverInstallBanner, {
+        needs: [],
+        layout: 'chip',
+        parts: { missingImports: [], missingOnBoard: [], installing: false, onInstall: () => {}, ...parts }
       })
     )
-    expect(withDrivers).toContain('Install bme280')
-    // No install source at all → nag only, no button.
-    const bare = renderToStaticMarkup(
-      createElement(PartsImportBanner, { ...base, missingOnBoard: [{ module: 'mystery', parts: ['X'] }] })
-    )
-    expect(bare).not.toContain('Install mystery')
+  }
+  it('shows an Imports chip when the file only lacks an import', async () => {
+    const html = await render({ missingImports: [{ module: 'hcsr04', parts: ['HC SR04'] }] })
+    expect(html).toContain('Imports')
+    expect(html).toContain('drvchip__count">1<')
+  })
+  it('counts a board library that only has a mip source', async () => {
+    const html = await render({ missingOnBoard: [{ module: 'ssd1306', parts: ['OLED'], url: 'github:x/ssd1306' }] })
+    expect(html).toContain('Drivers')
+    expect(html).toContain('drvchip__count">1<')
+  })
+  it('leaves a driver-file module to the driver rows (no double count)', async () => {
+    const html = await render({
+      missingOnBoard: [
+        { module: 'bme280', parts: ['BME280'], drivers: [{ source: 'bme280.py', target: 'lib/bme280.py' }] }
+      ]
+    })
+    expect(html).toBe('')
   })
 })

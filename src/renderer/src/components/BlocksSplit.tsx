@@ -97,9 +97,13 @@ export interface BlocksSplitProps {
   mode: BlocksViewMode
   /** Set the emphasis (the tab pair in the narrow layout uses it too). */
   onModeChange: (mode: BlocksViewMode) => void
+  /** Report the parts this program uses whose drivers need installing. When
+   *  given, the host shows them in its Drivers chip and the split shows no
+   *  banner of its own (a banner pushed the canvas down). */
+  onDriverNeeds?: (needs: PartDriverNeed[]) => void
 }
 
-export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Element {
+export function BlocksSplit({ mode, onModeChange, onDriverNeeds }: BlocksSplitProps): JSX.Element {
   const { openFiles, activeId, updateBlocks, currentFolder } = useWorkspace()
   const layout = useWorkspaceLayout()
   // The advanced-blocks tier (#1210). Read here for the offer below, which is
@@ -594,6 +598,11 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
     }
     return out
   }, [partsUsed, partFor])
+  // Hand them to the host's chip; clear them when this file closes.
+  useEffect(() => {
+    onDriverNeeds?.(driverNeeds)
+  }, [driverNeeds, onDriverNeeds])
+  useEffect(() => () => onDriverNeeds?.([]), [onDriverNeeds])
 
   if (!file || !doc) {
     return (
@@ -662,7 +671,7 @@ export function BlocksSplit({ mode, onModeChange }: BlocksSplitProps): JSX.Eleme
 
   return (
     <div className="blocks-split" ref={hostRef}>
-      {driverNeeds.length > 0 && <DriverInstallBanner needs={driverNeeds} />}
+      {!onDriverNeeds && driverNeeds.length > 0 && <DriverInstallBanner needs={driverNeeds} />}
       {/* The blocks are all here — only the drawer they came from is missing (#1212). */}
       {offerAdvanced && (
         <Notice

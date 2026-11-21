@@ -6,6 +6,7 @@ import { installPartDriver } from './driver-install'
 import { Notice } from './Notice'
 import { dispatchDeviceAction } from './device-bus'
 import type { DriverFile } from '../../../preload/index.d'
+import type { RequiredModule } from './part-imports'
 import './ErcPanel.css'
 import './DriverInstallBanner.css'
 
@@ -60,6 +61,24 @@ interface DriverStatus {
   note?: string
 }
 
+/**
+ * The project-parts check for the OPEN FILE (#166), owned by AppShell: modules
+ * the placed parts need that this file doesn't import, and libraries the board
+ * hasn't got. It used to be its own full-width banner above the whole app; it
+ * rides in the same chip now, so the editor has ONE place for "your parts need
+ * something" and nothing pushes the content down.
+ */
+export interface PartsNotice {
+  /** Required modules the active file doesn't import. */
+  missingImports: RequiredModule[]
+  /** Required modules not importable on the connected board. */
+  missingOnBoard: RequiredModule[]
+  installing: boolean
+  error?: string | null
+  /** Install the missing board libraries (driver files copy; `url` ones via mip). */
+  onInstall: () => void
+}
+
 export interface DriverInstallBannerProps {
   /** The placed parts that declare drivers (from `placedPartsNeedingDrivers`). */
   needs: PartDriverNeed[]
@@ -74,6 +93,8 @@ export interface DriverInstallBannerProps {
   /** Chip only: open the Electronics workspace, where the parts are placed.
    *  Absent ⇒ no such button. */
   onShowParts?: () => void
+  /** Chip only: the open file's parts check (see {@link PartsNotice}). */
+  parts?: PartsNotice
 }
 
 /** A stable id for one driver ROW, independent of its list position — so filtering
@@ -90,7 +111,8 @@ function driverLabel(d: DriverFile): string {
 export function DriverInstallBanner({
   needs,
   layout = 'banner',
-  onShowParts
+  onShowParts,
+  parts
 }: DriverInstallBannerProps): JSX.Element | null {
   const chip = layout === 'chip'
   const [dismissed, setDismissed] = useState(false)
@@ -260,8 +282,19 @@ export function DriverInstallBanner({
     [needs, present]
   )
 
+  // The parts check's board libraries that the driver rows don't already cover:
+  // a part that ships driver files is a driver row above (and its module is the
+  // same file), so only modules with nothing but a mip source are left over.
+  const extraLibs = chip ? (parts?.missingOnBoard ?? []).filter((m) => !(m.drivers?.length ?? 0)) : []
+  const installableExtra = extraLibs.filter((m) => m.url)
+  const missingImports = chip ? (parts?.missingImports ?? []) : []
+
   // A chip is already out of the way, so it never dismisses — ✕ closes its popover.
-  if (visibleNeeds.length === 0 || (dismissed && !chip)) return null
+  if (
+    (visibleNeeds.length === 0 && extraLibs.length === 0 && missingImports.length === 0) ||
+    (dismissed && !chip)
+  )
+    return null
 
   const setStatus = (id: string, status: DriverStatus): void =>
     setStatuses((prev) => ({ ...prev, [id]: status }))
@@ -305,7 +338,12 @@ export function DriverInstallBanner({
     }
   }
 
-  installRef.current = installAll
+  // The chip's one Install: the driver rows, then any leftover mip libraries.
+  const installEverything = async (): Promise<void> => {
+    await installAll()
+    if (connected && installableExtra.length > 0 && !parts?.installing) parts?.onInstall()
+  }
+  installRef.current = installEverything
 
   const rows = visibleNeeds.flatMap((need) =>
     need.drivers.map((d) => ({ need, d, id: driverKey(need, d) }))
@@ -407,8 +445,31 @@ export function DriverInstallBanner({
   // The code editor's chip (beside Find): amber while something needs
   // installing, red after a failure, green once everything is in. Its card hangs
   // OVER the code — nothing in the editor moves when it opens.
-  const tone = errored ? 'error' : allOk ? 'ok' : 'warning'
-  const count = total - done
+  const libsBusy = !!parts?.installing
+  const libsError = parts?.error ?? null
+  const anyErrored = errored || !!libsError
+  // What still needs installing: driver rows not yet in, plus leftover libraries.
+  const toInstall = total - done + extraLibs.length
+  const everythingIn = toInstall === 0 && (allOk || total === 0)
+  const onlyImports = toInstall === 0 && total === 0
+  const tone = anyErrored ? 'error' : onlyImports ? 'warning' : everythingIn ? 'ok' : 'warning'
+  const count = onlyImports ? missingImports.length : toInstall
+  const listNames = (ms: RequiredModule[]): string => ms.map((m) => m.module).join(', ')
+  const title =
+    total > 0
+      ? summary
+      : extraLibs.length > 0
+        ? `The board is missing ${extraLibs.length === 1 ? 'a library' : `${extraLibs.length} libraries`}`
+        : `This file doesn't import ${listNames(missingImports)}`
+  const installLabel =
+    total > 0 && !allOk
+      ? actionLabel
+      : libsBusy
+        ? 'Installing…'
+        : libsError
+          ? 'Retry install'
+          : `Install ${installableExtra.length === 1 ? installableExtra[0].module : `${installableExtra.length} libraries`}`
+  const showInstall = (total > 0 && !allOk) || installableExtra.length > 0
   return (
     <div className="drvchip" ref={chipRef}>
       <button
@@ -423,11 +484,11 @@ export function DriverInstallBanner({
         }}
         aria-expanded={popOpen}
         aria-haspopup="dialog"
-        title={`${summary} — click for details`}
+        title={`${title} — click for details`}
       >
         <span className="drvchip__dot" aria-hidden="true" />
-        Drivers
-        {allOk ? (
+        {onlyImports ? 'Imports' : 'Drivers'}
+        {everythingIn && !onlyImports ? (
           <span className="drvchip__count drvchip__count--ok" aria-hidden="true">
             ✓
           </span>
@@ -439,12 +500,12 @@ export function DriverInstallBanner({
         <div
           className={`drvchip__pop drvchip__pop--${tone}`}
           role="dialog"
-          aria-label="Part drivers"
+          aria-label="Part drivers and libraries"
           style={popPos ?? undefined}
         >
           <div className="drvchip__head">
             <span className="drvchip__dot" aria-hidden="true" />
-            <h4 className="drvchip__title">{summary}</h4>
+            <h4 className="drvchip__title">{title}</h4>
             <button
               type="button"
               className="drvchip__close"
@@ -455,7 +516,7 @@ export function DriverInstallBanner({
               ✕
             </button>
           </div>
-          {!allOk && (
+          {total > 0 && !allOk && (
             <p className="drvchip__text">
               {allStale
                 ? 'An older copy is on the board. Update it so your code gets the fixed version.'
@@ -465,16 +526,41 @@ export function DriverInstallBanner({
             </p>
           )}
           {boardHint && <p className="drvchip__hint">{boardHint}</p>}
-          {list}
+          {total > 0 && list}
+          {extraLibs.length > 0 && (
+            <ul className="drvbanner__list">
+              {extraLibs.map((m) => (
+                <li key={m.module} className="drvbanner__row drvbanner__row--pending">
+                  <span className="drvbanner__dot drvbanner__dot--pending" aria-hidden="true" />
+                  <span className="drvbanner__row-part">{m.module}</span>
+                  <span className="drvbanner__row-driver">for {m.parts.join(', ')}</span>
+                  {!m.url && (
+                    <span className="drvbanner__row-error">
+                      Snakie doesn&rsquo;t know where to get this one. Copy it into /lib on the board.
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {libsError && <p className="drvchip__hint">Couldn&rsquo;t install: {libsError}</p>}
+          {missingImports.length > 0 && (
+            <p className="drvchip__text">
+              {total > 0 || extraLibs.length > 0 ? 'Also, this file ' : 'This file '}
+              doesn&rsquo;t <code>import</code> <strong>{listNames(missingImports)}</strong> yet (needed by{' '}
+              {[...new Set(missingImports.flatMap((m) => m.parts))].join(', ')}). Add the import when
+              your code uses {missingImports.length === 1 ? 'that part' : 'those parts'}.
+            </p>
+          )}
           <div className="drvchip__actions">
-            {!allOk && (
+            {showInstall && (
               <button
                 type="button"
                 className="drvchip__primary"
-                onClick={() => void installAll()}
-                disabled={running}
+                onClick={() => void installEverything()}
+                disabled={running || libsBusy}
               >
-                {actionLabel}
+                {installLabel}
               </button>
             )}
             {onShowParts && (
