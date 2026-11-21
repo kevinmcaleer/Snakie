@@ -20,6 +20,7 @@ import mpWasmUrl from '@micropython/micropython-webassembly-pyscript/micropython
 import { delScratch } from '../../../shared/device-scratch'
 import { SimOutputPump } from '../../../shared/sim-output-pump'
 import { SIM_MACHINE_PY } from '../../../shared/sim-machine'
+import { SIM_CIRCUITPY_PY } from '../../../shared/sim-circuitpython'
 import { INSTRUMENTS_PY, SNAKIE_PY, TURTLE_PY } from './web-lib-sources'
 
 type InMsg =
@@ -101,6 +102,13 @@ self.onmessage = async (e: MessageEvent<InMsg>): Promise<void> => {
       mp.runPython(SIM_MACHINE_PY)
     } catch {
       /* best-effort — a missing machine stub just means the ImportError returns */
+    }
+    // CircuitPython's hardware modules (board, digitalio, pwmio, …) on top of
+    // that machine, so CircuitPython code runs on the sim too.
+    try {
+      mp.runPython(SIM_CIRCUITPY_PY)
+    } catch {
+      /* best-effort — without it CircuitPython imports fail as before */
     }
     // Seed the bundled `instruments` + `snakie` libraries into the VFS so the
     // demos' `from snakie import Servo` / `import instruments` just work (#267).
