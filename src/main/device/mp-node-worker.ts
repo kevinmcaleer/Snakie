@@ -15,6 +15,7 @@
 import { parentPort } from 'worker_threads'
 import { createRequire } from 'module'
 import { SIM_MACHINE_PY } from '../../shared/sim-machine'
+import { SIM_CIRCUITPY_PY } from '../../shared/sim-circuitpython'
 import { SimOutputPump } from '../../shared/sim-output-pump'
 import type { MicroPythonInstance } from '@micropython/micropython-webassembly-pyscript/micropython.mjs'
 
@@ -71,6 +72,13 @@ port.on('message', async (msg: InMsg): Promise<void> => {
       loaded.runPython(SIM_MACHINE_PY)
     } catch {
       /* best-effort — a missing machine stub just means the ImportError returns */
+    }
+    // CircuitPython's hardware modules (board, digitalio, pwmio, …) on top of
+    // that machine, so CircuitPython code runs on the sim too.
+    try {
+      loaded.runPython(SIM_CIRCUITPY_PY)
+    } catch {
+      /* best-effort — without it CircuitPython imports fail as before */
     }
     loaded.replInit()
     flush()

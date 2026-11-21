@@ -325,6 +325,67 @@ export function resolvePinToken(token: string, varMap: Map<string, string>): str
 }
 
 /**
+ * CircuitPython's `board` pin name → the token the board layout matches
+ * (`board.GP15` → `GP15`, `board.LED` → `LED`, `board.A0` → `GP26`).
+ */
+export function circuitPythonPinToken(name: string): string {
+  const a = /^A([0-3])$/.exec(name)
+  if (a) return `GP${26 + Number(a[1])}`
+  return name
+}
+
+const CP_BOARD_PIN = /\bboard\.([A-Za-z_]\w*)/g
+
+/**
+ * One CircuitPython wiring line, or null when the line isn't one:
+ *   - `X = digitalio.DigitalInOut(board.GP0)`  → output | input
+ *   - `X = pwmio.PWMOut(board.GP0, …)`         → pwm
+ *   - `X = analogio.AnalogIn(board.A0)`        → adc
+ *   - `X = busio.I2C(board.GP5, board.GP4)`    → i2c (SCL, SDA: CircuitPython's order)
+ *   - `X = busio.SPI(board.GP2, MOSI=board.GP3, MISO=board.GP4)` → spi
+ * The direction of a DigitalInOut comes from what the program does with it
+ * later (`.direction = …OUTPUT` / `.switch_to_output()` vs INPUT / input),
+ * defaulting to output like a bare `Pin(n)`.
+ */
+function parseCircuitPythonLine(rhs: string, variable: string, source: string): UsedPins | null {
+  const ctor = rhs.match(/(?:\b(?:digitalio|pwmio|analogio|busio)\.)?\b(DigitalInOut|PWMOut|AnalogIn|I2C|SPI)\s*\(/)
+  if (!ctor) return null
+  const openIdx = rhs.indexOf('(', ctor.index)
+  const closeIdx = matchParen(rhs, openIdx)
+  const args = closeIdx > openIdx ? rhs.slice(openIdx + 1, closeIdx) : rhs.slice(openIdx + 1)
+  const names = [...args.matchAll(CP_BOARD_PIN)].map((m) => m[1])
+  // No `board.` pin: a MicroPython `I2C(0, …)` / `SPI(…)`, left to the main parser.
+  if (names.length === 0) return null
+  const ctorSrc = (closeIdx > openIdx ? rhs.slice(ctor.index, closeIdx + 1) : rhs.slice(ctor.index)).trim()
+  const pins = names.map(circuitPythonPinToken)
+  switch (ctor[1]) {
+    case 'PWMOut':
+      return { type: 'pwm', pins: pins.slice(0, 1), variable, constructor: ctorSrc }
+    case 'AnalogIn':
+      return { type: 'adc', pins: pins.slice(0, 1), variable, constructor: ctorSrc }
+    case 'I2C':
+      return { type: 'i2c', pins: pins.slice(0, 2), variable, constructor: ctorSrc, roles: ['SCL', 'SDA'].slice(0, Math.min(2, pins.length)) }
+    case 'SPI': {
+      const roles = [...args.matchAll(/(?:(MOSI|MISO|clock)\s*=\s*)?board\./g)].map((m, i) =>
+        m[1] ? (m[1] === 'clock' ? 'SCK' : m[1]) : i === 0 ? 'SCK' : i === 1 ? 'MOSI' : 'MISO'
+      )
+      return { type: 'spi', pins, variable, constructor: ctorSrc, roles }
+    }
+    default: {
+      let type: 'output' | 'input' = 'output'
+      if (variable) {
+        // `variable` is a bare identifier (the assign regex), so it needs no escaping.
+        const v = variable
+        const isOut = new RegExp(`\\b${v}\\.(?:direction\\s*=\\s*(?:\\w+\\.)*OUTPUT|switch_to_output\\b|value\\s*=(?!=))`).test(source)
+        const isIn = new RegExp(`\\b${v}\\.(?:direction\\s*=\\s*(?:\\w+\\.)*INPUT|switch_to_input\\b|pull\\s*=)`).test(source)
+        if (isIn && !isOut) type = 'input'
+      }
+      return { type, pins: pins.slice(0, 1), variable, constructor: ctorSrc }
+    }
+  }
+}
+
+/**
  * Parse `source` into the list of connections it wires up.
  *
  * Each detected constructor yields one {@link UsedPins}. The scan is line-based
@@ -350,6 +411,13 @@ export function parsePins(source: string): UsedPins[] {
     const assign = line.match(/^([A-Za-z_]\w*)\s*(?::[^=]+)?=\s*(.*)$/)
     const variable = assign ? assign[1] : ''
     const rhs = assign ? assign[2] : line
+
+    // CircuitPython wires pins through `board.*` names rather than `Pin(n)`.
+    const cp = parseCircuitPythonLine(rhs, variable, source)
+    if (cp) {
+      out.push(cp)
+      continue
+    }
 
     // Identify the outermost constructor on the RHS and its argument span.
     // ADC sits before the bare `Pin` fallback so `ADC(Pin(26))` reads as adc.

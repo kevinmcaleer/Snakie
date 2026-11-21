@@ -416,3 +416,33 @@ describe('parsePins — instrument pins', () => {
     ])
   })
 })
+
+describe('parsePins — CircuitPython board pins', () => {
+  it('reads DigitalInOut, PWMOut and AnalogIn on board pins', () => {
+    const src = [
+      'import board, digitalio, pwmio, analogio',
+      'led = digitalio.DigitalInOut(board.LED)',
+      'led.direction = digitalio.Direction.OUTPUT',
+      'motor = pwmio.PWMOut(board.GP0, frequency=1000)',
+      'pot = analogio.AnalogIn(board.A0)',
+      'button = digitalio.DigitalInOut(board.GP14)',
+      'button.switch_to_input(pull=digitalio.Pull.UP)'
+    ].join('\n')
+    expect(parsePins(src).map((u) => [u.variable, u.type, u.pins])).toEqual([
+      ['led', 'output', ['LED']],
+      ['motor', 'pwm', ['GP0']],
+      ['pot', 'adc', ['GP26']],
+      ['button', 'input', ['GP14']]
+    ])
+  })
+
+  it('reads busio.I2C in CircuitPython order (SCL, SDA)', () => {
+    const [u] = parsePins('import board, busio\ni2c = busio.I2C(board.GP5, board.GP4)')
+    expect(u).toMatchObject({ type: 'i2c', pins: ['GP5', 'GP4'], roles: ['SCL', 'SDA'], variable: 'i2c' })
+  })
+
+  it('leaves MicroPython I2C to the machine parser', () => {
+    const [u] = parsePins('from machine import I2C, Pin\ni2c = I2C(0, sda=Pin(4), scl=Pin(5))')
+    expect(u).toMatchObject({ type: 'i2c', pins: ['4', '5'] })
+  })
+})
