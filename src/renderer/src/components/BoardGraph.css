@@ -61,6 +61,10 @@
 .boardgraph__bar--drag .boardgraph__viewtabs,
 .boardgraph__bar--drag .boardgraph__live,
 .boardgraph__bar--drag .boardgraph__help-btn,
+.boardgraph__bar--drag .erc__badge,
+.boardgraph__bar--drag .drvchip,
+.boardgraph__bar--drag .esync__button,
+.boardgraph__bar--drag .esync__scrim,
 .boardgraph__bar--drag .boardgraph__key {
   -webkit-app-region: no-drag;
   app-region: no-drag;
@@ -1091,4 +1095,12 @@
 .boardgraph__pot-val {
   font-family: var(--font-mono, monospace);
   color: var(--text-muted, #999);
+}
+
+/* The Electronics ⇄ Build Sync button, hosted in the header's status cluster:
+   match the ERC / Drivers chips' height so the row reads as one family. */
+.boardgraph__actions .esync__button {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12.5px;
 }

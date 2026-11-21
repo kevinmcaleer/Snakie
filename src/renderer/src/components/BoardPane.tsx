@@ -394,12 +394,12 @@ export function BoardPane({ mat }: BoardPaneProps = {}): JSX.Element {
         onAddManyToProject={addManyToProject}
         pendingSwapBoard={robotLoaded ? pendingBoardSwap : null}
         onSwapConsumed={clearBoardSwap}
+        // Electronics ⇄ Build reconcile (#717) — same control as the Build
+        // workspace and the pop-out window, self-contained on the folder. It
+        // lives in the board header: floating bottom-left it covered the
+        // Connections strip's title.
+        headerActions={<SyncControl folder={folder} />}
       />
-      {/* Electronics ⇄ Build reconcile (#717) — same control as the Build
-          workspace and the pop-out window, self-contained on the folder. */}
-      <div className="esync__float">
-        <SyncControl folder={folder} />
-      </div>
       {editing && (
         <PartEditor
           libraryId={editing.libraryId}

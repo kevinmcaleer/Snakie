@@ -332,14 +332,6 @@
 .shell[data-size='phone'] .shell__solo-board .wc__table-headrow > button:not(.wc__table-head--toggle) {
   min-width: var(--em-tap);
 }
-.shell[data-size='phone'] .shell__solo-board .esync__float {
-  left: auto;
-  right: var(--em-edge);
-  /* Above the Connections strip (40) and clear of the controls pill (48). */
-  bottom: calc(var(--em-tap) + var(--em-edge) + 56px);
-  /* Under the sheets (30): it was floating over the open Library. */
-  z-index: 7;
-}
 .shell[data-size='phone'] .shell__solo-board .esync__button {
   min-height: var(--em-tap);
   padding-inline: 12px;
@@ -374,9 +366,6 @@
   }
   .shell[data-size='phone'] .shell__solo-board .wc__browser-collapse {
     transform: none;
-  }
-  .shell[data-size='phone'] .shell__solo-board .esync__float {
-    bottom: calc(var(--em-tap) + var(--em-edge) + 8px);
   }
   /* ~270px of panel: keep the library tool bar to one (scrolling) row, and let a
      selected part's detail take the whole panel — beside the list, its "Add to
