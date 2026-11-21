@@ -2118,6 +2118,15 @@ body {
   overflow-y: auto;
 }
 
+/* Monaco also caps the CONTENTS at max(a quarter of the editor, 250px), inline.
+ * The function card (signature, docstring, parameters, usages, hints) is taller
+ * than that, and 250px hid the usages and hints behind a scroll. Let it grow to
+ * the same 60vh; Monaco still flips it above/below the line to fit and still
+ * scrolls past that. */
+.editor-host .monaco-editor .monaco-hover .monaco-hover-content {
+  max-height: 60vh !important;
+}
+
 /* Prose wraps on its own; long unbroken tokens (paths, URLs, dotted names) must
  * be allowed to break, or one of them forces the widget past its max-width. */
 .editor-host .monaco-editor .monaco-hover .monaco-hover-content {
