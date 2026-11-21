@@ -1,0 +1,29 @@
+/*
+ * The kevsrobots account button in the toolbar (kevsrobots.com#581). It draws
+ * itself (vendor/kr-suite.js); this maps Snakie's Soft Shell tokens onto the
+ * suite's `--kr-*` properties so it follows both skins.
+ */
+.suite-account {
+  --kr-ink: var(--head, var(--text));
+  --kr-ink-soft: var(--txt2, var(--text-muted));
+  --kr-line: var(--shellbd, var(--border));
+  --kr-panel: var(--card, var(--bg-elevated));
+  --kr-sunk: var(--panel2, var(--bg));
+  --kr-font-ui: var(--font-ui);
+  flex: 0 0 auto;
+}
+
+/* Before the module upgrades them, keep their space so the toolbar doesn't jump. */
+.suite-account:not(:defined) {
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+}
+
+/* The account button sits at the far right, in the toolbar's end side. */
+.toolbar__side--end {
+  justify-content: flex-end;
+}
+.toolbar__side--end > * {
+  pointer-events: auto;
+}
