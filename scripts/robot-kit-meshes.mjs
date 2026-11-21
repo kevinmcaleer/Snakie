@@ -9,6 +9,10 @@
  * TT motor from Adafruit's CAD library, the HC-SR04 from the FreeCAD library)
  * ship that file instead and are not generated here.
  *
+ * It also builds the two Open Duck Mini bus-servo parts, the Feetech STS3215 and
+ * the Waveshare Bus Servo Adapter (A). Feetech and Waveshare publish drawings
+ * but no model licensed for redistribution, so these are modelled the same way.
+ *
  *   node scripts/robot-kit-meshes.mjs --all            # every part below → its model.stl
  *   node scripts/robot-kit-meshes.mjs --part mx1508    # one part folder
  *   node scripts/robot-kit-meshes.mjs --part pico2w --out path.stl
@@ -32,6 +36,16 @@
  *   4×AA pack — the two-over-two holder every chassis kit ships (≈31.5 × 59.5
  *               × 30.5 mm outside; AA cells are Ø14.5 × 50.5 mm), with the
  *               stubs of its red and black leads leaving the top end.
+ *   STS3215   — Feetech's listed 45.2 × 24.7 × 35 mm case, with the horn,
+ *               the two 5264-3P ports, the recessed lower panel and the four
+ *               M2 face holes placed off the part's own photo (the same photo
+ *               its Board View drawing uses). Z is the 35 mm axis, so the
+ *               horn face is the top, as the part is drawn.
+ *   Bus Servo Adapter (A) — the 42 × 34 mm board from Waveshare's wiki, 1.6 mm
+ *               FR-4, with every part read off its top-down photo: the two
+ *               5264-3P servo ports, the TX/RX/GND header, the A/B jumper
+ *               block, the DC jack, the 3.5 mm DC+/DC- terminal, the USB-C
+ *               receptacle and the larger chips.
  * Everything is a named constant below, so a measured correction is a one-line
  * change plus a re-run.
  */
@@ -418,6 +432,187 @@ export function aaPackGeometries(p = AA_PACK) {
   return out
 }
 
+// --- Feetech STS3215 bus servo -------------------------------------------------
+
+/** Photo position → model mm. The part's picture is `w` × `h` mm with its top at
+ *  +y; `fx`/`fy` are fractions across / down it, as the 2-D part stores them. */
+const atX = (w, fx) => fx * w - w / 2
+const atY = (h, fy) => h / 2 - fy * h
+
+export const STS3215 = {
+  /** The case: 24.7 wide (x) by 45.2 long (y), 33 mm to the horn face. */
+  widthMm: 24.7,
+  lengthMm: 45.2,
+  caseHeightMm: 33,
+  cornerRadiusMm: 2,
+  /** The horn face is a 1 mm skin carrying the four M2 holes, so they read as
+   *  holes rather than painted dots. Centres as fractions of the photo. */
+  faceMm: 1,
+  faceHoles: { diameterMm: 2, at: [[0.075, 0.415], [0.925, 0.415], [0.075, 0.955], [0.925, 0.955]] },
+  /** The output: a raised boss and the Ø19 aluminium horn (four Ø3 holes on a
+   *  12 mm circle, a Ø5 centre bore), 10 mm in from the output end. Case + boss
+   *  + horn = the listed 35 mm. */
+  horn: { yFrac: 0.222, diameterMm: 19, thicknessMm: 1.5, bossDiameterMm: 11, bossMm: 0.5, holeMm: 3, holeCircleMm: 12, boreMm: 5 },
+  /** The two 5264-3P ports (white, ~10 × 4.9 mm), standing 1.2 mm proud of the
+   *  face, centred on the contact rows of the 2-D part. */
+  port: { widthMm: 9.9, depthMm: 4.9, proudMm: 1.2, yFrac: 0.532, xFracs: [0.296, 0.705] },
+  /** The raised label panel on the lower half of the face. */
+  panel: { widthMm: 17.9, lengthMm: 11.7, yFrac: 0.79, proudMm: 0.6 },
+  /** The bottom cover's seam: a band 4 mm up, a touch inset. */
+  cover: { heightMm: 4, insetMm: 0.3 }
+}
+
+/** Total height to the top of the horn. */
+export function sts3215HeightMm(s = STS3215) {
+  return s.caseHeightMm + s.horn.bossMm + s.horn.thicknessMm
+}
+
+export function sts3215Geometries(s = STS3215) {
+  const W = s.widthMm
+  const L = s.lengthMm
+  const out = []
+  // Bottom cover, then the case, then the horn face with its four holes.
+  out.push({
+    name: 'cover',
+    geo: pcb(roundedRect(new THREE.Shape(), W - 2 * s.cover.insetMm, L - 2 * s.cover.insetMm, s.cornerRadiusMm), s.cover.heightMm)
+  })
+  const caseBody = pcb(roundedRect(new THREE.Shape(), W, L, s.cornerRadiusMm), s.caseHeightMm - s.faceMm - s.cover.heightMm)
+  caseBody.translate(0, 0, s.cover.heightMm)
+  out.push({ name: 'case', geo: caseBody })
+  const face = roundedRect(new THREE.Shape(), W, L, s.cornerRadiusMm)
+  for (const [fx, fy] of s.faceHoles.at) face.holes.push(holePath(atX(W, fx), atY(L, fy), s.faceHoles.diameterMm))
+  const faceGeo = pcb(face, s.faceMm)
+  faceGeo.translate(0, 0, s.caseHeightMm - s.faceMm)
+  out.push({ name: 'face', geo: faceGeo })
+  // Horn: boss, then the disc with its holes.
+  const h = s.horn
+  const hy = atY(L, h.yFrac)
+  const top = s.caseHeightMm
+  out.push({ name: 'horn-boss', geo: cyl(h.bossDiameterMm, h.bossMm, 'z', 0, hy, top + h.bossMm / 2, 32) })
+  const disc = new THREE.Shape()
+  disc.absarc(0, 0, h.diameterMm / 2, 0, Math.PI * 2, false)
+  disc.holes.push(holePath(0, 0, h.boreMm))
+  for (let i = 0; i < 4; i++) {
+    const a = (i * Math.PI) / 2
+    disc.holes.push(holePath((Math.cos(a) * h.holeCircleMm) / 2, (Math.sin(a) * h.holeCircleMm) / 2, h.holeMm))
+  }
+  const discGeo = new THREE.ExtrudeGeometry(disc, { depth: h.thicknessMm, bevelEnabled: false, curveSegments: 24 })
+  discGeo.translate(0, hy, top + h.bossMm)
+  out.push({ name: 'horn', geo: discGeo })
+  // The two bus ports.
+  const p = s.port
+  p.xFracs.forEach((fx, i) =>
+    out.push({
+      name: `port-${i + 1}`,
+      geo: box(p.widthMm, p.depthMm, p.proudMm, atX(W, fx), atY(L, p.yFrac), top + p.proudMm / 2)
+    })
+  )
+  const pn = s.panel
+  out.push({ name: 'panel', geo: box(pn.widthMm, pn.lengthMm, pn.proudMm, 0, atY(L, pn.yFrac), top + pn.proudMm / 2) })
+  return out
+}
+
+// --- Waveshare Bus Servo Adapter (A) -----------------------------------------------
+
+export const BUS_ADAPTER = {
+  widthMm: 42,
+  lengthMm: 34,
+  thicknessMm: 1.6,
+  cornerRadiusMm: 2,
+  /** Ø3 corner holes, at the 2-D part's mounting-hole positions. */
+  holes: { diameterMm: 3, at: [[0.065, 0.08], [0.926, 0.08], [0.065, 0.897], [0.926, 0.897]] },
+  /** Two vertical 5264-3P servo ports along the top edge. */
+  servoPort: { widthMm: 9.9, depthMm: 4.9, heightMm: 6, yFrac: 0.085, xFracs: [0.251, 0.536] },
+  /** The TX/RX/GND 0.1" header: black base, three square posts. */
+  uart: { xFrac: 0.796, yFrac: 0.052, pitchMm: 2.54, baseMm: 2.5, postMm: 0.64, postHeightMm: 6 },
+  /** The A/B mode jumpers: a 2 × 3 header with two yellow shunts on the B rows. */
+  jumper: { xFrac: 0.86, yFrac: 0.48, pitchMm: 2.54, baseMm: 2.5, postHeightMm: 6, shunt: { widthMm: 2.5, lengthMm: 5, heightMm: 6 } },
+  /** The 5.5 × 2.1 mm DC barrel jack, its mouth just past the bottom edge. */
+  dcJack: { xFrac: 0.24, topFrac: 0.555, widthMm: 9, lengthMm: 14.5, heightMm: 11, barrelMm: 6.4, overhangMm: 0.5 },
+  /** The 2-way 3.5 mm DC+/DC- screw terminal. */
+  terminal: { xFrac: 0.5, widthMm: 7.2, lengthMm: 7.6, heightMm: 8.5, overhangMm: 0.3, screwMm: 2.8 },
+  /** USB-C receptacle, 0.6 mm proud of the bottom edge. */
+  usb: { xFrac: 0.755, widthMm: 8.9, lengthMm: 7.35, heightMm: 3.2, overhangMm: 0.6 },
+  /** The larger chips, as [name, xFrac, yFrac, w, l, h]. */
+  chips: [
+    ['regulator', 0.585, 0.285, 6.5, 3.5, 1.6],
+    ['regulator-tab', 0.585, 0.225, 3.2, 1.5, 1.6],
+    ['buck', 0.498, 0.69, 4.9, 3.9, 1.5],
+    ['inductor', 0.61, 0.745, 4, 4, 2],
+    ['ch343', 0.72, 0.6, 3, 3, 0.9],
+    ['diode', 0.045, 0.76, 2.6, 4.3, 2],
+    ['buffer-1', 0.13, 0.415, 2.9, 1.6, 1.1],
+    ['buffer-2', 0.32, 0.415, 2.9, 1.6, 1.1]
+  ]
+}
+
+export function busAdapterGeometries(a = BUS_ADAPTER) {
+  const W = a.widthMm
+  const L = a.lengthMm
+  const t = a.thicknessMm
+  const board = roundedRect(new THREE.Shape(), W, L, a.cornerRadiusMm)
+  for (const [fx, fy] of a.holes.at) board.holes.push(holePath(atX(W, fx), atY(L, fy), a.holes.diameterMm))
+  const out = [{ name: 'pcb', geo: pcb(board, t) }]
+  const sp = a.servoPort
+  sp.xFracs.forEach((fx, i) =>
+    out.push({
+      name: `servo-port-${i + 1}`,
+      geo: box(sp.widthMm, sp.depthMm, sp.heightMm, atX(W, fx), atY(L, sp.yFrac), t + sp.heightMm / 2)
+    })
+  )
+  // UART header: base + three posts.
+  const u = a.uart
+  const ux = atX(W, u.xFrac)
+  const uy = atY(L, u.yFrac)
+  out.push({ name: 'uart-base', geo: box(3 * u.pitchMm, u.pitchMm, u.baseMm, ux, uy, t + u.baseMm / 2) })
+  for (let i = -1; i <= 1; i++)
+    out.push({
+      name: `uart-pin-${i + 2}`,
+      geo: box(u.postMm, u.postMm, u.postHeightMm, ux + i * u.pitchMm, uy, t + u.postHeightMm / 2)
+    })
+  // Jumper block: base, then a shunt over each column's lower pair.
+  const j = a.jumper
+  const jx = atX(W, j.xFrac)
+  const jy = atY(L, j.yFrac)
+  out.push({ name: 'jumper-base', geo: box(2 * j.pitchMm, 3 * j.pitchMm, j.baseMm, jx, jy, t + j.baseMm / 2) })
+  for (const sx of [-0.5, 0.5]) {
+    out.push({
+      name: `jumper-pin-${sx < 0 ? 'l' : 'r'}`,
+      geo: box(0.64, 0.64, j.postHeightMm, jx + sx * j.pitchMm, jy + j.pitchMm, t + j.postHeightMm / 2)
+    })
+    out.push({
+      name: `jumper-shunt-${sx < 0 ? 'l' : 'r'}`,
+      geo: box(j.shunt.widthMm, j.shunt.lengthMm, j.shunt.heightMm, jx + sx * j.pitchMm, jy - j.pitchMm / 2, t + j.baseMm + j.shunt.heightMm / 2 - 2)
+    })
+  }
+  // DC jack: body plus the barrel mouth facing -y.
+  const d = a.dcJack
+  const dx = atX(W, d.xFrac)
+  const dTop = atY(L, d.topFrac)
+  const dCy = dTop - d.lengthMm / 2
+  out.push({ name: 'dc-jack', geo: box(d.widthMm, d.lengthMm, d.heightMm, dx, dCy, t + d.heightMm / 2) })
+  out.push({ name: 'dc-jack-mouth', geo: cyl(d.barrelMm, d.overhangMm + 0.5, 'y', dx, dTop - d.lengthMm - d.overhangMm / 2 + 0.25, t + d.heightMm / 2, 24) })
+  // Terminal block with two screw heads on top.
+  const tb = a.terminal
+  const tx = atX(W, tb.xFrac)
+  const ty = -L / 2 + tb.lengthMm / 2 - tb.overhangMm
+  out.push({ name: 'terminal', geo: box(tb.widthMm, tb.lengthMm, tb.heightMm, tx, ty, t + tb.heightMm / 2) })
+  for (const sx of [-1, 1])
+    out.push({
+      name: `terminal-screw-${sx < 0 ? 1 : 2}`,
+      geo: cyl(tb.screwMm, 0.4, 'z', tx + (sx * tb.widthMm) / 4, ty + 1, t + tb.heightMm + 0.2, 20)
+    })
+  // USB-C.
+  const us = a.usb
+  out.push({
+    name: 'usb-c',
+    geo: box(us.widthMm, us.lengthMm, us.heightMm, atX(W, us.xFrac), -L / 2 + us.lengthMm / 2 - us.overhangMm, t + us.heightMm / 2)
+  })
+  for (const [name, fx, fy, w, l, h] of a.chips)
+    out.push({ name, geo: box(w, l, h, atX(W, fx), atY(L, fy), t + h / 2) })
+  return out
+}
+
 // --- Registry ------------------------------------------------------------------
 
 /** Part id → the geometries its model is made of, and its expected footprint. */
@@ -427,6 +622,14 @@ export const PARTS = {
   'battery-aa-4': {
     footprint: [AA_PACK.widthMm, AA_PACK.lengthMm],
     build: () => aaPackGeometries()
+  },
+  'sts3215-bus-servo': {
+    footprint: [STS3215.widthMm, STS3215.lengthMm],
+    build: () => sts3215Geometries()
+  },
+  'waveshare-bus-servo-adapter': {
+    footprint: [BUS_ADAPTER.widthMm, BUS_ADAPTER.lengthMm],
+    build: () => busAdapterGeometries()
   }
 }
 

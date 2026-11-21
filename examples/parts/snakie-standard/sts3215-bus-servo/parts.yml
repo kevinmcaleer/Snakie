@@ -30,57 +30,48 @@ dimensions:
 shape:
   kind: rect
   cornerRadiusMm: 2
-headers:
-- edge: bottom
+# The two 5264-3P daisy-chain ports, drawn as their housings (2.5 mm pitch, the
+# same pitch as JST XH). Contact order is D, V, G left to right with the horn up,
+# so the flattened pin order (and every wire's #index) is unchanged.
+# Their silk labels sit a little lower, clear of the wire pins.
+headers: []
+connectors:
+- kind: jst
+  variant: xh
+  label: BUS 1
+  labelOffset:
+    x: 0
+    y: 0.035
+  x: 0.296
+  y: 0.518
   pins:
   - name: D1
     type: io
-    group: bus-1
     label: D
-    shape: octagonal
-    rotation: 90
-    x: 0.197
-    y: 0.518
   - name: V1
     type: pwr
-    group: bus-1
     label: V
-    shape: octagonal
-    rotation: 90
-    x: 0.295
-    y: 0.518
   - name: G1
     type: gnd
-    group: bus-1
     label: G
-    shape: octagonal
-    rotation: 90
-    x: 0.396
-    y: 0.518
+- kind: jst
+  variant: xh
+  label: BUS 2
+  labelOffset:
+    x: 0
+    y: 0.035
+  x: 0.705
+  y: 0.518
+  pins:
   - name: D2
     type: io
-    group: bus-2
     label: D
-    shape: octagonal
-    rotation: 90
-    x: 0.607
-    y: 0.518
   - name: V2
     type: pwr
-    group: bus-2
     label: V
-    shape: octagonal
-    rotation: 90
-    x: 0.707
-    y: 0.518
   - name: G2
     type: gnd
-    group: bus-2
     label: G
-    shape: octagonal
-    rotation: 90
-    x: 0.803
-    y: 0.518
 mountingHoles:
 - x: 0.075
   y: 0.415
@@ -95,6 +86,8 @@ mountingHoles:
   y: 0.955
   diameter: 1
 image: image.png
+mesh: model.stl
+meshUnits: mm
 imageLayer:
   x: 0
   y: 0
@@ -116,11 +109,6 @@ electrical:
   terminals:
     positive: V1
     negative: G1
-groups:
-- id: bus-1
-  name: Bus port 1
-- id: bus-2
-  name: Bus port 2
 layerVisibility:
   pcb: false
   image: true

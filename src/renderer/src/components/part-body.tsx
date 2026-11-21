@@ -1041,11 +1041,19 @@ export function connectorStyle(
     case 'jst':
       // A JST declared as the SH family IS a QWIIC port — same moulding, so the
       // two spellings must not look different (their SIZES were unified for the
-      // same reason). Other families keep the dark shell: their colours aren't
-      // datasheet-checked, so this doesn't guess for them.
-      return coerceJstFamily(variant) === 'sh'
-        ? shIvory
-        : { shell: '#1c1f24', edge: '#0b0d10', contact: '#e6c34a', male: false }
+      // same reason). XH is checked too: JST's XH datasheet gives the header as
+      // "PA66, natural" — the white 2.5 mm ports on bus servos and their
+      // adapters (Molex 5264 is the same look and pitch). Other families keep
+      // the dark shell: their colours aren't datasheet-checked, so this doesn't
+      // guess for them.
+      switch (coerceJstFamily(variant)) {
+        case 'sh':
+          return shIvory
+        case 'xh':
+          return { shell: '#f1ecdc', edge: '#a39b84', contact: '#e6c34a', male: false }
+        default:
+          return { shell: '#1c1f24', edge: '#0b0d10', contact: '#e6c34a', male: false }
+      }
     default:
       return shIvory // qwiic / STEMMA QT
   }
