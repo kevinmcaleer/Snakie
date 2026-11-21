@@ -15,6 +15,7 @@ import {
 import { enqueueDeviceTask } from '../lib/device-queue'
 import { installStepReporter } from '../lib/install-steps'
 import { ModulesPanel } from './ModulesPanel'
+import { useInstallWhenConnected, WAITING_FOR_BOARD_HINT } from '../hooks/useInstallWhenConnected'
 import type { InstallProgress, PackageInfo } from '../../../preload/index.d'
 
 /**
@@ -369,6 +370,8 @@ function PackagesTab({ view }: { view: LibrariesTab }): JSX.Element {
     },
     [overwrite, convertMpy, customIndex]
   )
+  // Never a dead Install: with no board it asks to connect, then installs.
+  const pending = useInstallWhenConnected(connected, install)
 
   const listToShow = results ?? top
 
@@ -434,14 +437,25 @@ function PackagesTab({ view }: { view: LibrariesTab }): JSX.Element {
       action = <span className="pkgs__stamp pkgs__stamp--installed">INSTALLED</span>
     } else {
       const installing = st?.status === 'installing'
-      const label = installing ? 'INSTALLING…' : st?.status === 'error' ? 'RETRY' : 'INSTALL'
+      const waiting = pending.isWaiting(pkg.name)
+      const label = installing
+        ? 'INSTALLING…'
+        : waiting
+          ? 'WAITING FOR BOARD…'
+          : st?.status === 'error'
+            ? 'RETRY'
+            : 'INSTALL'
       action = (
         <button
           type="button"
           className="pkgs__key"
-          disabled={!connected || installing}
-          title={connected ? `Install ${pkg.name}` : 'Connect a board first'}
-          onClick={() => void install(pkg.name)}
+          disabled={installing}
+          title={
+            connected
+              ? `Install ${pkg.name}`
+              : `Connect your board and install ${pkg.name} as soon as it's ready`
+          }
+          onClick={() => pending.request(pkg.name)}
         >
           {label}
         </button>
@@ -568,8 +582,9 @@ function PackagesTab({ view }: { view: LibrariesTab }): JSX.Element {
 
       {!connected && (
         <p className="pkgs__hint" role="status">
-          Connect a board to install packages. You can still search and browse popular libraries
-          below.
+          {pending.waiting
+            ? WAITING_FOR_BOARD_HINT
+            : 'Search and browse below. Press Install and Snakie connects your board, then installs it.'}
         </p>
       )}
 
