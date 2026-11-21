@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { driverInstallMethod, driverModuleId, type PartDriverNeed } from './part-editor.util'
 import { moduleById, type ModuleDef } from '../../../shared/modules-catalog'
 import { probeOutdatedModules } from '../lib/moduleFreshness'
 import { installPartDriver } from './driver-install'
 import { Notice } from './Notice'
+import { dispatchDeviceAction } from './device-bus'
 import type { DriverFile } from '../../../preload/index.d'
 import './ErcPanel.css'
 import './DriverInstallBanner.css'
@@ -40,8 +41,11 @@ import './DriverInstallBanner.css'
  * stale driver read as installed for ever, so a bug-fixed driver could never
  * reach a board that already had the old one). Rows clear once installed /
  * updated (its own install, or another window's, via the shared
- * `modules.onChanged` signal), instead of lingering forever. Installing touches the
- * device, so the action is disabled until a board is connected.
+ * `modules.onChanged` signal), instead of lingering forever.
+ *
+ * Installing touches the device, but the action is NEVER greyed out for want of
+ * one: pressing it with no board asks the connection control to connect, says
+ * what is missing in plain words, and installs as soon as a board arrives.
  */
 
 /** Per-driver install state, keyed by {@link driverKey}. */
@@ -61,12 +65,15 @@ export interface DriverInstallBannerProps {
   needs: PartDriverNeed[]
   /**
    * `banner` (default): a full-width Notice row above the content — the Blocks
-   * workspace. `chip`: a compact status chip for the Board View header, beside
-   * ERC / LIVE / Help, that opens the same Notice as a popover. On the board a
-   * full-width row pushed the whole canvas down for something that is only
-   * actionable once a board is plugged in.
+   * workspace. `chip`: a compact "Drivers" chip for the code editor's tab strip,
+   * beside Find, that opens a small card OVER the code. A full-width row pushed
+   * the content down for something that is only actionable once a board is
+   * plugged in, so the Code workspace never uses one.
    */
   layout?: 'banner' | 'chip'
+  /** Chip only: open the Electronics workspace, where the parts are placed.
+   *  Absent ⇒ no such button. */
+  onShowParts?: () => void
 }
 
 /** A stable id for one driver ROW, independent of its list position — so filtering
@@ -82,12 +89,42 @@ function driverLabel(d: DriverFile): string {
 
 export function DriverInstallBanner({
   needs,
-  layout = 'banner'
+  layout = 'banner',
+  onShowParts
 }: DriverInstallBannerProps): JSX.Element | null {
   const chip = layout === 'chip'
   const [dismissed, setDismissed] = useState(false)
-  // Chip layout only: whether the popover is showing.
-  const [popOpen, setPopOpen] = useState(false)
+  // Chip layout only: where the card is showing, or null when it's closed. Fixed
+  // to the viewport and clamped inside it: on a phone the chip sits mid-strip,
+  // and a card anchored to its right edge ran off the left of the screen.
+  const [popPos, setPopPos] = useState<{ top: number; right: number; width: number } | null>(
+    null
+  )
+  const popOpen = popPos !== null
+  const chipRef = useRef<HTMLDivElement>(null)
+  // The card closes like any popover: a press outside it, or Escape. It also
+  // closes on resize, where its fixed position would go stale.
+  useEffect(() => {
+    if (!popOpen) return
+    const close = (): void => setPopPos(null)
+    const onDown = (e: PointerEvent): void => {
+      if (!chipRef.current?.contains(e.target as Node)) close()
+    }
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') close()
+    }
+    window.addEventListener('pointerdown', onDown, true)
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('resize', close)
+    return () => {
+      window.removeEventListener('pointerdown', onDown, true)
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('resize', close)
+    }
+  }, [popOpen])
+  const setPopOpen = (open: boolean): void => {
+    if (!open) setPopPos(null)
+  }
   const [connected, setConnected] = useState(false)
   const [running, setRunning] = useState(false)
   // Per-driver status; absent ⇒ not started. Cleared when the part set changes.
@@ -99,6 +136,12 @@ export function DriverInstallBanner({
   // still shown, worded as an update rather than an install.
   const [outdated, setOutdated] = useState<Set<string>>(new Set())
   const [probeNonce, setProbeNonce] = useState(0)
+  // Install was pressed with no board connected: we asked for a connection and
+  // will install the moment one arrives. Drives the "connect your board" line.
+  const [waitingForBoard, setWaitingForBoard] = useState(false)
+  // The latest installAll, for the effect below (it is defined after the early
+  // return, where hooks cannot live).
+  const installRef = useRef<() => Promise<void>>(async () => undefined)
 
   // Track connection so Install is gated on a present board (it writes to it).
   useEffect(() => {
@@ -113,6 +156,14 @@ export function DriverInstallBanner({
       off()
     }
   }, [])
+
+  // The board arrived after Install was pressed — carry on with the install the
+  // user already asked for, rather than making them press it twice.
+  useEffect(() => {
+    if (!waitingForBoard || !connected) return
+    setWaitingForBoard(false)
+    void installRef.current()
+  }, [waitingForBoard, connected])
 
   // Reset progress if the set of parts-needing-drivers changes (different project
   // / placed part), so stale OK/error ticks never linger against new rows.
@@ -226,7 +277,14 @@ export function DriverInstallBanner({
   }
 
   const installAll = async (): Promise<void> => {
-    if (running || !connected) return
+    if (running) return
+    if (!connected) {
+      // Never a dead button: ask whoever owns the connection to connect the
+      // selected port, and install once it is up (the effect above).
+      setWaitingForBoard(true)
+      dispatchDeviceAction('connect')
+      return
+    }
     setRunning(true)
     try {
       // A row that fails does NOT stop the run — installing what can be
@@ -247,6 +305,8 @@ export function DriverInstallBanner({
     }
   }
 
+  installRef.current = installAll
+
   const rows = visibleNeeds.flatMap((need) =>
     need.drivers.map((d) => ({ need, d, id: driverKey(need, d) }))
   )
@@ -258,121 +318,178 @@ export function DriverInstallBanner({
   // driver" on a board that HAS the driver reads as a false alarm.
   const allStale = total > 0 && rows.every(({ id }) => outdated.has(id))
 
-  // The summary must carry WHY Install is disabled, or a greyed-out button reads
-  // as broken rather than blocked.
   const one = visibleNeeds.length === 1
   const summary = allOk
     ? 'Drivers installed'
     : allStale
-      ? `${visibleNeeds.length} part${one ? '' : 's'} ha${one ? 's' : 've'} a driver update${
-          connected ? '' : ' — connect a board'
-        }`
-      : `${visibleNeeds.length} part${one ? '' : 's'} need${one ? 's' : ''} a driver${
-          connected ? '' : ' — connect a board'
-        }`
+      ? `${visibleNeeds.length} part${one ? '' : 's'} ha${one ? 's' : 've'} a driver update`
+      : `${visibleNeeds.length} part${one ? '' : 's'} need${one ? 's' : ''} a driver`
+  const actionLabel = running
+    ? `Installing… ${done}/${total}`
+    : errored
+      ? 'Retry install'
+      : allStale
+        ? 'Update drivers'
+        : 'Install drivers'
+  // Shown once Install was pressed without a board: what is missing, in words.
+  const boardHint = waitingForBoard && !connected
+    ? 'Connect your board to install. Plug it in and pick it in the console bar; the install starts as soon as it connects.'
+    : null
 
-  const notice = (
-    <Notice
-      variant="canvas"
-      tone={errored ? 'error' : 'info'}
-      summary={summary}
-      // An install failure must not stay hidden behind a collapsed row — the
-      // message is the only thing that explains what to do next.
-      forceExpanded={errored}
-      action={
-        allOk
-          ? undefined
-          : {
-              label: running
-                ? `Installing… ${done}/${total}`
-                : errored
-                  ? 'Retry install'
-                  : allStale
-                    ? 'Update drivers'
-                    : 'Install drivers',
-              onClick: () => void installAll(),
-              disabled: running || !connected,
-              title: connected
-                ? allStale
-                  ? 'Update the drivers on the board'
-                  : 'Install the drivers onto the board'
-                : 'Connect a board first'
-            }
-      }
-      onDismiss={() => (chip ? setPopOpen(false) : setDismissed(true))}
-      // In the popover the list IS the content the user opened it for.
-      defaultExpanded={chip}
-      detail={
-        <ul className="drvbanner__list">
-          {rows.map(({ need, d, id }) => {
-            const st = statuses[id]?.state ?? 'pending'
-            return (
-              <li key={id} className={`drvbanner__row drvbanner__row--${st}`}>
-                <span className={`drvbanner__dot drvbanner__dot--${st}`} aria-hidden="true" />
-                <span className="drvbanner__row-part">{need.label}</span>
-                <span className="drvbanner__row-driver">{driverLabel(d)}</span>
-                <span className="drvbanner__row-target" title={`Installs to ${d.target}`}>
-                  → {d.target}
-                </span>
-                {outdated.has(id) && (
-                  <span
-                    className="drvbanner__row-stale"
-                    title="An older copy of this driver is on the board — installing updates it"
-                  >
-                    update
-                  </span>
-                )}
-                {st === 'error' && statuses[id]?.message && (
-                  <span className="drvbanner__row-error">{statuses[id]?.message}</span>
-                )}
-                {/* A successful install that ALSO had to clear the board's
-                    cached copy (#784). Without this the banner reports plain
-                    success while something the user never asked about was
-                    changed on their board — and the import that sent them here
-                    would still have been failing for a reason nothing named. */}
-                {st === 'ok' && statuses[id]?.note && (
-                  <span className="drvbanner__row-note">{statuses[id]?.note}</span>
-                )}
-              </li>
-            )
-          })}
-        </ul>
-      }
-    />
+  const list = (
+    <ul className="drvbanner__list">
+      {rows.map(({ need, d, id }) => {
+        const st = statuses[id]?.state ?? 'pending'
+        return (
+          <li key={id} className={`drvbanner__row drvbanner__row--${st}`}>
+            <span className={`drvbanner__dot drvbanner__dot--${st}`} aria-hidden="true" />
+            <span className="drvbanner__row-part">{need.label}</span>
+            <span className="drvbanner__row-driver">{driverLabel(d)}</span>
+            <span className="drvbanner__row-target" title={`Installs to ${d.target}`}>
+              → {d.target}
+            </span>
+            {outdated.has(id) && (
+              <span
+                className="drvbanner__row-stale"
+                title="An older copy of this driver is on the board — installing updates it"
+              >
+                update
+              </span>
+            )}
+            {st === 'error' && statuses[id]?.message && (
+              <span className="drvbanner__row-error">{statuses[id]?.message}</span>
+            )}
+            {/* A successful install that ALSO had to clear the board's
+                cached copy (#784). Without this the banner reports plain
+                success while something the user never asked about was
+                changed on their board — and the import that sent them here
+                would still have been failing for a reason nothing named. */}
+            {st === 'ok' && statuses[id]?.note && (
+              <span className="drvbanner__row-note">{statuses[id]?.note}</span>
+            )}
+          </li>
+        )
+      })}
+    </ul>
   )
 
-  if (!chip) return notice
+  if (!chip) {
+    return (
+      <Notice
+        variant="canvas"
+        tone={errored ? 'error' : 'info'}
+        summary={summary}
+        // An install failure must not stay hidden behind a collapsed row — the
+        // message is the only thing that explains what to do next. Nor may the
+        // "connect your board" line, which answers the press that showed it.
+        forceExpanded={errored || !!boardHint}
+        action={
+          allOk
+            ? undefined
+            : {
+                label: actionLabel,
+                onClick: () => void installAll(),
+                disabled: running,
+                title: allStale ? 'Update the drivers on the board' : 'Install the drivers onto the board'
+              }
+        }
+        onDismiss={() => setDismissed(true)}
+        detail={
+          <>
+            {boardHint && <p className="drvbanner__hint">{boardHint}</p>}
+            {list}
+          </>
+        }
+      />
+    )
+  }
 
-  // Header chip, styled as a sibling of the ERC badge so the two read as one
-  // family of status chips. Amber while something needs installing, red after
-  // a failure, green once everything is installed.
-  const tone = errored ? 'error' : allOk ? 'clean' : 'warning'
+  // The code editor's chip (beside Find): amber while something needs
+  // installing, red after a failure, green once everything is in. Its card hangs
+  // OVER the code — nothing in the editor moves when it opens.
+  const tone = errored ? 'error' : allOk ? 'ok' : 'warning'
   const count = total - done
   return (
-    <div className="drvchip">
+    <div className="drvchip" ref={chipRef}>
       <button
         type="button"
-        className={`erc__badge erc__badge--${tone}${popOpen ? ' is-open' : ''}`}
-        onClick={() => setPopOpen((o) => !o)}
+        className={`drvchip__btn drvchip__btn--${tone}${popOpen ? ' is-open' : ''}`}
+        onClick={(e) => {
+          if (popOpen) return setPopOpen(false)
+          const r = e.currentTarget.getBoundingClientRect()
+          const width = Math.min(340, window.innerWidth - 24)
+          const right = Math.min(Math.max(12, window.innerWidth - r.right), window.innerWidth - 12 - width)
+          setPopPos({ top: r.bottom + 6, right, width })
+        }}
         aria-expanded={popOpen}
         aria-haspopup="dialog"
         title={`${summary} — click for details`}
       >
-        <span className="erc__badge-dot" aria-hidden="true" />
+        <span className="drvchip__dot" aria-hidden="true" />
         Drivers
         {allOk ? (
-          <span className="erc__badge-count erc__badge-count--ok" aria-hidden="true">
+          <span className="drvchip__count drvchip__count--ok" aria-hidden="true">
             ✓
           </span>
         ) : (
-          <span className={`erc__badge-count erc__badge-count--${errored ? 'error' : 'warning'}`}>
-            {count}
-          </span>
+          <span className="drvchip__count">{count}</span>
         )}
       </button>
       {popOpen && (
-        <div className="drvchip__pop" role="dialog" aria-label="Part drivers">
-          {notice}
+        <div
+          className={`drvchip__pop drvchip__pop--${tone}`}
+          role="dialog"
+          aria-label="Part drivers"
+          style={popPos ?? undefined}
+        >
+          <div className="drvchip__head">
+            <span className="drvchip__dot" aria-hidden="true" />
+            <h4 className="drvchip__title">{summary}</h4>
+            <button
+              type="button"
+              className="drvchip__close"
+              onClick={() => setPopOpen(false)}
+              aria-label="Close"
+              title="Close"
+            >
+              ✕
+            </button>
+          </div>
+          {!allOk && (
+            <p className="drvchip__text">
+              {allStale
+                ? 'An older copy is on the board. Update it so your code gets the fixed version.'
+                : one
+                  ? `Your code can't use the ${visibleNeeds[0].label} until its driver is on the board.`
+                  : "Your code can't use these parts until their drivers are on the board."}
+            </p>
+          )}
+          {boardHint && <p className="drvchip__hint">{boardHint}</p>}
+          {list}
+          <div className="drvchip__actions">
+            {!allOk && (
+              <button
+                type="button"
+                className="drvchip__primary"
+                onClick={() => void installAll()}
+                disabled={running}
+              >
+                {actionLabel}
+              </button>
+            )}
+            {onShowParts && (
+              <button
+                type="button"
+                className="drvchip__secondary"
+                onClick={() => {
+                  setPopOpen(false)
+                  onShowParts()
+                }}
+              >
+                Show parts
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

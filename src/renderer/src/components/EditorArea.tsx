@@ -6,6 +6,8 @@ import { useWorkspace } from '../store/workspace'
 import { defaultBlocksViewMode, useWorkspaceLayout, type BlocksViewMode } from '../store/layout'
 import { isMpyFile } from '../../../shared/mpy-info'
 import { showsBlocksCanvas } from './editor-routing'
+import { DriverInstallBanner } from './DriverInstallBanner'
+import { useProjectDriverNeeds } from './use-project-driver-needs'
 
 export interface EditorAreaProps {
   /** Whether the AI chat pane is open (drives the Chat toggle's state). */
@@ -63,7 +65,7 @@ function isRobotFile(name: string | undefined): boolean {
  * dynamic import, with a matching fallback shown while it streams in.
  */
 export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps = {}): JSX.Element {
-  const { openFiles, activeId } = useWorkspace()
+  const { openFiles, activeId, currentFolder } = useWorkspace()
   const layout = useWorkspaceLayout()
   const { setBlocksBoth } = layout
   const hasFiles = openFiles.length > 0
@@ -77,6 +79,15 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
   // where it can be a test rather than something you find out by switching to
   // Build and seeing the block shelf over the robot (#1066).
   const showBlocks = showsBlocksCanvas(layout.active, activeFile)
+  const showCode = hasFiles && !showData && !showRobot && !showMpy && !showBlocks
+  // Part drivers (#184): the Code workspace is where a missing driver bites (the
+  // import fails), so its prompt lives here as a chip beside Find rather than a
+  // banner in Electronics. A chip, not a row: nothing in the editor moves.
+  const driverNeeds = useProjectDriverNeeds(
+    currentFolder ?? undefined,
+    layout.active === 'code' && showCode
+  )
+  const showDriverChip = layout.active === 'code' && showCode && driverNeeds.length > 0
 
   // The blocks emphasis is PER FILE, seeded from the workspace default (epic
   // #1007 §8 Q5): Blocks opens blocks-primary, Code opens Python-primary, and a
@@ -182,8 +193,15 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
     >
       <div className="editor-header">
         <EditorTabs />
-        {(onToggleChat || (hasFiles && !showData && !showRobot && !showMpy && !showBlocks)) && (
+        {(onToggleChat || showCode) && (
           <div className="editor-header__actions">
+            {showDriverChip && (
+              <DriverInstallBanner
+                needs={driverNeeds}
+                layout="chip"
+                onShowParts={() => layout.switchWorkspace('board')}
+              />
+            )}
             {/* Chat toggle — moved here from the console header (which was too
                 busy). Sits to the LEFT of Find. Desktop + Code workspace only. */}
             {onToggleChat && (
@@ -201,7 +219,7 @@ export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps =
                 <span>Chat</span>
               </button>
             )}
-            {hasFiles && !showData && !showRobot && !showMpy && !showBlocks && (
+            {showCode && (
               <button
                 type="button"
                 className="btn btn--sm btn--ghost"

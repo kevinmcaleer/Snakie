@@ -17,9 +17,8 @@ import {
   type BoardFeature,
   type BoardPadType
 } from './board-defs'
-import { boardPartFor, placedPartsNeedingDrivers } from './part-editor.util'
+import { boardPartFor } from './part-editor.util'
 import { useBoards } from './use-boards'
-import { DriverInstallBanner } from './DriverInstallBanner'
 import { buildNetlist, remapConnectionsForBoard, type BoardRemap, type TerminalRole } from '../../../shared/netlist'
 import { runErc, ercSummary, smokeSites } from '../../../shared/erc'
 import { buildCircuit, type CircuitComponent } from '../../../shared/dc-solver'
@@ -645,13 +644,6 @@ export function BoardGraph({
     }))
   }, [netlistData, solverState])
 
-  // Placed parts that declare MicroPython drivers needing install (#184). Drives
-  // the consent-first install banner; empty (so hidden) without a robot/parts.
-  const driverNeeds = useMemo(
-    () => placedPartsNeedingDrivers(robot, libraries ?? []),
-    [robot, libraries]
-  )
-
   // Bundled mini-help for the placed items (the MCU + each unique placed part that
   // ships a help.md), stacked in the Board View help drawer (offline). Deduped so
   // two of the same part show one card; the board's own help leads.
@@ -1239,10 +1231,8 @@ export function BoardGraph({
               In the header rather than floating over the canvas, where it sat
               on top of the Connections strip. */}
           {headerActions}
-          {/* Part drivers (#184): a status chip beside ERC, not a full-width
-              banner — the banner pushed the whole canvas down. Its install
-              list opens as a popover under the chip. */}
-          {wiringEnabled && <DriverInstallBanner needs={driverNeeds} layout="chip" />}
+          {/* Part drivers (#184) are offered in the Code workspace now, beside
+              Find: that is where a missing driver bites (the import fails). */}
           {/* ERC badge (#601): worst-severity + counts over the wiring, or a quiet
               ✓ when clean. Shown wherever the full circuit is visible — the
               Breadboard + node graph (not the abstract Schematic). */}
