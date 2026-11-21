@@ -50,6 +50,17 @@ export interface BoardProfile {
    * leaves a board that needs re-flashing before it will talk again.
    */
   circuitPythonBoardId?: string
+  /**
+   * The board's **MicroPython BOARD name** — the name micropython.org publishes
+   * its build under (`RPI_PICO_W`, `PIMORONI_TINY2040`), as it appears in the
+   * download URL. Picking the profile then pre-selects that exact build in the
+   * catalog instead of only the chip family.
+   *
+   * Same rule as {@link circuitPythonBoardId}: only set where micropython.org
+   * publishes the build and the name has been checked against the catalog.
+   * Absent means no micropython.org build is chosen for you.
+   */
+  micropythonBoard?: string
   /** esptool `write_flash` offset. Absent for non-esptool methods. */
   offset?: string
   /** Recommended baud; absent ⇒ the flasher default. */
@@ -162,7 +173,8 @@ export const BOARD_PROFILES: BoardProfile[] = [
     model: 'XIAO RP2040',
     label: 'Seeed Studio XIAO RP2040',
     ...RP2,
-    circuitPythonBoardId: 'seeeduino_xiao_rp2040'
+    circuitPythonBoardId: 'seeeduino_xiao_rp2040',
+    micropythonBoard: 'SEEED_XIAO_RP2040'
   },
   {
     id: 'xiao-rp2350',
@@ -171,7 +183,8 @@ export const BOARD_PROFILES: BoardProfile[] = [
     label: 'Seeed Studio XIAO RP2350',
     chipFamily: 'rp2',
     method: 'uf2',
-    circuitPythonBoardId: 'seeeduino_xiao_rp2350'
+    circuitPythonBoardId: 'seeeduino_xiao_rp2350',
+    micropythonBoard: 'SEEED_XIAO_RP2350'
   },
   {
     id: 'pico',
@@ -180,6 +193,7 @@ export const BOARD_PROFILES: BoardProfile[] = [
     label: 'Raspberry Pi Pico',
     ...RP2,
     circuitPythonBoardId: 'raspberry_pi_pico',
+    micropythonBoard: 'RPI_PICO',
     notes: 'Hold BOOTSEL while plugging in, so the RPI-RP2 drive appears.'
   },
   {
@@ -191,6 +205,7 @@ export const BOARD_PROFILES: BoardProfile[] = [
     // A different CircuitPython build from the plain Pico — same chip, different
     // board — which is exactly why the id is per board rather than per family.
     circuitPythonBoardId: 'raspberry_pi_pico_w',
+    micropythonBoard: 'RPI_PICO_W',
     notes: 'Hold BOOTSEL while plugging in, so the RPI-RP2 drive appears.'
   },
   {
@@ -200,7 +215,50 @@ export const BOARD_PROFILES: BoardProfile[] = [
     label: 'Raspberry Pi Pico 2',
     ...RP2,
     circuitPythonBoardId: 'raspberry_pi_pico2',
+    micropythonBoard: 'RPI_PICO2',
     notes: 'Hold BOOTSEL while plugging in, so the RP2350 drive appears.'
+  },
+  {
+    id: 'pico2-w',
+    vendor: 'Raspberry Pi',
+    model: 'Pico 2 W',
+    label: 'Raspberry Pi Pico 2 W',
+    ...RP2,
+    circuitPythonBoardId: 'raspberry_pi_pico2_w',
+    micropythonBoard: 'RPI_PICO2_W',
+    notes: 'Hold BOOTSEL while plugging in, so the RP2350 drive appears.'
+  },
+  {
+    // micropython.org publishes PIMORONI_TINY2040, and its mpconfigboard.h names
+    // it "Pimoroni Tiny 2040 8MB". Pimoroni also sold a 2 MB Tiny 2040, which
+    // CircuitPython builds separately (`pimoroni_tiny2040_2mb`); MicroPython does
+    // not, and an 8 MB layout on 2 MB of flash puts the filesystem past the end
+    // of the chip — so the note sends 2 MB owners to the Pico build, which is
+    // the same RP2040 with a 2 MB layout.
+    id: 'pimoroni-tiny-2040',
+    vendor: 'Pimoroni',
+    model: 'Tiny 2040',
+    label: 'Pimoroni Tiny 2040',
+    ...RP2,
+    circuitPythonBoardId: 'pimoroni_tiny2040',
+    micropythonBoard: 'PIMORONI_TINY2040',
+    notes:
+      'Hold BOOT while tapping RST (or while plugging in), so the RPI-RP2 drive appears. This build is for the 8 MB Tiny 2040; on the 2 MB version, pick Raspberry Pi Pico instead.'
+  },
+  {
+    // micropython.org's PIMORONI_PICOLIPO is the 4 MB layout ("Pimoroni Pico
+    // LiPo 4MB"), which runs on the 16 MB board too — it just leaves the extra
+    // flash unused. CircuitPython splits the two (`pimoroni_picolipo_4mb` /
+    // `_16mb`), and nothing here can tell which one is plugged in, so no
+    // CircuitPython id: a guess would be the wrong board half the time.
+    id: 'pimoroni-pico-lipo',
+    vendor: 'Pimoroni',
+    model: 'Pico LiPo',
+    label: 'Pimoroni Pico LiPo (RP2040)',
+    ...RP2,
+    micropythonBoard: 'PIMORONI_PICOLIPO',
+    notes:
+      'Hold BOOT while tapping RESET (or while plugging in), so the RPI-RP2 drive appears. The MicroPython build is the 4 MB layout; it runs on the 16 MB board too, with a smaller filesystem.'
   },
   {
     // Cytron's own page states the board carries the same RP2040, the same
@@ -215,6 +273,7 @@ export const BOARD_PROFILES: BoardProfile[] = [
     label: 'Cytron Maker Pi RP2040',
     ...RP2,
     circuitPythonBoardId: 'cytron_maker_pi_rp2040',
+    micropythonBoard: 'RPI_PICO',
     notes:
       'Hold the BOOT button while plugging in (or while tapping RESET), so the RPI-RP2 drive appears. The board ships with CircuitPython on it, so flashing MicroPython replaces what is already there.'
   },

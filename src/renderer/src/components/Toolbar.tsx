@@ -6,6 +6,7 @@ import type { ExportPhase } from '../lib/pdf/project-pdf'
 import { ExportProgress, type ExportProgressState } from './ExportProgress'
 import { onExportPdf } from './export-bus'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
+import { KrAppSwitcher } from './KrAppSwitcher'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
 import { SNAKIE_MARK_BODY, SNAKIE_MARK_VIEWBOX } from './snakie-mark'
@@ -292,6 +293,7 @@ export function Toolbar(): JSX.Element {
         <div className="toolbar__brand">
           {SNAKE_LOGO}
           <span className="toolbar__wordmark">Snakie</span>
+          <KrAppSwitcher />
         </div>
 
         <div className="toolbar__group">

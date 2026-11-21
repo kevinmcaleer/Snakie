@@ -323,15 +323,13 @@ function BoardWindowApp(): JSX.Element {
         jointLimits={jointLimits}
         libraries={libraries}
         onAddToProject={addToProject}
+        // Electronics ⇄ Build reconcile (#717) — the same self-contained control
+        // as the in-window pane, in the board header.
+        headerActions={<SyncControl folder={folder} />}
       />
       {/* The board-is-busy modal (#837). This window has its OWN device queue —
           the driver banner installs from here — so it needs its own copy. */}
       <DeviceQueueDialog />
-      {/* Electronics ⇄ Build reconcile (#717) — the same self-contained control
-          as the in-window pane; fixed here (this window is all board). */}
-      <div className="esync__float esync__float--window">
-        <SyncControl folder={folder} />
-      </div>
       {editing && (
         <PartEditor
           libraryId={editing.libraryId}

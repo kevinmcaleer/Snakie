@@ -24,6 +24,7 @@ import {
   FIRMWARE_RUNTIME_ICON,
   FIRMWARE_RUNTIME_LABEL,
   findBoardBuilds,
+  findMicroPythonBuilds,
   flashTargetForDownload,
   catalogBuildForBoard,
   siblingBuildUrl,
@@ -302,7 +303,7 @@ export function FirmwareFlasher({
       const pick = flasherSelectionFor(req)
       setBoard(pick.board)
       if (pick.offset) setOffset(pick.offset)
-      setSource('catalog')
+      if (isElectron()) setSource('catalog')
       setSelFamily(pick.family)
       setSelVersionUrl(pick.url)
       dropFinder()
@@ -330,7 +331,12 @@ export function FirmwareFlasher({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const [source, setSource] = useState<Source>('catalog')
+  // The catalog download has no browser implementation yet (Web W3, #284):
+  // `fetchCatalog` is inert outside Electron, so opening on it in the web app
+  // showed an empty Family list and a Download & Flash that could never enable,
+  // with the Local file switch hidden behind the Electron-only Advanced panel.
+  // In the browser a local file is the only source that works, so open on it.
+  const [source, setSource] = useState<Source>(isElectron() ? 'catalog' : 'local')
   const [catalog, setCatalog] = useState<FirmwareCatalog | null>(null)
   const [catalogLoading, setCatalogLoading] = useState(false)
   const [catalogError, setCatalogError] = useState<string | null>(null)
@@ -540,6 +546,8 @@ export function FirmwareFlasher({
    */
   const handleRuntimeChange = useCallback((next: FirmwareRuntime): void => {
     setRuntime(next)
+    // The new catalog has not been matched yet, whatever the old one was.
+    appliedMatchRef.current = ''
     setCatalog(null)
     setCatalogError(null)
     setSelFamily('')
@@ -609,11 +617,18 @@ export function FirmwareFlasher({
    */
   const activeBoardId = profileId ? (profile?.circuitPythonBoardId ?? '') : (boardId ?? '')
 
-  /** Every CircuitPython build published for that board (`.uf2` and `.bin` both,
-   *  where a board has both). Empty for MicroPython, whose builds are per chip. */
+  /** The micropython.org BOARD name of the board picked by hand, if it has one. */
+  const activeMicropythonBoard = profile?.micropythonBoard ?? ''
+
+  /** Every build published for that board: CircuitPython's per Board ID
+   *  (`.uf2` and `.bin` both, where a board has both), MicroPython's per BOARD
+   *  name — a Tiny 2040 and a Pico are both rp2, but not the same file. */
   const boardBuilds = useMemo(
-    () => (runtime === 'circuitpython' ? findBoardBuilds(catalog, activeBoardId) : []),
-    [runtime, catalog, activeBoardId]
+    () =>
+      runtime === 'circuitpython'
+        ? findBoardBuilds(catalog, activeBoardId)
+        : findMicroPythonBuilds(catalog, activeMicropythonBoard),
+    [runtime, catalog, activeBoardId, activeMicropythonBoard]
   )
 
   /**
@@ -900,6 +915,8 @@ export function FirmwareFlasher({
   const flashUrl = recommendedUrl && useRecommended ? recommendedUrl : selVersionUrl
 
   const serialCandidates = candidates.filter((c) => c.source === 'serial')
+  /** An RP2 board sitting in its UF2 bootloader, if detection found one. */
+  const bootDrive = candidates.find((c) => c.source === 'uf2-drive' && c.board === 'rp2040')
   // Every OTHER serial port — the ones whose USB bridge we did not recognise.
   //
   // Detection keys off a VID/PID table (`ESP_USB_BRIDGES`), and that table is
@@ -1231,7 +1248,7 @@ export function FirmwareFlasher({
               Builds come from <strong>{FIRMWARE_RUNTIME_HOST[runtime]}</strong>.
               {runtime === 'circuitpython'
                 ? ' CircuitPython builds are per BOARD, not per chip — the wrong board’s build flashes without complaint and comes up with the wrong pins.'
-                : ' MicroPython builds are per chip family.'}
+                : ' Naming your board picks its own build where micropython.org publishes one, otherwise a generic build for the chip.'}
             </p>
           </div>
 
@@ -1353,6 +1370,23 @@ export function FirmwareFlasher({
             {/* CircuitPython is matched per BOARD, so say plainly whether we know
                 which board this is — and, when we don't, that we are offering
                 nothing rather than a near-enough build (#756). */}
+            {runtime === 'micropython' && activeMicropythonBoard && matchedBuild && source === 'catalog' && (
+              <p className="firmware-hint">
+                Pre-selected <code>{activeMicropythonBoard}</code>, this board&apos;s own build
+                from {FIRMWARE_RUNTIME_HOST.micropython}.
+              </p>
+            )}
+            {/* A UF2 bootloader drive says which CHIP it is, never which board:
+                every RP2040's boot ROM mounts the same RPI-RP2 drive, so a Tiny
+                2040 and a Pico are indistinguishable until they run firmware.
+                Say that, rather than leave a found board looking ignored. */}
+            {!profileId && bootDrive && (
+              <p className="firmware-hint">
+                Found a board in bootloader mode ({bootDrive.label}). The bootloader
+                doesn&apos;t say which board it is on, so pick yours from the Board list —
+                that chooses the right build for it.
+              </p>
+            )}
             {runtime === 'circuitpython' && activeBoardId && matchedBuild && (
               <p className="firmware-hint">
                 Board ID <code>{activeBoardId}</code> — pre-selected{' '}
@@ -1867,6 +1901,36 @@ export function FirmwareFlasher({
                 style={{ display: 'none' }}
                 onChange={(e) => void handleWebFileChange(e)}
               />
+              {/* Where this board's own file lives, so "choose a .uf2" is not a
+                  search across every board micropython.org builds for. */}
+              {runtime === 'micropython' && profile?.micropythonBoard && (
+                <p className="firmware-hint">
+                  Get <code>{profile.micropythonBoard}</code> from{' '}
+                  <a
+                    className="firmware-link"
+                    href={`https://micropython.org/download/${profile.micropythonBoard}/`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    micropython.org/download/{profile.micropythonBoard}
+                  </a>{' '}
+                  (the newest release <code>.uf2</code>), then choose it here.
+                </p>
+              )}
+              {runtime === 'circuitpython' && profile?.circuitPythonBoardId && (
+                <p className="firmware-hint">
+                  Get it from{' '}
+                  <a
+                    className="firmware-link"
+                    href={`https://circuitpython.org/board/${profile.circuitPythonBoardId}/`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    circuitpython.org/board/{profile.circuitPythonBoardId}
+                  </a>
+                  , then choose it here.
+                </p>
+              )}
               {/* Wrong KIND of file. Blocks the flash rather than warning: this one
                   reports success at every step and leaves the board dead (#685). */}
               {fileIssue && <p className="firmware-hint firmware-hint--warn">{fileIssue}</p>}

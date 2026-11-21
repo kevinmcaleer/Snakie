@@ -24,6 +24,12 @@
  * plain code block into a live box in place and runs it ("Run here"); its
  * unmount() puts the block back.
  *
+ * The lesson runner: SnakieEmbed.runner(preEl, { name, board, engine }) keeps
+ * the block as it is and pops an output panel up under it that runs the code
+ * straight away: the output in a live REPL, and the board when the code uses
+ * pins. The handle has run(), stop(), close(), `running`, and the options
+ * onState(running) and onClose() let the page's own play button follow along.
+ *
  * Frames on one page share what they point at (#1320): hover a pin in one and
  * the others light it. The page can join in: document gets `snakie:pin-hover`
  * ({ pins, id }), `snakie:pin-state` ({ states: { GP15: { kind, value } } })
@@ -52,7 +58,7 @@
   var PARAMS = [
     'gist', 'user', 'file', 'revision', 'repo', 'path', 'ref', 'lines', 'code', 'name',
     'view', 'views', 'toolbox', 'run', 'autorun', 'theme', 'height', 'engine', 'packages',
-    'board', 'pins', 'project', 'paths', 'robot', 'urdf'
+    'board', 'pins', 'project', 'paths', 'robot', 'urdf', 'output'
   ]
   var DEFAULT_HEIGHT = 360
   var RADIUS = 12
@@ -150,6 +156,7 @@
     })
     el.appendChild(iframe)
     frames[id] = { iframe: iframe, fixed: fixed !== null }
+    iframe.__snakieId = id
     var handle = {
       iframe: iframe,
       unmount: function () {
@@ -206,6 +213,70 @@
     return handle
   }
 
+  /**
+   * The lesson runner: keep the code block as it is and pop an output panel up
+   * under it, running the block's code. `el` is the block (or a wrapper round
+   * it); the panel goes straight after it. opts are mount()'s (name, board,
+   * engine, theme, pins) plus onState(running) and onClose(). Calling it again
+   * for the same block returns the open panel's handle. Returns
+   * { iframe, box, run(), stop(), close(), running }, or null for an empty
+   * block or one too long to send (offer Open in Snakie for that).
+   */
+  function runner(el, opts) {
+    if (!el || !el.parentNode) return null
+    if (el.__snakieRunner) return el.__snakieRunner
+    opts = opts || {}
+    var codeEl = (el.querySelector && el.querySelector('code')) || el
+    var code = String(codeEl.textContent || '').replace(/\s+$/, '')
+    if (!code) return null
+    var o = {}
+    for (var k in opts) {
+      if (Object.prototype.hasOwnProperty.call(opts, k) && typeof opts[k] !== 'function') o[k] = opts[k]
+    }
+    o.code = code
+    o.output = true
+    o.autorun = true
+    if (!o.name) o.name = 'main.py'
+    if (embedUrl(o, 'x').length > MAX_UPGRADE_URL) return null
+    var box = document.createElement('div')
+    box.className = 'snakie-runner'
+    box.style.margin = '6px 0 1rem'
+    el.parentNode.insertBefore(box, el.nextSibling)
+    var inner = mount(box, o)
+    inner.iframe.loading = 'eager'
+    inner.iframe.style.height = '232px'
+    inner.iframe.title = (o.name || 'Code') + ': output'
+    var entry = frames[inner.iframe.__snakieId]
+    var handle = {
+      iframe: inner.iframe,
+      box: box,
+      running: true,
+      run: function () { post('run') },
+      stop: function () { post('stop') },
+      close: function () {
+        if (!el.__snakieRunner) return
+        inner.unmount()
+        if (box.parentNode) box.parentNode.removeChild(box)
+        el.__snakieRunner = null
+        handle.running = false
+        if (typeof opts.onState === 'function') opts.onState(false)
+        if (typeof opts.onClose === 'function') opts.onClose()
+      }
+    }
+    function post(type) {
+      if (inner.iframe.contentWindow) inner.iframe.contentWindow.postMessage({ source: 'snakie-embed-host', type: type }, ORIGIN)
+    }
+    if (entry) {
+      entry.onRunState = function (running) {
+        handle.running = running
+        if (typeof opts.onState === 'function') opts.onState(running)
+      }
+      entry.onClose = handle.close
+    }
+    el.__snakieRunner = handle
+    return handle
+  }
+
   window.addEventListener('message', function (e) {
     if (e.origin !== ORIGIN) return
     var data = e.data
@@ -214,6 +285,10 @@
     if (!entry || entry.iframe.contentWindow !== e.source) return
     if (data.type === 'height' && !entry.fixed && typeof data.height === 'number') {
       entry.iframe.style.height = Math.max(120, Math.min(2000, Math.round(data.height))) + 'px'
+    } else if (data.type === 'run-state') {
+      if (entry.onRunState) entry.onRunState(data.running === true)
+    } else if (data.type === 'close') {
+      if (entry.onClose) entry.onClose()
     } else if (data.type === 'pin-hover') {
       // One frame points at a pin: the others on the page light it too, and
       // the page hears about it (a wiring picture can light the wire).
@@ -337,6 +412,7 @@
     origin: ORIGIN,
     mount: mount,
     upgrade: upgrade,
+    runner: runner,
     scan: scan,
     hover: hover,
     // This copy draws robot frames (#1321); a page checks before asking for one.

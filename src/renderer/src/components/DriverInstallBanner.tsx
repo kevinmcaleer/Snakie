@@ -5,6 +5,7 @@ import { probeOutdatedModules } from '../lib/moduleFreshness'
 import { installPartDriver } from './driver-install'
 import { Notice } from './Notice'
 import type { DriverFile } from '../../../preload/index.d'
+import './ErcPanel.css'
 import './DriverInstallBanner.css'
 
 /**
@@ -58,6 +59,14 @@ interface DriverStatus {
 export interface DriverInstallBannerProps {
   /** The placed parts that declare drivers (from `placedPartsNeedingDrivers`). */
   needs: PartDriverNeed[]
+  /**
+   * `banner` (default): a full-width Notice row above the content — the Blocks
+   * workspace. `chip`: a compact status chip for the Board View header, beside
+   * ERC / LIVE / Help, that opens the same Notice as a popover. On the board a
+   * full-width row pushed the whole canvas down for something that is only
+   * actionable once a board is plugged in.
+   */
+  layout?: 'banner' | 'chip'
 }
 
 /** A stable id for one driver ROW, independent of its list position — so filtering
@@ -71,8 +80,14 @@ function driverLabel(d: DriverFile): string {
   return d.label?.trim() || d.source
 }
 
-export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.Element | null {
+export function DriverInstallBanner({
+  needs,
+  layout = 'banner'
+}: DriverInstallBannerProps): JSX.Element | null {
+  const chip = layout === 'chip'
   const [dismissed, setDismissed] = useState(false)
+  // Chip layout only: whether the popover is showing.
+  const [popOpen, setPopOpen] = useState(false)
   const [connected, setConnected] = useState(false)
   const [running, setRunning] = useState(false)
   // Per-driver status; absent ⇒ not started. Cleared when the part set changes.
@@ -194,7 +209,8 @@ export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.El
     [needs, present]
   )
 
-  if (visibleNeeds.length === 0 || dismissed) return null
+  // A chip is already out of the way, so it never dismisses — ✕ closes its popover.
+  if (visibleNeeds.length === 0 || (dismissed && !chip)) return null
 
   const setStatus = (id: string, status: DriverStatus): void =>
     setStatuses((prev) => ({ ...prev, [id]: status }))
@@ -255,7 +271,7 @@ export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.El
           connected ? '' : ' — connect a board'
         }`
 
-  return (
+  const notice = (
     <Notice
       variant="canvas"
       tone={errored ? 'error' : 'info'}
@@ -283,7 +299,9 @@ export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.El
                 : 'Connect a board first'
             }
       }
-      onDismiss={() => setDismissed(true)}
+      onDismiss={() => (chip ? setPopOpen(false) : setDismissed(true))}
+      // In the popover the list IS the content the user opened it for.
+      defaultExpanded={chip}
       detail={
         <ul className="drvbanner__list">
           {rows.map(({ need, d, id }) => {
@@ -321,5 +339,42 @@ export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.El
         </ul>
       }
     />
+  )
+
+  if (!chip) return notice
+
+  // Header chip, styled as a sibling of the ERC badge so the two read as one
+  // family of status chips. Amber while something needs installing, red after
+  // a failure, green once everything is installed.
+  const tone = errored ? 'error' : allOk ? 'clean' : 'warning'
+  const count = total - done
+  return (
+    <div className="drvchip">
+      <button
+        type="button"
+        className={`erc__badge erc__badge--${tone}${popOpen ? ' is-open' : ''}`}
+        onClick={() => setPopOpen((o) => !o)}
+        aria-expanded={popOpen}
+        aria-haspopup="dialog"
+        title={`${summary} — click for details`}
+      >
+        <span className="erc__badge-dot" aria-hidden="true" />
+        Drivers
+        {allOk ? (
+          <span className="erc__badge-count erc__badge-count--ok" aria-hidden="true">
+            ✓
+          </span>
+        ) : (
+          <span className={`erc__badge-count erc__badge-count--${errored ? 'error' : 'warning'}`}>
+            {count}
+          </span>
+        )}
+      </button>
+      {popOpen && (
+        <div className="drvchip__pop" role="dialog" aria-label="Part drivers">
+          {notice}
+        </div>
+      )}
+    </div>
   )
 }

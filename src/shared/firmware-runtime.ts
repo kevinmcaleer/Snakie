@@ -366,6 +366,60 @@ export function findBoardBuilds(
 }
 
 // ---------------------------------------------------------------------------
+// MicroPython board name — matching a profile to its micropython.org build
+// ---------------------------------------------------------------------------
+
+/**
+ * The MicroPython BOARD name in a micropython.org build URL.
+ *
+ * Shape verified against Thonny's `micropython-variants-uf2.json` (2026-11):
+ *   `https://micropython.org/resources/firmware/<BOARD>-<YYYYMMDD>-v<version>.<ext>`
+ *
+ * The date is the boundary, not the first hyphen: `RPI_PICO` and `RPI_PICO_W`
+ * are different boards and must not collapse. Null for anything else — a
+ * Pimoroni GitHub release, a CircuitPython build, a hand-typed link.
+ */
+export function micropythonBoardFromUrl(url: string): string | null {
+  const m = /^https?:\/\/(?:www\.)?micropython\.org\/resources\/firmware\/([A-Za-z0-9_]+)-\d{8}-/i.exec(
+    url.trim()
+  )
+  return m ? m[1] : null
+}
+
+/**
+ * Every MicroPython catalog entry whose builds are micropython.org's build for
+ * `board` (e.g. `PIMORONI_TINY2040`).
+ *
+ * MicroPython builds were described as "per chip family", which is true of the
+ * ESP generics but not of rp2: `RPI_PICO_W` and `PIMORONI_TINY2040` are
+ * different files with different pin names and flash sizes. Naming the board in
+ * the picker should land on that board's file, not leave the user to find it in
+ * a Model list of ninety rp2 boards.
+ *
+ * Only micropython.org builds match. A vendor's own build (Pimoroni's
+ * "with Pimoroni libraries" releases) sits under the same Model and is still
+ * there to pick by hand; it is just never chosen for you.
+ */
+export function findMicroPythonBuilds(
+  catalog: FirmwareCatalog | null | undefined,
+  board: string | null | undefined
+): FirmwareBoardBuild[] {
+  const want = (board ?? '').trim().toUpperCase()
+  if (!want) return []
+  const out: FirmwareBoardBuild[] = []
+  for (const family of catalog?.families ?? []) {
+    for (const model of family.models ?? []) {
+      for (const variant of model.variants ?? []) {
+        if (variant.versions.some((v) => micropythonBoardFromUrl(v.url)?.toUpperCase() === want)) {
+          out.push({ family: family.family, model, variant })
+        }
+      }
+    }
+  }
+  return out
+}
+
+// ---------------------------------------------------------------------------
 // Versions
 // ---------------------------------------------------------------------------
 

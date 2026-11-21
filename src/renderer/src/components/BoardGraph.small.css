@@ -73,11 +73,44 @@
   border: 1px solid var(--shellbd, var(--border));
   border-radius: 8px;
 }
-.shell[data-size='phone'] .shell__solo-board .boardgraph__sync {
-  display: flex;
+/* Up to five cells share 359px on a small iPhone: about 68px each. */
+.shell[data-size='phone'] .shell__solo-board .boardgraph__actions {
+  gap: 4px;
 }
-.shell[data-size='phone'] .shell__solo-board .boardgraph__sync .esync__button {
+.shell[data-size='phone'] .shell__solo-board .boardgraph__actions > *,
+.shell[data-size='phone'] .shell__solo-board .boardgraph__actions > .drvchip > .erc__badge,
+.shell[data-size='phone'] .shell__solo-board .boardgraph__actions .esync__button {
+  padding-inline: 4px;
+  gap: 4px;
+  font-size: 12px;
+  letter-spacing: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.shell[data-size='phone'] .shell__solo-board .boardgraph__actions > .drvchip {
+  padding: 0;
+  overflow: visible;
+}
+/* The Drivers chip is a wrapper round its button; its list opens across the
+   whole row rather than hanging off a chip that may be at the left edge. */
+.shell[data-size='phone'] .shell__solo-board .boardgraph__actions {
+  position: relative;
+}
+.shell[data-size='phone'] .shell__solo-board .boardgraph__actions > .drvchip {
+  position: static;
+}
+.shell[data-size='phone'] .shell__solo-board .boardgraph__actions > .drvchip > .erc__badge {
   flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  justify-content: center;
+}
+.shell[data-size='phone'] .shell__solo-board .boardgraph__actions .drvchip__pop {
+  left: 0;
+  right: 0;
+  width: auto;
+}
+.shell[data-size='phone'] .shell__solo-board .boardgraph__actions .esync__button {
   justify-content: center;
   min-height: var(--em-tap);
   font-size: 13px;

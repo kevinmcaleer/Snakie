@@ -164,9 +164,9 @@ export interface BoardGraphProps {
    *  `onSwapConsumed`. */
   pendingSwapBoard?: string | null
   onSwapConsumed?: () => void
-  /** An extra control for the header's action row, before ERC. The phone layout
-   *  puts Sync here, where it floated over the board on a desktop. */
-  headerExtra?: ReactNode
+  /** Extra controls the host puts at the start of the header's status cluster
+   *  (the Electronics ⇄ Build Sync button). */
+  headerActions?: ReactNode
 }
 
 /** localStorage key shared with {@link BoardView} so board choice persists across both. */
@@ -383,7 +383,7 @@ export function BoardGraph({
   onAddManyToProject,
   pendingSwapBoard,
   onSwapConsumed,
-  headerExtra
+  headerActions
 }: BoardGraphProps): JSX.Element {
   // Boards are sourced from the installed parts libraries (microcontroller parts)
   // plus any Board-Creator boards; the built-ins are only a fresh-install fallback.
@@ -1235,7 +1235,14 @@ export function BoardGraph({
         <span className="boardgraph__chip">{def.mcu}</span>
 
         <div className="boardgraph__actions">
-          {headerExtra && <div className="boardgraph__sync">{headerExtra}</div>}
+          {/* Board-level controls the host owns (the Electronics ⇄ Build Sync).
+              In the header rather than floating over the canvas, where it sat
+              on top of the Connections strip. */}
+          {headerActions}
+          {/* Part drivers (#184): a status chip beside ERC, not a full-width
+              banner — the banner pushed the whole canvas down. Its install
+              list opens as a popover under the chip. */}
+          {wiringEnabled && <DriverInstallBanner needs={driverNeeds} layout="chip" />}
           {/* ERC badge (#601): worst-severity + counts over the wiring, or a quiet
               ✓ when clean. Shown wherever the full circuit is visible — the
               Breadboard + node graph (not the abstract Schematic). */}
@@ -1291,8 +1298,6 @@ export function BoardGraph({
               closes via board-main's key handler. */}
         </div>
       </header>
-
-      {wiringEnabled && <DriverInstallBanner needs={driverNeeds} />}
 
       <div className="boardgraph__body">
       {/* ERC issues panel (#601) — floats over the board, anchored to the body.

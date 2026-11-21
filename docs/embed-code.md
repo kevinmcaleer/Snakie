@@ -54,6 +54,33 @@ for an empty block or one whose URL would pass 12,000 characters. Check
 `SnakieEmbed.upgrade` exists before showing the button: a cached older helper
 does not have it.
 
+### The lesson runner: play, and the output pops up
+
+Trinket-style: the block stays a plain code block, and pressing the page's own
+play button pops an output panel up under it that runs the code. The panel is
+`embed.html?output=1`: a run bar (status, Run again / Stop, close), the output
+in a live REPL, and the board with its pins lit when the code drives them
+(chips under the output below 600px wide). No editor and no blocks, so Monaco
+and Blockly never load.
+
+```js
+const panel = SnakieEmbed.runner(pre, {
+  name: 'blink.py',
+  board: 'pico2w',
+  onState: (running) => play.classList.toggle('is-running', running),
+  onClose: () => play.focus()
+})
+if (!panel) return // empty, or too long for a URL: offer Open in Snakie instead
+panel.stop()  // or panel.run() to run it again, panel.close() to take it away
+```
+
+Calling `runner` again for the same block returns the open panel, so one
+button can be play, stop and run again (`panel.running` says which). The
+panel and the page stay in step by `postMessage`: the frame sends
+`run-state` and `close`, the helper sends it `run` and `stop`. Check
+`SnakieEmbed.runner` exists before relying on it: a cached older helper has
+only `upgrade`.
+
 ## The URL (#1286)
 
 ```
@@ -80,6 +107,7 @@ https://app.snakie.org/embed.html?code=<text or base64url deflate>&name=main.py
 | `board` | The board the pin strip draws: `pico2w` (default), `pico-plus-2`, `tiny2040`, `tiny2350` or `esp32-devkit` (a built-in board's id or name, any case, with or without dashes). The reader can change it in the strip. |
 | `pins` | `1` (default) shows the pins the code uses beside it (see below). `0` hides them. |
 | `packages` | Pyodide packages to load before running, comma-separated. Imports are detected anyway. |
+| `output` | `1` shows only the output panel (the lesson runner, above): no editor. Use with `autorun=1`. |
 | `id` | Echoed in the embed's `postMessage`s. The helper sets it. |
 
 The footer always has **View on GitHub** (the gist, or the repo file at its

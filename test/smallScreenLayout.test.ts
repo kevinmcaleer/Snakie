@@ -121,10 +121,10 @@ describe('Electronics on a phone: one arrangement, nothing adrift', () => {
     return css.slice(i, css.indexOf('}', i))
   }
 
-  it('puts Sync in the header row instead of floating it over the board', () => {
-    expect(pane).toMatch(/headerExtra=\{phone \? <SyncControl folder=\{folder\} \/> : undefined\}/)
-    expect(pane).toMatch(/\{!phone && \(\s*<div className="esync__float">/)
-    expect(graph).toMatch(/\{headerExtra && <div className="boardgraph__sync">\{headerExtra\}<\/div>\}/)
+  it('keeps Sync in the header row, not floating over the board', () => {
+    expect(pane).toMatch(/headerActions=\{<SyncControl folder=\{folder\} \/>\}/)
+    expect(pane).not.toMatch(/esync__float/)
+    expect(graph).toMatch(/\{headerActions\}/)
     expect(css).not.toMatch(/esync__float/)
   })
 
