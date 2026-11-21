@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs'
 import {
   fetchDeployedVersion,
   isDifferentBuild,
+  reloadPlan,
+  TAKEOVER_WAIT_MS,
   POLL_INTERVAL_MS,
   SW_SCOPE,
   SW_URL,
@@ -95,7 +97,10 @@ describe('the version stamp is emitted and always fetched fresh', () => {
 
   it('reads the deployed version out of it', async () => {
     const fake = (async () =>
-      ({ ok: true, json: async () => ({ version: '0.57.0' }) }) as unknown as Response) as typeof fetch
+      ({
+        ok: true,
+        json: async () => ({ version: '0.57.0' })
+      }) as unknown as Response) as typeof fetch
     await expect(fetchDeployedVersion(fake)).resolves.toBe('0.57.0')
   })
 
@@ -184,5 +189,45 @@ describe('the notice says what a browser can actually do', () => {
     expect(notifier).toContain("isWeb ? 'Reload' : 'Restart'")
     expect(notifier).toContain('reload to update')
     expect(notifier).toContain('restart to update')
+  })
+})
+
+describe('reloading into a new build waits for the new worker', () => {
+  // 2026-11-21: the reload used to fire the moment a new worker reached
+  // `installed`. The navigation then went to the OLD worker as skipWaiting shut
+  // it down, was cut off ("Failed to fetch" in sw.js), and the tab froze.
+  const updates = readFileSync('src/renderer/src/web/web-updates.ts', 'utf8')
+  const code = updates.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')
+
+  it('waits while a new worker is still on its way', () => {
+    expect(reloadPlan({ registered: true, tookOver: false, newWorkerPending: true })).toBe('wait')
+    // even after an earlier deploy took over: a later one may be behind it
+    expect(reloadPlan({ registered: true, tookOver: true, newWorkerPending: true })).toBe('wait')
+  })
+
+  it('reloads once the new worker is in charge, or with no worker at all', () => {
+    expect(reloadPlan({ registered: true, tookOver: true, newWorkerPending: false })).toBe('reload')
+    expect(reloadPlan({ registered: false, tookOver: false, newWorkerPending: false })).toBe(
+      'reload'
+    )
+  })
+
+  it('goes around the old worker when no new one is coming (a failed install)', () => {
+    // Otherwise the old worker answers the reload with the old build again.
+    expect(reloadPlan({ registered: true, tookOver: false, newWorkerPending: false })).toBe(
+      'bypass'
+    )
+    expect(code).toMatch(/\.unregister\(\)[\s\S]*window\.location\.reload\(\)/)
+    expect(code).toMatch(/worker\.state === 'redundant'/)
+  })
+
+  it('treats controllerchange, not `installed`, as the update having landed', () => {
+    expect(code).toMatch(/addEventListener\('controllerchange'/)
+    expect(code).not.toMatch(/state === 'installed'/)
+  })
+
+  it('gives a slow worker a while, not forever', () => {
+    expect(TAKEOVER_WAIT_MS).toBeGreaterThanOrEqual(5_000)
+    expect(TAKEOVER_WAIT_MS).toBeLessThanOrEqual(60_000)
   })
 })
