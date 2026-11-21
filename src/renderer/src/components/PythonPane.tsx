@@ -79,8 +79,8 @@ export interface PythonPaneProps {
    * The link itself still works; only the invitations to use it are hidden.
    */
   linked?: boolean
-  /** The header's language name. MicroPython unless the code is for another
-   *  Python — the embed's Pyodide engine runs CPython (#1289). */
+  /** The header's language name, for the embed (MicroPython, or Python for
+   *  the Pyodide engine, #1289). Omitted in the app, which shows no title. */
   title?: string
   /** A viewer, not an editor (the embed with `run=0`, #1286). */
   readOnly?: boolean
@@ -112,7 +112,7 @@ export function PythonPane({
   onLineClick,
   revealLine,
   linked = false,
-  title = 'MicroPython',
+  title,
   readOnly = false,
   onLineFocus,
   problems
@@ -308,19 +308,21 @@ export function PythonPane({
 
   return (
     <div className="python-pane">
-      <div className="python-pane__header">
-        {/* MICROPYTHON, not PYTHON. The generator writes MicroPython — that is
-            the whole premise of the epic — and a learner who graduates from
-            this pane is graduating to the language named on it. The narrow
-            layout's tab keeps the short word: it sits beside "Blocks" in a
-            two-tab strip under 720px, where the long one does not fit. */}
-        <span className="python-pane__title">{title}</span>
-        {/* The link is invisible until you try it, so say it once. This is the
-            teaching mechanism of the whole epic and it should not be a secret. */}
-        {onLineClick && linked && (
-          <span className="python-pane__hint">click a line to find its block</span>
-        )}
-      </div>
+      {/* No title in the app: the status bar already names the runtime, and a
+          "MICROPYTHON" strip over an editor in a MicroPython IDE said nothing
+          the code doesn't. The header stays for an embed, which has no status
+          bar and passes `title` (MicroPython vs Python for Pyodide), and for
+          the split view's one-off hint below. */}
+      {(title || (onLineClick && linked)) && (
+        <div className="python-pane__header">
+          {title && <span className="python-pane__title">{title}</span>}
+          {/* The link is invisible until you try it, so say it once. This is the
+              teaching mechanism of the whole epic and it should not be a secret. */}
+          {onLineClick && linked && (
+            <span className="python-pane__hint">click a line to find its block</span>
+          )}
+        </div>
+      )}
       {code === '' && !readOnly && (
         <p className="python-pane__empty">
           {linked
