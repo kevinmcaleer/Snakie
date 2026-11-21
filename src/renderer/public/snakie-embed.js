@@ -89,6 +89,36 @@
   var counter = 0
   var frames = {}
 
+  // The "Starting Snakie" badge, in Snakie Flat green. Added once, on first use.
+  var stylesAdded = false
+  function injectStyles() {
+    if (stylesAdded) return
+    stylesAdded = true
+    var css =
+      '.snakie-embed__starting{position:absolute;top:8px;right:8px;z-index:3;display:inline-flex;align-items:center;gap:8px;' +
+      'padding:5px 10px;border-radius:999px;background:#1d8150;color:#fff;font:600 12px/1 "Plus Jakarta Sans",system-ui,sans-serif;' +
+      'box-shadow:0 1px 3px rgba(0,0,0,.2)}' +
+      '.snakie-embed__spin{width:12px;height:12px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;' +
+      'animation:snakie-embed-spin .8s linear infinite}' +
+      '@keyframes snakie-embed-spin{to{transform:rotate(360deg)}}' +
+      '@media (prefers-reduced-motion:reduce){.snakie-embed__spin{animation:none}}'
+    var style = document.createElement('style')
+    style.textContent = css
+    document.head.appendChild(style)
+  }
+
+  // Say hello to Snakie early: the connection is open before the first box needs it.
+  ;(function () {
+    try {
+      var link = document.createElement('link')
+      link.rel = 'preconnect'
+      link.href = ORIGIN
+      document.head.appendChild(link)
+    } catch (e) {
+      /* no <head> yet: the iframe connects on its own */
+    }
+  })()
+
   function optionsFromElement(el) {
     var opts = {}
     var d = el.dataset
@@ -125,14 +155,15 @@
     return ORIGIN + '/embed.html?' + q.join('&')
   }
 
-  function mount(el, opts) {
+  function mount(el, opts, eager) {
     opts = opts || optionsFromElement(el)
     if (el.__snakieEmbed) el.__snakieEmbed.unmount()
     var id = 'snakie-' + ++counter
     var iframe = document.createElement('iframe')
     iframe.src = embedUrl(opts, id)
     iframe.title = opts.title || (opts.robot ? 'Robot' : opts.file || opts.path || opts.name || 'Code') + ' in Snakie'
-    iframe.loading = 'lazy'
+    // The scroll observer already waits until a box is near; past that, don't wait twice.
+    iframe.loading = eager ? 'eager' : 'lazy'
     iframe.setAttribute('allow', 'clipboard-write')
     iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin')
     var fixed = heightFor(opts.height)
@@ -147,15 +178,58 @@
     el.style.borderRadius = RADIUS + 'px'
     el.style.overflow = 'hidden'
     el.style.maxWidth = width || ''
-    // Keep the fallback (a GitHub link) for screen readers until the frame loads.
-    var fallback = Array.prototype.slice.call(el.childNodes)
-    iframe.addEventListener('load', function () {
+    // Keep the page's own block (the code, or a GitHub link) until the frame
+    // says it has something to show ("ready"), with a small "Starting Snakie"
+    // badge on it, so the reader never looks at an empty box. The frame sits
+    // invisibly over the block meanwhile. A frame that never says so (a robot
+    // frame, an older embed) is shown a moment after it loads.
+    var fallback = Array.prototype.slice.call(el.childNodes).filter(function (n) {
+      return n.nodeType === 1 || (n.nodeType === 3 && /\S/.test(n.nodeValue))
+    })
+    var waiting = fallback.length > 0 && !opts.robot
+    var badge = null
+    function reveal() {
+      if (!waiting) return
+      waiting = false
+      clearTimeout(revealTimer)
       for (var i = 0; i < fallback.length; i++) {
         if (fallback[i].parentNode === el) el.removeChild(fallback[i])
       }
-    })
+      if (badge && badge.parentNode) badge.parentNode.removeChild(badge)
+      el.classList.remove('snakie-embed--loading')
+      iframe.style.position = ''
+      iframe.style.opacity = '1'
+      iframe.style.pointerEvents = ''
+    }
+    var revealTimer = 0
+    if (waiting) {
+      injectStyles()
+      el.classList.add('snakie-embed--loading')
+      if (getComputedStyle(el).position === 'static') el.style.position = 'relative'
+      iframe.style.position = 'absolute'
+      iframe.style.top = '0'
+      iframe.style.left = '0'
+      iframe.style.opacity = '0'
+      iframe.style.pointerEvents = 'none'
+      iframe.style.transition = 'height .15s ease, opacity .2s ease'
+      badge = document.createElement('span')
+      badge.className = 'snakie-embed__starting'
+      badge.setAttribute('role', 'status')
+      badge.innerHTML = '<span class="snakie-embed__spin" aria-hidden="true"></span>Starting Snakie…'
+      el.appendChild(badge)
+      // An older embed never says "ready": show it a little after it loads.
+      iframe.addEventListener('load', function () {
+        revealTimer = setTimeout(reveal, 6000)
+      })
+    } else {
+      iframe.addEventListener('load', function () {
+        for (var i = 0; i < fallback.length; i++) {
+          if (fallback[i].parentNode === el) el.removeChild(fallback[i])
+        }
+      })
+    }
     el.appendChild(iframe)
-    frames[id] = { iframe: iframe, fixed: fixed !== null }
+    frames[id] = { iframe: iframe, fixed: fixed !== null, onReady: reveal }
     iframe.__snakieId = id
     var handle = {
       iframe: iframe,
@@ -285,6 +359,8 @@
     if (!entry || entry.iframe.contentWindow !== e.source) return
     if (data.type === 'height' && !entry.fixed && typeof data.height === 'number') {
       entry.iframe.style.height = Math.max(120, Math.min(2000, Math.round(data.height))) + 'px'
+    } else if (data.type === 'ready') {
+      if (entry.onReady) entry.onReady()
     } else if (data.type === 'run-state') {
       if (entry.onRunState) entry.onRunState(data.running === true)
     } else if (data.type === 'close') {
@@ -389,10 +465,11 @@
             for (var i = 0; i < entries.length; i++) {
               if (!entries[i].isIntersecting) continue
               observer.unobserve(entries[i].target)
-              mount(entries[i].target)
+              mount(entries[i].target, null, true)
             }
           },
-          { rootMargin: '400px 0px' }
+          // Well before the box scrolls into view: Snakie's editor takes a moment to start.
+          { rootMargin: '1200px 0px' }
         )
       : null
 

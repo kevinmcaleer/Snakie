@@ -27,6 +27,12 @@ iframe's height follows the embed's content: the embed posts its height, and the
 helper only accepts messages from its own origin and its own frames. Without
 JavaScript, the element's own content (a GitHub link) stays on the page.
 
+While a box starts, the element's own content stays visible with a small
+"Starting Snakie…" badge, and the frame waits invisibly over it until it posts
+`ready` (it has drawn the code, or an error). The frame draws the code plainly
+at once and swaps in Monaco when it has downloaded. Boxes start 1200px before
+they scroll into view.
+
 For content added after the page loads (a live preview, an editor):
 
 ```js
