@@ -4,9 +4,10 @@
  * In-app MicroPython package installer: a header with a live flash-usage meter,
  * a prominent search box, a discovery list of popular libraries (split into
  * INSTALLED / REGISTRY groups), and a collapsible Advanced section. The base
- * rules use the shared design tokens from index.css so they track the active
- * theme; the skeuomorph "manila tags on green felt" treatment (matching Source
- * Control) lives in index.css under the themed selectors.
+ * rules use the shared design tokens so they track the active theme. Styled to
+ * the Snakie Flat system: solid fills, 1px hairlines, 32px controls, 6px radius.
+ * (The old "manila tags on green felt" skin that used to override all of this
+ * from index.css is gone.)
  */
 
 .pkgs {
@@ -22,39 +23,65 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  font-family: var(--font-ui, inherit);
+}
+/* Prose in either tab is UI text; mono is for names, imports and sizes. */
+.pkgs-shell .pkgs__hint,
+.pkgs-shell .mods__blurb,
+.pkgs-shell .mods__hint,
+.pkgs-shell .dmods__blurb,
+.pkgs-shell .dmods__empty {
+  font-family: var(--font-ui, inherit);
+}
+.pkgs-about code {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.92em;
 }
 
 .pkgs-tabs {
   display: flex;
-  gap: 2px;
-  padding: 0.45rem 0.85rem 0;
-  border-bottom: 1px solid var(--border);
+  gap: 4px;
+  padding: 8px 12px 0;
+  border-bottom: 1px solid var(--shellbd, var(--border));
 }
 
 .pkgs-tab {
-  flex: 1 1 auto;
-  padding: 0.35rem 0.6rem;
-  background: var(--bg-sunken);
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-  border-bottom: none;
-  border-radius: var(--radius) var(--radius) 0 0;
-  font-family: inherit;
-  font-size: 0.78rem;
+  flex: 1 1 0;
+  min-height: 32px;
+  padding: 0 8px;
+  background: transparent;
+  color: var(--txt2, var(--text-muted));
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  font-family: var(--font-ui, inherit);
+  font-size: 0.8rem;
   font-weight: 600;
-  letter-spacing: 0.03em;
   cursor: pointer;
 }
 
 .pkgs-tab:hover {
-  background: var(--bg-elevated);
+  color: var(--head, var(--text));
 }
 
 .pkgs-tab.is-active {
-  background: var(--bg-elevated);
-  color: var(--text);
-  border-bottom: 1px solid var(--bg-elevated);
-  margin-bottom: -1px;
+  color: var(--head, var(--text));
+  border-bottom-color: var(--green, var(--accent-2));
+}
+
+/* One line under the tabs saying what this tab is for — "package" and "module"
+   mean nothing to a newcomer, so each tab says what you get and where from. */
+.pkgs-about {
+  margin: 0;
+  padding: 10px 12px 2px;
+  color: var(--txt2, var(--text-muted));
+  font-family: var(--font-ui, inherit);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+.pkgs-about strong {
+  color: var(--head, var(--text));
+  font-weight: 600;
 }
 
 .pkgs__hint {
@@ -89,13 +116,12 @@
 }
 
 .pkgs__title {
-  font-weight: 700;
+  font-weight: 600;
   font-size: 0.78rem;
-  letter-spacing: 0.06em;
 }
 
 .pkgs__flash-readout {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 0.72rem;
   color: var(--text-muted);
 }
@@ -129,25 +155,28 @@
 .pkgs__search-input {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 0.35rem 0.55rem;
-  background: var(--bg-sunken);
+  height: 32px;
+  padding: 0 10px;
+  background: var(--card, var(--bg-sunken));
   color: var(--text);
-  border: 1px solid var(--border);
+  border: 1px solid var(--shellbd, var(--border));
   border-radius: var(--radius);
-  font-family: inherit;
+  font-family: var(--font-ui, inherit);
   font-size: 0.85rem;
 }
 
 .pkgs__search-btn,
 .pkgs__search-clear {
   flex: 0 0 auto;
-  padding: 0.3rem 0.7rem;
-  background: var(--bg-sunken);
+  height: 32px;
+  padding: 0 12px;
+  background: var(--card, var(--bg-sunken));
   color: var(--text);
-  border: 1px solid var(--border);
+  border: 1px solid var(--shellbd, var(--border));
   border-radius: var(--radius);
-  font-family: inherit;
+  font-family: var(--font-ui, inherit);
   font-size: 0.8rem;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -195,7 +224,7 @@
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 0.78rem;
 }
 
@@ -221,10 +250,10 @@
   position: relative;
   display: flex;
   margin: 0 0 0.6rem;
-  padding: 0.5rem 0.7rem 0.5rem 0.95rem;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 5px;
+  padding: 8px 10px;
+  background: var(--card, var(--bg-elevated));
+  border: 1px solid var(--shellbd, var(--border));
+  border-radius: var(--radius);
   overflow: hidden;
 }
 
@@ -249,14 +278,14 @@
 }
 
 .pkgs__name {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono, ui-monospace, monospace);
   font-weight: 700;
   word-break: break-word;
 }
 
 .pkgs__version {
   padding: 0.02rem 0.28rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 0.7rem;
   color: var(--text-muted);
   border: 1px solid var(--border);
@@ -282,30 +311,30 @@
 }
 
 .pkgs__src {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 0.66rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   color: var(--text-muted);
 }
 
-/* INSTALL / RETRY action — a small button (gold "key" in the skeuomorph skin). */
+/* INSTALL / RETRY action: the one primary (green) button on a row. */
 .pkgs__key {
   flex: 0 0 auto;
-  padding: 0.25rem 0.6rem;
-  background: var(--bg-sunken);
-  color: var(--text);
-  border: 1px solid var(--border);
+  min-height: 28px;
+  padding: 0 12px;
+  background: var(--green, var(--accent-2));
+  color: var(--fl-on-primary, #fff);
+  border: 1px solid var(--green, var(--accent-2));
   border-radius: var(--radius);
-  font-family: inherit;
-  font-size: 0.74rem;
+  font-family: var(--font-ui, inherit);
+  font-size: 0.76rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
   cursor: pointer;
 }
 
 .pkgs__key:hover:not(:disabled) {
-  background: var(--bg-elevated);
+  filter: brightness(1.06);
 }
 
 .pkgs__key:disabled {
@@ -313,11 +342,11 @@
   cursor: default;
 }
 
-/* INSTALLED rubber stamp. */
+/* INSTALLED marker. */
 .pkgs__stamp {
   flex: 0 0 auto;
   padding: 0.06rem 0.4rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -350,7 +379,7 @@
   background: var(--bg-sunken);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 0.74rem;
   white-space: pre-wrap;
   word-break: break-word;
@@ -384,13 +413,15 @@
   flex: 1;
 }
 .pkgs__act {
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
+  min-height: 28px;
+  font-family: var(--font-ui, inherit);
+  font-size: 0.74rem;
+  font-weight: 600;
   color: var(--text);
-  background: var(--bg-sunken);
-  border: var(--border-w) solid var(--border);
-  border-radius: 5px;
-  padding: 0.16rem 0.5rem;
+  background: var(--panel, var(--bg-sunken));
+  border: 1px solid var(--shellbd, var(--border));
+  border-radius: var(--radius);
+  padding: 0 10px;
   cursor: pointer;
 }
 .pkgs__act:disabled {
@@ -410,8 +441,6 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 0.4rem;
-  /* Match the group heads' horizontal inset so the row sits INSIDE the felt
-     panel's stitched (dashed) frame, not flush against the edge. */
   margin: 0.5rem 0.85rem;
 }
 .pkgs__scan-ok {
@@ -441,26 +470,20 @@
   cursor: default;
 }
 
-
-/* The manila tag is a FIXED material (same kraft gradient in both themes), so
-   its text is fixed dark ink — inheriting var(--text) rendered near-white on
-   manila in the dark theme. Same precedent as the paper inputs. */
-.pkgs__tag--board {
-  color: #2f2a1a;
+/* A Snakie driver installs the same way a package does, so its Install button
+   is the same green primary. */
+.pkgs-shell .mods__key {
+  min-height: 28px;
+  padding: 0 12px;
+  background: var(--green, var(--accent-2));
+  color: var(--fl-on-primary, #fff);
+  border: 1px solid var(--green, var(--accent-2));
+  border-radius: var(--radius);
+  font-family: var(--font-ui, inherit);
+  font-size: 0.76rem;
+  font-weight: 600;
 }
-.pkgs__tag--board .pkgs__ver {
-  color: #6b5f3e;
-}
-.pkgs__tag--board .pkgs__act {
-  color: #2f2a1a;
-  background: rgba(255, 255, 255, 0.4);
-  border-color: #9c8d5e;
-}
-.pkgs__tag--board .pkgs__act--upgrade {
-  color: #5c3f0c;
-  border-color: #8a6d1f;
-}
-.pkgs__tag--board .pkgs__act--uninstall:hover:not(:disabled) {
-  color: #a03024;
-  border-color: #a03024;
+.pkgs-shell .mods__key:hover:not(:disabled) {
+  background: var(--green, var(--accent-2));
+  filter: brightness(1.06);
 }

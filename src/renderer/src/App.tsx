@@ -13,6 +13,7 @@ import { FileSelectionProvider } from './store/file-selection'
 import { LayoutProvider } from './store/layout'
 import { TutorialsProvider } from './store/tutorials'
 import { IS_WEB } from './lib/env'
+import { StarterFile } from './components/StarterFile'
 import { OpenFromUrl } from './code-embed/OpenFromUrl'
 
 function App(): JSX.Element {
@@ -49,6 +50,10 @@ function App(): JSX.Element {
                         lesson (#1287, kevsrobots.com#581): opens the shared
                         code as a new tab — from the address bar on the web,
                         from a `snakie://open…` link on the desktop. */}
+                      {/* A brand-new user's first launch opens a small program
+                        that runs as it is, instead of an empty editor. Before
+                        OpenFromUrl so it reads the address bar first. */}
+                      <StarterFile />
                       <OpenFromUrl />
                     </TutorialsProvider>
                   </ConsoleProvider>

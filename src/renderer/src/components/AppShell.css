@@ -237,6 +237,32 @@
   width: min(300px, calc(100vw - 64px));
 }
 
+/* Inside a solo workspace the scrim must also cover that workspace's floating
+   controls, which sit well above the Code layout's z-indexes. */
+.shell__solo--overlay > .shell__scrim {
+  z-index: 89;
+}
+/* Electronics and Build: the side panel (Files, Parts, Search, a lesson…) is a
+   drawer over the workspace too, rather than a column squeezing it. */
+.shell:not([data-size='wide']) .shell__solo-lesson {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 6px;
+  width: min(320px, 86vw);
+  max-width: none;
+  /* Above the workspace's own floating controls (view cube, Sync, zoom bar). */
+  z-index: 90;
+  background: var(--panel, var(--bg-elevated));
+  border: 1px solid var(--shellbd, var(--border));
+  border-radius: 14px;
+  filter: drop-shadow(8px 0 18px rgba(40, 30, 10, 0.22));
+}
+.shell[data-size='phone'][data-menu-open] .shell__solo-lesson {
+  left: 56px;
+  width: min(300px, calc(100vw - 64px));
+}
+
 /* The console's own header: one row that scrolls sideways, not three. */
 .shell[data-size='phone'] .region--shell .shell-actions {
   flex-wrap: nowrap;

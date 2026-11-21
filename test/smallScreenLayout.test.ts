@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
 import {
   COMPACT_MAX_WIDTH,
   PHONE_MAX_HEIGHT,
@@ -79,5 +80,107 @@ describe('mini board touch pinout', () => {
     expect(isTouchTap(TOUCH_TAP_SLOP, 0)).toBe(true)
     expect(isTouchTap(TOUCH_TAP_SLOP + 1, 0)).toBe(false)
     expect(isTouchTap(0, -40)).toBe(false)
+  })
+})
+
+describe('side panels beside Electronics and Build', () => {
+  const shell = readFileSync('src/renderer/src/components/AppShell.tsx', 'utf8')
+  const shellCss = readFileSync('src/renderer/src/components/AppShell.css', 'utf8')
+
+  it('opens Files, Packages and Search there instead of ignoring the tap', () => {
+    // The non-lesson branch used to only remember the view and keep the panel shut.
+    expect(shell).toMatch(/setSoloSide\(\(open\) => \(open === view/)
+    expect(shell).toMatch(
+      /const soloPanelOpen = soloLessonOpen \|\| \(soloWorkspace && soloSide === activityView\)/
+    )
+    expect(shell).toMatch(/\{soloPanelOpen && \(\s*<aside className="shell__solo-lesson"/)
+  })
+
+  it('forgets the panel when the workspace changes', () => {
+    expect(shell).toMatch(/useEffect\(\(\) => setSoloSide\(null\), \[layout\.active\]\)/)
+  })
+
+  it('shows it as a drawer above the workspace controls on small screens', () => {
+    const i = shellCss.indexOf(".shell:not([data-size='wide']) .shell__solo-lesson {")
+    expect(i).toBeGreaterThan(-1)
+    const rule = shellCss.slice(i, shellCss.indexOf('}', i))
+    expect(rule).toMatch(/position:\s*absolute/)
+    expect(rule).toMatch(/z-index:\s*90/)
+    expect(shellCss).toMatch(/\.shell__solo--overlay > \.shell__scrim \{\s*z-index:\s*89/)
+  })
+})
+
+describe('Electronics on a phone: one arrangement, nothing adrift', () => {
+  const css = readFileSync('src/renderer/src/components/BoardGraph.small.css', 'utf8')
+  const pane = readFileSync('src/renderer/src/components/BoardPane.tsx', 'utf8')
+  const graph = readFileSync('src/renderer/src/components/BoardGraph.tsx', 'utf8')
+  const P = ".shell[data-size='phone'] .shell__solo-board"
+  const rule = (sel: string): string => {
+    const i = css.indexOf(`${P} ${sel} {`)
+    expect(i, sel).toBeGreaterThan(-1)
+    return css.slice(i, css.indexOf('}', i))
+  }
+
+  it('keeps Sync in the header row, not floating over the board', () => {
+    expect(pane).toMatch(/headerActions=\{<SyncControl folder=\{folder\} \/>\}/)
+    expect(pane).not.toMatch(/esync__float/)
+    expect(graph).toMatch(/\{headerActions\}/)
+    expect(css).not.toMatch(/esync__float/)
+  })
+
+  it('lays the header actions out as one full-width row', () => {
+    expect(rule('.boardgraph__actions')).toMatch(/flex:\s*1 1 100%/)
+    expect(rule('.boardgraph__actions > *')).toMatch(/flex:\s*1 1 0/)
+  })
+
+  it('docks the tool bar across the bottom and the part tools on top of it', () => {
+    const dock = rule('.wc__controls')
+    expect(dock).toMatch(/left:\s*var\(--em-edge\)/)
+    expect(dock).toMatch(/right:\s*var\(--em-edge\)/)
+    const i = css.indexOf(`${P} .wc__parttb,`)
+    const tb = css.slice(i, css.indexOf('}', i))
+    expect(tb).toMatch(/top:\s*auto !important/)
+    expect(tb).toMatch(/transform:\s*none/)
+  })
+
+  it('gives Library the same board chrome as the menu button', () => {
+    expect(rule('.boardgraph__dock-tab')).toMatch(/background:\s*rgba\(12, 20, 28, 0\.82\)/)
+  })
+
+  it('never shows a greyed-out undo or redo', () => {
+    expect(rule('.wc__zoom-btn:disabled')).toMatch(/visibility:\s*hidden/)
+  })
+})
+
+describe('a held finger on a part in Build opens its menu', () => {
+  const view = readFileSync('src/renderer/src/components/RobotView.tsx', 'utf8')
+  const panel = readFileSync('src/renderer/src/components/RobotBuildPanel.tsx', 'utf8')
+  const css = readFileSync('src/renderer/src/components/RobotView.css', 'utf8')
+
+  it('listens for a hold and a right-click on the 3-D view', () => {
+    expect(view).toMatch(/addEventListener\('pointerdown', onHoldDown\)/)
+    expect(view).toMatch(/addEventListener\('contextmenu', onPartContextMenu\)/)
+    expect(view).toMatch(/if \(fingers !== 1\) return/)
+    expect(view).toMatch(/<RobotBuildPanel\s+menuRequest=\{partMenuReq\}/)
+  })
+
+  it('shows the menu even with the Build panel shut', () => {
+    const closed = panel.slice(panel.indexOf('if (!open) {'), panel.indexOf('<aside'))
+    expect(closed).toMatch(/\{partMenu\}/)
+  })
+
+  it('offers no greyed-out item, and says what to do about the base', () => {
+    const items = panel.slice(panel.indexOf('const menuItems'), panel.indexOf('const activeKey'))
+    expect(items).not.toMatch(/disabled/)
+    expect(view).toMatch(/make another part the base first, then delete this one/)
+  })
+
+  it('turns off text selection and the iOS callout on touch screens', () => {
+    const i = css.indexOf('@media (pointer: coarse)')
+    expect(i).toBeGreaterThan(-1)
+    const block = css.slice(i)
+    expect(block).toMatch(/-webkit-touch-callout:\s*none/)
+    // Safari ignores the unprefixed property on its own.
+    expect(block).toMatch(/-webkit-user-select:\s*none/)
   })
 })

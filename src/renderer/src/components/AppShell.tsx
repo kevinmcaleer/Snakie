@@ -383,6 +383,13 @@ export function AppShell(): JSX.Element {
   // resurface a file tree in Electronics/Build.
   const isLessonView = SOLO_PANEL_VIEWS.has(activityView)
   const soloLessonOpen = soloWorkspace && isLessonView && !layout.workspace.filesCollapsed
+  // Files, Parts, Search and the other non-lesson views can be opened beside a
+  // solo workspace too, but only by asking: the choice lives here, not in the
+  // layout store, so the Files panel you left open in Code does not follow you
+  // into Electronics or Build. Leaving the workspace forgets it.
+  const [soloSide, setSoloSide] = useState<ActivityView | null>(null)
+  useEffect(() => setSoloSide(null), [layout.active])
+  const soloPanelOpen = soloLessonOpen || (soloWorkspace && soloSide === activityView)
   const dockOpen = layout.workspace.dockOpen
   // Transient editor focus (Robot pop-out): hide the board, instruments + console
   // around the URDF without touching the workspace (#320 follow-up).
@@ -1408,7 +1415,7 @@ export function AppShell(): JSX.Element {
         if (!soloRef.current) {
           if (next) filesRef.current?.expand()
           else filesRef.current?.collapse()
-        }
+        } else if (!next) setSoloSide(null)
         return next
       })
     }
@@ -1730,13 +1737,15 @@ export function AppShell(): JSX.Element {
             if (soloWorkspace) {
               const lessonView = SOLO_PANEL_VIEWS.has(view)
               if (!lessonView) {
-                // Files/Packages/etc. have no panel in a solo workspace — remember
-                // the choice but keep the sidebar hidden.
+                // Files/Parts/Search/etc.: open beside the workspace, and close
+                // again on a second tap. Kept out of the store flag (see soloSide).
                 setActivityView(view)
                 layout.setCollapsed('files', true)
+                setSoloSide((open) => (open === view && view === activityView ? null : view))
               } else if (view === activityView && soloLessonOpen) {
                 layout.setCollapsed('files', true) // toggle the open lesson closed
               } else {
+                setSoloSide(null)
                 setActivityView(view)
                 layout.setCollapsed('files', false) // open the lesson
               }
@@ -1938,7 +1947,7 @@ export function AppShell(): JSX.Element {
             tutorial that asked for this workspace — shows in a left panel. */}
           {/* Small screens: the Files drawer floats over the editor; tapping the
               dimmed editor closes it. */}
-          {compact && ((!filesCollapsed && !soloWorkspace) || (phone && menuOpen)) && (
+          {compact && !soloWorkspace && (!filesCollapsed || (phone && menuOpen)) && (
             <button
               type="button"
               className="shell__scrim"
@@ -1951,8 +1960,23 @@ export function AppShell(): JSX.Element {
           )}
           {soloWorkspace && (
             <div className="shell__solo shell__solo--overlay">
-              {soloLessonOpen && (
-                <aside className="shell__solo-lesson" aria-label="Lesson">
+              {/* Small screens: the side panel is a drawer over the workspace.
+                  Its scrim lives in here, inside the overlay's stacking context,
+                  so the drawer can sit above it. */}
+              {compact && (soloPanelOpen || (phone && menuOpen)) && (
+                <button
+                  type="button"
+                  className="shell__scrim"
+                  onClick={() => {
+                    setSoloSide(null)
+                    if (soloLessonOpen) layout.setCollapsed('files', true)
+                    setMenuOpen(false)
+                  }}
+                  aria-label="Close the side panel"
+                />
+              )}
+              {soloPanelOpen && (
+                <aside className="shell__solo-lesson" aria-label="Side panel">
                   <LeftView view={activityView} helpTarget={helpTarget} />
                 </aside>
               )}

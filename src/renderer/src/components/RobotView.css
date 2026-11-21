@@ -346,6 +346,7 @@
     0 8px 22px rgba(0, 0, 0, 0.18),
     inset 0 1px 0 var(--pillinset, rgba(255, 255, 255, 0.04));
   backdrop-filter: blur(6px);
+  -webkit-user-select: none;
   user-select: none;
 }
 .robotview__zbtn {
@@ -496,6 +497,7 @@
   font-size: 11px;
   color: var(--text-muted);
   cursor: pointer;
+  -webkit-user-select: none;
   user-select: none;
 }
 .robotview__zbtn.is-active {
@@ -568,4 +570,22 @@
 .robotview__stereo-depth input[type='range'] {
   width: 78px;
   accent-color: var(--accent, #e6ab30);
+}
+
+/* On a touch screen the Build workspace is a tool surface, not a page of text.
+   A held finger opens a part's menu; without this, iOS started a text selection
+   across the tool bar and the view and put up its Copy / Look Up callout.
+   (Safari needs the -webkit- prefix: the plain property alone does nothing.) */
+@media (pointer: coarse) {
+  .robotdock--full {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .robotdock--full input,
+  .robotdock--full textarea,
+  .robotdock--full [contenteditable='true'] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
 }

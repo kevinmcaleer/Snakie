@@ -63,50 +63,61 @@ interface FlashUsage {
 }
 
 /**
- * The two views the Packages activity surface hosts. `packages` is the original
- * mip/PyPI installer (#20); `modules` is the per-component module installer
- * (#120 — the Modules manager), reached via the tab bar below without adding a
- * new activity-bar view (which would need an AppShell edit). They sit together
- * because "modules on the board" is the per-component complement to packages.
+ * The two tabs of the Packages activity surface, named for what the user is
+ * there to do rather than for what the things are called:
+ *
+ *   get    "Get libraries"  — find something and install it: package search,
+ *          the popular list, the import scan, and Snakie's own driver catalog.
+ *   board  "On this board"  — what is already there: storage, the libraries in
+ *          /lib (with Uninstall / Upgrade), and every module the code can import.
+ *
+ * It used to be "Packages" and "Modules", two words that mean nothing to a
+ * newcomer and that overlapped: Packages also listed what was on the board, and
+ * Modules also installed things. The package installer (#20) and the modules
+ * manager (#120) are unchanged underneath; each now shows the half that belongs
+ * to the open tab.
  */
-type PackagesTab = 'packages' | 'modules'
+export type LibrariesTab = 'get' | 'board'
 
-/**
- * The Packages activity surface: a tab bar switching between the PyPI/mip
- * package installer and the #120 Modules manager. Keeps both on the existing
- * Packages view (no AppShell / ActivityBar churn).
- */
+const TABS: { id: LibrariesTab; label: string }[] = [
+  { id: 'get', label: 'Get libraries' },
+  { id: 'board', label: 'On this board' }
+]
+
 export function PackagesPanel(): JSX.Element {
-  const [tab, setTab] = useState<PackagesTab>('packages')
+  const [tab, setTab] = useState<LibrariesTab>('get')
   return (
     <div className="pkgs-shell">
-      <div className="pkgs-tabs" role="tablist" aria-label="Packages and modules">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'packages'}
-          className={`pkgs-tab${tab === 'packages' ? ' is-active' : ''}`}
-          onClick={() => setTab('packages')}
-        >
-          Packages
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'modules'}
-          className={`pkgs-tab${tab === 'modules' ? ' is-active' : ''}`}
-          onClick={() => setTab('modules')}
-        >
-          Modules
-        </button>
+      <div className="pkgs-tabs" role="tablist" aria-label="Libraries">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.id}
+            className={`pkgs-tab${tab === t.id ? ' is-active' : ''}`}
+            onClick={() => setTab(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
-      {tab === 'packages' ? <PackagesTab /> : <ModulesPanel />}
+      <p className="pkgs-about">
+        {tab === 'get'
+          ? 'Find a library and install it on your board: search the MicroPython package index, or pick one of Snakie’s own drivers.'
+          : 'What is on your board now: how full it is, the libraries you have installed, and every module your code can import.'}
+      </p>
+      {/* Both stay mounted across a tab change (same element, different `view`),
+          so a running install or a search is not thrown away by looking at the
+          other tab. */}
+      <PackagesTab view={tab} />
+      <ModulesPanel view={tab === 'get' ? 'catalog' : 'detected'} />
     </div>
   )
 }
 
-/** The original mip/PyPI package installer (#20), now hosted under a tab. */
-function PackagesTab(): JSX.Element {
+/** The mip/PyPI package installer (#20). `view` picks the half to show. */
+function PackagesTab({ view }: { view: LibrariesTab }): JSX.Element {
   const status = useDeviceStatus()
   const connected = status.state === 'connected'
   const { currentFolder } = useWorkspace()
@@ -154,7 +165,8 @@ function PackagesTab(): JSX.Element {
           } else if (e.name.endsWith('.py')) {
             projectModules.add(e.name.replace(/\.py$/, ''))
             try {
-              for (const imp of parsePyImports(await window.api.fs.readFile(e.path))) imports.add(imp)
+              for (const imp of parsePyImports(await window.api.fs.readFile(e.path)))
+                imports.add(imp)
             } catch {
               /* unreadable file — skip */
             }
@@ -374,9 +386,7 @@ function PackagesTab(): JSX.Element {
   }, [listToShow, installs])
 
   const flashPct = flash ? Math.min(100, Math.round((flash.usedKb / flash.totalKb) * 100)) : 0
-  const flashReadout = flash
-    ? `FLASH ${flash.usedKb} / ${flash.totalKb} KB`
-    : 'FLASH — / — KB'
+  const flashReadout = flash ? `${flash.usedKb} / ${flash.totalKb} KB` : '— / — KB'
 
   // Latest registry version for an on-board package (search results or the
   // curated list), for the Upgrade affordance.
@@ -470,24 +480,59 @@ function PackagesTab(): JSX.Element {
     )
   }
 
+  if (view === 'board') {
+    return (
+      <div className="pkgs">
+        <div className="pkgs__header">
+          <span className="pkgs__title">Board storage</span>
+          <span className="pkgs__flash-readout">{flashReadout}</span>
+        </div>
+
+        <div
+          className="pkgs__meter"
+          role="meter"
+          aria-label="Flash storage used"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={flashPct}
+        >
+          <span className="pkgs__meter-fill" style={{ width: `${flashPct}%` }} />
+        </div>
+
+        {!connected && (
+          <p className="pkgs__hint" role="status">
+            Connect a board to see how full it is and what is installed on it.
+          </p>
+        )}
+        {connected && boardPkgs !== null ? (
+          <>
+            <div className="pkgs__group-head">Installed libraries (/lib) — {boardPkgs.length}</div>
+            {boardPkgs.length > 0 ? (
+              <ul className="pkgs__list" role="list">
+                {boardPkgs.map(renderBoardTag)}
+              </ul>
+            ) : (
+              <p className="pkgs__hint">
+                Nothing in /lib yet. Install something from Get libraries.
+              </p>
+            )}
+          </>
+        ) : (
+          installed.length > 0 && (
+            <>
+              <div className="pkgs__group-head">Installed this session — {installed.length}</div>
+              <ul className="pkgs__list" role="list">
+                {installed.map(renderTag)}
+              </ul>
+            </>
+          )
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="pkgs">
-      <div className="pkgs__header">
-        <span className="pkgs__title">PACKAGES</span>
-        <span className="pkgs__flash-readout">{flashReadout}</span>
-      </div>
-
-      <div
-        className="pkgs__meter"
-        role="meter"
-        aria-label="Flash storage used"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={flashPct}
-      >
-        <span className="pkgs__meter-fill" style={{ width: `${flashPct}%` }} />
-      </div>
-
       <form
         className="pkgs__search"
         onSubmit={(e) => {
@@ -523,8 +568,8 @@ function PackagesTab(): JSX.Element {
 
       {!connected && (
         <p className="pkgs__hint" role="status">
-          Connect a board to install packages. You can still search and browse
-          popular libraries below.
+          Connect a board to install packages. You can still search and browse popular libraries
+          below.
         </p>
       )}
 
@@ -536,7 +581,7 @@ function PackagesTab(): JSX.Element {
         <p className="pkgs__hint pkgs__hint--dialect" role="status">
           This board runs <strong>CircuitPython</strong>. These are MicroPython packages — most
           won&rsquo;t import on it. CircuitPython libraries come from the Adafruit bundle: install
-          them from the <strong>Modules</strong> panel.
+          them from <strong>Snakie drivers</strong> below.
         </p>
       )}
 
@@ -576,9 +621,8 @@ function PackagesTab(): JSX.Element {
         </label>
         {convertMpy && (
           <p className="pkgs__note">
-            Note: this build has no bundled <code>mpy-cross</code>, so packages
-            install as source <code>.py</code>. Many ports still compile to
-            bytecode on import.
+            Note: this build has no bundled <code>mpy-cross</code>, so packages install as source{' '}
+            <code>.py</code>. Many ports still compile to bytecode on import.
           </p>
         )}
       </details>
@@ -620,36 +664,14 @@ function PackagesTab(): JSX.Element {
         </div>
       )}
 
-      {connected && boardPkgs !== null ? (
-        <>
-          <div className="pkgs__group-head">ON BOARD (/lib) — {boardPkgs.length}</div>
-          {boardPkgs.length > 0 ? (
-            <ul className="pkgs__list" role="list">
-              {boardPkgs.map(renderBoardTag)}
-            </ul>
-          ) : (
-            <p className="pkgs__hint">Nothing in /lib yet — install something below.</p>
-          )}
-        </>
-      ) : (
-        installed.length > 0 && (
-          <>
-            <div className="pkgs__group-head">INSTALLED — {installed.length}</div>
-            <ul className="pkgs__list" role="list">
-              {installed.map(renderTag)}
-            </ul>
-          </>
-        )
-      )}
-
-      <div className="pkgs__group-head">REGISTRY</div>
+      <div className="pkgs__group-head">
+        {results != null ? 'Search results' : 'Popular libraries'}
+      </div>
       <ul className="pkgs__list" role="list">
         {registry.map(renderTag)}
       </ul>
 
-      {listToShow.length === 0 && !searching && (
-        <p className="pkgs__hint">No packages to show.</p>
-      )}
+      {listToShow.length === 0 && !searching && <p className="pkgs__hint">No packages to show.</p>}
     </div>
   )
 }
