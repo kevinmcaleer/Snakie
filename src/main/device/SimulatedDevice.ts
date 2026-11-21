@@ -2,7 +2,12 @@ import { EventEmitter } from 'events'
 import { scratchBlock } from '../../shared/device-scratch'
 import { VIRTUAL_PORT_PATH } from '../../shared/virtual-device'
 import { MicroPythonRuntime, type ReplRuntime } from './MicroPythonRuntime'
-import { isProbeCode, simulateProbeResponse, simulatedTelemetryFrame } from '../../shared/simulation'
+import {
+  DemoTelemetryGate,
+  isProbeCode,
+  simulateProbeResponse,
+  simulatedTelemetryFrame
+} from '../../shared/simulation'
 import { clampSimHeapBytes, SIM_HEAP_DEFAULT_BYTES } from '../../shared/sim-memory'
 import type { RuntimeInfo } from '../../shared/dialect'
 import type {
@@ -53,6 +58,9 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
   private state: ConnectionState = 'disconnected'
   private timer: ReturnType<typeof setInterval> | null = null
   private tick = 0
+  /** The running program's own telemetry replaces the demo's (see the gate). */
+  private readonly demoGate = new DemoTelemetryGate()
+  private readonly outDecoder = new TextDecoder()
   private readonly runtime: ReplRuntime
   /** Latest control payload per target (for inspection / future feedback). */
   private readonly control = new Map<string, string>()
@@ -111,7 +119,10 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
     this.setState('connecting')
     try {
       // Boot the interpreter; its banner + prompt stream out via `data`.
-      await this.runtime.init((chunk) => this.emit('data', chunk), this.heapBytes)
+      await this.runtime.init((chunk) => {
+        this.demoGate.note(this.outDecoder.decode(chunk, { stream: true }))
+        this.emit('data', chunk)
+      }, this.heapBytes)
       this.bootedHeapBytes = this.heapBytes
     } catch (err) {
       // The REPL couldn't start — still connect so the instruments + Board
@@ -134,6 +145,7 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
 
   async disconnect(): Promise<void> {
     this.stopTelemetry()
+    this.demoGate.end()
     this.control.clear()
     this.bootedHeapBytes = null
     this.runtime.dispose()
@@ -166,7 +178,7 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
   /** Emit one frame of `SNK …` telemetry as a single `data` chunk. */
   private emitTelemetryFrame(): void {
     if (this.state !== 'connected') return
-    const frame = simulatedTelemetryFrame(this.tick++)
+    const frame = this.demoGate.filter(simulatedTelemetryFrame(this.tick++))
     if (frame.length === 0) return
     this.emit('data', Buffer.from(frame.join('\r\n') + '\r\n', 'utf8'))
   }
@@ -219,7 +231,12 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
    *  paste-mode `===` framing. */
   async runProgram(code: string): Promise<void> {
     if (this.state !== 'connected') return
-    await this.runtime.runStream(code)
+    this.demoGate.begin(code)
+    try {
+      await this.runtime.runStream(code)
+    } finally {
+      this.demoGate.end()
+    }
   }
 
   /** Record an IDE→board control command (latest-wins per target). */
@@ -233,6 +250,7 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
    *  gentle Ctrl-C that keeps state. */
   async interrupt(): Promise<void> {
     if (this.state !== 'connected') return
+    this.demoGate.end()
     await this.runtime.interrupt()
   }
 

@@ -1219,8 +1219,15 @@ export function AppShell(): JSX.Element {
   // #621: this is a notice ABOUT THE OPEN FILE ("this file doesn't import servo"),
   // so it belongs to the Code workspace only. It used to render above all three,
   // where it was noise in Electronics and Build — neither has a file to fix.
+  //
+  // Not for a file that isn't saved in the project: the parts belong to the
+  // project's robot, and a lesson's example opened from an "Open in Snakie" link
+  // (an unsaved buffer with no path) is not that robot's program. It used to be
+  // told it was "missing 2 imports" for a robot it has nothing to do with.
+  const activeInProject = !!activeFile && activeFile.path !== ''
   const showPartsBanner =
     layout.active === 'code' &&
+    activeInProject &&
     requiredModules.length > 0 &&
     !partsDismissed &&
     (missImports.length > 0 || missBoard.length > 0)

@@ -5,6 +5,8 @@ import { RESTORE_GUARD_KEY } from '../store/session-restore'
 import { IS_WEB } from '../lib/env'
 import type { Fetcher } from './source'
 import { resolveSharedLink, workspaceForSharedCode, type SharedProgram } from './shared-link'
+import { dispatchRevealInstruments } from '../components/editorBridge'
+import { instrumentsForProgram } from '../components/instruments-registry'
 
 /**
  * "OPEN IN SNAKIE" — the full app's half (#1287, epic #1285; kevsrobots.com#581).
@@ -74,6 +76,11 @@ export function OpenFromUrl(): null {
       // don't put the editor in front, so a lesson's code would open unseen.
       const target = workspaceForSharedCode(program.code, activeRef.current)
       if (target) switchWorkspace(target)
+      // A lesson that says "open this and watch the plotter" should find the
+      // plotter already on screen, not leave the learner hunting the dock for
+      // it (Snakie Instruments course). Only the instruments the program
+      // actually calls, and only opened, never closed.
+      dispatchRevealInstruments(instrumentsForProgram(program.code))
       status(program.note, 'Not saved yet. Save it to keep a copy.')
       return true
     }
