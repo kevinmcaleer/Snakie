@@ -64,7 +64,9 @@ describe('status bar in the Build workspace', () => {
       expect(i, cls).toBeGreaterThan(-1)
       expect(tsx.slice(i - 160, i), cls).toMatch(/\{!build && \(/)
     }
-    expect(tsx).toMatch(/\{runtime && !build && \(/)
+    // The runtime switcher shows even with no board (it picks the help's Python),
+    // but still steps aside in Build.
+    expect(tsx).toMatch(/\{!build && \(\s*<button\s+type="button"\s+className=\{`statusbar__item statusbar__runtime/)
     expect(tsx).toMatch(/\{lines != null && !build && \(/)
     expect(tsx).toMatch(/tipSlotFree &&\s+!build &&/)
     // …while sync and the coffee link are unconditional.
