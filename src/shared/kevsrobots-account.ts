@@ -28,7 +28,7 @@
 export const KR_ACCOUNTS_URL = 'https://accounts.kevsrobots.com'
 export const KR_PROJECTS_API = 'https://projects.kevsrobots.com'
 export const KR_CLIENT_ID = 'snakie'
-/** Name and avatar, list your projects, send wiring to one. No scope touches code. */
+/** Name and avatar, list your projects, make one, send wiring and the robot model. No scope touches code. */
 export const KR_SCOPES = 'profile projects:read projects:write'
 export const KR_WEB_REDIRECT_URI = 'https://app.snakie.org/auth/callback'
 /** The desktop's loopback redirect; Chatter accepts it on any port. */
@@ -88,6 +88,41 @@ export interface KrSent {
   addedWiringSection: boolean
 }
 
+/** A new kevsrobots project for a Snakie project that has none yet (Share sheet). */
+export interface KrNewProject {
+  title: string
+  repoUrl?: string
+}
+
+/** A project just made from Snakie: a private draft until its author publishes it. */
+export interface KrCreated extends KrProject {
+  /** Where the author writes it up and publishes it. */
+  editorUrl: string
+}
+
+/** One file of the robot model, as bytes. */
+export interface KrFile {
+  name: string
+  bytes: Uint8Array
+}
+
+export interface KrSendRobot {
+  projectId: number
+  /** The URDF and its STL meshes. Never code. */
+  files: KrFile[]
+  /** A picture of the robot for the project's cover (PNG). */
+  cover?: KrFile
+}
+
+export interface KrRobotSent {
+  projectId: number
+  title: string
+  url: string | null
+  editorUrl: string
+  files: string[]
+  cover: boolean
+}
+
 /** Every call resolves; nothing throws across the IPC bridge. */
 export type KrResult<T> = { ok: true; value: T } | { ok: false; error: string; signedOut?: boolean }
 
@@ -98,6 +133,10 @@ export interface KevsrobotsApi {
   signOut(): Promise<void>
   listProjects(): Promise<KrResult<KrProject[]>>
   sendWiring(payload: KrSendWiring): Promise<KrResult<KrSent>>
+  /** Make a private draft project (Share sheet). Optional: older hosts lack it. */
+  createProject?(payload: KrNewProject): Promise<KrResult<KrCreated>>
+  /** Send the robot model and a cover picture to a project (Share sheet). */
+  sendRobot?(payload: KrSendRobot): Promise<KrResult<KrRobotSent>>
 }
 
 export interface TokenStore {
@@ -304,6 +343,59 @@ export class KevsrobotsClient {
     }
   }
 
+  async createProject(payload: KrNewProject): Promise<KrResult<KrCreated>> {
+    const res = await this.call<{ id: number; title: string; slug: string | null; status: string; editor_url: string }>(
+      `${KR_PROJECTS_API}/api/projects/app/new`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ title: payload.title, code_repo_url: payload.repoUrl || null })
+      }
+    )
+    if (!res.ok) return res
+    const v = res.value
+    return {
+      ok: true,
+      value: {
+        id: v.id,
+        title: v.title,
+        slug: v.slug ?? null,
+        status: v.status,
+        hasUnpublishedChanges: false,
+        editorUrl: v.editor_url
+      }
+    }
+  }
+
+  async sendRobot(payload: KrSendRobot): Promise<KrResult<KrRobotSent>> {
+    const form = new FormData()
+    for (const f of payload.files) form.append('files', new Blob([f.bytes as Uint8Array<ArrayBuffer>]), f.name)
+    if (payload.cover) form.append('cover', new Blob([payload.cover.bytes as Uint8Array<ArrayBuffer>], { type: 'image/png' }), payload.cover.name)
+    const res = await this.call<{
+      project_id: number
+      title: string
+      url: string | null
+      editor_url: string
+      files: { filename: string }[]
+      cover: boolean
+    }>(`${KR_PROJECTS_API}/api/projects/${encodeURIComponent(String(payload.projectId))}/robot/send`, {
+      method: 'PUT',
+      body: form
+    })
+    if (!res.ok) return res
+    const v = res.value
+    return {
+      ok: true,
+      value: {
+        projectId: v.project_id,
+        title: v.title,
+        url: v.url,
+        editorUrl: v.editor_url,
+        files: (v.files ?? []).map((f) => f.filename),
+        cover: !!v.cover
+      }
+    }
+  }
+
   /** A valid access token, refreshing first if it has (nearly) run out. */
   private async accessToken(forceRefresh = false): Promise<string | null> {
     const tokens = await this.store.load()
@@ -333,7 +425,8 @@ export class KevsrobotsClient {
           ...init,
           headers: {
             Accept: 'application/json',
-            ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+            // A form sets its own multipart boundary.
+            ...(init.body && !(init.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
             Authorization: `Bearer ${token}`
           },
           signal: AbortSignal.timeout(TIMEOUT_MS)

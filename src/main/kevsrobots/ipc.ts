@@ -9,6 +9,8 @@ import {
   pkceChallenge,
   randomUrlSafe,
   type KrResult,
+  type KrNewProject,
+  type KrSendRobot,
   type KrSendWiring,
   type KrStatus,
   type KrTokens,
@@ -125,4 +127,6 @@ export function registerKevsrobotsIpc(): void {
   ipcMain.handle('kevsrobots:signOut', () => client.signOut())
   ipcMain.handle('kevsrobots:listProjects', () => client.listProjects())
   ipcMain.handle('kevsrobots:sendWiring', (_e, payload: KrSendWiring) => client.sendWiring(payload))
+  ipcMain.handle('kevsrobots:createProject', (_e, payload: KrNewProject) => client.createProject(payload))
+  ipcMain.handle('kevsrobots:sendRobot', (_e, payload: KrSendRobot) => client.sendRobot(payload))
 }

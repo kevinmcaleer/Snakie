@@ -127,6 +127,8 @@ export function createWebKevsrobotsApi(): KevsrobotsApi {
     },
     signOut: () => client.signOut(),
     listProjects: () => client.listProjects(),
-    sendWiring: (payload) => client.sendWiring(payload)
+    sendWiring: (payload) => client.sendWiring(payload),
+    createProject: (payload) => client.createProject(payload),
+    sendRobot: (payload) => client.sendRobot(payload)
   }
 }

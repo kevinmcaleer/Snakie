@@ -236,6 +236,7 @@ import {
   withBody,
   type BodyPose
 } from './robot-body'
+import { registerShareCapture } from '../lib/share-captures'
 import './RobotView.css'
 import './RobotView.small.css'
 
@@ -3898,13 +3899,19 @@ export function RobotView({
     // same task it was drawn in — hence render-then-copy here, not later.)
     const THUMB_W = 192
     const THUMB_H = 120
-    const thumbCanvas = document.createElement('canvas')
-    thumbCanvas.width = THUMB_W
-    thumbCanvas.height = THUMB_H
     const thumbBox = new THREE.Box3()
     const thumbPt = new THREE.Vector3()
-    const snapshotPose = (native: Record<string, number>): string | null => {
+    // `native` null = the posture on screen (the Share sheet's cover picture).
+    const snapshotAt = (
+      native: Record<string, number> | null,
+      outW: number,
+      outH: number,
+      ground?: string
+    ): string | null => {
       const r = robotRef.current
+      const thumbCanvas = document.createElement('canvas')
+      thumbCanvas.width = outW
+      thumbCanvas.height = outH
       const ctx = thumbCanvas.getContext('2d')
       const src = renderer.domElement
       if (!r || !ctx || src.width < 2 || src.height < 2) return null
@@ -3923,7 +3930,7 @@ export function RobotView({
         r.updateMatrixWorld(true)
       }
       try {
-        put(native)
+        if (native) put(native)
         ghostGroup.visible = false
         pinMarker.visible = false
         jointRingApi.setSuppressed(true)
@@ -3951,9 +3958,13 @@ export function RobotView({
           box.maxY = Math.max(box.maxY, y)
         }
         if (!Number.isFinite(box.minX + box.maxX + box.minY + box.maxY)) return null
-        const c = thumbnailCrop(box, THUMB_W / THUMB_H)
-        ctx.clearRect(0, 0, THUMB_W, THUMB_H)
-        ctx.drawImage(src, c.x, c.y, c.w, c.h, 0, 0, THUMB_W, THUMB_H)
+        const c = thumbnailCrop(box, outW / outH)
+        ctx.clearRect(0, 0, outW, outH)
+        if (ground) {
+          ctx.fillStyle = ground
+          ctx.fillRect(0, 0, outW, outH)
+        }
+        ctx.drawImage(src, c.x, c.y, c.w, c.h, 0, 0, outW, outH)
         return thumbCanvas.toDataURL('image/png')
       } catch {
         return null
@@ -3965,6 +3976,11 @@ export function RobotView({
         renderFrame()
       }
     }
+    const snapshotPose = (native: Record<string, number>): string | null => snapshotAt(native, THUMB_W, THUMB_H)
+    // The Share sheet's cover: the robot as it stands, at a link-preview size.
+    const unregisterCover = compact
+      ? () => undefined
+      : registerShareCapture('cover', () => snapshotAt(null, 1200, 630, '#f7f3ea'))
 
     // PIN MARKER: an amber ring on the floor under the pinned part. The part
     // does not move while it is pinned, so the ring is placed once.
@@ -6324,6 +6340,7 @@ export function RobotView({
 
     return () => {
       disposed = true
+      unregisterCover()
       // Snapshot the camera so the next rebuild (after a build edit) restores it
       // instead of re-framing (#315a). Cleared by a NEW file via framedKeyRef.
       cameraStateRef.current = {

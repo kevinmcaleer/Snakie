@@ -111,7 +111,7 @@ import type { BundledPartStatus } from '../shared/bundled-seed'
 import type { RobotDefinition, RobotPart } from '../shared/robot'
 import type { InstrumentWindowPayload } from '../shared/instrument-window'
 import type { BugReportPayload, BugReportResult } from '../main/feedback/ipc'
-import type { KevsrobotsApi, KrSendWiring } from '../shared/kevsrobots-account'
+import type { KevsrobotsApi, KrNewProject, KrSendRobot, KrSendWiring } from '../shared/kevsrobots-account'
 
 /** The active-file snapshot the main renderer streams to the Board View window. */
 export interface BoardSourcePayload {
@@ -1482,7 +1482,9 @@ const kevsrobots: KevsrobotsApi = {
   signIn: () => ipcRenderer.invoke('kevsrobots:signIn'),
   signOut: () => ipcRenderer.invoke('kevsrobots:signOut'),
   listProjects: () => ipcRenderer.invoke('kevsrobots:listProjects'),
-  sendWiring: (payload: KrSendWiring) => ipcRenderer.invoke('kevsrobots:sendWiring', payload)
+  sendWiring: (payload: KrSendWiring) => ipcRenderer.invoke('kevsrobots:sendWiring', payload),
+  createProject: (payload: KrNewProject) => ipcRenderer.invoke('kevsrobots:createProject', payload),
+  sendRobot: (payload: KrSendRobot) => ipcRenderer.invoke('kevsrobots:sendRobot', payload)
 }
 
 /** In-app bug reporting (#206): submit the Report Bug form to the feedback API. */
