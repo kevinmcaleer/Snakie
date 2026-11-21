@@ -34,16 +34,19 @@ Always keep `lint`, `typecheck`, `test`, and `build` green before merging.
 
 ## Versioning & releases (SemVer, pre-1.0)
 
-Bump the version in `package.json` according to what a release contains:
+**The PATCH number bumps itself.** Every pull request merged into `master` gets
+its own patch bump (`0.92.0` → `0.92.1` → `0.92.2` …) from
+`.github/workflows/version-bump.yml`, committed straight to `master` by
+`github-actions[bot]`. **Don't touch `version` in `package.json` /
+`package-lock.json` in a feature branch** for an ordinary change: the bot does
+it after the merge, so open PRs never conflict on that line.
 
-- **New feature → MINOR bump** (`0.MINOR.0`). e.g. adding a panel, a plugin
-  capability, a new command/view.
-- **Change / fix / docs / refactor → PATCH bump** (`0.0.PATCH`). e.g. bug fixes,
-  tweaks, dependency bumps, copy/UX changes with no new feature.
+- **New feature → MINOR bump** (`0.MINOR.0`) is still a human call. Either set it
+  in the PR (`npm version 0.93.0 --no-git-tag-version`) or in the release commit.
+  A push that already changed the version is left alone, so the next merged PR
+  after it becomes `0.93.1`.
 - (Breaking changes would be a MAJOR bump once we reach `1.0.0`.)
-
-When a release groups several PRs, pick the **highest** applicable bump (any new
-feature in the batch ⇒ minor).
+- Direct pushes to `master` that aren't a PR merge don't bump.
 
 **Changelog entries:** never edit `CHANGELOG.md` in a feature branch — every
 branch writing to the same place is what made nearly every PR conflict there
@@ -64,7 +67,9 @@ Details in `changelog.d/README.md`.
    and anything still in `[Unreleased]` into a new dated `[X.Y.Z]` section,
    merging duplicate headings, leaves a fresh empty `[Unreleased]`, updates the
    compare links, and deletes the fragments. Review the diff.
-2. Set `package.json` version to `X.Y.Z` (`npm version X.Y.Z --no-git-tag-version`).
+2. `master` is already at the latest patch number, so a patch release just
+   uses that (`X.Y.Z` = the current `package.json` version). For a minor
+   release, set it: `npm version X.Y.0 --no-git-tag-version`.
 3. Commit, push `master`.
 4. Tag and push: `git tag -a vX.Y.Z -m "…" && git push origin vX.Y.Z`. The
    `release.yml` workflow builds installers (macOS arm64+x64, Linux x64, Windows
