@@ -817,6 +817,12 @@ export interface PartBodyProps {
   /** Per pin flat-index, the code variable + colour to show (boxed mode only;
    *  used pins only — others show just the number box + label). */
   pinVariables?: Map<number, { variable: string; color: string }>
+  /** Pins (flat-index) to spotlight because the code's cursor is on their
+   *  variable: a ring on the pad, a highlighted label, the other used pins dimmed. */
+  focusedPins?: ReadonlySet<number>
+  /** Click on a pin (flat-index) — the mini board uses it to jump the editor to
+   *  the pin's variable. Absent ⇒ pins are not clickable. */
+  onPinClick?: (index: number) => void
   /** Which pins draw their capability chips (the breadboard hover): `'all'` or a
    *  set of pin flat-indices. Chips clear the number box/label and fade in from the
    *  board centre outward. Absent ⇒ none (the default everywhere else). */
@@ -1342,6 +1348,8 @@ export function PartBody({
   bodyScale = 1,
   boxedPins = false,
   pinVariables,
+  focusedPins,
+  onPinClick,
   capsPins,
   capsHoverPin,
   pinLabels = 'all',
@@ -1697,11 +1705,31 @@ export function PartBody({
           const gpioText = isHovered && rp.pin.gpio != null ? `GP${rp.pin.gpio}` : undefined
           const varText = pinVariables?.get(i)?.variable
           const pinVar = [gpioText, varText].filter(Boolean).join('  ') || undefined
+          const focused = !!focusedPins?.has(i)
+          const dimmed = !focused && !!focusedPins?.size && pinVariables?.has(i)
+          const clickable = !!onPinClick && !!pinVariables?.has(i)
           return (
-            <g key={`p${i}`}>
+            <g
+              key={`p${i}`}
+              className={focused ? 'pcv__pin--focus' : dimmed ? 'pcv__pin--dim' : undefined}
+              onClick={clickable ? () => onPinClick?.(i) : undefined}
+              style={clickable ? { cursor: 'pointer' } : undefined}
+            >
               {/* Mask the pad (not its label) so the through-hole shows the real
                   background, not a painted dot (#171). */}
               {!labelsOnly && (hasCuts ? <g mask={`url(#${maskId})`}>{pad}</g> : pad)}
+              {!labelsOnly && focused && (
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={size * 0.95}
+                  className="pcv__focus-ring"
+                  stroke={pinVariables?.get(i)?.color ?? '#f5b942'}
+                />
+              )}
+              {!labelsOnly && clickable && (
+                <circle cx={cx} cy={cy} r={size * 0.8} fill="transparent" className="pcv__pin-hit" />
+              )}
               {!bodyOnly && !pinLabelHidden(part, rp.pin) && (
               <g transform={labelGroupTf}>
               {boxThis ? (

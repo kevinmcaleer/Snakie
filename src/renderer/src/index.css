@@ -2118,6 +2118,20 @@ body {
   overflow-y: auto;
 }
 
+/* The hover help used the editor's own widget colour, so on the paper themes it
+ * read as more code rather than a popup over the code. Invert it: a dark card
+ * over the light editors and a light card over the dark ones. A literal colour
+ * inversion (rather than a palette per editor theme) keeps every editor theme —
+ * Paper, Bright, Midnight and the Dark skin — correct for free, and the 180°
+ * hue-rotate puts the syntax and link hues back where they were, only flipped in
+ * lightness, so the signature still reads as Python. The drop-shadow comes AFTER
+ * the inversion in the filter chain so it stays a dark shadow instead of
+ * becoming a light glow. */
+.editor-host .monaco-editor .monaco-hover {
+  filter: invert(1) hue-rotate(180deg) drop-shadow(0 6px 14px rgba(0, 0, 0, 0.35));
+  border-radius: 6px;
+}
+
 /* Prose wraps on its own; long unbroken tokens (paths, URLs, dotted names) must
  * be allowed to break, or one of them forces the widget past its max-width. */
 .editor-host .monaco-editor .monaco-hover .monaco-hover-content {
