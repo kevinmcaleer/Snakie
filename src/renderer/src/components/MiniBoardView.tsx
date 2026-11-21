@@ -31,7 +31,7 @@ import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { useAnimatedNumber } from '../hooks/useAnimatedNumber'
 import { isVirtualPort } from '../../../shared/virtual-device'
-import { useFocusedIdentifier } from './code-focus'
+import { pickFocusedName, useCodeFocus } from './code-focus'
 import { getActiveEditor } from './editorBridge'
 import { definitionOf } from './python-definitions'
 import './MiniBoardView.css'
@@ -469,8 +469,12 @@ export function MiniBoardView({
     return m
   }, [pads, usedByKey])
 
-  // Code ↔ board link: the pins whose variable the editor's cursor is on.
-  const focusedName = useFocusedIdentifier()
+  // Code ↔ board link: the pins whose variable the editor's mouse or cursor is on.
+  const codeFocus = useCodeFocus()
+  const focusedName = useMemo(
+    () => pickFocusedName(codeFocus, (n) => usedList.some((u) => u.variable === n)),
+    [codeFocus, usedList]
+  )
   const focusedPins = useMemo(() => {
     const set = new Set<number>()
     if (!focusedName) return set
