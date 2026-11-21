@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { blocksFooterPayloadLines } from './blocks-footer-fold'
 import { reporter } from '../lib/report-error'
 // Import only the editor core API rather than the full `monaco-editor` barrel,
 // then opt in to just the languages we render. This keeps the renderer bundle
@@ -153,6 +154,57 @@ function languageForName(name: string): string {
  *  - Ctrl/Cmd-S triggers `saveFile` and suppresses the browser default
  *  - the editor auto-lays-out, so it tracks panel resizes
  */
+/** The block-layout footer's decoration per editor (the "hidden" label). */
+const footerDecorations = new WeakMap<
+  monaco.editor.ICodeEditor,
+  monaco.editor.IEditorDecorationsCollection
+>()
+
+/**
+ * Hide the payload lines of a blocks footer (see `blocks-footer-fold.ts`) and
+ * label the marker line, so a file saved from Blocks reads as plain code here.
+ * Keyed to its own hidden-area source, so code folding is unaffected.
+ */
+function hideBlocksFooter(editor: monaco.editor.ICodeEditor): void {
+  const model = editor.getModel()
+  if (!model) return
+  const found = blocksFooterPayloadLines(model.getLinesContent())
+  const withHidden = editor as monaco.editor.ICodeEditor & {
+    setHiddenAreas?: (ranges: monaco.IRange[], source?: unknown) => void
+  }
+  withHidden.setHiddenAreas?.(
+    found ? [new monaco.Range(found.startLine, 1, found.endLine, 1)] : [],
+    BLOCKS_FOOTER_SOURCE
+  )
+  let deco = footerDecorations.get(editor)
+  if (!deco) {
+    deco = editor.createDecorationsCollection()
+    footerDecorations.set(editor, deco)
+  }
+  deco.set(
+    found
+      ? [
+          {
+            range: new monaco.Range(
+              found.markerLine,
+              model.getLineMaxColumn(found.markerLine),
+              found.markerLine,
+              model.getLineMaxColumn(found.markerLine)
+            ),
+            options: {
+              showIfCollapsed: true,
+              after: {
+                content: '  · block layout for the Blocks view, hidden here',
+                inlineClassName: 'blocks-footer-note'
+              }
+            }
+          }
+        ]
+      : []
+  )
+}
+const BLOCKS_FOOTER_SOURCE = { id: 'snakie-blocks-footer' }
+
 export function MonacoEditor(): JSX.Element {
   const { openFiles, activeId, revealRequest, updateContent, saveFile, currentFolder } =
     useWorkspace()
@@ -278,6 +330,7 @@ export function MonacoEditor(): JSX.Element {
     // Edits -> store (marks dirty). Guarded against programmatic model swaps via
     // the active id captured per change.
     const changeDisposable = editor.onDidChangeModelContent(() => {
+      hideBlocksFooter(editor)
       const id = activeIdRef.current
       if (!id) return
       updateContentRef.current(id, editor.getValue())
@@ -432,6 +485,7 @@ export function MonacoEditor(): JSX.Element {
     if (editor.getModel() !== model) {
       editor.setModel(model)
     }
+    hideBlocksFooter(editor)
   }, [activeFile, activeFile?.id, activeFile?.content, activeFile?.name])
 
   // Keep the sprite-thumbnail resolver pointed at the right folders (#790): a

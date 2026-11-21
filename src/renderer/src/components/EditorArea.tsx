@@ -86,7 +86,7 @@ export function EditorArea({
   // time and carried on the file. The rule itself lives in `editor-routing.ts`,
   // where it can be a test rather than something you find out by switching to
   // Build and seeing the block shelf over the robot (#1066).
-  const showBlocks = showsBlocksCanvas(layout.active, activeFile)
+  const showBlocks = showsBlocksCanvas(layout.active, activeFile, layout.blocksBoth)
   const showCode = hasFiles && !showData && !showRobot && !showMpy && !showBlocks
   // Part drivers (#184) and the parts check (#166): the code is where a missing
   // driver bites (the import fails), so both live here as ONE chip in the tab

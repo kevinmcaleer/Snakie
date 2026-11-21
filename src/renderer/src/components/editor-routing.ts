@@ -19,11 +19,10 @@ export interface RoutedFile {
 /**
  * Show the blocks split for this file, in this workspace?
  *
- * TWO RULES, AND THEY ARE BOTH ABOUT THE FILE:
- *  - a file with a blocks footer is a blocks file (#1008); and
- *  - in the Blocks workspace, so is any `.py` at all (#1034) — the `.py` is the
- *    program and the blocks are a view of it, so pressing Blocks on a file
- *    Snakie did not write shows you blocks rather than appearing to ignore you.
+ * In the Blocks workspace, any `.py` (#1034) — the `.py` is the program and the
+ * blocks are a view of it. In Code, only when the switcher's dot is lit (the
+ * split), and then for any `.py`; a blocks footer no longer changes which
+ * editor Code uses.
  *
  * AND ONE ABOUT THE WORKSPACE, which is what #1066 was missing. Blocks and Code
  * are the two workspaces that are ABOUT the program. Electronics and Build are
@@ -36,8 +35,21 @@ export interface RoutedFile {
  * The file is not hidden by this. It opens as ordinary code in those two, which
  * is all a workspace that is not about the program can usefully show of it.
  */
-export function showsBlocksCanvas(workspace: WorkspaceId, file: RoutedFile | null): boolean {
+export function showsBlocksCanvas(
+  workspace: WorkspaceId,
+  file: RoutedFile | null,
+  both = false
+): boolean {
   if (workspace !== 'blocks' && workspace !== 'code') return false
   if (!file) return false
-  return file.isBlocks === true || (workspace === 'blocks' && /\.py$/i.test(file.name))
+  const program = file.isBlocks === true || /\.py$/i.test(file.name)
+  if (!program) return false
+  // EVERY FILE IS MICROPYTHON, AND CODE TREATS THEM ALL THE SAME (Kev, 2026-11-21).
+  // A file saved from Blocks carries a comment footer recording where the blocks
+  // sat; that is all that makes it different, and it used to send the file to the
+  // blocks split's Python view in Code — another editor, another surface, no
+  // chip. Now Code shows the canvas only when the switcher's dot asks for both
+  // (and then for any `.py`), and otherwise opens every file in the code editor.
+  if (workspace === 'code') return both
+  return true
 }

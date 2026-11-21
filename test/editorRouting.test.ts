@@ -18,7 +18,8 @@ const plainPy = { name: 'main.py' }
 describe('the workspaces that show a canvas', () => {
   it('Blocks and Code do', () => {
     expect(showsBlocksCanvas('blocks', blocksFile)).toBe(true)
-    expect(showsBlocksCanvas('code', blocksFile)).toBe(true)
+    // Code shows the canvas only in the split (the switcher's dot).
+    expect(showsBlocksCanvas('code', blocksFile, true)).toBe(true)
   })
 
   it('Build and Electronics do NOT, whatever the file is', () => {
@@ -31,8 +32,16 @@ describe('the workspaces that show a canvas', () => {
 })
 
 describe('the files that are blocks files', () => {
-  it('a footer makes one, in either program workspace (#1008)', () => {
-    expect(showsBlocksCanvas('code', blocksFile)).toBe(true)
+  it('a footer no longer changes Code: every .py opens in the code editor', () => {
+    // Every file is MicroPython; the footer only remembers where blocks sat.
+    expect(showsBlocksCanvas('code', blocksFile)).toBe(false)
+    expect(showsBlocksCanvas('code', plainPy)).toBe(false)
+  })
+
+  it('the dot (both) brings the canvas into Code for any .py', () => {
+    expect(showsBlocksCanvas('code', blocksFile, true)).toBe(true)
+    expect(showsBlocksCanvas('code', plainPy, true)).toBe(true)
+    expect(showsBlocksCanvas('code', { name: 'data.csv' }, true)).toBe(false)
   })
 
   it('any .py at all is one in the Blocks workspace (#1034)', () => {
@@ -43,7 +52,7 @@ describe('the files that are blocks files', () => {
   })
 
   it('but a plain .py in Code is just code', () => {
-    // Code is where text lives; only a file that IS blocks brings the canvas.
+    // Code is where text lives.
     expect(showsBlocksCanvas('code', plainPy)).toBe(false)
   })
 

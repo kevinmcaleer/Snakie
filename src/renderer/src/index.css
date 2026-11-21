@@ -2681,3 +2681,12 @@ body {
   font-family: var(--font-ui);
   font-size: 0.82rem;
 }
+
+/* The label after a blocks footer's marker line in the code editor
+   (components/blocks-footer-fold.ts): the layout lines under it are hidden, so
+   say what they are. */
+.blocks-footer-note {
+  color: var(--txt3, #8a8a80);
+  font-style: italic;
+  opacity: 0.85;
+}
