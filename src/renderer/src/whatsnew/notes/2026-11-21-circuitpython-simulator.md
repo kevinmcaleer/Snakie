@@ -1,3 +1,3 @@
-# CircuitPython runs on the simulator
+# Switch the simulator to CircuitPython
 
-CircuitPython code that uses `board`, `digitalio`, `pwmio` or `analogio` now runs on the simulated board, so you can try it without plugging anything in.
+Tap **MicroPython** in the status bar and choose **CircuitPython**. The simulator then runs CircuitPython code (`board`, `digitalio` and friends), and the help and code suggestions switch with it. On a real board, the same menu offers to put the other Python on it.

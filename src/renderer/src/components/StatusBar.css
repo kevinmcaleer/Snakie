@@ -190,6 +190,35 @@ button.statusbar__runtime.is-mismatch {
   opacity: 0.7;
 }
 
+/* Phones: the right-hand group never gives way (#843), which on a phone left
+ * the whole left group about 30px wide, so the language switcher could not be
+ * seen or tapped. Here the switcher comes first and keeps its width, the
+ * connection label gives way instead (the console and board view already say
+ * "simulated"), and the line count and version, both one tap away elsewhere,
+ * step aside. */
+@media (max-width: 600px) {
+  .statusbar__lines,
+  .statusbar__version {
+    display: none;
+  }
+
+  .statusbar__group--left .statusbar__runtime {
+    order: -1;
+  }
+
+  .statusbar__group--left .statusbar__conn {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .statusbar__group--left .statusbar__conn > span:last-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
 /* Instrument live-poll warning — the poll interrupts a running program, so this
  * segment is deliberately loud (warning accent) and carries an inline Stop link.
  * Only rendered while live polling is actually interrupting the board. */

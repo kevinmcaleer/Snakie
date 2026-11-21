@@ -60,6 +60,9 @@ export function createWebDeviceRouter(): Record<string, unknown> {
     // simulator boot (#901).
     setSimMemory: async (bytes: number): Promise<unknown> => call(sim, 'setSimMemory', bytes),
     getSimMemory: async (): Promise<unknown> => call(sim, 'getSimMemory'),
+    // Likewise the simulator's language (#764): set it whichever backend is live.
+    setSimDialect: async (d: string): Promise<unknown> => call(sim, 'setSimDialect', d),
+    getSimDialect: async (): Promise<unknown> => call(sim, 'getSimDialect'),
 
     getStatus: async () => call(active, 'getStatus'),
 

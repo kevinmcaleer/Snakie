@@ -149,6 +149,11 @@ export function registerDeviceIpc(getWebContents: () => WebContents | undefined)
     })
   )
   ipcMain.handle('device:getSimMemory', () => wrap(async () => simDev.getMemory()))
+  // The simulator's language (#764) — also addressed to the simulator itself.
+  ipcMain.handle('device:setSimDialect', (_e, dialect: string) =>
+    wrap(async () => simDev.setDialect(dialect))
+  )
+  ipcMain.handle('device:getSimDialect', () => wrap(async () => simDev.getDialect()))
 
   ipcMain.handle('device:getStatus', () => wrap(async () => getActive().getStatus()))
 

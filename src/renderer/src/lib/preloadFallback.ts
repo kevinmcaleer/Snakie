@@ -50,9 +50,20 @@ const deepStub = (): unknown => {
   })
 }
 
+/**
+ * One wrapper per namespace object, so `window.api.kevsrobots` is the SAME
+ * object on every read. A fresh Proxy per read made any hook that lists a
+ * namespace in its deps (SuiteAccount's `[api]`) re-run on every render; its
+ * effect set state, which rendered again — a loop that froze the web app the
+ * moment the toolbar re-rendered (seen switching the simulator's language).
+ */
+const filled = new WeakMap<object, unknown>()
+
 /** Wrap an explicit stub namespace so any MISSING property is filled by {@link deepStub}. */
-const fill = (target: Record<string, unknown>): unknown =>
-  new Proxy(target, {
+const fill = (target: Record<string, unknown>): unknown => {
+  const cached = filled.get(target)
+  if (cached) return cached
+  const proxy = new Proxy(target, {
     get: (t, prop) => {
       if (prop in t) {
         const v = t[prop as string]
@@ -67,6 +78,9 @@ const fill = (target: Record<string, unknown>): unknown =>
       return deepStub()
     }
   })
+  filled.set(target, proxy)
+  return proxy
+}
 
 /** The web build's stand-in for the desktop's workspace relay (#775): one page,
  *  so the "send it to the main window" hop is a local dispatch. */

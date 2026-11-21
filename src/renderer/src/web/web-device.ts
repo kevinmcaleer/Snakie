@@ -25,6 +25,13 @@ import {
 } from '../../../shared/simulation'
 import { clampSimHeapBytes, SIM_HEAP_DEFAULT_BYTES } from '../../../shared/sim-memory'
 import type { RuntimeInfo } from '../../../shared/dialect'
+import {
+  normalizeSimDialect,
+  simDialectNotice,
+  simRuntimeInfo,
+  SIM_DIALECT_DEFAULT,
+  type SimDialect
+} from '../../../shared/sim-dialect'
 
 /** How often the simulated board "prints" a telemetry frame (matches the desktop sim). */
 const TELEMETRY_INTERVAL_MS = 120
@@ -38,14 +45,6 @@ interface DeviceStatus {
   runtime?: RuntimeInfo
 }
 
-/**
- * What the web simulator reports as its runtime (#752). Stated, not probed: the
- * interpreter behind it IS MicroPython (the official WASM port), so this is a
- * fact about the simulator rather than a guess about a board — and it matches
- * the desktop `SimulatedDevice`, which is the same thing in the other shell.
- * Whether a simulator should ever offer CircuitPython is #764.
- */
-const SIM_RUNTIME: RuntimeInfo = { dialect: 'micropython' }
 
 const enc = new TextEncoder()
 
@@ -92,6 +91,10 @@ export function createWebDeviceApi(): Record<string, unknown> {
   // exactly while a restart is owed, because the heap is fixed at `mp_js_init`.
   let heapBytes = SIM_HEAP_DEFAULT_BYTES
   let bootedHeapBytes: number | null = null
+  // Which Python the simulator presents as (#764). Stated, not probed: the
+  // interpreter is MicroPython with CircuitPython's modules on top, so either
+  // kind of program runs, and this is what the rest of the app follows.
+  let dialect: SimDialect = SIM_DIALECT_DEFAULT
 
   const emitData = (chunk: Uint8Array): void => dataSubs.forEach((cb) => cb(chunk))
   // The running program's own telemetry replaces the demo's (see the gate).
@@ -118,7 +121,7 @@ export function createWebDeviceApi(): Record<string, unknown> {
   }
   const status = (): DeviceStatus => {
     const st: DeviceStatus = { state, path: VIRTUAL_PORT_PATH, baudRate: 115200 }
-    if (state === 'connected') st.runtime = SIM_RUNTIME
+    if (state === 'connected') st.runtime = simRuntimeInfo(dialect)
     return st
   }
   const setState = (s: ConnState): void => {
@@ -151,8 +154,25 @@ export function createWebDeviceApi(): Record<string, unknown> {
         )
       }
       setState('connected')
+      if (dialect !== 'micropython' && runtime) emitData(enc.encode(simDialectNotice(dialect)))
       startTelemetry()
     },
+
+    // Switch the Python the simulator presents as (#764). Live: no reboot, the
+    // CircuitPython modules are always installed — only the reported runtime
+    // (and so everything that follows the board) changes.
+    setSimDialect: async (next: unknown) => {
+      const d = normalizeSimDialect(next)
+      if (d === dialect) return d
+      dialect = d
+      if (state === 'connected') {
+        setState('connected')
+        if (runtime) emitData(enc.encode(simDialectNotice(d)))
+      }
+      return d
+    },
+
+    getSimDialect: async () => dialect,
 
     setSimMemory: async (bytes: number) => {
       heapBytes = clampSimHeapBytes(bytes)
