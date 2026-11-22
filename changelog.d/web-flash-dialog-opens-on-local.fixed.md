@@ -1,1 +1,0 @@
-- **Web flash dialog opens on Local file, since the browser cannot download from the catalog.** It used to show an empty Family list and a Download & Flash that never enabled. With a board named, it links straight to that board's download page.

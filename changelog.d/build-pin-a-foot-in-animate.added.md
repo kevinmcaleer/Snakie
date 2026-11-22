@@ -1,1 +1,0 @@
-- **Build: Pin a foot in Animate. The pinned part stays planted while you pose, so the body moves over it, and looping walks play on the spot.** 

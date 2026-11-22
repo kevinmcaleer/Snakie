@@ -1,1 +1,0 @@
-- **Switch to the other kevsrobots apps from the toolbar.** A grid button beside the Snakie logo lists Learn, Projects, Snakie and BetterCAD, with Snakie marked "you are here". The others open in a new tab, so nothing unsaved is lost.

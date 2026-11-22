@@ -1,1 +1,0 @@
-- **A lesson's instruments example opened from a link shows its own plot, with the Plotter already open.** 

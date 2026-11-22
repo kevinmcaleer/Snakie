@@ -1,1 +1,0 @@
-- **Build: pose shelf in Animate mode. Saved poses show as thumbnails you press to apply, with rename in place, mirror to a new pose, duplicate, update from current, and S to save.** 

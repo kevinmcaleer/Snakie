@@ -10,6 +10,259 @@ when a release is cut. See `changelog.d/README.md`.
 
 ## [Unreleased]
 
+## [0.93.0] - 2026-11-21
+
+The first desktop release since 0.91.0. It also carries everything listed
+under 0.92.0 below, which was never released as a desktop build.
+
+**Highlights**
+
+- **Animate your robot.** Build has an Animate mode: drag the robot to pose
+  it, save poses to a shelf, lay them out on a timeline, pin a foot so walks
+  stay planted, and render the result as a movie.
+- **Projects in the top bar.** New, Open, Recent and Close project sit next to
+  the logo, and **Share project** sends a project to kevsrobots, BetterCAD or
+  GitHub.
+- **CircuitPython on the simulator.** Switch the simulator between MicroPython
+  and CircuitPython from the status bar, and CircuitPython sketches run offline.
+- **Easier coding.** The code and the mini board light up together, hover help
+  shows everything about your functions, Python keywords autocomplete, and one
+  Drivers chip shows any missing drivers or libraries.
+- **A friendlier start.** New users get a starter program to run straight away,
+  Install connects your board for you, more boards are in the flash dialog,
+  and a What's new card tells you what changed after each update.
+- **Better parts.** Real 3-D part models (including bus servos) and side panels
+  in Electronics and Build.
+
+### Added
+
+- **kevsrobots account button in the toolbar (#1310).** The button at the right of the toolbar shows whether you are signed in with kevsrobots and lets you sign in or out. Signing in is still only needed to send wiring.
+
+- **Code embeds show the board and the pins the code uses (#1318).** A code
+  box whose MicroPython uses pins now draws the board beside it, with each pin
+  lit, named and coloured by what it does (output, input, PWM, I2C and so on).
+  Point at a line and its pins glow on the board; point at a pin and its lines
+  are marked in the code. While the program runs, each pin shows its simulated
+  state (`on`, `off`, `PWM 8%`). A pin the board does not have, or one set up
+  twice, is underlined. `board=` picks the board (Pico 2 W by default) and
+  `pins=0` turns the strip off. Narrow boxes show a row of pin chips instead.
+
+- **Run here: a plain code block can become a live code box in place
+  (#1319).** `SnakieEmbed.upgrade(pre, { name, board })` in `snakie-embed.js`
+  takes a page's own `<pre><code>` block, shows it in the Snakie box where it
+  stood and runs it. Its `unmount()` puts the block back. A page with hundreds
+  of code blocks can stay plain and load an editor only when a reader asks.
+
+- **Code frames know the project they are on (#1320).** `project=<id>` on a
+  code embed reads a kevsrobots project's public wiring and names the part on
+  each pin in the board strip ("GP15, Servo 1"). `paths=main.py,servo.py`
+  shows several files of a repo as tabs. Frames on one page now share what
+  they point at: hover a pin in one and the others light it, and the page
+  hears `snakie:pin-hover`, `snakie:pin-state` and `snakie:pins` events (the
+  last one says where the code and the wiring disagree). Wires in an exported
+  wiring SVG carry their ids, so a page can light the wire for a pin.
+
+- **A robot frame for web pages, moved by the code (#1321).**
+  `<div data-snakie-robot="<kevsrobots project id>">` (or
+  `/embed.html?robot=1&project=<id>`) draws the URDF and meshes a project
+  carries among its files. Press Run in a code frame on the same page and the
+  joints the project binds to servo pins turn with the PWM the code sends.
+  Joint sliders move it by hand, and `urdf=` draws a URDF from any https
+  address.
+
+- **A starter program for new users.** Opening Snakie for the first time used to
+  land on an empty editor that said "Open a file to start editing". It now opens
+  a short `main.py` that blinks the board's LED and prints its state, so pressing
+  **Run** does something straight away, on a real board or the simulated one. It
+  is an unsaved tab, so nothing is written until you save it. It only appears
+  when Snakie starts with no files to reopen and no shared link to open, and it
+  stops appearing once you edit it, close it or open anything else.
+
+- **Build: Animate mode — drag the robot to pose it, turn one joint with a ring, live Mirror, a grouped Joints panel, one-press Save pose and undo for poses.**
+
+- **Build: one Animate timeline of pose blocks. Add pose (K), drag a gap to retime it, smooth or steady moves, Make walk cycle, onion skin, and Space and arrow keys; keyframes become Joint tracks and Controls becomes Perform.**
+
+- **Build: Pin a foot in Animate. The pinned part stays planted while you pose, so the body moves over it, and looping walks play on the spot.**
+
+- **Build: pose shelf in Animate mode. Saved poses show as thumbnails you press to apply, with rename in place, mirror to a new pose, duplicate, update from current, and S to save.**
+
+- **Build: Render movie. Turn the Animate timeline into an MP4, WebM, GIF or PNG frames on this computer, with size, frame rate, loops, camera, look and quality settings.**
+
+- **CircuitPython code runs on the simulator.** The simulated board now has
+  CircuitPython's hardware modules (`board`, `digitalio`, `pwmio`, `analogio`,
+  `busio`, `microcontroller`, `supervisor`) and `time.monotonic()`, built on
+  the same simulated pins as MicroPython's `machine`. A CircuitPython blink or
+  motor sketch runs offline, and the mini board labels `board.GP0`-style pins
+  the way it labels `Pin(0)`.
+
+- **The code and the board light up together.** Hover over a Pin variable
+  (`motor_a_speed`) in the editor, or put the cursor on it, and its pin and
+  label on the mini board are spotlighted: a pulsing ring on the pad, the label
+  in bold, and the other used pins dimmed. The board scrolls the pin into view.
+  The other way round, clicking a used pin on the mini board moves the editor's
+  cursor to the line that defines its variable.
+
+- **Hover a function to see everything about it.** Hovering one of your own
+  functions (where it's called, or its `def`) shows its signature, whether it's
+  a function or a method, its parameters with their types and defaults, its
+  docstring, and every line that uses it, each a link that jumps there. Below
+  that come hints: a missing or placeholder docstring, a function nothing calls,
+  functions with the same shape that could become one, a mutable default, a
+  non-snake_case name, plus any refactoring suggestions inside the function.
+
+- **Python keywords autocomplete, where they're valid.** Typing `fro` offers
+  `from`, `imp` offers `import`, `from machine ` offers `import`, and `for x `
+  offers `in`. Statement keywords appear at the start of a line; `elif`/`else`
+  only after an `if` block, `except`/`finally` after `try`, `return` inside a
+  function, `break`/`continue` inside a loop, `await` inside `async def`; and
+  `True`, `False`, `None`, `not`, `and`, `or` where an expression goes.
+
+- **The lesson runner: press play and the output pops up under the code.**
+  `SnakieEmbed.runner(pre, opts)` keeps a page's plain code block as it is and
+  opens a small output panel under it (`embed.html?output=1`) that runs the
+  code in the browser: the output in a live REPL you can keep typing into,
+  and the board with its pins lit while the simulator drives them. The panel
+  has Run again / Stop and a close button, and tells the page when it starts
+  and stops, so the page's own play button can turn into stop. It loads no
+  editor, so it opens quickly. kevsrobots.com lessons use it for their new
+  green play button.
+
+- **Part 3-D models now load in the browser.** On app.snakie.org, "Add to Build" and "⇄ Sync › Upgrade to mesh" now give a Standard Parts part (SG90 servo, HC-SR04, Pico 2 W…) its real 3-D model instead of a stand-in box. Models download the first time they're used and are then cached for offline use. When a model can't be loaded, the message now says why in plain words (offline, or desktop-only).
+
+- **Pimoroni Tiny 2040, Pico LiPo and Pico 2 W in the flash dialog's Board list.** Naming an rp2 board now pre-selects that board's own micropython.org build (`PIMORONI_TINY2040`, `RPI_PICO_W`, …) instead of only the chip family, and a board found in bootloader mode says to pick it from the list, since an RP2040 bootloader looks the same on every board.
+
+- **Project switcher: New, Open, Recent and Close project from the top bar.** The open project's name sits next to the logo on every workspace; its menu shows where the project is saved and what is in it (code, the Electronics wiring in `robot.yml`, the Build model `robot.yml` links, print files in `stl/`), each a jump to its workspace. New project writes a real folder from a template (Just code; Robot, the KRF `code/` `urdf/` `stl/` layout via the previously unused scaffold; or the Servo arm demo) and shows the files before creating them. With no folder open, the scratch `robot.yml` (app data / browser storage) is labelled "Untitled robot · not saved", with Save as project (carries the wiring and untitled tabs into the new folder, then clears the scratch) and Start fresh. Recent projects now reopen on the web too (folder handles kept in IndexedDB). File menu gains New Project… (⇧⌘N) and Close Project. Build's tucked demo-arm pill now says it is the demo arm.
+
+- **Share project** in the project menu: one sheet that sends a project to a kevsrobots project page (wiring, parts list, the Build robot model's URDF + STL meshes and a cover picture of it), making a private draft page when there isn't one yet, and points to BetterCAD and GitHub. Needs projects-api's new `POST /api/projects/app/new` and `PUT /api/projects/{id}/robot/send` (kevsrobots.com). Code is never sent.
+
+- **Switch between MicroPython and CircuitPython from the status bar.** The
+  runtime item in the status bar is now a menu. On the simulator it switches the
+  simulator itself between MicroPython and CircuitPython, live, and the help,
+  completions, Run/Reset wording and file badges follow (#764). With nothing
+  connected it picks the Python to write for. On a real board it sets which
+  Python the help and completions teach (the same setting as the Help panel's
+  pills), and offers to put the other Python on the board or try it on the
+  simulator instead. On phones the switcher now comes first in the status bar.
+
+- **Switch to the other kevsrobots apps from the toolbar.** A grid button beside the Snakie logo lists Learn, Projects, Snakie and BetterCAD, with Snakie marked "you are here". The others open in a new tab, so nothing unsaved is lost.
+
+- **What's new.** After an update (a new web deploy or a desktop release), a
+  small card in the bottom-right corner names the new features once, with
+  **See what's new** to read them all. Help ▸ What's New and the Help panel's
+  **What's new in Snakie** button open the full list again any time, newest day
+  first, with the ones you hadn't seen marked New. Notes are short,
+  plain-language files in `src/renderer/src/whatsnew/notes/`, one per change. A
+  first visit shows no card. Modelled on BetterCAD's.
+
+### Changed
+
+- **Board View: tidier header and selection ring.** The "parts need a driver" banner no longer pushes the breadboard down: it is a **Drivers** chip beside ERC / LIVE / Help, and its install list opens as a popover. The Electronics ⇄ Build **Sync** button moves from the canvas's bottom-left corner (where it covered the Connections strip's title) into the same header cluster. The dashed selection ring now hugs the part's picture instead of the larger hit area above it.
+
+- **Build: Animate is never greyed out. If nothing can move yet it says why and offers a one-press fix, and the timeline's buttons do the same.**
+
+- **Code embeds wear Snakie Flat.** The embed on kevsrobots.com lessons and
+  project pages now loads the same Flat design system as the app: a solid
+  green Run button instead of the glossy gradient pill, flat Code / Split /
+  Blocks tabs, and a REPL without the double frame.
+
+- **Code embeds start sooner and say they're starting.** A page's plain code
+  block now stays in place with a small green "Starting Snakie…" badge until
+  the box has something to show, so there's no blank moment. The box shows
+  the code straight away, in the editor's layout, while the editor itself
+  (several MB) downloads, and that download starts alongside the program
+  instead of after it. `snakie-embed.js` also opens the connection to Snakie
+  as the page loads and starts a box 1200px before it scrolls into view
+  (was 400px).
+
+- **The Code workspace opens every `.py` in the same code editor.** A file saved from Blocks used to open in the blocks split's read-only Python view in Code, because of the block-layout footer it carries. Now Code treats every file the same: it opens in the code editor (with Find, the Drivers chip and your editor theme), and the footer's encoded layout lines are hidden under its marker line. The blocks canvas shows in Code only when the switcher's dot asks for Blocks and Python side by side, and then for any `.py`. Editing the code there is safe: Blocks re-reads a file whose footer no longer matches its code.
+
+- **Electronics on a phone is one tidy arrangement.** The floating pieces had
+  each been placed on their own and looked scattered. Now **Sync** sits in the
+  header with ERC, Live and Help as one even row; **Library** matches the menu
+  button opposite; the board tools are a dock across the bottom with undo and
+  redo on the left; a selected part's tools dock on top of that bar, in the same
+  place every time, instead of floating over the menu and Library buttons; and
+  the "help is available" note appears under the top buttons rather than over
+  the tools. Undo and redo are no longer shown greyed out when there is nothing
+  to undo.
+
+- **Install in the Packages panel is never greyed out.** With no board
+  connected, the Install buttons on Get libraries (package search, popular
+  libraries) and Snakie drivers used to be disabled with a "Connect a board
+  first" tooltip. Now pressing Install asks the connection control to connect,
+  the row says **WAITING FOR BOARD…** with a line explaining what to do, and
+  the install starts by itself as soon as the board connects, the same way the
+  Drivers chip's Install drivers works.
+
+- **One Drivers chip for every editor tab, and one editor surface.** The "board is missing a library / this file is missing an import" bar (#166) no longer sits above the whole app: it rides in the editor's **Drivers** chip, which now also shows for blocks files and in the Blocks workspace (whose own driver banner above the canvas is gone). A blocks file's Python pane paints the same editor-theme background as a plain `.py` tab instead of the lighter `--editor` token.
+
+- **Packages and Modules became "Get libraries" and "On this board".** The two
+  old tabs were named for what the things are called, which told a newcomer
+  nothing, and they overlapped: Packages also listed what was on the board, and
+  Modules also installed things. Now **Get libraries** is everything you can
+  add: the package search, the popular list, the import scan and Snakie's own
+  drivers. **On this board** is everything already there: how full the board is,
+  the libraries you have installed (with Uninstall and Upgrade), and every module
+  your code can import. Starting an install and switching tab no longer loses it.
+  The panel was also the last one in the old green-felt and manila-tag skin; it
+  now uses the Flat design, with one green **Install** button per row.
+
+- **Part drivers are offered from a Drivers chip in the Code workspace.** The "parts need a driver" prompt moved out of the Electronics board header to an amber **Drivers** chip beside Find in the code editor, where the failing import is. Its card floats over the code (nothing is pushed down), lists each driver, and has **Install drivers** and **Show parts**. Install is never greyed out: with no board connected it asks the connection control to connect and installs as soon as the board arrives.
+
+- **No more "MICROPYTHON" bar above the code.** The editor gets that line
+  back; the status bar already names the runtime. In the Blocks and Code split
+  the strip still appears just for its "click a line to find its block" hint,
+  and code embeds keep their MicroPython / Python label.
+
+- **STS3215 bus servo and Waveshare Bus Servo Adapter (A): real connector housings on the breadboard and 3-D models in Build.** Both parts' ports are now `connectors` (the 5264-3P bus ports as JST XH-pitch housings, the adapter's UART as a 0.1" header and DC+/DC- as a screw terminal) instead of bare pads, in the same pin order so saved wiring keeps its `#index`. A JST XH housing now draws natural white, per JST's datasheet. Both parts ship a generated `model.stl` (`scripts/robot-kit-meshes.mjs`); projects that already placed them as boxes can swap via Sync ▸ Upgrade to mesh.
+
+- **The editor's hover help stands out from the code.** The popup is now an
+  inverted card (dark on the light editor themes, light on the dark ones) with
+  a drop shadow, instead of the same colour as the code underneath it.
+
+### Fixed
+
+- **A lesson's instruments example opened from a link shows its own plot, with the Plotter already open.**
+
+- **Build on a phone: the Servos and Poses sections no longer overlap in the Build sheet.**
+
+- **Open in Snakie shows the code it opened, whichever workspace you were last in (kevsrobots.com#581).**
+  Snakie reopens on the workspace you last used, so code opened from a lesson
+  or an embed landed behind Electronics or Build, where the editor isn't in
+  front. It now switches to Code (or Blocks, for a blocks file).
+
+- **Press and hold a part in Build opens its menu.** On an iPhone a held finger
+  on the 3-D view started a text selection across the tool bar, with the Copy /
+  Look Up callout, and there was no way to reach a part's menu without opening
+  the Build panel and finding its row. Now holding a part (or right-clicking it
+  with a mouse) selects it and opens the same menu as its row: Rename, Make
+  base, Delete and its joint. Text selection is off across the Build workspace
+  on touch screens, apart from text fields. The menu no longer shows greyed-out
+  items: Delete on the base tells you to pick a new base first.
+
+- **The left rail works in Electronics and Build.** Tapping Files, Packages or
+  Inspect there did nothing: only Learn, Help and Report Bug had a panel in those
+  workspaces. Every icon now opens its panel beside the workspace, and a second
+  tap closes it. On tablets and phones the panel is a drawer over the workspace
+  (it used to be a narrow column that squeezed it), and tapping outside closes
+  it. A panel you open in Code still does not follow you into Electronics or
+  Build.
+
+- **The web app no longer freezes when the toolbar re-renders.** The browser
+  stand-in for the desktop bridge handed out a new `window.api.kevsrobots`
+  object on every read, so the account button's effects re-ran on every render
+  and looped. It now returns the same object each time.
+
+- **Web flash dialog opens on Local file, since the browser cannot download from the catalog.** It used to show an empty Family list and a Download & Flash that never enabled. With a board named, it links straight to that board's download page.
+
+- **Web: the app no longer freezes when it reloads into a new deploy.** The
+  update check reloaded the page the moment a new service worker reached
+  `installed`, so the reload went to the old worker just as `skipWaiting` shut
+  it down; the navigation was cut off ("Failed to fetch" in sw.js) and the tab
+  froze. It now waits for the new worker to take over, and if the new worker's
+  install fails it unregisters the old one before reloading, so you are never
+  left on the old build until a hard reload.
+
 ## [0.92.0] - 2026-11-19
 
 ### Added
@@ -10604,7 +10857,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.92.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.93.0...HEAD
+[0.93.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.91.0...v0.93.0
 [0.92.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.91.0...v0.92.0
 [0.91.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.85.4...v0.91.0
 [0.85.4]: https://github.com/kevinmcaleer/Snakie/compare/v0.84.1...v0.85.4
