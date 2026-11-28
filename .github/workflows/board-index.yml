@@ -45,8 +45,14 @@ jobs:
           node-version: 20
           cache: npm
 
-      # ImageMagick is what the generator reaches for first; the runner has it,
-      # so thumbnails are produced identically to a local run.
+      # ImageMagick is what the generator reaches for first. GitHub's Ubuntu
+      # runner images no longer ship it (neither 24.04 nor 26.04), so install
+      # it here; thumbnails are then produced identically to a local run.
+      - name: Install ImageMagick
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq imagemagick
+
       - name: Check the tooling the generator needs
         run: |
           command -v magick || command -v convert || {
